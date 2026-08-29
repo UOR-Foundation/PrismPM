@@ -1,0 +1,212 @@
+spec = "prismpm/errors/1"
+
+[[error]]
+code = "PP1001"
+title = "Unknown configuration field"
+class = "configuration"
+exit = 2
+statement = "The project configuration contains an unrecognized key."
+
+[[error]]
+code = "PP1002"
+title = "Missing required configuration field"
+class = "configuration"
+exit = 2
+statement = "A required project configuration field is absent."
+
+[[error]]
+code = "PP1003"
+title = "Invalid project limits"
+class = "configuration"
+exit = 2
+statement = "A configured resource limit is non-positive or exceeds maximum allowable threshold."
+
+[[error]]
+code = "PP2001"
+title = "Unresolved document reference"
+class = "semantic"
+exit = 1
+statement = "A model references a declaration or component that is not defined."
+
+[[error]]
+code = "PP2002"
+title = "Ambiguous facet term"
+class = "semantic"
+exit = 1
+statement = "A term is defined across multiple facet packages without explicit namespace qualification."
+
+[[error]]
+code = "PP2003"
+title = "Duplicate component identifier"
+class = "semantic"
+exit = 1
+statement = "Multiple components share the same qualified identifier."
+
+[[error]]
+code = "PP2004"
+title = "Dangling component edge"
+class = "semantic"
+exit = 1
+statement = "An edge endpoint references a non-existent component."
+
+[[error]]
+code = "PP2005"
+title = "Unresolved risk link"
+class = "semantic"
+exit = 1
+statement = "A risk definition references an undefined asset or threat."
+
+[[error]]
+code = "PP2006"
+title = "Unsatisfied security control"
+class = "semantic"
+exit = 1
+statement = "A required security control is not satisfied by the target architecture."
+
+[[error]]
+code = "PP2007"
+title = "Invalid quality requirement mapping"
+class = "semantic"
+exit = 1
+statement = "A quality requirement references an undefined ISO 25010 characteristic or measure."
+
+[[error]]
+code = "PP2008"
+title = "Cyclic lexicon import"
+class = "semantic"
+exit = 1
+statement = "A circular dependency was detected in facet lexicon package imports."
+
+[[error]]
+code = "PP3001"
+title = "Malformed Holo JSON"
+class = "holo"
+exit = 1
+statement = "The .holo file is not valid JSON."
+
+[[error]]
+code = "PP3002"
+title = "Noncanonical Holo encoding"
+class = "holo"
+exit = 1
+statement = "The .holo artifact does not follow canonical JSON formatting rules."
+
+[[error]]
+code = "PP3003"
+title = "Duplicate Holo entity ID"
+class = "holo"
+exit = 1
+statement = "A .holo artifact contains duplicate entity IDs in an array."
+
+[[error]]
+code = "PP3004"
+title = "Noncanonical integer representation"
+class = "holo"
+exit = 1
+statement = "An integer in the .holo file is formatted with noncanonical leading zeros or exponential notation."
+
+[[error]]
+code = "PP3005"
+title = "Unsupported Holo schema"
+class = "holo"
+exit = 1
+statement = "The Holo schema identifier does not match prismpm/holo/1."
+
+[[error]]
+code = "PP3006"
+title = "Trailing bytes in Holo file"
+class = "holo"
+exit = 1
+statement = "Data was found after the closing JSON delimiter."
+
+[[error]]
+code = "PP4001"
+title = "Artifact checksum mismatch"
+class = "artifact"
+exit = 1
+statement = "An artifact does not match its manifest digest."
+
+[[error]]
+code = "PP4002"
+title = "Missing published artifact"
+class = "artifact"
+exit = 1
+statement = "An expected artifact was not produced by the build pipeline."
+
+[[error]]
+code = "PP4003"
+title = "Emitter inputs digest drift"
+class = "artifact"
+exit = 1
+statement = "The emitter-semantics ID does not match the digest of the declared emitter inputs."
+
+[[error]]
+code = "PP4004"
+title = "Invalid manifest structure"
+class = "artifact"
+exit = 1
+statement = "A build or verification manifest fails schema validation."
+
+[[error]]
+code = "PP5001"
+title = "Lean elaboration failure"
+class = "oracle"
+exit = 1
+statement = "Generated Lean declarations failed formal elaboration."
+
+[[error]]
+code = "PP5002"
+title = "leanchecker replay failure"
+class = "oracle"
+exit = 1
+statement = "leanchecker kernel replay rejected a compiled module environment."
+
+[[error]]
+code = "PP5003"
+title = "Unaudited Lean axiom"
+class = "oracle"
+exit = 1
+statement = "A PrismPM-owned theorem depends on unapproved external axioms."
+
+[[error]]
+code = "PP5004"
+title = "lean4-prod export failure"
+class = "oracle"
+exit = 1
+statement = "lean4-prod failed to export LCNF for registered runtime roots."
+
+[[error]]
+code = "PP5005"
+title = "Rust validator compilation error"
+class = "oracle"
+exit = 1
+statement = "Generated Rust code failed to compile under the pinned toolchain."
+
+[[error]]
+code = "PP5006"
+title = "Validator execution mismatch or panic"
+class = "oracle"
+exit = 1
+statement = "A generated Rust validator panicked or produced an inconsistent result during property testing."
+
+[[error]]
+code = "PP8001"
+title = "Path traversal rejected"
+class = "security"
+exit = 1
+statement = "An operation attempted to access a path outside the project root."
+
+[[error]]
+code = "PP8002"
+title = "Disallowed network access"
+class = "security"
+exit = 1
+statement = "A network operation was attempted during an offline verification stage."
+
+[[error]]
+code = "PP9001"
+title = "Internal invariant failure"
+class = "internal"
+exit = 101
+statement = "An internal compiler or runtime invariant was violated."
+

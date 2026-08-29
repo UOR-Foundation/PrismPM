@@ -1,0 +1,26 @@
+# tools.lock --- pinned toolchains and binary dependencies for PrismPM
+
+[rust]
+version = "1.97.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+
+[lean]
+version = "v4.32.1"
+release = "leanprover/lean4:v4.32.1"
+commit = "f054605aea4b840552cca2e725580bffd1e1b704"
+
+[elan]
+version = "4.2.3"
+url = "https://github.com/leanprover/elan/releases/download/v4.2.3/elan-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "b7a667104b77f9e8a8b1ef381335dc1200424564c7ea4ca88b64e5264b38cf4b"
+
+[just]
+version = "1.57.0"
+url = "https://github.com/casey/just/releases/download/1.57.0/just-1.57.0-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "eb74a6cfefc2df08447cf08a0dca0e5a6ef6c3b6dd8621415df8a5a549646b96"
+
+[cargo-deny]
+version = "0.20.2"
+url = "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "a609d94ceb70959fbbd8e0ae71ec700da6ef2c6e61f237ef1d488f28df05ba1b"

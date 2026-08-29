@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prismpm/project/1",
+  "title": "ProjectConfig",
+  "type": "object",
+  "required": ["project", "lexlean_project", "build_root", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "type": "string"
+    },
+    "lexlean_project": {
+      "type": "string"
+    },
+    "build_root": {
+      "type": "string"
+    },
+    "limits": {
+      "type": "object",
+      "required": ["max_holo_bytes", "max_entities", "max_diagnostics"],
+      "additionalProperties": false,
+      "properties": {
+        "max_holo_bytes": { "type": "integer", "minimum": 1 },
+        "max_entities": { "type": "integer", "minimum": 1 },
+        "max_diagnostics": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
+

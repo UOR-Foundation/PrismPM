@@ -1,0 +1,6 @@
+spec = "lexlean/lexicon/1"
+package = "prism.qual"
+version = "1.0.0"
+language = "1.1"
+imports = ["lexlean.core@1.0.0"]
+

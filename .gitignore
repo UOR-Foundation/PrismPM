@@ -1,0 +1,32 @@
+# Build and target output
+/target/
+**/target/
+
+# Prism and LexLean build roots
+.prism/
+**/.prism/
+.lexlean/
+**/.lexlean/
+
+# Lake build artifacts
+.lake/
+**/.lake/
+
+# Release assembly
+/release/
+
+# Temporary and generated files
+**/*.olean
+**/*.ilean
+**/*.c
+**/*.ir
+**/*.out
+
+# Editor and OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+.claude/
+

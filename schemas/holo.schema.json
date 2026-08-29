@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prismpm/holo/1",
+  "title": "HoloDocument",
+  "type": "object",
+  "required": [
+    "schema",
+    "semantic_id",
+    "compiler_semantics_id",
+    "emitter_semantics_id",
+    "standards_profile",
+    "components",
+    "edges",
+    "risks",
+    "controls",
+    "quality_requirements"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "prismpm/holo/1"
+    },
+    "semantic_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "compiler_semantics_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "emitter_semantics_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "standards_profile": {
+      "type": "string"
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "index", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "kind": { "type": "string" }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "index", "from_index", "to_index", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "from_index": { "type": "integer", "minimum": 0 },
+          "to_index": { "type": "integer", "minimum": 0 },
+          "kind": { "type": "string" }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "index", "asset_index", "threat"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "asset_index": { "type": "integer", "minimum": 0 },
+          "threat": { "type": "string" }
+        }
+      }
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "index", "risk_index", "objective"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "risk_index": { "type": "integer", "minimum": 0 },
+          "objective": { "type": "string" }
+        }
+      }
+    },
+    "quality_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "index", "characteristic", "measure"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "characteristic": { "type": "string" },
+          "measure": { "type": "string" }
+        }
+      }
+    }
+  }
+}
+

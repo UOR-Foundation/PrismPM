@@ -1,0 +1,9 @@
+spec = "prismpm/emitter-inputs/1"
+inputs = [
+    "crates/prismpm/src/holo/canonical.rs",
+    "crates/prismpm/src/holo/dto.rs",
+    "crates/prismpm/src/holo/mod.rs",
+    "crates/prismpm/src/holo/projector.rs",
+    "crates/prismpm/src/holo/validate.rs",
+    "schemas/holo.schema.json"
+]

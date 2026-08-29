@@ -1,0 +1,5 @@
+spec = "prismpm/test-case/1"
+command = "check"
+expected_exit = 0
+expect_artifacts = false
+
