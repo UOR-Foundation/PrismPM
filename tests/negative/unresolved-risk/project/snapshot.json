@@ -1,0 +1,23 @@
+{
+  "spec": "lexlean/semantic-snapshot/1",
+  "source_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "semantic_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "compiler_semantics_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "language": "1.1",
+  "modules": [
+    {
+      "name": "Foundation.Arch",
+      "lean_module": "PrismPM.Foundation.Arch",
+      "declarations": [
+        { "id": "comp_gateway", "kind": "def", "lean_name": "comp_gateway", "axiom_policy": "none" }
+      ]
+    },
+    {
+      "name": "Foundation.Sec",
+      "lean_module": "PrismPM.Foundation.Sec",
+      "declarations": [
+        { "id": "risk_unresolved", "kind": "def", "lean_name": "risk_unresolved", "axiom_policy": "none", "asset_index": 99 }
+      ]
+    }
+  ]
+}

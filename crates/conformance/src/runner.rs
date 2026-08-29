@@ -57,16 +57,25 @@ pub fn scenarios_in(dir: &Path) -> std::io::Result<SuiteReport> {
 
     for entry in entries {
         let path = entry.path();
-        if path.extension().is_none_or(|extension| extension != "feature") {
+        if path
+            .extension()
+            .is_none_or(|extension| extension != "feature")
+        {
             continue;
         }
         report.files += 1;
-        let suite = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let suite = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let text = std::fs::read_to_string(&path)?;
         let mut state = State::Start;
         let mut current: Option<Scenario> = None;
-        let mut violate = |report: &mut SuiteReport, line_number: usize, message: String| {
-            report.violations.push(format!("{suite}.feature:{line_number}: {message}"));
+        let violate = |report: &mut SuiteReport, line_number: usize, message: String| {
+            report
+                .violations
+                .push(format!("{suite}.feature:{line_number}: {message}"));
         };
 
         for (index, raw) in text.lines().enumerate() {
@@ -77,40 +86,71 @@ pub fn scenarios_in(dir: &Path) -> std::io::Result<SuiteReport> {
             }
             for forbidden in FORBIDDEN_HEADINGS {
                 if line.starts_with(forbidden) {
-                    violate(&mut report, line_number, format!("`{forbidden}` is outside the subset"));
+                    violate(
+                        &mut report,
+                        line_number,
+                        format!("`{forbidden}` is outside the subset"),
+                    );
                 }
             }
             if let Some(name) = line.strip_prefix("Feature:") {
                 if !matches!(state, State::Start) {
-                    violate(&mut report, line_number, "a second `Feature:` heading; each suite file has one".to_owned());
+                    violate(
+                        &mut report,
+                        line_number,
+                        "a second `Feature:` heading; each suite file has one".to_owned(),
+                    );
                 }
                 if name.trim() != suite {
-                    violate(&mut report, line_number, format!("the `Feature:` heading names `{}`, the file is `{suite}.feature`", name.trim()));
+                    violate(
+                        &mut report,
+                        line_number,
+                        format!(
+                            "the `Feature:` heading names `{}`, the file is `{suite}.feature`",
+                            name.trim()
+                        ),
+                    );
                 }
                 state = State::Description;
                 continue;
             }
             if matches!(state, State::Start) {
-                violate(&mut report, line_number, "the file must begin with its `Feature:` heading".to_owned());
+                violate(
+                    &mut report,
+                    line_number,
+                    "the file must begin with its `Feature:` heading".to_owned(),
+                );
                 state = State::Description;
             }
             if line.starts_with('@') {
                 if let State::Tagged(_) = state {
-                    violate(&mut report, line_number, "a tag line must be followed by its `Scenario:` line".to_owned());
+                    violate(
+                        &mut report,
+                        line_number,
+                        "a tag line must be followed by its `Scenario:` line".to_owned(),
+                    );
                 }
                 if let Some(done) = current.take() {
                     finish(&mut report, done, &suite);
                 }
                 let tags: Vec<&str> = line.split_whitespace().collect();
                 if tags.len() != 2 || tags[1] != "@build" {
-                    violate(&mut report, line_number, format!("the tag line is exactly `@<ID> @build`, found `{line}`"));
+                    violate(
+                        &mut report,
+                        line_number,
+                        format!("the tag line is exactly `@<ID> @build`, found `{line}`"),
+                    );
                 }
                 state = State::Tagged(line.to_owned());
                 continue;
             }
             if let Some(rest) = line.strip_prefix("Scenario:") {
                 let State::Tagged(tag_line) = std::mem::replace(&mut state, State::Steps) else {
-                    violate(&mut report, line_number, "a `Scenario:` line without its `@<ID> @build` tag line".to_owned());
+                    violate(
+                        &mut report,
+                        line_number,
+                        "a `Scenario:` line without its `@<ID> @build` tag line".to_owned(),
+                    );
                     state = State::Steps;
                     current = Some(Scenario {
                         id: String::new(),
@@ -123,8 +163,14 @@ pub fn scenarios_in(dir: &Path) -> std::io::Result<SuiteReport> {
                     continue;
                 };
                 let tags: Vec<&str> = tag_line.split_whitespace().collect();
-                let id = tags.first().map(|tag| tag.trim_start_matches('@').to_owned()).unwrap_or_default();
-                let level = tags.get(1).map(|tag| tag.trim_start_matches('@').to_owned()).unwrap_or_default();
+                let id = tags
+                    .first()
+                    .map(|tag| tag.trim_start_matches('@').to_owned())
+                    .unwrap_or_default();
+                let level = tags
+                    .get(1)
+                    .map(|tag| tag.trim_start_matches('@').to_owned())
+                    .unwrap_or_default();
                 current = Some(Scenario {
                     id,
                     level,
@@ -135,7 +181,9 @@ pub fn scenarios_in(dir: &Path) -> std::io::Result<SuiteReport> {
                 });
                 continue;
             }
-            let step = STEP_KEYWORDS.iter().find_map(|keyword| line.strip_prefix(keyword).map(|text| (*keyword, text)));
+            let step = STEP_KEYWORDS
+                .iter()
+                .find_map(|keyword| line.strip_prefix(keyword).map(|text| (*keyword, text)));
             match (&state, step) {
                 (State::Description, None) => {}
                 (State::Description, Some(_)) => violate(&mut report, line_number, "a step outside any scenario".to_owned()),
@@ -175,8 +223,10 @@ pub fn scenarios_in(dir: &Path) -> std::io::Result<SuiteReport> {
 
 fn finish(report: &mut SuiteReport, scenario: Scenario, suite: &str) {
     if scenario.steps.is_empty() {
-        report.violations.push(format!("{suite}.feature: scenario `{}` has no steps", scenario.statement));
+        report.violations.push(format!(
+            "{suite}.feature: scenario `{}` has no steps",
+            scenario.statement
+        ));
     }
     report.scenarios.push(scenario);
 }
-

@@ -97,4 +97,3 @@ pub struct QualityRequirementRecord {
     /// Quality measure.
     pub measure: String,
 }
-

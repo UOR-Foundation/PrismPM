@@ -7,6 +7,7 @@ mod audit;
 mod codegen;
 mod spec_links;
 
+/// General error type for xtask commands.
 pub type Fail = Box<dyn std::error::Error>;
 
 fn main() -> ExitCode {
@@ -23,7 +24,8 @@ fn main() -> ExitCode {
         "check-fixtures" => check_fixtures(&root, write),
         "release-artifacts" => release_artifacts(&root),
         "release-check" => release_check(&root),
-        "validate" => codegen::check_model(&root, false).and_then(|()| spec_links::validate(&root)),
+        "validate" => validate_all(&root, false),
+        "vv" => run_vv(&root),
         _ => {
             eprintln!("Usage: cargo xtask <task>");
             return ExitCode::from(2);
@@ -39,6 +41,40 @@ fn main() -> ExitCode {
     }
 }
 
+fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
+    codegen::check_model(root, write)?;
+    spec_links::validate(root)?;
+    audit::audit_no_handwritten_lean(root)?;
+    audit::audit_no_unsafe(root)?;
+    audit::audit_shipped(root)?;
+    let model = repo_model::Model::load_from_repo_root()?;
+    audit::audit_errors(root, &model)?;
+    Ok(())
+}
+
+fn run_vv(root: &Path) -> Result<(), Fail> {
+    println!("Running VV gate 1: validate model & spec links");
+    validate_all(root, false)?;
+
+    println!("Running VV gate 2: check fixtures");
+    check_fixtures(root, false)?;
+
+    println!("Running VV gate 3: verify reproducibility");
+    check_reproducibility(root)?;
+
+    println!("Running VV gate 4: verify examples & stdlib");
+    verify_examples(root, false)?;
+
+    println!("Running VV gate 5: check golden artifacts");
+    check_golden(root, false)?;
+
+    println!("Running VV gate 6: check release criteria");
+    release_check(root)?;
+
+    println!("All VV gates PASSED with rigor.");
+    Ok(())
+}
+
 fn verify_examples(root: &Path, _write: bool) -> Result<(), Fail> {
     let controller = prismpm::Controller::load(root)?;
     let check_res = controller.check(prismpm::controller::CheckRequest { config_path: None })?;
@@ -46,7 +82,10 @@ fn verify_examples(root: &Path, _write: bool) -> Result<(), Fail> {
         return Err("verify-examples: check failed".into());
     }
     let verify_res = controller.verify(prismpm::controller::VerifyRequest { config_path: None })?;
-    println!("verify-examples: verified attestation {}", verify_res.attestation_id);
+    println!(
+        "verify-examples: verified attestation {}",
+        verify_res.attestation_id
+    );
     Ok(())
 }
 
@@ -81,10 +120,14 @@ fn check_reproducibility(root: &Path) -> Result<(), Fail> {
         return Err(format!(
             "check-reproducibility: build IDs differ across directories: {} vs {}",
             b1.build_id, b2.build_id
-        ).into());
+        )
+        .into());
     }
 
-    println!("check-reproducibility: byte-identical across distinct roots: {}", b1.build_id);
+    println!(
+        "check-reproducibility: byte-identical across distinct roots: {}",
+        b1.build_id
+    );
     Ok(())
 }
 
@@ -118,7 +161,11 @@ fn release_check(root: &Path) -> Result<(), Fail> {
     let hidden_vec: Vec<String> = hidden_tests.into_iter().collect();
     let unmet = repo_model::release::check(root, &hidden_vec);
     if let Err(issues) = unmet {
-        return Err(format!("release-check refused: unmet criteria:\n  {}", issues.join("\n  ")).into());
+        return Err(format!(
+            "release-check refused: unmet criteria:\n  {}",
+            issues.join("\n  ")
+        )
+        .into());
     }
     println!("release-check: all release criteria hold");
     Ok(())

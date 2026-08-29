@@ -1,12 +1,11 @@
 //! Semantic snapshot to Holo projector.
 
-use std::collections::BTreeMap;
-use sha2::{Digest, Sha256};
-use crate::error::PrismError;
 use super::dto::{
-    ComponentRecord, ControlRecord, EdgeRecord, HoloDocument, QualityRequirementRecord,
-    RiskRecord,
+    ComponentRecord, ControlRecord, EdgeRecord, HoloDocument, QualityRequirementRecord, RiskRecord,
 };
+use crate::error::PrismError;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 
 /// Project a LexLean semantic snapshot into a HoloDocument.
 pub fn project_snapshot(snapshot_json: &[u8]) -> Result<HoloDocument, PrismError> {
@@ -15,10 +14,13 @@ pub fn project_snapshot(snapshot_json: &[u8]) -> Result<HoloDocument, PrismError
 
     let spec = parsed.get("spec").and_then(|v| v.as_str()).unwrap_or("");
     if spec != "lexlean/semantic-snapshot/1" {
-        return Err(PrismError::new("PP3005", "unsupported semantic snapshot schema"));
+        return Err(PrismError::new(
+            "PP3005",
+            "unsupported semantic snapshot schema",
+        ));
     }
 
-    let source_id = parsed
+    let _source_id = parsed
         .get("source_id")
         .and_then(|v| v.as_str())
         .unwrap_or("0000000000000000000000000000000000000000000000000000000000000000")
@@ -47,18 +49,46 @@ pub fn project_snapshot(snapshot_json: &[u8]) -> Result<HoloDocument, PrismError
                 for decl in decls {
                     let id = decl.get("id").and_then(|v| v.as_str()).unwrap_or("");
                     let qualified = format!("{mod_name}.{id}");
-                    if mod_name.contains("Arch") || id.starts_with("comp_") || id.starts_with("component_") {
-                        raw_components.insert(qualified.clone(), "service".to_owned());
-                    } else if id.starts_with("edge_") || id.starts_with("flow_") {
-                        raw_edges.insert(qualified.clone(), ("data_flow".to_owned(), 0u64, 0u64));
-                    } else if mod_name.contains("Sec") || id.starts_with("risk_") {
-                        raw_risks.insert(qualified.clone(), (0u64, "unauthorized_access".to_owned()));
+                    if id.starts_with("edge_") || id.starts_with("flow_") {
+                        let from_idx = decl.get("from_index").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let to_idx = decl.get("to_index").and_then(|v| v.as_u64()).unwrap_or(0);
+                        raw_edges.insert(
+                            qualified.clone(),
+                            ("data_flow".to_owned(), from_idx, to_idx),
+                        );
                     } else if id.starts_with("ctrl_") || id.starts_with("control_") {
-                        raw_controls.insert(qualified.clone(), (0u64, "mutual_tls".to_owned()));
-                    } else if mod_name.contains("Qual") || id.starts_with("qual_") {
-                        raw_qual.insert(qualified.clone(), ("maintainability".to_owned(), "modularity".to_owned()));
+                        let risk_idx = decl.get("risk_index").and_then(|v| v.as_u64()).unwrap_or(0);
+                        raw_controls.insert(qualified.clone(), (risk_idx, "mutual_tls".to_owned()));
+                    } else if id.starts_with("risk_") {
+                        let asset_idx = decl
+                            .get("asset_index")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        raw_risks.insert(
+                            qualified.clone(),
+                            (asset_idx, "unauthorized_access".to_owned()),
+                        );
+                    } else if id.starts_with("qual_") {
+                        raw_qual.insert(
+                            qualified.clone(),
+                            ("maintainability".to_owned(), "modularity".to_owned()),
+                        );
+                    } else if mod_name.contains("Sec") {
+                        let asset_idx = decl
+                            .get("asset_index")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        raw_risks.insert(
+                            qualified.clone(),
+                            (asset_idx, "unauthorized_access".to_owned()),
+                        );
+                    } else if mod_name.contains("Qual") {
+                        raw_qual.insert(
+                            qualified.clone(),
+                            ("maintainability".to_owned(), "modularity".to_owned()),
+                        );
                     } else {
-                        raw_components.insert(qualified.clone(), "general_component".to_owned());
+                        raw_components.insert(qualified.clone(), "service".to_owned());
                     }
                 }
             }
@@ -70,43 +100,36 @@ pub fn project_snapshot(snapshot_json: &[u8]) -> Result<HoloDocument, PrismError
     for (idx, (id, kind)) in raw_components.into_iter().enumerate() {
         let index = idx as u64;
         component_indices.insert(id.clone(), index);
-        components.push(ComponentRecord {
-            id,
-            index,
-            kind,
-        });
+        components.push(ComponentRecord { id, index, kind });
     }
 
     let mut edges = Vec::new();
     for (idx, (id, (kind, from_idx, to_idx))) in raw_edges.into_iter().enumerate() {
-        let max_comp = components.len().saturating_sub(1) as u64;
         edges.push(EdgeRecord {
             id,
             index: idx as u64,
-            from_index: from_idx.min(max_comp),
-            to_index: to_idx.min(max_comp),
+            from_index: from_idx,
+            to_index: to_idx,
             kind,
         });
     }
 
     let mut risks = Vec::new();
     for (idx, (id, (asset_idx, threat))) in raw_risks.into_iter().enumerate() {
-        let max_comp = components.len().saturating_sub(1) as u64;
         risks.push(RiskRecord {
             id,
             index: idx as u64,
-            asset_index: asset_idx.min(max_comp),
+            asset_index: asset_idx,
             threat,
         });
     }
 
     let mut controls = Vec::new();
     for (idx, (id, (risk_idx, objective))) in raw_controls.into_iter().enumerate() {
-        let max_risk = risks.len().saturating_sub(1) as u64;
         controls.push(ControlRecord {
             id,
             index: idx as u64,
-            risk_index: risk_idx.min(max_risk),
+            risk_index: risk_idx,
             objective,
         });
     }
@@ -128,7 +151,8 @@ pub fn project_snapshot(snapshot_json: &[u8]) -> Result<HoloDocument, PrismError
         semantic_id,
         compiler_semantics_id,
         emitter_semantics_id,
-        standards_profile: "ISO-42010-2022/ISO-27034-1-2011/ISO-27005-2022/ISO-25010-2023".to_owned(),
+        standards_profile: "ISO-42010-2022/ISO-27034-1-2011/ISO-27005-2022/ISO-25010-2023"
+            .to_owned(),
         components,
         edges,
         risks,

@@ -15,4 +15,3 @@ pub const HOST_TARGETS: &[&str] = &[
 pub fn check(_root: &Path, _hidden_tests: &[String]) -> Result<(), Vec<String>> {
     Ok(())
 }
-

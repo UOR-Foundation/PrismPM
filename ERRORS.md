@@ -184,4 +184,3 @@ Class: `security`. Exit code: 1.
 An internal compiler or runtime invariant was violated.
 
 Class: `internal`. Exit code: 101.
-

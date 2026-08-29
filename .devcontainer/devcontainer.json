@@ -3,6 +3,10 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "mounts": [
+    "source=/home/alex/Desktop/LexLean,target=/workspaces/LexLean,type=bind",
+    "source=/home/alex/Desktop/lean4-prod,target=/workspaces/lean4-prod,type=bind"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
@@ -27,8 +31,6 @@
     }
   },
   "remoteEnv": {
-    "PATH": "/home/codespace/.elan/bin:/home/codespace/.cargo/bin:${containerEnv:PATH}"
-  },
-  "postCreateCommand": "rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy && cargo install cargo-deny --version 0.20.2 --locked && curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y --default-toolchain none && ~/.elan/bin/elan toolchain install leanprover/lean4:v4.32.1"
+    "PATH": "/usr/local/elan/bin:/usr/local/cargo/bin:${containerEnv:PATH}"
+  }
 }
-

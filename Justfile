@@ -46,3 +46,4 @@ release-check:
 # Stage release artifacts
 release-artifacts:
     cargo run --package xtask -- release-artifacts
+

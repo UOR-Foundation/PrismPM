@@ -35,7 +35,10 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("{}: invalid case spec `{spec}`", dir.display()).into());
     }
 
-    let expected_exit = parsed.get("expected_exit").and_then(|v| v.as_integer()).unwrap_or(0) as i32;
+    let expected_exit = parsed
+        .get("expected_exit")
+        .and_then(|v| v.as_integer())
+        .unwrap_or(0) as i32;
 
     let project_dir = dir.join("project");
     if project_dir.exists() {
@@ -50,7 +53,11 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 return Err(format!("{}: expected success, got error {e}", dir.display()).into());
             }
         } else if check_res.is_ok() {
-            return Err(format!("{}: expected failure with exit code {expected_exit}, but check succeeded", dir.display()).into());
+            return Err(format!(
+                "{}: expected failure with exit code {expected_exit}, but check succeeded",
+                dir.display()
+            )
+            .into());
         }
     }
 
@@ -73,7 +80,8 @@ pub fn write(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempfile::tempdir()?;
         copy_dir_recursive(&project_dir, temp_dir.path())?;
         let controller = prismpm::Controller::load(temp_dir.path())?;
-        let build_res = controller.build(prismpm::controller::BuildRequest { config_path: None })?;
+        let build_res =
+            controller.build(prismpm::controller::BuildRequest { config_path: None })?;
 
         let expected_dir = dir.join("expected");
         std::fs::create_dir_all(&expected_dir)?;

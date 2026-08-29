@@ -1,9 +1,9 @@
 //! Specification-link validation gate.
 
+use crate::Fail;
+use repo_model::Model;
 use std::collections::BTreeSet;
 use std::path::Path;
-use repo_model::Model;
-use crate::Fail;
 
 struct TableRow {
     id: String,
@@ -51,7 +51,12 @@ pub fn validate(root: &Path) -> Result<(), Fail> {
     let model = Model::load(&root.join("model"))?;
 
     if rows.len() != model.ids.id.len() {
-        return Err(format!("RP-07: table has {} rows, register has {}", rows.len(), model.ids.id.len()).into());
+        return Err(format!(
+            "RP-07: table has {} rows, register has {}",
+            rows.len(),
+            model.ids.id.len()
+        )
+        .into());
     }
 
     let mut seen = BTreeSet::new();
@@ -63,14 +68,24 @@ pub fn validate(root: &Path) -> Result<(), Fail> {
             return Err(format!("RP-07: `{}` in table but not in model/ids.toml", row.id).into());
         };
         if model_row.suite != row.suite {
-            return Err(format!("RP-07: `{}` suite mismatch: table `{}` vs register `{}`", row.id, row.suite, model_row.suite).into());
+            return Err(format!(
+                "RP-07: `{}` suite mismatch: table `{}` vs register `{}`",
+                row.id, row.suite, model_row.suite
+            )
+            .into());
         }
         if model_row.statement != row.statement {
-            return Err(format!("RP-07: `{}` statement mismatch:\n  table:    {}\n  register: {}", row.id, row.statement, model_row.statement).into());
+            return Err(format!(
+                "RP-07: `{}` statement mismatch:\n  table:    {}\n  register: {}",
+                row.id, row.statement, model_row.statement
+            )
+            .into());
         }
     }
 
-    println!("validate-spec-links: {} table rows bijective with register (RP-07)", rows.len());
+    println!(
+        "validate-spec-links: {} table rows bijective with register (RP-07)",
+        rows.len()
+    );
     Ok(())
 }
-

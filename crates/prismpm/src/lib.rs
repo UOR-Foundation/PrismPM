@@ -10,4 +10,3 @@ pub mod holo;
 
 pub use controller::Controller;
 pub use error::PrismError;
-

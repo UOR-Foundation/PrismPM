@@ -14,6 +14,7 @@ The three honesty levels:
 | `build` | Constructed here and validated against its oracle. Evidence, not a proof. |
 | `open` | Measured and reported. **Never asserted.** |
 
+
 ## artifacts
 
 | ID | Level | Statement |
@@ -153,8 +154,6 @@ The three honesty levels:
 
 ## Cited authorities
 
-Never re-derived, vendored, or gated on.
-
 | Authority | Citation | Evidence here |
 | --- | --- | --- |
 | `LEAN-REL-4-32-1` | https://github.com/leanprover/lean4/releases/tag/v4.32.1 | `VR-01`, `VR-02` |
@@ -180,4 +179,3 @@ Never re-derived, vendored, or gated on.
 | `AUTH-ISO-27034-5-2017` | `some-true` | ISO/IEC 27034-5 defines application security control data structures. |
 | `AUTH-ISO-27005-2022` | `some-true` | ISO/IEC 27005:2022 provides guidance on information security risk management. |
 | `AUTH-ISO-25010-2023` | `some-true` | ISO/IEC 25010:2023 defines the product quality model. |
-

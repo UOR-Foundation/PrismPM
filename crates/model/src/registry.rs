@@ -1,7 +1,7 @@
 //! Typed shape of model/*.toml registers for PrismPM.
 
-use serde::Deserialize;
 use crate::ModelError;
+use serde::Deserialize;
 
 /// Honesty levels for claims.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -181,11 +181,17 @@ impl Errors {
         let mut seen = Vec::new();
         for e in &self.error {
             if seen.contains(&e.code.as_str()) {
-                return Err(ModelError::Inconsistent(format!("{}: duplicate error code", e.code)));
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: duplicate error code",
+                    e.code
+                )));
             }
             seen.push(&e.code);
             if !e.code.starts_with("PP") || e.code.len() != 6 {
-                return Err(ModelError::Inconsistent(format!("{}: invalid error code shape", e.code)));
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: invalid error code shape",
+                    e.code
+                )));
             }
         }
         Ok(())
@@ -231,10 +237,16 @@ impl Standards {
     pub fn check(&self) -> Result<(), ModelError> {
         for s in &self.standard {
             if s.edition.trim().is_empty() {
-                return Err(ModelError::Inconsistent(format!("{}: missing edition", s.id)));
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: missing edition",
+                    s.id
+                )));
             }
             if s.provenance.trim().is_empty() {
-                return Err(ModelError::Inconsistent(format!("{}: missing provenance", s.id)));
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: missing provenance",
+                    s.id
+                )));
             }
         }
         Ok(())
@@ -250,4 +262,3 @@ pub struct EmitterInputs {
     /// List of input file paths.
     pub inputs: Vec<String>,
 }
-

@@ -1,9 +1,9 @@
 //! The honesty meta-gate.
 
+use crate::runner::SuiteReport;
+use repo_model::Model;
 use std::collections::BTreeSet;
 use std::path::Path;
-use repo_model::Model;
-use crate::runner::SuiteReport;
 
 /// What the meta-gate found.
 #[derive(Clone, Debug, Default)]
@@ -36,7 +36,9 @@ pub fn check_honesty(root: &Path, tests: &BTreeSet<String>) -> std::io::Result<H
     let model = match Model::load(&root.join("model")) {
         Ok(model) => model,
         Err(error) => {
-            report.violations.push(format!("R1: model load failed: {error}"));
+            report
+                .violations
+                .push(format!("R1: model load failed: {error}"));
             return Ok(report);
         }
     };
@@ -52,27 +54,45 @@ pub fn check_honesty(root: &Path, tests: &BTreeSet<String>) -> std::io::Result<H
             .filter(|scenario| scenario.id == row.id)
             .collect();
         match matching.as_slice() {
-            [] => report.violations.push(format!("R3: {} is registered but has no scenario in features/suites/.", row.id)),
+            [] => report.violations.push(format!(
+                "R3: {} is registered but has no scenario in features/suites/.",
+                row.id
+            )),
             [scenario] => {
                 if scenario.suite != row.suite {
-                    report.violations.push(format!("R3: {} lives in `{}`, register says `{}`.", row.id, scenario.suite, row.suite));
+                    report.violations.push(format!(
+                        "R3: {} lives in `{}`, register says `{}`.",
+                        row.id, scenario.suite, row.suite
+                    ));
                 }
                 if scenario.statement.trim() != row.statement.trim() {
                     report.violations.push(format!("R3: {}'s scenario statement differs from register:\n  scenario: {}\n  register: {}", row.id, scenario.statement, row.statement));
                 }
                 if scenario.tag_line != format!("@{} @{}", row.id, row.level.as_str()) {
-                    report.violations.push(format!("R3: {} tag line `{}` does not match `@{} @{}`", row.id, scenario.tag_line, row.id, row.level.as_str()));
+                    report.violations.push(format!(
+                        "R3: {} tag line `{}` does not match `@{} @{}`",
+                        row.id,
+                        scenario.tag_line,
+                        row.id,
+                        row.level.as_str()
+                    ));
                 }
             }
-            multiple => report.violations.push(format!("R3: {} has {} scenarios; exactly one is required", row.id, multiple.len())),
+            multiple => report.violations.push(format!(
+                "R3: {} has {} scenarios; exactly one is required",
+                row.id,
+                multiple.len()
+            )),
         }
 
         let test_name = test_name_for(&row.id);
         if !tests.contains(&test_name) {
-            report.violations.push(format!("R3: {} has scenario in `{}` but no test named `{test_name}`.", row.id, row.suite));
+            report.violations.push(format!(
+                "R3: {} has scenario in `{}` but no test named `{test_name}`.",
+                row.id, row.suite
+            ));
         }
     }
 
     Ok(report)
 }
-

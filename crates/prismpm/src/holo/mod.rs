@@ -6,4 +6,3 @@ pub mod projector;
 pub mod validate;
 
 pub use dto::HoloDocument;
-

@@ -6,7 +6,10 @@ pub mod codegen;
 pub mod registry;
 pub mod release;
 
-pub use registry::{Authorities, AuthorityRow, Claim, ErrorRow, Errors, IdRow, Ids, Ledger, Level, StandardRow, Standards, EmitterInputs};
+pub use registry::{
+    Authorities, AuthorityRow, Claim, EmitterInputs, ErrorRow, Errors, IdRow, Ids, Ledger, Level,
+    StandardRow, Standards,
+};
 
 use std::path::{Path, PathBuf};
 
@@ -107,7 +110,10 @@ impl Model {
             }
             for id in &a.realized_by {
                 if self.ids.get(id).is_none() {
-                    return Err(bad(format!("{}: authority realized_by unknown ID {id}", a.id)));
+                    return Err(bad(format!(
+                        "{}: authority realized_by unknown ID {id}",
+                        a.id
+                    )));
                 }
             }
         }
@@ -139,4 +145,3 @@ pub fn repo_root() -> PathBuf {
         .expect("crates/model is two levels below repository root")
         .to_path_buf()
 }
-

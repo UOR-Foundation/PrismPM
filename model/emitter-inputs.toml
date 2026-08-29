@@ -7,3 +7,4 @@ inputs = [
     "crates/prismpm/src/holo/validate.rs",
     "schemas/holo.schema.json"
 ]
+

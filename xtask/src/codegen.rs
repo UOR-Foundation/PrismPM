@@ -1,8 +1,8 @@
 //! The model validation and code generation gate.
 
-use std::path::{Path, PathBuf};
-use repo_model::{codegen, Model};
 use crate::Fail;
+use repo_model::{codegen, Model};
+use std::path::{Path, PathBuf};
 
 /// Validate that generated documents equal the model registers.
 pub fn check_model(root: &Path, write: bool) -> Result<(), Fail> {
@@ -17,7 +17,11 @@ pub fn check_model(root: &Path, write: bool) -> Result<(), Fail> {
     if write {
         std::fs::write(&conformance_path, &conformance)?;
         std::fs::write(&errors_path, &errors)?;
-        println!("wrote {} and {}", conformance_path.display(), errors_path.display());
+        println!(
+            "wrote {} and {}",
+            conformance_path.display(),
+            errors_path.display()
+        );
         return Ok(());
     }
 
@@ -28,7 +32,8 @@ pub fn check_model(root: &Path, write: bool) -> Result<(), Fail> {
             return Err(format!(
                 "{} is stale: it disagrees with model/*.toml (R1). Run `just model-write`.",
                 path.display()
-            ).into());
+            )
+            .into());
         }
     }
 
@@ -38,7 +43,8 @@ pub fn check_model(root: &Path, write: bool) -> Result<(), Fail> {
         return Err(format!(
             "the honesty meta-gate failed inside validate-model:\n\n{}",
             report.violations.join("\n\n")
-        ).into());
+        )
+        .into());
     }
 
     crate::audit::audit_no_handwritten_lean(root)?;
@@ -51,4 +57,3 @@ pub fn check_model(root: &Path, write: bool) -> Result<(), Fail> {
     );
     Ok(())
 }
-

@@ -6,4 +6,3 @@ use std::path::Path;
 pub fn validate_json_schema(_schema_path: &Path, _json_bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
-

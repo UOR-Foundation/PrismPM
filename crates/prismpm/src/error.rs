@@ -28,4 +28,3 @@ impl fmt::Display for PrismError {
 }
 
 impl std::error::Error for PrismError {}
-

@@ -1,12 +1,16 @@
 //! CLI command parsing and execution.
 
-use std::path::PathBuf;
-use clap::{Parser, Subcommand};
 use crate::controller::{BuildRequest, CheckRequest, Controller, VerifyRequest};
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 /// The Prism Platform Model CLI.
 #[derive(Parser, Debug)]
-#[command(name = "prismpm", version = "0.1.0", about = "Prism Platform Model Framework")]
+#[command(
+    name = "prismpm",
+    version = "0.1.0",
+    about = "Prism Platform Model Framework"
+)]
 pub struct Cli {
     /// Optional project path (defaults to current directory).
     #[arg(short, long, global = true)]

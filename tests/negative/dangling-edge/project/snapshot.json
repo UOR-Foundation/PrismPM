@@ -1,0 +1,18 @@
+{
+  "spec": "lexlean/semantic-snapshot/1",
+  "source_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "semantic_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "compiler_semantics_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "language": "1.1",
+  "modules": [
+    {
+      "name": "Foundation.Arch",
+      "lean_module": "PrismPM.Foundation.Arch",
+      "declarations": [
+        { "id": "comp_gateway", "kind": "def", "lean_name": "comp_gateway", "axiom_policy": "none" },
+        { "id": "comp_auth", "kind": "def", "lean_name": "comp_auth", "axiom_policy": "none" },
+        { "id": "edge_dangling", "kind": "def", "lean_name": "edge_dangling", "axiom_policy": "none", "from_index": 99, "to_index": 1 }
+      ]
+    }
+  ]
+}
