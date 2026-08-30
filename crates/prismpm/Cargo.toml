@@ -17,6 +17,7 @@ include = [
     "src/**",
     "stdlib/**",
     "tests/production.rs",
+    "vendor/**",
 ]
 version.workspace = true
 edition.workspace = true

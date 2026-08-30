@@ -59,7 +59,6 @@ fn main() -> ExitCode {
         "check-fixtures" => check_fixtures(&root, write),
         "release-artifacts" => release_artifacts(&root),
         "release-check" => release_check(&root),
-        "package-api" => package_api_check(&root),
         "validate" => validate_all(&root, false),
         "vv" => run_vv(&root),
         _ => {
