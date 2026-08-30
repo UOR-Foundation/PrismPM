@@ -727,8 +727,9 @@ fn check_reproducibility(root: &Path) -> Result<(), Fail> {
 fn check_fixtures(root: &Path, write: bool) -> Result<(), Fail> {
     let fixtures = repo_conformance::fixtures::discover(root);
     if fixtures.is_empty() {
-        println!("check-fixtures: no fixture directories discovered");
-        return Ok(());
+        return Err(
+            "check-fixtures: no fixture directories discovered; the fixture gate is unarmed".into(),
+        );
     }
     for fixture in &fixtures {
         if write {
