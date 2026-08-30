@@ -136,8 +136,8 @@ errors, and content remain evidence. The reviewed set contains 41 files with:
 
 ```text
 build_id      2095c983d76fb94e8924b39fe68759fa20cd62433fefaa439395cccb15158bc5
-attestation   5bf6407e8a922ce152b9a5c01f026502fad1d89443084a18b4c2000646fe287c
-review reason Initial reviewed PrismPM 0.1.0 production artifacts
+attestation   01f278155303054594f56b0a6702d2af57e177038a4e9659b4b41ee01bff8ac3
+review reason Final reviewed PrismPM 0.1.0 production artifacts
 ```
 
 The acceptance gate only compares bytes and never regenerates goldens.
