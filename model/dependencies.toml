@@ -1,0 +1,50 @@
+spec = "prismpm/dependencies/1"
+
+[[dependency]]
+id = "lean4-prod"
+lean_version = "4.32.1"
+revision = "d618fd2f305e9d46319bda113fef601f01624ed3"
+source = "vendored"
+
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/lean4-prod/lean.tar"
+sha256 = "307d10d038e2c74de255ee6525cfa2055041eecf3e5d7f7da32e9d2168b8026d"
+
+[[dependency.artifact]]
+kind = "tree-manifest"
+path = "vendor/lean4-prod/rust/MANIFEST.sha256"
+sha256 = "890940f35bc92183835c881efae40e44a417d3ea2dc57cc34a6211b017844141"
+tree_root = "vendor/lean4-prod/rust"
+
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate"
+sha256 = "da23688cb7eee23dfa3258bb7e4856f2f4def937cf352d3ee47a92149baf980f"
+
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
+sha256 = "d83108a5435ea221e834348295bac11ecfc5e3fefdcda7684458e9ee9eb9720b"
+
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/lean4-prod/crates/prod-ir-0.1.0.crate"
+sha256 = "9c2a2af6d36fe12e90095d0a8d93f0f7c02d10c821e0be232569870f599c77f1"
+
+[[dependency]]
+id = "lexlean"
+version = "0.1.1"
+revision = "79371e16027d0864e014e3ce1f8f95745ce5caaa"
+source = "vendored"
+
+[[dependency.artifact]]
+kind = "tree-manifest"
+path = "vendor/lexlean/MANIFEST.sha256"
+sha256 = "47949ae679f8e864d7ce0063de0fef8c9c5ae9019d7f39386b365b21a6c80405"
+tree_root = "vendor/lexlean"
+
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/lexlean/lexlean-0.1.1.crate"
+sha256 = "2c657c5f96cd9cf21df6e584a110d12d872eec39439efcd1ff65ec1d6859a848"

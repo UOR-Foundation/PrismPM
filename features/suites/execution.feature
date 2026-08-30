@@ -13,7 +13,7 @@ Feature: execution
     Then all compilable callees are resolved with zero opaque gaps
 
   @EX-03 @build
-  Scenario: Generated Rust code is zero-cost, no_std compatible, and avoids heap allocation.
+  Scenario: Generated Rust validators are no_std compatible and perform no heap allocation during validator calls.
     Given LCNF IR from lean4-prod
     When prod-codegen generates Rust
     Then the output is no_std compatible and contains no heap allocations
@@ -31,13 +31,13 @@ Feature: execution
     Then validation results match Lean formal semantics
 
   @EX-06 @build
-  Scenario: Exhaustive evaluation matches Lean native results on small bounded models.
+  Scenario: Exhaustive generated-Rust evaluation matches the expected truth tables stated and proved in .lex.tex for the fixed small-model bounds.
     Given an exhaustive corpus of small bounded models
-    When evaluated in Lean and generated Rust
+    When generated Rust is compared with the committed formal truth-table oracle
     Then all outcomes are identical
 
   @EX-07 @build
-  Scenario: Property-based tests with committed seeds verify validator behavior on arbitrary bounded inputs.
+  Scenario: Deterministic property tests with committed seeds exercise validator behavior within the recorded finite strategies and bounds.
     Given property-based test suites with fixed seeds
     When proptests execute
     Then all invariant properties hold across generated models

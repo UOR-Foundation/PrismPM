@@ -1,9 +1,20 @@
 # tools.lock --- pinned toolchains and binary dependencies for PrismPM
 
+[support]
+# The first release has one supported/normative host. Additional hosts are not
+# claimed until their installer bytes and complete build/API matrix are pinned.
+hosts = ["x86_64-unknown-linux-gnu"]
+
 [rust]
 version = "1.97.1"
 profile = "minimal"
-components = ["rustfmt", "clippy"]
+components = ["rustfmt", "clippy", "rust-analyzer"]
+
+[rustup]
+version = "1.28.2"
+platform = "x86_64-unknown-linux-gnu"
+url = "https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-unknown-linux-gnu/rustup-init"
+sha256 = "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c"
 
 [lean]
 version = "v4.32.1"
@@ -12,16 +23,24 @@ commit = "f054605aea4b840552cca2e725580bffd1e1b704"
 
 [elan]
 version = "4.2.3"
+platform = "x86_64-unknown-linux-gnu"
 url = "https://github.com/leanprover/elan/releases/download/v4.2.3/elan-x86_64-unknown-linux-gnu.tar.gz"
-sha256 = "b7a667104b77f9e8a8b1ef381335dc1200424564c7ea4ca88b64e5264b38cf4b"
+sha256 = "df0b2b3a439961ffcbb3985214365ffe40f49bc871df04dff268c7d8e21ca8b2"
 
 [just]
 version = "1.57.0"
+platform = "x86_64-unknown-linux-musl"
 url = "https://github.com/casey/just/releases/download/1.57.0/just-1.57.0-x86_64-unknown-linux-musl.tar.gz"
-sha256 = "eb74a6cfefc2df08447cf08a0dca0e5a6ef6c3b6dd8621415df8a5a549646b96"
+sha256 = "45b548094283cb9739af8f13273b8cddeee869f5b4ef2bb631b1f311cb566155"
 
 [cargo-deny]
 version = "0.20.2"
+platform = "x86_64-unknown-linux-musl"
 url = "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz"
-sha256 = "a609d94ceb70959fbbd8e0ae71ec700da6ef2c6e61f237ef1d488f28df05ba1b"
+sha256 = "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f"
 
+[verification-executables]
+elan_proxy_sha256 = "840179e70803ef373c2ec53342d6a45ea7d022533e4145489fc1278b4f716385"
+rustup_proxy_sha256 = "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c"
+timeout_sha256 = "5ef0eaaaa4220593add7716aad74da927ca3bb10605e964330de64fecc3ef15e"
+timeout_package = "coreutils=9.1-1"

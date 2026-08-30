@@ -5,11 +5,7 @@ default:
 
 # Run full non-mutating verification and acceptance gates
 vv:
-    cargo metadata --locked
-    cargo fmt --all -- --check
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo test --workspace --all-features
-    cargo run --package xtask -- vv
+    cargo xtask vv
 
 # Validate claim registers and spec links
 validate:
@@ -20,8 +16,11 @@ check-fixtures:
     cargo run --package xtask -- check-fixtures
 
 # Rewrite fixture expected outputs
-write-fixtures:
+fixtures-write:
     cargo run --package xtask -- check-fixtures --write
+
+# Backward-compatible spelling; the normative rewrite command is fixtures-write.
+write-fixtures: fixtures-write
 
 # Verify reproducibility across two distinct build roots
 check-reproducibility:
@@ -32,8 +31,15 @@ verify-examples:
     cargo run --package xtask -- verify-examples
 
 # Verify golden outputs
-check-golden:
+golden-check:
     cargo run --package xtask -- check-golden
+
+# Rewrite committed golden outputs for review. Acceptance never invokes this recipe.
+golden-write reason:
+    PRISMPM_GOLDEN_REASON='{{reason}}' cargo run --package xtask -- check-golden --write
+
+# Backward-compatible spelling; the normative check command is golden-check.
+check-golden: golden-check
 
 # Regenerate model artifacts and documentation
 codegen:
@@ -46,4 +52,3 @@ release-check:
 # Stage release artifacts
 release-artifacts:
     cargo run --package xtask -- release-artifacts
-

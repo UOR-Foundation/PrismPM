@@ -1,7 +1,24 @@
 [package]
 name = "prismpm"
 description = "Prism Platform Model Framework"
-readme = "../../README.md"
+readme = "README.md"
+include = [
+    "Cargo.toml",
+    "CHANGELOG.md",
+    "CONFORMANCE.md",
+    "ERRORS.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "README.md",
+    "SPEC.md",
+    "language/**",
+    "model/**",
+    "schemas/**",
+    "src/**",
+    "stdlib/**",
+    "tests/production.rs",
+    "vendor/**",
+]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,19 +32,22 @@ camino = { workspace = true }
 clap = { workspace = true }
 fs4 = { workspace = true }
 lexlean = { workspace = true }
+prod-codegen = { workspace = true }
+prod-ir = { workspace = true }
 same-file = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
+tar = { workspace = true }
 toml = { workspace = true }
 unicode-normalization = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+jsonschema = { workspace = true }
 proptest = { workspace = true }
 
 [lints]
 workspace = true
-

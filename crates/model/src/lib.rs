@@ -1,13 +1,15 @@
 //! Typed registries parsed from model/*.toml.
 
 #![deny(missing_docs)]
+#![forbid(unsafe_code)]
 
 pub mod codegen;
 pub mod registry;
 pub mod release;
 
 pub use registry::{
-    Authorities, AuthorityRow, Claim, EmitterInputs, ErrorRow, Errors, IdRow, Ids, Ledger, Level,
+    Authorities, AuthorityRow, Claim, EmitterInputs, ErrorRow, Errors, ExecutionCorpus,
+    ExecutionOracle, ExhaustiveCorpus, IdRow, Ids, Ledger, Level, PropertyCorpus, RuntimeRoots,
     StandardRow, Standards,
 };
 
@@ -28,6 +30,10 @@ pub struct Model {
     pub standards: Standards,
     /// model/emitter-inputs.toml
     pub emitter_inputs: EmitterInputs,
+    /// model/execution-corpus.toml
+    pub execution_corpus: ExecutionCorpus,
+    /// model/runtime-roots.toml
+    pub runtime_roots: RuntimeRoots,
 }
 
 /// Model load/check failure.
@@ -63,6 +69,8 @@ impl Model {
             errors: read(dir, "errors.toml")?,
             standards: read(dir, "standards.toml")?,
             emitter_inputs: read(dir, "emitter-inputs.toml")?,
+            execution_corpus: read(dir, "execution-corpus.toml")?,
+            runtime_roots: read(dir, "runtime-roots.toml")?,
         })
     }
 
@@ -78,6 +86,92 @@ impl Model {
         self.check_authorities()?;
         self.errors.check()?;
         self.standards.check()?;
+        self.check_execution_corpus()?;
+        Ok(())
+    }
+
+    fn check_execution_corpus(&self) -> Result<(), ModelError> {
+        let corpus = &self.execution_corpus;
+        let bad = |message: &str| ModelError::Inconsistent(message.to_owned());
+        let width = corpus
+            .exhaustive
+            .value_max
+            .checked_add(1)
+            .ok_or_else(|| bad("execution corpus value range overflows"))?;
+        let mut list_count = 0_u64;
+        let mut width_power = 1_u64;
+        for length in 0..=corpus.exhaustive.max_length {
+            list_count = list_count
+                .checked_add(width_power)
+                .ok_or_else(|| bad("execution corpus size overflows"))?;
+            if length != corpus.exhaustive.max_length {
+                width_power = width_power
+                    .checked_mul(width)
+                    .ok_or_else(|| bad("execution corpus size overflows"))?;
+            }
+        }
+        let exhaustive_cases = list_count;
+        let property_cases = u64::try_from(corpus.property.case_count)
+            .map_err(|_| bad("execution property count overflows"))?;
+        let expected_cases = exhaustive_cases
+            .checked_add(property_cases)
+            .ok_or_else(|| bad("execution corpus size overflows"))?;
+        let mut functions = corpus
+            .oracle
+            .iter()
+            .map(|row| row.function.as_str())
+            .collect::<Vec<_>>();
+        let original = functions.clone();
+        functions.sort_unstable();
+        functions.dedup();
+        let theorem_count = corpus
+            .oracle
+            .iter()
+            .map(|row| row.theorem.as_str())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        let runtime_functions = corpus
+            .oracle
+            .iter()
+            .filter(|row| row.runtime_root)
+            .map(|row| row.function.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let runtime_roots = self
+            .runtime_roots
+            .roots
+            .iter()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>();
+        if corpus.spec != "prismpm/execution-corpus/1"
+            || corpus.strategy != "exhaustive-v1+lcg-v1"
+            || corpus.seed.len() != 16
+            || !corpus.seed.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || corpus.value_domain != "u64"
+            || corpus.exhaustive.case_count != exhaustive_cases
+            || corpus.property.shrink_result != "not-applicable-passed"
+            || corpus.case_count != expected_cases
+            || corpus.oracle.is_empty()
+            || functions != original
+            || theorem_count != corpus.oracle.len()
+            || self.runtime_roots.spec != "prismpm/runtime-roots/1"
+            || self.runtime_roots.lean_module != "PrismPM.Foundation.Holo"
+            || self.runtime_roots.ir_module != "PrismPM"
+            || self
+                .runtime_roots
+                .roots
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+            || runtime_roots.len() != self.runtime_roots.roots.len()
+            || runtime_functions != runtime_roots
+            || corpus.oracle.iter().any(|row| {
+                !row.function.starts_with("PrismPM.Foundation.Holo.")
+                    || !row.theorem.starts_with("PrismPM.Foundation.Holo.")
+            })
+        {
+            return Err(bad(
+                "execution corpus is not canonical or internally consistent",
+            ));
+        }
         Ok(())
     }
 

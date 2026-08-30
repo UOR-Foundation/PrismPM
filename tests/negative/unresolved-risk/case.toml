@@ -1,5 +1,14 @@
 spec = "prismpm/test-case/1"
-command = "check"
+command = "holo-unresolved-risk"
 expected_exit = 1
-expect_artifacts = false
+normalization = "none"
+capabilities = ["HO-10", "ST-03"]
+expected_artifacts = []
 
+[[expected_diagnostics]]
+code = "PP2005"
+message = "risk link is unresolved"
+primary = "none"
+labels = []
+notes = []
+help = []

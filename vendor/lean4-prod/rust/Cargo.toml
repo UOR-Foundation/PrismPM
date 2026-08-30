@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["prod-codegen", "prod-ir"]
+
+[workspace.dependencies]
+nom = { version = "7", default-features = false }
+serde = { version = "1", features = ["derive"] }
+
+[workspace.lints.rust]
+missing_docs = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"

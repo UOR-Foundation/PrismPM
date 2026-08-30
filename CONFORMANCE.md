@@ -44,6 +44,7 @@ The three honesty levels:
 | `CT-08` | `build` | The Controller operates completely offline during build and check. |
 | `CT-09` | `build` | Project configuration is strictly validated against schemas/project.schema.json. |
 | `CT-10` | `build` | The Controller preserves cause chains for underlying LexLean diagnostics. |
+| `CT-11` | `build` | Controller cleanup removes only the configured real output directory and rejects a symlink target. |
 
 ## execution
 
@@ -51,11 +52,11 @@ The three honesty levels:
 | --- | --- | --- |
 | `EX-01` | `build` | lean4-prod exports compilable LCNF from LexLean-generated Lean modules. |
 | `EX-02` | `build` | lean4-prod transitive closure extraction resolves all dependencies without opaque gaps. |
-| `EX-03` | `build` | Generated Rust code is zero-cost, no_std compatible, and avoids heap allocation. |
+| `EX-03` | `build` | Generated Rust validators are no_std compatible and perform no heap allocation during validator calls. |
 | `EX-04` | `build` | The Rust host strictly decodes canonical Holo and normalizes string IDs to indexes. |
 | `EX-05` | `build` | Generated Rust validators correctly evaluate normalized Holo models. |
-| `EX-06` | `build` | Exhaustive evaluation matches Lean native results on small bounded models. |
-| `EX-07` | `build` | Property-based tests with committed seeds verify validator behavior on arbitrary bounded inputs. |
+| `EX-06` | `build` | Exhaustive generated-Rust evaluation matches the expected truth tables stated and proved in .lex.tex for the fixed small-model bounds. |
+| `EX-07` | `build` | Deterministic property tests with committed seeds exercise validator behavior within the recorded finite strategies and bounds. |
 | `EX-08` | `build` | Generated Rust validators never panic on caller-controlled inputs. |
 | `EX-09` | `build` | Erased proof fields are not claimed as runtime checks. |
 | `EX-10` | `build` | Type boundary conversions between Lean Nat and Rust u64 are explicitly bounded. |

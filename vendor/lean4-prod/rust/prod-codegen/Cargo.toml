@@ -1,0 +1,12 @@
+[package]
+name = "prod-codegen"
+version = "0.1.0"
+edition = "2021"
+authors = ["UOR Foundation"]
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+prod-ir = { version = "0.1.0", path = "../prod-ir" }

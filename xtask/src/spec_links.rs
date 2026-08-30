@@ -9,13 +9,14 @@ struct TableRow {
     id: String,
     suite: String,
     statement: String,
+    primary: String,
 }
 
 fn parse_table(spec: &str) -> Result<Vec<TableRow>, Fail> {
     let registry = spec
-        .split("## 3. Conformance ID Registry")
+        .split("## Appendix A. Conformance ID Registry")
         .nth(1)
-        .ok_or("SPEC.md has no ## 3. Conformance ID Registry")?;
+        .ok_or("SPEC.md has no conformance registry appendix")?;
     let mut rows = Vec::new();
     for line in registry.lines() {
         let trimmed = line.trim();
@@ -39,6 +40,7 @@ fn parse_table(spec: &str) -> Result<Vec<TableRow>, Fail> {
             id,
             suite: strip_ticks(cells[1]),
             statement: cells[2].to_owned(),
+            primary: cells[3].to_owned(),
         });
     }
     Ok(rows)
@@ -78,6 +80,27 @@ pub fn validate(root: &Path) -> Result<(), Fail> {
             return Err(format!(
                 "RP-07: `{}` statement mismatch:\n  table:    {}\n  register: {}",
                 row.id, row.statement, model_row.statement
+            )
+            .into());
+        }
+        let expected_section = match row.suite.as_str() {
+            "repository" => "§1",
+            "facets" => "§2",
+            "holo" => "§3",
+            "controller" => "§4",
+            "stdlib" => "§5",
+            "artifacts" => "§6",
+            "execution" => "§7",
+            "verification" => "§8",
+            "security" => "§9",
+            other => return Err(format!("RP-07: unknown suite `{other}`").into()),
+        };
+        if row.primary != expected_section
+            || !spec.contains(&format!("## {}.", &expected_section[2..]))
+        {
+            return Err(format!(
+                "RP-07: `{}` primary specification `{}` does not name the suite section `{expected_section}`",
+                row.id, row.primary
             )
             .into());
         }

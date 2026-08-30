@@ -1,5 +1,5 @@
 //! The PrismPM command-line binary.
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::process::ExitCode {
     prismpm::cli::run()
 }

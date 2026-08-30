@@ -20,7 +20,13 @@
 **/*.ilean
 **/*.c
 **/*.ir
+**/generated.rs
 **/*.out
+
+# The sole reviewed generated-output exception. Its manifest binds every
+# generated Lean file to source, compiler semantics, and exact hashes.
+!/tests/golden/stdlib/
+!/tests/golden/stdlib/**
 
 # Editor and OS
 .DS_Store
@@ -29,4 +35,3 @@
 .idea/
 .vscode/
 .claude/
-

@@ -253,6 +253,12 @@ level = "build"
 statement = "The Controller preserves cause chains for underlying LexLean diagnostics."
 
 [[id]]
+id = "CT-11"
+suite = "controller"
+level = "build"
+statement = "Controller cleanup removes only the configured real output directory and rejects a symlink target."
+
+[[id]]
 id = "ST-01"
 suite = "stdlib"
 level = "build"
@@ -388,7 +394,7 @@ statement = "lean4-prod transitive closure extraction resolves all dependencies 
 id = "EX-03"
 suite = "execution"
 level = "build"
-statement = "Generated Rust code is zero-cost, no_std compatible, and avoids heap allocation."
+statement = "Generated Rust validators are no_std compatible and perform no heap allocation during validator calls."
 
 [[id]]
 id = "EX-04"
@@ -406,13 +412,13 @@ statement = "Generated Rust validators correctly evaluate normalized Holo models
 id = "EX-06"
 suite = "execution"
 level = "build"
-statement = "Exhaustive evaluation matches Lean native results on small bounded models."
+statement = "Exhaustive generated-Rust evaluation matches the expected truth tables stated and proved in .lex.tex for the fixed small-model bounds."
 
 [[id]]
 id = "EX-07"
 suite = "execution"
 level = "build"
-statement = "Property-based tests with committed seeds verify validator behavior on arbitrary bounded inputs."
+statement = "Deterministic property tests with committed seeds exercise validator behavior within the recorded finite strategies and bounds."
 
 [[id]]
 id = "EX-08"
@@ -551,4 +557,3 @@ id = "SE-08"
 suite = "security"
 level = "build"
 statement = "Dependency audits with cargo-deny enforce license and advisory policies."
-

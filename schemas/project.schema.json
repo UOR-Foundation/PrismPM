@@ -3,28 +3,33 @@
   "$id": "prismpm/project/1",
   "title": "ProjectConfig",
   "type": "object",
-  "required": ["project", "lexlean_project", "build_root", "limits"],
+  "required": ["spec", "project", "lexlean_project", "build_root", "limits"],
   "additionalProperties": false,
   "properties": {
+    "spec": {
+      "const": "prismpm/project/1"
+    },
     "project": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "lexlean_project": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^(?:\\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*)(?:/(?:\\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*))*$"
     },
     "build_root": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^(?:\\.[A-Za-z0-9_-]|[A-Za-z0-9_-])[A-Za-z0-9_.-]*$"
     },
     "limits": {
       "type": "object",
       "required": ["max_holo_bytes", "max_entities", "max_diagnostics"],
       "additionalProperties": false,
       "properties": {
-        "max_holo_bytes": { "type": "integer", "minimum": 1 },
-        "max_entities": { "type": "integer", "minimum": 1 },
-        "max_diagnostics": { "type": "integer", "minimum": 1 }
+        "max_holo_bytes": { "type": "integer", "minimum": 1, "maximum": 1073741824 },
+        "max_entities": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "max_diagnostics": { "type": "integer", "minimum": 1, "maximum": 10000 }
       }
     }
   }
 }
-

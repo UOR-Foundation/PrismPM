@@ -218,6 +218,10 @@ pub struct StandardRow {
     pub name: String,
     /// Standard edition.
     pub edition: String,
+    /// Exact public catalog reference.
+    pub reference: String,
+    /// Evidence basis (`public-catalog` or `authorized-clause-review`).
+    pub basis: String,
     /// Modeled scope.
     pub scope: String,
     /// Provenance citation.
@@ -226,6 +230,8 @@ pub struct StandardRow {
     pub interpretation: String,
     /// Responsible facet package.
     pub facet_package: String,
+    /// Exact facet entry IDs implementing this interpretation.
+    pub facet_entries: Vec<String>,
     /// Coverage state.
     pub coverage_state: String,
     /// Included in release scope.
@@ -248,6 +254,51 @@ impl Standards {
                     s.id
                 )));
             }
+            if !matches!(
+                s.basis.as_str(),
+                "public-catalog" | "authorized-clause-review"
+            ) {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: unsupported standards evidence basis",
+                    s.id
+                )));
+            }
+            if !s.reference.starts_with("https://www.iso.org/standard/") {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: reference is not an exact ISO catalog URL",
+                    s.id
+                )));
+            }
+            if s.basis == "public-catalog"
+                && (s.scope.to_ascii_lowercase().contains("clause")
+                    || s.interpretation
+                        .to_ascii_lowercase()
+                        .contains("conforms to"))
+            {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: catalog metadata cannot support clause-level conformance",
+                    s.id
+                )));
+            }
+            let claim_text = format!("{} {}", s.scope, s.interpretation).to_ascii_lowercase();
+            if claim_text.contains("iso certified") || claim_text.contains("iso certification") {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: unsupported certification claim",
+                    s.id
+                )));
+            }
+            if !matches!(s.coverage_state.as_str(), "implemented" | "known") {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: unsupported coverage state",
+                    s.id
+                )));
+            }
+            if s.release_scope && s.coverage_state != "implemented" {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: release-scope row is not implemented",
+                    s.id
+                )));
+            }
         }
         Ok(())
     }
@@ -259,6 +310,86 @@ impl Standards {
 pub struct EmitterInputs {
     /// Schema spec identifier.
     pub spec: String,
+    /// Canonical framed tree digest of the exact input list.
+    pub digest: String,
     /// List of input file paths.
     pub inputs: Vec<String>,
+}
+
+/// model/execution-corpus.toml
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionCorpus {
+    /// Schema spec identifier.
+    pub spec: String,
+    /// Fixed finite execution strategy identifier.
+    pub strategy: String,
+    /// Canonical hexadecimal deterministic seed.
+    pub seed: String,
+    /// Total exhaustive plus deterministic-property case count.
+    pub case_count: u64,
+    /// Runtime scalar domain.
+    pub value_domain: String,
+    /// Exhaustive finite-list bounds.
+    pub exhaustive: ExhaustiveCorpus,
+    /// Deterministic property-test bounds.
+    pub property: PropertyCorpus,
+    /// Runtime functions and their LexLean-authored oracle theorems.
+    pub oracle: Vec<ExecutionOracle>,
+}
+
+/// Exhaustive finite-list strategy parameters.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExhaustiveCorpus {
+    /// Inclusive maximum list length.
+    pub max_length: usize,
+    /// Inclusive maximum generated value.
+    pub value_max: u64,
+    /// Exclusive bound supplied to the all-below validator.
+    pub all_below_bound: u64,
+    /// Number of exhaustive generated input cases.
+    pub case_count: u64,
+}
+
+/// Deterministic property-test strategy parameters.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PropertyCorpus {
+    /// Number of deterministic generated cases.
+    pub case_count: usize,
+    /// Inclusive maximum generated list length.
+    pub max_length: usize,
+    /// Exclusive bound supplied to the flattened validator.
+    pub all_below_bound: u64,
+    /// Modulus used to generate ordinary values.
+    pub generated_value_modulus: u64,
+    /// Shrink outcome; passing fixed corpora have no counterexample to shrink.
+    pub shrink_result: String,
+}
+
+/// One runtime function bound to its formal oracle theorem.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionOracle {
+    /// Fully qualified executable function.
+    pub function: String,
+    /// Fully qualified LexLean-generated theorem stating its expected result.
+    pub theorem: String,
+    /// Whether the function must occur in the exact named-export root set.
+    pub runtime_root: bool,
+}
+
+/// Exact generated Lean definitions selected for named LCNF export.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeRoots {
+    /// Schema spec identifier.
+    pub spec: String,
+    /// Generated Lean module containing the roots.
+    pub lean_module: String,
+    /// Logical LCNF module name.
+    pub ir_module: String,
+    /// Sorted, unique, fully qualified generated Lean definition names.
+    pub roots: Vec<String>,
 }

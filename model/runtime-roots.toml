@@ -1,0 +1,14 @@
+spec = "prismpm/runtime-roots/1"
+lean_module = "PrismPM.Foundation.Holo"
+ir_module = "PrismPM"
+roots = [
+  "PrismPM.Foundation.Holo.canonicalIndexes",
+  "PrismPM.Foundation.Holo.validateComponentIndexes",
+  "PrismPM.Foundation.Holo.validateControlLinks",
+  "PrismPM.Foundation.Holo.validateEdgeEndpoints",
+  "PrismPM.Foundation.Holo.validateExactStandardsProfile",
+  "PrismPM.Foundation.Holo.validateFlattenedBounds",
+  "PrismPM.Foundation.Holo.validateQualityLinks",
+  "PrismPM.Foundation.Holo.validateRiskLinks",
+  "PrismPM.Foundation.Holo.validateViewpointLinks"
+]

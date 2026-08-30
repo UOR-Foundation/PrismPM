@@ -1,181 +1,353 @@
-//! In-memory Holo model validation and referential integrity checking.
+//! Structural, ordering, profile, and cross-reference validation for Holo.
 
 use super::dto::HoloDocument;
 use crate::error::PrismError;
 use std::collections::BTreeSet;
 
-/// Validate structural and referential integrity of a Holo model.
+const PROFILE: [&str; 5] = [
+    "ISO-25010-2023",
+    "ISO-27005-2022",
+    "ISO-27034-1-2011",
+    "ISO-27034-5-2017",
+    "ISO-42010-2022",
+];
+
+fn digest(value: &str, field: &str) -> Result<(), PrismError> {
+    if value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        Ok(())
+    } else {
+        Err(PrismError::new(
+            "PP3002",
+            format!("{field} is not a lowercase SHA-256 digest"),
+        ))
+    }
+}
+
+fn identifier(value: &str, field: &str) -> Result<(), PrismError> {
+    if value.is_empty()
+        || !value.is_ascii()
+        || !value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b':' | b'@' | b'-' | b'_')
+        })
+    {
+        return Err(PrismError::new(
+            "PP3002",
+            format!("{field} is not a qualified ASCII identifier"),
+        ));
+    }
+    Ok(())
+}
+
+fn ordered<'a>(
+    kind: &str,
+    rows: impl IntoIterator<Item = (&'a str, u64)>,
+) -> Result<BTreeSet<String>, PrismError> {
+    let rows: Vec<_> = rows.into_iter().collect();
+    let mut ids = BTreeSet::new();
+    let mut previous: Option<&str> = None;
+    for (expected, (id, index)) in rows.iter().enumerate() {
+        identifier(id, kind)?;
+        if !ids.insert((*id).to_owned()) {
+            return Err(PrismError::new(
+                "PP3003",
+                format!("duplicate {kind} ID {id}"),
+            ));
+        }
+        if previous.is_some_and(|prior| prior.as_bytes() >= id.as_bytes()) {
+            return Err(PrismError::new(
+                "PP3002",
+                format!("{kind} IDs are not in canonical ASCII order"),
+            ));
+        }
+        if *index != expected as u64 {
+            return Err(PrismError::new(
+                "PP3004",
+                format!("{kind} {id} has index {index}, expected {expected}"),
+            ));
+        }
+        previous = Some(id);
+    }
+    Ok(ids)
+}
+
+fn contains_index<T>(rows: &[T], index: u64) -> bool {
+    usize::try_from(index).is_ok_and(|value| value < rows.len())
+}
+
+/// Validate a Holo DTO before encoding or after strict decoding.
 pub fn validate(doc: &HoloDocument) -> Result<(), PrismError> {
     if doc.schema != "prismpm/holo/1" {
-        return Err(PrismError::new(
-            "PP3005",
-            format!("unsupported Holo schema: {}", doc.schema),
-        ));
+        return Err(PrismError::new("PP3005", "unsupported Holo schema"));
     }
-
-    if doc.semantic_id.len() != 64 || !doc.semantic_id.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(PrismError::new(
-            "PP3002",
-            "semantic_id must be a 64-character hex string",
-        ));
-    }
-    if doc.compiler_semantics_id.len() != 64
-        || !doc
-            .compiler_semantics_id
-            .chars()
-            .all(|c| c.is_ascii_hexdigit())
+    digest(&doc.provenance.source_id, "source_id")?;
+    digest(&doc.provenance.semantic_id, "semantic_id")?;
+    digest(
+        &doc.provenance.compiler_semantics_id,
+        "compiler_semantics_id",
+    )?;
+    digest(&doc.provenance.snapshot_id, "snapshot_id")?;
+    digest(&doc.provenance.emitter_semantics_id, "emitter_semantics_id")?;
+    if doc
+        .standards_profile
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        != PROFILE
     {
-        return Err(PrismError::new(
-            "PP3002",
-            "compiler_semantics_id must be a 64-character hex string",
-        ));
+        return Err(PrismError::new("PP2001", "standards profile is not exact"));
     }
-    if doc.emitter_semantics_id.len() != 64
-        || !doc
-            .emitter_semantics_id
-            .chars()
-            .all(|c| c.is_ascii_hexdigit())
-    {
-        return Err(PrismError::new(
-            "PP3002",
-            "emitter_semantics_id must be a 64-character hex string",
-        ));
+    let packages: Vec<_> = doc
+        .provenance
+        .facet_packages
+        .iter()
+        .map(|row| row.package.as_str())
+        .collect();
+    if packages != ["prism.arch", "prism.qual", "prism.sec"] {
+        return Err(PrismError::new("PP2001", "facet package list is not exact"));
     }
-
-    let mut component_indices = BTreeSet::new();
-    let mut component_ids = BTreeSet::new();
-    for (expected_idx, comp) in doc.components.iter().enumerate() {
-        if comp.index != expected_idx as u64 {
-            return Err(PrismError::new(
-                "PP3004",
-                format!(
-                    "component index mismatch: expected {expected_idx}, found {}",
-                    comp.index
-                ),
-            ));
+    for package in &doc.provenance.facet_packages {
+        identifier(&package.package, "facet package")?;
+        if package.version != "1.0.0" {
+            return Err(PrismError::new("PP2001", "facet version is not exact"));
         }
-        if !component_ids.insert(&comp.id) {
-            return Err(PrismError::new(
-                "PP3003",
-                format!("duplicate component id: {}", comp.id),
-            ));
-        }
-        component_indices.insert(comp.index);
+        digest(&package.content_id, "facet content_id")?;
     }
 
-    let mut edge_ids = BTreeSet::new();
-    for (expected_idx, edge) in doc.edges.iter().enumerate() {
-        if edge.index != expected_idx as u64 {
-            return Err(PrismError::new(
-                "PP3004",
-                format!(
-                    "edge index mismatch: expected {expected_idx}, found {}",
-                    edge.index
-                ),
-            ));
+    let component_kinds = ordered(
+        "component kind",
+        doc.architecture
+            .component_kinds
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    let edge_kinds = ordered(
+        "edge kind",
+        doc.architecture
+            .edge_kinds
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "model kind",
+        doc.architecture
+            .model_kinds
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "component",
+        doc.architecture
+            .components
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.architecture.components {
+        if !component_kinds.contains(&row.kind_id) {
+            return Err(PrismError::new("PP2001", "component kind is unresolved"));
         }
-        if !edge_ids.insert(&edge.id) {
-            return Err(PrismError::new(
-                "PP3003",
-                format!("duplicate edge id: {}", edge.id),
-            ));
+    }
+    ordered(
+        "edge",
+        doc.architecture
+            .edges
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.architecture.edges {
+        if !contains_index(&doc.architecture.components, row.from_index)
+            || !contains_index(&doc.architecture.components, row.to_index)
+        {
+            return Err(PrismError::new("PP2004", "edge endpoint is dangling"));
         }
-        if !component_indices.contains(&edge.from_index) {
-            return Err(PrismError::new(
-                "PP2004",
-                format!(
-                    "edge {} source index {} is dangling",
-                    edge.id, edge.from_index
-                ),
-            ));
+        if !edge_kinds.contains(&row.kind_id) {
+            return Err(PrismError::new("PP2001", "edge kind is unresolved"));
         }
-        if !component_indices.contains(&edge.to_index) {
-            return Err(PrismError::new(
-                "PP2004",
-                format!(
-                    "edge {} target index {} is dangling",
-                    edge.id, edge.to_index
-                ),
-            ));
+    }
+    ordered(
+        "stakeholder",
+        doc.architecture
+            .stakeholders
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "concern",
+        doc.architecture
+            .concerns
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "viewpoint",
+        doc.architecture
+            .viewpoints
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.architecture.viewpoints {
+        if !contains_index(&doc.architecture.stakeholders, row.stakeholder_index)
+            || !contains_index(&doc.architecture.concerns, row.concern_index)
+            || !contains_index(&doc.architecture.model_kinds, row.model_kind_index)
+        {
+            return Err(PrismError::new("PP2001", "viewpoint link is unresolved"));
+        }
+    }
+    ordered(
+        "view",
+        doc.architecture
+            .views
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.architecture.views {
+        if !contains_index(&doc.architecture.viewpoints, row.viewpoint_index)
+            || !contains_index(&doc.architecture.model_kinds, row.model_kind_index)
+        {
+            return Err(PrismError::new("PP2001", "view link is unresolved"));
         }
     }
 
-    let mut risk_indices = BTreeSet::new();
-    let mut risk_ids = BTreeSet::new();
-    for (expected_idx, risk) in doc.risks.iter().enumerate() {
-        if risk.index != expected_idx as u64 {
-            return Err(PrismError::new(
-                "PP3004",
-                format!(
-                    "risk index mismatch: expected {expected_idx}, found {}",
-                    risk.index
-                ),
-            ));
+    let likelihoods = ordered(
+        "likelihood",
+        doc.security
+            .likelihoods
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    let impacts = ordered(
+        "impact",
+        doc.security
+            .impacts
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "asset",
+        doc.security
+            .assets
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.security.assets {
+        if !contains_index(&doc.architecture.components, row.component_index) {
+            return Err(PrismError::new("PP2005", "asset component is unresolved"));
         }
-        if !risk_ids.insert(&risk.id) {
-            return Err(PrismError::new(
-                "PP3003",
-                format!("duplicate risk id: {}", risk.id),
-            ));
-        }
-        if !doc.components.is_empty() && !component_indices.contains(&risk.asset_index) {
-            return Err(PrismError::new(
-                "PP2005",
-                format!(
-                    "risk {} references undefined asset index {}",
-                    risk.id, risk.asset_index
-                ),
-            ));
-        }
-        risk_indices.insert(risk.index);
     }
-
-    let mut control_ids = BTreeSet::new();
-    for (expected_idx, ctrl) in doc.controls.iter().enumerate() {
-        if ctrl.index != expected_idx as u64 {
-            return Err(PrismError::new(
-                "PP3004",
-                format!(
-                    "control index mismatch: expected {expected_idx}, found {}",
-                    ctrl.index
-                ),
-            ));
+    ordered(
+        "threat",
+        doc.security
+            .threats
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "risk",
+        doc.security
+            .risks
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.security.risks {
+        if !contains_index(&doc.security.assets, row.asset_index)
+            || !contains_index(&doc.security.threats, row.threat_index)
+            || !likelihoods.contains(&row.likelihood_id)
+            || !impacts.contains(&row.impact_id)
+        {
+            return Err(PrismError::new("PP2005", "risk link is unresolved"));
         }
-        if !control_ids.insert(&ctrl.id) {
-            return Err(PrismError::new(
-                "PP3003",
-                format!("duplicate control id: {}", ctrl.id),
-            ));
+    }
+    ordered(
+        "control",
+        doc.security
+            .controls
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.security.controls {
+        if !contains_index(&doc.security.risks, row.risk_index) {
+            return Err(PrismError::new("PP2006", "control risk is unresolved"));
         }
-        if !doc.risks.is_empty() && !risk_indices.contains(&ctrl.risk_index) {
+    }
+    ordered(
+        "activity",
+        doc.security
+            .activities
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.security.activities {
+        if !contains_index(&doc.security.controls, row.control_index) {
+            return Err(PrismError::new("PP2006", "activity control is unresolved"));
+        }
+    }
+    ordered(
+        "measurement",
+        doc.security
+            .measurements
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.security.measurements {
+        if !contains_index(&doc.security.controls, row.control_index) {
             return Err(PrismError::new(
                 "PP2006",
-                format!(
-                    "control {} references undefined risk index {}",
-                    ctrl.id, ctrl.risk_index
-                ),
+                "measurement control is unresolved",
             ));
         }
     }
 
-    let mut qual_ids = BTreeSet::new();
-    for (expected_idx, qual) in doc.quality_requirements.iter().enumerate() {
-        if qual.index != expected_idx as u64 {
+    ordered(
+        "quality characteristic",
+        doc.quality
+            .characteristics
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    ordered(
+        "quality subcharacteristic",
+        doc.quality
+            .subcharacteristics
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.quality.subcharacteristics {
+        if !contains_index(&doc.quality.characteristics, row.characteristic_index) {
             return Err(PrismError::new(
-                "PP3004",
-                format!(
-                    "quality requirement index mismatch: expected {expected_idx}, found {}",
-                    qual.index
-                ),
-            ));
-        }
-        if !qual_ids.insert(&qual.id) {
-            return Err(PrismError::new(
-                "PP3003",
-                format!("duplicate quality requirement id: {}", qual.id),
+                "PP2007",
+                "quality characteristic is unresolved",
             ));
         }
     }
-
+    ordered(
+        "quality requirement",
+        doc.quality
+            .requirements
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.quality.requirements {
+        if !contains_index(&doc.quality.subcharacteristics, row.subcharacteristic_index) {
+            return Err(PrismError::new("PP2007", "subcharacteristic is unresolved"));
+        }
+    }
+    ordered(
+        "quality measure",
+        doc.quality
+            .measures
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.quality.measures {
+        if !contains_index(&doc.quality.requirements, row.requirement_index) {
+            return Err(PrismError::new(
+                "PP2007",
+                "measure requirement is unresolved",
+            ));
+        }
+    }
     Ok(())
 }

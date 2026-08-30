@@ -59,3 +59,9 @@ Feature: controller
     Given a LexLean syntax error
     When handled by Controller
     Then the original diagnostic cause is preserved in structured output
+
+  @CT-11 @build
+  Scenario: Controller cleanup removes only the configured real output directory and rejects a symlink target.
+    Given a Prism project with a configured output directory
+    When Controller cleanup is called
+    Then only that real directory is removed and a symlink in its place is rejected

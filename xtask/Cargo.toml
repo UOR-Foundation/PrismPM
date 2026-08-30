@@ -13,10 +13,10 @@ prismpm = { workspace = true }
 repo-conformance = { workspace = true }
 repo-model = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
 walkdir = { workspace = true }
 
 [lints]
 workspace = true
-

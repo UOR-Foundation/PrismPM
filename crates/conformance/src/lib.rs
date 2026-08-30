@@ -1,5 +1,11 @@
 //! Conformance testing harness and validation runners.
 
+#![deny(missing_docs)]
+#![forbid(unsafe_code)]
+// Conformance deliberately exercises the complete public PrismError value;
+// boxing it here would test a different API from downstream callers.
+#![allow(clippy::result_large_err)]
+
 pub mod cases;
 pub mod fixtures;
 pub mod meta;

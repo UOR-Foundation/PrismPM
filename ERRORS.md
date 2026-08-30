@@ -167,6 +167,18 @@ A generated Rust validator panicked or produced an inconsistent result during pr
 
 Class: `oracle`. Exit code: 1.
 
+## `PP5007` --- Child process resource limit exceeded
+
+A verification child process exceeded its fixed timeout or captured-output limit.
+
+Class: `oracle`. Exit code: 1.
+
+## `PP5008` --- Required verification executable unavailable
+
+A pinned verification executable or source package is missing or unreadable.
+
+Class: `oracle`. Exit code: 1.
+
 ## `PP8001` --- Path traversal rejected
 
 An operation attempted to access a path outside the project root.

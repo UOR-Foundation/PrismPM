@@ -190,6 +190,20 @@ exit = 1
 statement = "A generated Rust validator panicked or produced an inconsistent result during property testing."
 
 [[error]]
+code = "PP5007"
+title = "Child process resource limit exceeded"
+class = "oracle"
+exit = 1
+statement = "A verification child process exceeded its fixed timeout or captured-output limit."
+
+[[error]]
+code = "PP5008"
+title = "Required verification executable unavailable"
+class = "oracle"
+exit = 1
+statement = "A pinned verification executable or source package is missing or unreadable."
+
+[[error]]
 code = "PP8001"
 title = "Path traversal rejected"
 class = "security"
@@ -209,4 +223,3 @@ title = "Internal invariant failure"
 class = "internal"
 exit = 101
 statement = "An internal compiler or runtime invariant was violated."
-

@@ -3,10 +3,8 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "mounts": [
-    "source=/home/alex/Desktop/LexLean,target=/workspaces/LexLean,type=bind",
-    "source=/home/alex/Desktop/lean4-prod,target=/workspaces/lean4-prod,type=bind"
-  ],
+  "remoteUser": "vscode",
+  "postCreateCommand": "toolchain=$(tr -d '\\n' < lean-toolchain); if ! elan toolchain list | grep -Fqx \"$toolchain\"; then elan toolchain install \"$toolchain\"; fi; lean --version; cargo fetch --locked; cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -31,6 +29,6 @@
     }
   },
   "remoteEnv": {
-    "PATH": "/usr/local/elan/bin:/usr/local/cargo/bin:${containerEnv:PATH}"
+    "PATH": "/usr/local/elan/bin:/home/vscode/.cargo/bin:${containerEnv:PATH}"
   }
 }
