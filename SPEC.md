@@ -15,9 +15,9 @@ The exact standards rows, editions, public-catalog or authorized-review scope,
 and original interpretations are in `model/standards.toml`. PrismPM does not
 reproduce a standard, grant certification, or prove facts asserted by a
 standard. ISO/IEC 25019, ISO/IEC 27034 parts other than 1 and 5, quality-in-use
-outcomes, and organizational certification are outside version 0.1.0.
+outcomes, and organizational certification are outside the Holo/1 baseline.
 
-The only supported and normative host for version 0.1.0 is
+The only supported and normative host for PrismPM 0.2.0 is
 `x86_64-unknown-linux-gnu`. Rust 1.97.1 and Lean 4.32.1 are mandatory. Tool
 installer identities and the supported-host list are closed by `tools.lock`.
 
@@ -63,16 +63,24 @@ dependencies.
 ### 1.3 Compiler pipeline
 
 PrismPM operates through a verification-oriented multi-stage pipeline:
-1. Systems and facets are authored in `.lex.tex` using LexLean 1.1 lexicons.
-2. LexLean lowers the model to Lean 4 for formal verification (`leanchecker` and axiom audit).
-3. The Prism Holo emitter produces canonical `prismpm/holo/1` artifacts from LexLean semantic snapshots.
-4. `lean4-prod` extracts compilable LCNF from the verified Lean declarations and emits `kernel.ir`.
-5. `prod-codegen` compiles `no_std` Rust validators that perform no heap allocation during validator calls and execute over normalized Holo models.
+1. Systems, applications, proofs, packaging intent, and typed Views are
+   authored in `.lex.tex` using LexLean language 1.1.
+2. LexLean emits the canonical semantic snapshot, Lean, LaTeX, maps, and
+   coverage. Generated Lean elaborates and replays through `leanchecker`; its
+   observed axioms must exactly match the declared policy.
+3. `lean4-prod` exports the exact named application/runtime roots to complete
+   LCNF and generates the Cargo core, import-free Core-Wasm guest, and View
+   adapters without application-specific branches.
+4. The generated `prism-stdlib` Holo/1 semantics project the evaluated
+   application to canonical capability, manifest, directory, provenance,
+   portable View, and source-manifest values.
+5. PrismPM composes a strict binary Hologram v4 fat archive and independently
+   validates and executes it with the pinned Hologram Live oracle.
 
 `check` ends after in-memory snapshot projection and validation. `build` adds
 deterministic platform-independent artifacts but makes no verification claim.
-Only `verify` runs Lean, `leanchecker`, axiom audit, LCNF extraction, Rust
-generation, compilation, and execution.
+Only `verify` may emit `prismpm/application-acceptance/1`; it reruns and binds
+all generated-package, Wasm, View, archive, oracle, and modeled-vector checks.
 
 ## 2. Facet packages and formal metamodel
 
@@ -102,43 +110,47 @@ sorting external IDs before assigning indexes.
 
 ## 3. Canonical Holo contract
 
-A Holo artifact is exactly one UTF-8 JSON value with schema
-`prismpm/holo/1`. Its top level has exactly `architecture`, `provenance`,
-`quality`, `schema`, `security`, and `standards_profile`. DTOs reject unknown
-fields. Numbers are nonnegative JSON integers representable as `u64`; floats,
-duplicate object names, invalid UTF-8, trailing bytes, insignificant
-whitespace, and noncanonical escaping are rejected.
+Holo/1 is the Prism application profile defined by the generated declarations
+under `Foundation.Holo.V1`; it is not a physical version number. Holo/1 maps to
+the Hologram v4 container pinned by `model/dependencies.toml`. A file named
+`*.holo` begins with `HOLO` followed by little-endian physical version 4 and
+canonical flags. Legacy JSON, including the prototype `prismpm/holo/1` JSON,
+is rejected as a `.holo` file. The old logical projection is now the separate
+canonical JSON artifact `model.prism.json` with schema
+`prismpm/model-document/1`.
 
-Canonical JSON sorts object keys by ASCII byte order, writes arrays in their
-schema-defined order, uses minimal escaping, writes decimal integers without
-leading zeroes, and has no final LF. The Holo ID is lowercase hexadecimal
-SHA-256 of those exact bytes and is not embedded in the document. Strict decode
-first parses and validates the value, canonically re-encodes it, and rejects a
-byte mismatch; diagnostic `PP3002` includes the canonical spelling as a note.
+The V1 model defines the header and section table; `AppManifest`, Metadata,
+Extension, and ContentBlob sections; canonical capability requests and child
+delegations; application directory; footer; physical archive; Core-Wasm
+contract; portable View bundle; source manifest; and all content, application,
+footer, and archive identity preimages. A strict Calculator fat archive has one
+manifest, one Metadata section, two extensions (the upstream application
+directory and Prism provenance), four content blobs, and one footer. Unknown,
+duplicate, missing, reordered, overlapping, truncated, trailing, over-limit,
+or cross-reference-invalid content is rejected.
 
-Every entity ID has `<logical-module>::<component-id>` form. Catalog IDs are
-qualified facet entry IDs. Entity and catalog arrays are sorted by ASCII ID,
-unique, and assigned consecutive zero-based indexes after sorting. All index
-references must address the corresponding array; component graph cycles are
-legal. The standards profile is exactly the five registered editions:
-42010:2022, 27034-1:2011, 27034-5:2017, 27005:2022, and 25010:2023.
+Portable View bytes start with `HOLOVIEW`, use big-endian bundle version 1,
+have entry `index.html`, and encode lexically ordered portable paths with u32
+path/count fields and u64 content lengths. The fixed limits are 4,096 files,
+1,024 bytes per path, 64 MiB per file, and 256 MiB aggregate content. Symlinks,
+special files, invalid UTF-8, reserved/non-portable paths, case-folded
+collisions, duplicates, missing entry, wrong order, and trailing bytes fail.
 
-`Foundation.Holo.canonicalIndexes expected count` recursively denotes the
-single consecutive list of `count` natural indexes beginning at `expected`.
-`canonicalIndexAssignment count values` is the proposition that `values`
-equals `canonicalIndexes 0 count`; the generated
-`canonicalIndexAssignmentUnique` theorem characterizes the proposition by
-that equality. This is the formal uniqueness boundary. Sorting external string
-IDs and checking their conversion to `u64` remain host responsibilities.
+The producer extension key is
+`https://uor.foundation/extension/prismpm-model/v1`. Its closed canonical
+`prismpm/model-provenance/1` payload binds the authoritative model blob,
+LexLean and lean4-prod evidence, generated core/package/guest/View/browser
+evidence, dependency commits, and application kappa. It cannot grant a
+capability or replace the manifest. Final archive fingerprint, archive kappa,
+and Prism attestation are bound externally after archive construction to avoid
+a digest cycle.
 
-Provenance contains LexLean `source_id`, `semantic_id`,
-`compiler_semantics_id`, semantic `snapshot_id`, Prism
-`emitter_semantics_id`, and the sorted exact facet package/version/content-ID
-closure. These IDs are 64-byte lowercase hexadecimal SHA-256 strings. The
-emitter-semantics ID is the canonical length-delimited tree digest of exactly
-the files listed in `model/emitter-inputs.toml`; the list and stored digest are
-audited together. Holo contains no timestamp, host, output path, random value,
-or verification status.
+The model emits ordered typed hash requests only after each preimage is fixed:
+leaf content/capability/model identities, then the manifest/application
+identity, then footer/archive identities. BLAKE3 and SHA-256 implementations
+are pinned adapter primitives. The stdlib validates algorithm, digest width,
+role, phase, ordering, and dependencies; it does not claim collision
+resistance or a proof of the external compression implementation.
 
 ## 4. Controller API, CLI, and diagnostics
 
@@ -172,14 +184,31 @@ must not panic.
 
 ## 5. Prism-stdlib contract
 
-The root LexLean project selects language 1.1, `stdlib/src/System.lex.tex` as
-its entrypoint, and the three exact path facet packages. Foundation modules
-define the fixed standards profile; architecture, security/risk, quality, and
-Holo types; View/Viewpoint classes and instances; normalized inputs; recursive
-Boolean validators; their propositions; soundness/completeness theorems; and
-canonical index uniqueness. `System` provides at least one value of every
-release type and coherent architecture, viewpoint, risk/control, and quality
-chains. Its graph deliberately contains a legal cycle.
+`prism-stdlib` is the first portable foundation/runtime layer: the ecosystem
+equivalent of libc/libgcc, not a POSIX or C ABI clone. Its only authoritative
+source is `.lex.tex`. The versioned module surface covers core Boolean/unit/
+ordering values; option/result; mathematical and fixed-width integers with
+checked operations; byte, bounded-buffer, little-endian codec, and UTF-8
+operations; deterministic structural recursion; guest memory; BLAKE3/SHA-256
+adapter contracts; Prism applications; typed ordered Views and interactions;
+and the complete Holo/1 family described in §3. Files, sockets, processes,
+clocks, locale, environment, nondeterministic randomness, threads, dynamic
+loading, floating point, and ambient POSIX authority are excluded.
+
+The generated Cargo package is `prism-stdlib` version 0.1.0, licensed
+`MIT OR Apache-2.0`, with only the default `std` feature. Disabling default
+features retains the same semantic core for Core-Wasm. The package contains no
+path or Git dependency. Its generated-source manifest binds every output to
+LexLean source/semantic/compiler IDs, generated Lean, LCNF, and the pinned
+lean4-prod revision. The bootstrap build and the PrismPM-regenerated build must
+be byte-identical. A source audit rejects handwritten mirrors of Holo/View
+layouts, tags, renderings, state transitions, or validators outside registered
+I/O, hash, and host-transport adapters.
+
+The stdlib also owns a real conformance application which produces a binary
+fat archive and executes through the independent Hologram oracle. `System`
+continues to supply coherent architecture, viewpoint, risk/control, and
+quality chains, including its intentionally legal graph cycle.
 
 All Prism theorem policies are empty. Verification acceptance requires Lean
 elaboration, same-toolchain `leanchecker` replay, and an exact empty observed
@@ -189,21 +218,29 @@ output, never a substitute for direct verification.
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
-validates Holo entirely in memory, enforces configured limits, and writes
+validates the canonical Prism model document entirely in memory against the
+generated stdlib model contract, enforces configured limits, and writes
 nothing. It does not launch Lean, Lake, `leanchecker`, `lean4-prod`, rustfmt,
 rustc, or a generated executable.
 
 `build` invokes LexLean's deterministic build and publishes under
-`<build_root>/build/<prism-build-id>/`. The fixed tree contains `model.holo`,
+`<build_root>/build/<prism-build-id>/`. The fixed tree contains `model.prism.json`,
 `lexlean/snapshot.json`, every selected LexLean manifest/module Lean/LaTeX/map/
 coverage/lexicon-closure artifact below `lexlean/build/`, and
-`manifest.json`. The manifest schema is `prismpm/build-manifest/1`; each file
-row contains its relative path, closed kind, byte length, and SHA-256.
+`manifest.json`. For an application, the tree additionally contains named-root LCNF/coverage, the
+generated Cargo package and `.crate`, Core-Wasm package and guest, evaluated
+View and projection manifest, Hologram assets/bundle, browser adapter/lock/
+Wasm/six-file production closure, source manifest, capability/manifest/
+directory/provenance values, `ApplicationName.holo`, identities, and build
+manifest. Each file row fixes its relative path, kind, byte length, and
+SHA-256; undeclared extras and symlinks fail reuse.
 
 The Prism build ID is SHA-256 of canonical `prismpm/build-inputs/1` bytes
-containing LexLean source, semantic, and build IDs, Holo ID,
-emitter-semantics ID, and dependency-register digest. Paths and environment do
-not participate. Publication takes an exclusive lock, writes a unique staging
+containing LexLean source, semantic, compiler, snapshot, and build IDs; stdlib
+semantics/package identity; lean4-prod and Hologram pins; target profile;
+generated core, guest, View, browser, manifest, capability, extension, and
+Hologram application identities; and dependency-register digest. Paths and
+environment do not participate. Publication takes an exclusive lock, writes a unique staging
 directory with create-new semantics, synchronizes it, and atomically renames
 it. An existing build is reused only after its exact file set, types, and bytes
 match; extra files, symlinks, missing files, and tampering are errors.
@@ -224,6 +261,15 @@ normalizes IDs to checked `u64` indexes, and calls generated validators. The
 validator-call interval is measured by the shared allocation counter and must
 not allocate. All returned `Result` values are checked; overflow and output
 exhaustion are failures, never wrapping behavior.
+
+Application roots additionally generate a complete registry-consumable Cargo
+library, an import-free `wasm32-unknown-unknown` Core-Wasm guest exporting
+`memory`, `holo_alloc(i32)->i32`, and `holo_run(i32,i32)->i64`, and both View
+transports. Mathematical `Int` is never narrowed to `i64`; fixed `Int64`
+operations use checked target operations. The guest allocator is aligned,
+bounded, fresh-instance scoped, and aborts on ABI resource violations. The
+browser boundary carries operands/results as decimal strings and calls only
+the generated crate API; JavaScript Number arithmetic is forbidden.
 
 Execution evidence has exactly schema `prismpm/execution-evidence/1`, status
 `passed`, strategy `exhaustive-v1+lcg-v1`, seed `5eedcafef00dbeef`, 597 cases,
@@ -279,6 +325,18 @@ manifest and normalized platform-independent evidence atomically published at
 `<build_root>/verified/<attestation-id>/`. Failed verification publishes no
 verified directory.
 
+For an application, verification independently rechecks the exact build
+closure, generated package under default and no-default features, a fresh
+registry-format downstream consumer over every model-authored byte vector,
+the guest import/export ABI, browser file closure, internal Holo/1 validation,
+and the pinned Hologram Live source oracle. The oracle inspects and plans the
+archive, asserts the exact headless portable-surface blocker, opens a session
+with a display-independent portable surface, invokes every vector directly and
+every UTF-8 vector through `application.invoke`, and checks reverse detach,
+stale-handler rejection, and idempotent shutdown. Only then is canonical
+`prismpm/application-acceptance/1` published and bound into the verification
+manifest.
+
 ## 9. Security, acceptance, and release
 
 All source/config/package inputs are confined regular files. Symlinks,
@@ -303,17 +361,24 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 14 gates, records `passed`, and
 binds the exact full Git commit.
 
-Release version 0.1.0 requires a clean exact commit, byte-current generated
-documents and goldens, all release-scope capabilities/standards implemented,
-no open measurement used for acceptance, a dated changelog, exact dependency
-revisions/checksums, complete exact-commit `vv` evidence, reproducible source
-archive, canonical dependency SBOM, release manifest, and SHA-256 list. The
-release assembler builds twice and refuses differing bytes. No release tag or
-artifact is evidence for a different source commit.
+The historical version 0.1.0 is a prototype and is not PrismPM completion.
+Release version 0.2.0 is atomic across PrismPM, LexLean 0.2.0, the exact
+lean4-prod fork revision, published `prism-stdlib = 0.1.0`, published
+`prism-calculator = 0.1.0`, `Calculator.holo`, and
+`UOR-Foundation/calculator-example = v0.1.0` served at the sole Pages URL
+`https://uor-foundation.github.io/calculator-example/`. It requires clean
+exact commits, all four devcontainer gates, two consecutive PrismPM gates,
+two-root byte reproduction, negative-gate falsification, registry-only fresh
+consumers, independent Hologram execution, Playwright/axe browser acceptance,
+live asset hash verification, SBOMs, checksums, and one final manifest binding
+all source/model/compiler/package/Wasm/View/Hologram/Pages identities. Missing
+credentials, namespace ownership, public bytes, Pages deployment, or any
+failed/conditional/stale result stops release. Holo/1 freezes only when that
+manifest and all referenced public artifacts have been verified.
 
 ## Appendix A. Conformance ID Registry
 
-Every row below is normative, has honesty level `build`, and is copied byte-for-byte into `model/ids.toml`.
+Every row below is normative, has the honesty level registered in `model/ids.toml`, and is generated from that register.
 
 | ID | Suite | Normative statement | Primary specification |
 |---|---|---|---|
@@ -339,16 +404,16 @@ Every row below is normative, has honesty level `build`, and is copied byte-for-
 | `FT-08` | `facets` | Every standards entry links to exactly one row in model/standards.toml. | §2 |
 | `FT-09` | `facets` | Facet lexicons produce deterministic canonical LaTeX and Lean lowerings. | §2 |
 | `FT-10` | `facets` | Lexicon package locks reproduce across multiple directory roots. | §2 |
-| `HO-01` | `holo` | Holo artifacts conform to the prismpm/holo/1 JSON schema. | §3 |
-| `HO-02` | `holo` | Holo serialization follows canonical JSON formatting rules with sorted ASCII keys. | §3 |
-| `HO-03` | `holo` | Holo content ID is the exact SHA-256 hash of its canonical UTF-8 bytes. | §3 |
-| `HO-04` | `holo` | The Holo projector is a total function from LexLean semantic snapshots. | §3 |
-| `HO-05` | `holo` | Holo entity identifiers are qualified strings assigned deterministic zero-based indexes. | §3 |
-| `HO-06` | `holo` | Holo serialization excludes host paths, timestamps, and unstable environment data. | §3 |
-| `HO-07` | `holo` | Holo decoding rejects noncanonical representations and malformed values. | §3 |
-| `HO-08` | `holo` | The emitter-semantics ID uniquely identifies the Holo projector inputs. | §3 |
-| `HO-09` | `holo` | Shared golden vectors prove correspondence between Lean normalized models and Holo DTOs. | §3 |
-| `HO-10` | `holo` | Holo validation verifies internal cross-references before emission. | §3 |
+| `HO-01` | `holo` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. | §3 |
+| `HO-02` | `holo` | The non-Holo Prism model document uses the closed prismpm/model-document/1 schema and model.prism.json name. | §3 |
+| `HO-03` | `holo` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. | §3 |
+| `HO-04` | `holo` | The model-document projector is a total deterministic function from valid LexLean semantic snapshots. | §3 |
+| `HO-05` | `holo` | Model entity identifiers are qualified strings assigned deterministic zero-based indexes. | §3 |
+| `HO-06` | `holo` | Platform-independent Prism model and Holo artifacts exclude host paths, timestamps, and unstable environment data. | §3 |
+| `HO-07` | `holo` | Holo decoding rejects legacy JSON, noncanonical archives, malformed values, and unsupported physical versions. | §3 |
+| `HO-08` | `holo` | The emitter-semantics ID uniquely identifies the model-document projector inputs. | §3 |
+| `HO-09` | `holo` | Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources. | §3 |
+| `HO-10` | `holo` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

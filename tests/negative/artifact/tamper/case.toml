@@ -7,7 +7,7 @@ expected_artifacts = []
 
 [[expected_diagnostics]]
 code = "PP4001"
-message = "published artifact was modified: model.holo"
+message = "published artifact was modified: model.prism.json"
 primary = "none"
 labels = []
 notes = []

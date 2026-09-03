@@ -17,7 +17,7 @@ fn root() -> PathBuf {
         .to_path_buf()
 }
 
-fn document() -> prismpm::holo::HoloDocument {
+fn document() -> prismpm::holo::ModelDocument {
     let project = camino::Utf8PathBuf::from_path_buf(root().join("lexlean.toml")).expect("UTF-8");
     let snapshot = Engine::load(&project)
         .expect("LexLean project")
@@ -25,13 +25,13 @@ fn document() -> prismpm::holo::HoloDocument {
             selection: Selection::Entrypoints,
         })
         .expect("snapshot");
-    project_snapshot(&snapshot).expect("Holo projection")
+    project_snapshot(&snapshot).expect("model-document projection")
 }
 
 fn canonical_bytes() -> &'static [u8] {
     static BYTES: OnceLock<Vec<u8>> = OnceLock::new();
     BYTES
-        .get_or_init(|| encode_canonical(&document()).expect("canonical Holo"))
+        .get_or_init(|| encode_canonical(&document()).expect("canonical model document"))
         .as_slice()
 }
 
@@ -63,7 +63,7 @@ fn copy_tree(from: &Path, to: &Path) {
 #[test]
 fn holo_roundtrip_schema_and_cycles_are_valid() {
     let doc = document();
-    let bytes = encode_canonical(&doc).expect("canonical Holo");
+    let bytes = encode_canonical(&doc).expect("canonical model document");
     assert_eq!(decode_canonical(&bytes).expect("decode"), doc);
     assert_eq!(encode_canonical(&doc).expect("repeat"), bytes);
     assert_eq!(content_id(&bytes).len(), 64);
@@ -73,17 +73,18 @@ fn holo_roundtrip_schema_and_cycles_are_valid() {
         .iter()
         .any(|right| { left.from_index == right.to_index && left.to_index == right.from_index })));
 
-    let schema: serde_json::Value =
-        serde_json::from_slice(include_bytes!("../../../schemas/holo.schema.json"))
-            .expect("schema JSON");
+    let schema: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../schemas/model-document.schema.json"
+    ))
+    .expect("schema JSON");
     let validator = jsonschema::validator_for(&schema).expect("valid JSON Schema");
-    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("Holo JSON");
+    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("model-document JSON");
     assert!(validator.is_valid(&value));
 }
 
 #[test]
 fn strict_holo_decode_rejects_each_malformed_class() {
-    let bytes = encode_canonical(&document()).expect("canonical Holo");
+    let bytes = encode_canonical(&document()).expect("canonical model document");
     let text = String::from_utf8(bytes.clone()).expect("UTF-8");
     let cases = [
         format!("{}\n", text),
@@ -91,13 +92,13 @@ fn strict_holo_decode_rejects_each_malformed_class() {
         text.replacen("\"index\":0", "\"index\":0.0", 1),
         text.replacen("\"index\":0", "\"index\":00", 1),
         text.replacen(
-            "\"schema\":\"prismpm/holo/1\"",
-            "\"schema\":\"prismpm/holo/1\",\"schema\":\"prismpm/holo/1\"",
+            "\"schema\":\"prismpm/model-document/1\"",
+            "\"schema\":\"prismpm/model-document/1\",\"schema\":\"prismpm/model-document/1\"",
             1,
         ),
         text.replacen(
-            "\"schema\":\"prismpm/holo/1\"",
-            "\"schema\":\"prismpm/holo/1\",\"unknown\":true",
+            "\"schema\":\"prismpm/model-document/1\"",
+            "\"schema\":\"prismpm/model-document/1\",\"unknown\":true",
             1,
         ),
     ];
@@ -159,7 +160,7 @@ fn check_is_no_write_and_build_detects_tampering() {
         .path()
         .join(".prism/build")
         .join(&built.build_id)
-        .join("model.holo");
+        .join("model.prism.json");
     let extra = holo.parent().unwrap().join("unmanifested-empty-directory");
     std::fs::create_dir(&extra).expect("plant extra directory");
     assert_eq!(

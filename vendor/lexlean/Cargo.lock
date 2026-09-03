@@ -282,7 +282,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "lexlean"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "camino",
  "clap",
@@ -445,28 +445,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "repo-conformance"
-version = "0.1.1"
-dependencies = [
- "camino",
- "lexlean",
- "repo-model",
- "serde_json",
- "sha2",
- "tempfile",
- "toml",
- "walkdir",
-]
-
-[[package]]
-name = "repo-model"
-version = "0.1.1"
-dependencies = [
- "serde",
- "toml",
-]
 
 [[package]]
 name = "rustix"
@@ -846,20 +824,6 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
-
-[[package]]
-name = "xtask"
-version = "0.1.1"
-dependencies = [
- "camino",
- "lexlean",
- "repo-conformance",
- "repo-model",
- "serde_json",
- "tempfile",
- "toml",
- "walkdir",
-]
 
 [[package]]
 name = "zerocopy"

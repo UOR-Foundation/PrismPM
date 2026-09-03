@@ -73,11 +73,11 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         .filter(|output| output.status.success())
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .unwrap_or_default();
-    if !tag.lines().any(|line| line == "v0.1.0") {
-        issues.push("release source commit is not tagged v0.1.0".to_owned());
+    if !tag.lines().any(|line| line == "v0.2.0") {
+        issues.push("release source commit is not tagged v0.2.0".to_owned());
     }
     let annotated = Command::new("git")
-        .args(["cat-file", "-t", "refs/tags/v0.1.0"])
+        .args(["cat-file", "-t", "refs/tags/v0.2.0"])
         .current_dir(root)
         .output()
         .ok()
@@ -85,7 +85,7 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .is_some_and(|kind| kind.trim() == "tag");
     if !annotated {
-        issues.push("release tag v0.1.0 is absent or not annotated".to_owned());
+        issues.push("release tag v0.2.0 is absent or not annotated".to_owned());
     }
 
     match crate::Model::load(&root.join("model")) {

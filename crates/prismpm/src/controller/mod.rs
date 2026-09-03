@@ -3,7 +3,7 @@
 use crate::config::ProjectConfig;
 use crate::error::PrismError;
 use crate::holo::canonical::{content_id, encode_canonical, encode_value};
-use crate::holo::dto::HoloDocument;
+use crate::holo::model_document::ModelDocument;
 use crate::holo::projector::project_snapshot;
 use camino::Utf8PathBuf;
 use fs4::fs_std::FileExt;
@@ -42,7 +42,7 @@ pub struct CheckResult {
     /// Semantic snapshot identity.
     pub snapshot_id: String,
     /// Canonical Holo identity.
-    pub holo_id: String,
+    pub model_id: String,
     /// Number of domain entities, excluding fixed catalogs.
     pub entity_count: u64,
 }
@@ -67,7 +67,7 @@ pub struct BuildResult {
     /// LexLean semantic identity.
     pub semantic_id: String,
     /// Canonical relative Holo path.
-    pub holo_path: String,
+    pub model_path: String,
     /// Canonical relative manifest path.
     pub manifest_path: String,
 }
@@ -114,8 +114,8 @@ struct Prepared {
     config: ProjectConfig,
     engine: Engine,
     snapshot: lexlean::SemanticSnapshot,
-    holo: HoloDocument,
-    holo_bytes: Vec<u8>,
+    model: ModelDocument,
+    model_bytes: Vec<u8>,
 }
 
 #[derive(Serialize)]
@@ -131,7 +131,7 @@ fn utf8(path: PathBuf) -> Result<Utf8PathBuf, PrismError> {
         .map_err(|_| PrismError::new("PP1001", "configured path is not UTF-8"))
 }
 
-fn count_entities(doc: &HoloDocument) -> Result<u64, PrismError> {
+fn count_entities(doc: &ModelDocument) -> Result<u64, PrismError> {
     let count = doc.architecture.components.len()
         + doc.architecture.edges.len()
         + doc.architecture.stakeholders.len()
@@ -326,21 +326,24 @@ impl Controller {
                 )
             })?;
         crate::holo::projector::validate_snapshot_envelope(&snapshot.canonical_bytes())?;
-        let holo = project_snapshot(&snapshot)?;
-        let holo_bytes = encode_canonical(&holo)?;
-        let entities = count_entities(&holo)?;
+        let model = match crate::holo::application::project_application(&snapshot)? {
+            Some(model) => model,
+            None => project_snapshot(&snapshot)?,
+        };
+        let model_bytes = encode_canonical(&model)?;
+        let entities = count_entities(&model)?;
         if entities > config.limits.max_entities {
             return Err(PrismError::new("PP1003", "max_entities exceeded"));
         }
-        if holo_bytes.len() as u64 > config.limits.max_holo_bytes {
+        if model_bytes.len() as u64 > config.limits.max_holo_bytes {
             return Err(PrismError::new("PP1003", "max_holo_bytes exceeded"));
         }
         Ok(Prepared {
             config,
             engine,
             snapshot,
-            holo,
-            holo_bytes,
+            model,
+            model_bytes,
         })
     }
 
@@ -351,8 +354,8 @@ impl Controller {
             schema: "prismpm/check-result/1".to_owned(),
             semantic_id: prepared.snapshot.semantic_id().to_string(),
             snapshot_id: prepared.snapshot.snapshot_id().to_string(),
-            holo_id: content_id(&prepared.holo_bytes),
-            entity_count: count_entities(&prepared.holo)?,
+            model_id: content_id(&prepared.model_bytes),
+            entity_count: count_entities(&prepared.model)?,
         })
     }
 
@@ -408,7 +411,7 @@ impl Controller {
         lex_paths.insert("manifest.json".to_owned());
 
         let mut artifacts = vec![
-            ("model.holo".to_owned(), prepared.holo_bytes.clone()),
+            ("model.prism.json".to_owned(), prepared.model_bytes.clone()),
             (
                 "lexlean/snapshot.json".to_owned(),
                 prepared.snapshot.canonical_bytes(),
@@ -429,16 +432,30 @@ impl Controller {
                 })?,
             ));
         }
+        if prepared.model.application.is_some() {
+            artifacts.extend(crate::application_build::generate(
+                &self.root,
+                &prepared.model,
+                &prepared.model_bytes,
+                &lex_root,
+                &lex_manifest_bytes,
+            )?);
+        }
         artifacts.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
-        let holo_id = content_id(&prepared.holo_bytes);
+        let model_id = content_id(&prepared.model_bytes);
         let dependency_digest = format!(
             "{:x}",
             Sha256::digest(include_bytes!("../../model/dependencies.toml"))
         );
         let inputs = json!({
+            "application_generator_sha256": format!("{:x}", Sha256::digest([
+                include_bytes!("../application_build.rs").as_slice(),
+                include_bytes!("../holo/archive.rs").as_slice(),
+                include_bytes!("../../../../vendor/lean4-prod/rust/MANIFEST.sha256").as_slice()
+            ].concat())),
             "dependency_register_sha256": dependency_digest,
-            "emitter_semantics_id": prepared.holo.provenance.emitter_semantics_id,
-            "holo_id": holo_id,
+            "emitter_semantics_id": prepared.model.provenance.emitter_semantics_id,
+            "model_id": model_id,
             "lexlean_build_id": lex_build_id,
             "lexlean_semantic_id": prepared.snapshot.semantic_id().to_string(),
             "lexlean_source_id": prepared.snapshot.source_id().to_string(),
@@ -517,7 +534,10 @@ impl Controller {
             build_id: build_id.clone(),
             source_id: prepared.snapshot.source_id().to_string(),
             semantic_id: prepared.snapshot.semantic_id().to_string(),
-            holo_path: format!("{}/build/{build_id}/model.holo", prepared.config.build_root),
+            model_path: format!(
+                "{}/build/{build_id}/model.prism.json",
+                prepared.config.build_root
+            ),
             manifest_path: format!(
                 "{}/build/{build_id}/manifest.json",
                 prepared.config.build_root

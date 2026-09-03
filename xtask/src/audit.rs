@@ -71,7 +71,12 @@ pub fn audit_no_handwritten_lean(root: &Path) -> Result<(), Fail> {
         }
         let path = entry.path();
         let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
-        if rel.starts_with(".prism") || rel.starts_with(".lexlean") || rel.starts_with("target") {
+        if Path::new(rel.as_ref()).components().any(|component| {
+            matches!(
+                component.as_os_str().to_str(),
+                Some(".prism" | ".lexlean" | ".git" | "target" | "node_modules")
+            )
+        }) {
             continue;
         }
         if rel.ends_with(".lean") && !allowed.contains(path) {
@@ -591,13 +596,13 @@ pub fn audit_errors(root: &Path, model: &Model) -> Result<(), Fail> {
 pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
     const EXPECTED: [&str; 8] = [
         "crates/prismpm/src/holo/canonical.rs",
-        "crates/prismpm/src/holo/dto.rs",
+        "crates/prismpm/src/holo/model_document.rs",
         "crates/prismpm/src/holo/mod.rs",
         "crates/prismpm/src/holo/projector.rs",
         "crates/prismpm/src/holo/validate.rs",
         "model/projection.toml",
         "model/standards.toml",
-        "schemas/holo.schema.json",
+        "schemas/model-document.schema.json",
     ];
     if model.emitter_inputs.spec != "prismpm/emitter-inputs/1"
         || model.emitter_inputs.inputs != EXPECTED

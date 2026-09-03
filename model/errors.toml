@@ -79,45 +79,108 @@ statement = "A circular dependency was detected in facet lexicon package imports
 
 [[error]]
 code = "PP3001"
-title = "Malformed Holo JSON"
+title = "Malformed Hologram archive header or version"
 class = "holo"
 exit = 1
-statement = "The .holo file is not valid JSON."
+statement = "A .holo file is not a binary Hologram v4 archive with the exact HOLO header."
 
 [[error]]
 code = "PP3002"
-title = "Noncanonical Holo encoding"
+title = "Malformed Hologram section table"
 class = "holo"
 exit = 1
-statement = "The .holo artifact does not follow canonical JSON formatting rules."
+statement = "A Hologram section table has invalid offsets, lengths, alignment, ordering, or bounds."
 
 [[error]]
 code = "PP3003"
-title = "Duplicate Holo entity ID"
+title = "Invalid Hologram section closure"
 class = "holo"
 exit = 1
-statement = "A .holo artifact contains duplicate entity IDs in an array."
+statement = "A Holo/1 archive has a missing, duplicate, unknown, or noncanonically ordered section."
 
 [[error]]
 code = "PP3004"
-title = "Noncanonical integer representation"
+title = "Hologram archive footer mismatch"
 class = "holo"
 exit = 1
-statement = "An integer in the .holo file is formatted with noncanonical leading zeros or exponential notation."
+statement = "The BLAKE3 footer does not authenticate the exact archive prefix."
 
 [[error]]
 code = "PP3005"
-title = "Unsupported Holo schema"
+title = "Application manifest disagreement"
 class = "holo"
 exit = 1
-statement = "The Holo schema identifier does not match prismpm/holo/1."
+statement = "The canonical AppManifest is malformed or disagrees with the modeled topology."
 
 [[error]]
 code = "PP3006"
-title = "Trailing bytes in Holo file"
+title = "Capability request disagreement"
 class = "holo"
 exit = 1
-statement = "Data was found after the closing JSON delimiter."
+statement = "The canonical capability request or child delegation disagrees with the model."
+
+[[error]]
+code = "PP3007"
+title = "Hologram identity disagreement"
+class = "holo"
+exit = 1
+statement = "A content, application, footer, or archive identity does not match its canonical preimage."
+
+[[error]]
+code = "PP3008"
+title = "Content blob disagreement"
+class = "holo"
+exit = 1
+statement = "A content blob is duplicated, mislabeled, malformed, or does not match its content kappa."
+
+[[error]]
+code = "PP3009"
+title = "Incomplete fat archive"
+class = "holo"
+exit = 1
+statement = "A fat archive omits a content or capability object required by its manifest."
+
+[[error]]
+code = "PP3010"
+title = "Invalid modeled application layer"
+class = "holo"
+exit = 1
+statement = "A modeled guest, View, or embedded model layer is malformed or unsupported."
+
+[[error]]
+code = "PP3011"
+title = "Holo application projection disagreement"
+class = "holo"
+exit = 1
+statement = "The projected Hologram application differs from the authoritative Prism application value."
+
+[[error]]
+code = "PP3012"
+title = "Application directory disagreement"
+class = "holo"
+exit = 1
+statement = "The application-directory extension does not exactly derive from the manifest and content closure."
+
+[[error]]
+code = "PP3013"
+title = "Extension disagreement"
+class = "holo"
+exit = 1
+statement = "A required extension is missing, duplicated, malformed, unknown, or noncanonical."
+
+[[error]]
+code = "PP3014"
+title = "Source manifest disagreement"
+class = "holo"
+exit = 1
+statement = "The derived source manifest or Metadata section disagrees with generated application artifacts."
+
+[[error]]
+code = "PP3015"
+title = "Prism provenance disagreement"
+class = "holo"
+exit = 1
+statement = "The closed Prism model-provenance extension is malformed or disagrees with embedded evidence."
 
 [[error]]
 code = "PP4001"
@@ -146,6 +209,41 @@ title = "Invalid manifest structure"
 class = "artifact"
 exit = 1
 statement = "A build or verification manifest fails schema validation."
+
+[[error]]
+code = "PP4101"
+title = "Generated stdlib runtime mismatch"
+class = "artifact"
+exit = 1
+statement = "The generated prism-stdlib runtime differs from its authoritative LexLean, Lean, LCNF, or fixed-point evidence."
+
+[[error]]
+code = "PP4102"
+title = "Generated application code mismatch"
+class = "artifact"
+exit = 1
+statement = "Generated application code contains unbound, handwritten, duplicated, or stale application behavior."
+
+[[error]]
+code = "PP4103"
+title = "Cargo package publication failure"
+class = "artifact"
+exit = 1
+statement = "A generated Cargo package cannot be packaged, consumed, reproduced, or published under its declared exact identity."
+
+[[error]]
+code = "PP4104"
+title = "Archive publication failure"
+class = "artifact"
+exit = 1
+statement = "A release archive or its bound checksum/provenance could not be atomically staged or published."
+
+[[error]]
+code = "PP4105"
+title = "Browser publication failure"
+class = "artifact"
+exit = 1
+statement = "The generated browser application differs from its acceptance evidence or could not be published at the registered URL."
 
 [[error]]
 code = "PP5001"
@@ -202,6 +300,104 @@ title = "Required verification executable unavailable"
 class = "oracle"
 exit = 1
 statement = "A pinned verification executable or source package is missing or unreadable."
+
+[[error]]
+code = "PP5101"
+title = "Guest ABI disagreement"
+class = "oracle"
+exit = 1
+statement = "A generated Hologram guest does not implement the exact core-wasm@1 pointer/length ABI."
+
+[[error]]
+code = "PP5102"
+title = "Forbidden guest import"
+class = "oracle"
+exit = 1
+statement = "A generated Core-Wasm guest has a nonempty import table."
+
+[[error]]
+code = "PP5103"
+title = "Guest export disagreement"
+class = "oracle"
+exit = 1
+statement = "A generated Core-Wasm guest is missing or has the wrong type for memory, holo_alloc, or holo_run."
+
+[[error]]
+code = "PP5104"
+title = "Guest memory contract failure"
+class = "oracle"
+exit = 1
+statement = "A guest allocation, pointer, length, cap, overlap, growth, trap, or reset behavior violates core-wasm@1."
+
+[[error]]
+code = "PP5201"
+title = "Portable View bundle disagreement"
+class = "oracle"
+exit = 1
+statement = "A HOLOVIEW bundle has invalid magic, version, entry, path order, limits, framing, or trailing bytes."
+
+[[error]]
+code = "PP5202"
+title = "View model disagreement"
+class = "oracle"
+exit = 1
+statement = "An evaluated View value does not match the typed View model in the authoritative application."
+
+[[error]]
+code = "PP5203"
+title = "View projection disagreement"
+class = "oracle"
+exit = 1
+statement = "A Hologram or browser View projection differs from its canonical modeled projection."
+
+[[error]]
+code = "PP5204"
+title = "View intent disagreement"
+class = "oracle"
+exit = 1
+statement = "A View action, validation, result, error, focus, or live-region trace differs from the modeled intent."
+
+[[error]]
+code = "PP5205"
+title = "View surface disagreement"
+class = "oracle"
+exit = 1
+statement = "A runtime surface is missing, unsupported, or attached with a contract different from the manifest."
+
+[[error]]
+code = "PP5301"
+title = "Upstream Hologram oracle disagreement"
+class = "oracle"
+exit = 1
+statement = "The pinned independent Hologram loader, planner, executor, or View encoder disagrees with Prism evidence."
+
+[[error]]
+code = "PP6001"
+title = "Reference model identity drift"
+class = "acceptance"
+exit = 1
+statement = "The reference repository model or lock is not byte-identical to the authoritative PrismPM getting-started source closure."
+
+[[error]]
+code = "PP6002"
+title = "Incomplete application acceptance"
+class = "acceptance"
+exit = 1
+statement = "A required application acceptance gate is missing, skipped, stale, conditional, failed, or not bound to current artifacts."
+
+[[error]]
+code = "PP6003"
+title = "Application execution disagreement"
+class = "acceptance"
+exit = 1
+statement = "Generated Rust, Wasm, Hologram, or browser execution differs over the authoritative acceptance corpus."
+
+[[error]]
+code = "PP6004"
+title = "Ecosystem release incomplete"
+class = "acceptance"
+exit = 1
+statement = "PrismPM completion was requested before all registry, archive, reference repository, Pages, CI, and release identities were verified."
 
 [[error]]
 code = "PP8001"

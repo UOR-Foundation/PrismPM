@@ -1,6 +1,6 @@
-//! Structural, ordering, profile, and cross-reference validation for Holo.
+//! Structural, ordering, profile, and cross-reference model validation.
 
-use super::dto::HoloDocument;
+use super::model_document::ModelDocument;
 use crate::error::PrismError;
 use std::collections::BTreeSet;
 
@@ -21,7 +21,7 @@ fn digest(value: &str, field: &str) -> Result<(), PrismError> {
         Ok(())
     } else {
         Err(PrismError::new(
-            "PP3002",
+            "PP4004",
             format!("{field} is not a lowercase SHA-256 digest"),
         ))
     }
@@ -35,7 +35,7 @@ fn identifier(value: &str, field: &str) -> Result<(), PrismError> {
         })
     {
         return Err(PrismError::new(
-            "PP3002",
+            "PP4004",
             format!("{field} is not a qualified ASCII identifier"),
         ));
     }
@@ -53,19 +53,19 @@ fn ordered<'a>(
         identifier(id, kind)?;
         if !ids.insert((*id).to_owned()) {
             return Err(PrismError::new(
-                "PP3003",
+                "PP4004",
                 format!("duplicate {kind} ID {id}"),
             ));
         }
         if previous.is_some_and(|prior| prior.as_bytes() >= id.as_bytes()) {
             return Err(PrismError::new(
-                "PP3002",
+                "PP4004",
                 format!("{kind} IDs are not in canonical ASCII order"),
             ));
         }
         if *index != expected as u64 {
             return Err(PrismError::new(
-                "PP3004",
+                "PP4004",
                 format!("{kind} {id} has index {index}, expected {expected}"),
             ));
         }
@@ -78,10 +78,13 @@ fn contains_index<T>(rows: &[T], index: u64) -> bool {
     usize::try_from(index).is_ok_and(|value| value < rows.len())
 }
 
-/// Validate a Holo DTO before encoding or after strict decoding.
-pub fn validate(doc: &HoloDocument) -> Result<(), PrismError> {
-    if doc.schema != "prismpm/holo/1" {
-        return Err(PrismError::new("PP3005", "unsupported Holo schema"));
+/// Validate a model-document DTO before encoding or after strict decoding.
+pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
+    if doc.schema != "prismpm/model-document/1" {
+        return Err(PrismError::new(
+            "PP4004",
+            "unsupported model-document schema",
+        ));
     }
     digest(&doc.provenance.source_id, "source_id")?;
     digest(&doc.provenance.semantic_id, "semantic_id")?;
@@ -91,6 +94,21 @@ pub fn validate(doc: &HoloDocument) -> Result<(), PrismError> {
     )?;
     digest(&doc.provenance.snapshot_id, "snapshot_id")?;
     digest(&doc.provenance.emitter_semantics_id, "emitter_semantics_id")?;
+    if let Some(application) = &doc.application {
+        if !doc.standards_profile.is_empty()
+            || !doc.provenance.facet_packages.is_empty()
+            || doc.architecture != Default::default()
+            || doc.security != Default::default()
+            || doc.quality != Default::default()
+        {
+            return Err(PrismError::new(
+                "PP2001",
+                "an application model may not contain architecture facet records",
+            ));
+        }
+        validate_application(application)?;
+        return Ok(());
+    }
     if doc
         .standards_profile
         .iter()
@@ -348,6 +366,102 @@ pub fn validate(doc: &HoloDocument) -> Result<(), PrismError> {
                 "measure requirement is unresolved",
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_application(
+    application: &super::model_document::ApplicationModel,
+) -> Result<(), PrismError> {
+    for (value, field) in [
+        (&application.name, "application name"),
+        (&application.cargo_name, "Cargo package name"),
+        (&application.cargo_version, "Cargo package version"),
+        (&application.cargo_description, "Cargo package description"),
+        (&application.cargo_repository, "Cargo repository"),
+        (&application.cargo_homepage, "Cargo homepage"),
+        (&application.operation_type, "operation type"),
+        (&application.error_type, "error type"),
+        (&application.function_name, "function name"),
+        (&application.entry_root, "entry root"),
+        (&application.core_contract, "core contract"),
+    ] {
+        if value.is_empty() || !value.is_ascii() {
+            return Err(PrismError::new(
+                "PP2001",
+                format!("{field} is empty or non-ASCII"),
+            ));
+        }
+    }
+    if application.request_maximum == 0
+        || application.response_maximum == 0
+        || application.guest_allocation_maximum < application.request_maximum
+        || !application.capabilities_empty
+        || !application.fat_archive
+        || application.primary_layer == application.view_layer
+        || !application.view.live_polite
+        || !application.view.retain_focus
+        || !application.view.submit_on_enter
+        || !application.view.hologram_intent
+        || !application.view.pages_adapter
+        || application.actions.is_empty()
+        || application.targets.is_empty()
+        || application.library_roots.is_empty()
+        || application.view.operations.is_empty()
+        || application.acceptance_vectors.is_empty()
+        || !application
+            .view
+            .operations
+            .iter()
+            .any(|operation| operation.discriminant == application.view.initial_operation)
+    {
+        return Err(PrismError::new(
+            "PP2001",
+            "application declaration violates the portable application contract",
+        ));
+    }
+    let mut actions = BTreeSet::new();
+    let mut targets = BTreeSet::new();
+    let mut library_roots = BTreeSet::new();
+    let mut operation_labels = BTreeSet::new();
+    let mut operation_names = BTreeSet::new();
+    let mut operation_variants = BTreeSet::new();
+    let mut operation_discriminants = BTreeSet::new();
+    let mut acceptance_requests = BTreeSet::new();
+    if application
+        .actions
+        .iter()
+        .any(|value| !actions.insert(value))
+        || application
+            .targets
+            .iter()
+            .any(|value| !targets.insert(value))
+        || application
+            .library_roots
+            .iter()
+            .any(|value| !library_roots.insert(value))
+        || application.view.operations.iter().any(|operation| {
+            operation.label.is_empty()
+                || operation.request_name.is_empty()
+                || operation.rust_variant.is_empty()
+                || !operation_labels.insert(&operation.label)
+                || !operation_names.insert(&operation.request_name)
+                || !operation_variants.insert(&operation.rust_variant)
+                || !operation_discriminants.insert(operation.discriminant)
+        })
+        || application
+            .library_roots
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        || application
+            .acceptance_vectors
+            .iter()
+            .any(|vector| !acceptance_requests.insert(&vector.request))
+    {
+        return Err(PrismError::new(
+            "PP2001",
+            "application roots, actions, targets, or View operations are invalid or duplicated",
+        ));
     }
     Ok(())
 }

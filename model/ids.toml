@@ -136,61 +136,61 @@ statement = "Lexicon package locks reproduce across multiple directory roots."
 id = "HO-01"
 suite = "holo"
 level = "build"
-statement = "Holo artifacts conform to the prismpm/holo/1 JSON schema."
+statement = "A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header."
 
 [[id]]
 id = "HO-02"
 suite = "holo"
 level = "build"
-statement = "Holo serialization follows canonical JSON formatting rules with sorted ASCII keys."
+statement = "The non-Holo Prism model document uses the closed prismpm/model-document/1 schema and model.prism.json name."
 
 [[id]]
 id = "HO-03"
 suite = "holo"
 level = "build"
-statement = "Holo content ID is the exact SHA-256 hash of its canonical UTF-8 bytes."
+statement = "Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity."
 
 [[id]]
 id = "HO-04"
 suite = "holo"
 level = "build"
-statement = "The Holo projector is a total function from LexLean semantic snapshots."
+statement = "The model-document projector is a total deterministic function from valid LexLean semantic snapshots."
 
 [[id]]
 id = "HO-05"
 suite = "holo"
 level = "build"
-statement = "Holo entity identifiers are qualified strings assigned deterministic zero-based indexes."
+statement = "Model entity identifiers are qualified strings assigned deterministic zero-based indexes."
 
 [[id]]
 id = "HO-06"
 suite = "holo"
 level = "build"
-statement = "Holo serialization excludes host paths, timestamps, and unstable environment data."
+statement = "Platform-independent Prism model and Holo artifacts exclude host paths, timestamps, and unstable environment data."
 
 [[id]]
 id = "HO-07"
 suite = "holo"
 level = "build"
-statement = "Holo decoding rejects noncanonical representations and malformed values."
+statement = "Holo decoding rejects legacy JSON, noncanonical archives, malformed values, and unsupported physical versions."
 
 [[id]]
 id = "HO-08"
 suite = "holo"
 level = "build"
-statement = "The emitter-semantics ID uniquely identifies the Holo projector inputs."
+statement = "The emitter-semantics ID uniquely identifies the model-document projector inputs."
 
 [[id]]
 id = "HO-09"
 suite = "holo"
 level = "build"
-statement = "Shared golden vectors prove correspondence between Lean normalized models and Holo DTOs."
+statement = "Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources."
 
 [[id]]
 id = "HO-10"
 suite = "holo"
 level = "build"
-statement = "Holo validation verifies internal cross-references before emission."
+statement = "Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance."
 
 [[id]]
 id = "CT-01"

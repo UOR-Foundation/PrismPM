@@ -7,7 +7,8 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
-        build-essential ca-certificates coreutils=9.1-1 curl git libgmp10 ripgrep \
+        build-essential ca-certificates coreutils=9.1-1 curl git libgmp10 \
+        libssl-dev pkg-config ripgrep xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --proto '=https' --tlsv1.2 -sSfL \
@@ -17,7 +18,22 @@ RUN curl --proto '=https' --tlsv1.2 -sSfL \
     && chmod +x /tmp/rustup-init \
     && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain 1.97.1 \
     && rm /tmp/rustup-init \
-    && rustup component add rustfmt clippy rust-analyzer
+    && rustup component add rustfmt clippy rust-analyzer \
+    && rustup target add wasm32-unknown-unknown
+
+RUN curl --proto '=https' --tlsv1.2 -sSfL \
+        https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-x64.tar.xz \
+        -o /tmp/node.tar.xz \
+    && echo "d60acfe00a2932254bb0ad20e01b0d74397a0875595de719654b214f4b03f307  /tmp/node.tar.xz" | sha256sum -c - \
+    && tar -xJf /tmp/node.tar.xz --strip-components=1 -C /usr/local \
+    && rm /tmp/node.tar.xz \
+    && node --version \
+    && npm --version
+
+RUN cargo install --locked wasm-bindgen-cli --version 0.2.122 \
+    && cargo install --locked wasm-tools --version 1.258.0 \
+    && cargo install --locked wasmtime-cli --version 48.0.1 \
+    && cargo install --locked cargo-local-registry --version 0.2.12
 
 RUN curl -sSfL https://github.com/leanprover/elan/releases/download/v4.2.3/elan-x86_64-unknown-linux-gnu.tar.gz -o elan.tar.gz \
     && echo "df0b2b3a439961ffcbb3985214365ffe40f49bc871df04dff268c7d8e21ca8b2  elan.tar.gz" | sha256sum -c - \

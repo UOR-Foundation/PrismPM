@@ -9,6 +9,38 @@ pub const CONFORMANCE_PATH: &str = "CONFORMANCE.md";
 /// Path where ERRORS.md is committed.
 pub const ERRORS_PATH: &str = "ERRORS.md";
 
+/// Render the normative SPEC.md conformance appendix from the ID register.
+pub fn render_spec_appendix(model: &Model) -> String {
+    let mut out = String::from("## Appendix A. Conformance ID Registry\n\n");
+    out.push_str("Every row below is normative, has the honesty level registered in `model/ids.toml`, and is generated from that register.\n\n");
+    out.push_str("| ID | Suite | Normative statement | Primary specification |\n");
+    out.push_str("|---|---|---|---|\n");
+    for row in &model.ids.id {
+        let primary = match row.suite.as_str() {
+            "repository" => "§1",
+            "facets" => "§2",
+            "holo" => "§3",
+            "controller" => "§4",
+            "stdlib" => "§5",
+            "artifacts" => "§6",
+            "execution" => "§7",
+            "verification" => "§8",
+            "security" => "§9",
+            _ => "§1",
+        };
+        let statement = row.statement.replace('\n', " ").replace('|', "\\|");
+        let _ = writeln!(
+            out,
+            "| `{}` | `{}` | {} | {} |",
+            row.id,
+            row.suite,
+            statement.trim(),
+            primary
+        );
+    }
+    out
+}
+
 /// Render CONFORMANCE.md from model registers.
 pub fn render_conformance(model: &Model) -> String {
     let mut out = String::new();

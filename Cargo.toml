@@ -2,13 +2,14 @@
 resolver = "2"
 members = ["crates/*", "xtask"]
 exclude = [
+    "stdlib/generated/package",
     "vendor/lexlean",
     "vendor/lean4-prod/rust/prod-codegen",
     "vendor/lean4-prod/rust/prod-ir",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
@@ -17,16 +18,17 @@ keywords = ["prismpm", "lean", "latex", "architecture", "security"]
 categories = ["compilers", "development-tools"]
 
 [workspace.dependencies]
-repo-model = { version = "0.1.0", path = "crates/model" }
-repo-conformance = { version = "0.1.0", path = "crates/conformance" }
-prismpm = { version = "0.1.0", path = "crates/prismpm" }
-lexlean = { version = "0.1.1", path = "vendor/lexlean/crates/lexlean" }
+repo-model = { version = "0.2.0", path = "crates/model" }
+repo-conformance = { version = "0.2.0", path = "crates/conformance" }
+prismpm = { version = "0.2.0", path = "crates/prismpm" }
+lexlean = { version = "0.2.0", path = "vendor/lexlean" }
 prod-codegen = { version = "0.1.0", path = "vendor/lean4-prod/rust/prod-codegen" }
 prod-ir = { version = "0.1.0", path = "vendor/lean4-prod/rust/prod-ir" }
 
 camino = "1.2"
 clap = { version = "4.5", features = ["derive"] }
 fs4 = { version = "0.13", features = ["sync"] }
+hologram = { package = "uor-hologram", git = "https://github.com/Hologram-Technologies/hologram", rev = "2bda6a9a9476872dade705bd61ece4209607f6da", default-features = false, features = ["archive", "space"] }
 nom = { version = "7", default-features = false }
 proptest = "1.6"
 jsonschema = { version = "0.33", default-features = false }
@@ -56,6 +58,6 @@ lto = "thin"
 codegen-units = 1
 
 [patch.crates-io]
-lexlean = { path = "vendor/lexlean/crates/lexlean" }
+lexlean = { path = "vendor/lexlean" }
 prod-codegen = { path = "vendor/lean4-prod/rust/prod-codegen" }
 prod-ir = { path = "vendor/lean4-prod/rust/prod-ir" }

@@ -80,16 +80,16 @@ The three honesty levels:
 
 | ID | Level | Statement |
 | --- | --- | --- |
-| `HO-01` | `build` | Holo artifacts conform to the prismpm/holo/1 JSON schema. |
-| `HO-02` | `build` | Holo serialization follows canonical JSON formatting rules with sorted ASCII keys. |
-| `HO-03` | `build` | Holo content ID is the exact SHA-256 hash of its canonical UTF-8 bytes. |
-| `HO-04` | `build` | The Holo projector is a total function from LexLean semantic snapshots. |
-| `HO-05` | `build` | Holo entity identifiers are qualified strings assigned deterministic zero-based indexes. |
-| `HO-06` | `build` | Holo serialization excludes host paths, timestamps, and unstable environment data. |
-| `HO-07` | `build` | Holo decoding rejects noncanonical representations and malformed values. |
-| `HO-08` | `build` | The emitter-semantics ID uniquely identifies the Holo projector inputs. |
-| `HO-09` | `build` | Shared golden vectors prove correspondence between Lean normalized models and Holo DTOs. |
-| `HO-10` | `build` | Holo validation verifies internal cross-references before emission. |
+| `HO-01` | `build` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. |
+| `HO-02` | `build` | The non-Holo Prism model document uses the closed prismpm/model-document/1 schema and model.prism.json name. |
+| `HO-03` | `build` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. |
+| `HO-04` | `build` | The model-document projector is a total deterministic function from valid LexLean semantic snapshots. |
+| `HO-05` | `build` | Model entity identifiers are qualified strings assigned deterministic zero-based indexes. |
+| `HO-06` | `build` | Platform-independent Prism model and Holo artifacts exclude host paths, timestamps, and unstable environment data. |
+| `HO-07` | `build` | Holo decoding rejects legacy JSON, noncanonical archives, malformed values, and unsupported physical versions. |
+| `HO-08` | `build` | The emitter-semantics ID uniquely identifies the model-document projector inputs. |
+| `HO-09` | `build` | Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources. |
+| `HO-10` | `build` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. |
 
 ## repository
 

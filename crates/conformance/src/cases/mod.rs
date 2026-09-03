@@ -5,6 +5,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::OnceLock;
 
 static CHECK: OnceLock<Result<prismpm::controller::CheckResult, String>> = OnceLock::new();
@@ -73,12 +74,48 @@ fn verification_manifest(root: &Path) -> Value {
     json(&verified_root(root).join("manifest.json"))
 }
 
-fn holo_bytes(root: &Path) -> Vec<u8> {
-    std::fs::read(build_root(root).join("model.holo")).expect("published model.holo")
+fn model_bytes(root: &Path) -> Vec<u8> {
+    std::fs::read(build_root(root).join("model.prism.json")).expect("published model.prism.json")
 }
 
-fn holo(root: &Path) -> Value {
-    serde_json::from_slice(&holo_bytes(root)).expect("canonical Holo JSON")
+fn model(root: &Path) -> Value {
+    serde_json::from_slice(&model_bytes(root)).expect("canonical model-document JSON")
+}
+
+fn sample_application_holo(root: &Path) -> prismpm::holo::archive::GeneratedHolo {
+    let model_document = model_bytes(root);
+    let digest = "0".repeat(64);
+    let commit = "0".repeat(40);
+    prismpm::holo::archive::compose_application(&prismpm::holo::archive::ApplicationArchiveInput {
+        application_name: "Conformance".to_owned(),
+        guest_wasm: b"\0asm\x01\0\0\0".to_vec(),
+        view_bundle: b"HOLOVIEW\0\x01".to_vec(),
+        model_document,
+        source_manifest: br#"{"version":4}"#.to_vec(),
+        provenance: prismpm::holo::archive::ArchiveProvenance {
+            source_id: digest.clone(),
+            semantic_id: digest.clone(),
+            compiler_semantics_id: digest.clone(),
+            snapshot_id: digest.clone(),
+            stdlib_semantics_id: digest.clone(),
+            prism_stdlib_crate_sha256: digest.clone(),
+            lexlean_commit: commit.clone(),
+            lexlean_package_sha256: digest.clone(),
+            lean4_prod_commit: commit.clone(),
+            hologram_live_commit: commit.clone(),
+            uor_hologram_commit: commit,
+            target_profile_id: digest.clone(),
+            lean_manifest_sha256: digest.clone(),
+            lcnf_manifest_sha256: digest.clone(),
+            generated_core_sha256: digest.clone(),
+            cargo_name: "conformance".to_owned(),
+            cargo_version: "0.1.0".to_owned(),
+            cargo_crate_sha256: digest.clone(),
+            view_model_id: digest.clone(),
+            browser_projection_sha256: digest,
+        },
+    })
+    .expect("sample Holo/1 application composes")
 }
 
 fn snapshot(root: &Path) -> Value {
@@ -131,7 +168,7 @@ fn assert_contains(root: &Path, relative: &str, needles: &[&str]) {
 }
 
 fn assert_indexed(array: &Value) {
-    let rows = array.as_array().expect("Holo collection");
+    let rows = array.as_array().expect("model-document collection");
     let ids: Vec<_> = rows
         .iter()
         .map(|row| row["id"].as_str().expect("qualified entity ID"))
@@ -412,9 +449,41 @@ fn verify_rp_12(root: &Path) {
             "missing release criterion {criterion}"
         );
     }
-    let issues =
-        repo_model::release::check(root, &[]).expect_err("untagged or dirty source is refused");
-    assert!(!issues.is_empty());
+    let fixture = tempfile::tempdir().unwrap();
+    for entry in walkdir::WalkDir::new(root.join("model")) {
+        let entry = entry.unwrap();
+        let suffix = entry.path().strip_prefix(root).unwrap();
+        let target = fixture.path().join(suffix);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(target).unwrap();
+        } else if entry.file_type().is_file() {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+    for relative in ["Cargo.toml", "CHANGELOG.md"] {
+        std::fs::copy(root.join(relative), fixture.path().join(relative)).unwrap();
+    }
+    for args in [
+        &["init", "--quiet"][..],
+        &["config", "user.name", "PrismPM conformance"][..],
+        &["config", "user.email", "conformance@example.invalid"][..],
+        &["add", "."][..],
+        &["commit", "--quiet", "-m", "release fixture"][..],
+    ] {
+        let status = Command::new("git")
+            .args(args)
+            .current_dir(fixture.path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {} failed", args.join(" "));
+    }
+    std::fs::write(fixture.path().join("dirty.fixture"), b"dirty\n").unwrap();
+
+    let issues = repo_model::release::check(fixture.path(), &[])
+        .expect_err("the local untagged, dirty, missing-evidence fixture must be refused");
+    assert!(issues.iter().any(|issue| issue.contains("not clean")));
+    assert!(issues.iter().any(|issue| issue.contains("not tagged")));
+    assert!(issues.iter().any(|issue| issue.contains("evidence")));
 }
 
 fn verify_facets(root: &Path, id: &str) {
@@ -540,23 +609,29 @@ fn verify_facets(root: &Path, id: &str) {
 }
 
 fn verify_holo(root: &Path, id: &str) {
-    let document = holo(root);
-    let bytes = holo_bytes(root);
+    let document = model(root);
+    let bytes = model_bytes(root);
     match id {
         "HO-01" => {
-            assert_eq!(document["schema"], "prismpm/holo/1");
-            let _: prismpm::holo::dto::HoloDocument = serde_json::from_slice(&bytes).unwrap();
-            let schema = json(&root.join("schemas/holo.schema.json"));
-            assert_eq!(schema["$id"], "prismpm/holo/1");
+            let holo = sample_application_holo(root);
+            assert_eq!(&holo.bytes[..6], b"HOLO\x04\0");
+            prismpm::holo::archive::validate_application(&holo.bytes).unwrap();
         }
         "HO-02" => {
+            assert_eq!(document["schema"], "prismpm/model-document/1");
+            let _: prismpm::holo::model_document::ModelDocument =
+                serde_json::from_slice(&bytes).unwrap();
+            let schema = json(&root.join("schemas/model-document.schema.json"));
+            assert_eq!(schema["$id"], "prismpm/model-document/1");
+        }
+        "HO-03" => {
             assert!(!bytes.ends_with(b"\n"));
             assert_eq!(
                 prismpm::holo::canonical::encode_value(&document).unwrap(),
                 bytes
             );
+            assert_eq!(checked(root).model_id, sha256(&bytes));
         }
-        "HO-03" => assert_eq!(checked(root).holo_id, sha256(&bytes)),
         "HO-04" => {
             assert_eq!(
                 document["provenance"]["snapshot_id"].as_str().unwrap(),
@@ -584,15 +659,15 @@ fn verify_holo(root: &Path, id: &str) {
             ] {
                 assert!(
                     !text.contains(forbidden),
-                    "Holo contains unstable value {forbidden}"
+                    "model document contains unstable value {forbidden}"
                 );
             }
         }
         "HO-07" => {
-            let mut noncanonical = bytes.clone();
-            noncanonical.push(b'\n');
-            assert!(prismpm::holo::canonical::decode_canonical(&noncanonical).is_err());
-            assert!(prismpm::holo::canonical::decode_canonical(b"{\"schema\":").is_err());
+            assert!(prismpm::holo::archive::validate_application(&bytes).is_err());
+            let mut wrong_version = sample_application_holo(root).bytes;
+            wrong_version[4] = 5;
+            assert!(prismpm::holo::archive::validate_application(&wrong_version).is_err());
         }
         "HO-08" => {
             let emitter = document["provenance"]["emitter_semantics_id"]
@@ -602,14 +677,20 @@ fn verify_holo(root: &Path, id: &str) {
             assert_contains(root, "model/emitter-inputs.toml", &[emitter]);
         }
         "HO-09" => {
-            assert!(root.join("tests/golden/stdlib/build/model.holo").exists());
+            assert!(root
+                .join("tests/golden/stdlib/build/model.prism.json")
+                .exists());
             assert!(root
                 .join("tests/golden/stdlib/golden-manifest.json")
                 .exists());
         }
         "HO-10" => {
-            let decoded = prismpm::holo::canonical::decode_canonical(&bytes).unwrap();
-            prismpm::holo::validate::validate(&decoded).unwrap();
+            let holo = sample_application_holo(root);
+            prismpm::holo::archive::validate_application(&holo.bytes).unwrap();
+            let mut mutation = holo.bytes;
+            let middle = mutation.len() / 2;
+            mutation[middle] ^= 1;
+            assert!(prismpm::holo::archive::validate_application(&mutation).is_err());
         }
         _ => unreachable!(),
     }
@@ -669,7 +750,7 @@ fn verify_controller(root: &Path, id: &str) {
         "CT-03" => {
             let result = checked(root);
             assert_hex_digest(&result.snapshot_id);
-            assert_hex_digest(&result.holo_id);
+            assert_hex_digest(&result.model_id);
         }
         "CT-04" => {
             let result = built(root);
@@ -788,7 +869,7 @@ fn verify_stdlib(root: &Path, id: &str) {
         "ST-09" => {
             let golden = root.join("tests/golden/stdlib");
             for path in [
-                "build/model.holo",
+                "build/model.prism.json",
                 "build/manifest.json",
                 "build/lexlean/snapshot.json",
                 "golden-manifest.json",
@@ -798,7 +879,7 @@ fn verify_stdlib(root: &Path, id: &str) {
         }
         "ST-10" => {
             assert_eq!(verified(root).schema, "prismpm/verify-result/1");
-            assert_eq!(holo(root)["schema"], "prismpm/holo/1");
+            assert_eq!(model(root)["schema"], "prismpm/model-document/1");
         }
         _ => unreachable!(),
     }
@@ -899,7 +980,7 @@ fn verify_execution(root: &Path, id: &str) {
             );
         }
         "EX-04" => {
-            assert_eq!(holo(root)["schema"], "prismpm/holo/1");
+            assert_eq!(model(root)["schema"], "prismpm/model-document/1");
             assert_contains(
                 root,
                 "crates/prismpm/src/verification.rs",
@@ -973,10 +1054,10 @@ fn verify_verification(root: &Path, id: &str) {
             );
         }
         "VR-07" => {
-            let holo_bytes = std::fs::read(build_root(root).join("model.holo")).unwrap();
-            let holo_row = artifact(&manifest, "holo");
-            assert_eq!(holo_row["byte_length"], holo_bytes.len() as u64);
-            assert_eq!(holo_row["sha256"], sha256(&holo_bytes));
+            let model_bytes = std::fs::read(build_root(root).join("model.prism.json")).unwrap();
+            let holo_row = artifact(&manifest, "model");
+            assert_eq!(holo_row["byte_length"], model_bytes.len() as u64);
+            assert_eq!(holo_row["sha256"], sha256(&model_bytes));
             for (name, filename) in [
                 ("execution_evidence", "execution.json"),
                 ("kernel_ir", "kernel.ir"),

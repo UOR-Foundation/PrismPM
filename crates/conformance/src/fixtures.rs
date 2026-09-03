@@ -199,7 +199,7 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         | "holo-noncanonical" => controller
             .build(prismpm::controller::BuildRequest { config_path: None })
             .and_then(|result| {
-                let bytes = std::fs::read(temp_dir.path().join(result.holo_path))
+                let bytes = std::fs::read(temp_dir.path().join(result.model_path))
                     .map_err(|error| prismpm::PrismError::new("PP4002", error.to_string()))?;
                 if case.command == "holo-noncanonical" {
                     let mut malformed = bytes;
@@ -326,7 +326,7 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         "artifact-tamper" => controller
             .build(prismpm::controller::BuildRequest { config_path: None })
             .and_then(|result| {
-                std::fs::write(temp_dir.path().join(&result.holo_path), b"tampered")
+                std::fs::write(temp_dir.path().join(&result.model_path), b"tampered")
                     .map_err(|error| prismpm::PrismError::new("PP4002", error.to_string()))?;
                 controller
                     .build(prismpm::controller::BuildRequest { config_path: None })
@@ -360,7 +360,7 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 controller.check(prismpm::controller::CheckRequest { config_path: None })?;
             let built =
                 controller.build(prismpm::controller::BuildRequest { config_path: None })?;
-            let holo_bytes = std::fs::metadata(temp_dir.path().join(built.holo_path))?.len();
+            let holo_bytes = std::fs::metadata(temp_dir.path().join(built.model_path))?.len();
             let config = temp_dir.path().join("prismpm.toml");
             let text = std::fs::read_to_string(&config)?
                 .replace(

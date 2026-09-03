@@ -109,6 +109,15 @@ fn command(root: &Path, program: &str, args: &[&str]) -> Result<(), Fail> {
 }
 
 fn run_vv(root: &Path) -> Result<(), Fail> {
+    // Evidence is a result of this run, never an input to it.  Removing a
+    // prior ignored record makes the gate repeatable and prevents a stale
+    // success marker from changing the outcome of negative release tests.
+    match std::fs::remove_file(root.join("target/vv-evidence.json")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("cannot invalidate prior vv evidence: {error}").into()),
+    }
+
     println!("VV gate 1/14: formatting");
     command(root, "cargo", &["fmt", "--all", "--", "--check"])?;
 
@@ -224,7 +233,10 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
 fn verify_examples(root: &Path, _write: bool) -> Result<(), Fail> {
     let controller = prismpm::Controller::load(root)?;
     let check_res = controller.check(prismpm::controller::CheckRequest { config_path: None })?;
-    println!("verify-examples: checked Holo {}", check_res.holo_id);
+    println!(
+        "verify-examples: checked model document {}",
+        check_res.model_id
+    );
     let verify_res = verify_once(root)?;
     println!(
         "verify-examples: verified attestation {}",
@@ -281,12 +293,12 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
     }
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
 
-    let holo: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(build_root.join("model.holo"))?)?;
-    let compiler_semantics_id = holo
+    let model: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(build_root.join("model.prism.json"))?)?;
+    let compiler_semantics_id = model
         .pointer("/provenance/compiler_semantics_id")
         .and_then(serde_json::Value::as_str)
-        .ok_or("golden Holo compiler semantics ID is absent")?;
+        .ok_or("golden model-document compiler semantics ID is absent")?;
     let rows = files
         .iter()
         .map(|(path, bytes)| {
@@ -570,7 +582,7 @@ missing_safety_doc = "deny"
         "SPEC.md",
         "language/prism.arch/lexicon.toml",
         "model/dependencies.toml",
-        "schemas/holo.schema.json",
+        "schemas/model-document.schema.json",
         "src/prod_alloc_counter.rs.inc",
         "stdlib/src/Foundation/Holo.lex.tex",
         "vendor/lean4-prod/lean.tar",
@@ -783,7 +795,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
     .trim()
     .to_owned();
     let archive = Command::new("git")
-        .args(["archive", "--format=tar", "--prefix=PrismPM-0.1.0/", "HEAD"])
+        .args(["archive", "--format=tar", "--prefix=PrismPM-0.2.0/", "HEAD"])
         .current_dir(root)
         .output()?;
     if !archive.status.success() {
@@ -793,7 +805,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         )
         .into());
     }
-    let source_name = "PrismPM-0.1.0-source.tar";
+    let source_name = "PrismPM-0.2.0-source.tar";
     std::fs::write(destination.join(source_name), archive.stdout)?;
 
     let metadata = Command::new("cargo")
@@ -859,11 +871,11 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "components": components,
         "source_commit": head,
         "spec": "prismpm/sbom/1",
-        "version": "0.1.0"
+        "version": "0.2.0"
     });
     let mut sbom_bytes = prismpm::holo::canonical::encode_value(&sbom)?;
     sbom_bytes.push(b'\n');
-    let sbom_name = "PrismPM-0.1.0-sbom.json";
+    let sbom_name = "PrismPM-0.2.0-sbom.json";
     std::fs::write(destination.join(sbom_name), &sbom_bytes)?;
 
     let artifact_rows = [
@@ -883,7 +895,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "artifacts": artifact_rows.iter().map(|(path, sha256)| serde_json::json!({"path": path, "sha256": sha256})).collect::<Vec<_>>(),
         "commit": head,
         "schema": "prismpm/release-manifest/1",
-        "version": "0.1.0"
+        "version": "0.2.0"
     });
     let mut manifest_bytes = prismpm::holo::canonical::encode_value(&manifest)?;
     manifest_bytes.push(b'\n');

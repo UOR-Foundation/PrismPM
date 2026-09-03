@@ -1,8 +1,8 @@
 //! Total projection from the stable LexLean semantic snapshot.
 
-use super::dto::{
+use super::model_document::{
     ActivityRecord, ArchitectureModel, AssetRecord, CatalogRecord, ComponentRecord, ControlRecord,
-    EdgeRecord, FacetPackage, HoloDocument, IndexedRecord, MeasureRecord, MeasurementRecord,
+    EdgeRecord, FacetPackage, IndexedRecord, MeasureRecord, MeasurementRecord, ModelDocument,
     ProjectionProvenance, QualityModel, RequirementRecord, RiskRecord, SecurityModel,
     SubcharacteristicRecord, ViewRecord, ViewpointRecord,
 };
@@ -77,7 +77,7 @@ fn facets(snapshot: &SemanticSnapshot) -> Result<Vec<FacetPackage>, PrismError> 
         .lexicon_closure()
         .get("packages")
         .and_then(Value::as_array)
-        .ok_or_else(|| PrismError::new("PP3001", "malformed package closure"))?;
+        .ok_or_else(|| PrismError::new("PP4004", "malformed package closure"))?;
     let mut out = Vec::new();
     for package in packages {
         let id = package
@@ -90,12 +90,12 @@ fn facets(snapshot: &SemanticSnapshot) -> Result<Vec<FacetPackage>, PrismError> 
                 version: package
                     .get("version")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| PrismError::new("PP3001", "missing facet version"))?
+                    .ok_or_else(|| PrismError::new("PP4004", "missing facet version"))?
                     .to_owned(),
                 content_id: package
                     .get("tree_sha256")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| PrismError::new("PP3001", "missing facet digest"))?
+                    .ok_or_else(|| PrismError::new("PP4004", "missing facet digest"))?
                     .to_owned(),
             });
         }
@@ -152,10 +152,10 @@ fn nat(fields: &BTreeMap<&str, &Value>, name: &str) -> Result<u64, PrismError> {
         .and_then(Value::as_str)
         .ok_or_else(|| PrismError::new("PP2001", format!("field {name} is malformed")))?;
     if text != "0" && (text.starts_with('0') || !text.bytes().all(|byte| byte.is_ascii_digit())) {
-        return Err(PrismError::new("PP3004", "noncanonical natural number"));
+        return Err(PrismError::new("PP4004", "noncanonical natural number"));
     }
     text.parse()
-        .map_err(|_| PrismError::new("PP3004", format!("field {name} exceeds u64")))
+        .map_err(|_| PrismError::new("PP4004", format!("field {name} exceeds u64")))
 }
 
 fn bool_field(fields: &BTreeMap<&str, &Value>, name: &str) -> Result<bool, PrismError> {
@@ -201,10 +201,10 @@ fn index(rows: &mut [Raw<'_>]) -> Result<(), PrismError> {
     rows.sort_by(|a, b| a.id.as_bytes().cmp(b.id.as_bytes()));
     for (expected, row) in rows.iter().enumerate() {
         let expected = u64::try_from(expected)
-            .map_err(|_| PrismError::new("PP3004", "entity count exceeds u64"))?;
+            .map_err(|_| PrismError::new("PP4004", "entity count exceeds u64"))?;
         if nat(&row.fields, "index")? != expected {
             return Err(PrismError::new(
-                "PP3004",
+                "PP4004",
                 format!("{} must have canonical index {expected}", row.id),
             ));
         }
@@ -225,12 +225,12 @@ fn indexed(rows: Vec<Raw<'_>>) -> Vec<IndexedRecord> {
 /// Validate the stable snapshot envelope before semantic projection.
 pub fn validate_snapshot_envelope(bytes: &[u8]) -> Result<(), PrismError> {
     let value: Value = serde_json::from_slice(bytes)
-        .map_err(|error| PrismError::new("PP3005", format!("semantic snapshot: {error}")))?;
+        .map_err(|error| PrismError::new("PP4004", format!("semantic snapshot: {error}")))?;
     if value.get("spec").and_then(Value::as_str) != Some("lexlean/semantic-snapshot/1")
         || value.get("language").and_then(Value::as_str) != Some("1.1")
         || !value.get("modules").is_some_and(Value::is_array)
     {
-        return Err(PrismError::new("PP3005", "unsupported semantic snapshot"));
+        return Err(PrismError::new("PP4004", "unsupported semantic snapshot"));
     }
     Ok(())
 }
@@ -240,9 +240,9 @@ fn take_raw<'a>(map: &mut BTreeMap<String, Vec<Raw<'a>>>, name: &str) -> Vec<Raw
 }
 
 /// Project one checked LexLean snapshot without filesystem writes or child processes.
-pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<HoloDocument, PrismError> {
+pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, PrismError> {
     if snapshot.spec() != "lexlean/semantic-snapshot/1" || snapshot.language() != "1.1" {
-        return Err(PrismError::new("PP3005", "unsupported semantic snapshot"));
+        return Err(PrismError::new("PP4004", "unsupported semantic snapshot"));
     }
     let table = table()?;
     let mut catalogs: BTreeMap<String, Vec<CatalogRecord>> = BTreeMap::new();
@@ -257,12 +257,12 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<HoloDocument, Pri
                     let constructors = linked
                         .get("constructors")
                         .and_then(Value::as_array)
-                        .ok_or_else(|| PrismError::new("PP3001", "missing constructors"))?;
+                        .ok_or_else(|| PrismError::new("PP4004", "missing constructors"))?;
                     for constructor in constructors {
                         let name = constructor
                             .get("name")
                             .and_then(Value::as_str)
-                            .ok_or_else(|| PrismError::new("PP3001", "missing constructor name"))?;
+                            .ok_or_else(|| PrismError::new("PP4004", "missing constructor name"))?;
                         catalogs
                             .entry(mapping.target.clone())
                             .or_default()
@@ -470,8 +470,8 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<HoloDocument, Pri
         return Err(PrismError::new("PP9001", "unconsumed entity projection"));
     }
 
-    let doc = HoloDocument {
-        schema: "prismpm/holo/1".to_owned(),
+    let doc = ModelDocument {
+        schema: "prismpm/model-document/1".to_owned(),
         provenance: ProjectionProvenance {
             source_id: snapshot.source_id().to_string(),
             semantic_id: snapshot.semantic_id().to_string(),
@@ -508,6 +508,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<HoloDocument, Pri
             requirements,
             measures,
         },
+        application: None,
     };
     if !catalogs.is_empty() {
         return Err(PrismError::new("PP9001", "unconsumed catalog projection"));
@@ -524,7 +525,10 @@ pub fn compute_emitter_semantics_id() -> String {
             "crates/prismpm/src/holo/canonical.rs",
             include_bytes!("canonical.rs"),
         ),
-        ("crates/prismpm/src/holo/dto.rs", include_bytes!("dto.rs")),
+        (
+            "crates/prismpm/src/holo/model_document.rs",
+            include_bytes!("model_document.rs"),
+        ),
         ("crates/prismpm/src/holo/mod.rs", include_bytes!("mod.rs")),
         (
             "crates/prismpm/src/holo/projector.rs",
@@ -543,8 +547,8 @@ pub fn compute_emitter_semantics_id() -> String {
             include_bytes!("../../model/standards.toml"),
         ),
         (
-            "schemas/holo.schema.json",
-            include_bytes!("../../schemas/holo.schema.json"),
+            "schemas/model-document.schema.json",
+            include_bytes!("../../schemas/model-document.schema.json"),
         ),
     ];
     let mut hasher = Sha256::new();

@@ -1,50 +1,104 @@
-# PrismPM (Prism Platform Model)
+# PrismPM
 
-## Overview
-PrismPM is a first-release framework for modeling software and systems architectures with a fixed architecture, application-security/risk, and product-quality profile. It provides kernel-checked generated declarations and bounded executable-validator evidence for the claims registered in this repository.
+PrismPM compiles authoritative Prism models into verified software artifacts. A
+model is a closed `.lex.tex` source graph: LexLean produces its semantic
+snapshot and Lean, Lean checks the proofs, `lean4-prod` exports only named
+verified roots, and generic generators produce Cargo, Core-Wasm, View, browser,
+and Hologram artifacts. Prism application behavior is never supplied by
+handwritten Lean or target-specific application code.
 
-## Core Architecture & Verification Pipeline
+The historical `v0.1.0` release is a systems-modeling prototype. The completed
+application line is `v0.2.0`, and it is releasable only when the generated
+`prism-stdlib` and `prism-calculator` crates, `Calculator.holo`, the independent
+Hologram execution evidence, and the public `calculator-example` Pages
+application all pass the atomic release contract in [SPEC.md](SPEC.md).
+
+## Artifact model
 
 ```text
-Prism .lex.tex + prism.* lexicons (Language 1.1)
-        │
-        ▼
-LexLean 1.1 linked IR ───► stable semantic snapshot ───► Prism Holo emitter
-        │                                                        │
-        ├────► canonical Lean + canonical LaTeX                  └────► model.holo
-        │             │
-        │             ▼
-        │     LexLean verify + leanchecker + axiom audit
-        │             │
-        │             ▼
-        └────► named-definition LCNF export with lean4-prod (Lean 4.32.1)
-                      │
-                      ▼
-               generated Rust validators over normalized Holo data
+authoritative .lex.tex + lock
+             |
+             +-- LexLean snapshot, generated Lean/LaTeX, proof evidence
+             +-- lean4-prod LCNF and named-root coverage
+             +-- generated Cargo crate and registry package
+             +-- import-free hologram:guest/core-wasm@1 guest
+             +-- evaluated View -> portable HOLOVIEW + browser adapter/assets
+             `-- binary Hologram v4 ApplicationName.holo
 ```
 
-### 1. Generated-Lean-Only Boundary
-Every PrismPM-owned type, validator, theorem, and proof is authored in `.lex.tex` and lowered by LexLean. PrismPM contains **no handwritten `.lean` source** or `lakefile.lean`. Generated Lean exists only inside content-addressed build/verification outputs or provenance-checked goldens.
+Holo/1 is the Prism profile defined by `prism-stdlib`; its physical container
+is Hologram archive version 4. Every `.holo` begins with `HOLO\x04\x00`.
+`model.prism.json` is the separate canonical Prism model document. JSON is
+never accepted as a `.holo` archive.
 
-### 2. Lexicon Facets & Standards Profile
-PrismPM organizes domain primitives into versioned LexLean 1.1 lexicon packages containing repository-authored interpretations of concepts from the fixed standards profile:
-- **`prism.arch`**: Architecture-description concepts from **ISO/IEC/IEEE 42010:2022**.
-- **`prism.sec`**: Application-security and risk-management concepts from **ISO/IEC 27034-1:2011/Cor 1:2014**, **ISO/IEC 27034-5:2017**, and **ISO/IEC 27005:2022**.
-- **`prism.qual`**: Product-quality characteristics and requirements from **ISO/IEC 25010:2023**.
+## Calculator: getting started
 
-PrismPM validates its own formal profile. It does not reproduce standards text, certify an organization or product, or grant ISO conformance or certification.
+Open this repository in its VS Code devcontainer. From the container shell:
 
-### 3. Holo Format (`.holo`) as PrismIR
-The Holo format (`prismpm/holo/1`) is one UTF-8 canonical JSON value emitted by the Prism projector from stable LexLean semantic snapshots; it is not an archive container. Entity identifiers are normalized into deterministic zero-based numeric indexes.
+```sh
+cargo run --locked --offline -p prismpm -- \
+  --project examples/Calculator check
+cargo run --locked --offline -p prismpm -- \
+  --project examples/Calculator build
+cargo run --locked --offline -p prismpm -- \
+  --project examples/Calculator verify
+```
 
-### 4. Verified Execution via `lean4-prod`
-`lean4-prod` extracts compilable Lean Compiler Normal Form (LCNF) from verified Lean modules. `prod-codegen` produces `no_std` Rust validators that allocate no heap memory during validator calls and execute over the normalized Holo representation. Deterministic property tests cover recorded finite strategies and bounds.
+The project root is [examples/Calculator](examples/Calculator). Its sole
+application authority is `src/Calculator.lex.tex` plus `lexlean.lock`.
+Successful verification writes a content-addressed build beneath
+`examples/Calculator/.prism/build/` and an acceptance result beneath
+`examples/Calculator/.prism/verified/`. The build contains:
 
-## Model-View-Controller Implementation
-- **Model**: `Prism-stdlib` and facet definitions authored in `.lex.tex`.
-- **View**: Canonical `.holo` values and canonical LaTeX documentation.
-- **Controller**: The `prismpm` Rust library and CLI orchestrating LexLean and artifact generation.
+- `Calculator.holo`, the composed Core-Wasm plus portable View application;
+- `cargo/prism-calculator-0.1.0.crate` and its complete generated package;
+- `core-wasm/prism_calculator_core_wasm.wasm`;
+- generated Hologram and browser View artifacts; and
+- the model, Lean, LCNF, provenance, identity, and manifest evidence.
 
-## Verification & Acceptance Gates
-- `just vv` runs the 14-stage non-mutating acceptance gate in strict normative order.
-- Oracles include Lean 4.32.1 elaboration, `leanchecker` same-kernel replay, `#print axioms` auditing (verifying empty observed axiom sets), and `lean4-prod` execution property testing.
+Inspect and headlessly plan the archive with the pinned Hologram Live binary:
+
+```sh
+hologram --json holo inspect path/to/Calculator.holo
+hologram --json holo plan path/to/Calculator.holo
+```
+
+The ordinary headless plan intentionally reports that the `portable` View
+surface is unavailable. `prismpm verify` also builds the pinned independent
+Hologram oracle and opens the same archive with a display-independent portable
+surface, runs every modeled request directly and through View intents, then
+checks detach and idempotent shutdown.
+
+After publication, ordinary Rust consumers use the generated API:
+
+```toml
+[dependencies]
+prism-calculator = "=0.1.0"
+```
+
+```rust
+use prism_calculator::{calculate, Operation};
+
+assert_eq!(calculate(Operation::Add, 20, 22), Ok(42));
+```
+
+The public reference application is
+[`UOR-Foundation/calculator-example`](https://github.com/UOR-Foundation/calculator-example).
+It mirrors the exact content-addressed model, reruns PrismPM acceptance, imports
+the registry crate, and deploys only the generated six-file browser closure.
+
+## Development and acceptance
+
+The host needs only Git, Docker with Buildx, the Dev Container CLI, and
+repository credentials. Rust, Lean, Wasm, Node, browser, and conformance tools
+run inside the pinned devcontainers. Dependency acquisition is an explicit
+setup phase; build and acceptance are locked and offline afterward.
+
+```sh
+just vv
+```
+
+`just vv` is the normative repository gate. Application completion is reported
+only by `prismpm/application-acceptance/1`, and ecosystem completion additionally
+requires the final cross-repository release manifest. See [CONFORMANCE.md](CONFORMANCE.md),
+[ERRORS.md](ERRORS.md), and [VERIFICATION.md](VERIFICATION.md).

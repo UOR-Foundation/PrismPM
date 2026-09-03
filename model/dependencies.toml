@@ -9,42 +9,58 @@ source = "vendored"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/lean.tar"
-sha256 = "307d10d038e2c74de255ee6525cfa2055041eecf3e5d7f7da32e9d2168b8026d"
+sha256 = "0dc6a43f3fdf9609e22293cfd22acd56ab4fab4964da59660aa8cdd8fa2e4d03"
 
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "890940f35bc92183835c881efae40e44a417d3ea2dc57cc34a6211b017844141"
+sha256 = "1477613dee35b5aeadbfc8b2110c7fa23762f4606c860532166a95189287f14b"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate"
-sha256 = "da23688cb7eee23dfa3258bb7e4856f2f4def937cf352d3ee47a92149baf980f"
+sha256 = "7d735c657407706bfd683aab6509484a19ba141346519e93737db1087e5db4d0"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
-sha256 = "d83108a5435ea221e834348295bac11ecfc5e3fefdcda7684458e9ee9eb9720b"
+sha256 = "eb0cca176c0dfdcc6479041f5b152f57d99ee6bf1dd033c61f54e51235b6d1c4"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-ir-0.1.0.crate"
-sha256 = "9c2a2af6d36fe12e90095d0a8d93f0f7c02d10c821e0be232569870f599c77f1"
+sha256 = "30ed321932441aad6eb82781950577bec70b12bd59351a34c67beda6773f14ab"
 
 [[dependency]]
 id = "lexlean"
-version = "0.1.1"
+version = "0.2.0"
 revision = "79371e16027d0864e014e3ce1f8f95745ce5caaa"
 source = "vendored"
 
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lexlean/MANIFEST.sha256"
-sha256 = "47949ae679f8e864d7ce0063de0fef8c9c5ae9019d7f39386b365b21a6c80405"
+sha256 = "9ad135205dcbf2ea463342c08a7c753aa8c24f28e45a9c9e54c7a6827a6ecc81"
 tree_root = "vendor/lexlean"
 
 [[dependency.artifact]]
 kind = "file"
-path = "vendor/lexlean/lexlean-0.1.1.crate"
-sha256 = "2c657c5f96cd9cf21df6e584a110d12d872eec39439efcd1ff65ec1d6859a848"
+path = "vendor/lexlean/lexlean-0.2.0.crate"
+sha256 = "78673aba8607142c4d2447275d7b5765e883e7545d3083a0cdd7293dae1e5d1b"
+
+[[dependency]]
+id = "hologram-live"
+version = "1.0.0"
+revision = "d8208266d8abdc2445b7bbc0cef412a566adfaf1"
+source = "vendored"
+
+[[dependency.artifact]]
+kind = "file"
+path = "vendor/hologram-live.tar"
+sha256 = "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66"
+
+[[dependency]]
+id = "uor-hologram"
+revision = "2bda6a9a9476872dade705bd61ece4209607f6da"
+source = "git"

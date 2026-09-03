@@ -1,7 +1,7 @@
 //! Complete verified Lean to LCNF to allocation-free Rust execution chain.
 
 use crate::config::ProjectConfig;
-use crate::controller::{BuildRequest, Controller, VerifyRequest, VerifyResult};
+use crate::controller::{BuildRequest, BuildResult, Controller, VerifyRequest, VerifyResult};
 use crate::error::PrismError;
 use crate::holo::canonical::{content_id, decode_canonical, encode_value};
 use fs4::fs_std::FileExt;
@@ -20,6 +20,12 @@ const CHILD_TIMEOUT_SECONDS: &str = "300";
 const ROOTS_SOURCE: &str = include_str!("../model/runtime-roots.toml");
 const EXECUTION_CORPUS_SOURCE: &str = include_str!("../model/execution-corpus.toml");
 const ALLOCATION_COUNTER_SOURCE: &str = include_str!("prod_alloc_counter.rs.inc");
+const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../../../vendor/hologram-live.tar");
+const HOLOGRAM_ORACLE_SOURCE_SHA256: &str =
+    "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66";
+const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("../../../tests/hologram-oracle/Cargo.toml");
+const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("../../../tests/hologram-oracle/Cargo.lock");
+const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("../../../tests/hologram-oracle/src/main.rs");
 const ELAN_PROXY_SHA256: &str = "840179e70803ef373c2ec53342d6a45ea7d022533e4145489fc1278b4f716385";
 const RUSTUP_PROXY_SHA256: &str =
     "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c";
@@ -154,16 +160,16 @@ fn execution_corpus(roots: &RuntimeRoots) -> Result<(ExecutionCorpus, String), P
 }
 
 #[derive(Debug, Serialize)]
-struct ProcessRecord {
-    tool: String,
-    argv: Vec<String>,
-    executable_sha256: String,
-    exit_code: i32,
-    stdout: String,
-    stderr: String,
+pub(crate) struct ProcessRecord {
+    pub(crate) tool: String,
+    pub(crate) argv: Vec<String>,
+    pub(crate) executable_sha256: String,
+    pub(crate) exit_code: i32,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
 }
 
-fn executable(name: &str) -> Result<PathBuf, PrismError> {
+pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
     let path =
         std::env::var_os("PATH").ok_or_else(|| PrismError::new("PP5008", "PATH is unavailable"))?;
     for directory in std::env::split_paths(&path) {
@@ -331,6 +337,15 @@ fn normalized(value: &str, replacements: &[(&Path, &str)]) -> String {
 }
 
 fn stable_success_output(tool: &str, value: String) -> String {
+    if tool == "hologram-oracle-build" {
+        return String::new();
+    }
+    if tool == "hologram-oracle" {
+        return value
+            .lines()
+            .find(|line| line.starts_with('{'))
+            .map_or_else(String::new, |line| format!("{line}\n"));
+    }
     if !matches!(
         tool,
         "lake-build-generated" | "lean4-prod-build" | "prod-export"
@@ -367,6 +382,98 @@ fn stable_success_output(tool: &str, value: String) -> String {
     }
 }
 
+fn run_hologram_oracle(
+    controller: &Controller,
+    build_root: &Path,
+    holo_path: &Path,
+    model_path: &Path,
+    wasm_path: &Path,
+) -> Result<Vec<ProcessRecord>, PrismError> {
+    if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
+        return Err(PrismError::new(
+            "PP5301",
+            "pinned Hologram Live oracle source checksum changed",
+        ));
+    }
+    let work = tempfile::Builder::new()
+        .prefix("prismpm-hologram-oracle-")
+        .tempdir()
+        .map_err(|error| PrismError::new("PP5301", format!("Hologram oracle: {error}")))?;
+    let upstream = work.path().join("hologram-live");
+    let harness = work.path().join("harness");
+    std::fs::create_dir(&upstream)
+        .and_then(|()| std::fs::create_dir(&harness))
+        .map_err(|error| PrismError::new("PP5301", format!("Hologram oracle: {error}")))?;
+    tar::Archive::new(std::io::Cursor::new(HOLOGRAM_ORACLE_SOURCE))
+        .unpack(&upstream)
+        .map_err(|error| PrismError::new("PP5301", format!("Hologram oracle source: {error}")))?;
+    write(&harness.join("Cargo.toml"), HOLOGRAM_ORACLE_CARGO)?;
+    write(&harness.join("Cargo.lock"), HOLOGRAM_ORACLE_LOCK)?;
+    write(&harness.join("src/main.rs"), HOLOGRAM_ORACLE_MAIN)?;
+
+    let cargo = executable("cargo")?;
+    let replacements = [
+        (controller.root.as_path(), "$PROJECT"),
+        (build_root, "$BUILD"),
+        (work.path(), "$ORACLE_WORK"),
+    ];
+    let mut env = BTreeMap::new();
+    env.insert("CARGO_NET_OFFLINE".to_owned(), "true".to_owned());
+    env.insert(
+        "CARGO_TARGET_DIR".to_owned(),
+        controller
+            .root
+            .join("target/hologram-oracle")
+            .to_string_lossy()
+            .into_owned(),
+    );
+    let build = run_process(
+        "hologram-oracle-build",
+        &cargo,
+        &[
+            "build".to_owned(),
+            "--manifest-path".to_owned(),
+            harness.join("Cargo.toml").to_string_lossy().into_owned(),
+            "--locked".to_owned(),
+            "--offline".to_owned(),
+        ],
+        &harness,
+        &env,
+        &replacements,
+        "PP5301",
+    )?;
+    let run = run_process(
+        "hologram-oracle",
+        &cargo,
+        &[
+            "run".to_owned(),
+            "--manifest-path".to_owned(),
+            harness.join("Cargo.toml").to_string_lossy().into_owned(),
+            "--locked".to_owned(),
+            "--offline".to_owned(),
+            "--".to_owned(),
+            holo_path.to_string_lossy().into_owned(),
+            model_path.to_string_lossy().into_owned(),
+            wasm_path.to_string_lossy().into_owned(),
+        ],
+        &harness,
+        &env,
+        &replacements,
+        "PP5301",
+    )?;
+    let report: Value = serde_json::from_str(run.stdout.trim())
+        .map_err(|error| PrismError::new("PP5301", format!("Hologram oracle report: {error}")))?;
+    if report.get("schema").and_then(Value::as_str) != Some("prismpm/hologram-oracle/1")
+        || report.get("footer_verified").and_then(Value::as_bool) != Some(true)
+    {
+        return Err(PrismError::new(
+            "PP5301",
+            "pinned Hologram oracle did not return complete acceptance",
+        ));
+    }
+    Ok(vec![build, run])
+}
+
 fn pipe<R: Read>(mut reader: R, limit: usize) -> std::io::Result<Vec<u8>> {
     let mut saved = Vec::new();
     let mut buffer = [0_u8; 8192];
@@ -383,7 +490,7 @@ fn pipe<R: Read>(mut reader: R, limit: usize) -> std::io::Result<Vec<u8>> {
     Ok(saved)
 }
 
-fn run_process(
+pub(crate) fn run_process(
     tool: &str,
     program: &Path,
     args: &[String],
@@ -527,18 +634,18 @@ fn hash_file(path: &Path) -> Result<String, PrismError> {
 }
 
 fn harness(
-    holo: &crate::holo::dto::HoloDocument,
+    model: &crate::holo::model_document::ModelDocument,
     corpus: &ExecutionCorpus,
     corpus_sha256: &str,
 ) -> String {
-    let indexes = holo
+    let indexes = model
         .architecture
         .components
         .iter()
         .map(|row| row.index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let endpoints = holo
+    let endpoints = model
         .architecture
         .edges
         .iter()
@@ -546,49 +653,49 @@ fn harness(
         .map(|value| value.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let risk_asset_links = holo
+    let risk_asset_links = model
         .security
         .risks
         .iter()
         .map(|row| row.asset_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let risk_threat_links = holo
+    let risk_threat_links = model
         .security
         .risks
         .iter()
         .map(|row| row.threat_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let control_links = holo
+    let control_links = model
         .security
         .controls
         .iter()
         .map(|row| row.risk_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let viewpoint_stakeholder_links = holo
+    let viewpoint_stakeholder_links = model
         .architecture
         .viewpoints
         .iter()
         .map(|row| row.stakeholder_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let viewpoint_concern_links = holo
+    let viewpoint_concern_links = model
         .architecture
         .viewpoints
         .iter()
         .map(|row| row.concern_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let viewpoint_model_kind_links = holo
+    let viewpoint_model_kind_links = model
         .architecture
         .viewpoints
         .iter()
         .map(|row| row.model_kind_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let quality_characteristic_links = holo
+    let quality_characteristic_links = model
         .quality
         .subcharacteristics
         .iter()
@@ -596,14 +703,14 @@ fn harness(
         .map(|value| value.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let quality_subcharacteristic_links = holo
+    let quality_subcharacteristic_links = model
         .quality
         .requirements
         .iter()
         .map(|row| row.subcharacteristic_index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let quality_requirement_links = holo
+    let quality_requirement_links = model
         .quality
         .measures
         .iter()
@@ -722,16 +829,16 @@ fn main() {{
         quality_characteristic_links = quality_characteristic_links,
         quality_subcharacteristic_links = quality_subcharacteristic_links,
         quality_requirement_links = quality_requirement_links,
-        component_count = holo.architecture.components.len(),
-        asset_count = holo.security.assets.len(),
-        threat_count = holo.security.threats.len(),
-        risk_count = holo.security.risks.len(),
-        stakeholder_count = holo.architecture.stakeholders.len(),
-        concern_count = holo.architecture.concerns.len(),
-        model_kind_count = holo.architecture.model_kinds.len(),
-        characteristic_count = holo.quality.characteristics.len(),
-        subcharacteristic_count = holo.quality.subcharacteristics.len(),
-        requirement_count = holo.quality.requirements.len(),
+        component_count = model.architecture.components.len(),
+        asset_count = model.security.assets.len(),
+        threat_count = model.security.threats.len(),
+        risk_count = model.security.risks.len(),
+        stakeholder_count = model.architecture.stakeholders.len(),
+        concern_count = model.architecture.concerns.len(),
+        model_kind_count = model.architecture.model_kinds.len(),
+        characteristic_count = model.quality.characteristics.len(),
+        subcharacteristic_count = model.quality.subcharacteristics.len(),
+        requirement_count = model.quality.requirements.len(),
         exhaustive_max_length = corpus.exhaustive.max_length,
         exhaustive_width = corpus.exhaustive.value_max + 1,
         exhaustive_bound = corpus.exhaustive.all_below_bound,
@@ -1042,6 +1149,399 @@ fn publish(
     Ok(())
 }
 
+fn verify_application_build_closure(build_root: &Path, manifest: &Value) -> Result<(), PrismError> {
+    let rows = manifest
+        .get("files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| PrismError::new("PP4004", "application build file manifest is absent"))?;
+    let mut expected = BTreeMap::new();
+    for row in rows {
+        let path = row
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| PrismError::new("PP4004", "application artifact path is absent"))?;
+        if path == "manifest.json"
+            || Path::new(path).is_absolute()
+            || Path::new(path)
+                .components()
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
+        {
+            return Err(PrismError::new(
+                "PP4004",
+                format!("application artifact path is invalid: {path}"),
+            ));
+        }
+        let length = row
+            .get("byte_length")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| PrismError::new("PP4004", "application artifact size is absent"))?;
+        let digest = row
+            .get("sha256")
+            .and_then(Value::as_str)
+            .ok_or_else(|| PrismError::new("PP4004", "application artifact hash is absent"))?;
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || expected
+                .insert(path.to_owned(), (length, digest.to_owned()))
+                .is_some()
+        {
+            return Err(PrismError::new(
+                "PP4004",
+                "application artifact row is invalid or duplicated",
+            ));
+        }
+    }
+    let mut observed = BTreeSet::new();
+    for entry in walkdir::WalkDir::new(build_root).min_depth(1) {
+        let entry = entry.map_err(|error| {
+            PrismError::new("PP4002", format!("application artifact walk: {error}"))
+        })?;
+        if entry.file_type().is_symlink()
+            || (!entry.file_type().is_file() && !entry.file_type().is_dir())
+        {
+            return Err(PrismError::new(
+                "PP4001",
+                "application artifact closure contains a symlink or special file",
+            ));
+        }
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry
+            .path()
+            .strip_prefix(build_root)
+            .map_err(|_| PrismError::new("PP9001", "application artifact path escaped"))?
+            .to_string_lossy()
+            .replace('\\', "/");
+        if path == "manifest.json" {
+            continue;
+        }
+        let (length, digest) = expected.get(&path).ok_or_else(|| {
+            PrismError::new("PP4001", format!("undeclared application artifact: {path}"))
+        })?;
+        let bytes = std::fs::read(entry.path()).map_err(|error| {
+            PrismError::new("PP4002", format!("{}: {error}", entry.path().display()))
+        })?;
+        if bytes.len() as u64 != *length || format!("{:x}", Sha256::digest(&bytes)) != *digest {
+            return Err(PrismError::new(
+                "PP4001",
+                format!("application artifact does not match its manifest: {path}"),
+            ));
+        }
+        observed.insert(path);
+    }
+    if observed.len() != expected.len() || expected.keys().any(|path| !observed.contains(path)) {
+        return Err(PrismError::new(
+            "PP4001",
+            "application artifact closure is incomplete",
+        ));
+    }
+    Ok(())
+}
+
+fn copy_application_package(build_root: &Path, destination: &Path) -> Result<(), PrismError> {
+    let source = build_root.join("cargo/package");
+    for entry in walkdir::WalkDir::new(&source).min_depth(1) {
+        let entry = entry
+            .map_err(|error| PrismError::new("PP4002", format!("generated package: {error}")))?;
+        let relative = entry
+            .path()
+            .strip_prefix(&source)
+            .map_err(|_| PrismError::new("PP9001", "generated package path escaped"))?;
+        let target = destination.join(relative);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&target).map_err(|error| {
+                PrismError::new("PP4002", format!("{}: {error}", target.display()))
+            })?;
+        } else if entry.file_type().is_file() && !entry.file_type().is_symlink() {
+            write(
+                &target,
+                &std::fs::read(entry.path()).map_err(|error| {
+                    PrismError::new("PP4002", format!("{}: {error}", entry.path().display()))
+                })?,
+            )?;
+        } else {
+            return Err(PrismError::new(
+                "PP4001",
+                "generated package contains a symlink or special file",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn application_harness(
+    application: &crate::holo::model_document::ApplicationModel,
+) -> Result<String, PrismError> {
+    let crate_name = application.cargo_name.replace('-', "_");
+    let entry = application
+        .entry_root
+        .rsplit('.')
+        .next()
+        .ok_or_else(|| PrismError::new("PP2001", "application entry root is malformed"))?;
+    let vectors = application
+        .acceptance_vectors
+        .iter()
+        .enumerate()
+        .map(|(index, vector)| {
+            format!(
+                "    assert_eq!({crate_name}::{entry}(vec!{:?}), vec!{:?}, \"acceptance vector {index}\");\n",
+                vector.request, vector.response
+            )
+        })
+        .collect::<String>();
+    Ok(format!("fn main() {{\n{vectors}}}\n"))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_application(
+    controller: &Controller,
+    config: &ProjectConfig,
+    build: BuildResult,
+    model: crate::holo::model_document::ModelDocument,
+    model_bytes: Vec<u8>,
+    build_manifest: Value,
+    build_root: &Path,
+    lex_attestation: Vec<u8>,
+    lex_attestation_id: String,
+    mut processes: Vec<ProcessRecord>,
+) -> Result<VerifyResult, PrismError> {
+    let application = model.application.as_ref().ok_or_else(|| {
+        PrismError::new(
+            "PP9001",
+            "application verification received a non-application model",
+        )
+    })?;
+    verify_application_build_closure(build_root, &build_manifest)?;
+    let holo_path = build_root.join(format!("{}.holo", application.name));
+    let holo = std::fs::read(&holo_path)
+        .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", holo_path.display())))?;
+    crate::holo::archive::validate_application(&holo)?;
+    let wasm_path = build_root.join(format!(
+        "core-wasm/{}_core_wasm.wasm",
+        application.cargo_name.replace('-', "_")
+    ));
+    processes.extend(run_hologram_oracle(
+        controller,
+        build_root,
+        &holo_path,
+        &build_root.join("model.prism.json"),
+        &wasm_path,
+    )?);
+    let wasm_tools = executable("wasm-tools")?;
+    let no_env = BTreeMap::new();
+    let replacements = [
+        (controller.root.as_path(), "$PROJECT"),
+        (build_root, "$BUILD"),
+    ];
+    processes.push(run_process(
+        "core-wasm-validate",
+        &wasm_tools,
+        &[
+            "validate".to_owned(),
+            wasm_path.to_string_lossy().into_owned(),
+        ],
+        build_root,
+        &no_env,
+        &replacements,
+        "PP5101",
+    )?);
+    let printed = run_process(
+        "core-wasm-inspect",
+        &wasm_tools,
+        &["print".to_owned(), wasm_path.to_string_lossy().into_owned()],
+        build_root,
+        &no_env,
+        &replacements,
+        "PP5101",
+    )?;
+    if printed.stdout.contains("(import ")
+        || !printed.stdout.contains("(export \"memory\"")
+        || !printed.stdout.contains("(export \"holo_alloc\"")
+        || !printed.stdout.contains("(export \"holo_run\"")
+    {
+        return Err(PrismError::new(
+            "PP5103",
+            "Core-Wasm imports or exports disagree with the closed guest ABI",
+        ));
+    }
+    processes.push(printed);
+
+    let work = tempfile::Builder::new()
+        .prefix("prismpm-application-verify-")
+        .tempdir()
+        .map_err(|error| PrismError::new("PP4002", format!("application verification: {error}")))?;
+    let package_root = work.path().join("package");
+    std::fs::create_dir(&package_root)
+        .map_err(|error| PrismError::new("PP4002", format!("package staging: {error}")))?;
+    copy_application_package(build_root, &package_root)?;
+    let crate_path = build_root.join(format!(
+        "cargo/{}-{}.crate",
+        application.cargo_name, application.cargo_version
+    ));
+    let crate_bytes = std::fs::read(&crate_path)
+        .map_err(|error| PrismError::new("PP4102", format!("generated crate: {error}")))?;
+    let cargo_home =
+        crate::application_build::application_cargo_home(work.path(), application, &crate_bytes)?;
+    let mut cargo_env = BTreeMap::new();
+    cargo_env.insert(
+        "CARGO_HOME".to_owned(),
+        cargo_home.to_string_lossy().into_owned(),
+    );
+    cargo_env.insert("CARGO_NET_OFFLINE".to_owned(), "true".to_owned());
+    let cargo = executable("cargo")?;
+    let app_replacements = [
+        (controller.root.as_path(), "$PROJECT"),
+        (build_root, "$BUILD"),
+        (work.path(), "$VERIFY_WORK"),
+    ];
+    for (tool, args) in [
+        (
+            "application-package-test",
+            vec!["test", "--locked", "--offline"],
+        ),
+        (
+            "application-package-no-std",
+            vec!["check", "--locked", "--offline", "--no-default-features"],
+        ),
+    ] {
+        processes.push(run_process(
+            tool,
+            &cargo,
+            &args.into_iter().map(str::to_owned).collect::<Vec<_>>(),
+            &package_root,
+            &cargo_env,
+            &app_replacements,
+            "PP4102",
+        )?);
+    }
+
+    let consumer = work.path().join("consumer");
+    std::fs::create_dir(&consumer)
+        .map_err(|error| PrismError::new("PP4002", format!("consumer staging: {error}")))?;
+    write(
+        &consumer.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"prismpm-application-consumer\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[dependencies]\n{} = {{ version = \"={}\", default-features = false, features = [\"std\"] }}\n",
+            application.cargo_name, application.cargo_version
+        )
+        .as_bytes(),
+    )?;
+    write(
+        &consumer.join("src/main.rs"),
+        application_harness(application)?.as_bytes(),
+    )?;
+    processes.push(run_process(
+        "application-consumer-lock",
+        &cargo,
+        &["generate-lockfile".to_owned(), "--offline".to_owned()],
+        &consumer,
+        &cargo_env,
+        &app_replacements,
+        "PP4103",
+    )?);
+    let execution = run_process(
+        "application-generated-rust-corpus",
+        &cargo,
+        &[
+            "run".to_owned(),
+            "--locked".to_owned(),
+            "--offline".to_owned(),
+        ],
+        &consumer,
+        &cargo_env,
+        &app_replacements,
+        "PP6003",
+    )?;
+    processes.push(execution);
+
+    let browser = build_root.join("view/browser");
+    let expected_browser = [
+        "app.css",
+        "app.js",
+        "index.html",
+        &format!("{}.js", application.cargo_name.replace('-', "_")),
+        &format!("{}_bg.wasm", application.cargo_name.replace('-', "_")),
+        "provenance.json",
+    ];
+    let observed_browser = std::fs::read_dir(&browser)
+        .map_err(|error| PrismError::new("PP5203", format!("browser output: {error}")))?
+        .map(|entry| {
+            entry
+                .map_err(|error| PrismError::new("PP5203", error.to_string()))
+                .and_then(|entry| {
+                    if entry
+                        .file_type()
+                        .map_err(|error| PrismError::new("PP5203", error.to_string()))?
+                        .is_file()
+                    {
+                        Ok(entry.file_name().to_string_lossy().into_owned())
+                    } else {
+                        Err(PrismError::new(
+                            "PP5203",
+                            "browser output contains a non-file",
+                        ))
+                    }
+                })
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    if observed_browser != expected_browser.into_iter().map(str::to_owned).collect() {
+        return Err(PrismError::new(
+            "PP5203",
+            "browser production file closure is not exact",
+        ));
+    }
+
+    let identities: Value = serde_json::from_slice(
+        &std::fs::read(build_root.join("application/holo-identities.json"))
+            .map_err(|error| PrismError::new("PP3014", format!("Holo identities: {error}")))?,
+    )
+    .map_err(|error| PrismError::new("PP3014", format!("Holo identities: {error}")))?;
+    let process_value = serde_json::to_value(&processes)
+        .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+    let acceptance = json!({
+        "application": application.name,
+        "artifact_closure": "verified",
+        "browser_projection": "verified",
+        "build_id": build.build_id,
+        "cargo_package": {"name":application.cargo_name,"sha256":format!("{:x}",Sha256::digest(&crate_bytes)),"version":application.cargo_version},
+        "core_wasm": {"sha256":hash_file(&wasm_path)?,"status":"verified"},
+        "holo": identities,
+        "hologram_oracle": "verified",
+        "lexlean_attestation_id": lex_attestation_id,
+        "modeled_vectors": application.acceptance_vectors.len(),
+        "schema": "prismpm/application-acceptance/1",
+        "source_id": build.source_id,
+        "status": "verified"
+    });
+    let acceptance_bytes = encode_value(&acceptance)?;
+    let manifest = json!({
+        "acceptance_sha256": format!("{:x}", Sha256::digest(&acceptance_bytes)),
+        "build_id": build.build_id,
+        "lexlean_attestation_sha256": format!("{:x}", Sha256::digest(&lex_attestation)),
+        "model_sha256": format!("{:x}", Sha256::digest(&model_bytes)),
+        "processes": process_value,
+        "schema": "prismpm/application-verification-manifest/1"
+    });
+    let manifest_bytes = encode_value(&manifest)?;
+    let attestation_id = content_id(&manifest_bytes);
+    let files = vec![
+        ("application-acceptance.json".to_owned(), acceptance_bytes),
+        ("lexlean-attestation.json".to_owned(), lex_attestation),
+        ("manifest.json".to_owned(), manifest_bytes),
+    ];
+    let output_root = config.output_root(&controller.root)?;
+    publish(&output_root, &attestation_id, &files)?;
+    Ok(VerifyResult {
+        schema: "prismpm/verify-result/1".to_owned(),
+        attestation_id: attestation_id.clone(),
+        build_id: build.build_id,
+        verified_root: format!("{}/verified/{attestation_id}", config.build_root),
+    })
+}
+
 pub(crate) fn run(
     controller: &Controller,
     request: VerifyRequest,
@@ -1100,9 +1600,9 @@ pub(crate) fn run(
     }
     let output_root = config.output_root(&controller.root)?;
     let build_root = output_root.join("build").join(&build.build_id);
-    let holo_bytes = std::fs::read(build_root.join("model.holo"))
-        .map_err(|error| PrismError::new("PP4002", format!("model.holo: {error}")))?;
-    let holo = decode_canonical(&holo_bytes)?;
+    let model_bytes = std::fs::read(build_root.join("model.prism.json"))
+        .map_err(|error| PrismError::new("PP4002", format!("model.prism.json: {error}")))?;
+    let model = decode_canonical(&model_bytes)?;
     let build_manifest: Value = serde_json::from_slice(
         &std::fs::read(build_root.join("manifest.json"))
             .map_err(|error| PrismError::new("PP4002", format!("Prism manifest: {error}")))?,
@@ -1115,7 +1615,7 @@ pub(crate) fn run(
         || lex_value
             .pointer("/lexlean/compiler_semantics")
             .and_then(Value::as_str)
-            != Some(holo.provenance.compiler_semantics_id.as_str())
+            != Some(model.provenance.compiler_semantics_id.as_str())
         || lex_value.get("build_id").and_then(Value::as_str)
             != build_manifest
                 .pointer("/inputs/lexlean_build_id")
@@ -1135,7 +1635,9 @@ pub(crate) fn run(
         return Err(PrismError::new("PP9001", "runtime roots are not canonical"));
     }
     let (corpus, corpus_sha256) = execution_corpus(&roots)?;
-    validate_lexlean_declarations(&lex_value, &corpus)?;
+    if model.application.is_none() {
+        validate_lexlean_declarations(&lex_value, &corpus)?;
+    }
     let lex_manifest = std::fs::read(build_root.join("lexlean/build/manifest.json"))
         .map_err(|error| PrismError::new("PP4002", format!("LexLean manifest: {error}")))?;
     let attested_manifest = lex_value
@@ -1206,6 +1708,20 @@ pub(crate) fn run(
             "PP4004",
             "LexLean manifest attests no generated Lean modules",
         ));
+    }
+    if model.application.is_some() {
+        return run_application(
+            controller,
+            &config,
+            build,
+            model,
+            model_bytes,
+            build_manifest,
+            &build_root,
+            lex_attestation,
+            lex_attestation_id,
+            toolchain.records,
+        );
     }
 
     let staging_parent = output_root.join(".verify-work");
@@ -1402,7 +1918,7 @@ pub(crate) fn run(
     write(&generated_path, generated_a.as_bytes())?;
     write(
         &harness_path,
-        harness(&holo, &corpus, &corpus_sha256).as_bytes(),
+        harness(&model, &corpus, &corpus_sha256).as_bytes(),
     )?;
     processes.push(run_process(
         "rustfmt",
@@ -1528,7 +2044,7 @@ pub(crate) fn run(
             "execution_corpus": {"byte_length": EXECUTION_CORPUS_SOURCE.len(), "sha256": corpus_sha256},
             "execution_evidence": {"byte_length": execution_bytes.len(), "sha256": format!("{:x}", Sha256::digest(&execution_bytes))},
             "generated_rust": artifact(&generated_path)?,
-            "holo": {"byte_length": holo_bytes.len(), "sha256": content_id(&holo_bytes)},
+            "model": {"byte_length": model_bytes.len(), "sha256": content_id(&model_bytes)},
             "kernel_ir": artifact(&export_a.join("kernel.ir"))?,
             "lexlean_attestation": {"byte_length": lex_attestation.len(), "sha256": format!("{:x}", Sha256::digest(&lex_attestation))},
             "roots": artifact(&export_a.join("roots.json"))?

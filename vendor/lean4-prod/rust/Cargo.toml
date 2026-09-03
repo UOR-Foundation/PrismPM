@@ -5,6 +5,8 @@ members = ["prod-codegen", "prod-ir"]
 [workspace.dependencies]
 nom = { version = "7", default-features = false }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 
 [workspace.lints.rust]
 missing_docs = "allow"

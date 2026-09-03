@@ -1,0 +1,7 @@
+{
+  "git": {
+    "sha1": "79371e16027d0864e014e3ce1f8f95745ce5caaa",
+    "dirty": true
+  },
+  "path_in_vcs": "crates/lexlean"
+}

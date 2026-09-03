@@ -1,6 +1,6 @@
 //! Canonical JSON encode, strict decode, validation, and content identity.
 
-use super::dto::HoloDocument;
+use super::model_document::ModelDocument;
 use crate::error::PrismError;
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
@@ -95,7 +95,7 @@ fn write_value(value: &Value, out: &mut Vec<u8>) -> Result<(), PrismError> {
         Value::Number(number) if number.is_i64() || number.is_u64() => {
             out.extend_from_slice(number.to_string().as_bytes());
         }
-        Value::Number(_) => return Err(PrismError::new("PP3004", "floats are forbidden")),
+        Value::Number(_) => return Err(PrismError::new("PP4004", "floats are forbidden")),
         Value::String(text) => out.extend_from_slice(
             serde_json::to_string(text)
                 .map_err(|error| PrismError::new("PP9001", error.to_string()))?
@@ -140,8 +140,8 @@ pub fn encode_value(value: &Value) -> Result<Vec<u8>, PrismError> {
     Ok(out)
 }
 
-/// Encode a validated Holo document with sorted ASCII object keys and no final LF.
-pub fn encode_canonical(doc: &HoloDocument) -> Result<Vec<u8>, PrismError> {
+/// Encode a validated model document with sorted ASCII object keys and no final LF.
+pub fn encode_canonical(doc: &ModelDocument) -> Result<Vec<u8>, PrismError> {
     super::validate::validate(doc)?;
     let value =
         serde_json::to_value(doc).map_err(|error| PrismError::new("PP9001", error.to_string()))?;
@@ -149,37 +149,43 @@ pub fn encode_canonical(doc: &HoloDocument) -> Result<Vec<u8>, PrismError> {
 }
 
 /// Strictly decode, validate, and require the input bytes to be canonical.
-pub fn decode_canonical(bytes: &[u8]) -> Result<HoloDocument, PrismError> {
+pub fn decode_canonical(bytes: &[u8]) -> Result<ModelDocument, PrismError> {
     let mut stream = serde_json::Deserializer::from_slice(bytes).into_iter::<UniqueValue>();
     let unique = stream
         .next()
-        .ok_or_else(|| PrismError::new("PP3001", "Holo JSON is empty"))?
+        .ok_or_else(|| PrismError::new("PP4004", "model-document JSON is empty"))?
         .map_err(|error| {
             let message = error.to_string();
             if message.contains("floating-point values are forbidden") {
-                PrismError::new("PP3004", message)
+                PrismError::new("PP4004", message)
             } else {
-                PrismError::new("PP3001", format!("malformed Holo JSON: {message}"))
+                PrismError::new(
+                    "PP4004",
+                    format!("malformed model-document JSON: {message}"),
+                )
             }
         })?;
     if stream.byte_offset() != bytes.len() {
         return Err(PrismError::new(
-            "PP3006",
-            "bytes follow the canonical Holo JSON value",
+            "PP4004",
+            "bytes follow the canonical model-document JSON value",
         ));
     }
-    let doc: HoloDocument = serde_json::from_value(unique.0)
-        .map_err(|error| PrismError::new("PP3001", format!("invalid Holo shape: {error}")))?;
+    let doc: ModelDocument = serde_json::from_value(unique.0).map_err(|error| {
+        PrismError::new("PP4004", format!("invalid model-document shape: {error}"))
+    })?;
     super::validate::validate(&doc)?;
     let canonical = encode_canonical(&doc)?;
     if canonical != bytes {
-        return Err(PrismError::new("PP3002", "Holo bytes are not canonical")
-            .with_note(String::from_utf8(canonical).expect("canonical JSON is UTF-8")));
+        return Err(
+            PrismError::new("PP4004", "model-document bytes are not canonical")
+                .with_note(String::from_utf8(canonical).expect("canonical JSON is UTF-8")),
+        );
     }
     Ok(doc)
 }
 
-/// Compute the SHA-256 identity of canonical Holo bytes.
+/// Compute the SHA-256 identity of canonical model-document bytes.
 #[must_use]
 pub fn content_id(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
