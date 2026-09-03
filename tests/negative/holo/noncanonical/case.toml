@@ -6,8 +6,8 @@ capabilities = ["HO-02", "HO-07"]
 expected_artifacts = []
 
 [[expected_diagnostics]]
-code = "PP3002"
-message = "Holo bytes are not canonical"
+code = "PP4004"
+message = "model-document bytes are not canonical"
 primary = "none"
 labels = []
 notes = ["canonical"]

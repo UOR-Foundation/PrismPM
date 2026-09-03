@@ -4,7 +4,7 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "vscode",
-  "postCreateCommand": "toolchain=$(tr -d '\\n' < lean-toolchain); if ! elan toolchain list | grep -Fqx \"$toolchain\"; then elan toolchain install \"$toolchain\"; fi; lean --version; cargo fetch --locked; cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml",
+  "postCreateCommand": "toolchain=$(tr -d '\\n' < lean-toolchain); if ! elan toolchain list | grep -Fqx \"$toolchain\"; then elan toolchain install \"$toolchain\"; fi; lean --version; cargo fetch --locked; cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml; cargo deny fetch",
   "customizations": {
     "vscode": {
       "extensions": [

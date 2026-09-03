@@ -26,6 +26,10 @@ write-fixtures: fixtures-write
 check-reproducibility:
     cargo run --package xtask -- check-reproducibility
 
+# Verify the Cargo-selected package and its downstream public API
+package-api:
+    cargo run --package xtask -- package-api
+
 # Verify examples and standard library
 verify-examples:
     cargo run --package xtask -- verify-examples

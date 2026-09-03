@@ -3,51 +3,51 @@ spec = "prismpm/dependencies/1"
 [[dependency]]
 id = "lean4-prod"
 lean_version = "4.32.1"
-revision = "d618fd2f305e9d46319bda113fef601f01624ed3"
+revision = "ca3a137f18dd508da6ee40df3236306ad57955e4"
 source = "vendored"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/lean.tar"
-sha256 = "0dc6a43f3fdf9609e22293cfd22acd56ab4fab4964da59660aa8cdd8fa2e4d03"
+sha256 = "2be23f24ec7199f3b43476e731a285fcd10ba206abeefc0bd0431e104ab2e5c8"
 
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "1477613dee35b5aeadbfc8b2110c7fa23762f4606c860532166a95189287f14b"
+sha256 = "c574f2f27e62a129a65cc3355f79a92c494c05b65df42199f492e63768856773"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate"
-sha256 = "7d735c657407706bfd683aab6509484a19ba141346519e93737db1087e5db4d0"
+sha256 = "3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
-sha256 = "eb0cca176c0dfdcc6479041f5b152f57d99ee6bf1dd033c61f54e51235b6d1c4"
+sha256 = "b70fa4d83c7cc9a992d74a6402c9793ed08e8a44ae996144bb1919fe1c1480af"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-ir-0.1.0.crate"
-sha256 = "30ed321932441aad6eb82781950577bec70b12bd59351a34c67beda6773f14ab"
+sha256 = "3796cd0d649f8e5e4b533fc5ea2ea0f3c56367df502ebdd565e0f3c080f1f020"
 
 [[dependency]]
 id = "lexlean"
 version = "0.2.0"
-revision = "79371e16027d0864e014e3ce1f8f95745ce5caaa"
+revision = "0b53334e5846a1f5e5d9bb3bf6959c085daa4d08"
 source = "vendored"
 
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lexlean/MANIFEST.sha256"
-sha256 = "9ad135205dcbf2ea463342c08a7c753aa8c24f28e45a9c9e54c7a6827a6ecc81"
+sha256 = "60c3e59fb49151d1025a43eca421f6d5a41c79def570e21a8e43b2ffda2a9135"
 tree_root = "vendor/lexlean"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lexlean/lexlean-0.2.0.crate"
-sha256 = "78673aba8607142c4d2447275d7b5765e883e7545d3083a0cdd7293dae1e5d1b"
+sha256 = "feedcdaf2a18a9e63d2bbe1dd744f7fa790a2bc3af4a85a10403f7de10676a64"
 
 [[dependency]]
 id = "hologram-live"

@@ -123,8 +123,8 @@ gate runs the public Prism controller's `check`, `build`, and `verify` paths; it
 does not substitute a fixture-only implementation.
 
 The immutable integrations used by the release are LexLean
-`79371e16027d0864e014e3ce1f8f95745ce5caaa` and `lean4-prod`
-`d618fd2f305e9d46319bda113fef601f01624ed3`.
+`0b53334e5846a1f5e5d9bb3bf6959c085daa4d08` and `lean4-prod`
+`ca3a137f18dd508da6ee40df3236306ad57955e4`.
 
 ## Gate 10 — Holo schema and reviewed golden bytes
 
@@ -132,12 +132,12 @@ Successful Lake output originally contained scheduling ordinals and durations,
 and LexLean `.olean`/attestation evidence originally captured absolute source
 roots. Exact golden comparison exposed both changes. Successful tool output is
 now normalized only for those declared volatile fields; status, arguments,
-errors, and content remain evidence. The reviewed set contains 41 files with:
+errors, and content remain evidence. The reviewed set contains 167 files with:
 
 ```text
-build_id      2095c983d76fb94e8924b39fe68759fa20cd62433fefaa439395cccb15158bc5
-attestation   01f278155303054594f56b0a6702d2af57e177038a4e9659b4b41ee01bff8ac3
-review reason Final reviewed PrismPM 0.1.0 production artifacts
+build_id      4b144f83991cd970ac3dd2dc44aa65679a56c2f099a4c5545347352f42fc4e60
+attestation   9a790d121dd59c7a70dd3e3858cf8b392cc1e1fff1e460993de4d86b5b83f486
+review reason Make PrismPM package assets relocatable and downstream-compilable
 ```
 
 The acceptance gate only compares bytes and never regenerates goldens.
@@ -149,7 +149,7 @@ An intermediate generated harness represented a declared `u64` value as
 the named validator closure and executes the deterministic corpus twice. The
 evidence asserts complete named-root coverage, empty unsupported-node sets, 597
 cases, no panic, no allocation, equal repeated output, and a published result
-bound to the verified Holo and kernel IR.
+bound to the verified Prism model document and kernel IR.
 
 ## Gate 12 — two-absolute-directory reproducibility
 
@@ -157,17 +157,18 @@ Building in two fresh absolute directories exposed source-root bytes in `.olean`
 artifacts and Lake scheduling ordinals in captured output. LexLean now invokes
 Lean with an explicit logical root and verifies equality from two fresh roots;
 Prism normalizes only the permitted successful-output volatility. The restored
-gate compares 29 build artifacts and 8 verification artifacts byte for byte and
+gate compares 134 build artifacts and 8 verification artifacts byte for byte and
 requires equal build and attestation identities.
 
 ## Gate 13 — dependency policy
 
 The workspace `serde` requirement was temporarily changed to `*`.
-`cargo deny --all-features check` reported wildcard requirements for
+`cargo deny --frozen --all-features check` reported wildcard requirements for
 `prismpm`, `repo-conformance`, and `repo-model`, marked the bans check failed,
-and exited with status 2. Restoring the exact requirement made the policy pass;
-the only duplicate-version notice is the explicitly allowed `windows-sys`
-family.
+and exited with status 2. Restoring the exact requirement made the policy pass.
+Duplicate-version notices remain warnings for reviewed transitive dependency
+families; licenses, advisories, wildcard requirements, registries, and the
+exact pinned Hologram Git source remain deny-level checks.
 
 ## Gate 14 — packaged crate and downstream public API
 

@@ -478,7 +478,7 @@ statement = "Controller::verify publishes verified attestations under .prism/ver
 id = "VR-07"
 suite = "verification"
 level = "build"
-statement = "Verification manifests bind Holo, Lean, LCNF, and Rust execution evidence."
+statement = "Verification manifests bind the Prism model document, Lean, LCNF, and Rust execution evidence."
 
 [[id]]
 id = "VR-08"

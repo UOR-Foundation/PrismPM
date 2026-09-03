@@ -146,7 +146,7 @@ The three honesty levels:
 | `VR-04` | `build` | leanchecker replays compiled module environments independently. |
 | `VR-05` | `build` | Axiom audits enforce that all PrismPM-owned theorems have empty observed axiom sets. |
 | `VR-06` | `build` | Controller::verify publishes verified attestations under .prism/verified/<id>. |
-| `VR-07` | `build` | Verification manifests bind Holo, Lean, LCNF, and Rust execution evidence. |
+| `VR-07` | `build` | Verification manifests bind the Prism model document, Lean, LCNF, and Rust execution evidence. |
 | `VR-08` | `build` | Verification fails if any Lean elaboration, replay, or axiom check fails. |
 | `VR-09` | `build` | Verification performs no hidden network access. |
 | `VR-10` | `build` | Process execution limits output size and execution time strictly. |

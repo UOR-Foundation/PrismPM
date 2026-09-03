@@ -57,6 +57,7 @@ fn main() -> ExitCode {
         "check-golden" => check_golden(&root, write),
         "check-reproducibility" => check_reproducibility(&root),
         "check-fixtures" => check_fixtures(&root, write),
+        "package-api" => package_api_check(&root),
         "release-artifacts" => release_artifacts(&root),
         "release-check" => release_check(&root),
         "validate" => validate_all(&root, false),
@@ -202,7 +203,11 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     check_reproducibility(root)?;
 
     println!("VV gate 13/14: dependency policy");
-    command(root, "cargo", &["deny", "--all-features", "check"])?;
+    command(
+        root,
+        "cargo",
+        &["deny", "--frozen", "--all-features", "check"],
+    )?;
 
     println!("VV gate 14/14: packaged crate and downstream public API");
     package_api_check(root)?;
@@ -466,9 +471,9 @@ fn check_verified_evidence(root: &Path) -> Result<(), Fail> {
         "coverage",
         "executable",
         "generated_rust",
-        "holo",
         "kernel_ir",
         "lexlean_attestation",
+        "model",
         "execution_corpus",
         "execution_evidence",
         "roots",
@@ -512,7 +517,9 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         .into());
     }
     let temp = tempfile::tempdir()?;
-    let packaged = temp.path().join("prismpm-0.1.0");
+    let packaged = temp
+        .path()
+        .join(format!("prismpm-{}", env!("CARGO_PKG_VERSION")));
     std::fs::create_dir(&packaged)?;
     let crate_root = root.join("crates/prismpm");
     for relative in String::from_utf8(selection.stdout)?.lines() {
@@ -538,7 +545,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         packaged.join("Cargo.toml"),
         r#"[package]
 name = "prismpm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
@@ -549,7 +556,8 @@ readme = "README.md"
 camino = "1.2"
 clap = { version = "4.5", features = ["derive"] }
 fs4 = { version = "0.13", features = ["sync"] }
-lexlean = "0.1.1"
+hologram = { package = "uor-hologram", version = "0.12.1", git = "https://github.com/Hologram-Technologies/hologram", rev = "2bda6a9a9476872dade705bd61ece4209607f6da", default-features = false, features = ["archive", "space"] }
+lexlean = "0.2.0"
 prod-codegen = "0.1.0"
 prod-ir = "0.1.0"
 same-file = "1.0"
@@ -609,7 +617,7 @@ missing_safety_doc = "deny"
     let cargo_toml = format!(
         "[package]\nname = \"prismpm-downstream\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\nprismpm = {{ path = {:?} }}\n\n[patch.crates-io]\nlexlean = {{ path = {:?} }}\nprod-codegen = {{ path = {:?} }}\nprod-ir = {{ path = {:?} }}\n",
         packaged,
-        root.join("vendor/lexlean/crates/lexlean"),
+        root.join("vendor/lexlean"),
         root.join("vendor/lean4-prod/rust/prod-codegen"),
         root.join("vendor/lean4-prod/rust/prod-ir"),
     );

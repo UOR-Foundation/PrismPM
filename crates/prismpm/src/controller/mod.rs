@@ -451,7 +451,7 @@ impl Controller {
             "application_generator_sha256": format!("{:x}", Sha256::digest([
                 include_bytes!("../application_build.rs").as_slice(),
                 include_bytes!("../holo/archive.rs").as_slice(),
-                include_bytes!("../../../../vendor/lean4-prod/rust/MANIFEST.sha256").as_slice()
+                include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice()
             ].concat())),
             "dependency_register_sha256": dependency_digest,
             "emitter_semantics_id": prepared.model.provenance.emitter_semantics_id,

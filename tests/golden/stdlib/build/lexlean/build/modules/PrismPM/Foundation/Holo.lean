@@ -1,8 +1,29 @@
 module
 public import Init
+public import PrismPM.Foundation.Application
 public import PrismPM.Foundation.Arch
+public import PrismPM.Foundation.Bytes
+public import PrismPM.Foundation.Codec
+public import PrismPM.Foundation.Core
+public import PrismPM.Foundation.Holo.V1.Archive
+public import PrismPM.Foundation.Holo.V1.Capability
+public import PrismPM.Foundation.Holo.V1.CoreWasm
+public import PrismPM.Foundation.Holo.V1.Directory
+public import PrismPM.Foundation.Holo.V1.Format
+public import PrismPM.Foundation.Holo.V1.Identity
+public import PrismPM.Foundation.Holo.V1.Manifest
+public import PrismPM.Foundation.Holo.V1.PrismExtension
+public import PrismPM.Foundation.Holo.V1.SourceManifest
+public import PrismPM.Foundation.Holo.V1.View
+public import PrismPM.Foundation.Integer
 public import PrismPM.Foundation.Qual
+public import PrismPM.Foundation.Result
+public import PrismPM.Foundation.Runtime
 public import PrismPM.Foundation.Sec
+public import PrismPM.Foundation.Utf8
+public import PrismPM.Foundation.View.V1.Interaction
+public import PrismPM.Foundation.View.V1.Model
+public import PrismPM.Foundation.View.V1.Projection
 set_option autoImplicit false
 namespace PrismPM.Foundation.Holo
 

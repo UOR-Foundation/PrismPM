@@ -20,12 +20,12 @@ const CHILD_TIMEOUT_SECONDS: &str = "300";
 const ROOTS_SOURCE: &str = include_str!("../model/runtime-roots.toml");
 const EXECUTION_CORPUS_SOURCE: &str = include_str!("../model/execution-corpus.toml");
 const ALLOCATION_COUNTER_SOURCE: &str = include_str!("prod_alloc_counter.rs.inc");
-const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../../../vendor/hologram-live.tar");
+const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../vendor/hologram-live.tar");
 const HOLOGRAM_ORACLE_SOURCE_SHA256: &str =
     "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66";
-const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("../../../tests/hologram-oracle/Cargo.toml");
-const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("../../../tests/hologram-oracle/Cargo.lock");
-const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("../../../tests/hologram-oracle/src/main.rs");
+const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.toml");
+const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.lock");
+const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("embedded/hologram-oracle.main.rs");
 const ELAN_PROXY_SHA256: &str = "840179e70803ef373c2ec53342d6a45ea7d022533e4145489fc1278b4f716385";
 const RUSTUP_PROXY_SHA256: &str =
     "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c";
@@ -873,13 +873,49 @@ fn exact_array(value: &Value, key: &str) -> Result<Vec<String>, PrismError> {
 
 fn validate_lexlean_declarations(
     value: &Value,
+    snapshot: &Value,
     corpus: &ExecutionCorpus,
 ) -> Result<(), PrismError> {
     let declarations = value
         .get("declarations")
         .and_then(Value::as_array)
         .ok_or_else(|| PrismError::new("PP4004", "LexLean declaration audit is absent"))?;
-    let mut prism_declarations = 0_usize;
+    let modules = snapshot
+        .get("modules")
+        .and_then(Value::as_array)
+        .ok_or_else(|| PrismError::new("PP4004", "LexLean snapshot modules are absent"))?;
+    let mut expected = BTreeMap::new();
+    for module in modules {
+        let lean_module = module
+            .get("lean_module")
+            .and_then(Value::as_str)
+            .ok_or_else(|| PrismError::new("PP4004", "snapshot Lean module is absent"))?;
+        let module_declarations = module
+            .get("declarations")
+            .and_then(Value::as_array)
+            .ok_or_else(|| PrismError::new("PP4004", "snapshot declarations are absent"))?;
+        for declaration in module_declarations {
+            let lean_name = declaration
+                .get("lean_name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| PrismError::new("PP4004", "snapshot declaration name is absent"))?;
+            let full_name = format!("{lean_module}.{lean_name}");
+            if full_name.starts_with("PrismPM.")
+                && expected.insert(full_name.clone(), declaration).is_some()
+            {
+                return Err(PrismError::new(
+                    "PP4004",
+                    format!("duplicate snapshot declaration {full_name}"),
+                ));
+            }
+        }
+    }
+    if expected.is_empty() {
+        return Err(PrismError::new(
+            "PP5003",
+            "LexLean snapshot contains no Prism declarations",
+        ));
+    }
     let mut audited = BTreeSet::new();
     for declaration in declarations {
         let name = declaration
@@ -887,32 +923,113 @@ fn validate_lexlean_declarations(
             .and_then(Value::as_str)
             .ok_or_else(|| PrismError::new("PP4004", "LexLean declaration name is absent"))?;
         if name.starts_with("PrismPM.") {
-            prism_declarations += 1;
+            let snapshot_declaration = expected.get(name).ok_or_else(|| {
+                PrismError::new(
+                    "PP5003",
+                    format!("axiom audit names undeclared Prism declaration {name}"),
+                )
+            })?;
+            if !audited.insert(name.to_owned()) {
+                return Err(PrismError::new(
+                    "PP5003",
+                    format!("duplicate axiom audit for Prism declaration {name}"),
+                ));
+            }
             let observed = declaration
                 .get("observed")
                 .and_then(Value::as_array)
                 .ok_or_else(|| {
                     PrismError::new("PP4004", format!("axiom audit is absent for {name}"))
                 })?;
-            if !observed.is_empty()
-                || declaration.get("result").and_then(Value::as_str) != Some("ok")
+            if observed.iter().any(|axiom| axiom.as_str().is_none()) {
+                return Err(PrismError::new(
+                    "PP4004",
+                    format!("axiom audit is malformed for {name}"),
+                ));
+            }
+            if declaration.get("result").and_then(Value::as_str) != Some("ok") {
+                return Err(PrismError::new(
+                    "PP5003",
+                    format!("Prism declaration {name} failed its axiom policy audit"),
+                ));
+            }
+            if declaration.get("policy") != snapshot_declaration.get("axiom_policy") {
+                return Err(PrismError::new(
+                    "PP5003",
+                    format!("Prism declaration {name} audit policy differs from its snapshot"),
+                ));
+            }
+            if snapshot_declaration.get("kind").and_then(Value::as_str) == Some("theorem")
+                && !observed.is_empty()
             {
                 return Err(PrismError::new(
                     "PP5003",
-                    format!("Prism declaration {name} has a nonempty axiom audit"),
+                    format!("Prism theorem {name} has a nonempty axiom audit"),
                 ));
             }
-            audited.insert(name);
+            let observed_names = observed
+                .iter()
+                .map(|axiom| axiom.as_str().expect("validated axiom name"))
+                .collect::<Vec<_>>();
+            let policy_kind = declaration
+                .pointer("/policy/kind")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    PrismError::new("PP4004", format!("axiom policy kind is absent for {name}"))
+                })?;
+            let policy_names = declaration
+                .pointer("/policy/axioms")
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    PrismError::new(
+                        "PP4004",
+                        format!("axiom policy names are absent for {name}"),
+                    )
+                })?
+                .iter()
+                .map(|axiom| {
+                    axiom.as_str().ok_or_else(|| {
+                        PrismError::new("PP4004", format!("axiom policy is malformed for {name}"))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let permitted = match policy_kind {
+                "none" => policy_names.is_empty() && observed_names.is_empty(),
+                "exact" => observed_names == policy_names,
+                "allow" => observed_names
+                    .iter()
+                    .all(|axiom| policy_names.contains(axiom)),
+                _ => false,
+            };
+            if !permitted {
+                return Err(PrismError::new(
+                    "PP5003",
+                    format!("Prism declaration {name} has an unapproved axiom audit"),
+                ));
+            }
         }
     }
-    if prism_declarations == 0 {
+    if audited.len() != expected.len() {
+        let missing = expected
+            .keys()
+            .find(|name| !audited.contains(*name))
+            .expect("unequal declaration sets have a missing member");
         return Err(PrismError::new(
             "PP5003",
-            "LexLean attestation audited no Prism declarations",
+            format!("Prism declaration {missing} has no axiom audit"),
         ));
     }
     for oracle in &corpus.oracle {
-        if !audited.contains(oracle.theorem.as_str()) {
+        let audit = declarations.iter().find(|declaration| {
+            declaration.get("name").and_then(Value::as_str) == Some(oracle.theorem.as_str())
+        });
+        if !audit.is_some_and(|declaration| {
+            declaration
+                .get("observed")
+                .and_then(Value::as_array)
+                .is_some_and(Vec::is_empty)
+                && declaration.pointer("/policy/kind").and_then(Value::as_str) == Some("none")
+        }) {
             return Err(PrismError::new(
                 "PP5003",
                 format!(
@@ -1603,6 +1720,11 @@ pub(crate) fn run(
     let model_bytes = std::fs::read(build_root.join("model.prism.json"))
         .map_err(|error| PrismError::new("PP4002", format!("model.prism.json: {error}")))?;
     let model = decode_canonical(&model_bytes)?;
+    let lex_snapshot: Value = serde_json::from_slice(
+        &std::fs::read(build_root.join("lexlean/snapshot.json"))
+            .map_err(|error| PrismError::new("PP4002", format!("LexLean snapshot: {error}")))?,
+    )
+    .map_err(|error| PrismError::new("PP4004", format!("LexLean snapshot: {error}")))?;
     let build_manifest: Value = serde_json::from_slice(
         &std::fs::read(build_root.join("manifest.json"))
             .map_err(|error| PrismError::new("PP4002", format!("Prism manifest: {error}")))?,
@@ -1636,7 +1758,7 @@ pub(crate) fn run(
     }
     let (corpus, corpus_sha256) = execution_corpus(&roots)?;
     if model.application.is_none() {
-        validate_lexlean_declarations(&lex_value, &corpus)?;
+        validate_lexlean_declarations(&lex_value, &lex_snapshot, &corpus)?;
     }
     let lex_manifest = std::fs::read(build_root.join("lexlean/build/manifest.json"))
         .map_err(|error| PrismError::new("PP4002", format!("LexLean manifest: {error}")))?;
@@ -2199,27 +2321,68 @@ mod tests {
     #[test]
     fn semantic_axiom_mismatch_is_rejected_exactly() {
         let (_, corpus, _) = corpus();
+        let snapshot = json!({
+            "modules": [{
+                "declarations": [{
+                    "axiom_policy": {"axioms": [], "kind": "none"},
+                    "kind": "theorem",
+                    "lean_name": "canonicalIndexAssignmentUnique"
+                }],
+                "lean_module": "PrismPM.Foundation.Holo"
+            }]
+        });
         let error = validate_lexlean_declarations(
             &json!({
                 "declarations": [{
                     "name": "PrismPM.Foundation.Holo.canonicalIndexAssignmentUnique",
                     "observed": ["propext"],
+                    "policy": {"axioms": [], "kind": "none"},
                     "result": "ok"
                 }]
             }),
+            &snapshot,
             &corpus,
         )
         .unwrap_err();
         assert_eq!(error.code, "PP5003");
         assert!(error.message.contains("nonempty axiom audit"));
 
-        let error =
-            validate_lexlean_declarations(&json!({"declarations": []}), &corpus).unwrap_err();
+        let error = validate_lexlean_declarations(&json!({"declarations": []}), &snapshot, &corpus)
+            .unwrap_err();
         assert_eq!(error.code, "PP5003");
         assert_eq!(
             error.message,
-            "LexLean attestation audited no Prism declarations"
+            "Prism declaration PrismPM.Foundation.Holo.canonicalIndexAssignmentUnique has no axiom audit"
         );
+    }
+
+    #[test]
+    fn semantic_definition_may_use_its_exact_registered_axioms() {
+        let (_, mut corpus, _) = corpus();
+        corpus.oracle.clear();
+        let snapshot = json!({
+            "modules": [{
+                "declarations": [{
+                    "axiom_policy": {"axioms": ["propext"], "kind": "exact"},
+                    "kind": "definition",
+                    "lean_name": "compareBytes"
+                }],
+                "lean_module": "PrismPM.Foundation.Bytes"
+            }]
+        });
+        validate_lexlean_declarations(
+            &json!({
+                "declarations": [{
+                    "name": "PrismPM.Foundation.Bytes.compareBytes",
+                    "observed": ["propext"],
+                    "policy": {"axioms": ["propext"], "kind": "exact"},
+                    "result": "ok"
+                }]
+            }),
+            &snapshot,
+            &corpus,
+        )
+        .expect("an exact, snapshot-bound definition policy is accepted");
     }
 
     #[test]

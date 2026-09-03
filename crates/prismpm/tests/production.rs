@@ -124,9 +124,14 @@ fn cross_references_and_order_are_enforced() {
 
     let mut doc = document();
     doc.architecture.components.swap(0, 1);
+    for (index, component) in doc.architecture.components.iter_mut().enumerate() {
+        component.index = index as u64;
+    }
+    let error = encode_canonical(&doc).expect_err("noncanonical order");
+    assert_eq!(error.code, "PP4004");
     assert_eq!(
-        encode_canonical(&doc).expect_err("noncanonical order").code,
-        "PP3004"
+        error.message,
+        "component IDs are not in canonical ASCII order"
     );
 }
 
@@ -308,14 +313,21 @@ fn cleanup_cannot_select_the_project_root_as_output() {
 fn strict_holo_decode_distinguishes_floats_and_trailing_bytes() {
     let mut trailing = canonical_bytes().to_vec();
     trailing.push(b' ');
-    assert_eq!(decode_canonical(&trailing).unwrap_err().code, "PP3006");
+    let trailing_error = decode_canonical(&trailing).unwrap_err();
+    assert_eq!(trailing_error.code, "PP4004");
+    assert_eq!(
+        trailing_error.message,
+        "bytes follow the canonical model-document JSON value"
+    );
 
     let text = std::str::from_utf8(canonical_bytes()).expect("canonical UTF-8");
     let floating = text.replacen("\"index\":0", "\"index\":0.5", 1);
-    assert_eq!(
-        decode_canonical(floating.as_bytes()).unwrap_err().code,
-        "PP3004"
-    );
+    let floating_error = decode_canonical(floating.as_bytes()).unwrap_err();
+    assert_eq!(floating_error.code, "PP4004");
+    assert!(floating_error
+        .message
+        .contains("floating-point values are forbidden"));
+    assert_ne!(trailing_error.message, floating_error.message);
 }
 
 proptest! {

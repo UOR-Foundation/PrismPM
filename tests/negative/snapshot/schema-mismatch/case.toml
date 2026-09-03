@@ -6,7 +6,7 @@ capabilities = ["HO-04", "CT-02"]
 expected_artifacts = []
 
 [[expected_diagnostics]]
-code = "PP3005"
+code = "PP4004"
 message = "unsupported semantic snapshot"
 primary = "none"
 labels = []

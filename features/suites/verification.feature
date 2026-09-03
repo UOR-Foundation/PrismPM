@@ -37,7 +37,7 @@ Feature: verification
     Then an attestation manifest is atomically published under .prism/verified/<id>
 
   @VR-07 @build
-  Scenario: Verification manifests bind Holo, Lean, LCNF, and Rust execution evidence.
+  Scenario: Verification manifests bind the Prism model document, Lean, LCNF, and Rust execution evidence.
     Given a published verification manifest
     When manifest contents are inspected
     Then all artifact digests and execution results are bound together

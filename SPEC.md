@@ -461,7 +461,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `VR-04` | `verification` | leanchecker replays compiled module environments independently. | §8 |
 | `VR-05` | `verification` | Axiom audits enforce that all PrismPM-owned theorems have empty observed axiom sets. | §8 |
 | `VR-06` | `verification` | Controller::verify publishes verified attestations under .prism/verified/<id>. | §8 |
-| `VR-07` | `verification` | Verification manifests bind Holo, Lean, LCNF, and Rust execution evidence. | §8 |
+| `VR-07` | `verification` | Verification manifests bind the Prism model document, Lean, LCNF, and Rust execution evidence. | §8 |
 | `VR-08` | `verification` | Verification fails if any Lean elaboration, replay, or axiom check fails. | §8 |
 | `VR-09` | `verification` | Verification performs no hidden network access. | §8 |
 | `VR-10` | `verification` | Process execution limits output size and execution time strictly. | §8 |

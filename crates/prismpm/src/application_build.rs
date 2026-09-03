@@ -19,13 +19,13 @@ use std::path::{Component, Path, PathBuf};
 
 const HOLOGRAM_LIVE_COMMIT: &str = "d8208266d8abdc2445b7bbc0cef412a566adfaf1";
 const UOR_HOLOGRAM_COMMIT: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
-const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../../../vendor/lean4-prod/lean.tar");
-const DEPENDENCY_REGISTER: &str = include_str!("../../../model/dependencies.toml");
-const STDLIB_RELEASE_SOURCE: &str = include_str!("../../../stdlib/release.json");
-const STDLIB_CRATE: &[u8] = include_bytes!("../../../stdlib/generated/prism-stdlib-0.1.0.crate");
-const REGISTRY_ARCHIVE: &[u8] = include_bytes!("../../../vendor/registry.tar");
-const LICENSE_MIT: &str = include_str!("../../../LICENSE-MIT");
-const LICENSE_APACHE: &str = include_str!("../../../LICENSE-APACHE");
+const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
+const DEPENDENCY_REGISTER: &str = include_str!("../model/dependencies.toml");
+const STDLIB_RELEASE_SOURCE: &str = include_str!("../stdlib/release.json");
+const STDLIB_CRATE: &[u8] = include_bytes!("../stdlib/generated/prism-stdlib-0.1.0.crate");
+const REGISTRY_ARCHIVE: &[u8] = include_bytes!("../vendor/registry.tar");
+const LICENSE_MIT: &str = include_str!("../LICENSE-MIT");
+const LICENSE_APACHE: &str = include_str!("../LICENSE-APACHE");
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

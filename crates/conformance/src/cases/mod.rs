@@ -122,6 +122,57 @@ fn snapshot(root: &Path) -> Value {
     json(&build_root(root).join("lexlean/snapshot.json"))
 }
 
+fn assert_prism_theorems_axiom_free(root: &Path) {
+    let snapshot = snapshot(root);
+    let theorem_names = snapshot["modules"]
+        .as_array()
+        .expect("snapshot modules")
+        .iter()
+        .flat_map(|module| {
+            let lean_module = module["lean_module"]
+                .as_str()
+                .expect("snapshot Lean module");
+            module["declarations"]
+                .as_array()
+                .expect("snapshot declarations")
+                .iter()
+                .filter(|declaration| declaration["kind"].as_str() == Some("theorem"))
+                .map(move |declaration| {
+                    format!(
+                        "{lean_module}.{}",
+                        declaration["lean_name"]
+                            .as_str()
+                            .expect("snapshot theorem name")
+                    )
+                })
+        })
+        .collect::<BTreeSet<_>>();
+    assert!(
+        !theorem_names.is_empty(),
+        "snapshot contains no Prism theorems"
+    );
+
+    let attestation = json(&verified_root(root).join("lexlean-attestation.json"));
+    let audits = attestation["declarations"]
+        .as_array()
+        .expect("attested declarations");
+    for theorem in theorem_names {
+        let audit = audits
+            .iter()
+            .find(|row| row["name"].as_str() == Some(theorem.as_str()))
+            .unwrap_or_else(|| panic!("missing theorem audit for {theorem}"));
+        assert_eq!(audit["result"], "ok", "failed theorem audit for {theorem}");
+        assert_eq!(
+            audit["policy"]["kind"], "none",
+            "nonempty theorem policy for {theorem}"
+        );
+        assert!(
+            audit["observed"].as_array().is_some_and(Vec::is_empty),
+            "nonempty observed theorem axioms for {theorem}"
+        );
+    }
+}
+
 fn semantic_names(root: &Path, module: &str) -> BTreeSet<String> {
     snapshot(root)["modules"]
         .as_array()
@@ -360,13 +411,13 @@ fn verify_rp_04(root: &Path) {
         ".devcontainer/Dockerfile",
         &["rustup-init", "sha256sum -c", "leanprover/lean4:v4.32.1"],
     );
-    assert_contains(
-        root,
-        ".github/workflows/vv.yml",
-        &[
-            "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
-            "runCmd: just vv",
-        ],
+    let workflow = read(root, ".github/workflows/vv.yml");
+    assert!(workflow.contains("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"));
+    assert!(workflow.contains("runCmd: |"));
+    assert_eq!(
+        workflow.matches("just vv").count(),
+        2,
+        "the CI workflow must exercise repeatable verification"
     );
 }
 
@@ -849,15 +900,7 @@ fn verify_stdlib(root: &Path, id: &str) {
             assert!(root.join("tests/negative/dangling-edge/case.toml").exists());
         }
         "ST-07" => {
-            let attestation = json(&verified_root(root).join("lexlean-attestation.json"));
-            let declarations = attestation["declarations"].as_array().unwrap();
-            assert!(declarations.iter().any(|row| row["name"]
-                .as_str()
-                .unwrap_or("")
-                .contains("sound_complete")));
-            assert!(declarations
-                .iter()
-                .all(|row| row["observed"].as_array().is_some_and(Vec::is_empty)));
+            assert_prism_theorems_axiom_free(root);
         }
         "ST-08" => {
             let roots = json(&verified_root(root).join("roots.json"));
@@ -1038,14 +1081,7 @@ fn verify_verification(root: &Path, id: &str) {
             &["tempdir", "lakefile.toml"],
         ),
         "VR-04" => assert!(tools.contains("leanchecker")),
-        "VR-05" => {
-            let attestation = json(&verified_root(root).join("lexlean-attestation.json"));
-            assert!(attestation["declarations"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|row| row["observed"].as_array().is_some_and(Vec::is_empty)));
-        }
+        "VR-05" => assert_prism_theorems_axiom_free(root),
         "VR-06" => {
             assert_eq!(verified(root).schema, "prismpm/verify-result/1");
             assert_eq!(

@@ -348,7 +348,7 @@ fn audit_tree_manifest(root: &Path, manifest: &Path, tree_root: &Path) -> Result
     Ok(())
 }
 
-/// Audit immutable vendored dependency revisions and package checksums.
+/// Audit immutable dependency revisions, source modes, and vendored checksums.
 pub fn audit_dependencies(root: &Path) -> Result<(), Fail> {
     let path = root.join("model/dependencies.toml");
     let source = std::fs::read_to_string(&path)?;
@@ -369,7 +369,7 @@ pub fn audit_dependencies(root: &Path) -> Result<(), Fail> {
         .iter()
         .filter_map(|row| row.get("id").and_then(toml::Value::as_str))
         .collect::<Vec<_>>();
-    if ids != ["lean4-prod", "lexlean"] {
+    if ids != ["lean4-prod", "lexlean", "hologram-live", "uor-hologram"] {
         return Err("dependency rows are not the exact canonical set/order".into());
     }
     for row in rows {
@@ -384,13 +384,22 @@ pub fn audit_dependencies(root: &Path) -> Result<(), Fail> {
         if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(format!("{id} revision is not a full commit").into());
         }
-        if row.get("source").and_then(toml::Value::as_str) != Some("vendored") {
-            return Err(format!("{id} is not vendored").into());
+        let expected_source = if id == "uor-hologram" {
+            "git"
+        } else {
+            "vendored"
+        };
+        if row.get("source").and_then(toml::Value::as_str) != Some(expected_source) {
+            return Err(format!("{id} does not use canonical source {expected_source}").into());
         }
-        let artifacts = row
-            .get("artifact")
-            .and_then(toml::Value::as_array)
-            .ok_or_else(|| format!("{id} has no artifact checksums"))?;
+        let artifacts = row.get("artifact").and_then(toml::Value::as_array);
+        if expected_source == "git" {
+            if artifacts.is_some_and(|values| !values.is_empty()) {
+                return Err(format!("Git-only dependency {id} declares local artifacts").into());
+            }
+            continue;
+        }
+        let artifacts = artifacts.ok_or_else(|| format!("{id} has no artifact checksums"))?;
         if artifacts.is_empty() {
             return Err(format!("{id} has no artifact checksums").into());
         }
