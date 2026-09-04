@@ -89,7 +89,31 @@ pub fn audit_no_handwritten_lean(root: &Path) -> Result<(), Fail> {
                 format!("no-handwritten-lean audit failed: found {}", path.display()).into(),
             );
         }
-        if rel.ends_with(".ir") || rel.ends_with("/generated.rs") {
+        if rel.ends_with(".ir") {
+            let vendor_root = root.join("vendor/lean4-prod/rust");
+            if let Ok(vendor_relative) = path.strip_prefix(&vendor_root) {
+                let digest = format!("{:x}", sha2::Sha256::digest(std::fs::read(path)?));
+                let manifest = std::fs::read_to_string(vendor_root.join("MANIFEST.sha256"))?;
+                let row = format!(
+                    "{digest}  {}",
+                    vendor_relative.to_string_lossy().replace('\\', "/")
+                );
+                if manifest.lines().any(|line| line == row) {
+                    continue;
+                }
+                return Err(
+                    format!(
+                        "generated-output audit failed: vendored generated fixture {rel} is not hash-pinned"
+                    )
+                    .into(),
+                );
+            }
+            return Err(format!(
+                "generated-output audit failed: source tree contains {rel}; retain its normalized hash record instead"
+            )
+            .into());
+        }
+        if rel.ends_with("/generated.rs") {
             return Err(format!(
                 "generated-output audit failed: source tree contains {rel}; retain its normalized hash record instead"
             )

@@ -124,7 +124,7 @@ does not substitute a fixture-only implementation.
 
 The immutable integrations used by the release are LexLean
 `0b53334e5846a1f5e5d9bb3bf6959c085daa4d08` and `lean4-prod`
-`ca3a137f18dd508da6ee40df3236306ad57955e4`.
+`c4078cf96537cd71c0818bbed0aa82300ef66786`.
 
 ## Gate 10 — Holo schema and reviewed golden bytes
 

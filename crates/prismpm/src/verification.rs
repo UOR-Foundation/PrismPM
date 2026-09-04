@@ -2301,8 +2301,10 @@ mod tests {
             stable_success_output("application-package-test", left.to_owned()),
             stable_success_output("application-package-test", right.to_owned())
         );
-        assert!(stable_success_output("application-package-test", left.to_owned())
-            .contains("substantive output"));
+        assert!(
+            stable_success_output("application-package-test", left.to_owned())
+                .contains("substantive output")
+        );
     }
 
     #[test]

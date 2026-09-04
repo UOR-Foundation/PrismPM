@@ -3,7 +3,7 @@ spec = "prismpm/dependencies/1"
 [[dependency]]
 id = "lean4-prod"
 lean_version = "4.32.1"
-revision = "ca3a137f18dd508da6ee40df3236306ad57955e4"
+revision = "c4078cf96537cd71c0818bbed0aa82300ef66786"
 source = "vendored"
 
 [[dependency.artifact]]
@@ -14,7 +14,7 @@ sha256 = "2be23f24ec7199f3b43476e731a285fcd10ba206abeefc0bd0431e104ab2e5c8"
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "c574f2f27e62a129a65cc3355f79a92c494c05b65df42199f492e63768856773"
+sha256 = "5cfd7880ae1e858d33caf4509ac85148375428917079e8626ecb4395012e50b4"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
