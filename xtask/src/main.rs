@@ -247,6 +247,27 @@ fn verify_examples(root: &Path, _write: bool) -> Result<(), Fail> {
         "verify-examples: verified attestation {}",
         verify_res.attestation_id
     );
+
+    let calculator_root = root.join("examples/Calculator");
+    let calculator = prismpm::Controller::load(&calculator_root)?;
+    let calculator_check =
+        calculator.check(prismpm::controller::CheckRequest { config_path: None })?;
+    let first = calculator.build(prismpm::controller::BuildRequest { config_path: None })?;
+    let second = calculator.build(prismpm::controller::BuildRequest { config_path: None })?;
+    if first.build_id != second.build_id {
+        return Err("Calculator build identity changed between consecutive builds".into());
+    }
+    let first_verify =
+        calculator.verify(prismpm::controller::VerifyRequest { config_path: None })?;
+    let second_verify =
+        calculator.verify(prismpm::controller::VerifyRequest { config_path: None })?;
+    if first_verify.attestation_id != second_verify.attestation_id {
+        return Err("Calculator verification identity changed between consecutive runs".into());
+    }
+    println!(
+        "verify-examples: Calculator model {} reproduced build {} and verified attestation {}",
+        calculator_check.model_id, first.build_id, first_verify.attestation_id
+    );
     Ok(())
 }
 

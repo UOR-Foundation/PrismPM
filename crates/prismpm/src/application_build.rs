@@ -556,6 +556,13 @@ pub(crate) fn generate(
         cargo_home.to_string_lossy().into_owned(),
     );
     cargo_env.insert("CARGO_NET_OFFLINE".to_owned(), "true".to_owned());
+    cargo_env.insert(
+        "RUSTFLAGS".to_owned(),
+        format!(
+            "--remap-path-prefix={}=$APPLICATION_WORK",
+            workspace.to_string_lossy()
+        ),
+    );
     run(
         "application-cargo-check",
         &cargo,
@@ -589,6 +596,44 @@ pub(crate) fn generate(
     ));
     let crate_bytes = std::fs::read(&crate_file)
         .map_err(|error| PrismError::new("PP4102", format!("generated crate: {error}")))?;
+
+    let registry_source_root = cargo_home.join("registry/src");
+    let mut registry_sources = std::fs::read_dir(&registry_source_root)
+        .map_err(|error| PrismError::new("PP4101", format!("Cargo registry source: {error}")))?
+        .map(|entry| {
+            entry
+                .map_err(|error| PrismError::new("PP4101", error.to_string()))
+                .and_then(|entry| {
+                    if entry
+                        .file_type()
+                        .map_err(|error| PrismError::new("PP4101", error.to_string()))?
+                        .is_dir()
+                    {
+                        Ok(entry.path())
+                    } else {
+                        Err(PrismError::new(
+                            "PP4101",
+                            "Cargo registry source contains a non-directory",
+                        ))
+                    }
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    registry_sources.sort();
+    if registry_sources.len() != 1 {
+        return Err(PrismError::new(
+            "PP4101",
+            "Cargo registry source closure is not exact",
+        ));
+    }
+    cargo_env.insert(
+        "RUSTFLAGS".to_owned(),
+        format!(
+            "--remap-path-prefix={}=$APPLICATION_WORK --remap-path-prefix={}=$CARGO_REGISTRY_SRC",
+            workspace.to_string_lossy(),
+            registry_sources[0].to_string_lossy()
+        ),
+    );
 
     let entry = application
         .entry_root

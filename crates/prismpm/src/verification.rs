@@ -337,6 +337,25 @@ fn normalized(value: &str, replacements: &[(&Path, &str)]) -> String {
 }
 
 fn stable_success_output(tool: &str, value: String) -> String {
+    let had_final_newline = value.ends_with('\n');
+    let mut value = value
+        .lines()
+        .map(|line| {
+            if let Some((prefix, duration)) = line.rsplit_once(" in ") {
+                if duration
+                    .strip_suffix('s')
+                    .is_some_and(|seconds| seconds.parse::<f64>().is_ok())
+                {
+                    return format!("{prefix} in <DURATION>");
+                }
+            }
+            line.to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if had_final_newline {
+        value.push('\n');
+    }
     if tool == "hologram-oracle-build" {
         return String::new();
     }
@@ -2272,6 +2291,18 @@ mod tests {
             stable_success_output("lake-build-generated", left.to_owned()),
             stable_success_output("lake-build-generated", right.to_owned())
         );
+    }
+
+    #[test]
+    fn cargo_success_output_discards_elapsed_time_only() {
+        let left = "    Finished `test` profile in 0.22s\nsubstantive output\n";
+        let right = "    Finished `test` profile in 19.75s\nsubstantive output\n";
+        assert_eq!(
+            stable_success_output("application-package-test", left.to_owned()),
+            stable_success_output("application-package-test", right.to_owned())
+        );
+        assert!(stable_success_output("application-package-test", left.to_owned())
+            .contains("substantive output"));
     }
 
     #[test]
