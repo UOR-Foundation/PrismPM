@@ -22,6 +22,7 @@ include = [
     "sdk/oracles/go/intoto-statement-validator/main.go",
     "sdk/stdlib-sources.tar",
     "src/**",
+    "standards.lock",
     "stdlib/README.md",
     "stdlib/release.json",
     "stdlib/generated/prism-stdlib-0.2.0.crate",

@@ -2577,7 +2577,7 @@ mod tests {
             ("org.opencontainers.image.title".into(), "app.bin".into()),
             ("org.prismpm.role".into(), "release-artifact".into()),
         ]));
-        let standards_lock_bytes = include_bytes!("../../../standards.lock");
+        let standards_lock_bytes = include_bytes!("../standards.lock");
         CanonicalDocument::parse("prismpm/standards-lock/1", standards_lock_bytes).unwrap();
         let sdk_lock_document = CanonicalDocument::from_value(
             "prismpm/sdk-lock/1",

@@ -1659,7 +1659,7 @@ fn runtime_profile(system: &Value) -> Value {
 }
 
 pub(crate) fn authority_binding_for_feature(feature_id: &str) -> Result<Value, PrismError> {
-    let lock: Value = serde_json::from_str(include_str!("../../../standards.lock"))
+    let lock: Value = serde_json::from_str(include_str!("../standards.lock"))
         .map_err(|error| PrismError::new("PP9001", format!("standards lock: {error}")))?;
     let mut ids = lock["authorities"]
         .as_array()

@@ -800,7 +800,7 @@ fn check_verified_evidence(root: &Path) -> Result<(), Fail> {
 
 fn package_api_check(root: &Path) -> Result<(), Fail> {
     let selection = Command::new("cargo")
-        .args(["package", "--package", "prismpm", "--list"])
+        .args(["package", "--package", "prismpm", "--list", "--allow-dirty"])
         .current_dir(root)
         .env("CARGO_NET_OFFLINE", "true")
         .output()?;
@@ -838,42 +838,10 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
     }
     std::fs::write(
         packaged.join("Cargo.toml"),
-        r#"[package]
-name = "prismpm"
-version = "0.3.0"
-edition = "2021"
-rust-version = "1.97"
-license = "MIT OR Apache-2.0"
-description = "Prism Platform Model Framework"
-readme = "README.md"
-
-[dependencies]
-camino = "1.2"
-clap = { version = "4.5", features = ["derive"] }
-fs4 = { version = "0.13", features = ["sync"] }
-hologram = { package = "uor-hologram", version = "0.12.1", git = "https://github.com/Hologram-Technologies/hologram", rev = "2bda6a9a9476872dade705bd61ece4209607f6da", default-features = false, features = ["archive", "space"] }
-lexlean = "0.3.0"
-prod-codegen = "0.1.0"
-prod-ir = "0.1.0"
-same-file = "1.0"
-semver = "1.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.10"
-tempfile = "3"
-tar = "0.4"
-toml = "0.8"
-unicode-normalization = "0.1"
-walkdir = "2"
-
-[lints.rust]
-missing_docs = "deny"
-unsafe_op_in_unsafe_fn = "deny"
-
-[lints.clippy]
-undocumented_unsafe_blocks = "deny"
-missing_safety_doc = "deny"
-"#,
+        standalone_package_manifest(
+            &std::fs::read_to_string(crate_root.join("Cargo.toml"))?,
+            &std::fs::read_to_string(root.join("Cargo.toml"))?,
+        )?,
     )?;
     for required in [
         "CHANGELOG.md",
@@ -887,6 +855,7 @@ missing_safety_doc = "deny"
         "model/dependencies.toml",
         "schemas/model-document.schema.json",
         "src/prod_alloc_counter.rs.inc",
+        "standards.lock",
         "stdlib/src/Foundation/Holo.lex.tex",
         "vendor/lean4-prod/lean.tar",
     ] {
@@ -941,6 +910,105 @@ missing_safety_doc = "deny"
         &["scripts/package-release-crates.sh", "--check"],
     )?;
     Ok(())
+}
+
+// Resolve the same workspace inheritance used by the real package instead of
+// keeping a second dependency list that can silently drift from Cargo.toml.
+fn standalone_package_manifest(source: &str, workspace: &str) -> Result<String, Fail> {
+    let mut manifest: toml::Value = toml::from_str(source)?;
+    let workspace: toml::Value = toml::from_str(workspace)?;
+    let workspace = workspace
+        .get("workspace")
+        .ok_or("package check requires a workspace manifest")?;
+    let package = manifest
+        .get_mut("package")
+        .and_then(toml::Value::as_table_mut)
+        .ok_or("package manifest lacks its package table")?;
+    for (name, value) in package {
+        if value.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+            *value = workspace
+                .get("package")
+                .and_then(|fields| fields.get(name))
+                .ok_or_else(|| format!("workspace package field {name} is absent"))?
+                .clone();
+        }
+    }
+    fn dependencies(table: &mut toml::Value, workspace: &toml::Value) -> Result<(), Fail> {
+        for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let Some(entries) = table.get_mut(section).and_then(toml::Value::as_table_mut) else {
+                continue;
+            };
+            for (name, value) in entries {
+                if value.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+                    let overrides = value
+                        .as_table()
+                        .ok_or("invalid inherited dependency")?
+                        .clone();
+                    *value = workspace
+                        .get("dependencies")
+                        .and_then(|entries| entries.get(name))
+                        .ok_or_else(|| format!("workspace dependency {name} is absent"))?
+                        .clone();
+                    if let Some(version) = value.as_str() {
+                        *value = toml::Value::Table(toml::map::Map::from_iter([(
+                            "version".into(),
+                            toml::Value::String(version.into()),
+                        )]));
+                    }
+                    let resolved = value.as_table_mut().ok_or("invalid workspace dependency")?;
+                    for (key, item) in overrides {
+                        if key == "workspace" {
+                            continue;
+                        }
+                        if key == "features" {
+                            if let Some(features) =
+                                resolved.get_mut(&key).and_then(toml::Value::as_array_mut)
+                            {
+                                for feature in
+                                    item.as_array().ok_or("invalid dependency features")?
+                                {
+                                    if !features.contains(feature) {
+                                        features.push(feature.clone());
+                                    }
+                                }
+                                continue;
+                            }
+                        }
+                        resolved.insert(key, item);
+                    }
+                }
+                if let Some(dependency) = value.as_table_mut() {
+                    if dependency.remove("path").is_some() && !dependency.contains_key("version") {
+                        return Err(
+                            format!("packaged dependency {name} lacks a registry version").into(),
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    dependencies(&mut manifest, workspace)?;
+    if let Some(targets) = manifest
+        .get_mut("target")
+        .and_then(toml::Value::as_table_mut)
+    {
+        for (_, target) in targets.iter_mut() {
+            dependencies(target, workspace)?;
+        }
+    }
+    if manifest
+        .get("lints")
+        .and_then(|lints| lints.get("workspace"))
+        .and_then(toml::Value::as_bool)
+        == Some(true)
+    {
+        manifest["lints"] = workspace
+            .get("lints")
+            .ok_or("workspace lints are absent")?
+            .clone();
+    }
+    Ok(toml::to_string(&manifest)?)
 }
 
 fn check_reproducibility(root: &Path) -> Result<(), Fail> {
@@ -1254,4 +1322,59 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod package_tests {
+    #[test]
+    fn package_manifest_follows_workspace_dependencies_and_rejects_unpublishable_paths() {
+        let source = r#"
+[package]
+name = "consumer"
+version.workspace = true
+[dependencies]
+new_runtime_dependency.workspace = true
+compiler = { workspace = true, features = ["extra"] }
+[target.'cfg(unix)'.dependencies]
+compiler.workspace = true
+[lints]
+workspace = true
+"#;
+        let workspace = r#"
+[workspace.package]
+version = "1.2.3"
+[workspace.dependencies]
+new_runtime_dependency = "=4.5.6"
+compiler = { path = "vendor/compiler", version = "0.3.0", features = ["base"] }
+[workspace.lints.rust]
+unsafe_code = "deny"
+"#;
+        let resolved = super::standalone_package_manifest(source, workspace).unwrap();
+        let manifest: toml::Value = toml::from_str(&resolved).unwrap();
+        assert_eq!(manifest["package"]["version"].as_str(), Some("1.2.3"));
+        assert_eq!(
+            manifest["dependencies"]["new_runtime_dependency"]["version"].as_str(),
+            Some("=4.5.6")
+        );
+        assert_eq!(
+            manifest["dependencies"]["compiler"]["features"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(manifest["dependencies"]["compiler"].get("path").is_none());
+        assert!(manifest["target"]["cfg(unix)"]["dependencies"]["compiler"]
+            .get("path")
+            .is_none());
+        assert_eq!(
+            manifest["lints"]["rust"]["unsafe_code"].as_str(),
+            Some("deny")
+        );
+        assert!(super::standalone_package_manifest(
+            source,
+            &workspace.replace("version = \"0.3.0\", ", "")
+        )
+        .is_err());
+    }
 }
