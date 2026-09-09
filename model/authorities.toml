@@ -364,7 +364,7 @@ network = "deny"
 normalization = "prismpm/oracle-diagnostics/1"
 covers = ["strict JSON decoding into the exact generated Go protobuf published for in-toto Statement 1.0, including declared field wire types and unknown-field rejection"]
 does_not_cover = ["the upstream protobuf explicitly leaves validation of all field semantics to consumers; required-field presence, Statement type value, digest policy, subject agreement, predicate truth, and signer trust are Prism policy or separate verification"]
-expected_exits = ["0=protobuf shape accepted", "1=malformed or schema-unknown JSON", "2=invocation error"]
+expected_exits = ["0=protobuf shape accepted", "1=invalid", "2=invocation error"]
 upstream_payload_sha256 = "9e2c92fbb11eef640de5d98dce6a82ed6a93af3b141e02b9f164e6de4ac952ed"
 corpus = { path = "standards/oracles/in-toto-attestation-ee16c68a", sha256 = "6cbad548e30d2e227d1cea0ee23bb09c06c506c27094ccd8f55137d0bef17371" }
 wrapper_source = "sdk/oracles/go/intoto-statement-validator/main.go"
