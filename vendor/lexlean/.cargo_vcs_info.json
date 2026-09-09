@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "f8bc89d5a930900b9e01601a92c680f619809f7d"
+    "sha1": "c40df5aa5308b396ada87378aed3f4b62ca0adc9"
   },
   "path_in_vcs": "crates/lexlean"
 }
