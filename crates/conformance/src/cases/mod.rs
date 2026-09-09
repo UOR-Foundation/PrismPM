@@ -876,13 +876,25 @@ fn verify_sdk(id: &str) {
                     "source_commit": "f378fd3a8dc5711cb4b22cec9ee2f874353628c3",
                     "version": "0.2.0"
                 },
-                "current_result_digest": format!("sha256:{}", "c".repeat(64)),
-                "prior_result_digest": format!("sha256:{}", "d".repeat(64)),
-                "schema": "prismpm/bootstrap-evidence/1",
-                "shared_identity": {
+                "compatibility_projection": {
+                    "current_result_digest": format!("sha256:{}", "c".repeat(64)),
+                    "prior_result_digest": format!("sha256:{}", "d".repeat(64)),
+                    "shared_identity": {
+                        "entity_count": 1,
+                        "semantic_id": "e".repeat(64),
+                        "snapshot_id": "f".repeat(64)
+                    }
+                },
+                "production_model": {
                     "entity_count": 18,
-                    "semantic_id": "e".repeat(64),
-                    "snapshot_id": "f".repeat(64)
+                    "result_digest": format!("sha256:{}", "1".repeat(64)),
+                    "semantic_id": "2".repeat(64),
+                    "snapshot_id": "3".repeat(64)
+                },
+                "schema": "prismpm/bootstrap-evidence/1",
+                "source_manifest": {
+                    "digest": format!("sha256:{}", "4".repeat(64)),
+                    "file_count": 200
                 },
                 "status": "passed"
             });

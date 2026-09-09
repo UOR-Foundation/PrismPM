@@ -478,10 +478,15 @@ classification. Reference repositories execute it directly from the signed
 SDK inventory; it has no host fallback or application-specific policy.
 
 An SDK release is bootstrapped by the prior accepted SDK plus independently
-pinned language and kernel tools. The prior SDK checks the new source/model;
-the new SDK rebuilds in two clean absolute roots; an independent kernel/tool
-path verifies formal evidence. Provenance records both stages and cannot cite
-the output as its sole input or verifier.
+pinned language and kernel tools. The prior SDK checks a byte-exact manifest of
+the complete new tracked source closure through a source-bootstrap projection
+expressed in the prior language version. The new SDK checks that projection
+with the same semantic identity and separately checks the complete new model;
+the compatibility projection is never reported as full conformance to language
+forms introduced after the prior SDK. The new SDK then rebuilds in two clean
+absolute roots, and an independent kernel/tool path verifies formal evidence.
+Provenance records the source manifest and both validation scopes and cannot
+cite the output as its sole input or verifier.
 
 ## 13. OCI product-release graph
 
