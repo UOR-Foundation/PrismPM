@@ -953,7 +953,6 @@ end LexLeanRuntime
 "#
 }
 
-/// Render one semantic module as prose-free Lean.
 fn contains_lean_comment_outside_string(text: &str) -> bool {
     let bytes = text.as_bytes();
     let mut index = 0_usize;
@@ -981,6 +980,7 @@ fn contains_lean_comment_outside_string(text: &str) -> bool {
     false
 }
 
+/// Render one semantic module as prose-free Lean.
 pub fn render_lean(
     checked: &CheckedModule,
     module: &SemanticModule,
@@ -1142,31 +1142,6 @@ pub fn render_lean(
     Ok(emit(checked, &text, "semantic-lean-module"))
 }
 
-#[cfg(test)]
-mod comment_tests {
-    #[test]
-    fn imported_list_construction_remains_kernel_reducible() {
-        let runtime = super::portable_runtime();
-        for declaration in ["append", "length"] {
-            assert!(runtime.contains(&format!("@[expose] public def {declaration}")));
-            assert!(!runtime.contains(&format!("@[noinline] public def {declaration}")));
-        }
-    }
-
-    #[test]
-    fn comment_tokens_in_generated_string_literals_are_data() {
-        assert!(!super::contains_lean_comment_outside_string(
-            r#"def value := \"--config=locked /- literal\""#
-        ));
-        assert!(super::contains_lean_comment_outside_string(
-            "def value := true -- generated comment\n"
-        ));
-        assert!(super::contains_lean_comment_outside_string(
-            "def value := /- generated comment -/ true\n"
-        ));
-    }
-}
-
 fn tex_escape(text: &str) -> String {
     let mut out = String::new();
     for character in text.chars() {
@@ -1244,4 +1219,35 @@ pub fn render_latex(
     }
     text.push_str("\\end{document}\n");
     Ok(emit(checked, &text, "semantic-latex-module"))
+}
+
+#[cfg(test)]
+mod comment_tests {
+    #[test]
+    fn imported_list_construction_remains_kernel_reducible() {
+        let runtime = super::portable_runtime();
+        for declaration in ["append", "length"] {
+            assert!(runtime.contains(&format!("@[expose] public def {declaration}")));
+            assert!(!runtime.contains(&format!("@[noinline] public def {declaration}")));
+        }
+    }
+
+    #[test]
+    fn comment_tokens_in_generated_string_literals_are_data() {
+        assert!(!super::contains_lean_comment_outside_string(
+            r#"def value := "--config=locked /- literal""#
+        ));
+        assert!(!super::contains_lean_comment_outside_string(
+            r#"def value := "escaped \" /- literal \\""#
+        ));
+        assert!(super::contains_lean_comment_outside_string(
+            r#"def value := "safe \\" -- generated comment"#
+        ));
+        assert!(super::contains_lean_comment_outside_string(
+            "def value := true -- generated comment\n"
+        ));
+        assert!(super::contains_lean_comment_outside_string(
+            "def value := /- generated comment -/ true\n"
+        ));
+    }
 }

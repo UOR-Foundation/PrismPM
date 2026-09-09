@@ -377,7 +377,6 @@ fn check_project_inline(
             .map_err(|diagnostic| err(vec![diagnostic]))?;
         crate::source::scan::reject_forbidden_atoms(
             &relative,
-            &normalized,
             &atoms,
             &closure.bootstrap.structural.forbidden_controls,
         )
