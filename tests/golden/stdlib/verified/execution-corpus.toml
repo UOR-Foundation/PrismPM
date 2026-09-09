@@ -66,3 +66,193 @@ runtime_root = true
 function = "PrismPM.Foundation.Holo.validateViewpointLinks"
 theorem = "PrismPM.Foundation.Holo.viewpointLinks_sound_complete"
 runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateManifest"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusManifestSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelCapabilitySatisfaction"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusCapabilitySatisfactionSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusClosureSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelCompatibility"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusCompatibilitySound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelDeploymentOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusDeploymentOrderSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelEvidenceClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusEvidenceClosureSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelLicenseClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusLicenseClosureSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelMigrationOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusMigrationOrderSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelReferentialIntegrity"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusReferentialIntegritySound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelReleaseCompleteness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusReleaseCompletenessSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelRollbackSafety"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusRollbackSafetySound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelSecretFlow"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusSecretFlowSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelUniqueness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusUniquenessSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeCapabilitySatisfaction"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeCapabilitySatisfactionSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeClosureSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeCompatibility"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeCompatibilitySound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeDeploymentOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeDeploymentOrderSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeEvidenceClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeEvidenceClosureSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeLicenseClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeLicenseClosureSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeManifest"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeManifestSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeMigrationOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeMigrationOrderSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeReferentialIntegrity"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeReferentialIntegritySound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeReleaseCompleteness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeReleaseCompletenessSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeRollbackSafety"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeRollbackSafetySound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeSecretFlow"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeSecretFlowSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeUniqueness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeUniquenessSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateCapabilitySatisfaction"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateClosure"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateCompatibility"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateDeploymentOrder"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateEvidenceClosure"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateLicenseClosure"
+theorem = "PrismPM.Production.Validation.licenseClosure_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateMigrationOrder"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateReferentialIntegrity"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateReleaseCompleteness"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateRollbackSafety"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateSecretFlow"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateUniqueness"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+runtime_root = true

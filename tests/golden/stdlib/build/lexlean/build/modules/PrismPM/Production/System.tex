@@ -1,0 +1,94 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\begin{document}
+\section*{Semantic declarations}
+\subsection*{\texttt{ModelTerm}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{Lifecycle}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{ApplicationErrorBinding}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{TransactionalCommandView}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{TransactionalCommandServiceProfile}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{SystemModel}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{SystemManifest}}
+\noindent Kind: \texttt{structure}.\par
+\subsection*{\texttt{validateManifestClosure}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateClosure (((manifest).closure).bound) (((manifest).closure).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestUniqueness}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateUniqueness (((manifest).uniqueness).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestReferentialIntegrity}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateReferentialIntegrity (((manifest).referentialIntegrity).bound) (((manifest).referentialIntegrity).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestCompatibility}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateCompatibility (((manifest).compatibility).bound) (((manifest).compatibility).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestCapabilitySatisfaction}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateCapabilitySatisfaction (((manifest).capabilitySatisfaction).bound) (((manifest).capabilitySatisfaction).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestSecretFlow}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateSecretFlow (((manifest).secretFlow).bound) (((manifest).secretFlow).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestDeploymentOrder}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateDeploymentOrder (((manifest).deploymentOrder).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestMigrationOrder}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateMigrationOrder (((manifest).migrationOrder).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestRollbackSafety}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateRollbackSafety (((manifest).rollbackSafety).bound) (((manifest).rollbackSafety).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestEvidenceClosure}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateEvidenceClosure (((manifest).evidenceClosure).bound) (((manifest).evidenceClosure).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestLicenseClosure}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateLicenseClosure (((manifest).licenseClosure).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifestReleaseCompleteness}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{PrismPM.Production.Validation.validateReleaseCompleteness (((manifest).releaseCompleteness).values)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{validateManifest}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Bool}.\par
+\noindent Definition: \texttt{(PrismPM.Production.Validation.validateClosure (((manifest).closure).bound) (((manifest).closure).values) \&\& (PrismPM.Production.Validation.validateUniqueness (((manifest).uniqueness).values) \&\& (PrismPM.Production.Validation.validateReferentialIntegrity (((manifest).referentialIntegrity).bound) (((manifest).referentialIntegrity).values) \&\& (PrismPM.Production.Validation.validateCompatibility (((manifest).compatibility).bound) (((manifest).compatibility).values) \&\& (PrismPM.Production.Validation.validateCapabilitySatisfaction (((manifest).capabilitySatisfaction).bound) (((manifest).capabilitySatisfaction).values) \&\& (PrismPM.Production.Validation.validateSecretFlow (((manifest).secretFlow).bound) (((manifest).secretFlow).values) \&\& (PrismPM.Production.Validation.validateDeploymentOrder (((manifest).deploymentOrder).values) \&\& (PrismPM.Production.Validation.validateMigrationOrder (((manifest).migrationOrder).values) \&\& (PrismPM.Production.Validation.validateRollbackSafety (((manifest).rollbackSafety).bound) (((manifest).rollbackSafety).values) \&\& (PrismPM.Production.Validation.validateEvidenceClosure (((manifest).evidenceClosure).bound) (((manifest).evidenceClosure).values) \&\& (PrismPM.Production.Validation.validateLicenseClosure (((manifest).licenseClosure).values) \&\& PrismPM.Production.Validation.validateReleaseCompleteness (((manifest).releaseCompleteness).values))))))))))))}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{manifestValid}}
+\noindent Kind: \texttt{definition}.\par
+\noindent Type: \texttt{Prop}.\par
+\noindent Definition: \texttt{(validateManifest (manifest) = true)}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\subsection*{\texttt{manifestValidation\_sound\_complete}}
+\noindent Kind: \texttt{theorem}.\par
+\noindent Statement: \texttt{((validateManifest (manifest) = true) <-> manifestValid (manifest))}.\par
+\noindent Axiom policy: \texttt{none}.\par
+\end{document}
