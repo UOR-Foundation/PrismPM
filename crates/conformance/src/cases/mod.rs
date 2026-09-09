@@ -999,7 +999,7 @@ fn oci_fixture() -> OciFixture {
             "product":"conformance-product",
             "release":"fixture",
             "schema":"prismpm/product-release/1",
-            "sdk_digest":format!("sha256:{}", "2".repeat(64)),
+            "sdk_digest":format!("sha256:{}", "3".repeat(64)),
             "sdk_lock":sdk_lock.digest,
             "standards_lock":standards_lock.digest,
             "status":"development"

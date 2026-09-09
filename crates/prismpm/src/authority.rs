@@ -1903,7 +1903,7 @@ fn run_external_oracle(
         ));
     }
 
-    let staging_arguments = vec![
+    let mut staging_arguments = vec![
         "create".to_owned(),
         "--name".to_owned(),
         staging_name.clone(),
@@ -1920,11 +1920,16 @@ fn run_external_oracle(
         oracle.memory_bytes.to_string(),
         "--memory-swap".to_owned(),
         oracle.memory_bytes.to_string(),
+        "--user".to_owned(),
+        "1000:1000".to_owned(),
+        "--entrypoint".to_owned(),
+        "/bin/chmod".to_owned(),
         "--mount".to_owned(),
         format!("type=volume,source={input_volume},target=/oracle-inputs"),
         sdk_image.clone(),
-        "/usr/bin/true".to_owned(),
+        "a+rX".to_owned(),
     ];
+    staging_arguments.extend(invocation.mounts.iter().map(|mount| mount.guest.clone()));
     let created = run_docker_control(
         &docker,
         &docker_config,
@@ -1982,6 +1987,37 @@ fn run_external_oracle(
                 ),
             ));
         }
+    }
+    let permissions_arguments = vec![
+        "container".to_owned(),
+        "start".to_owned(),
+        "--attach".to_owned(),
+        staging_id.clone(),
+    ];
+    let permissions = run_docker_control(
+        &docker,
+        &docker_config,
+        &permissions_arguments,
+        Duration::from_secs(30),
+    );
+    let (status, _, stderr) = match permissions {
+        Ok(output) => output,
+        Err(error) => {
+            let _ = remove_container(&docker, &docker_config, &staging_id);
+            let _ = remove_volume(&docker, &docker_config, &input_volume);
+            return Err(error);
+        }
+    };
+    if !status.success() {
+        let _ = remove_container(&docker, &docker_config, &staging_id);
+        let _ = remove_volume(&docker, &docker_config, &input_volume);
+        return Err(PrismError::new(
+            "PP5403",
+            format!(
+                "make isolated oracle inputs readable failed: {}",
+                String::from_utf8_lossy(&stderr)
+            ),
+        ));
     }
     remove_container(&docker, &docker_config, &staging_id)?;
 
