@@ -6,6 +6,39 @@ use std::process::Command;
 /// Host targets supported for binary distribution.
 pub const HOST_TARGETS: &[&str] = &["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"];
 
+fn has_dated_release_entry(changelog: &str, version: &str) -> bool {
+    let prefix = format!("## [{version}] - ");
+    changelog.lines().any(|line| {
+        let Some(date) = line.strip_prefix(&prefix).map(str::trim) else {
+            return false;
+        };
+        if date.len() != 10
+            || !date.bytes().enumerate().all(|(index, byte)| {
+                if index == 4 || index == 7 {
+                    byte == b'-'
+                } else {
+                    byte.is_ascii_digit()
+                }
+            })
+        {
+            return false;
+        }
+        let year: u16 = date[..4].parse().unwrap_or(0);
+        let month: u8 = date[5..7].parse().unwrap_or(0);
+        let day: u8 = date[8..].parse().unwrap_or(0);
+        let leap_year =
+            year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+        let days = match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 if leap_year => 29,
+            2 => 28,
+            _ => 0,
+        };
+        year > 0 && day > 0 && day <= days
+    })
+}
+
 /// Validate release criteria for PrismPM.
 pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
     let mut issues = Vec::new();
@@ -53,7 +86,7 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         }
     }
     let changelog = std::fs::read_to_string(root.join("CHANGELOG.md")).unwrap_or_default();
-    if !changelog.contains("## [0.3.0] - 2026-09-05") {
+    if !has_dated_release_entry(&changelog, "0.3.0") {
         issues.push("CHANGELOG.md has no dated 0.3.0 release entry".to_owned());
     }
     let cargo = std::fs::read_to_string(root.join("Cargo.toml")).unwrap_or_default();
@@ -142,5 +175,32 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         Ok(())
     } else {
         Err(issues)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn release_date_is_valid_without_being_fixed_to_the_planning_date() {
+        for date in ["2026-09-05", "2026-09-09", "2028-02-29", "2000-02-29"] {
+            assert!(super::has_dated_release_entry(
+                &format!("## [0.3.0] - {date}"),
+                "0.3.0"
+            ));
+        }
+        for entry in [
+            "## [Unreleased]",
+            "## [0.2.0] - 2026-09-09",
+            "## [0.3.0] - unreleased",
+            "## [0.3.0] - 2026-02-29",
+            "## [0.3.0] - 2100-02-29",
+            "## [0.3.0] - 2026-04-31",
+            "## [0.3.0] - 2026-00-01",
+            "## [0.3.0] - 2026-09-00",
+            "## [0.3.0] - 2026-9-9",
+            "## [0.3.0] - 2026-09-09 planned",
+        ] {
+            assert!(!super::has_dated_release_entry(entry, "0.3.0"), "{entry}");
+        }
     }
 }
