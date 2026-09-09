@@ -215,7 +215,7 @@ RUN cargo build --locked --release --package prismpm \
     && cp -a . /opt/prismpm/share/conformance-root/ \
     && rm -rf /opt/prismpm/share/conformance-root/target /opt/prismpm/share/conformance-root/vendor/lexlean/target \
     && cp sdk/stdlib-sources.tar standards.lock /opt/prismpm/share/ \
-    && cp CHANGELOG.md CONFORMANCE.md CONTRACTS.md ERRORS.md LICENSE-APACHE LICENSE-MIT README.md SPEC.md /opt/prismpm/share/ \
+    && cp CHANGELOG.md CONFORMANCE.md CONTRACTS.md ERRORS.md LICENSE-APACHE LICENSE-MIT README.md RELEASE-STATUS.md SPEC.md /opt/prismpm/share/ \
     && cp -a action adapters schemas standards /opt/prismpm/share/ \
     && mkdir -p /opt/prismpm/share/stdlib/generated \
     && cp stdlib/README.md stdlib/release.json /opt/prismpm/share/stdlib/ \

@@ -1,12 +1,20 @@
 # Changelog
 
-## [0.3.0] - 2026-09-08
+All notable changes to PrismPM will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+The following changes target 0.3.0. Public release acceptance is not complete;
+see [RELEASE-STATUS.md](RELEASE-STATUS.md) for the verified prerequisites.
 
 - Add the authoritative production-system model, immutable standards/oracle
   bindings, OCI release graphs, digest-only lifecycle controller, Compose and
   Kubernetes target projections, operations/supply-chain evidence, and the
   reproducible PrismPM SDK.
-- Release `prism-stdlib` 0.2.0 with generated production-system validation
+- Prepare `prism-stdlib` 0.2.0 with generated production-system validation
   support while preserving Holo/1 and the 0.1 application runtime API.
 - Correct generated View field layout in `lean4-prod`; Calculator behavior and
   Holo/1 remain compatible.
@@ -16,13 +24,6 @@
 Holo/1 and accepted Prism application inputs remain stable. Additive contracts
 use new registered schemas; an incompatible schema change requires a new schema
 identifier and an explicit migration.
-
-All notable changes to PrismPM will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
 
 ## [0.1.0] - 2026-08-30
 
