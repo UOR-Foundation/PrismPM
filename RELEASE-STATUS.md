@@ -17,10 +17,10 @@ cargo package --package prismpm --no-verify
 
 The package gate resolves registry dependencies as Cargo does when publishing;
 the development Git checkout is not a substitute for a public registry crate.
-The pinned Hologram 0.12.1 source predates registry versions on its internal
-path dependencies. The current publishable Hologram line is 0.13.1, so the
-PrismPM version/revision pin, lock, and artifact evidence must migrate together
-before the public package can be accepted.
+The former Hologram 0.12.1 source predates registry versions on its internal
+path dependencies. PrismPM now pins the publishable Hologram 0.13.1 source at
+`96769f16be454ab1572fddff4613704ccfbebf5e`; the corresponding packages must be
+published before the public PrismPM package can be accepted.
 
 Hologram's existing publication workflow publishes its complete 19-crate
 workspace. Its last real upload failed with HTTP 403 because
@@ -37,7 +37,7 @@ After dependency publication is authorized, complete the existing release plan:
 1. Accept and publish the Hologram dependency closure, and verify the downloaded
    bytes. Verify the generic compiler release packages and their publishing
    identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes.
-2. Finish the PrismPM dependency migration and reproduce its package, golden
+2. Reproduce the PrismPM dependency closure and its package, golden
    artifacts, Calculator regression, and all source/package/image checks.
 3. Pass every PrismPM gate twice without cleanup. Publish and independently
    verify the exact PrismPM/stdlib crates, SDK, runtime, adapters, and oracles.

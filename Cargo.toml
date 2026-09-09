@@ -30,7 +30,7 @@ base64 = "=0.22.1"
 clap = { version = "4.5", features = ["derive"] }
 ctrlc = "=3.5.2"
 fs4 = { version = "0.13", features = ["sync"] }
-hologram = { package = "uor-hologram", version = "0.12.1", git = "https://github.com/Hologram-Technologies/hologram", rev = "2bda6a9a9476872dade705bd61ece4209607f6da", default-features = false, features = ["archive", "space"] }
+hologram = { package = "uor-hologram", version = "0.13.1", git = "https://github.com/Hologram-Technologies/hologram", rev = "96769f16be454ab1572fddff4613704ccfbebf5e", default-features = false, features = ["archive", "space"] }
 nom = { version = "7", default-features = false }
 proptest = "1.6"
 jsonschema = { version = "=0.50.1", default-features = false }

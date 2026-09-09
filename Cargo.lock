@@ -575,8 +575,8 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hologram-archive"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "hashbrown 0.15.5",
  "hologram-compute",
@@ -592,8 +592,8 @@ dependencies = [
 
 [[package]]
 name = "hologram-compute"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "bytemuck",
  "hologram-ops",
@@ -609,8 +609,8 @@ dependencies = [
 
 [[package]]
 name = "hologram-graph"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "hologram-ops",
  "hologram-types",
@@ -620,8 +620,8 @@ dependencies = [
 
 [[package]]
 name = "hologram-ops"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "hologram-types",
  "libm",
@@ -631,8 +631,8 @@ dependencies = [
 
 [[package]]
 name = "hologram-space"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "async-trait",
  "hashbrown 0.15.5",
@@ -643,8 +643,8 @@ dependencies = [
 
 [[package]]
 name = "hologram-types"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "uor-foundation",
  "uor-foundation-sdk",
@@ -1820,8 +1820,8 @@ dependencies = [
 
 [[package]]
 name = "uor-hologram"
-version = "0.12.1"
-source = "git+https://github.com/Hologram-Technologies/hologram?rev=2bda6a9a9476872dade705bd61ece4209607f6da#2bda6a9a9476872dade705bd61ece4209607f6da"
+version = "0.13.1"
+source = "git+https://github.com/Hologram-Technologies/hologram?rev=96769f16be454ab1572fddff4613704ccfbebf5e#96769f16be454ab1572fddff4613704ccfbebf5e"
 dependencies = [
  "hologram-archive",
  "hologram-space",
