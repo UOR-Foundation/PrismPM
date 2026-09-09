@@ -785,10 +785,10 @@ fn sdk_lock_value() -> Value {
     serde_json::json!({
         "inventory":[
             {"digest":digest,"id":"prismpm","kind":"binary","version":"0.3.0"},
+            {"digest":format!("sha256:{}", "7".repeat(64)),"id":"runtime-os-lock","kind":"dependency-lock","version":"ubuntu-noble@20260901T000000Z"},
             {"digest":format!("sha256:{}", "1".repeat(64)),"id":"sdk-linux-amd64","kind":"image","version":"0.3.0"},
             {"digest":format!("sha256:{}", "2".repeat(64)),"id":"sdk-linux-arm64","kind":"image","version":"0.3.0"},
             {"digest":format!("sha256:{}", "6".repeat(64)),"id":"sdk-test-corpus","kind":"test-corpus","version":"147-features-83-diagnostics"},
-            {"digest":format!("sha256:{}", "7".repeat(64)),"id":"runtime-os-lock","kind":"dependency-lock","version":"ubuntu-noble@20260901T000000Z"},
             {"digest":format!("sha256:{}", "5".repeat(64)),"id":"sigstore-root","kind":"trust-root","version":"2025-10-10"}
         ],
         "schema":"prismpm/sdk-lock/1",
@@ -815,9 +815,15 @@ fn verify_sdk(id: &str) {
             .unwrap();
             assert_eq!(lock.schema(), "prismpm/sdk-lock/1");
             assert_eq!(lock.value()["inventory"].as_array().unwrap().len(), 6);
-            assert_eq!(lock.value()["inventory"][3]["kind"], "test-corpus");
-            assert_eq!(lock.value()["inventory"][4]["kind"], "dependency-lock");
-            assert_eq!(lock.value()["inventory"][5]["kind"], "trust-root");
+            let kinds = lock.value()["inventory"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|row| (row["id"].as_str().unwrap(), row["kind"].as_str().unwrap()))
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(kinds["sdk-test-corpus"], "test-corpus");
+            assert_eq!(kinds["runtime-os-lock"], "dependency-lock");
+            assert_eq!(kinds["sigstore-root"], "trust-root");
         }
         "DK-02" => {
             let lock = sdk_lock_value();
