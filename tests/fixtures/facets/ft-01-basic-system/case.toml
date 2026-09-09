@@ -45,3 +45,155 @@ theorem = "PrismPM.Foundation.Holo.riskLinks_sound_complete"
 [[oracle]]
 function = "PrismPM.Foundation.Holo.validateViewpointLinks"
 theorem = "PrismPM.Foundation.Holo.viewpointLinks_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateManifest"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusManifestSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelCapabilitySatisfaction"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusCapabilitySatisfactionSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusClosureSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelCompatibility"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusCompatibilitySound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelDeploymentOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusDeploymentOrderSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelEvidenceClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusEvidenceClosureSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelLicenseClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusLicenseClosureSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelMigrationOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusMigrationOrderSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelReferentialIntegrity"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusReferentialIntegritySound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelReleaseCompleteness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusReleaseCompletenessSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelRollbackSafety"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusRollbackSafetySound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelSecretFlow"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusSecretFlowSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidation.validateModelUniqueness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusUniquenessSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeCapabilitySatisfaction"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeCapabilitySatisfactionSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeClosureSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeCompatibility"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeCompatibilitySound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeDeploymentOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeDeploymentOrderSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeEvidenceClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeEvidenceClosureSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeLicenseClosure"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeLicenseClosureSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeManifest"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeManifestSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeMigrationOrder"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeMigrationOrderSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeReferentialIntegrity"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeReferentialIntegritySound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeReleaseCompleteness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeReleaseCompletenessSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeRollbackSafety"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeRollbackSafetySound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeSecretFlow"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeSecretFlowSound"
+
+[[oracle]]
+function = "PrismPM.Production.SystemValidationCorpus.corpusProbeUniqueness"
+theorem = "PrismPM.Production.SystemValidationCorpus.corpusProbeUniquenessSound"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateCapabilitySatisfaction"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateClosure"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateCompatibility"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateDeploymentOrder"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateEvidenceClosure"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateLicenseClosure"
+theorem = "PrismPM.Production.Validation.licenseClosure_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateMigrationOrder"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateReferentialIntegrity"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateReleaseCompleteness"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateRollbackSafety"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateSecretFlow"
+theorem = "PrismPM.Production.Validation.relationAllBelow_sound_complete"
+
+[[oracle]]
+function = "PrismPM.Production.Validation.validateUniqueness"
+theorem = "PrismPM.Production.Validation.relationAllConsecutive_sound_complete"
