@@ -15,10 +15,14 @@ if test -z "${PRISMPM_TEST_SDK_IMAGE:-}"; then
   registry="prismpm-vv-registry-${nonce}"
   config_volume="prismpm-vv-registry-config-${nonce}"
   scratch=$(mktemp -d)
+  sdk_tag=''
 
   cleanup_registry() {
     docker container rm --force "$registry" >/dev/null 2>&1 || true
     docker volume rm --force "$config_volume" >/dev/null 2>&1 || true
+    if test -n "$sdk_tag"; then
+      docker image rm "$sdk_tag" >/dev/null 2>&1 || true
+    fi
     rm -r -- "$scratch"
   }
   trap cleanup_registry EXIT
