@@ -287,7 +287,7 @@ wrapper_source = "crates/prismpm/src/authority.rs"
 
 [[oracle]]
 id = "asyncapi-3.1-schema"
-authority_ids = ["ASYNCAPI-3-1-0"]
+authority_ids = ["ASYNCAPI-3-1-0", "ASYNCAPI-WEBSITE-20A31A03"]
 edition = "3.1.0"
 executable = "asyncapi-parser"
 supported_platforms = ["linux/amd64", "linux/arm64"]
@@ -299,7 +299,7 @@ memory_bytes = 268435456
 output_bytes = 1048576
 network = "deny"
 normalization = "prismpm/oracle-diagnostics/1"
-covers = ["all 24 complete AsyncAPI 3.1.0 documents published by the pinned specification repository and all 89 embedded specification examples through the repository's unmodified locked validation harness, plus submitted document validity through the exact parser"]
+covers = ["all 24 complete AsyncAPI 3.1.0 documents and all 89 embedded specification examples published by the pinned specification repository through its unmodified locked validation harness; the ADEO example's two external Avro payload schemas are supplied byte-for-byte from the pinned AsyncAPI website source; submitted documents are checked by the exact parser"]
 does_not_cover = ["the upstream repository publishes no negative fixture corpus; planted invalid-document rejection is separate evidence, while broker delivery behavior and prose-only interoperability remain outside this oracle"]
 expected_exits = ["0=pass", "4=invalid"]
 upstream_payload_sha256 = "7b9de4debb0f6050bf5c4d6284694876c0cf6ec6bcd72fb250d2b58d66538989"
@@ -833,6 +833,25 @@ retrieval_date = "2026-09-05"
 supersession_policy = "explicit-lock-update-only"
 statement = "AsyncAPI 3.1.0 owns the generated asynchronous interface document semantics."
 realized_by = ["AU-01", "SY-04"]
+
+[[authority]]
+id = "ASYNCAPI-WEBSITE-20A31A03"
+name = "AsyncAPI website ADEO case-study schemas"
+issuer = "AsyncAPI Initiative"
+canonical_identifier = "asyncapi/website"
+edition = "20a31a0396b4"
+source_role = "informative"
+immutable_url = "https://codeload.github.com/asyncapi/website/tar.gz/20a31a0396b41dd24b1bac877ab7ce3f58037c28"
+revision = "20a31a0396b41dd24b1bac877ab7ce3f58037c28"
+acquired_sha256 = "6dbd4685b6e4ccbc3847a0d11acd3f7f770b4e7c83d10da5d147383395dea24b"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/gzip"
+license = "Apache-2.0"
+redistribution = "redistributable"
+retrieval_date = "2026-09-08"
+supersession_policy = "explicit-lock-update-only"
+statement = "The pinned AsyncAPI website source publishes the two external Avro schemas referenced by the official ADEO AsyncAPI example; it is fixture input, not a normative extension of AsyncAPI 3.1.0."
+realized_by = ["AU-01", "AU-06"]
 
 [[authority]]
 id = "DEVCONTAINER-C95FFEED"

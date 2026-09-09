@@ -4,6 +4,17 @@ import { dirname } from "node:path";
 import { Parser } from "@asyncapi/parser";
 import yaml from "js-yaml";
 
+const lockedReferences = new Map([
+  [
+    "https://www.asyncapi.com/resources/casestudies/adeo/CostingRequestPayload.avsc",
+    "/opt/prismpm/share/standards/oracles/asyncapi-website-20a31a03/CostingRequestPayload.avsc",
+  ],
+  [
+    "https://www.asyncapi.com/resources/casestudies/adeo/CostingResponsePayload.avsc",
+    "/opt/prismpm/share/standards/oracles/asyncapi-website-20a31a03/CostingResponsePayload.avsc",
+  ],
+]);
+
 if (process.argv.length !== 3) {
   process.stderr.write("usage: asyncapi-parser INPUT\n");
   process.exit(2);
@@ -21,10 +32,30 @@ try {
     process.exit(4);
   }
   // The official examples contain relative external references. Resolve them
-  // from the document's source directory, matching the upstream repository's
-  // own validation workflow.
+  // from the document's source directory. The ADEO example also names two
+  // mutable website URLs; an earlier resolver serves only those exact locators
+  // from byte-locked files. The submitted document is never rewritten.
   process.chdir(dirname(path));
-  const parser = new Parser();
+  const parser = new Parser({
+    __unstable: {
+      resolver: {
+        cache: false,
+        resolvers: [
+          {
+            schema: "https",
+            order: 1,
+            canRead(uri) {
+              return lockedReferences.has(uri.toString());
+            },
+            async read(uri) {
+              const local = lockedReferences.get(uri.toString());
+              return local === undefined ? undefined : readFile(local, "utf8");
+            },
+          },
+        ],
+      },
+    },
+  });
   const { document, diagnostics } = await parser.parse(input);
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 0);
   if (!document || errors.length !== 0) {

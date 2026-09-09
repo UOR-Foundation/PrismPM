@@ -20,6 +20,10 @@ const JSON_SCHEMA_TREE: &str = "8f63dc2d12ed947bfa4ae4cabab2d5926ecc06d86d054b6a
 const UNICODE_TREE: &str = "1885ce2b3409b4f2b4a569c378d243f4a75e22fc10d59a69a69a1cacc16dda9e";
 const CLOUDEVENTS_TREE: &str = "38480c5a48f73d20b8aa0db8366e22ae4ab34c245a370a11b8862cfbdeb5c6d1";
 const ASYNCAPI_TREE: &str = "6bec0a3910568ff84f28b8fd9c2f63e3fcde7986bebf3e24b1f4649c150d735b";
+const ASYNCAPI_ADEO_REQUEST: &str =
+    "96c749416552ef404fbfb1f4f894339cb104ffdb06e8694c5045d5aaa79cd020";
+const ASYNCAPI_ADEO_RESPONSE: &str =
+    "7d2452e4b2db5e7deeab404b071323843f3c9fb7149957f68eeb927970cf0547";
 const INTOTO_TREE: &str = "6cbad548e30d2e227d1cea0ee23bb09c06c506c27094ccd8f55137d0bef17371";
 const CLOUDEVENTS_FIXTURES_TREE: &str =
     "48aa53d280e5e78275acfff62ae0173ac06fc86af86c379cad693e05e74a7803";
@@ -636,9 +640,34 @@ fn cloudevents_suite(root: &Path, image: &str) -> Result<CorpusEvidence, PrismEr
     })
 }
 
+fn verify_asyncapi_adeo_mirrors(root: &Path) -> Result<(), PrismError> {
+    let mirrors = regular_tree(&root.join("standards/oracles/asyncapi-website-20a31a03"))?;
+    if mirrors.len() != 2 {
+        return Err(fail(format!(
+            "AsyncAPI ADEO reference projection changed: expected 2 files, observed {}",
+            mirrors.len()
+        )));
+    }
+    for (path, bytes) in &mirrors {
+        let expected = match path.as_str() {
+            "CostingRequestPayload.avsc" => ASYNCAPI_ADEO_REQUEST,
+            "CostingResponsePayload.avsc" => ASYNCAPI_ADEO_RESPONSE,
+            _ => return Err(fail(format!("unregistered AsyncAPI ADEO mirror {path}"))),
+        };
+        let observed = format!("{:x}", Sha256::digest(bytes));
+        if observed != expected {
+            return Err(fail(format!(
+                "AsyncAPI ADEO mirror {path} changed: expected {expected}, observed {observed}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn asyncapi_suite(root: &Path, image: &str) -> Result<AsyncApiEvidence, PrismError> {
     let corpus = root.join("standards/oracles/asyncapi-spec-b3fac5bb");
     let digest = verify_tree(&corpus, ASYNCAPI_TREE)?;
+    verify_asyncapi_adeo_mirrors(root)?;
     let mut documents = regular_tree(&corpus)?
         .into_iter()
         .map(|(path, _)| path)
@@ -2001,6 +2030,7 @@ mod tests {
             ASYNCAPI_TREE
         )
         .is_ok());
+        assert!(verify_asyncapi_adeo_mirrors(root).is_ok());
         assert!(verify_tree(
             &root.join("standards/oracles/in-toto-attestation-ee16c68a"),
             INTOTO_TREE
