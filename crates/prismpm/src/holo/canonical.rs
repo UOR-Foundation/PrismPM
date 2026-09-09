@@ -150,39 +150,43 @@ pub fn encode_canonical(doc: &ModelDocument) -> Result<Vec<u8>, PrismError> {
 
 /// Strictly decode, validate, and require the input bytes to be canonical.
 pub fn decode_canonical(bytes: &[u8]) -> Result<ModelDocument, PrismError> {
+    let value = decode_value(bytes, "model-document")?;
+    let doc: ModelDocument = serde_json::from_value(value).map_err(|error| {
+        PrismError::new("PP4004", format!("invalid model-document shape: {error}"))
+    })?;
+    super::validate::validate(&doc)?;
+    Ok(doc)
+}
+
+/// Strictly decode one canonical JSON value, rejecting duplicates, floats,
+/// trailing bytes, noncanonical member order, and nonminimal serialization.
+pub fn decode_value(bytes: &[u8], description: &str) -> Result<Value, PrismError> {
     let mut stream = serde_json::Deserializer::from_slice(bytes).into_iter::<UniqueValue>();
     let unique = stream
         .next()
-        .ok_or_else(|| PrismError::new("PP4004", "model-document JSON is empty"))?
+        .ok_or_else(|| PrismError::new("PP4004", format!("{description} JSON is empty")))?
         .map_err(|error| {
             let message = error.to_string();
             if message.contains("floating-point values are forbidden") {
                 PrismError::new("PP4004", message)
             } else {
-                PrismError::new(
-                    "PP4004",
-                    format!("malformed model-document JSON: {message}"),
-                )
+                PrismError::new("PP4004", format!("malformed {description} JSON: {message}"))
             }
         })?;
     if stream.byte_offset() != bytes.len() {
         return Err(PrismError::new(
             "PP4004",
-            "bytes follow the canonical model-document JSON value",
+            format!("bytes follow the canonical {description} JSON value"),
         ));
     }
-    let doc: ModelDocument = serde_json::from_value(unique.0).map_err(|error| {
-        PrismError::new("PP4004", format!("invalid model-document shape: {error}"))
-    })?;
-    super::validate::validate(&doc)?;
-    let canonical = encode_canonical(&doc)?;
+    let canonical = encode_value(&unique.0)?;
     if canonical != bytes {
         return Err(
-            PrismError::new("PP4004", "model-document bytes are not canonical")
+            PrismError::new("PP4004", format!("{description} bytes are not canonical"))
                 .with_note(String::from_utf8(canonical).expect("canonical JSON is UTF-8")),
         );
     }
-    Ok(doc)
+    Ok(unique.0)
 }
 
 /// Compute the SHA-256 identity of canonical model-document bytes.

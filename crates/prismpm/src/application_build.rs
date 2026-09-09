@@ -22,7 +22,7 @@ const UOR_HOLOGRAM_COMMIT: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
 const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
 const DEPENDENCY_REGISTER: &str = include_str!("../model/dependencies.toml");
 const STDLIB_RELEASE_SOURCE: &str = include_str!("../stdlib/release.json");
-const STDLIB_CRATE: &[u8] = include_bytes!("../stdlib/generated/prism-stdlib-0.1.0.crate");
+const STDLIB_CRATE: &[u8] = include_bytes!("../stdlib/generated/prism-stdlib-0.2.0.crate");
 const REGISTRY_ARCHIVE: &[u8] = include_bytes!("../vendor/registry.tar");
 const LICENSE_MIT: &str = include_str!("../LICENSE-MIT");
 const LICENSE_APACHE: &str = include_str!("../LICENSE-APACHE");
@@ -246,9 +246,9 @@ fn stdlib_registry(workspace: &Path, stdlib: &StdlibRelease) -> Result<PathBuf, 
     let index = registry.join("index/pr/is");
     std::fs::create_dir_all(&index)
         .map_err(|error| PrismError::new("PP4101", format!("local registry: {error}")))?;
-    write(&registry.join("prism-stdlib-0.1.0.crate"), STDLIB_CRATE)?;
+    write(&registry.join("prism-stdlib-0.2.0.crate"), STDLIB_CRATE)?;
     let row = format!(
-        "{{\"name\":\"prism-stdlib\",\"vers\":\"0.1.0\",\"deps\":[],\"cksum\":\"{}\",\"features\":{{\"default\":[\"std\"],\"std\":[]}},\"yanked\":false}}\n",
+        "{{\"name\":\"prism-stdlib\",\"vers\":\"0.2.0\",\"deps\":[],\"cksum\":\"{}\",\"features\":{{\"default\":[\"std\"],\"std\":[]}},\"yanked\":false}}\n",
         stdlib.crate_sha256
     );
     write(&index.join("prism-stdlib"), row.as_bytes())?;
@@ -291,7 +291,7 @@ fn add_application_to_registry(
             "name": "prism-stdlib",
             "optional": false,
             "registry": Value::Null,
-            "req": "=0.1.0",
+            "req": "=0.2.0",
             "target": Value::Null
         }],
         "features": {"default":["std"],"std":["prism-stdlib/std"]},
@@ -375,7 +375,7 @@ pub(crate) fn generate(
             "stdlib release metadata is invalid",
         ));
     }
-    if stdlib.crate_path != "stdlib/generated/prism-stdlib-0.1.0.crate"
+    if stdlib.crate_path != "stdlib/generated/prism-stdlib-0.2.0.crate"
         || sha256(STDLIB_CRATE) != stdlib.crate_sha256
     {
         return Err(PrismError::new(
@@ -538,7 +538,7 @@ pub(crate) fn generate(
             input_sha256: sha256(&kernel_bytes),
             dependencies: vec![CargoDependency {
                 name: "prism-stdlib".to_owned(),
-                version: "0.1.0".to_owned(),
+                version: "0.2.0".to_owned(),
                 checksum: stdlib.crate_sha256.clone(),
                 default_features: false,
                 features: Vec::new(),

@@ -123,11 +123,6 @@ fn execution_corpus(roots: &RuntimeRoots) -> Result<(ExecutionCorpus, String), P
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    let theorem_set = corpus
-        .oracle
-        .iter()
-        .map(|oracle| oracle.theorem.as_str())
-        .collect::<BTreeSet<_>>();
     if corpus.spec != "prismpm/execution-corpus/1"
         || corpus.strategy != "exhaustive-v1+lcg-v1"
         || corpus.seed != "5eedcafef00dbeef"
@@ -144,11 +139,16 @@ fn execution_corpus(roots: &RuntimeRoots) -> Result<(ExecutionCorpus, String), P
         || corpus.case_count != expected_cases
         || corpus.oracle.is_empty()
         || functions.windows(2).any(|pair| pair[0] >= pair[1])
-        || theorem_set.len() != corpus.oracle.len()
         || runtime_functions != roots_set
         || corpus.oracle.iter().any(|oracle| {
-            !oracle.function.starts_with("PrismPM.Foundation.Holo.")
-                || !oracle.theorem.starts_with("PrismPM.Foundation.Holo.")
+            let allowed = |name: &str| {
+                name.starts_with("PrismPM.Foundation.Holo.")
+                    || name.starts_with("PrismPM.Production.System.")
+                    || name.starts_with("PrismPM.Production.SystemValidation.")
+                    || name.starts_with("PrismPM.Production.SystemValidationCorpus.")
+                    || name.starts_with("PrismPM.Production.Validation.")
+            };
+            !allowed(&oracle.function) || !allowed(&oracle.theorem)
         })
     {
         return Err(PrismError::new(
@@ -170,6 +170,13 @@ pub(crate) struct ProcessRecord {
 }
 
 pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
+    // A released SDK has a generated, signed inventory of the exact final
+    // runtime filesystem for its architecture.  It is the authority for
+    // executables in that environment; the constants below remain the
+    // independent pins for the source-bootstrap devcontainer and native CLI.
+    if crate::sdk::inventory_path().is_some() {
+        return crate::sdk::executable(name);
+    }
     let path =
         std::env::var_os("PATH").ok_or_else(|| PrismError::new("PP5008", "PATH is unavailable"))?;
     for directory in std::env::split_paths(&path) {
@@ -234,18 +241,32 @@ fn preflight_toolchain(
     cwd: &Path,
     replacements: &[(&Path, &str)],
 ) -> Result<Toolchain, PrismError> {
+    let sdk_environment = crate::sdk::inventory_path().is_some();
+    let lean_host = match std::env::consts::ARCH {
+        "x86_64" => "x86_64-unknown-linux-gnu",
+        "aarch64" => "aarch64-unknown-linux-gnu",
+        architecture => {
+            return Err(PrismError::new(
+                "PP5008",
+                format!("unsupported verification architecture {architecture}"),
+            ))
+        }
+    };
     let lake = executable("lake")?;
     let lean = executable("lean")?;
     let rustfmt = executable("rustfmt")?;
     let rustc = executable("rustc")?;
     let timeout = executable("timeout")?;
     let no_env = BTreeMap::new();
+    let lean_version = format!(
+        "Lean (version 4.32.1, {lean_host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n"
+    );
     let specifications = [
         (
             "lean-version",
             lean.as_path(),
             vec!["--version".to_owned()],
-            "Lean (version 4.32.1, x86_64-unknown-linux-gnu, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n",
+            lean_version.as_str(),
         ),
         (
             "lake-version",
@@ -280,9 +301,10 @@ fn preflight_toolchain(
         replacements,
         "PP5008",
     )?;
+    let rustc_host = format!("host: {lean_host}");
     for exact in [
         "commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452",
-        "host: x86_64-unknown-linux-gnu",
+        rustc_host.as_str(),
         "release: 1.97.1",
     ] {
         if !rustc_record.stdout.lines().any(|line| line == exact) {
@@ -308,9 +330,10 @@ fn preflight_toolchain(
         replacements,
         "PP5008",
     )?;
+    let timeout_version = if sdk_environment { "9.4" } else { "9.1" };
     if !timeout_record
         .stdout
-        .starts_with("timeout (GNU coreutils) 9.1\n")
+        .starts_with(&format!("timeout (GNU coreutils) {timeout_version}\n"))
         || !timeout_record.stderr.is_empty()
     {
         return Err(PrismError::new(
@@ -532,7 +555,7 @@ pub(crate) fn run_process(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_process_limited(
+pub(crate) fn run_process_limited(
     tool: &str,
     program: &Path,
     args: &[String],
@@ -543,6 +566,43 @@ fn run_process_limited(
     timeout_seconds: &str,
     output_limit: usize,
 ) -> Result<ProcessRecord, PrismError> {
+    run_process_limited_allowed(
+        tool,
+        program,
+        args,
+        cwd,
+        extra_env,
+        replacements,
+        failure_code,
+        timeout_seconds,
+        output_limit,
+        &[0],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_process_limited_allowed(
+    tool: &str,
+    program: &Path,
+    args: &[String],
+    cwd: &Path,
+    extra_env: &BTreeMap<String, String>,
+    replacements: &[(&Path, &str)],
+    failure_code: &'static str,
+    timeout_seconds: &str,
+    output_limit: usize,
+    allowed_exit_codes: &[i32],
+) -> Result<ProcessRecord, PrismError> {
+    if allowed_exit_codes.is_empty()
+        || allowed_exit_codes
+            .iter()
+            .any(|code| !(0..=125).contains(code))
+    {
+        return Err(PrismError::new(
+            "PP9001",
+            "allowed process exit-code set is empty or malformed",
+        ));
+    }
     let timeout = executable("timeout")?;
     let program_bytes =
         std::fs::read(program).or_else(|_| program.canonicalize().and_then(std::fs::read));
@@ -565,7 +625,16 @@ fn run_process_limited(
         .env("LANG", "C")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for key in ["PATH", "ELAN_HOME", "RUSTUP_HOME", "CARGO_HOME"] {
+    for key in [
+        "PATH",
+        "ELAN_HOME",
+        "ELAN_TOOLCHAIN",
+        "RUSTUP_HOME",
+        "RUSTUP_TOOLCHAIN",
+        "CARGO_HOME",
+        "HOME",
+        "XDG_CACHE_HOME",
+    ] {
         if let Some(value) = std::env::var_os(key) {
             command.env(key, value);
         }
@@ -609,7 +678,7 @@ fn run_process_limited(
     if matches!(exit_code, 124 | 137) {
         return Err(PrismError::new("PP5007", format!("{tool} timed out")));
     }
-    if !status.success() {
+    if !allowed_exit_codes.contains(&exit_code) {
         return Err(PrismError::new(
             failure_code,
             format!("{tool} exited {exit_code}: stdout={stdout:?}; stderr={stderr:?}"),
@@ -738,6 +807,7 @@ fn harness(
         .join(",");
     format!(
         r#"#![allow(dead_code, non_snake_case)]
+extern crate alloc;
 use prod_alloc_counter::{{activity, CountingAllocator}};
 use std::sync::atomic::{{AtomicUsize, Ordering}};
 
@@ -752,6 +822,9 @@ static BEFORE: AtomicUsize = AtomicUsize::new(0);
 fn begin() {{ BEFORE.store(activity(), Ordering::SeqCst); }}
 fn end() -> bool {{ activity() == BEFORE.load(Ordering::SeqCst) }}
 fn fail(code: i32) -> ! {{ std::process::exit(code) }}
+trait ProbeBool {{ fn is(self, expected: bool) -> bool; }}
+impl ProbeBool for bool {{ fn is(self, expected: bool) -> bool {{ self == expected }} }}
+impl ProbeBool for Result<bool, ComputeError> {{ fn is(self, expected: bool) -> bool {{ self == Ok(expected) }} }}
 fn main() {{
     let component_indexes: &[u64] = &[{indexes}];
     let endpoints: &[u64] = &[{endpoints}];
@@ -778,6 +851,75 @@ fn main() {{
     begin(); let g = validateFlattenedBounds({component_count}, component_indexes); if !end() || !g {{ fail(16); }}
     let profile = StandardsProfile {{ architectureEdition: 2022, applicationSecurityEdition: 2011, controlEdition: 2017, riskEdition: 2022, qualityEdition: 2023 }};
     begin(); let p = validateExactStandardsProfile(profile); if !end() || !p {{ fail(17); }}
+    let corpus_model = corpusValidModel();
+    let corpus_manifest = corpusManifest();
+    begin(); let value = validateManifest(&corpus_model, &corpus_manifest); if !end() {{ fail(102); }} if !value.is(true) {{ fail(41); }}
+    begin(); let value = validateModelClosure(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(42); }}
+    begin(); let value = validateModelUniqueness(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(79); }}
+    begin(); let value = validateModelReferentialIntegrity(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(80); }}
+    begin(); let value = validateModelCompatibility(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(81); }}
+    begin(); let value = validateModelCapabilitySatisfaction(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(82); }}
+    begin(); let value = validateModelSecretFlow(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(83); }}
+    begin(); let value = validateModelDeploymentOrder(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(84); }}
+    begin(); let value = validateModelMigrationOrder(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(85); }}
+    begin(); let value = validateModelRollbackSafety(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(86); }}
+    begin(); let value = validateModelEvidenceClosure(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(87); }}
+    begin(); let value = validateModelLicenseClosure(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(88); }}
+    begin(); let value = validateModelReleaseCompleteness(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(89); }}
+    {{ let invalid = corpusInvalidClosureModel(); begin(); let value = validateModelClosure(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(90); }} }}
+    {{ let invalid = corpusInvalidUniquenessModel(); begin(); let value = validateModelUniqueness(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(91); }} }}
+    {{ let invalid = corpusInvalidReferentialIntegrityModel(); begin(); let value = validateModelReferentialIntegrity(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(92); }} }}
+    {{ let invalid = corpusInvalidCompatibilityModel(); begin(); let value = validateModelCompatibility(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(93); }} }}
+    {{ let invalid = corpusInvalidCapabilitySatisfactionModel(); begin(); let value = validateModelCapabilitySatisfaction(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(94); }} }}
+    {{ let invalid = corpusInvalidSecretFlowModel(); begin(); let value = validateModelSecretFlow(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(95); }} }}
+    {{ let invalid = corpusInvalidDeploymentOrderModel(); begin(); let value = validateModelDeploymentOrder(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(96); }} }}
+    {{ let invalid = corpusInvalidMigrationOrderModel(); begin(); let value = validateModelMigrationOrder(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(97); }} }}
+    {{ let invalid = corpusInvalidRollbackSafetyModel(); begin(); let value = validateModelRollbackSafety(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(98); }} }}
+    {{ let invalid = corpusInvalidEvidenceClosureModel(); begin(); let value = validateModelEvidenceClosure(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(99); }} }}
+    {{ let invalid = corpusInvalidLicenseClosureModel(); begin(); let value = validateModelLicenseClosure(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(100); }} }}
+    {{ let invalid = corpusInvalidReleaseCompletenessModel(); begin(); let value = validateModelReleaseCompleteness(&invalid, &corpus_manifest); if !end() || !value.is(false) {{ fail(101); }} }}
+    let valid_relation: &[u64] = &[0, 1, 2];
+    let empty_relation: &[u64] = &[];
+    let invalid_bounds: &[u64] = &[0, 3];
+    let invalid_order: &[u64] = &[0, 2];
+    begin(); let value = validateClosure(3, valid_relation); if !end() || !value {{ fail(43); }}
+    begin(); let value = validateClosure(3, invalid_bounds); if !end() || value {{ fail(44); }}
+    begin(); let value = validateUniqueness(valid_relation); if !end() || value != Ok(true) {{ fail(45); }}
+    begin(); let value = validateUniqueness(invalid_order); if !end() || value != Ok(false) {{ fail(46); }}
+    begin(); let value = validateReferentialIntegrity(3, valid_relation); if !end() || !value {{ fail(47); }}
+    begin(); let value = validateReferentialIntegrity(3, invalid_bounds); if !end() || value {{ fail(48); }}
+    begin(); let value = validateCompatibility(3, valid_relation); if !end() || !value {{ fail(49); }}
+    begin(); let value = validateCompatibility(3, invalid_bounds); if !end() || value {{ fail(50); }}
+    begin(); let value = validateCapabilitySatisfaction(3, valid_relation); if !end() || !value {{ fail(51); }}
+    begin(); let value = validateCapabilitySatisfaction(3, invalid_bounds); if !end() || value {{ fail(52); }}
+    begin(); let value = validateSecretFlow(3, valid_relation); if !end() || !value {{ fail(53); }}
+    begin(); let value = validateSecretFlow(3, invalid_bounds); if !end() || value {{ fail(54); }}
+    begin(); let value = validateDeploymentOrder(valid_relation); if !end() || value != Ok(true) {{ fail(55); }}
+    begin(); let value = validateDeploymentOrder(invalid_order); if !end() || value != Ok(false) {{ fail(56); }}
+    begin(); let value = validateMigrationOrder(valid_relation); if !end() || value != Ok(true) {{ fail(57); }}
+    begin(); let value = validateMigrationOrder(invalid_order); if !end() || value != Ok(false) {{ fail(58); }}
+    begin(); let value = validateRollbackSafety(3, valid_relation); if !end() || !value {{ fail(59); }}
+    begin(); let value = validateRollbackSafety(3, invalid_bounds); if !end() || value {{ fail(60); }}
+    begin(); let value = validateEvidenceClosure(3, valid_relation); if !end() || !value {{ fail(61); }}
+    begin(); let value = validateEvidenceClosure(3, invalid_bounds); if !end() || value {{ fail(62); }}
+    begin(); let value = validateReleaseCompleteness(valid_relation); if !end() || value != Ok(true) {{ fail(63); }}
+    begin(); let value = validateReleaseCompleteness(invalid_order); if !end() || value != Ok(false) {{ fail(64); }}
+    begin(); let value = validateClosure(1, empty_relation); if !end() || value {{ fail(65); }}
+    begin(); let value = validateUniqueness(empty_relation); if !end() || value != Ok(false) {{ fail(66); }}
+    begin(); let value = validateReferentialIntegrity(1, empty_relation); if !end() || value {{ fail(67); }}
+    begin(); let value = validateCompatibility(1, empty_relation); if !end() || value {{ fail(68); }}
+    begin(); let value = validateCapabilitySatisfaction(1, empty_relation); if !end() || value {{ fail(69); }}
+    begin(); let value = validateSecretFlow(1, empty_relation); if !end() || value {{ fail(70); }}
+    begin(); let value = validateDeploymentOrder(empty_relation); if !end() || value != Ok(false) {{ fail(71); }}
+    begin(); let value = validateMigrationOrder(empty_relation); if !end() || value != Ok(false) {{ fail(72); }}
+    begin(); let value = validateRollbackSafety(1, empty_relation); if !end() || value {{ fail(73); }}
+    begin(); let value = validateEvidenceClosure(1, empty_relation); if !end() || value {{ fail(74); }}
+    begin(); let value = validateReleaseCompleteness(empty_relation); if !end() || value != Ok(false) {{ fail(75); }}
+    let positive_relation: &[u64] = &[1, 2, 3];
+    let zero_relation: &[u64] = &[1, 0, 3];
+    begin(); let value = validateLicenseClosure(positive_relation); if !end() || !value {{ fail(76); }}
+    begin(); let value = validateLicenseClosure(empty_relation); if !end() || value {{ fail(77); }}
+    begin(); let value = validateLicenseClosure(zero_relation); if !end() || value {{ fail(78); }}
     begin(); let bad = validateEdgeEndpoints({component_count}, &[{component_count}]); if !end() || bad {{ fail(18); }}
     begin(); let overflow = allConsecutive(u64::MAX, &[u64::MAX]); if !end() || overflow != Err(ComputeError::AddOverflow) {{ fail(19); }}
     let mut canonical = [0u64; 3];

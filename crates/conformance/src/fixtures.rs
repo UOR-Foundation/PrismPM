@@ -136,10 +136,15 @@ pub fn check(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
             )
             .into());
         }
-        let formal_source =
-            std::fs::read_to_string(dir.join("project/stdlib/src/Foundation/Holo.lex.tex"))?;
         for oracle in &case.oracle {
             for qualified in [&oracle.function, &oracle.theorem] {
+                let module = qualified
+                    .strip_prefix("PrismPM.")
+                    .and_then(|value| value.rsplit_once('.').map(|(module, _)| module))
+                    .ok_or("execution oracle is not a PrismPM module member")?;
+                let relative = format!("{}.lex.tex", module.replace('.', "/"));
+                let formal_source =
+                    std::fs::read_to_string(dir.join("project/stdlib/src").join(relative))?;
                 let name = qualified
                     .rsplit('.')
                     .next()

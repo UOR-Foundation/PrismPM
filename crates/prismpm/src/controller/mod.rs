@@ -13,10 +13,46 @@ use lexlean::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+
+const VERIFY_WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
+
+thread_local! {
+    static VERIFY_WORKER_ACTIVE: Cell<bool> = const { Cell::new(false) };
+}
+
+struct VerifyWorkerGuard;
+
+fn ensure_verification_not_active() -> Result<(), PrismError> {
+    VERIFY_WORKER_ACTIVE.with(|active| {
+        if active.get() {
+            Err(PrismError::new(
+                "PP5008",
+                "recursive verification worker invocation is forbidden",
+            ))
+        } else {
+            Ok(())
+        }
+    })
+}
+
+impl VerifyWorkerGuard {
+    fn enter() -> Result<Self, PrismError> {
+        ensure_verification_not_active()?;
+        VERIFY_WORKER_ACTIVE.with(|active| active.set(true));
+        Ok(Self)
+    }
+}
+
+impl Drop for VerifyWorkerGuard {
+    fn drop(&mut self) {
+        VERIFY_WORKER_ACTIVE.with(|active| active.set(false));
+    }
+}
 
 /// Controller for one canonical project root.
 #[derive(Debug, Clone)]
@@ -52,6 +88,19 @@ pub struct CheckResult {
 pub struct BuildRequest {
     /// Confined project configuration path, or the default prismpm.toml.
     pub config_path: Option<PathBuf>,
+}
+
+/// Request for a fully verified OCI product release.
+#[derive(Debug, Clone)]
+pub struct ProductBuildRequest {
+    /// Confined project configuration path, or the default prismpm.toml.
+    pub config_path: Option<PathBuf>,
+    /// Required tagged discovery reference; identity remains the returned digest.
+    pub reference: String,
+    /// Locked mode must be explicitly selected for product release assembly.
+    pub locked: bool,
+    /// Named system release selected from the authoritative source graph.
+    pub release: Option<String>,
 }
 
 /// Successful build publication.
@@ -114,8 +163,41 @@ struct Prepared {
     config: ProjectConfig,
     engine: Engine,
     snapshot: lexlean::SemanticSnapshot,
+    application_selection: Option<Selection>,
     model: ModelDocument,
     model_bytes: Vec<u8>,
+    system: Option<crate::contracts::CanonicalDocument>,
+}
+
+fn application_selection(
+    snapshot: &lexlean::SemanticSnapshot,
+) -> Result<Option<Selection>, PrismError> {
+    let mut paths = BTreeSet::new();
+    for module in snapshot.modules() {
+        if module.declarations().iter().any(|declaration| {
+            declaration.kind() == "definition"
+                && declaration
+                    .linked_ir()
+                    .pointer("/result/member/name")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|name| name.ends_with("Application"))
+                && declaration
+                    .linked_ir()
+                    .pointer("/body/kind")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("record")
+        }) {
+            paths.insert(Utf8PathBuf::from(module.source().path()));
+        }
+    }
+    match paths.len() {
+        0 => Ok(None),
+        1 => Ok(Some(Selection::Files(paths))),
+        _ => Err(PrismError::new(
+            "PP2001",
+            "a product source graph contains multiple application roots",
+        )),
+    }
 }
 
 #[derive(Serialize)]
@@ -302,7 +384,11 @@ impl Controller {
         Ok(Self { root })
     }
 
-    fn prepare(&self, config_path: Option<&Path>) -> Result<Prepared, PrismError> {
+    fn prepare_release(
+        &self,
+        config_path: Option<&Path>,
+        release: Option<&str>,
+    ) -> Result<Prepared, PrismError> {
         let (config, _) = ProjectConfig::load(&self.root, config_path)?;
         let project_file = utf8(config.lexlean_path(&self.root)?)?;
         let engine = Engine::load(&project_file).map_err(|error| {
@@ -326,11 +412,47 @@ impl Controller {
                 )
             })?;
         crate::holo::projector::validate_snapshot_envelope(&snapshot.canonical_bytes())?;
-        let model = match crate::holo::application::project_application(&snapshot)? {
+        let system = crate::system::project(&snapshot, release)?;
+        let application_selection = application_selection(&snapshot)?;
+        let application_snapshot = if system.is_some() {
+            application_selection
+                .as_ref()
+                .map(|selection| {
+                    engine
+                        .snapshot(LexCheckRequest {
+                            selection: selection.clone(),
+                        })
+                        .map_err(|error| {
+                            PrismError::from_lexlean(
+                                "PP2001",
+                                "application-root snapshot failed",
+                                error,
+                                config.limits.max_diagnostics,
+                            )
+                        })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let model_snapshot = application_snapshot.as_ref().unwrap_or(&snapshot);
+        let model = match crate::holo::application::project_application(model_snapshot)? {
             Some(model) => model,
-            None => project_snapshot(&snapshot)?,
+            None => project_snapshot(model_snapshot)?,
         };
         let model_bytes = encode_canonical(&model)?;
+        if let Some(system) = &system {
+            let expected = format!("sha256:{}", content_id(&model_bytes));
+            if system.value()["application_profile"]["application_model_digest"] != expected {
+                return Err(PrismError::new(
+                    "PP2101",
+                    format!(
+                        "system release binds application model {}, but the imported application model is {expected}",
+                        system.value()["application_profile"]["application_model_digest"]
+                    ),
+                ));
+            }
+        }
         let entities = count_entities(&model)?;
         if entities > config.limits.max_entities {
             return Err(PrismError::new("PP1003", "max_entities exceeded"));
@@ -342,9 +464,32 @@ impl Controller {
             config,
             engine,
             snapshot,
+            application_selection,
             model,
             model_bytes,
+            system,
         })
+    }
+
+    fn prepare(&self, config_path: Option<&Path>) -> Result<Prepared, PrismError> {
+        self.prepare_release(config_path, None)
+    }
+
+    pub(crate) fn production_systems(
+        &self,
+    ) -> Result<Vec<crate::contracts::CanonicalDocument>, PrismError> {
+        let prepared = self.prepare_release(None, None)?;
+        let systems = crate::system::project_all(&prepared.snapshot)?;
+        for system in &systems {
+            let expected = format!("sha256:{}", content_id(&prepared.model_bytes));
+            if system.value()["application_profile"]["application_model_digest"] != expected {
+                return Err(PrismError::new(
+                    "PP2101",
+                    "a named system release does not bind the selected application model",
+                ));
+            }
+        }
+        Ok(systems)
     }
 
     /// Check through LexLean snapshot, Holo projection, and validation in memory.
@@ -361,7 +506,16 @@ impl Controller {
 
     /// Build LexLean artifacts and atomically publish the fixed Prism artifact set.
     pub fn build(&self, request: BuildRequest) -> Result<BuildResult, PrismError> {
-        let prepared = self.prepare(request.config_path.as_deref())?;
+        self.build_release(request, None)
+    }
+
+    /// Build one named system release while retaining the same closed source graph.
+    pub fn build_release(
+        &self,
+        request: BuildRequest,
+        release: Option<&str>,
+    ) -> Result<BuildResult, PrismError> {
+        let prepared = self.prepare_release(request.config_path.as_deref(), release)?;
         let lex = prepared
             .engine
             .build(LexBuildRequest {
@@ -433,13 +587,47 @@ impl Controller {
             ));
         }
         if prepared.model.application.is_some() {
+            let application_build = prepared
+                .application_selection
+                .as_ref()
+                .map(|selection| {
+                    prepared
+                        .engine
+                        .build(LexBuildRequest {
+                            selection: selection.clone(),
+                        })
+                        .map_err(|error| {
+                            PrismError::from_lexlean(
+                                "PP4002",
+                                "application-root LexLean build failed",
+                                error,
+                                prepared.config.limits.max_diagnostics,
+                            )
+                        })
+                })
+                .transpose()?;
+            let application_build_id = application_build
+                .as_ref()
+                .and_then(|result| result.build_id)
+                .map_or_else(|| lex_build_id.clone(), |id| id.to_string());
+            let application_lex_root = self.root.join(".lexlean/build").join(&application_build_id);
+            let application_lex_manifest =
+                std::fs::read(application_lex_root.join("manifest.json")).map_err(|error| {
+                    PrismError::new("PP4002", format!("application LexLean manifest: {error}"))
+                })?;
             artifacts.extend(crate::application_build::generate(
                 &self.root,
                 &prepared.model,
                 &prepared.model_bytes,
-                &lex_root,
-                &lex_manifest_bytes,
+                &application_lex_root,
+                &application_lex_manifest,
             )?);
+        }
+        if let Some(system) = &prepared.system {
+            artifacts.push(("system.prism.json".to_owned(), system.bytes().to_vec()));
+            for projection in crate::system::projections(system, &artifacts)? {
+                artifacts.push((projection.path, projection.bytes));
+            }
         }
         artifacts.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
         let model_id = content_id(&prepared.model_bytes);
@@ -456,6 +644,7 @@ impl Controller {
             "dependency_register_sha256": dependency_digest,
             "emitter_semantics_id": prepared.model.provenance.emitter_semantics_id,
             "model_id": model_id,
+            "system_id": prepared.system.as_ref().map(crate::contracts::CanonicalDocument::digest),
             "lexlean_build_id": lex_build_id,
             "lexlean_semantic_id": prepared.snapshot.semantic_id().to_string(),
             "lexlean_source_id": prepared.snapshot.source_id().to_string(),
@@ -545,6 +734,52 @@ impl Controller {
         })
     }
 
+    /// Verify the source/tool chain and assemble the accepted build as one OCI graph.
+    pub fn product_build(
+        &self,
+        request: ProductBuildRequest,
+    ) -> Result<crate::oci::ProductBuildResult, PrismError> {
+        if !request.locked {
+            return Err(PrismError::new(
+                "PP1101",
+                "product release construction requires --locked",
+            ));
+        }
+        crate::authority::resolve(&self.root, true)?;
+        crate::authority::verify(&self.root)?;
+        let config_path = request.config_path;
+        let verified = self.verify(VerifyRequest {
+            config_path: config_path.clone(),
+        })?;
+        let selected = self.build_release(
+            BuildRequest {
+                config_path: config_path.clone(),
+            },
+            request.release.as_deref(),
+        )?;
+        let validations = if self
+            .prepare_release(config_path.as_deref(), request.release.as_deref())?
+            .system
+            .is_some()
+        {
+            crate::deployment::validate_build(&self.root, &selected.build_id)?
+        } else {
+            Vec::new()
+        };
+        if verified.build_id != selected.build_id && request.release.is_none() {
+            return Err(PrismError::new(
+                "PP9001",
+                "verification and selected build identities disagree",
+            ));
+        }
+        crate::oci::assemble(
+            &self.root,
+            &selected.build_id,
+            &request.reference,
+            &validations,
+        )
+    }
+
     /// Remove only the configured real Prism output directory.
     pub fn clean(&self, request: CleanRequest) -> Result<CleanResult, PrismError> {
         let (config, _) = ProjectConfig::load(&self.root, request.config_path.as_deref())?;
@@ -568,6 +803,47 @@ impl Controller {
 
     /// Run the complete verified Lean-to-LCNF-to-Rust execution chain.
     pub fn verify(&self, request: VerifyRequest) -> Result<VerifyResult, PrismError> {
-        crate::verification::run(self, request)
+        ensure_verification_not_active()?;
+        std::thread::scope(|scope| {
+            let worker = std::thread::Builder::new()
+                .name("prismpm-verification".to_owned())
+                .stack_size(VERIFY_WORKER_STACK_BYTES)
+                .spawn_scoped(scope, move || {
+                    let _guard = VerifyWorkerGuard::enter()?;
+                    crate::verification::run(self, request)
+                })
+                .map_err(|error| {
+                    PrismError::new("PP5008", format!("start verification worker: {error}"))
+                })?;
+            worker.join().map_err(|_| {
+                PrismError::new("PP5008", "verification worker terminated unexpectedly")
+            })?
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ensure_verification_not_active, VerifyWorkerGuard};
+
+    #[test]
+    fn verification_worker_rejects_reentrant_entry_and_resets() {
+        let guard = VerifyWorkerGuard::enter().expect("first worker entry");
+        let error = match ensure_verification_not_active() {
+            Ok(_) => panic!("recursive worker entry must fail"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code.as_str(), "PP5008");
+        drop(guard);
+        VerifyWorkerGuard::enter().expect("worker state resets when its guard is dropped");
+    }
+
+    #[test]
+    fn verification_worker_state_is_thread_local() {
+        let guard = VerifyWorkerGuard::enter().expect("caller worker entry");
+        std::thread::spawn(|| VerifyWorkerGuard::enter().expect("independent worker entry"))
+            .join()
+            .expect("independent worker did not panic");
+        drop(guard);
     }
 }

@@ -93,6 +93,14 @@ pub fn validate(root: &Path) -> Result<(), Fail> {
             "execution" => "§7",
             "verification" => "§8",
             "security" => "§9",
+            "authorities" => "§10",
+            "system" => "§11",
+            "sdk" => "§12",
+            "oci" => "§13",
+            "lifecycle" => "§14",
+            "deployment" => "§15",
+            "operations" | "supply-chain" => "§16",
+            "template-ci" => "§17",
             other => return Err(format!("RP-07: unknown suite `{other}`").into()),
         };
         if row.primary != expected_section

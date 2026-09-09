@@ -1,4 +1,36 @@
+FROM docker.io/library/docker:28.4.0-cli@sha256:6a73c9433f2ba4279815be1e60f5739288b939dda1e48151d8c393537802de37 AS docker_cli
+FROM docker.io/library/golang:1.19.7-alpine3.17@sha256:04065e607052705ede1ac6308ce56aec4715b0fafb1f0c2f4c2333aab9d84442 AS upstream_oracles
+COPY standards/oracles/oci-distribution-1.1.1 /src/distribution
+COPY standards/oracles/oci-runtime-1.3.0 /src/runtime
+COPY standards/oracles/oci-image-1.1.1 /src/image
+RUN cd /src/distribution \
+    && CGO_ENABLED=0 go test -c -o /oci-distribution-conformance --ldflags='-X github.com/opencontainers/distribution-spec/conformance.Version=a139cc423184af6078077b9b7ee336eddbd03f8f' \
+    && cd /src/runtime \
+    && CGO_ENABLED=0 go build -trimpath -o /oci-runtime-validate ./validate.go \
+    && cd /src/image \
+    && CGO_ENABLED=0 go test -c -o /oci-image-schema-conformance ./schema
+FROM docker.io/library/golang:1.23.8-alpine3.21@sha256:b7486658b87d34ecf95125e5b97e8dfe86c21f712aa36fc0c702e5dc41dc63e1 AS cloudevents_oracle
+COPY standards/oracles/cloudevents-sdk-go-2.16.2 /src/cloudevents
+COPY sdk/oracles/go/cloudevents-validator /src/wrapper
+RUN cd /src/cloudevents/v2 \
+    && CGO_ENABLED=0 go test -c -o /cloudevents-sdk-conformance ./event \
+    && cd /src/wrapper \
+    && go mod edit -replace github.com/cloudevents/sdk-go/v2=/src/cloudevents/v2 \
+    && CGO_ENABLED=0 go build -trimpath -o /cloudevents-validator .
+FROM docker.io/library/maven:3.9.11-eclipse-temurin-21@sha256:6fdc855a6ed81d288ca7ca37ac6ff5e9308b612485c0801d70b25a858c83d237 AS openid_oracle
+COPY standards/oracles/openid-conformance-suite-3e09b13b /src/openid
+RUN cd /src/openid \
+    && mvn --batch-mode --quiet \
+      -Dmaven.gitcommitid.skip=true \
+      -Djacoco.skip=true \
+      -Dtest=ValidateIdTokenSignature_UnitTest,OIDCCValidateRequestObjectExp_UnitTest,CheckDiscEndpointIssuer_UnitTest,CheckDiscEndpointIssuerIsValidUrl_UnitTest \
+      test
+RUN find /root/.m2/repository -type f \( -name '*.lastUpdated' -o -name '_remote.repositories' -o -name 'resolver-status.properties' -o -name 'maven-metadata-*.xml' -o -name 'maven-metadata-*.xml.sha1' \) -delete \
+    && rm -f /src/openid/target/classes/META-INF/build-info.properties /src/openid/target/classes/git.properties \
+    && find /root/.m2/repository /src/openid/target/classes /src/openid/target/test-classes -exec touch -h -d '@0' '{}' +
 FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+
+COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -54,7 +86,22 @@ RUN curl -sSfL https://github.com/EmbarkStudios/cargo-deny/releases/download/0.2
     && rm cargo-deny.tar.gz \
     && chmod +x /usr/local/bin/cargo-deny
 
+COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+COPY --from=upstream_oracles --chmod=0755 /oci-distribution-conformance /usr/local/bin/oci-distribution-conformance
+COPY --from=upstream_oracles --chmod=0755 /oci-runtime-validate /usr/local/bin/oci-runtime-validate
+COPY --from=upstream_oracles --chmod=0755 /oci-image-schema-conformance /usr/local/bin/oci-image-schema-conformance
+COPY --from=cloudevents_oracle --chmod=0755 /cloudevents-sdk-conformance /usr/local/bin/cloudevents-sdk-conformance
+COPY --from=cloudevents_oracle --chmod=0755 /cloudevents-validator /usr/local/bin/cloudevents-validator
+COPY --from=openid_oracle /usr/share/maven /opt/prismpm/openid-maven
+COPY --from=openid_oracle /opt/java/openjdk /opt/prismpm/openid-java
+COPY --from=openid_oracle /root/.m2/repository /opt/prismpm/openid-m2
+COPY --from=openid_oracle /src/openid/target/classes /opt/prismpm/openid-target/classes
+COPY --from=openid_oracle /src/openid/target/test-classes /opt/prismpm/openid-target/test-classes
+COPY --chmod=0755 sdk/oracles/openid-conformance.sh /usr/local/bin/openid-conformance
+
 RUN git config --system --add safe.directory /workspaces/PrismPM
+
+COPY --chmod=0755 .devcontainer/docker-entrypoint.sh /usr/local/bin/prismpm-devcontainer-init
 
 RUN groupadd --gid 1000 vscode \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash vscode \
@@ -69,3 +116,5 @@ ENV CARGO_HOME=/home/vscode/.cargo \
     ELAN_HOME=/home/vscode/.elan
 
 WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/prismpm-devcontainer-init"]
+CMD ["sleep", "infinity"]

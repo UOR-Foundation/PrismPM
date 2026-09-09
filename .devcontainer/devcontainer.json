@@ -1,9 +1,14 @@
 {
   "name": "PrismPM",
   "build": {
+    "context": "..",
     "dockerfile": "Dockerfile"
   },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
   "remoteUser": "vscode",
+  "overrideCommand": false,
   "postCreateCommand": "toolchain=$(tr -d '\\n' < lean-toolchain); if ! elan toolchain list | grep -Fqx \"$toolchain\"; then elan toolchain install \"$toolchain\"; fi; lean --version; ./scripts/fetch.sh",
   "customizations": {
     "vscode": {

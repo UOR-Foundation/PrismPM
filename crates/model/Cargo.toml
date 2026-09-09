@@ -1,7 +1,9 @@
 [package]
 name = "repo-model"
-description = "Typed registries parsed from model/*.toml: this repository's single source of every claim (R1)."
 publish = false
+description = "Typed registries parsed from model/*.toml: this repository's single source of every claim (R1)."
+repository = "https://github.com/UOR-Foundation/PrismPM"
+homepage = "https://github.com/UOR-Foundation/PrismPM"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +13,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+jsonschema = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

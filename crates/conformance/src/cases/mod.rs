@@ -3,7 +3,7 @@
 use repo_model::repo_root;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
@@ -11,6 +11,18 @@ use std::sync::OnceLock;
 static CHECK: OnceLock<Result<prismpm::controller::CheckResult, String>> = OnceLock::new();
 static BUILD: OnceLock<Result<prismpm::controller::BuildResult, String>> = OnceLock::new();
 static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, String>> = OnceLock::new();
+static UPSTREAM: OnceLock<
+    Result<prismpm::upstream_conformance::UpstreamConformanceEvidence, String>,
+> = OnceLock::new();
+
+fn upstream(root: &Path) -> &'static prismpm::upstream_conformance::UpstreamConformanceEvidence {
+    UPSTREAM
+        .get_or_init(|| {
+            prismpm::upstream_conformance::verify(root).map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .unwrap_or_else(|error| panic!("authoritative upstream conformance failed: {error}"))
+}
 
 fn checked(root: &Path) -> &'static prismpm::controller::CheckResult {
     CHECK
@@ -306,7 +318,12 @@ fn tree(root: &Path) -> Vec<(String, Vec<u8>)> {
 /// Execute a conformance case by ID.
 pub fn run(id: &str) {
     let root = repo_root();
-    let model = repo_model::Model::load_from_repo_root().expect("model loads");
+    run_at(&root, id);
+}
+
+/// Execute a conformance case by ID against an explicit PrismPM source root.
+pub fn run_at(root: &Path, id: &str) {
+    let model = repo_model::Model::load(&root.join("model")).expect("model loads");
     let row = model
         .ids
         .get(id)
@@ -318,59 +335,1451 @@ pub fn run(id: &str) {
     );
 
     match id {
-        "RP-01" => verify_rp_01(&root),
-        "RP-02" => verify_rp_02(&root),
-        "RP-03" => verify_rp_03(&root),
-        "RP-04" => verify_rp_04(&root),
-        "RP-05" => verify_rp_05(&root),
-        "RP-06" => verify_rp_06(&root),
-        "RP-07" => verify_rp_07(&root),
-        "RP-08" => verify_rp_08(&root),
-        "RP-09" => verify_rp_09(&root),
-        "RP-10" => verify_rp_10(&root),
-        "RP-11" => verify_rp_11(&root),
-        "RP-12" => verify_rp_12(&root),
+        "RP-01" => verify_rp_01(root),
+        "RP-02" => verify_rp_02(root),
+        "RP-03" => verify_rp_03(root),
+        "RP-04" => verify_rp_04(root),
+        "RP-05" => verify_rp_05(root),
+        "RP-06" => verify_rp_06(root),
+        "RP-07" => verify_rp_07(root),
+        "RP-08" => verify_rp_08(root),
+        "RP-09" => verify_rp_09(root),
+        "RP-10" => verify_rp_10(root),
+        "RP-11" => verify_rp_11(root),
+        "RP-12" => verify_rp_12(root),
 
         "FT-01" | "FT-02" | "FT-03" | "FT-04" | "FT-05" | "FT-06" | "FT-07" | "FT-08" | "FT-09"
         | "FT-10" => {
-            verify_facets(&root, id);
+            verify_facets(root, id);
         }
 
         "HO-01" | "HO-02" | "HO-03" | "HO-04" | "HO-05" | "HO-06" | "HO-07" | "HO-08" | "HO-09"
         | "HO-10" => {
-            verify_holo(&root, id);
+            verify_holo(root, id);
         }
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
-            verify_controller(&root, id);
+            verify_controller(root, id);
         }
 
         "ST-01" | "ST-02" | "ST-03" | "ST-04" | "ST-05" | "ST-06" | "ST-07" | "ST-08" | "ST-09"
         | "ST-10" => {
-            verify_stdlib(&root, id);
+            verify_stdlib(root, id);
         }
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {
-            verify_artifacts(&root, id);
+            verify_artifacts(root, id);
         }
 
         "EX-01" | "EX-02" | "EX-03" | "EX-04" | "EX-05" | "EX-06" | "EX-07" | "EX-08" | "EX-09"
         | "EX-10" => {
-            verify_execution(&root, id);
+            verify_execution(root, id);
         }
 
         "VR-01" | "VR-02" | "VR-03" | "VR-04" | "VR-05" | "VR-06" | "VR-07" | "VR-08" | "VR-09"
         | "VR-10" | "VR-11" | "VR-12" => {
-            verify_verification(&root, id);
+            verify_verification(root, id);
         }
 
         "SE-01" | "SE-02" | "SE-03" | "SE-04" | "SE-05" | "SE-06" | "SE-07" | "SE-08" => {
-            verify_security(&root, id);
+            verify_security(root, id);
         }
 
+        "AU-01" | "AU-02" | "AU-03" | "AU-04" | "AU-05" | "AU-06" => verify_authorities(root, id),
+        "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" => verify_system(root, id),
+        "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
+        "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
+        "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
+        "DP-01" | "DP-02" | "DP-03" | "DP-04" | "DP-05" | "DP-06" => verify_deployment(id),
+        "OP-01" | "OP-02" | "OP-03" | "OP-04" | "OP-05" | "OP-06" => verify_operations(id),
+        "SC-01" | "SC-02" | "SC-03" | "SC-04" | "SC-05" | "SC-06" => verify_supply_chain(id),
+        "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(id),
+
         _ => panic!("unhandled conformance id: {id}"),
+    }
+}
+
+fn canonical_file(value: &Value) -> tempfile::NamedTempFile {
+    let file = tempfile::NamedTempFile::new().expect("temporary canonical document");
+    std::fs::write(
+        file.path(),
+        prismpm::holo::canonical::encode_value(value).expect("canonical JSON"),
+    )
+    .expect("write canonical document");
+    file
+}
+
+fn oracle_accepts(profile: &str, value: &Value) -> bool {
+    let file = canonical_file(value);
+    prismpm::authority::run_oracle(profile, file.path()).is_ok()
+}
+
+fn publish_lock(root: &Path, mut lock: Value) {
+    lock.as_object_mut().unwrap().remove("lock_id");
+    let body = prismpm::holo::canonical::encode_value(&lock).unwrap();
+    lock["lock_id"] = Value::String(format!("sha256:{}", sha256(&body)));
+    std::fs::write(
+        root.join("standards.lock"),
+        prismpm::holo::canonical::encode_value(&lock).unwrap(),
+    )
+    .unwrap();
+}
+
+fn binding_only_lock(root: &Path) -> Value {
+    let mut lock = prismpm::authority::inspect(root).unwrap();
+    for row in lock["authorities"].as_array_mut().unwrap() {
+        row["source_role"] = Value::String("binding-only".to_owned());
+        row["source"]["revision"] = Value::Null;
+        row["source"]["sha256"] = Value::Null;
+        row["source"]["signature"] = Value::String("not-published".to_owned());
+    }
+    lock
+}
+
+fn verify_authorities(root: &Path, id: &str) {
+    match id {
+        "AU-01" => {
+            let lock = prismpm::authority::inspect(root).expect("standards lock parses");
+            let authorities = lock["authorities"].as_array().expect("authority bindings");
+            let oracles = lock["oracles"].as_array().expect("oracle bindings");
+            assert!(!authorities.is_empty() && !oracles.is_empty());
+            assert!(authorities.iter().all(|row| row["statement"].is_string()
+                && row["source"].is_object()
+                && row.get("executable").is_none()));
+            assert!(oracles.iter().all(|row| row["executable"].is_string()
+                && row["authority_ids"]
+                    .as_array()
+                    .is_some_and(|ids| !ids.is_empty())));
+        }
+        "AU-02" => {
+            let temp = tempfile::tempdir().unwrap();
+            let first = prismpm::authority::resolve(temp.path(), false).unwrap();
+            let bytes = std::fs::read(temp.path().join("standards.lock")).unwrap();
+            let second = prismpm::authority::resolve(temp.path(), true).unwrap();
+            assert!(second.unchanged);
+            assert_eq!(first.lock_digest, second.lock_digest);
+            std::fs::write(
+                temp.path().join("standards.lock"),
+                [bytes, b"\n".to_vec()].concat(),
+            )
+            .unwrap();
+            assert_eq!(
+                prismpm::authority::resolve(temp.path(), true)
+                    .unwrap_err()
+                    .code,
+                "PP1101"
+            );
+        }
+        "AU-03" => {
+            let temp = tempfile::tempdir().unwrap();
+            prismpm::authority::resolve(temp.path(), false).unwrap();
+            let mut value = binding_only_lock(temp.path());
+            value["authorities"][0]["source"]["signature"] =
+                Value::String("planted-invalid-signature".to_owned());
+            publish_lock(temp.path(), value);
+            assert_eq!(
+                prismpm::authority::verify(temp.path()).unwrap_err().code,
+                "PP5402"
+            );
+            assert!(!temp.path().join(".prism/evidence").exists());
+        }
+        "AU-04" => {
+            let temp = tempfile::tempdir().unwrap();
+            prismpm::authority::resolve(temp.path(), false).unwrap();
+            publish_lock(temp.path(), binding_only_lock(temp.path()));
+            let result = prismpm::authority::verify(temp.path()).unwrap();
+            assert!(result.offline);
+            assert_eq!(result.acquired_objects, 0);
+            assert!(temp.path().join(result.evidence_path).is_file());
+        }
+        "AU-05" => {
+            let temp = tempfile::tempdir().unwrap();
+            let standards = prismpm::authority::resolve(temp.path(), false).unwrap();
+            let mut sdk_lock = sdk_lock_value();
+            sdk_lock["sdk_image"] = Value::String(
+                std::env::var("PRISMPM_TEST_SDK_IMAGE")
+                    .expect("the no-skip authority gate requires an immutable SDK image"),
+            );
+            sdk_lock["standards_lock"] = Value::String(standards.lock_digest);
+            let sdk_lock =
+                prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock)
+                    .unwrap();
+            std::fs::write(temp.path().join("prismpm.lock"), sdk_lock.bytes()).unwrap();
+            let event = canonical_file(&serde_json::json!({
+                "data": {}, "id": "1", "source": "https://example.test",
+                "specversion": "1.0", "type": "example.accepted"
+            }));
+            let result = prismpm::authority::run_oracle_with_bindings_in_project(
+                temp.path(),
+                "cloudevents",
+                event.path(),
+                &BTreeMap::new(),
+            )
+            .unwrap();
+            assert!(result.valid && !result.covered.is_empty());
+            assert_hex_digest(result.subject.trim_start_matches("sha256:"));
+            assert_eq!(
+                prismpm::authority::run_oracle("unknown", event.path())
+                    .unwrap_err()
+                    .code,
+                "PP5403"
+            );
+        }
+        "AU-06" => {
+            let valid = serde_json::json!({"info":{"title":"T","version":"1"},"openapi":"3.2.0","paths":{}});
+            let mut invalid = valid.clone();
+            invalid["planted"] = Value::Bool(true);
+            assert!(oracle_accepts("openapi", &valid));
+            assert!(!oracle_accepts("openapi", &invalid));
+            let self_test = serde_json::json!({
+                "instance":{"value":1},
+                "schema":{"properties":{"value":{"type":"integer"}},"required":["value"],"type":"object"},
+                "valid":true
+            });
+            assert!(oracle_accepts("json-schema", &self_test));
+            let mut false_claim = self_test;
+            false_claim["valid"] = Value::Bool(false);
+            assert!(!oracle_accepts("json-schema", &false_claim));
+            let evidence = upstream(root);
+            assert!(evidence.json_schema.positive > 0);
+            assert!(evidence.json_schema.negative > 0);
+            assert!(evidence.json_schema.planted_rejections > 0);
+            assert!(evidence.unicode.positive > 0);
+            assert!(evidence.unicode.negative > 0);
+            assert!(evidence.unicode.planted_rejections > 0);
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn empty_system_relations() -> Value {
+    let mut value = serde_json::Map::new();
+    for name in [
+        "acceptance",
+        "alerts",
+        "architecture",
+        "artifacts",
+        "backups",
+        "calls",
+        "capabilities",
+        "components",
+        "controls",
+        "drifts",
+        "events",
+        "flows",
+        "identity_requirements",
+        "interfaces",
+        "migrations",
+        "parameters",
+        "platform_requirements",
+        "persistence",
+        "retirements",
+        "rollbacks",
+        "rollouts",
+        "scaling_policies",
+        "schemas",
+        "secret_references",
+        "slis",
+        "slos",
+        "standards",
+        "targets",
+        "topology",
+        "storage_classes",
+    ] {
+        value.insert(name.to_owned(), Value::Array(Vec::new()));
+    }
+    Value::Object(value)
+}
+
+fn verify_system(root: &Path, id: &str) {
+    match id {
+        "SY-01" => {
+            assert_declarations(
+                root,
+                "Production.Core",
+                &[
+                    "Product",
+                    "Artifact",
+                    "Component",
+                    "Configuration",
+                    "SecretReference",
+                ],
+            );
+            assert_declarations(
+                root,
+                "Production.Interface",
+                &["Schema", "Interface", "Call", "Event", "Flow"],
+            );
+            assert_declarations(
+                root,
+                "Production.Runtime",
+                &[
+                    "Topology",
+                    "Persistence",
+                    "Migration",
+                    "BackupRecovery",
+                    "TargetBinding",
+                ],
+            );
+            assert_declarations(
+                root,
+                "Production.Operations",
+                &[
+                    "Observability",
+                    "Sli",
+                    "Slo",
+                    "Alert",
+                    "Control",
+                    "Acceptance",
+                ],
+            );
+            assert_declarations(
+                root,
+                "Production.System",
+                &[
+                    "SystemModel",
+                    "Lifecycle",
+                    "ApplicationErrorBinding",
+                    "TransactionalCommandServiceProfile",
+                    "TransactionalCommandView",
+                    "SystemManifest",
+                ],
+            );
+            assert_declarations(
+                root,
+                "Production.SystemValidation",
+                &[
+                    "validateManifest",
+                    "validateModelClosure",
+                    "validateModelUniqueness",
+                    "validateModelReferentialIntegrity",
+                    "validateModelCompatibility",
+                    "validateModelCapabilitySatisfaction",
+                    "validateModelSecretFlow",
+                    "validateModelDeploymentOrder",
+                    "validateModelMigrationOrder",
+                    "validateModelRollbackSafety",
+                    "validateModelEvidenceClosure",
+                    "validateModelLicenseClosure",
+                    "validateModelReleaseCompleteness",
+                ],
+            );
+        }
+        "SY-02" => {
+            let mut system = empty_system_relations();
+            system["components"] = serde_json::json!([{"id":"component"}]);
+            system["artifacts"] = serde_json::json!([{
+                "id":"artifact",
+                "license_expression":"Apache-2.0"
+            }]);
+            let certificate = prismpm::system::validation_certificate(&system).unwrap();
+            for name in [
+                "closure",
+                "uniqueness",
+                "referential_integrity",
+                "compatibility",
+                "capability_satisfaction",
+                "secret_flow",
+                "deployment_order",
+                "migration_order",
+                "rollback_safety",
+                "evidence_closure",
+                "license_closure",
+                "release_completeness",
+            ] {
+                assert!(
+                    certificate[name]["bound"].is_u64(),
+                    "missing relation {name}"
+                );
+                assert!(
+                    certificate[name]["values"].is_array(),
+                    "missing values {name}"
+                );
+            }
+            assert_eq!(certificate["license_closure"]["bound"], 257);
+            assert_eq!(
+                certificate["license_closure"]["values"],
+                serde_json::json!([10])
+            );
+            system["targets"] = serde_json::json!([{"id":"component"}]);
+            assert_eq!(
+                prismpm::system::validation_certificate(&system)
+                    .unwrap_err()
+                    .code,
+                "PP2101"
+            );
+        }
+        "SY-03" => {
+            assert_prism_theorems_axiom_free(root);
+            assert_declarations(
+                root,
+                "Production.SystemValidation",
+                &[
+                    "validateModelClosure",
+                    "validateModelUniqueness",
+                    "validateModelReferentialIntegrity",
+                    "validateModelCompatibility",
+                    "validateModelCapabilitySatisfaction",
+                    "validateModelSecretFlow",
+                    "validateModelDeploymentOrder",
+                    "validateModelMigrationOrder",
+                    "validateModelRollbackSafety",
+                    "validateModelEvidenceClosure",
+                    "validateModelLicenseClosure",
+                    "validateModelReleaseCompleteness",
+                    "validateManifest",
+                ],
+            );
+        }
+        "SY-04" => {
+            let valid = serde_json::json!({"info":{"title":"projection","version":"1"},"openapi":"3.2.0","paths":{}});
+            assert!(oracle_accepts("openapi", &valid));
+            let evidence = upstream(root);
+            assert!(evidence.cloudevents.positive > 0);
+            assert!(evidence.cloudevents.negative > 0);
+            assert!(evidence.cloudevents.planted_rejections > 0);
+            assert_eq!(evidence.asyncapi.published_documents, 24);
+            assert_eq!(evidence.asyncapi.embedded_examples, 89);
+            assert_eq!(evidence.asyncapi.upstream_negative_fixtures, 0);
+            assert_eq!(evidence.asyncapi.negative_mutations, 1);
+            assert_eq!(evidence.asyncapi.planted_rejections, 1);
+            assert_eq!(
+                evidence.opentelemetry.accepted_signals,
+                vec!["logs", "metrics", "traces"]
+            );
+            assert!(evidence.opentelemetry.negative > 0);
+        }
+        "SY-05" => {
+            let model =
+                serde_json::json!({"observability":{"redacted_fields":["token","password"]}});
+            let mut observed =
+                serde_json::json!({"nested":{"token":"planted"},"secret":"secret://provider/key"});
+            prismpm::operations::redact(&model, &mut observed).unwrap();
+            assert_eq!(observed["nested"]["token"], "[REDACTED]");
+            assert_eq!(observed["secret"], "secret://provider/key");
+            let evidence = upstream(root);
+            assert_eq!(evidence.openid.positive, 11);
+            assert_eq!(evidence.openid.negative, 18);
+            assert!(evidence.openid.planted_rejections > 0);
+        }
+        "SY-06" => {
+            let invalid = serde_json::json!({"schema":"prismpm/system-model/1"});
+            assert_eq!(
+                prismpm::contracts::CanonicalDocument::from_value(
+                    "prismpm/system-model/1",
+                    invalid,
+                )
+                .unwrap_err()
+                .code,
+                "PP1101"
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn sdk_lock_value() -> Value {
+    let digest = format!("sha256:{}", "0".repeat(64));
+    serde_json::json!({
+        "inventory":[
+            {"digest":digest,"id":"prismpm","kind":"binary","version":"0.3.0"},
+            {"digest":format!("sha256:{}", "1".repeat(64)),"id":"sdk-linux-amd64","kind":"image","version":"0.3.0"},
+            {"digest":format!("sha256:{}", "2".repeat(64)),"id":"sdk-linux-arm64","kind":"image","version":"0.3.0"},
+            {"digest":format!("sha256:{}", "6".repeat(64)),"id":"sdk-test-corpus","kind":"test-corpus","version":"147-features-83-diagnostics"},
+            {"digest":format!("sha256:{}", "7".repeat(64)),"id":"runtime-os-lock","kind":"dependency-lock","version":"ubuntu-noble@20260901T000000Z"},
+            {"digest":format!("sha256:{}", "5".repeat(64)),"id":"sigstore-root","kind":"trust-root","version":"2025-10-10"}
+        ],
+        "schema":"prismpm/sdk-lock/1",
+        "sdk_image":format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{}", "3".repeat(64)),
+        "sdk_version":"0.3.0",
+        "standards_lock":format!("sha256:{}", "4".repeat(64))
+    })
+}
+
+fn write_sdk_lock(root: &Path) {
+    let lock =
+        prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock_value())
+            .expect("valid SDK lock fixture");
+    std::fs::write(root.join("prismpm.lock"), lock.bytes()).unwrap();
+}
+
+fn verify_sdk(id: &str) {
+    match id {
+        "DK-01" => {
+            let lock = prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/1",
+                sdk_lock_value(),
+            )
+            .unwrap();
+            assert_eq!(lock.schema(), "prismpm/sdk-lock/1");
+            assert_eq!(lock.value()["inventory"].as_array().unwrap().len(), 6);
+            assert_eq!(lock.value()["inventory"][3]["kind"], "test-corpus");
+            assert_eq!(lock.value()["inventory"][4]["kind"], "dependency-lock");
+            assert_eq!(lock.value()["inventory"][5]["kind"], "trust-root");
+        }
+        "DK-02" => {
+            let lock = sdk_lock_value();
+            let platforms = lock["inventory"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|row| row["id"].as_str())
+                .collect::<BTreeSet<_>>();
+            assert!(platforms.contains("sdk-linux-amd64"));
+            assert!(platforms.contains("sdk-linux-arm64"));
+            let mut floating = lock;
+            floating["sdk_image"] =
+                Value::String("ghcr.io/uor-foundation/prismpm-sdk:latest".into());
+            assert!(prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/1",
+                floating,
+            )
+            .is_err());
+        }
+        "DK-03" => {
+            let left = tempfile::tempdir().unwrap();
+            let right = tempfile::tempdir().unwrap();
+            let a = prismpm::sdk::install_project_inputs(left.path()).unwrap();
+            let b = prismpm::sdk::install_project_inputs(right.path()).unwrap();
+            assert_eq!(
+                a, b,
+                "native and container installation inputs must be byte-identical"
+            );
+            assert_eq!(tree(left.path()), tree(right.path()));
+        }
+        "DK-04" => {
+            let temp = tempfile::tempdir().unwrap();
+            write_sdk_lock(temp.path());
+            let lock = prismpm::sdk::inspect_lock(temp.path()).unwrap();
+            assert_eq!(lock, sdk_lock_value());
+            assert!(prismpm::sdk::fetch_project_dependencies(temp.path())
+                .unwrap()
+                .is_empty());
+        }
+        "DK-05" => {
+            let first = tempfile::tempdir().unwrap();
+            let second = tempfile::tempdir().unwrap();
+            let one = prismpm::sdk::install_project_inputs(first.path()).unwrap();
+            let two = prismpm::sdk::install_project_inputs(second.path()).unwrap();
+            assert_eq!(one, two, "clean self-rebuild inputs differ");
+            assert_eq!(
+                prismpm::sdk::install_project_inputs(first.path()).unwrap(),
+                one,
+                "self-bootstrap is not idempotent"
+            );
+            let evidence = serde_json::json!({
+                "bootstrap": {
+                    "archive_digest": format!("sha256:{}", "a".repeat(64)),
+                    "binary_digest": format!("sha256:{}", "b".repeat(64)),
+                    "source_commit": "f378fd3a8dc5711cb4b22cec9ee2f874353628c3",
+                    "version": "0.2.0"
+                },
+                "current_result_digest": format!("sha256:{}", "c".repeat(64)),
+                "prior_result_digest": format!("sha256:{}", "d".repeat(64)),
+                "schema": "prismpm/bootstrap-evidence/1",
+                "shared_identity": {
+                    "entity_count": 18,
+                    "semantic_id": "e".repeat(64),
+                    "snapshot_id": "f".repeat(64)
+                },
+                "status": "passed"
+            });
+            prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/bootstrap-evidence/1",
+                evidence,
+            )
+            .expect("bootstrap evidence is a closed canonical contract");
+        }
+        "DK-06" => {
+            let temp = tempfile::tempdir().unwrap();
+            prismpm::sdk::install_project_inputs(temp.path()).unwrap();
+            let path = temp
+                .path()
+                .join(".prism/sdk/inputs/stdlib/Production/Core.lex.tex");
+            std::fs::write(path, b"tampered").unwrap();
+            assert_eq!(
+                prismpm::sdk::install_project_inputs(temp.path())
+                    .unwrap_err()
+                    .code,
+                "PP5401"
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+struct OciFixture {
+    _temp: tempfile::TempDir,
+    root: PathBuf,
+    descriptor: prismpm::oci::Descriptor,
+}
+
+fn oci_fixture() -> OciFixture {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().to_path_buf();
+    let store = prismpm::oci::Store::open(&root).unwrap();
+    let mut layer = store
+        .put("application/octet-stream", b"release payload")
+        .unwrap();
+    layer.annotations = Some(BTreeMap::from([
+        (
+            "org.opencontainers.image.title".to_owned(),
+            "payload.bin".to_owned(),
+        ),
+        ("org.prismpm.role".to_owned(), "release-artifact".to_owned()),
+    ]));
+    let standards_lock_bytes = include_bytes!("../../../../standards.lock");
+    let standards_lock_digest = format!("sha256:{:x}", sha2::Sha256::digest(standards_lock_bytes));
+    let mut sdk_lock_value = sdk_lock_value();
+    sdk_lock_value["standards_lock"] = Value::String(standards_lock_digest);
+    let sdk_lock_document =
+        prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock_value)
+            .unwrap();
+    let mut sdk_lock = store
+        .put("application/json", sdk_lock_document.bytes())
+        .unwrap();
+    sdk_lock.annotations = Some(BTreeMap::from([
+        (
+            "org.opencontainers.image.title".to_owned(),
+            "prismpm.lock".to_owned(),
+        ),
+        ("org.prismpm.role".to_owned(), "sdk-lock".to_owned()),
+    ]));
+    let mut standards_lock = store.put("application/json", standards_lock_bytes).unwrap();
+    standards_lock.annotations = Some(BTreeMap::from([
+        (
+            "org.opencontainers.image.title".to_owned(),
+            "standards.lock".to_owned(),
+        ),
+        ("org.prismpm.role".to_owned(), "standards-lock".to_owned()),
+    ]));
+    let mut artifacts = [
+        (&layer, "release-artifact"),
+        (&sdk_lock, "sdk-lock"),
+        (&standards_lock, "standards-lock"),
+    ]
+    .into_iter()
+    .map(|(descriptor, role)| {
+        serde_json::json!({
+            "annotations":descriptor.annotations,
+            "digest":descriptor.digest,
+            "media_type":descriptor.media_type,
+            "role":role,
+            "size":descriptor.size
+        })
+    })
+    .collect::<Vec<_>>();
+    artifacts.sort_by(|left, right| left["digest"].as_str().cmp(&right["digest"].as_str()));
+    let release = prismpm::contracts::CanonicalDocument::from_value(
+        "prismpm/product-release/1",
+        serde_json::json!({
+            "artifacts":artifacts,
+            "external_artifacts":[],
+            "model_digest":format!("sha256:{}", "1".repeat(64)),
+            "product":"conformance-product",
+            "release":"fixture",
+            "schema":"prismpm/product-release/1",
+            "sdk_digest":format!("sha256:{}", "2".repeat(64)),
+            "sdk_lock":sdk_lock.digest,
+            "standards_lock":standards_lock.digest,
+            "status":"development"
+        }),
+    )
+    .unwrap();
+    let config = store
+        .put(prismpm::oci::PRISM_RELEASE, release.bytes())
+        .unwrap();
+    let manifest = prismpm::holo::canonical::encode_value(&serde_json::json!({
+        "artifactType":"application/vnd.prismpm.product.release.v1+json",
+        "config":config,
+        "layers":[layer,sdk_lock,standards_lock],
+        "mediaType":prismpm::oci::OCI_MANIFEST,
+        "schemaVersion":2
+    }))
+    .unwrap();
+    let mut descriptor = store.put(prismpm::oci::OCI_MANIFEST, &manifest).unwrap();
+    descriptor.artifact_type = Some("application/vnd.prismpm.product.release.v1+json".to_owned());
+    descriptor.annotations = Some(BTreeMap::from([(
+        "org.opencontainers.image.ref.name".to_owned(),
+        "example.test/product:fixture".to_owned(),
+    )]));
+    fn referrer(
+        store: &prismpm::oci::Store,
+        root: &prismpm::oci::Descriptor,
+        artifact_type: &str,
+        evidence: Value,
+    ) -> prismpm::oci::Descriptor {
+        let config = store
+            .put("application/vnd.oci.empty.v1+json", b"{}")
+            .unwrap();
+        let bytes = prismpm::holo::canonical::encode_value(&evidence).unwrap();
+        let layer = store.put(artifact_type, &bytes).unwrap();
+        let manifest = prismpm::holo::canonical::encode_value(&serde_json::json!({
+            "artifactType":artifact_type,
+            "config":config,
+            "layers":[layer],
+            "mediaType":prismpm::oci::OCI_MANIFEST,
+            "schemaVersion":2,
+            "subject":root
+        }))
+        .unwrap();
+        let mut row = store.put(prismpm::oci::OCI_MANIFEST, &manifest).unwrap();
+        row.artifact_type = Some(artifact_type.to_owned());
+        row
+    }
+    let provenance = referrer(
+        &store,
+        &descriptor,
+        prismpm::oci::INTOTO,
+        provenance_statement(serde_json::json!([{
+            "digest":{"sha256":descriptor.digest.trim_start_matches("sha256:")},
+            "name":"conformance-product"
+        }])),
+    );
+    let validation = referrer(
+        &store,
+        &descriptor,
+        prismpm::oci::PRISM_VALIDATION,
+        serde_json::json!({"result":"passed","subject":descriptor.digest}),
+    );
+    let spdx = referrer(
+        &store,
+        &descriptor,
+        "application/spdx+json;version=3.0.1",
+        spdx_document("urn:spdx:artifact"),
+    );
+    let supply = referrer(
+        &store,
+        &descriptor,
+        "application/vnd.prismpm.supply-chain.v1+json",
+        serde_json::json!({"release_digest":descriptor.digest,"status":"passed"}),
+    );
+    let mut rows = vec![descriptor.clone(), provenance, validation, spdx, supply];
+    rows.sort_by(|left, right| left.digest.cmp(&right.digest));
+    let index = prismpm::holo::canonical::encode_value(&serde_json::json!({
+        "manifests":rows,
+        "mediaType":prismpm::oci::OCI_INDEX,
+        "schemaVersion":2
+    }))
+    .unwrap();
+    std::fs::write(store.root().join("index.json"), index).unwrap();
+    let mut referrers = rows
+        .into_iter()
+        .filter(|row| row.digest != descriptor.digest)
+        .collect::<Vec<_>>();
+    referrers.sort_by(|left, right| left.digest.cmp(&right.digest));
+    let graph_digest = format!(
+        "sha256:{}",
+        sha256(
+            &prismpm::holo::canonical::encode_value(
+                &serde_json::json!({"referrers":referrers,"root":descriptor})
+            )
+            .unwrap()
+        )
+    );
+    let marker = prismpm::holo::canonical::encode_value(&serde_json::json!({
+        "graph_digest":graph_digest,
+        "policy":"release",
+        "referrers":referrers,
+        "root":descriptor,
+        "schema":"prismpm/verified-oci-root/1"
+    }))
+    .unwrap();
+    let verified = store.root().join("verified").join(format!(
+        "{}.json",
+        descriptor.digest.trim_start_matches("sha256:")
+    ));
+    std::fs::create_dir_all(verified.parent().unwrap()).unwrap();
+    std::fs::write(verified, marker).unwrap();
+    OciFixture {
+        _temp: temp,
+        root,
+        descriptor,
+    }
+}
+
+fn verify_oci(id: &str) {
+    let fixture = oci_fixture();
+    let store = prismpm::oci::Store::open(&fixture.root).unwrap();
+    match id {
+        "OC-01" => {
+            let result = prismpm::oci::verify_graph(&store, &fixture.descriptor.digest).unwrap();
+            assert_eq!(result["verified"], true);
+            assert!(result["descriptor_count"].as_u64().unwrap() >= 3);
+            let evidence = upstream(&repo_root());
+            assert!(evidence.oci_image.positive > 0);
+            assert!(evidence.oci_image.negative > 0);
+            assert!(evidence.oci_image.planted_rejections > 0);
+        }
+        "OC-02" => {
+            let mut changed = fixture.descriptor.clone();
+            changed.size += 1;
+            assert_eq!(store.read(&changed).unwrap_err().code, "PP6101");
+            let marker = store.root().join("verified").join(format!(
+                "{}.json",
+                fixture.descriptor.digest.trim_start_matches("sha256:")
+            ));
+            std::fs::remove_file(marker).unwrap();
+            assert!(prismpm::oci::verify_graph(&store, &fixture.descriptor.digest).is_ok());
+            assert_eq!(
+                prismpm::oci::inspect(
+                    &fixture.root,
+                    &format!("example.test/product@{}", fixture.descriptor.digest)
+                )
+                .unwrap_err()
+                .code,
+                "PP6101"
+            );
+        }
+        "OC-03" => {
+            let mut value = serde_json::json!({
+                "checks":[{
+                    "evidence_digest":format!("sha256:{}", "1".repeat(64)),
+                    "id":"readiness", "kind":"readiness", "status":"passed"
+                }],
+                "observed_state":format!("sha256:{}", "2".repeat(64)),
+                "operation":"deploy",
+                "plan_digest":format!("sha256:{}", "3".repeat(64)),
+                "release_digest":fixture.descriptor.digest,
+                "schema":"prismpm/deployment-evidence/1",
+                "status":"accepted",
+                "target":"compose-local"
+            });
+            let evidence_digest = format!(
+                "sha256:{}",
+                sha256(&prismpm::holo::canonical::encode_value(&value).unwrap())
+            );
+            value["evidence_digest"] = Value::String(evidence_digest);
+            let evidence = prismpm::holo::canonical::encode_value(&value).unwrap();
+            let referrer = prismpm::oci::attach_referrer(
+                &fixture.root,
+                &fixture.descriptor.digest,
+                "application/vnd.prismpm.deployment.evidence.v1+json",
+                &evidence,
+            )
+            .unwrap();
+            assert_ne!(referrer, fixture.descriptor.digest);
+            let inspected = prismpm::oci::inspect(
+                &fixture.root,
+                &format!("example.test/product@{}", fixture.descriptor.digest),
+            )
+            .unwrap();
+            assert_eq!(inspected["referrers"].as_array().unwrap().len(), 5);
+        }
+        "OC-04" => {
+            let reference = format!("example.test/product@{}", fixture.descriptor.digest);
+            let first = prismpm::oci::inspect(&fixture.root, &reference).unwrap();
+            let second = prismpm::oci::inspect(&fixture.root, &reference).unwrap();
+            assert_eq!(first, second);
+            assert_eq!(
+                prismpm::oci::artifact(&fixture.root, &fixture.descriptor.digest, "payload.bin")
+                    .unwrap(),
+                b"release payload"
+            );
+        }
+        "OC-05" => {
+            assert!(prismpm::oci::validate_reference("localhost:5000/product:tag", false).is_ok());
+            assert!(prismpm::oci::validate_reference("localhost:5000/product:tag", true).is_err());
+            assert!(prismpm::oci::validate_reference("../escape:tag", false).is_err());
+            assert!(prismpm::oci::validate_reference("product:latest", false).is_err());
+            let evidence = upstream(&repo_root());
+            assert_eq!(evidence.oci_distribution.passed, 79);
+            assert_eq!(evidence.oci_distribution.failed, 0);
+            assert_eq!(evidence.oci_distribution.upstream_skipped, 0);
+            assert_eq!(evidence.oci_distribution.raw_reports.len(), 6);
+            assert!(evidence
+                .oci_distribution
+                .raw_reports
+                .iter()
+                .all(|report| report.official_total == 79));
+            assert_eq!(evidence.oci_distribution.planted_rejections, 1);
+        }
+        "OC-06" => {
+            let original = fixture.descriptor.digest.clone();
+            for (from, to) in [("development", "candidate"), ("candidate", "accepted")] {
+                let evidence = prismpm::holo::canonical::encode_value(&serde_json::json!({
+                    "from":from,"signature":{"verified":true},"subject":original,"to":to
+                }))
+                .unwrap();
+                let error = prismpm::oci::attach_referrer(
+                    &fixture.root,
+                    &original,
+                    prismpm::oci::PRISM_PROMOTION,
+                    &evidence,
+                )
+                .unwrap_err();
+                assert_eq!(error.code, "PP7401");
+            }
+            assert_eq!(
+                prismpm::oci::verify_graph(&store, &original).unwrap()["root_digest"],
+                original
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn verify_lifecycle(root: &Path, id: &str) {
+    match id {
+        "LC-01" => {
+            let result = checked(root);
+            assert_eq!(result.schema, "prismpm/check-result/1");
+            let invalid = prismpm::lifecycle::status(root, "not-a-digest", "local").unwrap_err();
+            assert_eq!(invalid.code, "PP6101");
+        }
+        "LC-02" => {
+            let first = serde_json::to_value(checked(root)).unwrap();
+            let second = serde_json::to_value(checked(root)).unwrap();
+            assert_eq!(first, second, "Controller result is not stable");
+            let bytes = prismpm::holo::canonical::encode_value(&first).unwrap();
+            assert!(
+                !bytes.contains(&b'\n'),
+                "pipe result contains framing newlines"
+            );
+        }
+        "LC-03" => {
+            let fixture = oci_fixture();
+            let reference = format!("example.test/product@{}", fixture.descriptor.digest);
+            let error = prismpm::lifecycle::run(&fixture.root, &reference, "invalid/target", false)
+                .unwrap_err();
+            assert_eq!(error.code, "PP7101");
+            assert!(!fixture.root.join(".prism/targets").exists());
+            let evidence = upstream(root);
+            assert!(evidence.oci_runtime.positive > 0);
+            assert!(evidence.oci_runtime.negative > 0);
+            assert_eq!(evidence.oci_runtime.engine_positive, 1);
+            assert_eq!(evidence.oci_runtime.engine_negative, 1);
+            assert_eq!(evidence.oci_runtime.planted_rejections, 1);
+        }
+        "LC-04" => {
+            let fixture = oci_fixture();
+            let root = fixture.root.clone();
+            let threads = (0..4)
+                .map(|_| {
+                    let root = root.clone();
+                    std::thread::spawn(move || {
+                        prismpm::oci::Store::open(&root)
+                            .unwrap()
+                            .put("application/octet-stream", b"same operation")
+                            .unwrap()
+                    })
+                })
+                .collect::<Vec<_>>();
+            let digests = threads
+                .into_iter()
+                .map(|thread| thread.join().unwrap().digest)
+                .collect::<BTreeSet<_>>();
+            assert_eq!(
+                digests.len(),
+                1,
+                "concurrent publication was not idempotent"
+            );
+        }
+        "LC-05" => {
+            for (reference, target, expected) in [
+                ("mutable:tag", "local", "PP6101"),
+                ("example.test/p@sha256:bad", "local", "PP6101"),
+                (
+                    &format!("example.test/p@sha256:{}", "0".repeat(64)),
+                    "Bad",
+                    "PP7101",
+                ),
+            ] {
+                let error = prismpm::lifecycle::status(root, reference, target).unwrap_err();
+                assert_eq!(error.code, expected);
+                assert!(!error.message.is_empty());
+            }
+        }
+        "LC-06" => {
+            let model = repo_model::Model::load(&root.join("model")).unwrap();
+            model.check().unwrap();
+            let commands = model
+                .commands
+                .command
+                .iter()
+                .map(|row| row.name.as_str())
+                .collect::<BTreeSet<_>>();
+            for executable in [
+                "fetch", "build", "push", "pull", "inspect", "run", "plan", "deploy", "status",
+                "rollback", "destroy",
+            ] {
+                assert!(
+                    commands.contains(executable),
+                    "missing executable command {executable}"
+                );
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn adapter_system(kind: &str) -> Value {
+    let capability = format!("{kind}-capability");
+    serde_json::json!({
+        "artifacts":[],
+        "capabilities":[{"id":capability}],
+        "topology":[],
+        "targets":[{
+            "adapter_digest":prismpm::deployment::digest(kind).unwrap(),
+            "api_version":match kind {
+                "compose" => "compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d",
+                "github-pages" => "github-pages-artifact@v4",
+                "kubernetes" => "v1.36.4",
+                _ => unreachable!(),
+            },
+            "capabilities":[capability],
+            "credentials":"external",
+            "id":format!("{kind}-target"),
+            "ingress_class_name":null,
+            "ingress_controller_artifact":null,
+            "kind":kind,
+            "minimum_release_status":"development",
+            "platform_requirements":[format!("{kind}-linux")],
+            "storage_class":null,
+            "storage_profile":null
+        }]
+    })
+}
+
+fn verify_deployment(id: &str) {
+    match id {
+        "DP-01" => {
+            for kind in ["compose", "github-pages", "kubernetes"] {
+                prismpm::deployment::validate_targets(&adapter_system(kind)).unwrap();
+            }
+            assert_eq!(
+                prismpm::deployment::digest("shell").unwrap_err().code,
+                "PP7101"
+            );
+        }
+        "DP-02" => {
+            let mut system = adapter_system("compose");
+            prismpm::deployment::validate_targets(&system).unwrap();
+            system["targets"][0]["adapter_digest"] =
+                Value::String(format!("sha256:{}", "0".repeat(64)));
+            assert_eq!(
+                prismpm::deployment::validate_targets(&system)
+                    .unwrap_err()
+                    .code,
+                "PP7101"
+            );
+        }
+        "DP-03" => {
+            let mut system = adapter_system("kubernetes");
+            prismpm::deployment::validate_targets(&system).unwrap();
+            system["targets"][0]["api_version"] = Value::String("kubernetes/latest".to_owned());
+            assert_eq!(
+                prismpm::deployment::validate_targets(&system)
+                    .unwrap_err()
+                    .code,
+                "PP7101"
+            );
+        }
+        "DP-04" => {
+            let fixture = oci_fixture();
+            let reference = format!("example.test/product@{}", fixture.descriptor.digest);
+            let first =
+                prismpm::lifecycle::plan(&fixture.root, &reference, "compose-target").unwrap_err();
+            let second =
+                prismpm::lifecycle::plan(&fixture.root, &reference, "compose-target").unwrap_err();
+            assert_eq!((first.code, first.message), (second.code, second.message));
+            assert!(!fixture.root.join(".prism/plans").exists());
+        }
+        "DP-05" => {
+            let system = adapter_system("compose");
+            prismpm::deployment::validate_targets(&system).unwrap();
+            let mut incomplete = system;
+            incomplete["targets"][0]["capabilities"] = serde_json::json!(["undeclared"]);
+            assert_eq!(
+                prismpm::deployment::validate_targets(&incomplete)
+                    .unwrap_err()
+                    .code,
+                "PP7101"
+            );
+        }
+        "DP-06" => {
+            let fixture = oci_fixture();
+            let reference = format!("example.test/product@{}", fixture.descriptor.digest);
+            for operation in [
+                prismpm::lifecycle::status(&fixture.root, &reference, "invalid/target"),
+                prismpm::lifecycle::rollback(&fixture.root, &reference, "invalid/target"),
+                prismpm::lifecycle::destroy(&fixture.root, &reference, "invalid/target", false),
+            ] {
+                assert_eq!(operation.unwrap_err().code, "PP7101");
+            }
+            assert!(!fixture.root.join(".prism/targets").exists());
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn operations_model() -> Value {
+    serde_json::json!({
+        "alerts":[{"id":"availability-alert"}],
+        "components":[{"health":"/healthz","id":"service"}],
+        "observability":{
+            "alerts":["availability-alert"],
+            "logs":"otlp", "metrics":"otlp", "redacted_fields":["authorization","token","password"],
+            "slos":["availability-slo"], "traces":"otlp"
+        },
+        "slis":[{"id":"availability-sli"}],
+        "slos":[{"id":"availability-slo"}]
+    })
+}
+
+fn verify_operations(id: &str) {
+    match id {
+        "OP-01" | "OP-02" | "OP-05" => {
+            let release = format!("sha256:{}", "a".repeat(64));
+            let evidence =
+                prismpm::operations::model_evidence(&operations_model(), &release).unwrap();
+            assert_eq!(evidence.len(), 1);
+            assert_eq!(evidence[0]["status"], "passed");
+            if id == "OP-05" {
+                assert_hex_digest(
+                    evidence[0]["evidence_digest"]
+                        .as_str()
+                        .unwrap()
+                        .trim_start_matches("sha256:"),
+                );
+            }
+        }
+        "OP-03" => {
+            let mut incomplete = operations_model();
+            incomplete["slos"] = Value::Array(Vec::new());
+            assert_eq!(
+                prismpm::operations::model_evidence(
+                    &incomplete,
+                    &format!("sha256:{}", "a".repeat(64))
+                )
+                .unwrap_err()
+                .code,
+                "PP7401"
+            );
+        }
+        "OP-04" => {
+            let mut unhealthy = operations_model();
+            unhealthy["components"][0]["health"] = Value::String(String::new());
+            assert_eq!(
+                prismpm::operations::model_evidence(
+                    &unhealthy,
+                    &format!("sha256:{}", "a".repeat(64))
+                )
+                .unwrap_err()
+                .code,
+                "PP7401"
+            );
+        }
+        "OP-06" => {
+            let model = operations_model();
+            let mut evidence = serde_json::json!({
+                "authorization":"Bearer planted",
+                "nested":{"password":"planted","token":"planted"},
+                "release_digest":format!("sha256:{}", "a".repeat(64))
+            });
+            prismpm::operations::redact(&model, &mut evidence).unwrap();
+            let bytes = prismpm::holo::canonical::encode_value(&evidence).unwrap();
+            let text = String::from_utf8(bytes).unwrap();
+            assert!(!text.contains("planted"));
+            assert!(text.matches("[REDACTED]").count() >= 3);
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn spdx_document(target: &str) -> Value {
+    let creation = serde_json::json!({
+        "created":"1970-01-01T00:00:00Z",
+        "createdBy":["urn:spdx:tool:prismpm"],
+        "specVersion":"3.0.1",
+        "type":"CreationInfo"
+    });
+    serde_json::json!({
+        "@context":"https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph":[
+            {"creationInfo":creation,"name":"artifact","spdxId":"urn:spdx:artifact","type":"software_File"},
+            {"creationInfo":creation,"element":["urn:spdx:artifact","urn:spdx:package","urn:spdx:relationship"],
+             "rootElement":["urn:spdx:package"],"spdxId":"urn:spdx:document","type":"SpdxDocument"},
+            {"creationInfo":creation,"name":"release","spdxId":"urn:spdx:package","type":"software_Package"},
+            {"creationInfo":creation,"from":"urn:spdx:package","relationshipType":"contains",
+             "spdxId":"urn:spdx:relationship","to":[target],"type":"Relationship"}
+        ]
+    })
+}
+
+fn provenance_statement(subject: Value) -> Value {
+    serde_json::json!({
+        "_type":"https://in-toto.io/Statement/v1",
+        "predicate":{
+            "buildDefinition":{
+                "buildType":"https://uor.foundation/prismpm/build/v1",
+                "externalParameters":{},"internalParameters":{},"resolvedDependencies":[]
+            },
+            "runDetails":{"builder":{"id":"https://github.com/UOR-Foundation/PrismPM"}}
+        },
+        "predicateType":"https://slsa.dev/provenance/v1",
+        "subject":subject
+    })
+}
+
+fn verify_supply_chain(id: &str) {
+    match id {
+        "SC-01" => {
+            let evidence = upstream(&repo_root());
+            assert!(evidence.spdx.positive >= 2);
+            assert!(evidence.spdx.negative > 0);
+            assert!(evidence.spdx.planted_rejections > 0);
+        }
+        "SC-02" => {
+            let evidence = upstream(&repo_root());
+            assert_eq!(evidence.in_toto.positive, 1);
+            assert_eq!(evidence.in_toto.negative, 1);
+            assert_eq!(evidence.in_toto.planted_rejections, 1);
+            assert_eq!(
+                evidence.in_toto.semantic_validation,
+                "consumer-policy-required-by-upstream"
+            );
+            let subject = serde_json::json!([{
+                "digest":{"sha256":"a".repeat(64)},"name":"product"
+            }]);
+            assert!(prismpm::authority::intoto_policy_accepts(
+                &provenance_statement(subject)
+            ));
+            assert!(!prismpm::authority::intoto_policy_accepts(
+                &provenance_statement(serde_json::json!([]))
+            ));
+        }
+        "SC-03" => {
+            let subject = serde_json::json!([{
+                "digest":{"sha256":"a".repeat(64)},"name":"product"
+            }]);
+            let accepted = provenance_statement(subject);
+            assert!(prismpm::authority::intoto_policy_accepts(&accepted));
+            let mut wrong = accepted;
+            wrong["subject"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("digest");
+            assert!(!prismpm::authority::intoto_policy_accepts(&wrong));
+        }
+        "SC-04" => {
+            let valid = serde_json::json!({"vulnerabilities":[]});
+            assert!(oracle_accepts("osv", &valid));
+            let stale_shape = serde_json::json!({"vulnerabilities":[{"id":1}]});
+            assert!(!oracle_accepts("osv", &stale_shape));
+        }
+        "SC-05" => {
+            let model = operations_model();
+            let mut evidence = serde_json::json!({
+                "authorization":"Bearer planted", "safe":"secret://external/reference"
+            });
+            prismpm::operations::redact(&model, &mut evidence).unwrap();
+            assert_eq!(evidence["authorization"], "[REDACTED]");
+            assert_eq!(evidence["safe"], "secret://external/reference");
+        }
+        "SC-06" => {
+            let fixture = oci_fixture();
+            let store = prismpm::oci::Store::open(&fixture.root).unwrap();
+            let mut wrong_subject = fixture.descriptor.clone();
+            wrong_subject.digest = format!("sha256:{}", "f".repeat(64));
+            assert_eq!(store.read(&wrong_subject).unwrap_err().code, "PP6101");
+            assert!(prismpm::oci::attach_referrer(
+                &fixture.root,
+                &wrong_subject.digest,
+                prismpm::oci::INTOTO,
+                b"{}",
+            )
+            .is_err());
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn template_fixture() -> tempfile::TempDir {
+    let temp = tempfile::tempdir().unwrap();
+    for directory in [".devcontainer", ".github/workflows"] {
+        std::fs::create_dir_all(temp.path().join(directory)).unwrap();
+    }
+    let required = serde_json::json!([
+        ".devcontainer/devcontainer.json",
+        ".github/workflows/bootstrap.yml",
+        "AGENTS.md",
+        "CONFORMANCE.md",
+        "VERIFICATION.md",
+        "prismpm.lock",
+        "template-contract.json",
+        "template.lock"
+    ]);
+    let universal = serde_json::json!([
+        ".devcontainer/devcontainer.json",
+        ".github/workflows/bootstrap.yml",
+        "AGENTS.md",
+        "VERIFICATION.md",
+        "prismpm.lock",
+        "template-contract.json",
+        "template.lock"
+    ]);
+    let contract = serde_json::json!({
+        "project_content_paths":["CONFORMANCE.md"],
+        "required_paths":required,
+        "schema":"uor/template-contract/1",
+        "universal_policy_paths":universal,
+        "version":"1.0.0"
+    });
+    let contract_bytes = prismpm::holo::canonical::encode_value(&contract).unwrap();
+    std::fs::write(temp.path().join("template-contract.json"), &contract_bytes).unwrap();
+    write_sdk_lock(temp.path());
+    std::fs::write(temp.path().join(".devcontainer/devcontainer.json"), b"{}").unwrap();
+    std::fs::write(
+        temp.path().join(".github/workflows/bootstrap.yml"),
+        b"uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n",
+    )
+    .unwrap();
+    for name in ["AGENTS.md", "CONFORMANCE.md", "VERIFICATION.md"] {
+        std::fs::write(temp.path().join(name), b"contract fixture\n").unwrap();
+    }
+    std::fs::write(temp.path().join("Justfile"), b"model-write:\n    @true\n").unwrap();
+    let sdk_image = sdk_lock_value()["sdk_image"].as_str().unwrap().to_owned();
+    let contract_digest = format!("sha256:{}", sha256(&contract_bytes));
+    let policy_files = [
+        ".devcontainer/devcontainer.json",
+        ".github/workflows/bootstrap.yml",
+        "AGENTS.md",
+        "VERIFICATION.md",
+        "prismpm.lock",
+        "template-contract.json",
+    ]
+    .into_iter()
+    .map(|path| {
+        serde_json::json!({
+            "path":path,
+            "sha256":format!("sha256:{}",sha256(&std::fs::read(temp.path().join(path)).unwrap()))
+        })
+    })
+    .collect::<Vec<_>>();
+    let policy_tree_sha256 = format!(
+        "sha256:{}",
+        sha256(
+            &prismpm::holo::canonical::encode_value(&Value::Array(policy_files.clone())).unwrap()
+        )
+    );
+    let lock = serde_json::json!({
+        "contract_digest":contract_digest,
+        "policy_files":policy_files,
+        "policy_tree_sha256":policy_tree_sha256,
+        "schema":"uor/template-lock/1",
+        "sdk_image":sdk_image,
+        "template_repository":"https://github.com/UOR-Foundation/template",
+        "template_revision":"a".repeat(40)
+    });
+    std::fs::write(
+        temp.path().join("template.lock"),
+        prismpm::holo::canonical::encode_value(&lock).unwrap(),
+    )
+    .unwrap();
+    temp
+}
+
+fn verify_template(id: &str) {
+    let temp = template_fixture();
+    match id {
+        "TM-01" => {
+            let result = prismpm::template::check(temp.path()).unwrap();
+            assert_eq!(result["status"], "passed");
+            std::fs::write(
+                temp.path().join("Justfile"),
+                b"model-write:\n    @printf 'stale\\n' > CONFORMANCE.md\n",
+            )
+            .unwrap();
+            assert_eq!(
+                prismpm::template::check(temp.path()).unwrap_err().code,
+                "PP1101"
+            );
+            std::fs::write(temp.path().join("Justfile"), b"model-write:\n    @true\n").unwrap();
+            let mut contract: Value = serde_json::from_slice(
+                &std::fs::read(temp.path().join("template-contract.json")).unwrap(),
+            )
+            .unwrap();
+            contract["required_paths"].as_array_mut().unwrap().pop();
+            std::fs::write(
+                temp.path().join("template-contract.json"),
+                prismpm::holo::canonical::encode_value(&contract).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                prismpm::template::check(temp.path()).unwrap_err().code,
+                "PP1101"
+            );
+        }
+        "TM-02" => {
+            assert!(prismpm::template::check(temp.path()).is_ok());
+            std::fs::write(
+                temp.path().join(".devcontainer/devcontainer.json"),
+                b"{\"features\":{}}",
+            )
+            .unwrap();
+            assert_eq!(
+                prismpm::template::check(temp.path()).unwrap_err().code,
+                "PP1101"
+            );
+        }
+        "TM-03" => {
+            assert!(prismpm::template::check(temp.path()).is_ok());
+            std::fs::write(
+                temp.path().join(".github/workflows/bootstrap.yml"),
+                b"uses: actions/checkout@main\n",
+            )
+            .unwrap();
+            assert_eq!(
+                prismpm::template::check(temp.path()).unwrap_err().code,
+                "PP1101"
+            );
+        }
+        "TM-04" => {
+            let checked = prismpm::template::check(temp.path()).unwrap();
+            assert_eq!(checked["sdk_image"], sdk_lock_value()["sdk_image"]);
+            assert!(checked["template_revision"]
+                .as_str()
+                .is_some_and(|value| value.len() == 40));
+        }
+        "TM-05" => {
+            let before = tree(temp.path());
+            let update = prismpm::template::update(
+                temp.path(),
+                &format!(
+                    "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                    "5".repeat(64)
+                ),
+                &"b".repeat(40),
+            )
+            .unwrap();
+            assert_eq!(
+                tree(temp.path()),
+                before,
+                "template update mutated the project"
+            );
+            assert_eq!(update["changed"], true);
+            assert!(update["patch"]
+                .as_str()
+                .unwrap()
+                .contains("+++ b/template.lock"));
+        }
+        "TM-06" => {
+            assert!(prismpm::template::check(temp.path()).is_ok());
+            assert_eq!(
+                prismpm::template::update(
+                    temp.path(),
+                    "ghcr.io/uor-foundation/prismpm-sdk:latest",
+                    &"b".repeat(40)
+                )
+                .unwrap_err()
+                .code,
+                "PP1101"
+            );
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -466,7 +1875,7 @@ fn verify_rp_09(root: &Path) {
 }
 
 fn verify_rp_10(root: &Path) {
-    let model = repo_model::Model::load_from_repo_root().unwrap();
+    let model = repo_model::Model::load(&root.join("model")).unwrap();
     let conformance = read(root, "CONFORMANCE.md");
     let errors = read(root, "ERRORS.md");
     assert!(model.ids.id.iter().all(|row| conformance.contains(&row.id)));

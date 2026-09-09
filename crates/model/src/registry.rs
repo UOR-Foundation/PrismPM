@@ -1,7 +1,7 @@
 //! Typed shape of model/*.toml registers for PrismPM.
 
 use crate::ModelError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Honesty levels for claims.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -120,33 +120,159 @@ impl Ids {
 }
 
 /// model/authorities.toml
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Authorities {
     /// Schema spec identifier.
     pub spec: String,
     /// List of authorities.
     pub authority: Vec<AuthorityRow>,
+    /// Executable validation oracles, distinct from standards authorities.
+    #[serde(default)]
+    pub oracle: Vec<OracleRow>,
 }
 
 /// Single authority entry.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AuthorityRow {
     /// Authority ID.
     pub id: String,
     /// Display name.
     pub name: String,
-    /// Canonical citation.
-    pub citation: String,
-    /// Checksum string or 'none'.
-    pub checksum: String,
-    /// Stated reason if checksum is 'none'.
-    pub checksum_reason: String,
+    /// Organization or upstream project that owns the cited material.
+    pub issuer: String,
+    /// Canonical standard or source identifier.
+    pub canonical_identifier: String,
+    /// Exact edition or version.
+    pub edition: String,
+    /// Role of the acquired source (`normative`, `informative`, or `binding-only`).
+    pub source_role: String,
+    /// Immutable acquired-byte URL, or the lawful catalog citation for a binding-only row.
+    pub immutable_url: String,
+    /// Exact source commit, or `not-published` for a binding-only row.
+    pub revision: String,
+    /// SHA-256 of acquired bytes, or `not-acquired` for a binding-only row.
+    pub acquired_sha256: String,
+    /// Published signature identity, or an explicit `not-published` value.
+    pub signature: String,
+    /// Exact upstream-published public key used to replay a claimed tag signature.
+    #[serde(default)]
+    pub signature_trust_root: Option<SignatureTrustRoot>,
+    /// Media type of the acquired source.
+    pub media_type: String,
+    /// Applicable source license or controlled-document terms.
+    pub license: String,
+    /// Redistribution decision.
+    pub redistribution: String,
+    /// Acquisition date; evidence metadata, never a content identity input.
+    pub retrieval_date: String,
+    /// Explicit supersession policy.
+    pub supersession_policy: String,
     /// Authoritative statement.
     pub statement: String,
     /// Realized capability IDs.
     pub realized_by: Vec<String>,
+}
+
+/// An upstream-maintained public key selected for independent offline tag verification.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SignatureTrustRoot {
+    /// Signature format accepted by the pinned verifier (`openpgp` or `ssh`).
+    pub algorithm: String,
+    /// Repository-relative path of the exact packaged public-key bytes.
+    pub path: String,
+    /// SHA-256 of the packaged public-key bytes.
+    pub sha256: String,
+    /// Full OpenPGP or SHA-256 SSH fingerprint expected from verification.
+    pub fingerprint: String,
+    /// Upstream account that publishes the key.
+    pub owner: String,
+    /// Authoritative upstream key-list endpoint from which the selected record was acquired.
+    pub source_url: String,
+    /// Stable key-record identifier returned by that endpoint.
+    pub source_record_id: String,
+    /// Legal classification of the public-key material.
+    pub license: String,
+    /// Explicit redistribution decision for the verification key.
+    pub redistribution: String,
+}
+
+/// One validation oracle whose authority and execution boundary are explicit.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OracleRow {
+    /// Stable oracle identifier.
+    pub id: String,
+    /// Authority rows whose assets define this oracle's scope.
+    pub authority_ids: Vec<String>,
+    /// Exact upstream edition implemented by the oracle.
+    pub edition: String,
+    /// SDK-inventory executable name, never a shell command.
+    pub executable: String,
+    /// Exact OCI platforms on which the oracle is packaged and supported.
+    pub supported_platforms: Vec<String>,
+    /// Input media types accepted by the runner.
+    pub input_media_types: Vec<String>,
+    /// Output contract identifier.
+    pub output_schema: String,
+    /// Canonical argument vector with `{input}` as the only substitution.
+    pub arguments: Vec<String>,
+    /// Maximum wall-clock duration.
+    pub timeout_ms: u64,
+    /// Maximum resident memory.
+    pub memory_bytes: u64,
+    /// Maximum captured stdout plus stderr.
+    pub output_bytes: u64,
+    /// Network policy. `isolated-subject` permits only the disposable subject
+    /// service created by the conformance runner, never public networking.
+    pub network: String,
+    /// Deterministic diagnostic normalization profile.
+    pub normalization: String,
+    /// Exact requirements the upstream payload can establish.
+    pub covers: Vec<String>,
+    /// Requirements explicitly outside the oracle's authority.
+    pub does_not_cover: Vec<String>,
+    /// Accepted upstream process exits and their mapping.
+    pub expected_exits: Vec<String>,
+    /// Untouched upstream payload digest.
+    pub upstream_payload_sha256: String,
+    /// Exact imported finite corpus or upstream oracle source tree, when one
+    /// is executed by this profile.
+    #[serde(default)]
+    pub corpus: Option<OracleCorpus>,
+    /// Optional immutable implementation subjected to an interoperability
+    /// suite; this is evidence input, not a normative authority.
+    #[serde(default)]
+    pub subject: Option<String>,
+    /// Optional pinned trust material consumed by the executable verifier.
+    #[serde(default)]
+    pub trusted_root: Option<OracleTrustRoot>,
+    /// Wrapper implementation source whose digest is resolved into the lock.
+    pub wrapper_source: String,
+}
+
+/// Content-addressed repository copy of an upstream conformance asset.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OracleCorpus {
+    /// Repository-relative directory containing only the reviewed bytes.
+    pub path: String,
+    /// SHA-256 tree digest over length-prefixed sorted paths and file bytes.
+    pub sha256: String,
+}
+
+/// One content-addressed verification root used by an oracle.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OracleTrustRoot {
+    /// Repository-relative path packaged by the SDK.
+    pub path: String,
+    /// Exact SHA-256 of the trust-root bytes.
+    pub sha256: String,
+    /// Narrow semantic role; this material is not itself a standards authority.
+    pub role: String,
 }
 
 /// model/errors.toml
@@ -299,6 +425,178 @@ impl Standards {
                     s.id
                 )));
             }
+        }
+        Ok(())
+    }
+}
+
+/// model/contracts.toml
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Contracts {
+    /// Schema spec identifier.
+    pub spec: String,
+    /// Public canonical data contracts.
+    pub contract: Vec<ContractRow>,
+}
+
+/// One public canonical data contract.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContractRow {
+    /// Value of the contract's required `schema` member.
+    pub schema: String,
+    /// Repository-relative JSON Schema path.
+    pub path: String,
+    /// Registered content media type.
+    pub media_type: String,
+    /// Content identity algorithm.
+    pub identity: String,
+    /// Maximum canonical input size.
+    pub maximum_bytes: u64,
+    /// Maximum aggregate collection item count.
+    pub maximum_items: u64,
+    /// Unknown-field and extension policy.
+    pub extension_policy: String,
+    /// Version compatibility policy.
+    pub compatibility: String,
+}
+
+impl Contracts {
+    /// Validate public contract registry invariants.
+    pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 40 {
+            return Err(ModelError::Inconsistent(
+                "public contract registry is incomplete".to_owned(),
+            ));
+        }
+        let mut schemas = std::collections::BTreeSet::new();
+        let mut paths = std::collections::BTreeSet::new();
+        let mut media_types = std::collections::BTreeSet::new();
+        for row in &self.contract {
+            if !schemas.insert(&row.schema)
+                || !paths.insert(&row.path)
+                || !media_types.insert(&row.media_type)
+                || !(row.schema.starts_with("prismpm/") || row.schema.starts_with("uor/"))
+                || !(row.schema.ends_with("/1") || row.schema == "prismpm/ecosystem-release/2")
+                || !row.path.starts_with("schemas/")
+                || !row.path.ends_with(".schema.json")
+                || !root.join(&row.path).is_file()
+                || !(row.media_type.starts_with("application/vnd.prismpm.")
+                    || row.media_type.starts_with("application/vnd.uor."))
+                || !row.media_type.ends_with("+json")
+                || row.identity != "sha256-canonical-json"
+                || row.maximum_bytes == 0
+                || row.maximum_items == 0
+                || row.extension_policy != "closed"
+                || !matches!(
+                    row.compatibility.as_str(),
+                    "exact-major" | "exact-major-additive-minor"
+                )
+            {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: invalid public contract row",
+                    row.schema
+                )));
+            }
+            let bytes = std::fs::read(root.join(&row.path))
+                .map_err(|error| ModelError::Io(root.join(&row.path), error))?;
+            let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| {
+                ModelError::Inconsistent(format!("{}: invalid JSON Schema: {error}", row.path))
+            })?;
+            if value.get("additionalProperties") != Some(&serde_json::Value::Bool(false))
+                || value.get("$schema").and_then(serde_json::Value::as_str)
+                    != Some("https://json-schema.org/draft/2020-12/schema")
+            {
+                return Err(ModelError::Inconsistent(format!(
+                    "{}: schema root is not closed draft 2020-12",
+                    row.path
+                )));
+            }
+            jsonschema::validator_for(&value).map_err(|error| {
+                ModelError::Inconsistent(format!(
+                    "{}: JSON Schema does not compile without external resolution: {error}",
+                    row.path
+                ))
+            })?;
+        }
+        Ok(())
+    }
+}
+
+/// model/commands.toml
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Commands {
+    /// Schema spec identifier.
+    pub spec: String,
+    /// Stable public command contracts.
+    pub command: Vec<CommandRow>,
+}
+
+/// One stable public command contract.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandRow {
+    /// Canonical command name.
+    pub name: String,
+    /// Declared mutation boundary.
+    pub mutates: String,
+    /// Whether artifact selection requires an immutable digest.
+    pub requires_digest: bool,
+    /// Canonical machine result schema.
+    pub result_schema: String,
+}
+
+impl Commands {
+    /// Validate the complete stable command surface.
+    pub fn check(&self) -> Result<(), ModelError> {
+        const EXPECTED: [&str; 28] = [
+            "backup",
+            "authority",
+            "build",
+            "check",
+            "clean",
+            "completion",
+            "conformance",
+            "deploy",
+            "destroy",
+            "fetch",
+            "finalize-contract",
+            "inspect",
+            "lock",
+            "plan",
+            "prepare-promotion",
+            "promote",
+            "pull",
+            "push",
+            "rollback",
+            "restore",
+            "run",
+            "sign",
+            "sign-evidence",
+            "status",
+            "template",
+            "verify",
+            "verify-release",
+            "verify-signature",
+        ];
+        let names = self
+            .command
+            .iter()
+            .map(|row| row.name.as_str())
+            .collect::<Vec<_>>();
+        if self.spec != "prismpm/command-contract/1"
+            || names != EXPECTED
+            || self.command.iter().any(|row| {
+                row.mutates.is_empty()
+                    || !row.result_schema.starts_with("prismpm/")
+                    || !row.result_schema.ends_with("/1")
+            })
+        {
+            return Err(ModelError::Inconsistent(
+                "public command contract is incomplete or noncanonical".to_owned(),
+            ));
         }
         Ok(())
     }

@@ -248,6 +248,84 @@ pub fn audit_formal_contract(root: &Path) -> Result<(), Fail> {
     {
         return Err("canonical index uniqueness theorem is not the exact characterization".into());
     }
+
+    let corpus_source =
+        std::fs::read_to_string(root.join("stdlib/src/Production/SystemValidationCorpus.lex.tex"))?;
+    let corpus_payload = corpus_source
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("\\semanticdata{")
+                .and_then(|value| value.strip_suffix('}'))
+        })
+        .ok_or("Production.SystemValidationCorpus has no semantic module payload")?;
+    let corpus: serde_json::Value = serde_json::from_str(corpus_payload)?;
+    let corpus_declarations = corpus["declarations"]
+        .as_array()
+        .ok_or("Production.SystemValidationCorpus has no semantic declarations")?;
+    let corpus_by_name = corpus_declarations
+        .iter()
+        .filter_map(|row| Some((row.get("name")?.as_str()?, row)))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for family in [
+        "CapabilitySatisfaction",
+        "Closure",
+        "Compatibility",
+        "DeploymentOrder",
+        "EvidenceClosure",
+        "LicenseClosure",
+        "MigrationOrder",
+        "ReferentialIntegrity",
+        "ReleaseCompleteness",
+        "RollbackSafety",
+        "SecretFlow",
+        "Uniqueness",
+    ] {
+        for (suffix, model, expected) in [
+            ("Sound", "corpusValidModel".to_owned(), true),
+            (
+                "RejectsMutation",
+                format!("corpusInvalid{family}Model"),
+                false,
+            ),
+        ] {
+            let theorem_name = format!("corpus{family}{suffix}");
+            let theorem = corpus_by_name
+                .get(theorem_name.as_str())
+                .ok_or_else(|| format!("missing direct model theorem {theorem_name}"))?;
+            let statement = &theorem["statement"];
+            if theorem["kind"] != "theorem"
+                || theorem["axioms"]
+                    .as_array()
+                    .is_none_or(|rows| !rows.is_empty())
+                || statement["kind"] != "eq"
+                || statement["left"]["function"]["module"] != "Production.SystemValidation"
+                || statement["left"]["function"]["name"] != format!("validateModel{family}")
+                || statement["left"]["arguments"][0]["function"]["name"] != model
+                || statement["left"]["arguments"][1]["function"]["name"] != "corpusManifest"
+                || statement["right"]["value"] != expected
+            {
+                return Err(format!(
+                    "{theorem_name} does not prove its exact typed model predicate"
+                )
+                .into());
+            }
+        }
+    }
+    let aggregate = corpus_by_name
+        .get("corpusManifestSound")
+        .ok_or("missing aggregate typed model theorem")?;
+    if aggregate["kind"] != "theorem"
+        || aggregate["axioms"]
+            .as_array()
+            .is_none_or(|rows| !rows.is_empty())
+        || aggregate["statement"]["left"]["function"]["module"] != "Production.SystemValidation"
+        || aggregate["statement"]["left"]["function"]["name"] != "validateManifest"
+        || aggregate["statement"]["left"]["arguments"][0]["function"]["name"] != "corpusValidModel"
+        || aggregate["statement"]["left"]["arguments"][1]["function"]["name"] != "corpusManifest"
+        || aggregate["statement"]["right"]["value"] != true
+    {
+        return Err("aggregate typed model theorem is not the exact direct predicate".into());
+    }
     Ok(())
 }
 
@@ -294,11 +372,21 @@ pub fn audit_shipped(root: &Path) -> Result<(), Fail> {
         }
     }
     let container = std::fs::read_to_string(root.join(".devcontainer/devcontainer.json"))?;
-    if container.contains("\"mounts\"")
-        || container.contains("../LexLean")
-        || container.contains("../lean4-prod")
-    {
+    if container.contains("../LexLean") || container.contains("../lean4-prod") {
         return Err("devcontainer depends on a host-specific adjacent mount".into());
+    }
+    let value: serde_json::Value = serde_json::from_str(&container)?;
+    if value
+        .get("mounts")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|mounts| {
+            mounts.iter().any(|mount| {
+                mount.as_str()
+                    != Some("source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind")
+            })
+        })
+    {
+        return Err("devcontainer contains a host-specific non-Docker mount".into());
     }
     Ok(())
 }
@@ -342,7 +430,11 @@ fn audit_tree_manifest(root: &Path, manifest: &Path, tree_root: &Path) -> Result
         .into());
     }
     let mut observed = std::collections::BTreeMap::new();
-    for entry in walkdir::WalkDir::new(&tree).min_depth(1) {
+    for entry in walkdir::WalkDir::new(&tree)
+        .min_depth(1)
+        .into_iter()
+        .filter_entry(|entry| !(entry.file_type().is_dir() && entry.file_name() == "target"))
+    {
         let entry = entry?;
         if entry.file_type().is_symlink() {
             return Err(format!(
@@ -493,11 +585,112 @@ pub fn audit_tools_ci(root: &Path) -> Result<(), Fail> {
         .and_then(|value| value.get("hosts"))
         .and_then(toml::Value::as_array)
         .ok_or("tools.lock has no supported-host array")?;
-    if hosts.len() != 1
-        || hosts[0].as_str() != Some("x86_64-unknown-linux-gnu")
-        || repo_model::release::HOST_TARGETS != ["x86_64-unknown-linux-gnu"]
+    let claimed_hosts = hosts
+        .iter()
+        .map(|host| host.as_str().ok_or("supported host is not a string"))
+        .collect::<Result<Vec<_>, _>>()?;
+    if claimed_hosts != repo_model::release::HOST_TARGETS
+        || claimed_hosts != ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
     {
         return Err("supported host claims differ between tools.lock and release policy".into());
+    }
+    let sdk_dockerfile = std::fs::read_to_string(root.join("sdk/Dockerfile"))?;
+    for (name, value) in lock
+        .get("sdk-bases")
+        .and_then(toml::Value::as_table)
+        .ok_or("tools.lock has no sdk-bases table")?
+    {
+        let value = value
+            .as_str()
+            .ok_or_else(|| format!("sdk-bases.{name} is not a string"))?;
+        let (source, source_name) = if name == "devcontainer" {
+            (&dockerfile, ".devcontainer/Dockerfile")
+        } else {
+            (&sdk_dockerfile, "sdk/Dockerfile")
+        };
+        if !source.contains(value) {
+            return Err(format!("sdk-bases.{name} is not bound by {source_name}").into());
+        }
+    }
+    let adapters = lock
+        .get("target-adapters")
+        .and_then(toml::Value::as_table)
+        .ok_or("tools.lock has no target-adapters table")?;
+    for (name, relative) in [
+        ("compose", "adapters/compose.json"),
+        ("github_pages", "adapters/github-pages.json"),
+        ("kubernetes", "adapters/kubernetes.json"),
+        (
+            "ingress_nginx_kind_manifest",
+            "adapters/ingress-nginx-kind-v1.15.1.yaml",
+        ),
+    ] {
+        let expected = adapters
+            .get(name)
+            .and_then(toml::Value::as_str)
+            .ok_or_else(|| format!("target-adapters.{name} is absent"))?;
+        let actual = format!(
+            "sha256:{:x}",
+            sha2::Sha256::digest(std::fs::read(root.join(relative))?)
+        );
+        if expected != actual {
+            return Err(format!("target-adapters.{name} digest is stale").into());
+        }
+    }
+    let kubernetes_adapter = std::fs::read_to_string(root.join("adapters/kubernetes.json"))?;
+    for name in ["ingress_nginx_controller", "ingress_nginx_admission"] {
+        let value = adapters
+            .get(name)
+            .and_then(toml::Value::as_str)
+            .ok_or_else(|| format!("target-adapters.{name} is absent"))?;
+        if !kubernetes_adapter.contains(value) {
+            return Err(format!("target-adapters.{name} is not bound by kubernetes.json").into());
+        }
+    }
+    for architecture in ["amd64", "arm64"] {
+        let downloads = lock
+            .get("sdk-downloads")
+            .and_then(|value| value.get(architecture))
+            .and_then(toml::Value::as_table)
+            .ok_or_else(|| format!("tools.lock has no sdk-downloads.{architecture} table"))?;
+        for (name, digest) in downloads {
+            let digest = digest
+                .as_str()
+                .ok_or_else(|| format!("sdk-downloads.{architecture}.{name} is not a string"))?;
+            if digest.len() != 64
+                || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                || !sdk_dockerfile.contains(digest)
+            {
+                return Err(format!(
+                    "sdk-downloads.{architecture}.{name} is not checksum-bound by sdk/Dockerfile"
+                )
+                .into());
+            }
+        }
+    }
+    let sdk_sources = format!(
+        "{}{}{}{}{}",
+        sdk_dockerfile,
+        std::fs::read_to_string(root.join("sdk/generate-inventory.mjs"))?,
+        std::fs::read_to_string(root.join("sdk/devcontainer-cli/package-lock.json"))?,
+        std::fs::read_to_string(root.join("sdk/oracles/package-lock.json"))?,
+        std::fs::read_to_string(root.join("sdk/runtime/package-lock.json"))?
+    );
+    for table in ["sdk-tools", "runtime-libraries"] {
+        for (name, version) in lock
+            .get(table)
+            .and_then(toml::Value::as_table)
+            .ok_or_else(|| format!("tools.lock has no {table} table"))?
+        {
+            let version = version
+                .as_str()
+                .ok_or_else(|| format!("{table}.{name} is not a string"))?;
+            if !sdk_sources.contains(version) {
+                return Err(
+                    format!("{table}.{name} is not version-bound by the SDK inputs").into(),
+                );
+            }
+        }
     }
     for value in [
         "1.97.1",

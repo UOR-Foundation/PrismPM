@@ -414,6 +414,167 @@ exit = 1
 statement = "A network operation was attempted during an offline verification stage."
 
 [[error]]
+code = "PP1101"
+title = "Missing or invalid immutable lock"
+class = "configuration"
+exit = 2
+statement = "A required standards, SDK, dependency, adapter, or deployment lock is missing, noncanonical, incomplete, or mutable."
+
+[[error]]
+code = "PP2101"
+title = "Invalid production system closure"
+class = "model"
+exit = 3
+statement = "The production-system graph has an absent, duplicate, dangling, cyclic, incompatible, unsatisfied, or incomplete modeled value."
+
+[[error]]
+code = "PP2102"
+title = "Invalid environment or secret binding"
+class = "model"
+exit = 3
+statement = "An environment value is undeclared or ill-typed, changes immutable behavior, or a secret value entered a model or artifact."
+
+[[error]]
+code = "PP2103"
+title = "Unsafe migration or lifecycle transition"
+class = "model"
+exit = 3
+statement = "A migration, rollback, recovery, drift, retirement, or compatibility transition is absent, unordered, unsafe, or unauthorized."
+
+[[error]]
+code = "PP5401"
+title = "Authority resolution failure"
+class = "authority"
+exit = 4
+statement = "An authority source, edition, immutable identity, license, signature, supersession rule, or lawful acquisition binding could not be resolved."
+
+[[error]]
+code = "PP5402"
+title = "Authority bytes or signature mismatch"
+class = "authority"
+exit = 4
+statement = "Acquired authority or oracle bytes disagree with their locked digest or published signature."
+
+[[error]]
+code = "PP5403"
+title = "Oracle invocation failure"
+class = "authority"
+exit = 4
+statement = "A digest-bound oracle was missing, escaped isolation, exceeded a bound, returned an unknown exit, or validated a different subject."
+
+[[error]]
+code = "PP5404"
+title = "Insufficient standards coverage"
+class = "authority"
+exit = 4
+statement = "A standards claim exceeds the exact requirements covered by its authoritative schema, corpus, conformance tool, or reference implementation."
+
+[[error]]
+code = "PP5405"
+title = "Stale authority or oracle evidence"
+class = "authority"
+exit = 4
+statement = "Authority, oracle, vulnerability, license, or target evidence is stale for the declared policy or uses a different edition."
+
+[[error]]
+code = "PP6101"
+title = "Unverified product release"
+class = "artifact"
+exit = 5
+statement = "A build, publication, promotion, run, or deployment selected a release without complete verification bound to its root digest."
+
+[[error]]
+code = "PP6201"
+title = "Registry operation failure"
+class = "registry"
+exit = 6
+statement = "An OCI registry authentication, upload, download, discovery, referrer, concurrency, or remote-byte verification operation failed."
+
+[[error]]
+code = "PP6301"
+title = "Invalid OCI release graph"
+class = "artifact"
+exit = 5
+statement = "An OCI descriptor graph has a digest, size, media type, subject, role, closure, duplication, dangling edge, or cycle disagreement."
+
+[[error]]
+code = "PP6401"
+title = "Supply-chain policy rejection"
+class = "policy"
+exit = 7
+statement = "A signature, signer, builder, provenance, SBOM, vulnerability, license, freshness, promotion, or trust-policy requirement was not met."
+
+[[error]]
+code = "PP7001"
+title = "Target capability mismatch"
+class = "target"
+exit = 8
+statement = "The selected target or adapter cannot satisfy the model, API version, capability, identity, storage, isolation, or policy contract."
+
+[[error]]
+code = "PP7101"
+title = "Deployment plan invalid or stale"
+class = "deployment"
+exit = 9
+statement = "A deployment plan is incomplete, noncanonical, expired, destructive without policy, or bound to a different observed target state."
+
+[[error]]
+code = "PP7901"
+title = "Backup or recovery failure"
+class = "recovery"
+exit = 9
+statement = "A modeled backup, integrity check, clean-target restore, acceptance replay, or RPO/RTO bound failed or lacks digest-bound evidence."
+
+[[error]]
+code = "PP7201"
+title = "Deployment health or SLO failure"
+class = "health"
+exit = 10
+statement = "Startup, readiness, liveness, contract, telemetry, acceptance, or bounded SLO evaluation failed for the deployed digest."
+
+[[error]]
+code = "PP7301"
+title = "Deployment drift detected"
+class = "drift"
+exit = 11
+statement = "Observed target state differs from both the desired and last-applied identities or contains unmanaged behavior."
+
+[[error]]
+code = "PP7401"
+title = "Rollback safety failure"
+class = "rollback"
+exit = 12
+statement = "The requested prior release or data state is unavailable, unaccepted, incompatible, or unsafe to restore without a forward recovery."
+
+[[error]]
+code = "PP7501"
+title = "Operation authorization failure"
+class = "authorization"
+exit = 13
+statement = "Publication, deployment, rollback, secret access, migration, or destruction lacks the exact modeled identity and environment authorization."
+
+[[error]]
+code = "PP7601"
+title = "Operation timeout or resource exhaustion"
+class = "resource"
+exit = 14
+statement = "A controller, adapter, oracle, registry, runtime, or recovery operation exceeded its modeled time, output, memory, storage, or concurrency bound."
+
+[[error]]
+code = "PP7701"
+title = "Retirement or destruction refused"
+class = "authorization"
+exit = 13
+statement = "Retirement or destruction is not separately requested, retention-safe, state-bound, and authorized for the selected environment."
+
+[[error]]
+code = "PP7801"
+title = "Secret material detected"
+class = "policy"
+exit = 7
+statement = "A source, lock, plan, artifact, OCI blob, BOM, attestation, log, or evidence value contains prohibited secret material."
+
+[[error]]
 code = "PP9001"
 title = "Internal invariant failure"
 class = "internal"

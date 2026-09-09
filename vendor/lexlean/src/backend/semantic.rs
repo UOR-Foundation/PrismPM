@@ -898,13 +898,13 @@ public instance : Quotient Int where
 public class Appendable (α : Type) where append : α -> α -> α
 public instance {α : Type} : Appendable (List α) where append := List.append
 public instance : Appendable ByteArray where append := ByteArray.append
-@[noinline] public def append {α : Type} [Appendable α] (left right : α) : α := Appendable.append left right
+@[expose] public def append {α : Type} [Appendable α] (left right : α) : α := Appendable.append left right
 
 public class Lengthable (α : Type) where length : α -> Nat
 public instance {α : Type} : Lengthable (List α) where length := List.length
 public instance : Lengthable ByteArray where length := ByteArray.size
 public instance : Lengthable String where length := String.length
-@[noinline] public def length {α : Type} [Lengthable α] (value : α) : Nat := Lengthable.length value
+@[expose] public def length {α : Type} [Lengthable α] (value : α) : Nat := Lengthable.length value
 
 @[expose] public def listIndex {α : Type} : List α -> Nat -> Option α
   | [], _ => none
@@ -954,6 +954,33 @@ end LexLeanRuntime
 }
 
 /// Render one semantic module as prose-free Lean.
+fn contains_lean_comment_outside_string(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut index = 0_usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+        } else if byte == b'"' {
+            in_string = true;
+        } else if index + 1 < bytes.len()
+            && matches!((byte, bytes[index + 1]), (b'-', b'-') | (b'/', b'-'))
+        {
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
 pub fn render_lean(
     checked: &CheckedModule,
     module: &SemanticModule,
@@ -1106,13 +1133,38 @@ pub fn render_lean(
     text.push_str("\nend ");
     text.push_str(&document.lean_module);
     text.push('\n');
-    if text.contains("--") {
+    if contains_lean_comment_outside_string(&text) {
         return Err(Diagnostic::new(
             code!("LLI9001"),
             "phase lean-backend: semantic lowering produced a comment token",
         ));
     }
     Ok(emit(checked, &text, "semantic-lean-module"))
+}
+
+#[cfg(test)]
+mod comment_tests {
+    #[test]
+    fn imported_list_construction_remains_kernel_reducible() {
+        let runtime = super::portable_runtime();
+        for declaration in ["append", "length"] {
+            assert!(runtime.contains(&format!("@[expose] public def {declaration}")));
+            assert!(!runtime.contains(&format!("@[noinline] public def {declaration}")));
+        }
+    }
+
+    #[test]
+    fn comment_tokens_in_generated_string_literals_are_data() {
+        assert!(!super::contains_lean_comment_outside_string(
+            r#"def value := \"--config=locked /- literal\""#
+        ));
+        assert!(super::contains_lean_comment_outside_string(
+            "def value := true -- generated comment\n"
+        ));
+        assert!(super::contains_lean_comment_outside_string(
+            "def value := /- generated comment -/ true\n"
+        ));
+    }
 }
 
 fn tex_escape(text: &str) -> String {

@@ -7,11 +7,13 @@ verified roots, and generic generators produce Cargo, Core-Wasm, View, browser,
 and Hologram artifacts. Prism application behavior is never supplied by
 handwritten Lean or target-specific application code.
 
-The historical `v0.1.0` release is a systems-modeling prototype. The completed
-application line is `v0.2.0`, and it is releasable only when the generated
+The historical `v0.1.0` release is a systems-modeling prototype and `v0.2.0`
+is the completed portable-application line. The production-system SDK is
+`v0.3.0`, and it is releasable only when the generated
 `prism-stdlib` and `prism-calculator` crates, `Calculator.holo`, the independent
 Hologram execution evidence, and the public `calculator-example` Pages
-application all pass the atomic release contract in [SPEC.md](SPEC.md).
+application and complete CalculatorSystem reference all pass the atomic release
+contract in [SPEC.md](SPEC.md).
 
 ## Artifact model
 
@@ -102,3 +104,9 @@ just vv
 only by `prismpm/application-acceptance/1`, and ecosystem completion additionally
 requires the final cross-repository release manifest. See [CONFORMANCE.md](CONFORMANCE.md),
 [ERRORS.md](ERRORS.md), and [VERIFICATION.md](VERIFICATION.md).
+
+For a built immutable product release, `prismpm conformance
+NAME@sha256:DIGEST` runs the SDK-contained 147-feature and 83-diagnostic corpus
+and attaches its digest-bound canonical production-acceptance transcript. The
+same command is available through the shared action; it does not rebuild the
+release or infer coverage from registry membership.

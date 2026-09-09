@@ -359,6 +359,144 @@ A network operation was attempted during an offline verification stage.
 
 Class: `security`. Exit code: 1.
 
+## `PP1101` --- Missing or invalid immutable lock
+
+A required standards, SDK, dependency, adapter, or deployment lock is missing, noncanonical, incomplete, or mutable.
+
+Class: `configuration`. Exit code: 2.
+
+## `PP2101` --- Invalid production system closure
+
+The production-system graph has an absent, duplicate, dangling, cyclic, incompatible, unsatisfied, or incomplete modeled value.
+
+Class: `model`. Exit code: 3.
+
+## `PP2102` --- Invalid environment or secret binding
+
+An environment value is undeclared or ill-typed, changes immutable behavior, or a secret value entered a model or artifact.
+
+Class: `model`. Exit code: 3.
+
+## `PP2103` --- Unsafe migration or lifecycle transition
+
+A migration, rollback, recovery, drift, retirement, or compatibility transition is absent, unordered, unsafe, or unauthorized.
+
+Class: `model`. Exit code: 3.
+
+## `PP5401` --- Authority resolution failure
+
+An authority source, edition, immutable identity, license, signature, supersession rule, or lawful acquisition binding could not be resolved.
+
+Class: `authority`. Exit code: 4.
+
+## `PP5402` --- Authority bytes or signature mismatch
+
+Acquired authority or oracle bytes disagree with their locked digest or published signature.
+
+Class: `authority`. Exit code: 4.
+
+## `PP5403` --- Oracle invocation failure
+
+A digest-bound oracle was missing, escaped isolation, exceeded a bound, returned an unknown exit, or validated a different subject.
+
+Class: `authority`. Exit code: 4.
+
+## `PP5404` --- Insufficient standards coverage
+
+A standards claim exceeds the exact requirements covered by its authoritative schema, corpus, conformance tool, or reference implementation.
+
+Class: `authority`. Exit code: 4.
+
+## `PP5405` --- Stale authority or oracle evidence
+
+Authority, oracle, vulnerability, license, or target evidence is stale for the declared policy or uses a different edition.
+
+Class: `authority`. Exit code: 4.
+
+## `PP6101` --- Unverified product release
+
+A build, publication, promotion, run, or deployment selected a release without complete verification bound to its root digest.
+
+Class: `artifact`. Exit code: 5.
+
+## `PP6201` --- Registry operation failure
+
+An OCI registry authentication, upload, download, discovery, referrer, concurrency, or remote-byte verification operation failed.
+
+Class: `registry`. Exit code: 6.
+
+## `PP6301` --- Invalid OCI release graph
+
+An OCI descriptor graph has a digest, size, media type, subject, role, closure, duplication, dangling edge, or cycle disagreement.
+
+Class: `artifact`. Exit code: 5.
+
+## `PP6401` --- Supply-chain policy rejection
+
+A signature, signer, builder, provenance, SBOM, vulnerability, license, freshness, promotion, or trust-policy requirement was not met.
+
+Class: `policy`. Exit code: 7.
+
+## `PP7001` --- Target capability mismatch
+
+The selected target or adapter cannot satisfy the model, API version, capability, identity, storage, isolation, or policy contract.
+
+Class: `target`. Exit code: 8.
+
+## `PP7101` --- Deployment plan invalid or stale
+
+A deployment plan is incomplete, noncanonical, expired, destructive without policy, or bound to a different observed target state.
+
+Class: `deployment`. Exit code: 9.
+
+## `PP7901` --- Backup or recovery failure
+
+A modeled backup, integrity check, clean-target restore, acceptance replay, or RPO/RTO bound failed or lacks digest-bound evidence.
+
+Class: `recovery`. Exit code: 9.
+
+## `PP7201` --- Deployment health or SLO failure
+
+Startup, readiness, liveness, contract, telemetry, acceptance, or bounded SLO evaluation failed for the deployed digest.
+
+Class: `health`. Exit code: 10.
+
+## `PP7301` --- Deployment drift detected
+
+Observed target state differs from both the desired and last-applied identities or contains unmanaged behavior.
+
+Class: `drift`. Exit code: 11.
+
+## `PP7401` --- Rollback safety failure
+
+The requested prior release or data state is unavailable, unaccepted, incompatible, or unsafe to restore without a forward recovery.
+
+Class: `rollback`. Exit code: 12.
+
+## `PP7501` --- Operation authorization failure
+
+Publication, deployment, rollback, secret access, migration, or destruction lacks the exact modeled identity and environment authorization.
+
+Class: `authorization`. Exit code: 13.
+
+## `PP7601` --- Operation timeout or resource exhaustion
+
+A controller, adapter, oracle, registry, runtime, or recovery operation exceeded its modeled time, output, memory, storage, or concurrency bound.
+
+Class: `resource`. Exit code: 14.
+
+## `PP7701` --- Retirement or destruction refused
+
+Retirement or destruction is not separately requested, retention-safe, state-bound, and authorized for the selected environment.
+
+Class: `authorization`. Exit code: 13.
+
+## `PP7801` --- Secret material detected
+
+A source, lock, plan, artifact, OCI blob, BOM, attestation, log, or evidence value contains prohibited secret material.
+
+Class: `policy`. Exit code: 7.
+
 ## `PP9001` --- Internal invariant failure
 
 An internal compiler or runtime invariant was violated.

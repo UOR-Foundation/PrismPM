@@ -7,6 +7,12 @@ byte after observation. The clean restoring commit for the final falsification
 pass is `7752e4ea7f156ec613f7b052af9b430d6e24d61d`; the implementation baseline is
 `2745b0fb710c5fc1b13c38e82ff101106056c287`.
 
+The historical restoration/source commits above identify the original
+falsification campaign, not the PrismPM 0.3.0 release identity. Every current
+`just vv` run writes `target/vv-evidence.json` against the exact checked-out
+commit and all 15 gates; release-check rejects stale evidence or a different
+commit.
+
 The records below distinguish a gate failure from a later gate incidentally
 noticing the same defect. Exact diagnostics are included where they are stable;
 otherwise the asserted semantic outcome is recorded. No defect is present in the
@@ -26,8 +32,9 @@ release tree.
 | 10 | Schema and goldens | Nondeterministic Lake ordinals/root-bound evidence | Exact golden comparison fails | Output normalized and evidence root-independent |
 | 11 | Export and execution | Generated harness used `usize` where `u64` is required | Rust compilation fails | Harness uses the declared ABI type |
 | 12 | Reproducibility | `.olean` bytes and Lake output depended on absolute root/schedule | Two-root byte comparison fails | Root-independent compile and normalization |
-| 13 | Dependency policy | Workspace `serde` requirement changed to `*` | `cargo deny` bans check fails | Exact requirement restored |
-| 14 | Package/public API | `vendor/**` removed from Cargo package selection | Package gate reports omitted Lean payload | Restoring commit `7752e4e` |
+| 13 | Authoritative upstream conformance | Invalid OTLP/HTTP identifiers, mutated OCI layout, and always-pass/mismatched oracle fixtures | Pinned upstream runner or official corpus rejects the subject at its registered diagnostic | Canonical fixtures and exact authority bindings restored |
+| 14 | Dependency policy | Workspace `serde` requirement changed to `*` | `cargo deny` bans check fails | Exact requirement restored |
+| 15 | Package/public API | `vendor/**` removed from Cargo package selection | Package gate reports omitted Lean payload | Restoring commit `7752e4e` |
 
 ## Gate 1 — formatting
 
@@ -160,7 +167,19 @@ Prism normalizes only the permitted successful-output volatility. The restored
 gate compares 134 build artifacts and 8 verification artifacts byte for byte and
 requires equal build and attestation identities.
 
-## Gate 13 — dependency policy
+## Gate 13 — authoritative upstream corpora, registry, and runtime conformance
+
+This gate executes imported, immutable authority assets rather than a
+Prism-authored substitute: the official JSON Schema and Unicode corpora,
+upstream OCI Image and Runtime tests, the official OCI Distribution suite
+against a clean registry, and every external oracle runner in the SDK's
+network-denied sandbox. Permanent mutations cover an oracle that always
+passes, never executes, targets a different file or edition, changes bytes, or
+accepts a malformed subject. During implementation, base64 OTLP trace/span IDs
+were rejected because OTLP/HTTP JSON requires fixed-length hexadecimal IDs;
+the corrected corpus preserves that negative boundary.
+
+## Gate 14 — dependency policy
 
 The workspace `serde` requirement was temporarily changed to `*`.
 `cargo deny --frozen --all-features check` reported wildcard requirements for
@@ -170,12 +189,12 @@ Duplicate-version notices remain warnings for reviewed transitive dependency
 families; licenses, advisories, wildcard requirements, registries, and the
 exact pinned Hologram Git source remain deny-level checks.
 
-## Gate 14 — packaged crate and downstream public API
+## Gate 15 — packaged crate and downstream public API
 
 Test commit `8c644c90ec5bcb8b7db6aa2e5b8f8a951004e0ff` removed
 `vendor/**` from `crates/prismpm/Cargo.toml`, making Cargo omit the vendored Lean
 payload. An isolated temporary command route invoked the same
-`package_api_check` function used by gate 14 and failed with:
+`package_api_check` function used by gate 15 and failed with:
 
 ```text
 gate failed: packaged crate omits vendor/lean4-prod/lean.tar
@@ -183,7 +202,7 @@ gate failed: packaged crate omits vendor/lean4-prod/lean.tar
 
 The full `vv` entry point also rejected the manifest mutation at gate 10 because
 the package manifest is a build input; the isolated call establishes that gate
-14 independently rejects the package closure. Restoring commit
+15 independently rejects the package closure. Restoring commit
 `7752e4ea7f156ec613f7b052af9b430d6e24d61d` removed the temporary route and
 restored the include. The gate builds a Cargo-selected package tree,
 verifies required payload and forbidden-cache closure, rewrites only the
@@ -192,7 +211,9 @@ downstream consumer against the public Controller API.
 
 ## Release criterion
 
-Only a clean, annotated `v0.1.0` tag whose exact commit has produced
-`target/vv-evidence.json` with all gates 1 through 14 may pass
-`just release-check`. Release artifacts are built twice and must be identical;
-their checksums and SBOM are produced only after that comparison.
+Only a clean, annotated `v0.3.0` tag whose exact commit has produced
+`target/vv-evidence.json` with all gates 1 through 15 may pass
+`just release-check`. Release artifacts and every platform-specific SDK,
+runtime, adapter, and oracle image are built twice and must be identical;
+their checksums, SPDX SBOMs, provenance attestations, and signatures are
+produced only for those accepted bytes.

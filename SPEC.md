@@ -17,9 +17,12 @@ reproduce a standard, grant certification, or prove facts asserted by a
 standard. ISO/IEC 25019, ISO/IEC 27034 parts other than 1 and 5, quality-in-use
 outcomes, and organizational certification are outside the Holo/1 baseline.
 
-The only supported and normative host for PrismPM 0.2.0 is
-`x86_64-unknown-linux-gnu`. Rust 1.97.1 and Lean 4.32.1 are mandatory. Tool
-installer identities and the supported-host list are closed by `tools.lock`.
+The normative PrismPM 0.3.0 interface is the digest-pinned Linux SDK OCI index
+for `linux/amd64` and `linux/arm64`. Native archives support
+`x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`; other hosts use the
+SDK through Docker and the Development Container Specification. Rust 1.97.1
+and Lean 4.32.1 are mandatory inside that SDK. Tool and platform identities are
+closed by `prismpm.lock` and `standards.lock`.
 
 ### 1.1 Project configuration
 
@@ -195,7 +198,7 @@ and the complete Holo/1 family described in §3. Files, sockets, processes,
 clocks, locale, environment, nondeterministic randomness, threads, dynamic
 loading, floating point, and ambient POSIX authority are excluded.
 
-The generated Cargo package is `prism-stdlib` version 0.1.0, licensed
+The generated Cargo package is `prism-stdlib` version 0.2.0, licensed
 `MIT OR Apache-2.0`, with only the default `std` feature. Disabling default
 features retains the same semantic core for Core-Wasm. The package contains no
 path or Git dependency. Its generated-source manifest binds every output to
@@ -348,22 +351,23 @@ no absolute checkout path, hostname, locale text, random identifier, timestamp,
 or traversal-order dependence.
 
 `cargo xtask vv` is the sole normative acceptance entry point and `just vv` is
-its alias. It performs these 14 non-mutating gates in order: formatting; model,
+its alias. It performs these 15 non-mutating gates in order: formatting; model,
 diagnostic, standards, and generated-document validation; SPEC/register/
 scenario/test links; source/error/unsafe/dependency/generated-file audits;
 Clippy with warnings denied; workspace unit and property tests; conformance and
 negative fixtures; generated Lean build/replay/axiom/source audits; LexLean
 format/lock plus Prism check/build/verify; Holo schema and reviewed goldens;
 named export/coverage/Rust/execution evidence; two-root reproducibility;
-dependency policy; and packaged-crate/downstream-API checks. Golden and fixture
+authoritative upstream corpora/registry/runtime conformance; dependency policy;
+and packaged-crate/downstream-API checks. Golden and fixture
 rewriting require separate explicit commands and a review reason. Linux CI
 runs that exact command in the pinned devcontainer. Acceptance evidence is
-canonical `prismpm/vv-evidence/1`, lists all 14 gates, records `passed`, and
+canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
-Release version 0.2.0 is atomic across PrismPM, LexLean 0.2.0, the exact
-lean4-prod fork revision, published `prism-stdlib = 0.1.0`, published
+Release version 0.2.0 was the portable application baseline across PrismPM,
+LexLean 0.2.0, the exact lean4-prod fork revision, `prism-stdlib = 0.1.0`,
 `prism-calculator = 0.1.0`, `Calculator.holo`, and
 `UOR-Foundation/calculator-example = v0.1.0` served at the sole Pages URL
 `https://uor-foundation.github.io/calculator-example/`. It requires clean
@@ -375,6 +379,332 @@ all source/model/compiler/package/Wasm/View/Hologram/Pages identities. Missing
 credentials, namespace ownership, public bytes, Pages deployment, or any
 failed/conditional/stale result stops release. Holo/1 freezes only when that
 manifest and all referenced public artifacts have been verified.
+
+## 10. Immutable authorities and imported oracles
+
+An authority binding is a value of `prismpm/authority-binding/1`. It identifies
+the issuing standards body or upstream project, canonical standard identifier,
+exact edition, immutable sources and their acquired SHA-256 values, licenses,
+signatures when published, redistribution decisions, and explicit supersession
+policy. A source role is one of normative, informative, schema, corpus, oracle,
+or implementation. Retrieval time is evidence metadata and never participates
+in platform-independent content identity.
+
+A claimed signed Git tag also binds the upstream account's exact published
+public-key bytes, full fingerprint, key-record identifier, source endpoint,
+legal classification, and redistribution decision. GitHub's provider result is
+acquisition metadata only. The locked SDK independently replays OpenPGP or SSH
+signatures offline in the same network-denied sandbox used for external
+oracles; key, payload, signature, tag-object identity, and target revision must
+all agree.
+
+An oracle is distinct from its standard. Its binding fixes the executable or
+portable data identity, untouched upstream payload digest, supported platform,
+input and output media types, argv contract, expected exits, network policy,
+resource bounds, covered requirements, and uncovered requirements. A wrapper
+may normalize invocation and diagnostics but cannot enlarge upstream coverage.
+Schema validity, corpus passage, conformance-suite passage, reference-runtime
+agreement, formal proof, and prose review are different evidence kinds and are
+never collapsed into one `verified` boolean.
+
+`authority resolve` is the only operation that may propose new authority
+identities. Without `--locked` it emits a deterministic reviewable lock diff;
+with `--locked` it compares and fails on change. `fetch --locked` acquires only
+locked URLs, checks signatures where published, checks every digest, and
+atomically moves complete content into the immutable cache. Oracle verification
+reads a populated cache without network, runs a direct executable with an empty
+environment, read-only inputs and bounded scratch, and emits an in-toto
+validation statement whose subject is the validated artifact.
+
+Every active oracle has upstream positive and negative cases where available
+and a Prism mutation corpus. An oracle that never executes, always succeeds,
+reads the wrong subject, uses another edition, or has changed bytes fails with
+the authority/oracle diagnostics in the PP54xx range. If no executable oracle
+exists, coverage is `not-executable`; PrismPM cannot manufacture an external
+conformance claim from its own validator.
+
+## 11. Production system model and projections
+
+`prismpm/system-model/1` is a closed projection of one LexLean semantic graph.
+The graph defines product identity and ownership; components and artifacts;
+interfaces, schemas, calls and events; topology and capabilities; typed
+configuration and secret references; workload and user identity; persistence,
+migrations, backup and recovery; architecture, threats, risks, controls and
+quality; telemetry, probes, SLIs, SLOs and alerts; supply-chain, rollout,
+rollback, drift, retirement and acceptance policy; and target bindings.
+
+Optionality is explicit. A profile field is either present or has a typed
+`none` value; a missing JSON member is never interpreted as a default. Entity
+IDs are NFC, unique, and ordered by UTF-8 bytes. References close over those
+IDs. Component dependencies and deployment steps are acyclic; explicitly
+modeled runtime communication cycles are permitted. Compatibility is a closed
+value, and a target must satisfy every required capability before projection.
+Late-bound values are limited to declared parameters and secret references and
+do not participate in the platform-independent release digest. Their binding
+and observation digests do participate in plan and deployment evidence.
+
+The model projects standard-native OpenAPI, AsyncAPI, CloudEvents, SPDX,
+OpenTelemetry, Compose, and Kubernetes input documents. Emitters are total over
+accepted semantic snapshots and introduce no port, permission, resource,
+default, behavior, or secret. An application release, including Holo/1, is a
+referenced artifact in a system; its bytes and semantics are not reinterpreted.
+All Prism-owned system types, validators and theorems are `.lex.tex` values.
+LexLean is the only Lean generation path and named lean4-prod roots are the
+only production code-export path.
+
+## 12. SDK and lock contract
+
+The PrismPM 0.3 SDK consists of the CLI/library, LexLean, exact Lean and
+lean4-prod tools, prism-stdlib, schemas, standard bindings, redistributable
+oracles, adapters, and conformance tooling. Its canonical inventory maps every
+permitted subprocess name to version, platform and SHA-256. An undeclared or
+changed executable, including one found earlier on `PATH`, is rejected.
+
+`prismpm/sdk-lock/1` pins the multi-platform SDK manifest digest, standards
+lock, stdlib, compilers, runtime and base images, adapters, oracles, actions and
+workflow revisions. Ordinary commands never update it. `fetch --locked`
+materializes all content required for subsequent check, build, test, package,
+verify and release assembly with networking disabled. Native Linux archives
+and the OCI SDK implement the same canonical CLI protocol and must produce the
+same platform-independent content and diagnostics.
+
+`prismpm-platform-equivalence` is an SDK-internal evidence tool, not a public
+PrismPM application command. It compares complete release trees produced on
+`amd64` and `arm64`, rejects every byte or path difference in the
+platform-independent closure, and emits the registered canonical
+`prismpm/platform-equivalence/1` report. The report binds the release, model,
+SDK, complete file manifest, and the model's explicit platform-requirement
+classification. Reference repositories execute it directly from the signed
+SDK inventory; it has no host fallback or application-specific policy.
+
+An SDK release is bootstrapped by the prior accepted SDK plus independently
+pinned language and kernel tools. The prior SDK checks the new source/model;
+the new SDK rebuilds in two clean absolute roots; an independent kernel/tool
+path verifies formal evidence. Provenance records both stages and cannot cite
+the output as its sole input or verifier.
+
+## 13. OCI product-release graph
+
+Distribution uses OCI Image and Distribution 1.1. The root product release is
+a standard OCI artifact manifest whose Prism-owned config is
+`prismpm/product-release/1`. Descriptors reference every component image or
+index, Wasm component, Cargo package, `.holo`, API/event/schema document,
+deployment input, migration, immutable configuration, license and runtime
+dependency by digest. The root includes the canonical `prismpm.lock` and
+`standards.lock` as ordinary OCI layers: `sdk_lock` and `standards_lock` name
+their exact file digests, while `sdk_digest` names the manifest or index digest
+from the lock's immutable `sdk_image` reference. The SDK image is also an exact
+resolved dependency in SLSA provenance. Secret values and mutable tags are
+forbidden.
+
+SPDX BOMs, in-toto/SLSA provenance, standard validation, signatures,
+vulnerability and license results, and deployment evidence are OCI referrers
+whose `subject` is exact. Roles are unique where policy requires one result.
+Dangling descriptors, digest or size disagreement, confused subjects, and
+cycles fail before a verified root is published.
+
+`build --locked -t REFERENCE CONTEXT` creates local content only and returns
+`prismpm/product-release-result/1`. It runs all required gates before writing
+the verified root. `push` uploads only that root's existing closure and confirms
+remote descriptors. `pull` verifies trust and complete closure in a staging
+cache before atomic publication. `inspect` parses without executing. Promotion
+from development to candidate to accepted adds signed evidence or discovery
+pointers around the same digest and never rebuilds it.
+
+`verify-signature NAME@sha256:DIGEST --bundle PATH --trusted-root PATH
+--policy PATH` verifies a standard Sigstore v0.3 bundle over the canonical local
+root-manifest bytes. The SDK accepts only its pinned Cosign 3.1.3 executable and
+does not use the insecure SCT, transparency-log, or claim bypasses. The closed
+canonical policy pins the trusted-root digest, Fulcio issuer and SAN identity,
+GitHub repository, workflow and ref, deployment environment, hosted runner,
+provenance and exact release digest. Only successful cryptographic verification
+can attach the singleton same-subject signature referrer.
+
+`sign NAME@sha256:DIGEST --trusted-root PATH --policy PATH` signs those same
+canonical root-manifest bytes with the ambient GitHub Actions workload identity,
+then immediately performs the complete `verify-signature` procedure before
+attaching the exact closed policy and signature as singleton OCI referrers. It requires `id-token: write`, a protected GitHub
+environment, and network access to Sigstore; it has no local-key or unverified
+attachment mode. Signing precedes `push`, so the uploaded graph already contains
+the verified signature required by promotion.
+
+`verify-release NAME@sha256:DIGEST` obtains the policy only from that release's
+singleton policy referrer, requires its trusted-root digest to equal the SDK's
+embedded canonical root, and invokes pinned Cosign to replay the root signature,
+every promotion-statement signature, and every deployment-evidence-closure
+signature. It then independently re-evaluates exact provenance and promotion
+policy. An accepted release must additionally reproduce its acceptance closure
+and have exactly one replayed signature over the complete current deployment
+evidence. `push` and staging `pull` execute this same procedure automatically
+for every signed graph and every candidate or accepted release. A graph with
+development status may transfer without a signature only when it has no policy,
+signature, promotion, or evidence-signature referrer; it remains visibly
+unsigned and is ineligible for deployment or promotion. Serialized `verified`
+booleans are evidence fields and never trust inputs.
+
+Consumer repositories do not author trust roots or production policy files.
+`prepare-promotion NAME@sha256:DIGEST --environment NAME` runs only on a
+GitHub-hosted Actions runner, verifies the release's singleton provenance, and
+derives the complete closed policy from its exact subject, builder, source,
+parameters and dependency closure plus the ambient repository, workflow, ref,
+revision and protected-environment identity. It atomically materializes the
+SDK-embedded canonical Sigstore root and policy under SDK-owned `.prism` state;
+an existing different file, symlink, local runner, or mismatched provenance
+fails closed.
+
+`promote NAME@sha256:DIGEST --to candidate|accepted --trusted-root PATH
+--policy PATH` reverifies that stored release signature and provenance, signs the
+canonical immediate transition with the ambient GitHub Actions workload identity,
+reverifies the new bundle, and only then attaches a same-subject promotion
+referrer. Promotion requires `id-token: write`, a protected GitHub environment,
+and network access to Sigstore's signing services. There is no unsigned,
+local-key, skipped-transition, or nonempty-bundle shortcut.
+
+`sign-evidence NAME@sha256:DIGEST --all --trusted-root PATH --policy PATH`
+enumerates every deployment-evidence referrer currently attached to the exact
+release, constructs a sorted canonical closure containing each evidence
+self-digest and OCI referrer digest, and signs those closure bytes with the
+protected Actions identity. It independently verifies the standard Sigstore
+bundle and complete provenance policy before attaching the registered
+evidence-signature referrer. Omitting `--all`, an empty/ambiguous evidence set,
+or any confused evidence subject fails closed. Unsigned local deployment facts
+remain visibly development evidence and cannot satisfy this production
+boundary. The `candidate` to `accepted` transition additionally requires one
+exact-release production-acceptance referrer and exactly one verified Sigstore
+signature over the complete deployment-evidence set present at transition
+time. A subset signature, newly added unsigned observation, or missing
+acceptance transcript makes the release ineligible for accepted promotion.
+
+## 14. Controller lifecycle
+
+The stable command set is generated in `CONTRACTS.md`. Commands emit one
+canonical machine value on stdout in JSON mode and logs only on stderr. Build,
+push and run use Docker-like syntax; every artifact-consuming operation after
+build requires `name@sha256:digest`. Tags are permitted only as build-time
+discovery labels. A pushed artifact is immutable and deploy never rebuilds.
+
+`conformance NAME@sha256:DIGEST` executes the SDK-shipped PrismPM source and
+fixture closure with the SDK-shipped `prismpm-conformance` executable. It runs
+each of the 147 registered feature scenarios and each of the 83 executable
+malformed-input diagnostic triggers. The canonical transcript is bound to the
+release, capability-coverage artifact, SDK, and runner digests; any missing,
+duplicate, panicking, or differently coded execution fails before the evidence
+is attached as an OCI subject referrer. Selection flags on the lower-level
+runner support focused diagnosis but cannot produce attachable acceptance.
+
+Controller operations are path-confined, symlink-safe, cancellation-aware,
+bounded, atomic, and concurrency-safe. Operation-owned temporary state is
+removed after failure while diagnostics and redacted evidence are retained.
+
+Every target binding declares `minimumReleaseStatus` as `development`,
+`candidate`, or `accepted`. A development target accepts only a complete
+verified release graph with either no trust attachments or a fully replayed
+promotion chain; partial signatures or policy material always fail. Candidate
+and accepted targets require the complete cryptographic chain, and an accepted
+target additionally requires the accepted promotion state. This is model
+policy shared by run, deploy, migration, rollback, backup, restore, and
+retirement—not a CLI bypass flag. Explicit destructive authorization remains a
+separate requirement.
+Local `run` delegates to unmodified OCI/container/Compose runtimes, uses an
+isolated namespace, binds only modeled resources, waits for readiness, may run
+acceptance, forwards signals, and stops components in reverse dependency order.
+It runs in the foreground by default, streams runtime logs only to stderr, and
+performs graceful Compose shutdown after SIGINT or SIGTERM. Automation must
+request `run --detach` explicitly; detached mode returns only after readiness
+and acceptance and leaves the isolated deployment active.
+Hologram remains the sole `.holo` runtime host.
+
+Public exit classes are fixed by `model/errors.toml`: configuration 2, invalid
+model 3, authority 4, unverified artifact 5, registry 6, policy 7, target 8,
+deployment 9, health 10, drift 11, rollback 12, authorization 13, resource 14,
+and internal invariant 101. Caller-controlled input must never reach 101.
+
+## 15. Target planning and deployment
+
+Adapters are OCI-packaged executables over canonical model, release, plan and
+state documents. Their locks state model and target API compatibility,
+required capabilities, credential references and oracle commands. They emit
+only target-native documents and prohibit templates, shell fragments,
+post-render mutation, and unchecked target defaults.
+
+`plan` observes a target, removes only documented unstable fields, and binds
+the resulting digest. Its sorted change set includes every create, update,
+replacement, deletion, policy change, data migration, secret reference,
+downtime risk and rollback consequence. Apply compares current observation to
+the plan; any race requires a new plan. Destructive changes require both
+modeled policy and external environment authorization.
+
+Deployment order is preflight authority/signature/policy, backup, expand
+migration, stateless rollout, readiness, contract and SLO evaluation, traffic
+activation, and only then safe contract migration or cleanup. Failure stops and
+follows modeled rollback policy. State records desired, last-applied and
+observed identities separately. Rollback selects an accepted prior release and
+compatible data plan and refuses unsafe downgrade. Destroy is distinct from
+deploy and requires retention handling and explicit authorization.
+
+The initial adapters are pinned Compose and Kubernetes 1.36.4 profiles.
+Kubernetes documents pass exact OpenAPI validation, client decoding,
+server-side dry-run/admission, Kind execution and supported minor-skew tests.
+Compose documents pass the pinned Compose implementation. Target support is
+claimed only to those evidenced profiles.
+
+## 16. Supply chain, operations, and recovery
+
+SPDX 3.0.1 system/software BOM closure equals OCI graph closure and includes
+SDK, oracle, adapter, build and runtime dependencies, licenses, checksums,
+relationships and external references. in-toto Statement v1 and SLSA 1.2
+provenance bind exact subjects, source revision, builder, external parameters
+and resolved dependencies. The claimed SLSA level is limited to evidence
+provided by the accepted build platform.
+
+Production promotion requires a short-lived identity signature whose trusted
+issuer, subject, repository, workflow, ref, environment, certificate and
+transparency policy are explicit. Unsigned local development remains visibly
+distinct. Vulnerability results identify scanner and immutable database
+snapshot plus freshness; a stale offline fact cannot satisfy a current policy.
+
+OpenTelemetry logs, metrics and traces use modeled resource attributes,
+correlation and redaction and are accepted by an unmodified pinned Collector.
+Post-deployment evidence binds endpoint contracts, dependencies, migrations,
+release and component digests, telemetry receipt, SLO evaluation and drift.
+Secret values, tokens, authorization headers, and modeled sensitive fields are
+excluded from every artifact, log and evidence value.
+
+Backup is accepted only after clean-target restore, integrity verification and
+application acceptance. Recovery evidence records the source release, data
+snapshot, restored target and actual finite RPO/RTO measurements. Bounded load,
+dependency outage, process kill, network interruption, resource exhaustion,
+partial rollout, credential expiry, telemetry outage and registry outage are
+measurement scenarios, never universal reliability proofs.
+
+## 17. Template and CI bootstrap
+
+`uor/template-contract/1` retains R1-R6, claim/authority/ledger registers,
+empty-repository anti-vacuity, generated conformance documents, and planted
+defects. Its devcontainer uses the exact SDK image digest and its workflows call
+a full-commit-pinned thin action/reusable workflow that executes the same CLI.
+There is no copied validation, generation, publication or deployment logic.
+
+Untrusted pull requests check and build without write credentials. Protected
+jobs sign and push with short-lived identity. Protected environments authorize
+deployment, and post-deployment verification attaches evidence. The release
+digest is created once and passed between jobs; no deployment job rebuilds,
+uses a mutable tag, edits generated output, or skips missing evidence.
+
+Template checking is read-only. Explicit update creates a reviewable patch or
+automated pull request because GitHub template repositories do not propagate
+changes. One minimal human-reviewed bootstrap workflow stays outside generated
+model output so PrismPM cannot author the sole policy that authorizes itself.
+
+## 18. Version and compatibility policy
+
+Holo/1 is frozen. PrismPM 0.3.0 adds the production-system SDK and lifecycle;
+prism-stdlib 0.2.0 adds compatible system profiles while preserving every
+0.1.x application API and Calculator artifact contract. Public JSON schemas and
+media types have exact major compatibility; only contracts explicitly marked
+`exact-major-additive-minor` may add optional minor-version fields. Unknown
+fields in a `/1` value remain errors. An incompatible Holo change requires
+Holo/2 and is outside this release.
 
 ## Appendix A. Conformance ID Registry
 
@@ -475,3 +805,57 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SE-06` | `security` | Memory safety is enforced across all Rust crates with unsafe code forbidden. | §9 |
 | `SE-07` | `security` | Input parsing rejects excessively large inputs before memory exhaustion. | §9 |
 | `SE-08` | `security` | Dependency audits with cargo-deny enforce license and advisory policies. | §9 |
+| `AU-01` | `authorities` | Every standards claim uses a typed immutable authority binding distinct from its executable oracle. | §10 |
+| `AU-02` | `authorities` | Authority resolution writes a canonical reviewable lock and locked resolution rejects drift. | §10 |
+| `AU-03` | `authorities` | Fetch verifies signatures and digests before atomically publishing immutable cached inputs. | §10 |
+| `AU-04` | `authorities` | Authority and oracle verification reproduces from a populated cache with network access disabled. | §10 |
+| `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
+| `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
+| `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
+| `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
+| `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |
+| `SY-04` | `system` | System models deterministically project OpenAPI, AsyncAPI, CloudEvents, SPDX, OpenTelemetry, Compose, and Kubernetes inputs. | §11 |
+| `SY-05` | `system` | Late-bound configuration is typed and secret values remain external references excluded from artifacts and evidence. | §11 |
+| `SY-06` | `system` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. | §11 |
+| `DK-01` | `sdk` | One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas. | §12 |
+| `DK-02` | `sdk` | Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence. | §12 |
+| `DK-03` | `sdk` | Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics. | §12 |
+| `DK-04` | `sdk` | The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline. | §12 |
+| `DK-05` | `sdk` | SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle. | §12 |
+| `DK-06` | `sdk` | SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation. | §12 |
+| `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
+| `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
+| `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
+| `OC-04` | `oci` | Push, pull, and inspect preserve and validate complete OCI graph closure without executing artifact content or rebuilding. | §13 |
+| `OC-05` | `oci` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. | §13 |
+| `OC-06` | `oci` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. | §13 |
+| `LC-01` | `lifecycle` | The Controller owns fetch, build, push, pull, inspect, run, plan, deploy, status, rollback, and explicit destroy operations. | §14 |
+| `LC-02` | `lifecycle` | Build, push, run, and deploy accept Docker-simple command forms and return stable pipe-safe canonical result values. | §14 |
+| `LC-03` | `lifecycle` | Local run uses unmodified OCI, container, Compose, and Hologram runtimes with modeled isolation, readiness, acceptance, signals, and shutdown. | §14 |
+| `LC-04` | `lifecycle` | Controller operations are bounded, cancellable, atomic, concurrent-safe, path-confined, and idempotent where declared. | §14 |
+| `LC-05` | `lifecycle` | All caller-controlled failure boundaries return registered diagnostics in stable public exit classes without panic. | §14 |
+| `LC-06` | `lifecycle` | Generated help and shell completions describe only executable command-contract examples verified in the SDK devcontainer. | §14 |
+| `DP-01` | `deployment` | OCI-packaged target adapters consume canonical model, release, and plan documents without introducing application behavior. | §15 |
+| `DP-02` | `deployment` | The Compose adapter emits and applies only pinned Compose Specification documents with declared values and capabilities. | §15 |
+| `DP-03` | `deployment` | The Kubernetes adapter emits Kubernetes 1.36.4 resources validated by schema, decoding, dry-run admission, Kind, and supported skew. | §15 |
+| `DP-04` | `deployment` | Deployment planning is deterministic, binds observed state, and reports every create, update, replacement, deletion, migration, risk, and rollback consequence. | §15 |
+| `DP-05` | `deployment` | Deployment orders policy, backup, migration, rollout, readiness, contracts, SLOs, traffic, cleanup, and evidence and stops safely on partial failure. | §15 |
+| `DP-06` | `deployment` | Status distinguishes desired, applied, and observed identity; rollback enforces data safety; destroy requires retention policy and authorization. | §15 |
+| `OP-01` | `operations` | Modeled OpenTelemetry logs, metrics, traces, resource attributes, and correlation reach an unmodified pinned Collector. | §16 |
+| `OP-02` | `operations` | Startup, readiness, liveness, SLIs, SLOs, alerts, and finite evaluation windows are modeled and measured against exact releases. | §16 |
+| `OP-03` | `operations` | Backup is accepted only with a successful clean-target restore, integrity proof, application acceptance, and measured RPO and RTO. | §16 |
+| `OP-04` | `operations` | Bounded load, dependency, process, network, resource, rollout, credential, telemetry, and registry fault scenarios follow modeled policy. | §16 |
+| `OP-05` | `operations` | Observed deployment, health, drift, recovery, and failure evidence remains distinct from proof and binds the deployed release digest. | §16 |
+| `OP-06` | `operations` | Sensitive fields, credentials, tokens, operands, history, labels, and secret values are redacted from source-derived and observed evidence. | §16 |
+| `SC-01` | `supply-chain` | SPDX 3.0.1 BOMs close over SDK, build, oracle, adapter, application, and runtime dependencies and match OCI closure. | §16 |
+| `SC-02` | `supply-chain` | in-toto Statement v1 and SLSA 1.2 provenance bind subjects, builders, sources, parameters, dependencies, and objectively supported build level. | §16 |
+| `SC-03` | `supply-chain` | Sigstore verification enforces exact trusted issuer, subject, repository, workflow, ref, environment, certificate, and transparency policy. | §16 |
+| `SC-04` | `supply-chain` | Vulnerability and license results identify their immutable inputs and freshness and stale evidence cannot satisfy current policy. | §16 |
+| `SC-05` | `supply-chain` | Source, locks, artifacts, plans, OCI content, BOMs, attestations, logs, and evidence are verified free of secret values. | §16 |
+| `SC-06` | `supply-chain` | Supply-chain policy rejects wrong subjects or builders, incomplete graphs, tampering, unsigned promotion, and unsupported claims. | §16 |
+| `TM-01` | `template-ci` | The versioned UOR template contract preserves repository honesty, anti-vacuity, generated registers, and planted-defect policy. | §17 |
+| `TM-02` | `template-ci` | Template-derived devcontainers consume the exact signed SDK manifest digest with no floating feature, installer, action, or host-tool fallback. | §17 |
+| `TM-03` | `template-ci` | Full-SHA-pinned actions and reusable workflows invoke the same SDK digest and CLI and return declared release, plan, and evidence digests. | §17 |
+| `TM-04` | `template-ci` | Least-privilege jobs build once and pass the exact digest through protected signing, publication, deployment, and verification boundaries. | §17 |
+| `TM-05` | `template-ci` | Template checks are read-only and explicit updates produce reviewable downstream patches or pull requests without hidden branch mutation. | §17 |
+| `TM-06` | `template-ci` | All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates. | §17 |

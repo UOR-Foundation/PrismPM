@@ -1,0 +1,957 @@
+//! Closed canonical machine-contract validation.
+
+use crate::error::PrismError;
+use crate::holo::canonical::{content_id, decode_value, encode_value};
+use serde_json::Value;
+use std::collections::BTreeSet;
+
+struct Contract {
+    id: &'static str,
+    maximum_bytes: usize,
+    maximum_items: usize,
+    schema: &'static [u8],
+}
+
+const CONTRACTS: [Contract; 40] = [
+    Contract {
+        id: "prismpm/authority-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/authority-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/authority-binding/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/authority-binding.schema.json"),
+    },
+    Contract {
+        id: "prismpm/bootstrap-evidence/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/bootstrap-evidence.schema.json"),
+    },
+    Contract {
+        id: "prismpm/backup-snapshot/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/backup-snapshot.schema.json"),
+    },
+    Contract {
+        id: "prismpm/capability-coverage/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/capability-coverage.schema.json"),
+    },
+    Contract {
+        id: "prismpm/calculator-baseline/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/calculator-baseline.schema.json"),
+    },
+    Contract {
+        id: "prismpm/conformance-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/conformance-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/check-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/check-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/clean-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/clean-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/completion-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/completion-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/deployment-evidence/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/deployment-evidence.schema.json"),
+    },
+    Contract {
+        id: "prismpm/deployment-plan/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/deployment-plan.schema.json"),
+    },
+    Contract {
+        id: "prismpm/deployment-state/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/deployment-state.schema.json"),
+    },
+    Contract {
+        id: "prismpm/ecosystem-release/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/ecosystem-release.schema.json"),
+    },
+    Contract {
+        id: "prismpm/platform-equivalence/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/platform-equivalence.schema.json"),
+    },
+    Contract {
+        id: "prismpm/evidence-signature-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/evidence-signature-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/evidence-signature/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/evidence-signature.schema.json"),
+    },
+    Contract {
+        id: "prismpm/fetch-result/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/fetch-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/inspect-result/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/inspect-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/product-release-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/product-release-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/product-release/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/product-release.schema.json"),
+    },
+    Contract {
+        id: "prismpm/production-acceptance/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/production-acceptance.schema.json"),
+    },
+    Contract {
+        id: "prismpm/promotion-policy/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/promotion-policy.schema.json"),
+    },
+    Contract {
+        id: "prismpm/promotion-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/promotion-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/pull-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/pull-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/push-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/push-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/oracle-validation-attestation/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/oracle-validation-attestation.schema.json"),
+    },
+    Contract {
+        id: "prismpm/sdk-lock/1",
+        maximum_bytes: 4_194_304,
+        maximum_items: 8_192,
+        schema: include_bytes!("../schemas/sdk-lock.schema.json"),
+    },
+    Contract {
+        id: "prismpm/restore-result/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/restore-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/run-result/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/run-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/sdk-lock-update/1",
+        maximum_bytes: 4_194_304,
+        maximum_items: 8_192,
+        schema: include_bytes!("../schemas/sdk-lock-update.schema.json"),
+    },
+    Contract {
+        id: "prismpm/signature-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/signature-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/signature-closure-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/signature-closure-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/standards-lock/1",
+        maximum_bytes: 8_388_608,
+        maximum_items: 16_384,
+        schema: include_bytes!("../schemas/standards-lock.schema.json"),
+    },
+    Contract {
+        id: "prismpm/system-model/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/system-model.schema.json"),
+    },
+    Contract {
+        id: "prismpm/template-result/1",
+        maximum_bytes: 4_194_304,
+        maximum_items: 8_192,
+        schema: include_bytes!("../schemas/template-result.schema.json"),
+    },
+    Contract {
+        id: "prismpm/validation-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/validation-result.schema.json"),
+    },
+    Contract {
+        id: "uor/template-contract/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/template-contract.schema.json"),
+    },
+    Contract {
+        id: "uor/template-lock/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/template-lock.schema.json"),
+    },
+    Contract {
+        id: "prismpm/verify-result/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/verify-result.schema.json"),
+    },
+];
+
+fn contract(id: &str) -> Result<&'static Contract, PrismError> {
+    CONTRACTS
+        .iter()
+        .find(|contract| contract.id == id)
+        .ok_or_else(|| PrismError::new("PP1101", format!("unsupported contract {id}")))
+}
+
+fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> bool {
+    let keys = rows.iter().map(key).collect::<Option<Vec<_>>>();
+    keys.is_some_and(|keys| {
+        keys.windows(2)
+            .all(|pair| pair[0].as_bytes() < pair[1].as_bytes())
+    })
+}
+
+fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
+    let arrays: Vec<(&str, &str)> = match id {
+        "prismpm/capability-coverage/1" => {
+            vec![("diagnostics", "code"), ("features", "feature_id")]
+        }
+        "prismpm/platform-equivalence/1" => vec![
+            ("files", "path"),
+            ("modeled_platform_artifacts", "artifact_id"),
+        ],
+        "prismpm/standards-lock/1" => vec![("authorities", "id"), ("oracles", "id")],
+        "prismpm/sdk-lock/1" => vec![("inventory", "id")],
+        "prismpm/system-model/1" => vec![
+            ("acceptance", "id"),
+            ("alerts", "id"),
+            ("architecture", "id"),
+            ("artifacts", "id"),
+            ("backups", "id"),
+            ("calls", "id"),
+            ("capabilities", "id"),
+            ("components", "id"),
+            ("controls", "id"),
+            ("drifts", "id"),
+            ("events", "id"),
+            ("flows", "id"),
+            ("identity_requirements", "id"),
+            ("interfaces", "id"),
+            ("migrations", "id"),
+            ("parameters", "id"),
+            ("persistence", "id"),
+            ("retirements", "id"),
+            ("rollbacks", "id"),
+            ("rollouts", "id"),
+            ("schemas", "id"),
+            ("secret_references", "id"),
+            ("slis", "id"),
+            ("slos", "id"),
+            ("targets", "id"),
+            ("topology", "id"),
+        ],
+        "prismpm/deployment-plan/1" => vec![("changes", "id")],
+        "prismpm/deployment-evidence/1" => vec![("checks", "id")],
+        "prismpm/ecosystem-release/2" => vec![
+            ("actions", "path"),
+            ("artifacts", "name"),
+            ("evidence", "path"),
+            ("packages", "name"),
+            ("repositories", "name"),
+        ],
+        "uor/template-contract/1" => vec![
+            ("project_content_paths", ""),
+            ("required_paths", ""),
+            ("universal_policy_paths", ""),
+        ],
+        "uor/template-lock/1" => vec![("policy_files", "path")],
+        _ => Vec::new(),
+    };
+    for (field, key) in arrays {
+        let rows = value[field]
+            .as_array()
+            .ok_or_else(|| PrismError::new("PP1101", format!("{id}.{field} is absent")))?;
+        if !rows.is_empty()
+            && !strictly_ordered(rows, |row| {
+                if key.is_empty() {
+                    row.as_str().map(str::to_owned)
+                } else {
+                    row[key].as_str().map(str::to_owned)
+                }
+            })
+        {
+            return Err(PrismError::new(
+                "PP1101",
+                format!("{id}.{field} identities are duplicate or noncanonical"),
+            ));
+        }
+    }
+    if id == "prismpm/product-release/1" {
+        let rows = value["artifacts"]
+            .as_array()
+            .expect("schema-validated array");
+        if !strictly_ordered(rows, |row| row["digest"].as_str().map(str::to_owned)) {
+            return Err(PrismError::new(
+                "PP1101",
+                "product release artifact digests are duplicate or noncanonical",
+            ));
+        }
+        let external = value["external_artifacts"]
+            .as_array()
+            .expect("schema-validated array");
+        if !strictly_ordered(external, |row| row["reference"].as_str().map(str::to_owned)) {
+            return Err(PrismError::new(
+                "PP1101",
+                "external OCI artifact references are duplicate or noncanonical",
+            ));
+        }
+        for row in external {
+            let digest = row["digest"].as_str().expect("schema-validated digest");
+            let reference = row["reference"]
+                .as_str()
+                .expect("schema-validated reference");
+            if !reference.ends_with(digest) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    "external OCI artifact reference does not bind its descriptor digest",
+                ));
+            }
+        }
+    }
+    if id == "prismpm/calculator-baseline/1" {
+        let ordered = [
+            ("/repositories", "repository"),
+            ("/historical/packages", "name"),
+            ("/historical/pages/assets", "path"),
+            ("/remediation/publications", "name"),
+        ];
+        for (pointer, key) in ordered {
+            let rows = value
+                .pointer(pointer)
+                .and_then(Value::as_array)
+                .expect("schema-validated array");
+            if !strictly_ordered(rows, |row| row[key].as_str().map(str::to_owned)) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    format!("calculator baseline {pointer} is duplicate or noncanonical"),
+                ));
+            }
+        }
+        let verification_runs = value
+            .pointer("/verification_runs")
+            .and_then(Value::as_array)
+            .expect("schema-validated array");
+        if !strictly_ordered(verification_runs, |row| {
+            Some(format!(
+                "{}\0{:02}",
+                row["repository"].as_str()?,
+                row["repeat"].as_u64()?
+            ))
+        }) {
+            return Err(PrismError::new(
+                "PP1101",
+                "calculator baseline verification runs are duplicate or noncanonical",
+            ));
+        }
+        if let Some(rows) = value
+            .pointer("/remediation/current_closure/pages/assets")
+            .and_then(Value::as_array)
+        {
+            if !strictly_ordered(rows, |row| row["path"].as_str().map(str::to_owned)) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    "calculator baseline current Pages assets are duplicate or noncanonical",
+                ));
+            }
+        }
+    }
+    if id == "prismpm/production-acceptance/1" {
+        let rows = value["cases"].as_array().expect("schema-validated array");
+        if !strictly_ordered(rows, |row| match row["kind"].as_str()? {
+            "feature" => Some(format!("0/{}", row["feature_id"].as_str()?)),
+            "diagnostic" => Some(format!("1/{}", row["diagnostic"].as_str()?)),
+            _ => None,
+        }) {
+            return Err(PrismError::new(
+                "PP1101",
+                "production acceptance cases are duplicate or noncanonical",
+            ));
+        }
+    }
+    if id == "prismpm/ecosystem-release/2" {
+        let platforms = value
+            .pointer("/sdk/platform_manifests")
+            .and_then(Value::as_array)
+            .expect("schema-validated array");
+        if !strictly_ordered(platforms, |row| {
+            row["architecture"].as_str().map(str::to_owned)
+        }) {
+            return Err(PrismError::new(
+                "PP1101",
+                "ecosystem SDK platforms are duplicate or noncanonical",
+            ));
+        }
+        let sdk_digest = value
+            .pointer("/sdk/index_digest")
+            .and_then(Value::as_str)
+            .expect("schema-validated digest");
+        let sdk_reference = value
+            .pointer("/sdk/reference")
+            .and_then(Value::as_str)
+            .expect("schema-validated reference");
+        if !sdk_reference.ends_with(sdk_digest)
+            || value["actions"]
+                .as_array()
+                .expect("schema-validated array")
+                .iter()
+                .any(|action| action["sdk_digest"].as_str() != Some(sdk_digest))
+        {
+            return Err(PrismError::new(
+                "PP1101",
+                "ecosystem SDK consumers do not bind the one SDK index digest",
+            ));
+        }
+        let archives = value
+            .pointer("/sdk/native_archives")
+            .and_then(Value::as_array)
+            .expect("schema-validated array");
+        if !strictly_ordered(archives, |row| row["name"].as_str().map(str::to_owned)) {
+            return Err(PrismError::new(
+                "PP1101",
+                "ecosystem native archives are duplicate or noncanonical",
+            ));
+        }
+        let pages = value
+            .pointer("/calculator/pages/assets")
+            .and_then(Value::as_array)
+            .expect("schema-validated array");
+        if !strictly_ordered(pages, |row| row["name"].as_str().map(str::to_owned)) {
+            return Err(PrismError::new(
+                "PP1101",
+                "ecosystem Pages assets are duplicate or noncanonical",
+            ));
+        }
+        let releases = value
+            .pointer("/calculator/system_releases")
+            .and_then(Value::as_array)
+            .expect("schema-validated array");
+        if releases.len() != 2
+            || releases[0]["label"].as_str() != Some("A")
+            || releases[1]["label"].as_str() != Some("B")
+        {
+            return Err(PrismError::new(
+                "PP1101",
+                "ecosystem Calculator releases must be exactly A then B",
+            ));
+        }
+        for release in releases {
+            let digest = release["product_digest"]
+                .as_str()
+                .expect("schema-validated digest");
+            let reference = release["reference"]
+                .as_str()
+                .expect("schema-validated reference");
+            if !reference.ends_with(digest) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    "ecosystem Calculator release reference does not bind its product digest",
+                ));
+            }
+            let referrers = release["referrers"]
+                .as_array()
+                .expect("schema-validated array");
+            if !strictly_ordered(referrers, |row| row.as_str().map(str::to_owned)) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    "ecosystem Calculator referrers are duplicate or noncanonical",
+                ));
+            }
+        }
+        let repositories = value["repositories"]
+            .as_array()
+            .expect("schema-validated array")
+            .iter()
+            .filter_map(|row| row["name"].as_str())
+            .collect::<BTreeSet<_>>();
+        for required in [
+            "LexLean",
+            "PrismPM",
+            "calculator-example",
+            "lean4-prod",
+            "template",
+        ] {
+            if !repositories.contains(required) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    format!("ecosystem manifest omits required repository {required}"),
+                ));
+            }
+        }
+        let packages = value["packages"]
+            .as_array()
+            .expect("schema-validated array")
+            .iter()
+            .filter_map(|row| row["name"].as_str())
+            .collect::<BTreeSet<_>>();
+        for required in ["prism-calculator", "prism-stdlib", "prismpm"] {
+            if !packages.contains(required) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    format!("ecosystem manifest omits required package {required}"),
+                ));
+            }
+        }
+        let evidence_kinds = value["evidence"]
+            .as_array()
+            .expect("schema-validated array")
+            .iter()
+            .filter_map(|row| row["kind"].as_str())
+            .collect::<BTreeSet<_>>();
+        for required in [
+            "acceptance",
+            "backup-restore",
+            "conformance",
+            "deployment",
+            "drift",
+            "falsification",
+            "migration",
+            "provenance",
+            "recovery",
+            "rollback",
+            "sbom",
+            "signature",
+            "slo",
+            "verification",
+        ] {
+            if !evidence_kinds.contains(required) {
+                return Err(PrismError::new(
+                    "PP1101",
+                    format!("ecosystem manifest omits required {required} evidence"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// One validated canonical contract value and its exact content identity.
+#[derive(Debug, Clone)]
+pub struct CanonicalDocument {
+    id: &'static str,
+    bytes: Vec<u8>,
+    value: Value,
+}
+
+impl CanonicalDocument {
+    /// Validate exact canonical bytes against a registered closed schema.
+    pub fn parse(id: &'static str, bytes: &[u8]) -> Result<Self, PrismError> {
+        let contract = contract(id)?;
+        if bytes.len() > contract.maximum_bytes {
+            return Err(PrismError::new(
+                "PP7601",
+                format!("{id} exceeds its {} byte limit", contract.maximum_bytes),
+            ));
+        }
+        let value = decode_value(bytes, id)?;
+        fn item_count(value: &Value) -> usize {
+            match value {
+                Value::Array(values) => values.iter().fold(values.len(), |sum, value| {
+                    sum.saturating_add(item_count(value))
+                }),
+                Value::Object(values) => values.values().fold(values.len(), |sum, value| {
+                    sum.saturating_add(item_count(value))
+                }),
+                _ => 1,
+            }
+        }
+        if item_count(&value) > contract.maximum_items {
+            return Err(PrismError::new(
+                "PP7601",
+                format!("{id} exceeds its {} item limit", contract.maximum_items),
+            ));
+        }
+        if value.get("schema").and_then(Value::as_str) != Some(id) {
+            return Err(PrismError::new(
+                "PP1101",
+                format!("value does not declare {id}"),
+            ));
+        }
+        let schema: Value = serde_json::from_slice(contract.schema).map_err(|error| {
+            PrismError::new("PP9001", format!("registered schema {id}: {error}"))
+        })?;
+        let validator = jsonschema::validator_for(&schema).map_err(|error| {
+            PrismError::new("PP9001", format!("compile registered schema {id}: {error}"))
+        })?;
+        let errors = validator
+            .iter_errors(&value)
+            .take(32)
+            .map(|error| error.to_string())
+            .collect::<Vec<_>>();
+        if !errors.is_empty() {
+            return Err(PrismError::new(
+                "PP1101",
+                format!("{id} validation failed: {}", errors.join("; ")),
+            ));
+        }
+        validate_semantic_order(id, &value)?;
+        Ok(Self {
+            id,
+            bytes: bytes.to_vec(),
+            value,
+        })
+    }
+
+    /// Construct and validate canonical bytes from an in-memory value.
+    pub fn from_value(id: &'static str, value: Value) -> Result<Self, PrismError> {
+        let bytes = encode_value(&value)?;
+        Self::parse(id, &bytes)
+    }
+
+    /// Contract identifier.
+    #[must_use]
+    pub fn schema(&self) -> &'static str {
+        self.id
+    }
+
+    /// Exact canonical bytes without CLI framing.
+    #[must_use]
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Validated JSON value.
+    #[must_use]
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+
+    /// SHA-256 content identity with the standard digest prefix.
+    #[must_use]
+    pub fn digest(&self) -> String {
+        format!("sha256:{}", content_id(&self.bytes))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CanonicalDocument, CONTRACTS};
+    use serde_json::json;
+
+    #[test]
+    fn bootstrap_evidence_contract_accepts_the_gate_record() {
+        let value = json!({
+            "bootstrap": {
+                "archive_digest": format!("sha256:{}", "a".repeat(64)),
+                "binary_digest": format!("sha256:{}", "b".repeat(64)),
+                "source_commit": "f378fd3a8dc5711cb4b22cec9ee2f874353628c3",
+                "version": "0.2.0"
+            },
+            "current_result_digest": format!("sha256:{}", "c".repeat(64)),
+            "prior_result_digest": format!("sha256:{}", "d".repeat(64)),
+            "schema": "prismpm/bootstrap-evidence/1",
+            "shared_identity": {
+                "entity_count": 18,
+                "semantic_id": "e".repeat(64),
+                "snapshot_id": "f".repeat(64)
+            },
+            "status": "passed"
+        });
+        CanonicalDocument::from_value("prismpm/bootstrap-evidence/1", value)
+            .expect("bootstrap gate must emit the registered canonical contract");
+    }
+
+    #[test]
+    fn contracts_reject_unknown_fields_and_noncanonical_bytes() {
+        let value = json!({
+            "build_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "evidence_path": ".prism/evidence/x.json",
+            "model_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "product_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "reference": "example.invalid/product:build",
+            "release_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "schema": "prismpm/product-release-result/1"
+        });
+        let document = CanonicalDocument::from_value("prismpm/product-release-result/1", value)
+            .expect("valid closed result");
+        assert!(document.digest().starts_with("sha256:"));
+        let mut noncanonical = document.bytes().to_vec();
+        noncanonical.push(b'\n');
+        assert!(
+            CanonicalDocument::parse("prismpm/product-release-result/1", &noncanonical).is_err()
+        );
+        let mut changed = document.value().clone();
+        changed["unexpected"] = json!(true);
+        assert!(
+            CanonicalDocument::from_value("prismpm/product-release-result/1", changed).is_err()
+        );
+    }
+
+    #[test]
+    fn every_registered_schema_compiles_without_external_resolution() {
+        for contract in CONTRACTS {
+            let schema: serde_json::Value = serde_json::from_slice(contract.schema).unwrap();
+            jsonschema::validator_for(&schema)
+                .unwrap_or_else(|error| panic!("{} does not compile: {error}", contract.id));
+        }
+    }
+
+    #[test]
+    fn runtime_contracts_are_exactly_the_modeled_contracts() {
+        let modeled: toml::Value = toml::from_str(include_str!("../model/contracts.toml")).unwrap();
+        let modeled = modeled["contract"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["schema"].as_str().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        let runtime = CONTRACTS
+            .iter()
+            .map(|contract| contract.id)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(runtime.len(), CONTRACTS.len(), "duplicate runtime contract");
+        assert_eq!(runtime, modeled, "runtime and modeled contracts diverged");
+    }
+
+    #[test]
+    fn duplicate_object_members_are_rejected_before_schema_validation() {
+        let bytes = b"{\"build_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"evidence_path\":\"x\",\"model_digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"product_digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"reference\":\"example.invalid/x\",\"release_digest\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"schema\":\"prismpm/product-release-result/1\",\"schema\":\"prismpm/product-release-result/1\"}";
+        assert!(CanonicalDocument::parse("prismpm/product-release-result/1", bytes).is_err());
+    }
+
+    #[test]
+    fn external_oci_reference_must_bind_the_declared_descriptor() {
+        let release = json!({
+            "artifacts": [{
+                "annotations": {},
+                "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "media_type": "application/octet-stream",
+                "role": "application",
+                "size": 1
+            }],
+            "external_artifacts": [{
+                "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "license_expression": "Apache-2.0",
+                "media_type": "application/vnd.docker.distribution.manifest.list.v2+json",
+                "reference": "registry.example/product@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "role": "runtime-image"
+            }],
+            "model_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "product": "fixture",
+            "release": "1",
+            "schema": "prismpm/product-release/1",
+            "sdk_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "sdk_lock": "sha256:abababababababababababababababababababababababababababababababab",
+            "standards_lock": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "status": "development"
+        });
+        CanonicalDocument::from_value("prismpm/product-release/1", release.clone())
+            .expect("an exact Docker Distribution external descriptor is representable");
+        let mut mismatched = release;
+        mismatched["external_artifacts"][0]["reference"] = serde_json::Value::String(
+            "registry.example/product@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                .to_owned(),
+        );
+        let error = CanonicalDocument::from_value("prismpm/product-release/1", mismatched)
+            .expect_err("a reference to a different digest must fail");
+        assert_eq!(error.code.as_str(), "PP1101");
+    }
+
+    #[test]
+    fn ecosystem_release_closes_over_every_required_public_boundary() {
+        let digest = |byte: char| format!("sha256:{}", byte.to_string().repeat(64));
+        let artifact = |name: &str, byte: char| {
+            json!({
+                "digest": digest(byte),
+                "media_type": "application/octet-stream",
+                "name": name,
+                "public_url": format!("https://example.invalid/{name}"),
+                "size": 1
+            })
+        };
+        let repositories = [
+            "LexLean",
+            "PrismPM",
+            "calculator-example",
+            "lean4-prod",
+            "template",
+        ]
+        .into_iter()
+        .map(|name| {
+            json!({
+                "commit": "0123456789abcdef0123456789abcdef01234567",
+                "name": name,
+                "source_archive": artifact(&format!("{name}-source"), '1'),
+                "tag": "v0.3.0",
+                "url": format!("https://github.com/example/{name}")
+            })
+        })
+        .collect::<Vec<_>>();
+        let evidence = [
+            "acceptance",
+            "backup-restore",
+            "conformance",
+            "deployment",
+            "drift",
+            "falsification",
+            "migration",
+            "provenance",
+            "recovery",
+            "rollback",
+            "sbom",
+            "signature",
+            "slo",
+            "verification",
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, kind)| {
+            json!({
+                "ci_run": null,
+                "digest": digest(char::from_digit((index % 8 + 1) as u32, 10).unwrap()),
+                "kind": kind,
+                "path": format!("evidence/{index:02}-{kind}.json"),
+                "subject_digest": digest('a')
+            })
+        })
+        .collect::<Vec<_>>();
+        let sdk_digest = digest('b');
+        let release_a = digest('a');
+        let release_b = digest('c');
+        let value = json!({
+            "actions": [{
+                "path": ".github/actions/prismpm/action.yml",
+                "repository": "UOR-Foundation/PrismPM",
+                "revision": "0123456789abcdef0123456789abcdef01234567",
+                "sdk_digest": sdk_digest
+            }],
+            "artifacts": [artifact("ecosystem-release", 'd')],
+            "calculator": {
+                "application_baseline_digest": digest('e'),
+                "coverage_digest": digest('f'),
+                "pages": {
+                    "assets": (0..6).map(|index| artifact(&format!("asset-{index}"), '1')).collect::<Vec<_>>(),
+                    "commit": "0123456789abcdef0123456789abcdef01234567",
+                    "url": "https://example.invalid/calculator/"
+                },
+                "system_releases": [{
+                    "deployment_evidence": digest('2'),
+                    "label": "A",
+                    "product_digest": release_a,
+                    "reference": format!("ghcr.io/example/calculator-a@{release_a}"),
+                    "referrers": [digest('1'), digest('2')]
+                }, {
+                    "deployment_evidence": digest('3'),
+                    "label": "B",
+                    "product_digest": release_b,
+                    "reference": format!("ghcr.io/example/calculator-b@{release_b}"),
+                    "referrers": [digest('3'), digest('4')]
+                }]
+            },
+            "evidence": evidence,
+            "packages": [{
+                "checksum": "1111111111111111111111111111111111111111111111111111111111111111",
+                "name": "prism-calculator",
+                "registry": "https://crates.io/crates/prism-calculator",
+                "version": "0.1.0"
+            }, {
+                "checksum": "2222222222222222222222222222222222222222222222222222222222222222",
+                "name": "prism-stdlib",
+                "registry": "https://crates.io/crates/prism-stdlib",
+                "version": "0.2.0"
+            }, {
+                "checksum": "3333333333333333333333333333333333333333333333333333333333333333",
+                "name": "prismpm",
+                "registry": "https://crates.io/crates/prismpm",
+                "version": "0.3.0"
+            }],
+            "repositories": repositories,
+            "schema": "prismpm/ecosystem-release/2",
+            "sdk": {
+                "index_digest": sdk_digest,
+                "inventory_digest": digest('6'),
+                "native_archives": [artifact("aarch64", '7'), artifact("x86_64", '8')],
+                "platform_manifests": [{"architecture": "amd64", "digest": digest('7'), "os": "linux"}, {"architecture": "arm64", "digest": digest('8'), "os": "linux"}],
+                "reference": format!("ghcr.io/example/prismpm-sdk@{sdk_digest}"),
+                "version": "0.3.0"
+            },
+            "standards_lock_digest": digest('9'),
+            "status": "accepted",
+            "template": {
+                "contract_digest": digest('4'),
+                "instantiation_evidence": digest('5'),
+                "repository_commit": "0123456789abcdef0123456789abcdef01234567"
+            },
+            "version": "2"
+        });
+        let document = CanonicalDocument::from_value("prismpm/ecosystem-release/2", value)
+            .expect("complete ecosystem release");
+        let mut reordered = document.value().clone();
+        reordered["calculator"]["system_releases"]
+            .as_array_mut()
+            .unwrap()
+            .reverse();
+        assert!(CanonicalDocument::from_value("prismpm/ecosystem-release/2", reordered).is_err());
+        let mut omitted = document.value().clone();
+        omitted["repositories"].as_array_mut().unwrap().remove(0);
+        assert!(CanonicalDocument::from_value("prismpm/ecosystem-release/2", omitted).is_err());
+    }
+}

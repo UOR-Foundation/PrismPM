@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 /// Host targets supported for binary distribution.
-pub const HOST_TARGETS: &[&str] = &["x86_64-unknown-linux-gnu"];
+pub const HOST_TARGETS: &[&str] = &["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"];
 
 /// Validate release criteria for PrismPM.
 pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
@@ -53,12 +53,12 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         }
     }
     let changelog = std::fs::read_to_string(root.join("CHANGELOG.md")).unwrap_or_default();
-    if !changelog.contains("## [0.1.0] - 2026-08-30") {
-        issues.push("CHANGELOG.md has no dated 0.1.0 release entry".to_owned());
+    if !changelog.contains("## [0.3.0] - 2026-09-05") {
+        issues.push("CHANGELOG.md has no dated 0.3.0 release entry".to_owned());
     }
     let cargo = std::fs::read_to_string(root.join("Cargo.toml")).unwrap_or_default();
-    if !cargo.contains("version = \"0.1.0\"") {
-        issues.push("workspace release version is not 0.1.0".to_owned());
+    if !cargo.contains("version = \"0.3.0\"") {
+        issues.push("workspace release version is not 0.3.0".to_owned());
     }
     if !changelog.contains("### Compatibility")
         || !changelog.contains("incompatible schema change requires a new schema")
@@ -73,11 +73,11 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         .filter(|output| output.status.success())
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .unwrap_or_default();
-    if !tag.lines().any(|line| line == "v0.2.0") {
-        issues.push("release source commit is not tagged v0.2.0".to_owned());
+    if !tag.lines().any(|line| line == "v0.3.0") {
+        issues.push("release source commit is not tagged v0.3.0".to_owned());
     }
     let annotated = Command::new("git")
-        .args(["cat-file", "-t", "refs/tags/v0.2.0"])
+        .args(["cat-file", "-t", "refs/tags/v0.3.0"])
         .current_dir(root)
         .output()
         .ok()
@@ -85,7 +85,7 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .is_some_and(|kind| kind.trim() == "tag");
     if !annotated {
-        issues.push("release tag v0.2.0 is absent or not annotated".to_owned());
+        issues.push("release tag v0.3.0 is absent or not annotated".to_owned());
     }
 
     match crate::Model::load(&root.join("model")) {
@@ -127,7 +127,12 @@ pub fn check(root: &Path, hidden_tests: &[String]) -> Result<(), Vec<String>> {
                 && evidence
                     .get("gates")
                     .and_then(serde_json::Value::as_array)
-                    .is_some_and(|gates| gates.len() == 14) => {}
+                    .is_some_and(|gates| {
+                        gates.len() == 15
+                            && gates.iter().enumerate().all(|(index, gate)| {
+                                gate.as_u64() == Some(u64::try_from(index + 1).unwrap_or(u64::MAX))
+                            })
+                    }) => {}
         _ => issues.push(format!(
             "full vv evidence for exact commit {head} is absent or incomplete"
         )),

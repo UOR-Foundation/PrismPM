@@ -14,44 +14,28 @@ pub enum ComputeError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ValidationFacts {
+    pub closure: bool,
+    pub uniqueness: bool,
+    pub referentialIntegrity: bool,
+    pub compatibility: bool,
+    pub capabilitySatisfaction: bool,
+    pub secretFlow: bool,
+    pub deploymentOrder: bool,
+    pub migrationOrder: bool,
+    pub rollbackSafety: bool,
+    pub evidenceClosure: bool,
+    pub releaseCompleteness: bool,
+    pub lifecycleExplicit: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StandardsProfile {
     pub architectureEdition: u64,
     pub applicationSecurityEdition: u64,
     pub controlEdition: u64,
     pub riskEdition: u64,
     pub qualityEdition: u64,
-}
-
-pub fn appendBytes(left: alloc::vec::Vec<u8>, right: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
-    { let _x_1 = 0; { let _x_2 = { let mut __value = left; __value.extend_from_slice(&right); __value }; _x_2 } }
-}
-
-pub fn byteAt(value: alloc::vec::Vec<u8>, offset: u64) -> Option<u8> {
-    { let _x_1 = 0; { let _x_2 = usize::try_from(offset).ok().and_then(|__index| (value).get(__index).cloned()); _x_2 } }
-}
-
-pub fn byteLength(value: alloc::vec::Vec<u8>) -> u64 {
-    { let _x_1 = 0; { let _x_2 = (value).len() as u64; _x_2 } }
-}
-
-pub fn compareBytes(left: alloc::vec::Vec<u8>, right: alloc::vec::Vec<u8>) -> core::cmp::Ordering {
-    { let _x_1 = (left).cmp(&right); _x_1 }
-}
-
-pub fn sliceBytes(value: alloc::vec::Vec<u8>, start: u64, count: u64) -> Option<alloc::vec::Vec<u8>> {
-    { let _x_1 = 0; { let _x_2 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; _x_2 } }
-}
-
-pub fn formatInt64(value: i64) -> alloc::string::String {
-    { let _x_1 = 0; { let _x_2 = 0; { let _x_3 = 0; { let _x_4 = alloc::format!("{}", value); _x_4 } } } }
-}
-
-pub fn parseInt64(value: alloc::string::String) -> Option<i64> {
-    { let _x_1 = 0; { let _x_2 = 0; { let _x_3 = 0; { let _x_4 = { let __text = value; __text.parse().ok().filter(|__value| alloc::string::ToString::to_string(__value) == __text) }; _x_4 } } } }
-}
-
-pub fn portableTrue() -> bool {
-    { let _x_1 = true; _x_1 }
 }
 
 pub fn applicationSecurityEdition(__prod_self: crate::StandardsProfile) -> u64 {
@@ -145,30 +129,98 @@ pub fn validateViewpointLinks(targetCount: u64, links: &[u64]) -> bool {
     { let _x_1 = allBelow(targetCount, &(links)); _x_1 }
 }
 
-pub fn checkedAddInt64(left: i64, right: i64) -> Option<i64> {
-    { let _x_1 = (left).checked_add(right); _x_1 }
+pub fn capabilitySatisfaction(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).capabilitySatisfaction; _x_1 }
 }
 
-pub fn checkedDivideInt64(left: i64, right: i64) -> Option<i64> {
-    { let _x_1 = (left).checked_div(right); _x_1 }
+pub fn closure(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).closure; _x_1 }
 }
 
-pub fn checkedMultiplyInt64(left: i64, right: i64) -> Option<i64> {
-    { let _x_1 = (left).checked_mul(right); _x_1 }
+pub fn compatibility(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).compatibility; _x_1 }
 }
 
-pub fn checkedNegateInt64(value: i64) -> Option<i64> {
-    { let _x_1 = (value).checked_neg(); _x_1 }
+pub fn deploymentOrder(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).deploymentOrder; _x_1 }
 }
 
-pub fn checkedSubtractInt64(left: i64, right: i64) -> Option<i64> {
-    { let _x_1 = (left).checked_sub(right); _x_1 }
+pub fn evidenceClosure(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).evidenceClosure; _x_1 }
 }
 
-pub fn decode(value: alloc::vec::Vec<u8>) -> Option<alloc::string::String> {
-    { let _x_1 = alloc::string::String::from_utf8(value).ok(); _x_1 }
+pub fn lifecycleExplicit(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).lifecycleExplicit; _x_1 }
 }
 
-pub fn encode(value: alloc::string::String) -> alloc::vec::Vec<u8> {
-    { let _x_1 = (value).into_bytes(); _x_1 }
+pub fn migrationOrder(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).migrationOrder; _x_1 }
+}
+
+pub fn referentialIntegrity(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).referentialIntegrity; _x_1 }
+}
+
+pub fn releaseCompleteness(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).releaseCompleteness; _x_1 }
+}
+
+pub fn rollbackSafety(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).rollbackSafety; _x_1 }
+}
+
+pub fn secretFlow(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).secretFlow; _x_1 }
+}
+
+pub fn uniqueness(__prod_self: crate::ValidationFacts) -> bool {
+    { let _x_1 = (__prod_self).uniqueness; _x_1 }
+}
+
+pub fn validateCapabilitySatisfaction(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).capabilitySatisfaction; _x_1 }
+}
+
+pub fn validateClosure(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).closure; _x_1 }
+}
+
+pub fn validateCompatibility(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).compatibility; _x_1 }
+}
+
+pub fn validateDeploymentOrder(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).deploymentOrder; _x_1 }
+}
+
+pub fn validateEvidenceClosure(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).evidenceClosure; _x_1 }
+}
+
+pub fn validateLifecycleExplicit(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).lifecycleExplicit; _x_1 }
+}
+
+pub fn validateMigrationOrder(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).migrationOrder; _x_1 }
+}
+
+pub fn validateReferentialIntegrity(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).referentialIntegrity; _x_1 }
+}
+
+pub fn validateReleaseCompleteness(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).releaseCompleteness; _x_1 }
+}
+
+pub fn validateRollbackSafety(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).rollbackSafety; _x_1 }
+}
+
+pub fn validateSecretFlow(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).secretFlow; _x_1 }
+}
+
+pub fn validateUniqueness(facts: crate::ValidationFacts) -> bool {
+    { let _x_1 = (facts).uniqueness; _x_1 }
 }

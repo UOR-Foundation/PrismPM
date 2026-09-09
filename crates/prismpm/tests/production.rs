@@ -73,10 +73,9 @@ fn holo_roundtrip_schema_and_cycles_are_valid() {
         .iter()
         .any(|right| { left.from_index == right.to_index && left.to_index == right.from_index })));
 
-    let schema: serde_json::Value = serde_json::from_slice(include_bytes!(
-        "../../../schemas/model-document.schema.json"
-    ))
-    .expect("schema JSON");
+    let schema: serde_json::Value =
+        serde_json::from_slice(include_bytes!("../schemas/model-document.schema.json"))
+            .expect("schema JSON");
     let validator = jsonschema::validator_for(&schema).expect("valid JSON Schema");
     let value: serde_json::Value = serde_json::from_slice(&bytes).expect("model-document JSON");
     assert!(validator.is_valid(&value));

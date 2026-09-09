@@ -1,6 +1,7 @@
 use super::*;
 use alloc::vec;
 use prod_ir::parser::parse_module;
+extern crate std;
 
 fn generate(ir: &str) -> String {
     let (_, module) = parse_module(ir).unwrap();
@@ -200,6 +201,25 @@ fn test_view_v1_projects_both_transports_without_raw_content() {
     )
     .unwrap();
     assert!(index.contains("<title>Calculator &lt;safe&gt;</title>"));
+    assert!(
+        index.contains("<div class=\"field\"><label for=\"left\">Left</label><input id=\"left\"")
+    );
+    assert!(index.contains(
+        "<div class=\"field\"><label for=\"operation\">Operation</label><select id=\"operation\""
+    ));
+    assert!(index
+        .contains("<div class=\"field\"><label for=\"right\">Right</label><input id=\"right\""));
+    let stylesheet = core::str::from_utf8(
+        &generated
+            .hologram_assets
+            .iter()
+            .find(|file| file.path == "app.css")
+            .unwrap()
+            .bytes,
+    )
+    .unwrap();
+    assert!(stylesheet.contains(".field{display:grid;gap:.35rem;min-width:0}"));
+    assert!(stylesheet.contains("input,select,button{width:100%"));
     let intent = core::str::from_utf8(
         &generated
             .hologram_assets
@@ -515,6 +535,77 @@ fn test_nested_list_type_is_an_explicit_owned_vec() {
 )
 "#;
     assert!(generate(ir).contains("-> Option<alloc::vec::Vec<u64>>"));
+}
+
+#[test]
+fn test_structure_list_projection_copies_into_the_output_buffer() {
+    let ir = r#"
+(module M
+  (type "M.Relation" (ctor "M.Relation.mk" (bound Nat) (values (List Nat))))
+  (type "M.Manifest" (ctor "M.Manifest.mk" (relation (named "M.Relation"))))
+  (def values ((self (named "M.Relation"))) (List Nat)
+    (let projected (proj "M.Relation" "values" self) projected))
+  (def relation ((self (named "M.Manifest"))) (named "M.Relation")
+    (let projected (proj "M.Manifest" "relation" self) projected))
+)
+"#;
+    let out = generate(ir);
+    assert!(out.contains("pub values: alloc::vec::Vec<u64>"));
+    assert!(out.contains("pub fn values(__prod_self: &crate::Relation, output: &mut [u64])"));
+    assert!(out.contains("pub fn relation(__prod_self: &crate::Manifest) -> &crate::Relation"));
+    assert!(out.contains(
+        "if __source.len() > (output).len() { Err(crate::ComputeError::OutputTooSmall) }"
+    ));
+    assert!(out.contains("clone_from_slice(__source)"));
+    assert!(!out.contains("output["));
+    assert!(!out.contains("__list"));
+
+    // Compile and execute the generated projection so the undersized-buffer
+    // branch is behaviorally pinned: caller-controlled exhaustion is an
+    // error and leaves the caller's buffer untouched.
+    let directory = std::env::temp_dir().join(std::format!(
+        "prod-codegen-list-projection-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::create_dir_all(&directory).unwrap();
+    let source = directory.join("main.rs");
+    let executable = directory.join("projection-test");
+    std::fs::write(
+        &source,
+        std::format!(
+            r#"extern crate alloc;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComputeError {{ OutputTooSmall }}
+{out}
+fn main() {{
+    let relation_value = Relation {{ bound: 2, values: alloc::vec![10, 20] }};
+    let mut exact = [0_u64; 2];
+    assert_eq!(values(&relation_value, &mut exact), Ok(2));
+    assert_eq!(exact, [10, 20]);
+    let mut short = [99_u64; 1];
+    assert_eq!(values(&relation_value, &mut short), Err(ComputeError::OutputTooSmall));
+    assert_eq!(short, [99]);
+    let manifest = Manifest {{ relation: relation_value }};
+    assert_eq!(relation(&manifest).bound, 2);
+}}
+"#
+        ),
+    )
+    .unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .args(["--edition", "2021"])
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .status()
+        .unwrap();
+    assert!(compiled.success());
+    assert!(std::process::Command::new(&executable)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
@@ -853,10 +944,10 @@ fn test_cyclic_join_point_is_rejected() {
 }
 
 #[test]
-fn test_multi_caller_join_point_is_rejected() {
-    // Two `jmp` sites for one `jp`. LCNF produces this from something as
-    // ordinary as a `match` whose arms both feed a shared continuation, so it
-    // is not an exotic corner — see `Conformance.c_ctor_body_only`.
+fn test_multi_caller_acyclic_join_point_is_inlined_at_every_jump() {
+    // LCNF produces this shape when multiple match arms feed one pure
+    // continuation. Each branch gets its own parameter binding and checked
+    // addition, with no runtime allocation or unbound join parameter.
     let ir = r#"
 (module M
   (def f ((c Nat) (x Nat)) Nat
@@ -864,10 +955,11 @@ fn test_multi_caller_join_point_is_rejected() {
       (if (lt c 1) (jmp g x) (jmp g c))))
 )
 "#;
-    assert_eq!(
-        generate_err(ir),
-        Error::UnsupportedJoinPoint("g".to_string())
-    );
+    let out = generate(ir);
+    assert_eq!(out.matches("let a =").count(), 2);
+    assert_eq!(out.matches("checked_add(1)").count(), 2);
+    assert!(out.contains("let a = x"));
+    assert!(out.contains("let a = c"));
 }
 
 #[test]
@@ -999,6 +1091,84 @@ fn test_generate_struct_from_single_ctor_type() {
         "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub struct Instance {\n    pub q: u64,\n    pub T: u64,\n    pub O: u64,\n}\n"
     ));
     assert!(out.contains("pub fn stride(i: crate::Instance) -> u64 {"));
+}
+
+#[test]
+fn test_shared_owned_lcnf_values_are_cloned_for_record_fields_and_compile() {
+    let ir = r#"
+(module M
+  (type "M.Bundle"
+    (ctor "M.Bundle.mk"
+      (left String)
+      (right String)
+      (first (List Nat))
+      (second (List Nat))
+      (names (List String))))
+  (def shared () (named "M.Bundle")
+    (let text (string "shared")
+      (let empty (ctor "List.nil")
+        (let values (ctor "List.cons" 7 empty)
+          (ctor "M.Bundle.mk" text text values values empty)))))
+)
+"#;
+    let out = generate(ir);
+    assert_eq!(
+        out.matches("alloc::string::String::from(\"shared\")")
+            .count(),
+        2
+    );
+    assert_eq!(out.matches("values.clone()").count(), 2);
+    assert!(!out.contains("let empty ="));
+
+    // Parsing generated text is insufficient for ownership defects: the old
+    // output was valid Rust syntax but moved the same String/Vec twice.
+    let directory = std::env::temp_dir().join(std::format!(
+        "prod-codegen-shared-owned-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::create_dir_all(&directory).unwrap();
+    let source = directory.join("lib.rs");
+    let library = directory.join("libshared_owned.rlib");
+    std::fs::write(
+        &source,
+        std::format!(
+            r#"#![no_std]
+extern crate alloc;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComputeError {{ OutputTooSmall }}
+{out}
+"#
+        ),
+    )
+    .unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .args(["--edition", "2021", "--crate-type", "lib"])
+        .arg(&source)
+        .arg("-o")
+        .arg(&library)
+        .status()
+        .unwrap();
+    assert!(compiled.success());
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn test_string_predicates_borrow_inputs_and_literals_without_allocating() {
+    let ir = r#"
+(module M
+  (def equalsToken ((value String)) Bool
+    (eq value (string "token")))
+  (def delegates ((value String)) Bool
+    (call equalsToken value))
+)
+"#;
+    let out = generate(ir);
+    assert!(out.contains("pub fn equalsToken(value: &str) -> bool"));
+    assert!(out.contains("value == \"token\""));
+    assert!(out.contains("pub fn delegates(value: &str) -> bool"));
+    assert!(out.contains("equalsToken((value).as_ref())"));
+    assert!(!out.contains("alloc::string::String::from(\"token\")"));
 }
 
 #[test]

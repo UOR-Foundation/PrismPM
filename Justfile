@@ -5,7 +5,7 @@ default:
 
 # Run full non-mutating verification and acceptance gates
 vv:
-    cargo xtask vv
+    ./scripts/vv.sh
 
 # Validate claim registers and spec links
 validate:
@@ -29,6 +29,10 @@ check-reproducibility:
 # Verify the Cargo-selected package and its downstream public API
 package-api:
     cargo run --package xtask -- package-api
+
+# Reproduce the exact prebuilt dependency and stdlib crate archives.
+package-release-crates-check:
+    ./scripts/package-release-crates.sh --check
 
 # Verify examples and standard library
 verify-examples:

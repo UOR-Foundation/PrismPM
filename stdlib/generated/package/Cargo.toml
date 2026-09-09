@@ -1,9 +1,9 @@
 [package]
 name = "prism-stdlib"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
-description = "Generated portable Prism foundation and Holo/1 runtime"
+description = "Generated portable Prism application and production-system runtime"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/UOR-Foundation/PrismPM"
 homepage = "https://github.com/UOR-Foundation/PrismPM"

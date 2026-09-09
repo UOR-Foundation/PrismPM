@@ -8,8 +8,9 @@ pub mod registry;
 pub mod release;
 
 pub use registry::{
-    Authorities, AuthorityRow, Claim, EmitterInputs, ErrorRow, Errors, ExecutionCorpus,
-    ExecutionOracle, ExhaustiveCorpus, IdRow, Ids, Ledger, Level, PropertyCorpus, RuntimeRoots,
+    Authorities, AuthorityRow, Claim, CommandRow, Commands, ContractRow, Contracts, EmitterInputs,
+    ErrorRow, Errors, ExecutionCorpus, ExecutionOracle, ExhaustiveCorpus, IdRow, Ids, Ledger,
+    Level, OracleRow, OracleTrustRoot, PropertyCorpus, RuntimeRoots, SignatureTrustRoot,
     StandardRow, Standards,
 };
 
@@ -28,6 +29,10 @@ pub struct Model {
     pub errors: Errors,
     /// model/standards.toml
     pub standards: Standards,
+    /// model/contracts.toml
+    pub contracts: Contracts,
+    /// model/commands.toml
+    pub commands: Commands,
     /// model/emitter-inputs.toml
     pub emitter_inputs: EmitterInputs,
     /// model/execution-corpus.toml
@@ -68,6 +73,8 @@ impl Model {
             authorities: read(dir, "authorities.toml")?,
             errors: read(dir, "errors.toml")?,
             standards: read(dir, "standards.toml")?,
+            contracts: read(dir, "contracts.toml")?,
+            commands: read(dir, "commands.toml")?,
             emitter_inputs: read(dir, "emitter-inputs.toml")?,
             execution_corpus: read(dir, "execution-corpus.toml")?,
             runtime_roots: read(dir, "runtime-roots.toml")?,
@@ -86,7 +93,33 @@ impl Model {
         self.check_authorities()?;
         self.errors.check()?;
         self.standards.check()?;
+        self.contracts.check(&repo_root())?;
+        self.commands.check()?;
+        self.check_command_result_contracts()?;
         self.check_execution_corpus()?;
+        Ok(())
+    }
+
+    fn check_command_result_contracts(&self) -> Result<(), ModelError> {
+        let registered = self
+            .contracts
+            .contract
+            .iter()
+            .map(|row| row.schema.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let missing = self
+            .commands
+            .command
+            .iter()
+            .filter(|row| !registered.contains(row.result_schema.as_str()))
+            .map(|row| format!("{} -> {}", row.name, row.result_schema))
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(ModelError::Inconsistent(format!(
+                "public command result schemas are not registered: {}",
+                missing.join(", ")
+            )));
+        }
         Ok(())
     }
 
@@ -124,12 +157,6 @@ impl Model {
         let original = functions.clone();
         functions.sort_unstable();
         functions.dedup();
-        let theorem_count = corpus
-            .oracle
-            .iter()
-            .map(|row| row.theorem.as_str())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
         let runtime_functions = corpus
             .oracle
             .iter()
@@ -152,9 +179,8 @@ impl Model {
             || corpus.case_count != expected_cases
             || corpus.oracle.is_empty()
             || functions != original
-            || theorem_count != corpus.oracle.len()
             || self.runtime_roots.spec != "prismpm/runtime-roots/1"
-            || self.runtime_roots.lean_module != "PrismPM.Foundation.Holo"
+            || self.runtime_roots.lean_module != "PrismPM.Runtime"
             || self.runtime_roots.ir_module != "PrismPM"
             || self
                 .runtime_roots
@@ -164,8 +190,14 @@ impl Model {
             || runtime_roots.len() != self.runtime_roots.roots.len()
             || runtime_functions != runtime_roots
             || corpus.oracle.iter().any(|row| {
-                !row.function.starts_with("PrismPM.Foundation.Holo.")
-                    || !row.theorem.starts_with("PrismPM.Foundation.Holo.")
+                let supported = |name: &str| {
+                    name.starts_with("PrismPM.Foundation.Holo.")
+                        || name.starts_with("PrismPM.Production.System.")
+                        || name.starts_with("PrismPM.Production.SystemValidation.")
+                        || name.starts_with("PrismPM.Production.SystemValidationCorpus.")
+                        || name.starts_with("PrismPM.Production.Validation.")
+                };
+                !supported(&row.function) || !supported(&row.theorem)
             })
         {
             return Err(bad(
@@ -198,9 +230,88 @@ impl Model {
 
     fn check_authorities(&self) -> Result<(), ModelError> {
         let bad = |m: String| ModelError::Inconsistent(m);
+        let mut authority_ids = std::collections::BTreeSet::new();
         for a in &self.authorities.authority {
-            if a.citation.trim().is_empty() {
-                return Err(bad(format!("{}: authority missing citation", a.id)));
+            let fetched = a.source_role != "binding-only";
+            if !authority_ids.insert(a.id.as_str())
+                || a.issuer.trim().is_empty()
+                || a.name.trim().is_empty()
+                || a.canonical_identifier.trim().is_empty()
+                || a.edition.trim().is_empty()
+                || !matches!(
+                    a.source_role.as_str(),
+                    "normative" | "informative" | "binding-only"
+                )
+                || !a.immutable_url.starts_with("https://")
+                || a.media_type.trim().is_empty()
+                || a.license.trim().is_empty()
+                || !matches!(
+                    a.redistribution.as_str(),
+                    "redistributable" | "citation-only"
+                )
+                || a.retrieval_date.len() != 10
+                || a.retrieval_date.as_bytes().get(4) != Some(&b'-')
+                || a.retrieval_date.as_bytes().get(7) != Some(&b'-')
+                || a.supersession_policy != "explicit-lock-update-only"
+                || a.statement.trim().is_empty()
+                || a.immutable_url.to_ascii_lowercase().contains("latest")
+                || a.revision.to_ascii_lowercase().contains("latest")
+                || (fetched
+                    && (a.revision.trim().is_empty()
+                        || a.acquired_sha256.len() != 64
+                        || !a
+                            .acquired_sha256
+                            .bytes()
+                            .all(|byte| byte.is_ascii_hexdigit())))
+                || (!fetched
+                    && (a.revision != "not-published"
+                        || a.acquired_sha256 != "not-acquired"
+                        || a.redistribution != "citation-only"))
+            {
+                return Err(bad(format!(
+                    "{}: invalid immutable authority binding",
+                    a.id
+                )));
+            }
+            let signed_tag = a.signature.starts_with("signed-tag-object:");
+            let trust_root_valid = a.signature_trust_root.as_ref().is_some_and(|root| {
+                matches!(root.algorithm.as_str(), "openpgp" | "ssh")
+                    && root.path.starts_with("standards/trust/github-")
+                    && root.path.ends_with(if root.algorithm == "openpgp" {
+                        ".asc"
+                    } else {
+                        ".pub"
+                    })
+                    && root.sha256.len() == 64
+                    && root
+                        .sha256
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                    && if root.algorithm == "openpgp" {
+                        root.fingerprint.len() == 40
+                            && root
+                                .fingerprint
+                                .bytes()
+                                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_lowercase())
+                    } else {
+                        root.fingerprint.starts_with("SHA256:")
+                            && root.fingerprint.len() >= 50
+                            && root.fingerprint.len() <= 64
+                    }
+                    && !root.owner.trim().is_empty()
+                    && root.source_url.starts_with("https://api.github.com/users/")
+                    && root
+                        .source_record_id
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit())
+                    && root.license == "public-key-material-published-for-verification"
+                    && root.redistribution == "verification-use"
+            });
+            if signed_tag != trust_root_valid {
+                return Err(bad(format!(
+                    "{}: signed-tag policy and independent trust-root binding disagree",
+                    a.id
+                )));
             }
             for id in &a.realized_by {
                 if self.ids.get(id).is_none() {
@@ -209,6 +320,103 @@ impl Model {
                         a.id
                     )));
                 }
+            }
+        }
+        let mut oracle_ids = std::collections::BTreeSet::new();
+        for oracle in &self.authorities.oracle {
+            if !oracle_ids.insert(oracle.id.as_str())
+                || oracle.authority_ids.is_empty()
+                || oracle
+                    .authority_ids
+                    .iter()
+                    .any(|id| !authority_ids.contains(id.as_str()))
+                || oracle.executable.is_empty()
+                || oracle.executable.contains(char::is_whitespace)
+                || oracle.supported_platforms
+                    != ["linux/amd64".to_owned(), "linux/arm64".to_owned()]
+                || oracle.input_media_types.is_empty()
+                || !oracle.output_schema.starts_with("prismpm/")
+                || oracle.arguments.is_empty()
+                || (oracle.corpus.is_none()
+                    && !oracle.arguments.iter().any(|arg| {
+                        matches!(
+                            arg.as_str(),
+                            "{input}"
+                                | "{bundle}"
+                                | "{subject}"
+                                | "{provenance}"
+                                | "{trusted-root}"
+                        )
+                    }))
+                || oracle.arguments.iter().any(|arg| {
+                    arg.starts_with('{')
+                        && !matches!(
+                            arg.as_str(),
+                            "{input}"
+                                | "{bundle}"
+                                | "{subject}"
+                                | "{provenance}"
+                                | "{trusted-root}"
+                                | "{source-uri}"
+                                | "{identity}"
+                                | "{issuer}"
+                        )
+                })
+                || oracle.timeout_ms == 0
+                || oracle.memory_bytes < 1_048_576
+                || oracle.output_bytes == 0
+                || !matches!(oracle.network.as_str(), "deny" | "isolated-subject")
+                || oracle.normalization != "prismpm/oracle-diagnostics/1"
+                || oracle.covers.is_empty()
+                || oracle.does_not_cover.is_empty()
+                || oracle.expected_exits.is_empty()
+                || oracle.upstream_payload_sha256.len() != 64
+                || !oracle
+                    .upstream_payload_sha256
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                || oracle.corpus.as_ref().is_some_and(|corpus| {
+                    corpus.sha256.len() != 64
+                        || !corpus
+                            .sha256
+                            .bytes()
+                            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                        || !corpus.path.starts_with("standards/")
+                        || corpus.path.contains("..")
+                        || !repo_root().join(&corpus.path).is_dir()
+                })
+                || oracle.subject.as_ref().is_some_and(|subject| {
+                    !subject.contains("@sha256:")
+                        || subject.rsplit_once("@sha256:").is_none_or(|(_, digest)| {
+                            digest.len() != 64
+                                || !digest.bytes().all(|byte| {
+                                    byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()
+                                })
+                        })
+                })
+                || oracle
+                    .arguments
+                    .iter()
+                    .any(|argument| argument == "{trusted-root}")
+                    != oracle.trusted_root.is_some()
+                || oracle.trusted_root.as_ref().is_some_and(|root| {
+                    root.role != "sigstore-verification-root"
+                        || !root.path.starts_with("standards/trust/")
+                        || root.path.contains("..")
+                        || root.sha256.len() != 64
+                        || !root
+                            .sha256
+                            .bytes()
+                            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                })
+                || oracle.wrapper_source.starts_with('/')
+                || oracle.wrapper_source.contains("..")
+                || !repo_root().join(&oracle.wrapper_source).is_file()
+            {
+                return Err(bad(format!(
+                    "{}: invalid oracle execution contract",
+                    oracle.id
+                )));
             }
         }
         for c in &self.ledger.claim {
@@ -238,4 +446,52 @@ pub fn repo_root() -> PathBuf {
         .nth(2)
         .expect("crates/model is two levels below repository root")
         .to_path_buf()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Model;
+
+    #[test]
+    fn every_public_command_result_schema_is_registered() {
+        let model = Model::load_from_repo_root().expect("load repository model");
+        model
+            .check_command_result_contracts()
+            .expect("all public command results must be public contracts");
+
+        let mut planted = model;
+        planted
+            .contracts
+            .contract
+            .retain(|row| row.schema != "prismpm/check-result/1");
+        let error = planted
+            .check_command_result_contracts()
+            .expect_err("an undeclared result schema must fail closed");
+        assert!(error
+            .to_string()
+            .contains("check -> prismpm/check-result/1"));
+    }
+
+    #[test]
+    fn fixed_corpus_oracles_need_no_subject_but_dynamic_oracles_do() {
+        let model = Model::load_from_repo_root().expect("load repository model");
+        model
+            .check()
+            .expect("locked fixed-corpus oracles are valid");
+
+        let mut planted = model;
+        let oracle = planted
+            .authorities
+            .oracle
+            .iter_mut()
+            .find(|row| row.id == "oci-layout-1.1")
+            .expect("OCI Image official corpus oracle");
+        oracle.corpus = None;
+        let error = planted
+            .check()
+            .expect_err("a dynamic oracle without a subject binding must fail closed");
+        assert!(error
+            .to_string()
+            .contains("oci-layout-1.1: invalid oracle execution contract"));
+    }
 }

@@ -6,7 +6,7 @@
 
 use sha2::Digest;
 use std::path::Path;
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Output};
 use std::sync::OnceLock;
 
 mod audit;
@@ -53,6 +53,7 @@ fn main() -> ExitCode {
     let result = match task.as_str() {
         "validate-model" => codegen::check_model(&root, write),
         "validate-spec-links" => spec_links::validate(&root),
+        "validate-contract" => validate_contract(),
         "verify-examples" => verify_examples(&root, write),
         "check-golden" => check_golden(&root, write),
         "check-reproducibility" => check_reproducibility(&root),
@@ -75,6 +76,27 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn validate_contract() -> Result<(), Fail> {
+    let mut arguments = std::env::args().skip(2);
+    let id = arguments
+        .next()
+        .ok_or("validate-contract requires a contract identifier")?;
+    let path = arguments
+        .next()
+        .ok_or("validate-contract requires a document path")?;
+    if arguments.next().is_some() {
+        return Err("validate-contract accepts exactly two arguments".into());
+    }
+    let id: &'static str = match id.as_str() {
+        "prismpm/bootstrap-evidence/1" => "prismpm/bootstrap-evidence/1",
+        _ => return Err(format!("validate-contract does not expose {id}").into()),
+    };
+    let bytes = std::fs::read(&path)?;
+    let document = prismpm::contracts::CanonicalDocument::parse(id, &bytes)?;
+    println!("{} {}", document.schema(), document.digest());
+    Ok(())
 }
 
 fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
@@ -109,6 +131,234 @@ fn command(root: &Path, program: &str, args: &[&str]) -> Result<(), Fail> {
     Ok(())
 }
 
+fn command_quiet_stdout(root: &Path, program: &str, args: &[&str]) -> Result<(), Fail> {
+    let output = Command::new(program)
+        .args(args)
+        .current_dir(root)
+        .env("CARGO_NET_OFFLINE", "true")
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "{program} {} exited {}: {}",
+            args.join(" "),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn require_clean_worktree(root: &Path) -> Result<(), Fail> {
+    let output = Command::new("git")
+        .args(["status", "--porcelain=v1", "--untracked-files=all"])
+        .current_dir(root)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "cannot inspect VV source worktree: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    if !output.stdout.is_empty() {
+        return Err(format!(
+            "VV requires a clean source commit; worktree changes:\n{}",
+            String::from_utf8_lossy(&output.stdout).trim_end()
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn docker_sdk_command(image: &str, extra: &[&str]) -> Result<Output, Fail> {
+    let mut arguments = vec![
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev",
+        "--user",
+        "1000:1000",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+    ];
+    arguments.extend_from_slice(extra);
+    arguments.extend_from_slice(&[
+        "--entrypoint",
+        "/usr/local/bin/prismpm",
+        image,
+        "--json",
+        "completion",
+        "bash",
+    ]);
+    Ok(Command::new("docker").args(arguments).output()?)
+}
+
+fn assert_sdk_inventory_rejection(output: &Output, mutation: &str) -> Result<(), Fail> {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if output.status.success()
+        || !stdout.contains("\"schema\":\"prismpm/error-result/1\"")
+        || !stdout.contains("\"code\":\"PP5401\"")
+    {
+        return Err(format!(
+            "released SDK accepted {mutation}, or returned the wrong diagnostic: status={} stdout={} stderr={}",
+            output.status,
+            stdout.trim(),
+            stderr.trim()
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn mutated_sdk_command(
+    image: &str,
+    environment: Option<&str>,
+    source: &Path,
+    target: &str,
+) -> Result<Output, Fail> {
+    let mut arguments = vec![
+        "create",
+        "--network",
+        "none",
+        "--user",
+        "1000:1000",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+    ];
+    if let Some(environment) = environment {
+        arguments.extend_from_slice(&["--env", environment]);
+    }
+    arguments.extend_from_slice(&[
+        "--entrypoint",
+        "/usr/local/bin/prismpm",
+        image,
+        "--json",
+        "completion",
+        "bash",
+    ]);
+    let created = Command::new("docker").args(arguments).output()?;
+    if !created.status.success() {
+        return Err(format!(
+            "cannot create SDK mutation container: {}",
+            String::from_utf8_lossy(&created.stderr).trim()
+        )
+        .into());
+    }
+    let container = String::from_utf8(created.stdout)?.trim().to_owned();
+    if container.len() != 64 || !container.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("Docker returned a malformed mutation container ID".into());
+    }
+    let destination = format!("{container}:{target}");
+    let copied = Command::new("docker")
+        .arg("cp")
+        .arg(source)
+        .arg(&destination)
+        .output()?;
+    if !copied.status.success() {
+        let _ = Command::new("docker")
+            .args(["rm", "--force", &container])
+            .output();
+        return Err(format!(
+            "cannot plant SDK mutation at {target}: {}",
+            String::from_utf8_lossy(&copied.stderr).trim()
+        )
+        .into());
+    }
+    let output = Command::new("docker")
+        .args(["start", "--attach", &container])
+        .output();
+    let removed = Command::new("docker")
+        .args(["rm", "--force", &container])
+        .output()?;
+    if !removed.status.success() {
+        return Err(format!(
+            "cannot remove SDK mutation container: {}",
+            String::from_utf8_lossy(&removed.stderr).trim()
+        )
+        .into());
+    }
+    Ok(output?)
+}
+
+fn check_sdk_runtime_boundary() -> Result<(), Fail> {
+    let image = std::env::var("PRISMPM_TEST_SDK_IMAGE")
+        .map_err(|_| "PRISMPM_TEST_SDK_IMAGE is required for the SDK runtime boundary gate")?;
+    if !image.contains("@sha256:") {
+        return Err("SDK runtime boundary requires a digest-qualified image".into());
+    }
+
+    let baseline = docker_sdk_command(&image, &[])?;
+    if !baseline.status.success()
+        || !String::from_utf8_lossy(&baseline.stdout)
+            .contains("\"schema\":\"prismpm/completion-result/1\"")
+    {
+        return Err(format!(
+            "released SDK failed its immutable inventory baseline: status={} stdout={} stderr={}",
+            baseline.status,
+            String::from_utf8_lossy(&baseline.stdout).trim(),
+            String::from_utf8_lossy(&baseline.stderr).trim()
+        )
+        .into());
+    }
+
+    let override_attempt = docker_sdk_command(
+        &image,
+        &[
+            "--env",
+            "PRISMPM_SDK_INVENTORY=/tmp/attacker-inventory.json",
+        ],
+    )?;
+    if !override_attempt.status.success() || override_attempt.stdout != baseline.stdout {
+        return Err(format!(
+            "caller-controlled inventory environment changed released SDK behavior: status={} stdout={} stderr={}",
+            override_attempt.status,
+            String::from_utf8_lossy(&override_attempt.stdout).trim(),
+            String::from_utf8_lossy(&override_attempt.stderr).trim()
+        )
+        .into());
+    }
+
+    let planted = tempfile::tempdir()?;
+    let planted_command = planted.path().join("undeclared-sdk-command");
+    std::fs::write(&planted_command, b"#!/bin/sh\nexit 0\n")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&planted_command, std::fs::Permissions::from_mode(0o755))?;
+    }
+    let injected = mutated_sdk_command(
+        &image,
+        Some("PATH=/planted:/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin"),
+        planted.path(),
+        "/planted",
+    )?;
+    assert_sdk_inventory_rejection(&injected, "an undeclared executable on PATH")?;
+
+    let tampered = tempfile::NamedTempFile::new()?;
+    std::fs::write(tampered.path(), b"#!/bin/sh\nexit 0\n")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(tampered.path(), std::fs::Permissions::from_mode(0o755))?;
+    }
+    let changed = mutated_sdk_command(&image, None, tampered.path(), "/usr/local/bin/just")?;
+    assert_sdk_inventory_rejection(&changed, "a changed declared executable")?;
+
+    println!(
+        "SDK runtime boundary: immutable inventory accepted the exact image and rejected environment override, PATH injection, and executable tampering"
+    );
+    Ok(())
+}
+
 fn run_vv(root: &Path) -> Result<(), Fail> {
     // Evidence is a result of this run, never an input to it.  Removing a
     // prior ignored record makes the gate repeatable and prevents a stale
@@ -118,21 +368,28 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("cannot invalidate prior vv evidence: {error}").into()),
     }
+    require_clean_worktree(root)?;
 
-    println!("VV gate 1/14: formatting");
+    println!("VV gate 1/15: formatting");
     command(root, "cargo", &["fmt", "--all", "--", "--check"])?;
 
-    println!("VV gate 2/14: model, diagnostics, standards, and generated documentation");
+    println!("VV gate 2/15: model, diagnostics, standards, and generated documentation");
     codegen::check_model(root, false)?;
 
-    println!("VV gate 3/14: SPEC/register/scenario/test links");
+    println!("VV gate 3/15: SPEC/register/scenario/test links");
     spec_links::validate(root)?;
 
-    println!("VV gate 4/14: source, error, unsafe, dependency, and generated-file audits");
-    command(root, "cargo", &["metadata", "--locked", "--offline"])?;
+    println!("VV gate 4/15: source, error, unsafe, dependency, and generated-file audits");
+    command_quiet_stdout(
+        root,
+        "cargo",
+        &["metadata", "--locked", "--offline", "--format-version", "1"],
+    )?;
     audit_all(root)?;
+    command(root, "bash", &["scripts/bootstrap-verify.sh"])?;
+    check_sdk_runtime_boundary()?;
 
-    println!("VV gate 5/14: Clippy with warnings denied");
+    println!("VV gate 5/15: Clippy with warnings denied");
     command(
         root,
         "cargo",
@@ -141,13 +398,15 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "--workspace",
             "--all-targets",
             "--all-features",
+            "--locked",
+            "--offline",
             "--",
             "-D",
             "warnings",
         ],
     )?;
 
-    println!("VV gate 6/14: workspace unit and property tests");
+    println!("VV gate 6/15: workspace unit and property tests");
     command(
         root,
         "cargo",
@@ -160,14 +419,14 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         ],
     )?;
 
-    println!("VV gate 7/14: feature, conformance, and negative fixtures");
+    println!("VV gate 7/15: feature, conformance, and negative fixtures");
     check_fixtures(root, false)?;
 
-    println!("VV gate 8/14: generated Lean build, replay, axiom audit, and source audit");
+    println!("VV gate 8/15: generated Lean build, replay, axiom audit, and source audit");
     verify_examples(root, false)?;
     audit::audit_no_handwritten_lean(root)?;
 
-    println!("VV gate 9/14: LexLean format/lock and Prism check/build/verify");
+    println!("VV gate 9/15: LexLean format/lock and Prism check/build/verify");
     for operation in [["fmt", "--check"], ["lock", "--check"]] {
         command(
             root,
@@ -193,24 +452,39 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     let _ = build_once(root)?;
     let _ = verify_once(root)?;
 
-    println!("VV gate 10/14: Holo schema and reviewed golden bytes");
+    println!("VV gate 10/15: Holo schema and reviewed golden bytes");
     check_golden(root, false)?;
 
-    println!("VV gate 11/14: named export, coverage, Rust compilation, and execution evidence");
+    println!("VV gate 11/15: named export, coverage, Rust compilation, and execution evidence");
     check_verified_evidence(root)?;
 
-    println!("VV gate 12/14: two-absolute-directory reproducibility");
+    println!("VV gate 12/15: two-absolute-directory reproducibility");
     check_reproducibility(root)?;
 
-    println!("VV gate 13/14: dependency policy");
+    println!("VV gate 13/15: authoritative upstream corpora, registry, and runtime conformance");
+    let upstream = prismpm::upstream_conformance::verify(root)?;
+    println!(
+        "upstream conformance: JSON Schema +{}/-{}, Unicode {}, OCI Runtime +{}/-{}, OCI Distribution {}/{}",
+        upstream.json_schema.positive,
+        upstream.json_schema.negative,
+        upstream.unicode.positive,
+        upstream.oci_runtime.positive,
+        upstream.oci_runtime.negative,
+        upstream.oci_distribution.passed,
+        upstream.oci_distribution.failed
+    );
+
+    println!("VV gate 14/15: dependency policy");
     command(
         root,
         "cargo",
         &["deny", "--frozen", "--all-features", "check"],
     )?;
 
-    println!("VV gate 14/14: packaged crate and downstream public API");
+    println!("VV gate 15/15: packaged crate and downstream public API");
     package_api_check(root)?;
+
+    require_clean_worktree(root)?;
 
     let commit = Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -222,7 +496,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     let commit = String::from_utf8(commit.stdout)?.trim().to_owned();
     let evidence = serde_json::json!({
         "commit": commit,
-        "gates": (1_u8..=14).collect::<Vec<_>>(),
+        "gates": (1_u8..=15).collect::<Vec<_>>(),
         "schema": "prismpm/vv-evidence/1",
         "status": "passed"
     });
@@ -231,7 +505,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         root.join("target/vv-evidence.json"),
         prismpm::holo::canonical::encode_value(&evidence)?,
     )?;
-    println!("All 14 VV gates PASSED for commit {commit}.");
+    println!("All 15 VV gates PASSED for commit {commit}.");
     Ok(())
 }
 
@@ -566,7 +840,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         packaged.join("Cargo.toml"),
         r#"[package]
 name = "prismpm"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.97"
 license = "MIT OR Apache-2.0"
@@ -578,7 +852,7 @@ camino = "1.2"
 clap = { version = "4.5", features = ["derive"] }
 fs4 = { version = "0.13", features = ["sync"] }
 hologram = { package = "uor-hologram", version = "0.12.1", git = "https://github.com/Hologram-Technologies/hologram", rev = "2bda6a9a9476872dade705bd61ece4209607f6da", default-features = false, features = ["archive", "space"] }
-lexlean = "0.2.0"
+lexlean = "0.3.0"
 prod-codegen = "0.1.0"
 prod-ir = "0.1.0"
 same-file = "1.0"
@@ -661,6 +935,11 @@ missing_safety_doc = "deny"
         "package-api: Cargo-selected package assets and downstream public API compile (tree sha256 {:x})",
         package_hasher.finalize()
     );
+    command(
+        root,
+        "sh",
+        &["scripts/package-release-crates.sh", "--check"],
+    )?;
     Ok(())
 }
 
@@ -824,7 +1103,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
     .trim()
     .to_owned();
     let archive = Command::new("git")
-        .args(["archive", "--format=tar", "--prefix=PrismPM-0.2.0/", "HEAD"])
+        .args(["archive", "--format=tar", "--prefix=PrismPM-0.3.0/", "HEAD"])
         .current_dir(root)
         .output()?;
     if !archive.status.success() {
@@ -834,7 +1113,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         )
         .into());
     }
-    let source_name = "PrismPM-0.2.0-source.tar";
+    let source_name = "PrismPM-0.3.0-source.tar";
     std::fs::write(destination.join(source_name), archive.stdout)?;
 
     let metadata = Command::new("cargo")
@@ -900,11 +1179,11 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "components": components,
         "source_commit": head,
         "spec": "prismpm/sbom/1",
-        "version": "0.2.0"
+        "version": "0.3.0"
     });
     let mut sbom_bytes = prismpm::holo::canonical::encode_value(&sbom)?;
     sbom_bytes.push(b'\n');
-    let sbom_name = "PrismPM-0.2.0-sbom.json";
+    let sbom_name = "PrismPM-0.3.0-sbom.json";
     std::fs::write(destination.join(sbom_name), &sbom_bytes)?;
 
     let artifact_rows = [
@@ -924,7 +1203,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "artifacts": artifact_rows.iter().map(|(path, sha256)| serde_json::json!({"path": path, "sha256": sha256})).collect::<Vec<_>>(),
         "commit": head,
         "schema": "prismpm/release-manifest/1",
-        "version": "0.2.0"
+        "version": "0.3.0"
     });
     let mut manifest_bytes = prismpm::holo::canonical::encode_value(&manifest)?;
     manifest_bytes.push(b'\n');
