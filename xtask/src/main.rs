@@ -978,7 +978,12 @@ fn standalone_package_manifest(source: &str, workspace: &str) -> Result<String, 
                     }
                 }
                 if let Some(dependency) = value.as_table_mut() {
-                    if dependency.remove("path").is_some() && !dependency.contains_key("version") {
+                    let external_location =
+                        dependency.remove("path").is_some() | dependency.remove("git").is_some();
+                    for selector in ["branch", "tag", "rev"] {
+                        dependency.remove(selector);
+                    }
+                    if external_location && !dependency.contains_key("version") {
                         return Err(
                             format!("packaged dependency {name} lacks a registry version").into(),
                         );
@@ -1335,6 +1340,7 @@ version.workspace = true
 [dependencies]
 new_runtime_dependency.workspace = true
 compiler = { workspace = true, features = ["extra"] }
+archive = { version = "=1.2.3", git = "https://example.invalid/archive", rev = "012345" }
 [target.'cfg(unix)'.dependencies]
 compiler.workspace = true
 [lints]
@@ -1364,6 +1370,12 @@ unsafe_code = "deny"
             2
         );
         assert!(manifest["dependencies"]["compiler"].get("path").is_none());
+        assert!(manifest["dependencies"]["archive"].get("git").is_none());
+        assert!(manifest["dependencies"]["archive"].get("rev").is_none());
+        assert_eq!(
+            manifest["dependencies"]["archive"]["version"].as_str(),
+            Some("=1.2.3")
+        );
         assert!(manifest["target"]["cfg(unix)"]["dependencies"]["compiler"]
             .get("path")
             .is_none());
