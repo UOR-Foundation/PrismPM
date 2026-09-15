@@ -128,8 +128,8 @@ fn run() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         .iter()
         .map(|row| row.code.clone())
         .collect::<BTreeSet<_>>();
-    if registered_features.len() != 147 || registered_diagnostics.len() != 83 {
-        return Err("the shipped conformance register is not the complete 147/83 contract".into());
+    if registered_features.len() != 148 || registered_diagnostics.len() != 83 {
+        return Err("the shipped conformance register is not the complete 148/83 contract".into());
     }
     let requested_features = if arguments.feature.is_empty() {
         registered_features.clone()

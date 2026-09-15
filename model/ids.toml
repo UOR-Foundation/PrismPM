@@ -631,6 +631,12 @@ level = "build"
 statement = "Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values."
 
 [[id]]
+id = "SY-07"
+suite = "system"
+level = "build"
+statement = "Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches."
+
+[[id]]
 id = "DK-01"
 suite = "sdk"
 level = "build"

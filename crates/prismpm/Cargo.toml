@@ -25,6 +25,8 @@ include = [
     "src/**",
     "standards.lock",
     "stdlib/README.md",
+    "stdlib/LICENSE-APACHE",
+    "stdlib/LICENSE-MIT",
     "stdlib/release.json",
     "stdlib/generated/prism-stdlib-0.2.0.crate",
     "stdlib/src/**",

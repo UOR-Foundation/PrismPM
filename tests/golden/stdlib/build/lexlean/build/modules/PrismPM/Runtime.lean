@@ -1,6 +1,8 @@
 module
 public import Init
 public import PrismPM.Foundation.Holo
+public import PrismPM.Production.ControlCoverage
+public import PrismPM.Production.ControlCoverageCorpus
 public import PrismPM.Production.System
 public import PrismPM.Production.SystemValidation
 public import PrismPM.Production.SystemValidationCorpus

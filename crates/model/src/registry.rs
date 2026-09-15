@@ -624,7 +624,7 @@ pub struct ExecutionCorpus {
     pub strategy: String,
     /// Canonical hexadecimal deterministic seed.
     pub seed: String,
-    /// Total exhaustive plus deterministic-property case count.
+    /// Exhaustive plus deterministic-property list-input count, excluding structured probes.
     pub case_count: u64,
     /// Runtime scalar domain.
     pub value_domain: String,
@@ -632,6 +632,8 @@ pub struct ExecutionCorpus {
     pub exhaustive: ExhaustiveCorpus,
     /// Deterministic property-test bounds.
     pub property: PropertyCorpus,
+    /// Separate finite control-coverage corpus accounting.
+    pub control_coverage: ControlCoverageCorpus,
     /// Runtime functions and their LexLean-authored oracle theorems.
     pub oracle: Vec<ExecutionOracle>,
 }
@@ -664,6 +666,18 @@ pub struct PropertyCorpus {
     pub generated_value_modulus: u64,
     /// Shrink outcome; passing fixed corpora have no counterexample to shrink.
     pub shrink_result: String,
+}
+
+/// Counts for the separately executed modeled control-coverage corpus.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlCoverageCorpus {
+    /// Total number of modeled positive and negative cases.
+    pub case_count: u64,
+    /// Number of modeled submissions expected to be accepted.
+    pub positive: u64,
+    /// Number of modeled submissions expected to be rejected.
+    pub negative: u64,
 }
 
 /// One runtime function bound to its formal oracle theorem.

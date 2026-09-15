@@ -388,7 +388,9 @@ pub fn run_at(root: &Path, id: &str) {
         }
 
         "AU-01" | "AU-02" | "AU-03" | "AU-04" | "AU-05" | "AU-06" => verify_authorities(root, id),
-        "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" => verify_system(root, id),
+        "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" | "SY-07" => {
+            verify_system(root, id)
+        }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
@@ -595,6 +597,58 @@ fn empty_system_relations() -> Value {
 
 fn verify_system(root: &Path, id: &str) {
     match id {
+        "SY-07" => {
+            assert_declarations(
+                root,
+                "Production.ControlCoverage",
+                &[
+                    "ControlObligation",
+                    "ControlContribution",
+                    "ControlPolicy",
+                    "ControlSubmission",
+                    "validateControlCoverage",
+                ],
+            );
+            assert_declarations(
+                root,
+                "Production.ControlCoverageCorpus",
+                &["coverageCorpusPassed", "coverageCorpusSound"],
+            );
+            assert_prism_theorems_axiom_free(root);
+            // Controller::verify validates exact case definitions, distinct
+            // executed calls, and expectations before emitting this evidence.
+            // Exercise that shared implementation, not a parallel checker.
+            let model = repo_model::Model::load(&root.join("model")).expect("registered corpus");
+            let counts = &model.execution_corpus.control_coverage;
+            let evidence = json(&verified_root(root).join("execution.json"));
+            assert_eq!(
+                evidence["control_coverage"],
+                serde_json::json!({
+                    "case_count": counts.case_count, "positive": counts.positive, "negative": counts.negative,
+                    "status": "passed"
+                })
+            );
+            assert_eq!(
+                evidence["case_count"], 597,
+                "list inputs retain separate accounting"
+            );
+            let coverage = json(&verified_root(root).join("coverage.json"));
+            for name in [
+                "PrismPM.Production.ControlCoverage.validateControlCoverage",
+                "PrismPM.Production.ControlCoverageCorpus.coverageCorpusPassed",
+                "PrismPM.Production.ControlCoverageCorpus.coverageValidPolicy",
+                "PrismPM.Production.ControlCoverageCorpus.coverageValidSubmission",
+            ] {
+                assert!(
+                    coverage["requested_roots"]
+                        .as_array()
+                        .expect("export roots")
+                        .iter()
+                        .any(|root| root == name),
+                    "missing named runtime root {name}"
+                );
+            }
+        }
         "SY-01" => {
             assert_declarations(
                 root,
@@ -788,7 +842,7 @@ fn sdk_lock_value() -> Value {
             {"digest":format!("sha256:{}", "7".repeat(64)),"id":"runtime-os-lock","kind":"dependency-lock","version":"ubuntu-noble@20260901T000000Z"},
             {"digest":format!("sha256:{}", "1".repeat(64)),"id":"sdk-linux-amd64","kind":"image","version":"0.3.0"},
             {"digest":format!("sha256:{}", "2".repeat(64)),"id":"sdk-linux-arm64","kind":"image","version":"0.3.0"},
-            {"digest":format!("sha256:{}", "6".repeat(64)),"id":"sdk-test-corpus","kind":"test-corpus","version":"147-features-83-diagnostics"},
+            {"digest":format!("sha256:{}", "6".repeat(64)),"id":"sdk-test-corpus","kind":"test-corpus","version":"148-features-83-diagnostics"},
             {"digest":format!("sha256:{}", "5".repeat(64)),"id":"sigstore-root","kind":"trust-root","version":"2025-10-10"}
         ],
         "schema":"prismpm/sdk-lock/1",
@@ -2331,9 +2385,26 @@ fn verify_stdlib(root: &Path, id: &str) {
         }
         "ST-08" => {
             let roots = json(&verified_root(root).join("roots.json"));
+            let model = repo_model::Model::load(&root.join("model")).expect("registered exports");
+            let exports = model
+                .stdlib_exports
+                .union_with_runtime(&model.runtime_roots.roots)
+                .expect("canonical export union");
+            assert_eq!(roots["requested_roots"], serde_json::json!(exports));
+            let manifest = verification_manifest(root);
+            assert_eq!(roots["requested_roots"], manifest["export_roots"]);
             assert_eq!(
-                roots["requested_roots"],
-                verification_manifest(root)["runtime_roots"]
+                manifest["runtime_roots"],
+                serde_json::json!(model.runtime_roots.roots)
+            );
+            assert_eq!(
+                manifest["package_export_roots"],
+                serde_json::json!(model
+                    .stdlib_exports
+                    .export
+                    .iter()
+                    .map(|row| &row.lean_name)
+                    .collect::<Vec<_>>())
             );
         }
         "ST-09" => {

@@ -367,7 +367,7 @@ pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
         "prismpm/conformance-result/1",
         json!({
             "diagnostic_count":83,
-            "feature_count":147,
+            "feature_count":148,
             "referrer_digest":descriptor,
             "release_digest":digest,
             "runner_digest":expected_runner,
@@ -422,7 +422,7 @@ mod tests {
             "cases":cases,
             "coverage_digest":digest,
             "diagnostic_count":83,
-            "feature_count":147,
+            "feature_count":148,
             "release_digest":digest,
             "runner_digest":digest,
             "schema":"prismpm/production-acceptance/1",

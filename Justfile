@@ -34,6 +34,14 @@ package-api:
 package-release-crates-check:
     ./scripts/package-release-crates.sh --check
 
+# Check generated stdlib sources against a freshly verified, exact LCNF export.
+stdlib-package-check:
+    cargo run --locked --package xtask -- stdlib-package
+
+# Regenerate only the stdlib source package; archive/release sealing is separate.
+stdlib-package-write:
+    cargo run --locked --package xtask -- stdlib-package --write
+
 # Verify examples and standard library
 verify-examples:
     cargo run --package xtask -- verify-examples

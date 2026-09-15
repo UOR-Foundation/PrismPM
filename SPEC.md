@@ -189,7 +189,7 @@ must not panic.
 
 `prism-stdlib` is the first portable foundation/runtime layer: the ecosystem
 equivalent of libc/libgcc, not a POSIX or C ABI clone. Its only authoritative
-source is `.lex.tex`. The versioned module surface covers core Boolean/unit/
+semantic source is `.lex.tex`. The versioned module surface covers core Boolean/unit/
 ordering values; option/result; mathematical and fixed-width integers with
 checked operations; byte, bounded-buffer, little-endian codec, and UTF-8
 operations; deterministic structural recursion; guest memory; BLAKE3/SHA-256
@@ -201,9 +201,35 @@ loading, floating point, and ambient POSIX authority are excluded.
 The generated Cargo package is `prism-stdlib` version 0.2.0, licensed
 `MIT OR Apache-2.0`, with only the default `std` feature. Disabling default
 features retains the same semantic core for Core-Wasm. The package contains no
-path or Git dependency. Its generated-source manifest binds every output to
-LexLean source/semantic/compiler IDs, generated Lean, LCNF, and the pinned
-lean4-prod revision. The bootstrap build and the PrismPM-regenerated build must
+path or Git dependency. `model/stdlib-package.toml` owns its package metadata;
+the current contract and packaging tooling require exactly version 0.2.0.
+`model/stdlib-exports.toml` separately fixes the original 0.1.x application
+entry points and public Rust function types, including owned byte/string
+arguments and the five `StandardsProfile` accessors. The exact sorted union
+of those package exports and `model/runtime-roots.toml` is exported and checked
+by the native verification pipeline. Verification binds the package-export
+register bytes and requested union to the accepted LCNF and coverage evidence.
+Package-only primitives are not added to the validator execution corpus or
+its allocation-free call claims. A compiled consumer exercises every original
+function signature, public type, and representative boundary behavior under
+both `std` and `no_std + alloc`; removing an original export is a failure.
+The package copies `stdlib/README.md`, `stdlib/LICENSE-MIT`, and
+`stdlib/LICENSE-APACHE` byte-for-byte; repository-root license texts are not
+substitutes for the standard library's licensed release assets.
+`generation-manifest.json` directly records the exported LCNF's SHA-256 and
+the hashes of the generated package's source, Cargo metadata, README, and
+license files. It is not, by itself, a complete source/compiler attestation.
+Complete provenance remains mandatory through the checked evidence chain:
+the Prism verification manifest binds that exact LCNF, model, and LexLean
+attestation; the accepted LexLean attestation binds source/semantic/compiler
+IDs and the build manifest of exact generated Lean files. The Prism build ID
+binds the dependency-register digest, whose revision and artifact/tree hashes
+pin lean4-prod. Dependency audits check those actual bytes before stdlib
+generation and acceptance. The package gate regenerates from fresh verified
+LCNF, compares the complete package tree, checks the release's stdlib semantic
+identity and crate checksum, and reproduces the crate archive. All records in
+this chain are required for source-to-package provenance. The bootstrap build
+and the PrismPM-regenerated build must
 be byte-identical. A source audit rejects handwritten mirrors of Holo/View
 layouts, tags, renderings, state transitions, or validators outside registered
 I/O, hash, and host-transport adapters.
@@ -274,24 +300,35 @@ bounded, fresh-instance scoped, and aborts on ABI resource violations. The
 browser boundary carries operands/results as decimal strings and calls only
 the generated crate API; JavaScript Number arithmetic is forbidden.
 
-Execution evidence has exactly schema `prismpm/execution-evidence/1`, status
-`passed`, strategy `exhaustive-v1+lcg-v1`, seed `5eedcafef00dbeef`, 597 cases,
-maximum list length 16, and value domain `u64`, with `no_allocation` and
+Execution evidence has exactly schema `prismpm/execution-evidence/2`, status
+`passed`, strategy `exhaustive-v1+lcg-v1`, seed `5eedcafef00dbeef`, 597 list-input
+cases, maximum list length 16, and value domain `u64`, with `no_allocation` and
 `no_panic` true. It also records the SHA-256 of the exact typed
 `model/execution-corpus.toml` bytes. That register fixes all bounds and counts,
-binds every executed root or helper to its fully qualified LexLean-generated
-soundness/completeness or uniqueness theorem, and has a runtime-root subset
-exactly equal to `model/runtime-roots.toml`. Every listed theorem must have an
+binds every validator-campaign root or helper to its fully qualified LexLean-generated
+theorem, and has a runtime-root subset exactly equal to
+`model/runtime-roots.toml`. Every listed theorem must have an
 exact empty observed axiom set in the accepted LexLean attestation. The 85
 exhaustive input cases enumerate all lists of lengths 0
-through 3 over values 0 through 3 for every registered validator, helper,
-canonical-index generator, and standards-profile truth table. Each case
-exercises multiple oracle-bound checks. The
+through 3 over values 0 through 3 for the Foundation.Holo list validators,
+all-below helper, canonical-index generator, and standards-profile truth table.
+Each case exercises multiple oracle-bound checks. The
 remaining 512 deterministic LCG cases cover lengths 0
 through 16, invalid references, empty data, `u64::MAX`, and checked overflow.
 The evidence records `shrink_result = \"not-applicable-passed\"`, because no
 counterexample exists to shrink. This is a fixed finite strategy, not
 unconstrained fuzzing or a universal claim.
+
+Structured-model probes execute separately from those 597 list inputs. In
+particular, the required `control_coverage` evidence object records
+`case_count = 54`, `positive = 6`, `negative = 48`, and `status = "passed"`,
+matching the separate `[control_coverage]` counts in the execution-corpus
+register and the complete modeled corpus in §11.1. Missing, additional, or
+incorrect accounting fields are rejected. The corpus's finite expected-result
+theorems are not universal soundness/completeness theorems; neither their
+54 cases nor the other structured-model probes are included in the 597
+list-input count. A passing runtime result requires both the structured probes
+and the list-input checks to pass.
 
 ## 8. Verification and attestation
 
@@ -318,10 +355,14 @@ the LexLean declaration audit, unpacks the pinned `lean4-prod` Lean source,
 runs named export, code generation, compilation, and the execution corpus.
 No verification stage updates dependencies or accesses the network.
 
-The canonical `prismpm/verification-manifest/1` binds build and LexLean
-attestation IDs, runtime roots, normalized process records, execution evidence,
+The canonical `prismpm/verification-manifest/2` binds build and LexLean
+attestation IDs, separate runtime and package-export roots, their exact sorted
+export union, normalized process records, execution evidence,
 and sizes/hashes of Holo, LexLean attestation, coverage, roots, LCNF, the typed
-execution-corpus register, execution evidence, generated Rust, and executable.
+execution-corpus and package-export registers, execution evidence, generated
+Rust, and executable. The exact package-export register is published alongside
+the manifest; package generation requires its bytes and declared export union
+to agree with the current authoritative registers.
 The attestation ID is SHA-256 of manifest bytes; the
 manifest does not contain its own ID. Only after all stages pass are the
 manifest and normalized platform-independent evidence atomically published at
@@ -451,6 +492,52 @@ referenced artifact in a system; its bytes and semantics are not reinterpreted.
 All Prism-owned system types, validators and theorems are `.lex.tex` values.
 LexLean is the only Lean generation path and named lean4-prod roots are the
 only production code-export path.
+
+### 11.1 Ordered mandatory control coverage
+
+`Production.ControlCoverage` implements Prism-owned structural composition,
+not OSCAL validation or security certification. `ControlPolicy` supplies a
+nonempty ordered list of mandatory `ControlObligation` values independently
+of the submitted `ControlContribution` values. Its `digest` is the immutable
+policy identity authenticated by the surrounding evidence boundary; this
+finite validator represents each digest as exactly 32 `UInt8` octets, compares
+those lists by modeled structural recursion, and checks exact bindings, not the
+policy's digest preimage, signatures, evidence availability, or truth.
+The caller must obtain the required policy from its authenticated model,
+never substitute an applicant-selected policy. IDs are positive Nat keys
+local to this typed policy, not replacements for §11 system-model entity IDs.
+
+Each obligation fixes its control key, nonempty exact UTF-8 scope and version,
+32-byte subject and evidence identities, nonempty evidence-kind identity,
+`LocalRequired` or `InheritedRequired` mode, permitted provider obligation IDs,
+and residual control keys imposed on downstream consumers. Contributions bind
+all those scalar identities and the exact policy digest. A local contribution
+cannot satisfy an inherited-only obligation, or conversely. An inherited
+contribution additionally binds an explicitly permitted provider ID and its
+exact subject and evidence identities. Provider and consumer must have the
+same control, scope, version, and evidence kind; no implicit version mapping,
+scope broadening, or transfer between controls is admitted.
+
+Every required provider residual must have a covered obligation for the
+consumer's exact subject, scope, and version, and must remain in the consumer's
+own downstream residual list. Thus inheritance cannot erase consumer work or
+silently drop a requirement on further inheritance. Active provider and
+residual dependencies must precede the consuming obligation in policy order.
+This checked topological witness rejects cycles in their combined graph;
+acyclic inputs in a different dependency order must be explicitly reordered.
+Contribution order is immaterial. No caller-supplied validity Boolean, rank,
+fuel, or contribution-owned residual list is accepted.
+
+Validation checks every row, including otherwise unused rows: obligation IDs
+and control/scope/version/subject bindings are unique; provider/residual lists
+are duplicate-free and closed; each obligation has exactly one correctly
+bound contribution; and extra or duplicate contributions are rejected.
+Failure is the generated predicate's `false`, not a new host diagnostic.
+`ControlCoverageCorpus` contains 54 finite cases, including six positive cases
+and 48 rejection cases, each checked by an empty-axiom Lean theorem. The
+generated runtime executes that exact modeled corpus and checks the valid
+inherited/residual validator call for allocations. Those finite witnesses do
+not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
 
@@ -590,7 +677,7 @@ discovery labels. A pushed artifact is immutable and deploy never rebuilds.
 
 `conformance NAME@sha256:DIGEST` executes the SDK-shipped PrismPM source and
 fixture closure with the SDK-shipped `prismpm-conformance` executable. It runs
-each of the 147 registered feature scenarios and each of the 83 executable
+each of the 148 registered feature scenarios and each of the 83 executable
 malformed-input diagnostic triggers. The canonical transcript is bound to the
 release, capability-coverage artifact, SDK, and runner digests; any missing,
 duplicate, panicking, or differently coded execution fails before the evidence
@@ -711,6 +798,13 @@ media types have exact major compatibility; only contracts explicitly marked
 fields in a `/1` value remain errors. An incompatible Holo change requires
 Holo/2 and is outside this release.
 
+The required structured control-corpus accounting uses
+`prismpm/execution-evidence/2`; the required package-export root and register
+bindings use `prismpm/verification-manifest/2`. Their closed `/1` contracts
+are not extended in place, and `/1` evidence cannot satisfy these `/2`
+acceptance checks. This does not change Holo/1, `prismpm/verify-result/1`,
+or `prismpm/application-verification-manifest/1`.
+
 ## Appendix A. Conformance ID Registry
 
 Every row below is normative, has the honesty level registered in `model/ids.toml`, and is generated from that register.
@@ -822,6 +916,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `SY-04` | `system` | System models deterministically project OpenAPI, AsyncAPI, CloudEvents, SPDX, OpenTelemetry, Compose, and Kubernetes inputs. | §11 |
 | `SY-05` | `system` | Late-bound configuration is typed and secret values remain external references excluded from artifacts and evidence. | §11 |
 | `SY-06` | `system` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. | §11 |
+| `SY-07` | `system` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. | §11 |
 | `DK-01` | `sdk` | One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas. | §12 |
 | `DK-02` | `sdk` | Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence. | §12 |
 | `DK-03` | `sdk` | Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics. | §12 |

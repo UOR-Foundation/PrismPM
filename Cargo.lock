@@ -2143,6 +2143,8 @@ version = "0.3.0"
 dependencies = [
  "camino",
  "prismpm",
+ "prod-codegen",
+ "prod-ir",
  "repo-conformance",
  "repo-model",
  "serde_json",

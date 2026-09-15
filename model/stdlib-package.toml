@@ -1,0 +1,6 @@
+spec = "prismpm/stdlib-package/1"
+name = "prism-stdlib"
+version = "0.2.0"
+description = "Generated portable Prism application and production-system runtime"
+repository = "https://github.com/UOR-Foundation/PrismPM"
+homepage = "https://github.com/UOR-Foundation/PrismPM"

@@ -7,6 +7,14 @@ formally checked `Production.System.SystemManifest` validator. The manifest is
 derived from and byte-for-byte compared with the closed system graph; callers
 cannot supply Boolean claims of validity.
 
+`Production.ControlCoverage` additionally validates mandatory obligations and
+permitted local/inherited contributions, including consumer residual work,
+exact identity bindings, closure, uniqueness, and ordered dependencies. This
+is Prism-owned structural composition, not OSCAL conformance or evidence
+authentication: the surrounding boundary must authenticate the policy and
+evidence identities. Its 54 modeled cases have finite expected-result proofs
+and generated runtime execution; they do not claim universal soundness.
+
 The Rust in this crate is generated from `.lex.tex` by LexLean, elaborated by
 Lean 4, exported by the named `lean4-prod` LCNF boundary, and rendered by
 `prod-codegen`. No handwritten Lean or alternative application semantics are

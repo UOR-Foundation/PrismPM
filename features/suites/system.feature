@@ -35,3 +35,9 @@ Feature: system
     Given the locked PrismPM production fixture
     When the SY-06 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @SY-07 @build
+  Scenario: Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches.
+    Given the locked PrismPM production fixture
+    When the SY-07 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

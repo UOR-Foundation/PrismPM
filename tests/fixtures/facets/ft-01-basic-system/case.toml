@@ -47,6 +47,22 @@ function = "PrismPM.Foundation.Holo.validateViewpointLinks"
 theorem = "PrismPM.Foundation.Holo.viewpointLinks_sound_complete"
 
 [[oracle]]
+function = "PrismPM.Production.ControlCoverage.validateControlCoverage"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageCaseInheritedResidualExpected"
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverageCorpus.coverageCorpusPassed"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageCorpusSound"
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverageCorpus.coverageValidPolicy"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageAllocationProbeExpected"
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverageCorpus.coverageValidSubmission"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageAllocationProbeExpected"
+
+[[oracle]]
 function = "PrismPM.Production.SystemValidation.validateManifest"
 theorem = "PrismPM.Production.SystemValidationCorpus.corpusManifestSound"
 

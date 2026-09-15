@@ -223,6 +223,7 @@ The three honesty levels:
 | `SY-04` | `build` | System models deterministically project OpenAPI, AsyncAPI, CloudEvents, SPDX, OpenTelemetry, Compose, and Kubernetes inputs. |
 | `SY-05` | `build` | Late-bound configuration is typed and secret values remain external references excluded from artifacts and evidence. |
 | `SY-06` | `build` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. |
+| `SY-07` | `build` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. |
 
 ## template-ci
 

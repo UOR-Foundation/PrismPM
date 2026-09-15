@@ -6,12 +6,17 @@
 pub mod codegen;
 pub mod registry;
 pub mod release;
+mod stdlib_exports;
+mod stdlib_package;
+
+pub use stdlib_exports::{StdlibExport, StdlibExports};
+pub use stdlib_package::StdlibPackage;
 
 pub use registry::{
-    Authorities, AuthorityRow, Claim, CommandRow, Commands, ContractRow, Contracts, EmitterInputs,
-    ErrorRow, Errors, ExecutionCorpus, ExecutionOracle, ExhaustiveCorpus, IdRow, Ids, Ledger,
-    Level, OracleRow, OracleTrustRoot, PropertyCorpus, RuntimeRoots, SignatureTrustRoot,
-    StandardRow, Standards,
+    Authorities, AuthorityRow, Claim, CommandRow, Commands, ContractRow, Contracts,
+    ControlCoverageCorpus, EmitterInputs, ErrorRow, Errors, ExecutionCorpus, ExecutionOracle,
+    ExhaustiveCorpus, IdRow, Ids, Ledger, Level, OracleRow, OracleTrustRoot, PropertyCorpus,
+    RuntimeRoots, SignatureTrustRoot, StandardRow, Standards,
 };
 
 use std::path::{Path, PathBuf};
@@ -39,6 +44,10 @@ pub struct Model {
     pub execution_corpus: ExecutionCorpus,
     /// model/runtime-roots.toml
     pub runtime_roots: RuntimeRoots,
+    /// model/stdlib-package.toml
+    pub stdlib_package: StdlibPackage,
+    /// model/stdlib-exports.toml
+    pub stdlib_exports: StdlibExports,
 }
 
 /// Model load/check failure.
@@ -78,6 +87,8 @@ impl Model {
             emitter_inputs: read(dir, "emitter-inputs.toml")?,
             execution_corpus: read(dir, "execution-corpus.toml")?,
             runtime_roots: read(dir, "runtime-roots.toml")?,
+            stdlib_package: read(dir, "stdlib-package.toml")?,
+            stdlib_exports: read(dir, "stdlib-exports.toml")?,
         })
     }
 
@@ -88,6 +99,7 @@ impl Model {
 
     /// Cross-check all model invariants.
     pub fn check(&self) -> Result<(), ModelError> {
+        self.stdlib_exports.check()?;
         self.ledger.check()?;
         self.check_ids()?;
         self.check_authorities()?;
@@ -97,6 +109,7 @@ impl Model {
         self.commands.check()?;
         self.check_command_result_contracts()?;
         self.check_execution_corpus()?;
+        self.stdlib_package.check()?;
         Ok(())
     }
 
@@ -177,6 +190,9 @@ impl Model {
             || corpus.exhaustive.case_count != exhaustive_cases
             || corpus.property.shrink_result != "not-applicable-passed"
             || corpus.case_count != expected_cases
+            || corpus.control_coverage.case_count != 54
+            || corpus.control_coverage.positive != 6
+            || corpus.control_coverage.negative != 48
             || corpus.oracle.is_empty()
             || functions != original
             || self.runtime_roots.spec != "prismpm/runtime-roots/1"
@@ -192,6 +208,8 @@ impl Model {
             || corpus.oracle.iter().any(|row| {
                 let supported = |name: &str| {
                     name.starts_with("PrismPM.Foundation.Holo.")
+                        || name.starts_with("PrismPM.Production.ControlCoverage.")
+                        || name.starts_with("PrismPM.Production.ControlCoverageCorpus.")
                         || name.starts_with("PrismPM.Production.System.")
                         || name.starts_with("PrismPM.Production.SystemValidation.")
                         || name.starts_with("PrismPM.Production.SystemValidationCorpus.")
@@ -451,6 +469,63 @@ pub fn repo_root() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::Model;
+
+    #[test]
+    fn control_coverage_counts_are_separate_and_fixed() {
+        let model = Model::load_from_repo_root().expect("load repository model");
+        model
+            .check_execution_corpus()
+            .expect("both modeled corpora are well formed");
+        assert_eq!(model.execution_corpus.case_count, 597);
+        assert_eq!(model.execution_corpus.control_coverage.case_count, 54);
+        assert_eq!(model.execution_corpus.control_coverage.positive, 6);
+        assert_eq!(model.execution_corpus.control_coverage.negative, 48);
+
+        for field in ["case_count", "positive", "negative"] {
+            for invalid in [0, 1, u64::MAX] {
+                let mut planted = model.clone();
+                let counts = &mut planted.execution_corpus.control_coverage;
+                match field {
+                    "case_count" => counts.case_count = invalid,
+                    "positive" => counts.positive = invalid,
+                    "negative" => counts.negative = invalid,
+                    _ => unreachable!("fixed field list"),
+                }
+                assert!(
+                    planted.check_execution_corpus().is_err(),
+                    "{field}={invalid} must not be accepted"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn control_coverage_accounting_is_required_and_closed() {
+        let source = include_str!("../../../model/execution-corpus.toml");
+        let original: toml::Value = toml::from_str(source).expect("corpus TOML");
+        let mut missing = original.clone();
+        missing
+            .as_table_mut()
+            .expect("corpus table")
+            .remove("control_coverage");
+        assert!(missing.try_into::<super::ExecutionCorpus>().is_err());
+
+        for field in ["case_count", "positive", "negative"] {
+            let mut missing = original.clone();
+            missing["control_coverage"]
+                .as_table_mut()
+                .expect("control coverage table")
+                .remove(field);
+            assert!(missing.try_into::<super::ExecutionCorpus>().is_err());
+        }
+
+        let mut extra = original;
+        extra["control_coverage"]
+            .as_table_mut()
+            .expect("control coverage table")
+            .insert("accepted".to_owned(), toml::Value::Boolean(true));
+        assert!(extra.try_into::<super::ExecutionCorpus>().is_err());
+    }
 
     #[test]
     fn every_public_command_result_schema_is_registered() {

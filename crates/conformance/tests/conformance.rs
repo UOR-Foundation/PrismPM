@@ -125,6 +125,7 @@ test_case!(conformance_sy_03, "SY-03");
 test_case!(conformance_sy_04, "SY-04");
 test_case!(conformance_sy_05, "SY-05");
 test_case!(conformance_sy_06, "SY-06");
+test_case!(conformance_sy_07, "SY-07");
 test_case!(conformance_dk_01, "DK-01");
 test_case!(conformance_dk_02, "DK-02");
 test_case!(conformance_dk_03, "DK-03");

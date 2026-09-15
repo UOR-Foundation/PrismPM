@@ -1,4 +1,7 @@
-//! Complete verified Lean to LCNF to allocation-free Rust execution chain.
+//! Verified Lean to LCNF to Rust export and execution chain.
+//!
+//! Validator probe intervals are allocation-free; separately registered public
+//! package APIs may allocate their owned outputs and have consumer API checks.
 
 use crate::config::ProjectConfig;
 use crate::controller::{BuildRequest, BuildResult, Controller, VerifyRequest, VerifyResult};
@@ -18,6 +21,7 @@ use std::process::{Command, Stdio};
 const CHILD_OUTPUT_LIMIT: usize = 16_777_216;
 const CHILD_TIMEOUT_SECONDS: &str = "300";
 const ROOTS_SOURCE: &str = include_str!("../model/runtime-roots.toml");
+const STDLIB_EXPORTS_SOURCE: &str = include_str!("../model/stdlib-exports.toml");
 const EXECUTION_CORPUS_SOURCE: &str = include_str!("../model/execution-corpus.toml");
 const ALLOCATION_COUNTER_SOURCE: &str = include_str!("prod_alloc_counter.rs.inc");
 const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../vendor/hologram-live.tar");
@@ -42,6 +46,62 @@ struct RuntimeRoots {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct StdlibExports {
+    spec: String,
+    lean_module: String,
+    ir_module: String,
+    export: Vec<StdlibExport>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StdlibExport {
+    lean_name: String,
+    rust_name: String,
+    rust_signature: String,
+}
+
+fn package_export_roots(source: &str, runtime: &RuntimeRoots) -> Result<Vec<String>, PrismError> {
+    let register: StdlibExports = toml::from_str(source)
+        .map_err(|error| PrismError::new("PP9001", format!("stdlib exports: {error}")))?;
+    let names = register
+        .export
+        .iter()
+        .map(|row| row.lean_name.clone())
+        .collect::<Vec<_>>();
+    let symbols = register
+        .export
+        .iter()
+        .map(|row| row.rust_name.as_str())
+        .collect::<BTreeSet<_>>();
+    if register.spec != "prismpm/stdlib-exports/1"
+        || register.lean_module != runtime.lean_module
+        || register.ir_module != runtime.ir_module
+        || names.len() != 20
+        || names.windows(2).any(|pair| pair[0] >= pair[1])
+        || symbols.len() != names.len()
+        || register.export.iter().any(|row| {
+            !row.lean_name.starts_with("PrismPM.Foundation.")
+                || row.lean_name.rsplit('.').next() != Some(row.rust_name.as_str())
+                || row.rust_name.is_empty()
+                || !row
+                    .rust_name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric())
+                || !row.rust_signature.starts_with("fn(")
+                || !row.rust_signature.contains(") -> ")
+        })
+    {
+        return Err(PrismError::new(
+            "PP9001",
+            "stdlib package export register is not canonical",
+        ));
+    }
+    Ok(names)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ExecutionCorpus {
     spec: String,
     strategy: String,
@@ -50,7 +110,16 @@ struct ExecutionCorpus {
     value_domain: String,
     exhaustive: ExhaustiveCorpus,
     property: PropertyCorpus,
+    control_coverage: ControlCoverageCorpus,
     oracle: Vec<ExecutionOracle>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ControlCoverageCorpus {
+    case_count: u64,
+    positive: u64,
+    negative: u64,
 }
 
 #[derive(Deserialize)]
@@ -137,12 +206,22 @@ fn execution_corpus(roots: &RuntimeRoots) -> Result<(ExecutionCorpus, String), P
         || corpus.property.generated_value_modulus != 20
         || corpus.property.shrink_result != "not-applicable-passed"
         || corpus.case_count != expected_cases
+        || corpus.control_coverage.case_count != 54
+        || corpus.control_coverage.positive != 6
+        || corpus.control_coverage.negative != 48
+        || corpus
+            .control_coverage
+            .positive
+            .checked_add(corpus.control_coverage.negative)
+            != Some(corpus.control_coverage.case_count)
         || corpus.oracle.is_empty()
         || functions.windows(2).any(|pair| pair[0] >= pair[1])
         || runtime_functions != roots_set
         || corpus.oracle.iter().any(|oracle| {
             let allowed = |name: &str| {
                 name.starts_with("PrismPM.Foundation.Holo.")
+                    || name.starts_with("PrismPM.Production.ControlCoverage.")
+                    || name.starts_with("PrismPM.Production.ControlCoverageCorpus.")
                     || name.starts_with("PrismPM.Production.System.")
                     || name.starts_with("PrismPM.Production.SystemValidation.")
                     || name.starts_with("PrismPM.Production.SystemValidationCorpus.")
@@ -853,6 +932,10 @@ fn main() {{
     begin(); let p = validateExactStandardsProfile(profile); if !end() || !p {{ fail(17); }}
     let corpus_model = corpusValidModel();
     let corpus_manifest = corpusManifest();
+    let coverage_policy = coverageValidPolicy();
+    let coverage_submission = coverageValidSubmission();
+    begin(); let value = validateControlCoverage(&coverage_policy, &coverage_submission); if !end() || !value.is(true) {{ fail(103); }}
+    if !coverageCorpusPassed().is(true) {{ fail(104); }}
     begin(); let value = validateManifest(&corpus_model, &corpus_manifest); if !end() {{ fail(102); }} if !value.is(true) {{ fail(41); }}
     begin(); let value = validateModelClosure(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(42); }}
     begin(); let value = validateModelUniqueness(&corpus_model, &corpus_manifest); if !end() || !value.is(true) {{ fail(79); }}
@@ -976,7 +1059,7 @@ fn main() {{
         begin(); let observed = validateComponentIndexes(slice); if !end() || observed != Ok(expected_consecutive) {{ fail(40); }}
         corpus += 1;
     }}
-    println!("{{{{\"bounds\":{{{{\"max_length\":{property_max_length},\"value_domain\":\"{value_domain}\"}}}},\"case_count\":{{}},\"corpus_sha256\":\"{corpus_sha256}\",\"no_allocation\":true,\"no_panic\":true,\"schema\":\"prismpm/execution-evidence/1\",\"seed\":\"{seed}\",\"shrink_result\":\"{shrink_result}\",\"status\":\"passed\",\"strategy\":\"{strategy}\"}}}}", corpus);
+    println!("{{{{\"bounds\":{{{{\"max_length\":{property_max_length},\"value_domain\":\"{value_domain}\"}}}},\"case_count\":{{}},\"control_coverage\":{{{{\"case_count\":{control_coverage_cases},\"negative\":{control_coverage_negative},\"positive\":{control_coverage_positive},\"status\":\"passed\"}}}},\"corpus_sha256\":\"{corpus_sha256}\",\"no_allocation\":true,\"no_panic\":true,\"schema\":\"prismpm/execution-evidence/2\",\"seed\":\"{seed}\",\"shrink_result\":\"{shrink_result}\",\"status\":\"passed\",\"strategy\":\"{strategy}\"}}}}", corpus);
 }}
 "#,
         indexes = indexes,
@@ -1012,6 +1095,9 @@ fn main() {{
         property_max_length = corpus.property.max_length,
         value_domain = corpus.value_domain.as_str(),
         corpus_sha256 = corpus_sha256,
+        control_coverage_cases = corpus.control_coverage.case_count,
+        control_coverage_positive = corpus.control_coverage.positive,
+        control_coverage_negative = corpus.control_coverage.negative,
         strategy = corpus.strategy.as_str(),
         shrink_result = corpus.property.shrink_result.as_str(),
     )
@@ -1203,6 +1289,90 @@ fn validate_lexlean_declarations(
     Ok(())
 }
 
+fn validate_control_coverage_corpus(
+    snapshot: &Value,
+    corpus: &ExecutionCorpus,
+) -> Result<(), PrismError> {
+    let invalid = || {
+        PrismError::new("PP5006", "control coverage execution counts do not match the exact modeled cases and expectations")
+    };
+    let declarations = snapshot
+        .get("modules")
+        .and_then(Value::as_array)
+        .and_then(|modules| {
+            modules
+                .iter()
+                .find(|module| module["name"] == "Production.ControlCoverageCorpus")
+        })
+        .and_then(|module| module.pointer("/semantic/declarations"))
+        .and_then(Value::as_array)
+        .ok_or_else(invalid)?;
+    let mut cases = BTreeMap::new();
+    for row in declarations {
+        let Some(name) = row["name"]
+            .as_str()
+            .filter(|name| name.starts_with("coverageCase"))
+        else {
+            continue;
+        };
+        if row["kind"] != "definition" {
+            continue;
+        }
+        if row["body"]["kind"] != "call"
+            || row["body"]["function"]
+                != json!({"module":"Production.ControlCoverage", "name":"validateControlCoverage"})
+            || row["body"]["arguments"].as_array().map(Vec::len) != Some(2)
+        {
+            return Err(invalid());
+        }
+        let theorem = declarations
+            .iter()
+            .find(|row| row["kind"] == "theorem" && row["name"] == format!("{name}Expected"))
+            .ok_or_else(invalid)?;
+        let expected = theorem["statement"]["right"]["value"]
+            .as_bool()
+            .ok_or_else(invalid)?;
+        if theorem["statement"]
+            != json!({"kind":"eq", "left":{"kind":"call","function":{"name":name},"arguments":[]},"right":{"kind":"bool","value":expected}})
+            || cases.insert(name, expected).is_some()
+        {
+            return Err(invalid());
+        }
+    }
+    let counts = &corpus.control_coverage;
+    if cases.len() as u64 != counts.case_count
+        || cases.values().filter(|expected| **expected).count() as u64 != counts.positive
+        || cases.values().filter(|expected| !**expected).count() as u64 != counts.negative
+    {
+        return Err(invalid());
+    }
+    let aggregate = declarations
+        .iter()
+        .find(|row| row["kind"] == "definition" && row["name"] == "coverageCorpusPassed")
+        .ok_or_else(invalid)?;
+    let mut body = &aggregate["body"];
+    let mut executed = BTreeSet::new();
+    while body["kind"] == "and" {
+        let mut check = &body["left"];
+        let expected = check["kind"] != "not";
+        if !expected {
+            check = &check["value"];
+        }
+        let name = check["function"]["name"].as_str().ok_or_else(invalid)?;
+        if check != &json!({"kind":"call", "function":{"name":name},"arguments":[]})
+            || cases.get(name) != Some(&expected)
+            || !executed.insert(name)
+        {
+            return Err(invalid());
+        }
+        body = &body["right"];
+    }
+    if body != &json!({"kind":"bool", "value":true}) || executed.len() != cases.len() {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
 fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> {
     let object = value
         .as_object()
@@ -1269,6 +1439,7 @@ fn validate_execution(
         != [
             "bounds",
             "case_count",
+            "control_coverage",
             "corpus_sha256",
             "no_allocation",
             "no_panic",
@@ -1279,11 +1450,18 @@ fn validate_execution(
             "strategy",
         ]
         || bounds_keys.as_deref() != Some(&["max_length", "value_domain"])
-        || value.get("schema").and_then(Value::as_str) != Some("prismpm/execution-evidence/1")
+        || value.get("schema").and_then(Value::as_str) != Some("prismpm/execution-evidence/2")
         || value.get("status").and_then(Value::as_str) != Some("passed")
         || value.get("no_allocation").and_then(Value::as_bool) != Some(true)
         || value.get("no_panic").and_then(Value::as_bool) != Some(true)
         || value.get("case_count").and_then(Value::as_u64) != Some(corpus.case_count)
+        || value.get("control_coverage")
+            != Some(&serde_json::json!({
+                "case_count": corpus.control_coverage.case_count,
+                "negative": corpus.control_coverage.negative,
+                "positive": corpus.control_coverage.positive,
+                "status": "passed"
+            }))
         || value.get("corpus_sha256").and_then(Value::as_str) != Some(corpus_sha256)
         || value.get("seed").and_then(Value::as_str) != Some(corpus.seed.as_str())
         || value.get("strategy").and_then(Value::as_str) != Some(corpus.strategy.as_str())
@@ -1918,8 +2096,19 @@ pub(crate) fn run(
         return Err(PrismError::new("PP9001", "runtime roots are not canonical"));
     }
     let (corpus, corpus_sha256) = execution_corpus(&roots)?;
+    let package_roots = package_export_roots(STDLIB_EXPORTS_SOURCE, &roots)?;
+    let export_roots = roots
+        .roots
+        .iter()
+        .chain(&package_roots)
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let package_exports_sha256 = format!("{:x}", Sha256::digest(STDLIB_EXPORTS_SOURCE.as_bytes()));
     if model.application.is_none() {
         validate_lexlean_declarations(&lex_value, &lex_snapshot, &corpus)?;
+        validate_control_coverage_corpus(&lex_snapshot, &corpus)?;
     }
     let lex_manifest = std::fs::read(build_root.join("lexlean/build/manifest.json"))
         .map_err(|error| PrismError::new("PP4002", format!("LexLean manifest: {error}")))?;
@@ -2142,7 +2331,7 @@ pub(crate) fn run(
                 "--module".to_owned(),
                 roots.lean_module.clone(),
             ];
-            for root in &roots.roots {
+            for root in &export_roots {
                 args.push("--root".to_owned());
                 args.push(root.clone());
             }
@@ -2182,7 +2371,7 @@ pub(crate) fn run(
             .map_err(|error| PrismError::new("PP5004", format!("coverage: {error}")))?,
     )
     .map_err(|error| PrismError::new("PP5004", format!("coverage: {error}")))?;
-    validate_coverage(&coverage, &roots.roots)?;
+    validate_coverage(&coverage, &export_roots)?;
     let kernel = std::fs::read_to_string(export_a.join("kernel.ir"))
         .map_err(|error| PrismError::new("PP5004", format!("kernel.ir: {error}")))?;
     let module = parse_kernel(&kernel)?;
@@ -2330,14 +2519,17 @@ pub(crate) fn run(
             "model": {"byte_length": model_bytes.len(), "sha256": content_id(&model_bytes)},
             "kernel_ir": artifact(&export_a.join("kernel.ir"))?,
             "lexlean_attestation": {"byte_length": lex_attestation.len(), "sha256": format!("{:x}", Sha256::digest(&lex_attestation))},
-            "roots": artifact(&export_a.join("roots.json"))?
+            "roots": artifact(&export_a.join("roots.json"))?,
+            "stdlib_exports": {"byte_length": STDLIB_EXPORTS_SOURCE.len(), "sha256": package_exports_sha256}
         },
         "build_id": build.build_id,
         "execution": execution,
         "lexlean_attestation_id": lex_verified.attestation_id.to_string(),
         "processes": process_value,
+        "export_roots": export_roots,
+        "package_export_roots": package_roots,
         "runtime_roots": roots.roots,
-        "schema": "prismpm/verification-manifest/1"
+        "schema": "prismpm/verification-manifest/2"
     });
     let manifest_bytes = encode_value(&manifest)?;
     let attestation_id = content_id(&manifest_bytes);
@@ -2365,6 +2557,10 @@ pub(crate) fn run(
         ("lexlean-attestation.json".to_owned(), lex_attestation),
         ("manifest.json".to_owned(), manifest_bytes),
         (
+            "stdlib-exports.toml".to_owned(),
+            STDLIB_EXPORTS_SOURCE.as_bytes().to_vec(),
+        ),
+        (
             "roots.json".to_owned(),
             std::fs::read(export_a.join("roots.json"))
                 .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
@@ -2382,6 +2578,52 @@ pub(crate) fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_exports_are_closed_and_do_not_change_runtime_accounting() {
+        let (runtime, corpus, _) = corpus();
+        let package = package_export_roots(STDLIB_EXPORTS_SOURCE, &runtime).unwrap();
+        assert_eq!(package.len(), 20);
+        let union = runtime
+            .roots
+            .iter()
+            .chain(&package)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(union.len(), runtime.roots.len() + package.len());
+        assert_eq!(corpus.case_count, 597);
+        assert_eq!(corpus.control_coverage.case_count, 54);
+        for mutation in 0..6 {
+            let mut value: toml::Value = toml::from_str(STDLIB_EXPORTS_SOURCE).unwrap();
+            match mutation {
+                0 => {
+                    value["export"].as_array_mut().unwrap().pop();
+                }
+                1 => value["export"][1] = value["export"][0].clone(),
+                2 => value["lean_module"] = "Other.Module".into(),
+                3 => {
+                    value
+                        .as_table_mut()
+                        .unwrap()
+                        .insert("extra".into(), true.into());
+                }
+                4 => {
+                    value["export"][0]
+                        .as_table_mut()
+                        .unwrap()
+                        .insert("extra".into(), true.into());
+                }
+                5 => value["export"][0]["rust_name"] = "wrongSymbol".into(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                package_export_roots(&toml::to_string(&value).unwrap(), &runtime)
+                    .unwrap_err()
+                    .code,
+                "PP9001",
+                "mutation {mutation}"
+            );
+        }
+    }
 
     fn corpus() -> (RuntimeRoots, ExecutionCorpus, String) {
         let roots: RuntimeRoots = toml::from_str(ROOTS_SOURCE).expect("runtime roots");
@@ -2612,6 +2854,59 @@ mod tests {
     }
 
     #[test]
+    fn execution_requires_exact_control_coverage_accounting() {
+        let (_, corpus, sha256) = corpus();
+        let valid = json!({
+            "bounds": {"max_length": 16, "value_domain": "u64"},
+            "case_count": 597,
+            "control_coverage": {"case_count": 54, "positive": 6, "negative": 48, "status": "passed"},
+            "corpus_sha256": sha256,
+            "no_allocation": true,
+            "no_panic": true,
+            "schema": "prismpm/execution-evidence/2",
+            "seed": "5eedcafef00dbeef",
+            "shrink_result": "not-applicable-passed",
+            "status": "passed",
+            "strategy": "exhaustive-v1+lcg-v1"
+        });
+        validate_execution(&valid, &corpus, &sha256)
+            .expect("both executed corpora are accounted for");
+        let mut old_version = valid.clone();
+        old_version["schema"] = json!("prismpm/execution-evidence/1");
+        assert_eq!(
+            validate_execution(&old_version, &corpus, &sha256)
+                .unwrap_err()
+                .code,
+            "PP5006"
+        );
+        let mut missing = valid.clone();
+        missing.as_object_mut().unwrap().remove("control_coverage");
+        assert_eq!(
+            validate_execution(&missing, &corpus, &sha256)
+                .unwrap_err()
+                .code,
+            "PP5006"
+        );
+        for (field, replacement) in [
+            ("case_count", json!(53)),
+            ("positive", json!(7)),
+            ("negative", json!(47)),
+            ("status", json!("not-run")),
+            ("unchecked", json!(true)),
+        ] {
+            let mut changed = valid.clone();
+            changed["control_coverage"][field] = replacement;
+            assert_eq!(
+                validate_execution(&changed, &corpus, &sha256)
+                    .unwrap_err()
+                    .code,
+                "PP5006",
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
     fn execution_corpus_is_typed_counted_and_root_complete() {
         let (roots, corpus, sha256) = corpus();
         assert_eq!(corpus.case_count, 597);
@@ -2622,6 +2917,59 @@ mod tests {
             corpus.oracle.iter().filter(|row| row.runtime_root).count(),
             roots.roots.len()
         );
+    }
+
+    #[test]
+    fn execution_rejects_invented_or_short_circuited_control_case_counts() {
+        let (_, corpus, _) = corpus();
+        let mut declarations = Vec::new();
+        let mut aggregate = json!({"kind":"bool","value":true});
+        for index in (0..54).rev() {
+            let name = format!("coverageCase{index}");
+            let call = json!({"kind":"call","function":{"name":name},"arguments":[]});
+            let expected = index < 6;
+            aggregate = json!({"kind":"and","left":if expected {call.clone()} else {json!({"kind":"not","value":call.clone()})},"right":aggregate});
+            declarations.push(json!({"kind":"definition","name":name,"body":{"kind":"call","function":{"module":"Production.ControlCoverage","name":"validateControlCoverage"},"arguments":[{},{}]}}));
+            declarations.push(json!({"kind":"theorem","name":format!("{name}Expected"),"statement":{"kind":"eq","left":call,"right":{"kind":"bool","value":expected}}}));
+        }
+        declarations
+            .push(json!({"kind":"definition","name":"coverageCorpusPassed","body":aggregate}));
+        let valid = json!({"modules":[{"name":"Production.ControlCoverageCorpus","semantic":{"declarations":declarations}}]});
+        validate_control_coverage_corpus(&valid, &corpus).unwrap();
+        for mutation in 0..6 {
+            let mut changed = valid.clone();
+            let rows = changed["modules"][0]["semantic"]["declarations"]
+                .as_array_mut()
+                .unwrap();
+            match mutation {
+                0 => {
+                    rows.remove(0);
+                }
+                1 => {
+                    rows[0]["body"] = json!({"kind":"bool","value":true});
+                }
+                2 => {
+                    rows[108]["body"]["kind"] = json!("or");
+                }
+                3 => {
+                    rows[108]["body"]["right"] = json!({"kind":"bool","value":true});
+                }
+                4 => {
+                    rows[2]["name"] = rows[0]["name"].clone();
+                }
+                5 => {
+                    rows[1]["statement"]["right"]["value"] = json!(true);
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                validate_control_coverage_corpus(&changed, &corpus)
+                    .unwrap_err()
+                    .code,
+                "PP5006",
+                "mutation {mutation}"
+            );
+        }
     }
 
     #[test]

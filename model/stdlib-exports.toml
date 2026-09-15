@@ -1,0 +1,108 @@
+spec = "prismpm/stdlib-exports/1"
+lean_module = "PrismPM.Runtime"
+ir_module = "PrismPM"
+
+# These package entry points supplement the separately registered validator
+# runtime roots. Signatures preserve the original 0.1.x consumer contract;
+# executable semantics remain exclusively in the named LexLean declarations.
+# Baseline: 94697b1ff196ef362f4a6137ba72145e2ac68faf,
+# stdlib/generated/package/src/lib.rs (acceptance needs no network or Git history).
+[[export]]
+lean_name = "PrismPM.Foundation.Bytes.appendBytes"
+rust_name = "appendBytes"
+rust_signature = "fn(Vec<u8>, Vec<u8>) -> Vec<u8>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Bytes.byteAt"
+rust_name = "byteAt"
+rust_signature = "fn(Vec<u8>, u64) -> Option<u8>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Bytes.byteLength"
+rust_name = "byteLength"
+rust_signature = "fn(Vec<u8>) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Bytes.compareBytes"
+rust_name = "compareBytes"
+rust_signature = "fn(Vec<u8>, Vec<u8>) -> core::cmp::Ordering"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Bytes.sliceBytes"
+rust_name = "sliceBytes"
+rust_signature = "fn(Vec<u8>, u64, u64) -> Option<Vec<u8>>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Codec.formatInt64"
+rust_name = "formatInt64"
+rust_signature = "fn(i64) -> String"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Codec.parseInt64"
+rust_name = "parseInt64"
+rust_signature = "fn(String) -> Option<i64>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Core.portableTrue"
+rust_name = "portableTrue"
+rust_signature = "fn() -> bool"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.StandardsProfile.applicationSecurityEdition"
+rust_name = "applicationSecurityEdition"
+rust_signature = "fn(StandardsProfile) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.StandardsProfile.architectureEdition"
+rust_name = "architectureEdition"
+rust_signature = "fn(StandardsProfile) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.StandardsProfile.controlEdition"
+rust_name = "controlEdition"
+rust_signature = "fn(StandardsProfile) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.StandardsProfile.qualityEdition"
+rust_name = "qualityEdition"
+rust_signature = "fn(StandardsProfile) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.StandardsProfile.riskEdition"
+rust_name = "riskEdition"
+rust_signature = "fn(StandardsProfile) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Integer.checkedAddInt64"
+rust_name = "checkedAddInt64"
+rust_signature = "fn(i64, i64) -> Option<i64>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Integer.checkedDivideInt64"
+rust_name = "checkedDivideInt64"
+rust_signature = "fn(i64, i64) -> Option<i64>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Integer.checkedMultiplyInt64"
+rust_name = "checkedMultiplyInt64"
+rust_signature = "fn(i64, i64) -> Option<i64>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Integer.checkedNegateInt64"
+rust_name = "checkedNegateInt64"
+rust_signature = "fn(i64) -> Option<i64>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Integer.checkedSubtractInt64"
+rust_name = "checkedSubtractInt64"
+rust_signature = "fn(i64, i64) -> Option<i64>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Utf8.decode"
+rust_name = "decode"
+rust_signature = "fn(Vec<u8>) -> Option<String>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Utf8.encode"
+rust_name = "encode"
+rust_signature = "fn(String) -> Vec<u8>"

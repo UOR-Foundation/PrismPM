@@ -12,6 +12,7 @@ use std::sync::OnceLock;
 mod audit;
 mod codegen;
 mod spec_links;
+mod stdlib;
 
 /// General error type for xtask commands.
 pub type Fail = Box<dyn std::error::Error>;
@@ -59,6 +60,7 @@ fn main() -> ExitCode {
         "check-reproducibility" => check_reproducibility(&root),
         "check-fixtures" => check_fixtures(&root, write),
         "package-api" => package_api_check(&root),
+        "stdlib-package" => stdlib::run(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
         "release-artifacts" => release_artifacts(&root),
         "release-check" => release_check(&root),
         "validate" => validate_all(&root, false),
@@ -481,7 +483,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         &["deny", "--frozen", "--all-features", "check"],
     )?;
 
-    println!("VV gate 15/15: packaged crate and downstream public API");
+    println!("VV gate 15/15: verified stdlib package, crate archives, and downstream public API");
     package_api_check(root)?;
 
     require_clean_worktree(root)?;
@@ -746,7 +748,7 @@ fn check_verified_evidence(root: &Path) -> Result<(), Fail> {
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(directory.join("manifest.json"))?)?;
     if manifest.get("schema").and_then(serde_json::Value::as_str)
-        != Some("prismpm/verification-manifest/1")
+        != Some("prismpm/verification-manifest/2")
         || manifest
             .pointer("/execution/status")
             .and_then(serde_json::Value::as_str)
@@ -799,6 +801,7 @@ fn check_verified_evidence(root: &Path) -> Result<(), Fail> {
 }
 
 fn package_api_check(root: &Path) -> Result<(), Fail> {
+    stdlib::check_acceptance(root)?;
     let selection = Command::new("cargo")
         .args(["package", "--package", "prismpm", "--list", "--allow-dirty"])
         .current_dir(root)
@@ -853,10 +856,14 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "SPEC.md",
         "language/prism.arch/lexicon.toml",
         "model/dependencies.toml",
+        "model/stdlib-exports.toml",
+        "model/stdlib-package.toml",
         "schemas/model-document.schema.json",
         "src/prod_alloc_counter.rs.inc",
         "standards.lock",
         "stdlib/src/Foundation/Holo.lex.tex",
+        "stdlib/LICENSE-APACHE",
+        "stdlib/LICENSE-MIT",
         "vendor/lean4-prod/lean.tar",
     ] {
         if !packaged.join(required).is_file() {

@@ -17,6 +17,11 @@ all_below_bound = 10
 generated_value_modulus = 20
 shrink_result = "not-applicable-passed"
 
+[control_coverage]
+case_count = 54
+positive = 6
+negative = 48
+
 [[oracle]]
 function = "PrismPM.Foundation.Holo.allBelow"
 theorem = "PrismPM.Foundation.Holo.allBelow_sound_complete"
@@ -65,6 +70,26 @@ runtime_root = true
 [[oracle]]
 function = "PrismPM.Foundation.Holo.validateViewpointLinks"
 theorem = "PrismPM.Foundation.Holo.viewpointLinks_sound_complete"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverage.validateControlCoverage"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageCaseInheritedResidualExpected"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverageCorpus.coverageCorpusPassed"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageCorpusSound"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverageCorpus.coverageValidPolicy"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageAllocationProbeExpected"
+runtime_root = true
+
+[[oracle]]
+function = "PrismPM.Production.ControlCoverageCorpus.coverageValidSubmission"
+theorem = "PrismPM.Production.ControlCoverageCorpus.coverageAllocationProbeExpected"
 runtime_root = true
 
 [[oracle]]
