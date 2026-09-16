@@ -131,6 +131,39 @@ and no test was skipped. This is not full acceptance: normal clean-HEAD
 `just vv` must initialize the current-source SDK through its isolated local
 registry and rerun the complete gates.
 
+## SDK bootstrap registry transport compatibility
+
+At commit `954e83042816f59f4fad767068b43b96e17f439a`, GitHub runs
+[Bootstrap Honesty Gate 35034380309](https://github.com/UOR-Foundation/PrismPM/actions/runs/35034380309)
+and [Normative Verification & Validation 35034380342](https://github.com/UOR-Foundation/PrismPM/actions/runs/35034380342)
+uploaded the SDK layers, then failed with repeated `MANIFEST_INVALID` before
+the numbered VV gates began. The previous readiness error concealed a push
+failure. CI used Docker Engine 28.0.4; the successful local push used Engine
+29.1.3 with the containerd image store and an OCI index. The failed CI request's
+media type was not captured, so its exact format remains an inference.
+
+An isolated paired reproduction used the same pinned Zot image,
+`ghcr.io/project-zot/zot@sha256:cd2aea942f428630bcb4190542be6abd35e14177aab84fc7ccad0dca8ecb363d`
+(Zot 2.1.8). Without compatibility, a valid Docker schema-2 manifest returned
+415 `MANIFEST_INVALID`, explicitly naming its unsupported media type. Adding
+only [Zot's documented `http.compat = ["docker2s2"]` setting](https://github.com/project-zot/zot/blob/v2.1.8/examples/config-docker-compat.json)
+made the identical manifest return 201. Both configurations accepted valid OCI
+manifests; accepted manifests retained their exact bytes, media types and
+SHA-256 digests. With compatibility enabled, malformed JSON and missing
+referenced config blobs were rejected with 400 for both formats.
+
+`scripts/vv.sh` enables this compatibility only in its ephemeral SDK registry.
+Before the expensive SDK build, `scripts/registry-smoke.mjs` checks both valid
+formats and their malformed/missing-blob negatives against that actual
+registry. The tracked preflight was run as `vscode` in the pinned devcontainer:
+the default configuration exited 1 at the Docker-format check and the
+compatibility-enabled configuration exited 0. It uses the registry's inspected
+default-bridge IP; Docker image push/pull still use the daemon-host loopback
+endpoint. Push failures now report the failed operation and registry logs.
+This is a transport regression check, not an authoritative conformance oracle
+or proof of SDK/release acceptance. Prism's OCI artifact validation, independent
+upstream OCI oracle configurations, and all remaining VV gates are unchanged.
+
 ## Original full-gate falsification campaign
 
 This record covers every gate in `cargo xtask vv`. A gate is considered armed only

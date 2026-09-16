@@ -27,7 +27,7 @@ if test -z "${PRISMPM_TEST_SDK_IMAGE:-}"; then
   }
   trap cleanup_registry EXIT
 
-  printf '%s\n' '{"distSpecVersion":"1.1.1","http":{"address":"0.0.0.0","port":5000},"log":{"level":"warn"},"storage":{"rootDirectory":"/tmp/zot"}}' >"$scratch/config.json"
+  printf '%s\n' '{"distSpecVersion":"1.1.1","http":{"address":"0.0.0.0","port":5000,"compat":["docker2s2"]},"log":{"level":"warn"},"storage":{"rootDirectory":"/tmp/zot"}}' >"$scratch/config.json"
   docker volume create "$config_volume" >/dev/null
   docker container create \
     --name "$registry" \
@@ -46,6 +46,15 @@ if test -z "${PRISMPM_TEST_SDK_IMAGE:-}"; then
     *) printf 'SDK gate registry returned an invalid endpoint: %s\n' "$endpoint" >&2; exit 1 ;;
   esac
 
+  # The devcontainer and registry share the daemon's default bridge. Its IP
+  # reaches the registry from here; published loopback is for daemon image I/O.
+  registry_ip=$(docker container inspect "$registry" \
+    --format '{{(index .NetworkSettings.Networks "bridge").IPAddress}}')
+  if ! node scripts/registry-smoke.mjs "http://$registry_ip:5000"; then
+    docker container logs "$registry" >&2 || true
+    exit 1
+  fi
+
   docker build \
     --build-arg SOURCE_DATE_EPOCH=0 \
     --file sdk/Dockerfile \
@@ -60,7 +69,8 @@ if test -z "${PRISMPM_TEST_SDK_IMAGE:-}"; then
       break
     fi
     if test "$attempt" -eq 20; then
-      printf 'SDK gate registry was not ready after %s attempts\n' "$attempt" >&2
+      printf 'SDK gate image push failed after %s attempts\n' "$attempt" >&2
+      docker container logs "$registry" >&2 || true
       exit 1
     fi
     sleep 0.25
