@@ -1729,16 +1729,16 @@ fn copy_application_package(build_root: &Path, destination: &Path) -> Result<(),
 }
 
 fn application_harness(
-    application: &crate::holo::model_document::ApplicationModel,
+    application: &crate::holo::model_document::Application,
 ) -> Result<String, PrismError> {
-    let crate_name = application.cargo_name.replace('-', "_");
+    let crate_name = application.cargo_name().replace('-', "_");
     let entry = application
-        .entry_root
+        .entry_root()
         .rsplit('.')
         .next()
         .ok_or_else(|| PrismError::new("PP2001", "application entry root is malformed"))?;
     let vectors = application
-        .acceptance_vectors
+        .acceptance_vectors()
         .iter()
         .enumerate()
         .map(|(index, vector)| {
@@ -1771,13 +1771,13 @@ fn run_application(
         )
     })?;
     verify_application_build_closure(build_root, &build_manifest)?;
-    let holo_path = build_root.join(format!("{}.holo", application.name));
+    let holo_path = build_root.join(format!("{}.holo", application.name()));
     let holo = std::fs::read(&holo_path)
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", holo_path.display())))?;
     crate::holo::archive::validate_application(&holo)?;
     let wasm_path = build_root.join(format!(
         "core-wasm/{}_core_wasm.wasm",
-        application.cargo_name.replace('-', "_")
+        application.cargo_name().replace('-', "_")
     ));
     processes.extend(run_hologram_oracle(
         controller,
@@ -1835,7 +1835,8 @@ fn run_application(
     copy_application_package(build_root, &package_root)?;
     let crate_path = build_root.join(format!(
         "cargo/{}-{}.crate",
-        application.cargo_name, application.cargo_version
+        application.cargo_name(),
+        application.cargo_version()
     ));
     let crate_bytes = std::fs::read(&crate_path)
         .map_err(|error| PrismError::new("PP4102", format!("generated crate: {error}")))?;
@@ -1881,7 +1882,7 @@ fn run_application(
         &consumer.join("Cargo.toml"),
         format!(
             "[package]\nname = \"prismpm-application-consumer\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[dependencies]\n{} = {{ version = \"={}\", default-features = false, features = [\"std\"] }}\n",
-            application.cargo_name, application.cargo_version
+            application.cargo_name(), application.cargo_version()
         )
         .as_bytes(),
     )?;
@@ -1918,8 +1919,8 @@ fn run_application(
         "app.css",
         "app.js",
         "index.html",
-        &format!("{}.js", application.cargo_name.replace('-', "_")),
-        &format!("{}_bg.wasm", application.cargo_name.replace('-', "_")),
+        &format!("{}.js", application.cargo_name().replace('-', "_")),
+        &format!("{}_bg.wasm", application.cargo_name().replace('-', "_")),
         "provenance.json",
     ];
     let observed_browser = std::fs::read_dir(&browser)
@@ -1958,16 +1959,16 @@ fn run_application(
     let process_value = serde_json::to_value(&processes)
         .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
     let acceptance = json!({
-        "application": application.name,
+        "application": application.name(),
         "artifact_closure": "verified",
         "browser_projection": "verified",
         "build_id": build.build_id,
-        "cargo_package": {"name":application.cargo_name,"sha256":format!("{:x}",Sha256::digest(&crate_bytes)),"version":application.cargo_version},
+        "cargo_package": {"name":application.cargo_name(),"sha256":format!("{:x}",Sha256::digest(&crate_bytes)),"version":application.cargo_version()},
         "core_wasm": {"sha256":hash_file(&wasm_path)?,"status":"verified"},
         "holo": identities,
         "hologram_oracle": "verified",
         "lexlean_attestation_id": lex_attestation_id,
-        "modeled_vectors": application.acceptance_vectors.len(),
+        "modeled_vectors": application.acceptance_vectors().len(),
         "schema": "prismpm/application-acceptance/1",
         "source_id": build.source_id,
         "status": "verified"

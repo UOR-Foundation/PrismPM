@@ -52,6 +52,17 @@ Local reports are `target/asyncapi-upstream-audit-20260915.json` (SHA-256
 and `target/asyncapi-sdk-audit-20260915.json` (SHA-256
 `5b4208b5299acc2d0dd8bfd35e914ceb5568f21c34e93cbb864cb64498f8df48`).
 
+## Diagnostic boundary coverage
+
+The current 149-feature/84-diagnostic register accounting is checked dynamically.
+The new PP2009 probe executes the actual text-application validator, but the
+other 83 `diagnostics.rs` probes still test generic local predicates rather than
+their owning implementation boundaries. Passing those probes or counting their
+IDs is not evidence that all public error paths work. Complete real positive
+and malformed-input subsystem coverage, including emitted-code and execution
+evidence checks, remains required for production SDK acceptance; it is not
+excluded by the current text-profile work.
+
 ## Remaining release acceptance
 
 After dependency publication is authorized, complete the existing release plan:

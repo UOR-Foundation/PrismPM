@@ -1,5 +1,11 @@
 Feature: holo
 
+  @HO-11 @build
+  Scenario: The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations.
+    Given typed UTF-8 application metadata and legacy calculator metadata
+    When closed schemas and application profile invariants are checked
+    Then valid profiles retain their schemas and malformed text declarations fail closed
+
   @HO-01 @build
   Scenario: A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header.
     Given a modeled application archive
@@ -7,7 +13,7 @@ Feature: holo
     Then they begin with HOLO and little-endian physical version 4
 
   @HO-02 @build
-  Scenario: The non-Holo Prism model document uses the closed prismpm/model-document/1 schema and model.prism.json name.
+  Scenario: Legacy application and architecture model documents retain the closed prismpm/model-document/1 schema and model.prism.json name.
     Given a projected Prism model document
     When its build artifact and schema are inspected
     Then the closed schema and non-Holo filename agree

@@ -1,8 +1,9 @@
 //! Generic projection of an evaluated Prism application declaration.
 
 use super::model_document::{
-    ApplicationAcceptanceVector, ApplicationModel, ApplicationView, ApplicationViewOperation,
-    ArchitectureModel, ModelDocument, ProjectionProvenance, QualityModel, SecurityModel,
+    Application, ApplicationAcceptanceVector, ApplicationModel, ApplicationView,
+    ApplicationViewOperation, ArchitectureModel, ModelDocument, ProjectionProvenance, QualityModel,
+    SecurityModel, TextApplicationModel, TextView,
 };
 use crate::error::PrismError;
 use lexlean::SemanticSnapshot;
@@ -423,6 +424,49 @@ fn view(
     })
 }
 
+fn exact_fields(
+    fields: &BTreeMap<&str, (&str, &Value)>,
+    expected: &[&str],
+) -> Result<(), PrismError> {
+    if fields.len() != expected.len() || expected.iter().any(|name| !fields.contains_key(name)) {
+        return Err(PrismError::new(
+            "PP2009",
+            "text application record fields do not match its closed profile",
+        ));
+    }
+    Ok(())
+}
+
+fn text_view(
+    definitions: &Definitions<'_>,
+    module: &str,
+    fields: &BTreeMap<&str, (&str, &Value)>,
+) -> Result<TextView, PrismError> {
+    let (_, value) = field(fields, "view")?;
+    let values = record(definitions, module, value)?;
+    exact_fields(
+        &values,
+        &[
+            "title",
+            "heading",
+            "inputLabel",
+            "submitLabel",
+            "outputLabel",
+            "inputError",
+            "responseError",
+        ],
+    )?;
+    Ok(TextView {
+        title: string(&values, "title")?,
+        heading: string(&values, "heading")?,
+        input_label: string(&values, "inputLabel")?,
+        submit_label: string(&values, "submitLabel")?,
+        output_label: string(&values, "outputLabel")?,
+        input_error: string(&values, "inputError")?,
+        response_error: string(&values, "responseError")?,
+    })
+}
+
 /// Project the unique closed application definition, or return None for a
 /// non-application model. Discovery is structural and contains no project or
 /// application-name special case.
@@ -482,38 +526,90 @@ pub fn project_application(
         .map_err(|_| PrismError::new("PP2001", "primaryLayer exceeds UInt8"))?;
     let view_layer = u8::try_from(unsigned(&fields, "viewLayer", "uint8")?)
         .map_err(|_| PrismError::new("PP2001", "viewLayer exceeds UInt8"))?;
-    let application = ApplicationModel {
-        name: string(&fields, "name")?,
-        cargo_name: string(&fields, "cargoName")?,
-        cargo_version: string(&fields, "cargoVersion")?,
-        cargo_description: string(&fields, "cargoDescription")?,
-        cargo_repository: string(&fields, "cargoRepository")?,
-        cargo_homepage: string(&fields, "cargoHomepage")?,
-        library_roots: string_list(&fields, "libraryRoots")?,
-        operation_type: string(&fields, "operationType")?,
-        error_type: string(&fields, "errorType")?,
-        function_name: string(&fields, "functionName")?,
-        acceptance_vectors: acceptance_vectors(&definitions, module, &fields)?,
-        entry_root: string(&fields, "entryRoot")?,
-        core_contract: string(&fields, "coreContract")?,
-        request_maximum,
-        response_maximum,
-        guest_allocation_maximum,
-        capabilities_empty: boolean(&fields, "capabilitiesEmpty")?,
-        fat_archive: boolean(&fields, "fatArchive")?,
-        primary_layer,
-        view_layer,
-        view: view(&definitions, module, &fields)?,
-        input_grammar: constructor(&fields, "inputGrammar")?,
-        live_mode: constructor(&fields, "liveMode")?,
-        layout: constructor(&fields, "layout")?,
-        color: constructor(&fields, "color")?,
-        typography: constructor(&fields, "typography")?,
-        actions: constructor_list(&fields, "actions")?,
-        targets: constructor_list(&fields, "targets")?,
+    let application = if fields.contains_key("profile") {
+        exact_fields(
+            &fields,
+            &[
+                "profile",
+                "name",
+                "cargoName",
+                "cargoVersion",
+                "cargoDescription",
+                "cargoRepository",
+                "cargoHomepage",
+                "libraryRoots",
+                "acceptanceVectors",
+                "entryRoot",
+                "coreContract",
+                "requestMaximum",
+                "responseMaximum",
+                "guestAllocationMaximum",
+                "capabilitiesEmpty",
+                "fatArchive",
+                "primaryLayer",
+                "viewLayer",
+                "view",
+            ],
+        )?;
+        Application::Text(Box::new(TextApplicationModel {
+            profile: string(&fields, "profile")?,
+            name: string(&fields, "name")?,
+            cargo_name: string(&fields, "cargoName")?,
+            cargo_version: string(&fields, "cargoVersion")?,
+            cargo_description: string(&fields, "cargoDescription")?,
+            cargo_repository: string(&fields, "cargoRepository")?,
+            cargo_homepage: string(&fields, "cargoHomepage")?,
+            library_roots: string_list(&fields, "libraryRoots")?,
+            acceptance_vectors: acceptance_vectors(&definitions, module, &fields)?,
+            entry_root: string(&fields, "entryRoot")?,
+            core_contract: string(&fields, "coreContract")?,
+            request_maximum,
+            response_maximum,
+            guest_allocation_maximum,
+            capabilities_empty: boolean(&fields, "capabilitiesEmpty")?,
+            fat_archive: boolean(&fields, "fatArchive")?,
+            primary_layer,
+            view_layer,
+            view: text_view(&definitions, module, &fields)?,
+        }))
+    } else {
+        Application::Legacy(Box::new(ApplicationModel {
+            name: string(&fields, "name")?,
+            cargo_name: string(&fields, "cargoName")?,
+            cargo_version: string(&fields, "cargoVersion")?,
+            cargo_description: string(&fields, "cargoDescription")?,
+            cargo_repository: string(&fields, "cargoRepository")?,
+            cargo_homepage: string(&fields, "cargoHomepage")?,
+            library_roots: string_list(&fields, "libraryRoots")?,
+            operation_type: string(&fields, "operationType")?,
+            error_type: string(&fields, "errorType")?,
+            function_name: string(&fields, "functionName")?,
+            acceptance_vectors: acceptance_vectors(&definitions, module, &fields)?,
+            entry_root: string(&fields, "entryRoot")?,
+            core_contract: string(&fields, "coreContract")?,
+            request_maximum,
+            response_maximum,
+            guest_allocation_maximum,
+            capabilities_empty: boolean(&fields, "capabilitiesEmpty")?,
+            fat_archive: boolean(&fields, "fatArchive")?,
+            primary_layer,
+            view_layer,
+            view: view(&definitions, module, &fields)?,
+            input_grammar: constructor(&fields, "inputGrammar")?,
+            live_mode: constructor(&fields, "liveMode")?,
+            layout: constructor(&fields, "layout")?,
+            color: constructor(&fields, "color")?,
+            typography: constructor(&fields, "typography")?,
+            actions: constructor_list(&fields, "actions")?,
+            targets: constructor_list(&fields, "targets")?,
+        }))
     };
     let document = ModelDocument {
-        schema: "prismpm/model-document/1".to_owned(),
+        schema: match &application {
+            Application::Legacy(_) => "prismpm/model-document/1",
+            Application::Text(_) => "prismpm/model-document/2",
+        }
+        .to_owned(),
         provenance: ProjectionProvenance {
             source_id: snapshot.source_id().to_string(),
             semantic_id: snapshot.semantic_id().to_string(),

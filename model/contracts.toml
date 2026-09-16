@@ -1,5 +1,15 @@
 spec = "prismpm/contracts/1"
 
+[[contract]]
+schema = "prismpm/model-document/2"
+path = "schemas/model-document-v2.schema.json"
+media_type = "application/vnd.prismpm.model-document.v2+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 16777216
+maximum_items = 65536
+extension_policy = "closed"
+compatibility = "exact-major"
+
 # Every public JSON contract is canonical UTF-8 JSON: no BOM, no insignificant
 # whitespace, object keys sorted by UTF-8 bytes, shortest canonical integers,
 # arrays in their schema-declared semantic order, and exactly one final LF only

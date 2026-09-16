@@ -12,7 +12,7 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 42] = [
+const CONTRACTS: [Contract; 43] = [
     Contract {
         id: "prismpm/sdk-lock-update/2",
         maximum_bytes: 201_326_592,
@@ -24,6 +24,12 @@ const CONTRACTS: [Contract; 42] = [
         maximum_bytes: 67_108_864,
         maximum_items: 65_536,
         schema: include_bytes!("../schemas/sdk-lock-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/model-document/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/model-document-v2.schema.json"),
     },
     Contract {
         id: "prismpm/authority-result/1",
@@ -283,6 +289,12 @@ fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> b
 }
 
 fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
+    if id == "prismpm/model-document/2" {
+        let document = serde_json::from_value(value.clone()).map_err(|error| {
+            PrismError::new("PP2009", format!("text application shape: {error}"))
+        })?;
+        return crate::holo::validate::validate(&document);
+    }
     let arrays: Vec<(&str, &str)> = match id {
         "prismpm/capability-coverage/1" => {
             vec![("diagnostics", "code"), ("features", "feature_id")]
@@ -462,6 +474,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         }
     }
     if id == "prismpm/production-acceptance/1" {
+        crate::acceptance::verify_transcript(value)?;
         let rows = value["cases"].as_array().expect("schema-validated array");
         if !strictly_ordered(rows, |row| match row["kind"].as_str()? {
             "feature" => Some(format!("0/{}", row["feature_id"].as_str()?)),
@@ -473,6 +486,9 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
                 "production acceptance cases are duplicate or noncanonical",
             ));
         }
+    }
+    if id == "prismpm/conformance-result/1" {
+        crate::acceptance::verify_result_counts(value)?;
     }
     if id == "prismpm/ecosystem-release/2" {
         let platforms = value

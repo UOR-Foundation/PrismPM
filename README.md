@@ -109,7 +109,7 @@ requires the final cross-repository release manifest. See [CONFORMANCE.md](CONFO
 [ERRORS.md](ERRORS.md), and [VERIFICATION.md](VERIFICATION.md).
 
 For a built immutable product release, `prismpm conformance
-NAME@sha256:DIGEST` runs the SDK-contained 147-feature and 83-diagnostic corpus
+NAME@sha256:DIGEST` runs the SDK-contained registered feature and diagnostic corpus
 and attaches its digest-bound canonical production-acceptance transcript. The
 same command is available through the shared action; it does not rebuild the
 release or infer coverage from registry membership.

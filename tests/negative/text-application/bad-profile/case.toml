@@ -1,0 +1,14 @@
+spec = "prismpm/test-case/1"
+command = "check"
+expected_exit = 1
+normalization = "canonical-json"
+capabilities = ["HO-11"]
+expected_artifacts = []
+
+[[expected_diagnostics]]
+code = "PP2009"
+message = "text application declaration violates its closed byte-request profile"
+primary = "none"
+labels = []
+notes = []
+help = []

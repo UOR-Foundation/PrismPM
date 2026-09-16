@@ -50,13 +50,13 @@
         "function_name": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "type": "string" },
         "live_mode": { "type": "string" },
         "name": { "minLength": 1, "type": "string" },
-        "primary_layer": { "maximum": 255, "minimum": 0, "type": "integer" },
+        "primary_layer": { "const": 0 },
         "request_maximum": { "maximum": 4294967295, "minimum": 1, "type": "integer" },
         "response_maximum": { "maximum": 4294967295, "minimum": 1, "type": "integer" },
         "targets": { "items": { "type": "string" }, "minItems": 1, "type": "array", "uniqueItems": true },
         "typography": { "type": "string" },
         "view": { "$ref": "#/$defs/application_view" },
-        "view_layer": { "maximum": 255, "minimum": 0, "type": "integer" }
+        "view_layer": { "const": 1 }
       },
       "required": ["acceptance_vectors", "actions", "capabilities_empty", "cargo_description", "cargo_homepage", "cargo_name", "cargo_repository", "cargo_version", "color", "core_contract", "entry_root", "error_type", "fat_archive", "function_name", "guest_allocation_maximum", "input_grammar", "layout", "library_roots", "live_mode", "name", "operation_type", "primary_layer", "request_maximum", "response_maximum", "targets", "typography", "view", "view_layer"],
       "type": "object"

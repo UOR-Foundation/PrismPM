@@ -71,6 +71,12 @@ A circular dependency was detected in facet lexicon package imports.
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2009` --- Invalid text application profile
+
+A text application violates its closed profile, metadata, byte bounds, exported roots, View, or acceptance-vector contract.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

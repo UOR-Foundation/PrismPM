@@ -103,6 +103,27 @@ fn panic_text(payload: Box<dyn std::any::Any + Send>) -> String {
         .unwrap_or_else(|| "non-string conformance panic".to_owned())
 }
 
+fn verify_source_registers(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    for (name, expected) in [
+        (
+            "ids.toml",
+            include_bytes!("../../../../model/ids.toml").as_slice(),
+        ),
+        (
+            "errors.toml",
+            include_bytes!("../../../../model/errors.toml").as_slice(),
+        ),
+    ] {
+        if std::fs::read(root.join("model").join(name))? != expected {
+            return Err(format!(
+                "the conformance {name} register differs from the shipped authority"
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 fn run() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let arguments = Arguments::parse();
     if ![
@@ -115,6 +136,7 @@ fn run() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     {
         return Err("release, coverage, and SDK identities must be sha256 digests".into());
     }
+    verify_source_registers(&arguments.source_root)?;
     let model = repo_model::Model::load(&arguments.source_root.join("model"))?;
     let registered_features = model
         .ids
@@ -128,9 +150,6 @@ fn run() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         .iter()
         .map(|row| row.code.clone())
         .collect::<BTreeSet<_>>();
-    if registered_features.len() != 148 || registered_diagnostics.len() != 83 {
-        return Err("the shipped conformance register is not the complete 148/83 contract".into());
-    }
     let requested_features = if arguments.feature.is_empty() {
         registered_features.clone()
     } else {
@@ -234,7 +253,12 @@ fn run() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         "sdk_digest":arguments.sdk_digest,
         "status":if complete { "accepted" } else { "passed" }
     });
-    Ok(prismpm::holo::canonical::encode_value(&transcript)?)
+    Ok(prismpm::contracts::CanonicalDocument::from_value(
+        "prismpm/production-acceptance/1",
+        transcript,
+    )?
+    .bytes()
+    .to_vec())
 }
 
 fn main() -> std::process::ExitCode {
@@ -255,5 +279,36 @@ fn main() -> std::process::ExitCode {
             eprintln!("prismpm-conformance: {error}");
             std::process::ExitCode::from(1)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::verify_source_registers;
+
+    #[test]
+    fn shipped_registers_reject_omitted_substituted_and_duplicate_identities() {
+        let root = tempfile::tempdir().unwrap();
+        let model = root.path().join("model");
+        std::fs::create_dir(&model).unwrap();
+        let ids = include_str!("../../../../model/ids.toml");
+        let errors = include_str!("../../../../model/errors.toml");
+        std::fs::write(model.join("ids.toml"), ids).unwrap();
+        std::fs::write(model.join("errors.toml"), errors).unwrap();
+        verify_source_registers(root.path()).unwrap();
+        for changed in [
+            ids.replace("id = \"HO-11\"", "id = \"HO-12\""),
+            ids.replace("id = \"HO-11\"", "id = \"HO-10\""),
+            ids.replace("id = \"HO-11\"", ""),
+        ] {
+            assert_ne!(changed, ids);
+            std::fs::write(model.join("ids.toml"), changed).unwrap();
+            assert!(verify_source_registers(root.path()).is_err());
+        }
+        std::fs::write(model.join("ids.toml"), ids).unwrap();
+        let changed = errors.replace("code = \"PP2009\"", "code = \"PP2008\"");
+        assert_ne!(changed, errors);
+        std::fs::write(model.join("errors.toml"), changed).unwrap();
+        assert!(verify_source_registers(root.path()).is_err());
     }
 }

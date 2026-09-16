@@ -576,26 +576,35 @@ fn verify_examples(root: &Path, _write: bool) -> Result<(), Fail> {
         verify_res.attestation_id
     );
 
-    let calculator_root = root.join("examples/Calculator");
-    let calculator = prismpm::Controller::load(&calculator_root)?;
-    let calculator_check =
-        calculator.check(prismpm::controller::CheckRequest { config_path: None })?;
-    let first = calculator.build(prismpm::controller::BuildRequest { config_path: None })?;
-    let second = calculator.build(prismpm::controller::BuildRequest { config_path: None })?;
-    if first.build_id != second.build_id {
-        return Err("Calculator build identity changed between consecutive builds".into());
+    for (name, relative) in [
+        ("Calculator", "examples/Calculator"),
+        (
+            "Text Request",
+            "tests/fixtures/holo/ho-11-text-application/project",
+        ),
+    ] {
+        let application_root = root.join(relative);
+        let application = prismpm::Controller::load(&application_root)?;
+        let check = application.check(prismpm::controller::CheckRequest { config_path: None })?;
+        let first = application.build(prismpm::controller::BuildRequest { config_path: None })?;
+        let second = application.build(prismpm::controller::BuildRequest { config_path: None })?;
+        if first.build_id != second.build_id {
+            return Err(format!("{name} build identity changed between consecutive builds").into());
+        }
+        let first_verify =
+            application.verify(prismpm::controller::VerifyRequest { config_path: None })?;
+        let second_verify =
+            application.verify(prismpm::controller::VerifyRequest { config_path: None })?;
+        if first_verify.attestation_id != second_verify.attestation_id {
+            return Err(
+                format!("{name} verification identity changed between consecutive runs").into(),
+            );
+        }
+        println!(
+            "verify-examples: {name} model {} reproduced build {} and verified attestation {}",
+            check.model_id, first.build_id, first_verify.attestation_id
+        );
     }
-    let first_verify =
-        calculator.verify(prismpm::controller::VerifyRequest { config_path: None })?;
-    let second_verify =
-        calculator.verify(prismpm::controller::VerifyRequest { config_path: None })?;
-    if first_verify.attestation_id != second_verify.attestation_id {
-        return Err("Calculator verification identity changed between consecutive runs".into());
-    }
-    println!(
-        "verify-examples: Calculator model {} reproduced build {} and verified attestation {}",
-        calculator_check.model_id, first.build_id, first_verify.attestation_id
-    );
     Ok(())
 }
 

@@ -25,6 +25,7 @@ enum Rule {
     Offline,
     SecretFree,
     Internal,
+    TextApplication,
 }
 
 impl Rule {
@@ -70,6 +71,29 @@ impl Rule {
                 json!({"value":"Authorization: Bearer planted"}),
             ),
             Self::Internal => (json!({"invariant":true}), json!({"invariant":false})),
+            Self::TextApplication => {
+                let valid = json!({
+                    "profile":"prismpm/text-application/1",
+                    "name":"Text Probe",
+                    "cargo_name":"prism-text-probe",
+                    "cargo_version":"0.1.0",
+                    "cargo_description":"Executable text profile diagnostic specimen",
+                    "cargo_repository":"https://github.com/UOR-Foundation/PrismPM",
+                    "cargo_homepage":"https://github.com/UOR-Foundation/PrismPM",
+                    "library_roots":["TextProbe.dispatch"],
+                    "entry_root":"TextProbe.dispatch",
+                    "acceptance_vectors":[{"request":[97],"response":[97]}],
+                    "core_contract":"hologram:guest/core-wasm@1",
+                    "request_maximum":1,"response_maximum":1,"guest_allocation_maximum":1,
+                    "capabilities_empty":true,"fat_archive":true,"primary_layer":0,"view_layer":1,
+                    "view":{"title":"Text probe","heading":"Text probe","input_label":"Request",
+                        "submit_label":"Submit","output_label":"Response","input_error":"Invalid request",
+                        "response_error":"Invalid response"}
+                });
+                let mut invalid = valid.clone();
+                invalid["profile"] = json!("prismpm/text-application/2");
+                (valid, invalid)
+            }
         }
     }
 
@@ -134,6 +158,7 @@ impl Rule {
                 .as_str()
                 .is_some_and(|value| !value.to_ascii_lowercase().contains("bearer ")),
             Self::Internal => value["invariant"] == true,
+            Self::TextApplication => validate_text_specimen(value).is_ok(),
         }
     }
 }
@@ -163,6 +188,11 @@ probes!(
     ("PP2006", "unsatisfied-security-control", Complete),
     ("PP2007", "invalid-quality-mapping", Reference),
     ("PP2008", "cyclic-lexicon-import", Acyclic),
+    (
+        "PP2009",
+        "invalid-text-application-profile",
+        TextApplication
+    ),
     ("PP3001", "malformed-holo-header", Exact),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
@@ -258,7 +288,17 @@ fn digest(value: &Value) -> Result<String, PrismError> {
     Ok(format!("sha256:{:x}", Sha256::digest(encode_value(value)?)))
 }
 
+fn validate_text_specimen(value: &Value) -> Result<(), PrismError> {
+    let application = serde_json::from_value(value.clone()).map_err(|error| {
+        PrismError::new("PP2009", format!("text application specimen: {error}"))
+    })?;
+    crate::holo::validate::validate_text_application(&application)
+}
+
 fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
+    if matches!(spec.rule, Rule::TextApplication) {
+        return validate_text_specimen(value);
+    }
     if spec.rule.accepts(value) {
         Ok(())
     } else {
@@ -306,13 +346,12 @@ pub fn exercise_all() -> Result<Vec<DiagnosticProbeResult>, PrismError> {
 
 #[cfg(test)]
 mod tests {
-    use super::exercise_all;
+    use super::{exercise_all, validate, Rule, PROBES};
     use std::collections::BTreeSet;
 
     #[test]
     fn every_registered_diagnostic_has_an_executable_trigger() {
         let results = exercise_all().unwrap();
-        assert_eq!(results.len(), 83);
         assert_eq!(results.first().unwrap().code, "PP1001");
         assert_eq!(results.last().unwrap().code, "PP9001");
         let registered: toml::Value = include_str!("../model/errors.toml").parse().unwrap();
@@ -322,10 +361,27 @@ mod tests {
             .iter()
             .map(|row| row["code"].as_str().unwrap().to_owned())
             .collect::<BTreeSet<_>>();
+        assert_eq!(results.len(), expected.len());
         let observed = results
             .iter()
             .map(|row| row.code.clone())
             .collect::<BTreeSet<_>>();
         assert_eq!(observed, expected);
+    }
+
+    #[test]
+    fn text_profile_probe_returns_the_real_application_validator_diagnostic() {
+        let spec = *PROBES.iter().find(|spec| spec.code == "PP2009").unwrap();
+        let (valid, invalid) = Rule::TextApplication.specimens();
+        validate(spec, &valid).unwrap();
+        let application = serde_json::from_value(invalid.clone()).unwrap();
+        let expected = crate::holo::validate::validate_text_application(&application).unwrap_err();
+        let actual = validate(spec, &invalid).unwrap_err();
+        assert_eq!(actual.code, "PP2009");
+        assert_eq!(actual.message, expected.message);
+        assert_eq!(
+            actual.message,
+            "text application declaration violates its closed byte-request profile"
+        );
     }
 }

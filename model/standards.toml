@@ -8,9 +8,9 @@ reference = "https://www.iso.org/standard/74393.html"
 basis = "public-catalog"
 scope = "Architecture description conceptual foundations and view/viewpoint framework"
 provenance = "ISO/IEC/IEEE international standard catalog entry"
-interpretation = "Architecture descriptions are modeled as collections of concerns, viewpoints, views, models, and stakeholders."
+interpretation = "Architecture descriptions are modeled as collections of concerns, viewpoints, views, models, and stakeholders. Holo and text-application metadata are Prism-owned specializations in this vocabulary, not ISO-defined wire formats or user-interface contracts."
 facet_package = "prism.arch"
-facet_entries = ["arch-component", "arch-component-kind", "arch-concern", "arch-edge", "arch-edge-kind", "arch-model-kind", "arch-stakeholder", "arch-standard-reference", "arch-view", "arch-view-class", "arch-viewpoint", "arch-viewpoint-class", "holo-flat-validation-input", "holo-normalized-model", "holo-standards-profile"]
+facet_entries = ["arch-component", "arch-component-kind", "arch-concern", "arch-edge", "arch-edge-kind", "arch-model-kind", "arch-stakeholder", "arch-standard-reference", "arch-text-application-model", "arch-view", "arch-view-class", "arch-viewpoint", "arch-viewpoint-class", "holo-flat-validation-input", "holo-normalized-model", "holo-standards-profile"]
 coverage_state = "implemented"
 release_scope = true
 

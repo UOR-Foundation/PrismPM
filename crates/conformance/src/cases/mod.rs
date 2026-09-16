@@ -354,7 +354,7 @@ pub fn run_at(root: &Path, id: &str) {
         }
 
         "HO-01" | "HO-02" | "HO-03" | "HO-04" | "HO-05" | "HO-06" | "HO-07" | "HO-08" | "HO-09"
-        | "HO-10" => {
+        | "HO-10" | "HO-11" => {
             verify_holo(root, id);
         }
 
@@ -2260,6 +2260,66 @@ fn verify_facets(root: &Path, id: &str) {
 }
 
 fn verify_holo(root: &Path, id: &str) {
+    if id == "HO-11" {
+        for relative in [
+            "tests/fixtures/holo/ho-11-text-application",
+            "tests/negative/text-application/bad-profile",
+        ] {
+            crate::fixtures::check(&root.join(relative))
+                .expect("the complete text source fixture matches its declared outcome");
+        }
+        let value = json(&root.join("tests/data/text-model-document.json"));
+        let document: prismpm::holo::ModelDocument = serde_json::from_value(value.clone()).unwrap();
+        let bytes = prismpm::holo::canonical::encode_canonical(&document).unwrap();
+        assert_eq!(
+            prismpm::holo::canonical::decode_canonical(&bytes).unwrap(),
+            document
+        );
+        prismpm::contracts::CanonicalDocument::from_value(
+            "prismpm/model-document/2",
+            value.clone(),
+        )
+        .unwrap();
+        for (pointer, replacement, code) in [
+            (
+                "/schema",
+                serde_json::json!("prismpm/model-document/1"),
+                "PP4004",
+            ),
+            (
+                "/application/profile",
+                serde_json::json!("prismpm/text-application/2"),
+                "PP2009",
+            ),
+            (
+                "/application/request_maximum",
+                serde_json::json!(0),
+                "PP2009",
+            ),
+            (
+                "/application/library_roots",
+                serde_json::json!([]),
+                "PP2009",
+            ),
+            (
+                "/application/acceptance_vectors/0/response",
+                serde_json::json!([255]),
+                "PP2009",
+            ),
+        ] {
+            let mut bad = value.clone();
+            *bad.pointer_mut(pointer).unwrap() = replacement;
+            let bad: prismpm::holo::ModelDocument = serde_json::from_value(bad).unwrap();
+            assert_eq!(
+                prismpm::holo::validate::validate(&bad).unwrap_err().code,
+                code
+            );
+        }
+        let mut bad = value;
+        bad["application"]["view"]["operation_type"] = serde_json::json!("Invented");
+        assert!(serde_json::from_value::<prismpm::holo::ModelDocument>(bad).is_err());
+        return;
+    }
     let document = model(root);
     let bytes = model_bytes(root);
     match id {

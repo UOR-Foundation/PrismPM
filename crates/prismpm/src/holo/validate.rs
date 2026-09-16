@@ -1,6 +1,6 @@
 //! Structural, ordering, profile, and cross-reference model validation.
 
-use super::model_document::ModelDocument;
+use super::model_document::{Application, ModelDocument, TextApplicationModel};
 use crate::error::PrismError;
 use std::collections::BTreeSet;
 
@@ -80,7 +80,12 @@ fn contains_index<T>(rows: &[T], index: u64) -> bool {
 
 /// Validate a model-document DTO before encoding or after strict decoding.
 pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
-    if doc.schema != "prismpm/model-document/1" {
+    let expected_schema = if matches!(&doc.application, Some(Application::Text(_))) {
+        "prismpm/model-document/2"
+    } else {
+        "prismpm/model-document/1"
+    };
+    if doc.schema != expected_schema {
         return Err(PrismError::new(
             "PP4004",
             "unsupported model-document schema",
@@ -106,7 +111,10 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
                 "an application model may not contain architecture facet records",
             ));
         }
-        validate_application(application)?;
+        match application {
+            Application::Legacy(value) => validate_application(value)?,
+            Application::Text(value) => validate_text_application(value)?,
+        }
         return Ok(());
     }
     if doc
@@ -370,6 +378,127 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
     Ok(())
 }
 
+pub(crate) fn validate_text_application(
+    application: &TextApplicationModel,
+) -> Result<(), PrismError> {
+    let invalid = |message| PrismError::new("PP2009", message);
+    static HTTPS_URI: std::sync::OnceLock<jsonschema::Validator> = std::sync::OnceLock::new();
+    let https_uri = HTTPS_URI.get_or_init(|| {
+        jsonschema::options()
+            .should_validate_formats(true)
+            .build(&serde_json::json!({
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https://[^/?#]+"
+            }))
+            .expect("static HTTPS URI schema")
+    });
+    let cargo_name = &application.cargo_name;
+    let name = &application.name;
+    let version = semver::Version::parse(&application.cargo_version).map_err(|_| {
+        invalid("text application Cargo version is not canonical major.minor.patch")
+    })?;
+    if name.is_empty()
+        || name.len() > 128
+        || !name.as_bytes()[0].is_ascii_alphanumeric()
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b' '))
+        || name.ends_with(['.', ' '])
+        || cargo_name.is_empty()
+        || cargo_name.len() > 64
+        || !cargo_name.as_bytes()[0].is_ascii_lowercase()
+        || !cargo_name.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
+        })
+        || !version.pre.is_empty()
+        || !version.build.is_empty()
+        || version.to_string() != application.cargo_version
+        || [&application.name, &application.cargo_description]
+            .iter()
+            .any(|value| value.trim().is_empty() || value.chars().any(char::is_control))
+        || [&application.cargo_repository, &application.cargo_homepage]
+            .iter()
+            .any(|value| {
+                !https_uri.is_valid(&serde_json::Value::String((*value).clone()))
+                    || !value.is_ascii()
+                    || value
+                        .bytes()
+                        .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
+            })
+    {
+        return Err(invalid("text application package metadata is invalid"));
+    }
+    let valid_root = |root: &str| {
+        root.contains('.')
+            && root.split('.').all(|part| {
+                !part.is_empty()
+                    && (part.as_bytes()[0].is_ascii_alphabetic() || part.starts_with('_'))
+                    && part
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            })
+    };
+    if application.profile != "prismpm/text-application/1"
+        || application.core_contract != "hologram:guest/core-wasm@1"
+        || application.request_maximum == 0
+        || application.response_maximum == 0
+        || application.guest_allocation_maximum < application.request_maximum
+        || !application.capabilities_empty
+        || !application.fat_archive
+        || application.primary_layer != 0
+        || application.view_layer != 1
+        || application.library_roots.is_empty()
+        || !valid_root(&application.entry_root)
+        || !application.library_roots.contains(&application.entry_root)
+        || application
+            .library_roots
+            .iter()
+            .any(|root| !valid_root(root))
+        || application
+            .library_roots
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+    {
+        return Err(invalid(
+            "text application declaration violates its closed byte-request profile",
+        ));
+    }
+    for label in [
+        &application.view.title,
+        &application.view.heading,
+        &application.view.input_label,
+        &application.view.submit_label,
+        &application.view.output_label,
+        &application.view.input_error,
+        &application.view.response_error,
+    ] {
+        if label.trim().is_empty() || label.chars().any(char::is_control) {
+            return Err(invalid(
+                "text View labels must be nonempty Unicode text without control characters",
+            ));
+        }
+    }
+    let mut requests = BTreeSet::new();
+    if application.acceptance_vectors.is_empty()
+        || !application
+            .acceptance_vectors
+            .iter()
+            .any(|vector| vector.request.len() == application.guest_allocation_maximum as usize)
+        || application.acceptance_vectors.iter().any(|vector| {
+            vector.request.len() > application.guest_allocation_maximum as usize
+                || vector.response.len() > application.response_maximum as usize
+                || std::str::from_utf8(&vector.response).is_err()
+                || !requests.insert(&vector.request)
+        })
+    {
+        return Err(invalid(
+            "text acceptance vectors must have unique guest-allocation-bounded requests, an exact allocation-boundary vector, and bounded UTF-8 responses",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_application(
     application: &super::model_document::ApplicationModel,
 ) -> Result<(), PrismError> {
@@ -398,7 +527,8 @@ fn validate_application(
         || application.guest_allocation_maximum < application.request_maximum
         || !application.capabilities_empty
         || !application.fat_archive
-        || application.primary_layer == application.view_layer
+        || application.primary_layer != 0
+        || application.view_layer != 1
         || !application.view.live_polite
         || !application.view.retain_focus
         || !application.view.submit_on_enter

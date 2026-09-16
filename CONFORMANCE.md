@@ -103,7 +103,7 @@ The three honesty levels:
 | ID | Level | Statement |
 | --- | --- | --- |
 | `HO-01` | `build` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. |
-| `HO-02` | `build` | The non-Holo Prism model document uses the closed prismpm/model-document/1 schema and model.prism.json name. |
+| `HO-02` | `build` | Legacy application and architecture model documents retain the closed prismpm/model-document/1 schema and model.prism.json name. |
 | `HO-03` | `build` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. |
 | `HO-04` | `build` | The model-document projector is a total deterministic function from valid LexLean semantic snapshots. |
 | `HO-05` | `build` | Model entity identifiers are qualified strings assigned deterministic zero-based indexes. |
@@ -112,6 +112,7 @@ The three honesty levels:
 | `HO-08` | `build` | The emitter-semantics ID uniquely identifies the model-document projector inputs. |
 | `HO-09` | `build` | Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources. |
 | `HO-10` | `build` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. |
+| `HO-11` | `build` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. |
 
 ## lifecycle
 

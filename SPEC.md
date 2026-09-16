@@ -119,8 +119,43 @@ the Hologram v4 container pinned by `model/dependencies.toml`. A file named
 `*.holo` begins with `HOLO` followed by little-endian physical version 4 and
 canonical flags. Legacy JSON, including the prototype `prismpm/holo/1` JSON,
 is rejected as a `.holo` file. The old logical projection is now the separate
-canonical JSON artifact `model.prism.json` with schema
-`prismpm/model-document/1`.
+canonical JSON artifact `model.prism.json`. Legacy numeric applications and
+architecture models retain the closed `prismpm/model-document/1` schema.
+The separate closed `prismpm/model-document/2` schema is reserved for the
+explicit `prismpm/text-application/1` profile; it is not an additive /1 change.
+
+`Foundation.View.Text.V1.Model` authoritatively defines `TextApplication`,
+`TextView`, and byte-level `AcceptanceVector` records in LexLean. A unique
+closed application value declares its exact profile, Cargo metadata, sorted
+qualified library roots including its byte-request entry root, the Core-Wasm
+contract, positive request/response byte limits, guest allocation limit, empty
+capabilities, primary layer 0 and View layer 1, fat-archive intent, and nonempty
+acceptance vectors. Its View has exactly title, heading, input label, submit
+label, output label, input-error text, and response-error text. There are no
+calculator operation, error-enum, or numeric grammar fields in this profile.
+Both application profiles reject other layer indices: the current archive
+composer implements exactly primary layer 0 and View layer 1.
+Its application name is also its portable artifact stem: 1–128 ASCII letters,
+digits, spaces, underscores, hyphens, or dots, beginning with an alphanumeric
+character and not ending with a space or dot. Unicode presentation belongs in
+the View text, not in a path or URL component.
+Undeclared fields and incompatible profile/schema combinations are errors;
+`PP2009` rejects invalid text profile declarations. Requests in the acceptance
+corpus may deliberately contain malformed UTF-8, but all responses must be
+valid UTF-8 within the declared response bound. Acceptance requests may exceed
+the browser request bound to exercise modeled rejection, but must fit the guest
+allocation bound so the core can receive them.
+At least one vector must have request length exactly equal to that guest
+allocation bound, so independent runtime verification checks its modeled
+response without assuming that it equals an empty-request response.
+
+The text View transports strictly encode UTF-8 requests and display strictly
+decoded UTF-8 responses, with byte limits derived from the application.
+Application request parsing and response semantics remain LexLean-authored;
+generic generated host code may only adapt that byte contract, enforce limits,
+and present modeled text safely. This profile grants no persistence, network,
+authentication, or organizational compliance capability. It does not change
+the Holo/1 physical archive or the legacy numeric View representation.
 
 The V1 model defines the header and section table; `AppManifest`, Metadata,
 Extension, and ContentBlob sections; canonical capability requests and child
@@ -297,8 +332,10 @@ library, an import-free `wasm32-unknown-unknown` Core-Wasm guest exporting
 transports. Mathematical `Int` is never narrowed to `i64`; fixed `Int64`
 operations use checked target operations. The guest allocator is aligned,
 bounded, fresh-instance scoped, and aborts on ABI resource violations. The
-browser boundary carries operands/results as decimal strings and calls only
-the generated crate API; JavaScript Number arithmetic is forbidden.
+legacy numeric browser boundary carries operands/results as decimal strings;
+the text profile carries strictly validated UTF-8 byte requests/responses.
+Both call only the generated crate API; JavaScript domain arithmetic is
+forbidden.
 
 Execution evidence has exactly schema `prismpm/execution-evidence/2`, status
 `passed`, strategy `exhaustive-v1+lcg-v1`, seed `5eedcafef00dbeef`, 597 list-input
@@ -730,12 +767,19 @@ discovery labels. A pushed artifact is immutable and deploy never rebuilds.
 
 `conformance NAME@sha256:DIGEST` executes the SDK-shipped PrismPM source and
 fixture closure with the SDK-shipped `prismpm-conformance` executable. It runs
-each of the 148 registered feature scenarios and each of the 83 executable
-malformed-input diagnostic triggers. The canonical transcript is bound to the
+every registered feature scenario and every executable malformed-input
+diagnostic trigger. The runner requires the exact feature and diagnostic
+register bytes compiled into that SDK; counts are derived from its actual
+transcript and checked against those authorities, never fixed literals.
+The canonical transcript is bound to the
 release, capability-coverage artifact, SDK, and runner digests; any missing,
 duplicate, panicking, or differently coded execution fails before the evidence
 is attached as an OCI subject referrer. Selection flags on the lower-level
 runner support focused diagnosis but cannot produce attachable acceptance.
+Partial `passed` transcripts must name exact registered subsets with matching
+case counts; `accepted` transcripts and conformance results require the complete
+current register. Historical transcripts remain inert records, not evidence
+that a newer SDK's expanded contract has executed.
 
 Controller operations are path-confined, symlink-safe, cancellation-aware,
 bounded, atomic, and concurrency-safe. Operation-owned temporary state is
@@ -887,7 +931,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `FT-09` | `facets` | Facet lexicons produce deterministic canonical LaTeX and Lean lowerings. | §2 |
 | `FT-10` | `facets` | Lexicon package locks reproduce across multiple directory roots. | §2 |
 | `HO-01` | `holo` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. | §3 |
-| `HO-02` | `holo` | The non-Holo Prism model document uses the closed prismpm/model-document/1 schema and model.prism.json name. | §3 |
+| `HO-02` | `holo` | Legacy application and architecture model documents retain the closed prismpm/model-document/1 schema and model.prism.json name. | §3 |
 | `HO-03` | `holo` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. | §3 |
 | `HO-04` | `holo` | The model-document projector is a total deterministic function from valid LexLean semantic snapshots. | §3 |
 | `HO-05` | `holo` | Model entity identifiers are qualified strings assigned deterministic zero-based indexes. | §3 |
@@ -896,6 +940,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-08` | `holo` | The emitter-semantics ID uniquely identifies the model-document projector inputs. | §3 |
 | `HO-09` | `holo` | Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources. | §3 |
 | `HO-10` | `holo` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. | §3 |
+| `HO-11` | `holo` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

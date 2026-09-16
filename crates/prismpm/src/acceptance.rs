@@ -56,20 +56,36 @@ fn registered_values(
 }
 
 pub(crate) fn verify_closure(value: &Value) -> Result<(), PrismError> {
-    let features = registered_values(include_str!("../model/ids.toml"), "id", "id")?;
-    let diagnostics = registered_values(include_str!("../model/errors.toml"), "error", "code")?;
-    let mut observed_features = BTreeSet::new();
-    let mut observed_diagnostics = BTreeSet::new();
     if value["status"] != "accepted" {
         return Err(PrismError::new(
             "PP6002",
             "production acceptance transcript is not complete",
         ));
     }
+    verify_transcript(value)
+}
+
+pub(crate) fn verify_transcript(value: &Value) -> Result<(), PrismError> {
+    let features = registered_values(include_str!("../model/ids.toml"), "id", "id")?;
+    let diagnostics = registered_values(include_str!("../model/errors.toml"), "error", "code")?;
+    let mut observed_features = BTreeSet::new();
+    let mut observed_diagnostics = BTreeSet::new();
+    if !matches!(value["status"].as_str(), Some("accepted" | "passed")) {
+        return Err(PrismError::new(
+            "PP6002",
+            "production acceptance transcript status is invalid",
+        ));
+    }
     for row in value["cases"]
         .as_array()
         .ok_or_else(|| PrismError::new("PP6002", "production acceptance cases are absent"))?
     {
+        if row["status"] != "passed" {
+            return Err(PrismError::new(
+                "PP6002",
+                "production acceptance contains an unpassed execution",
+            ));
+        }
         match row["kind"].as_str() {
             Some("feature") => {
                 let feature = row["feature_id"].as_str().ok_or_else(|| {
@@ -107,20 +123,34 @@ pub(crate) fn verify_closure(value: &Value) -> Result<(), PrismError> {
             }
         }
     }
-    if observed_features != features
-        || value["feature_count"].as_u64() != Some(features.len() as u64)
+    if (value["status"] == "accepted" && observed_features != features)
+        || value["feature_count"].as_u64() != Some(observed_features.len() as u64)
     {
         return Err(PrismError::new(
             "PP6002",
             "production acceptance does not execute every registered public feature exactly once",
         ));
     }
-    if observed_diagnostics != diagnostics
-        || value["diagnostic_count"].as_u64() != Some(diagnostics.len() as u64)
+    if (value["status"] == "accepted" && observed_diagnostics != diagnostics)
+        || value["diagnostic_count"].as_u64() != Some(observed_diagnostics.len() as u64)
     {
         return Err(PrismError::new(
             "PP6002",
             "production acceptance does not trigger every registered diagnostic exactly once",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn verify_result_counts(value: &Value) -> Result<(), PrismError> {
+    let features = registered_values(include_str!("../model/ids.toml"), "id", "id")?;
+    let diagnostics = registered_values(include_str!("../model/errors.toml"), "error", "code")?;
+    if value["feature_count"].as_u64() != Some(features.len() as u64)
+        || value["diagnostic_count"].as_u64() != Some(diagnostics.len() as u64)
+    {
+        return Err(PrismError::new(
+            "PP6002",
+            "conformance result counts do not match the complete current register",
         ));
     }
     Ok(())
@@ -291,6 +321,33 @@ pub(crate) fn attach(root: &Path, reference: &str, input: &Path) -> Result<Value
     }))
 }
 
+fn result_document(
+    transcript: &CanonicalDocument,
+    descriptor: &str,
+    release: &str,
+    runner: &str,
+    sdk: &str,
+    path: &str,
+) -> Result<Value, PrismError> {
+    verify_closure(transcript.value())?;
+    CanonicalDocument::from_value(
+        "prismpm/conformance-result/1",
+        json!({
+            "diagnostic_count":transcript.value()["diagnostic_count"],
+            "feature_count":transcript.value()["feature_count"],
+            "referrer_digest":descriptor,
+            "release_digest":release,
+            "runner_digest":runner,
+            "schema":"prismpm/conformance-result/1",
+            "sdk_digest":sdk,
+            "status":"accepted",
+            "transcript_digest":transcript.digest(),
+            "transcript_path":path
+        }),
+    )
+    .map(|document| document.value().clone())
+}
+
 /// Execute the shipped conformance and diagnostic corpus and attach its exact transcript.
 pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
     let digest = release_digest(reference)?;
@@ -361,22 +418,14 @@ pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
     staged.persist(&path).map_err(|error| {
         PrismError::new("PP6002", format!("publish conformance transcript: {error}"))
     })?;
-    CanonicalDocument::from_value(
-        "prismpm/conformance-result/1",
-        json!({
-            "diagnostic_count":83,
-            "feature_count":148,
-            "referrer_digest":descriptor,
-            "release_digest":digest,
-            "runner_digest":expected_runner,
-            "schema":"prismpm/conformance-result/1",
-            "sdk_digest":sdk_digest,
-            "status":"accepted",
-            "transcript_digest":transcript_digest,
-            "transcript_path":path.strip_prefix(root).unwrap_or(&path).to_string_lossy()
-        }),
+    result_document(
+        &document,
+        &descriptor,
+        digest,
+        &expected_runner,
+        &sdk_digest,
+        &path.strip_prefix(root).unwrap_or(&path).to_string_lossy(),
     )
-    .map(|document| document.value().clone())
 }
 
 #[cfg(test)]
@@ -389,7 +438,7 @@ mod tests {
         );
     }
 
-    use super::{registered_values, verify_closure};
+    use super::{registered_values, result_document, verify_closure};
     use crate::contracts::CanonicalDocument;
     use serde_json::{json, Value};
 
@@ -409,6 +458,7 @@ mod tests {
                 })
             })
             .collect::<Vec<_>>();
+        let feature_count = cases.len();
         cases.extend(
             registered_values(include_str!("../model/errors.toml"), "error", "code")
                 .unwrap()
@@ -424,11 +474,12 @@ mod tests {
                     })
                 }),
         );
+        let diagnostic_count = cases.len() - feature_count;
         json!({
             "cases":cases,
             "coverage_digest":digest,
-            "diagnostic_count":83,
-            "feature_count":148,
+            "diagnostic_count":diagnostic_count,
+            "feature_count":feature_count,
             "release_digest":digest,
             "runner_digest":digest,
             "schema":"prismpm/production-acceptance/1",
@@ -454,6 +505,116 @@ mod tests {
         assert_eq!(
             verify_closure(&missing).unwrap_err().code.as_str(),
             "PP6002"
+        );
+    }
+
+    #[test]
+    fn result_counts_come_from_the_complete_current_transcript() {
+        let value = complete();
+        assert!(value["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["feature_id"] == "HO-11"));
+        assert!(value["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["diagnostic"] == "PP2009"));
+        let transcript =
+            CanonicalDocument::from_value("prismpm/production-acceptance/1", value.clone())
+                .unwrap();
+        let digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let result = result_document(
+            &transcript,
+            digest,
+            digest,
+            digest,
+            digest,
+            ".prism/transcript.json",
+        )
+        .unwrap();
+        assert_eq!(result["feature_count"], value["feature_count"]);
+        assert_eq!(result["diagnostic_count"], value["diagnostic_count"]);
+        for field in ["feature_count", "diagnostic_count"] {
+            let mut stale = result.clone();
+            stale[field] = json!(stale[field].as_u64().unwrap() - 1);
+            assert_eq!(
+                CanonicalDocument::from_value("prismpm/conformance-result/1", stale)
+                    .unwrap_err()
+                    .code,
+                "PP6002"
+            );
+        }
+    }
+
+    #[test]
+    fn accepted_transcript_rejects_missing_new_cases_even_with_adjusted_counts() {
+        for (field, identity, count) in [
+            ("feature_id", "HO-11", "feature_count"),
+            ("diagnostic", "PP2009", "diagnostic_count"),
+        ] {
+            let mut missing = complete();
+            missing["cases"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|row| row[field] != identity);
+            missing[count] = json!(missing[count].as_u64().unwrap() - 1);
+            assert_eq!(verify_closure(&missing).unwrap_err().code, "PP6002");
+            assert_eq!(
+                CanonicalDocument::from_value("prismpm/production-acceptance/1", missing)
+                    .unwrap_err()
+                    .code,
+                "PP6002"
+            );
+        }
+    }
+
+    #[test]
+    fn passed_slices_require_exact_cases_and_counts_but_are_not_accepted() {
+        let mut value = complete();
+        value["status"] = json!("passed");
+        value["cases"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|row| row["feature_id"] != "HO-11");
+        value["feature_count"] = json!(value["feature_count"].as_u64().unwrap() - 1);
+        let transcript =
+            CanonicalDocument::from_value("prismpm/production-acceptance/1", value.clone())
+                .unwrap();
+        assert_eq!(verify_closure(&value).unwrap_err().code, "PP6002");
+        let digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        assert_eq!(
+            result_document(
+                &transcript,
+                digest,
+                digest,
+                digest,
+                digest,
+                ".prism/transcript.json"
+            )
+            .unwrap_err()
+            .code,
+            "PP6002"
+        );
+        for (pointer, replacement) in [
+            (
+                "/feature_count",
+                json!(value["feature_count"].as_u64().unwrap() + 1),
+            ),
+            ("/cases/0/feature_id", json!("ZZ-99")),
+            ("/cases/0/status", json!("skipped")),
+        ] {
+            let mut bad = value.clone();
+            *bad.pointer_mut(pointer).unwrap() = replacement;
+            assert!(CanonicalDocument::from_value("prismpm/production-acceptance/1", bad).is_err());
+        }
+        let mut duplicate = value;
+        let row = duplicate["cases"][0].clone();
+        duplicate["cases"].as_array_mut().unwrap().insert(0, row);
+        duplicate["feature_count"] = json!(duplicate["feature_count"].as_u64().unwrap() + 1);
+        assert!(
+            CanonicalDocument::from_value("prismpm/production-acceptance/1", duplicate).is_err()
         );
     }
 }

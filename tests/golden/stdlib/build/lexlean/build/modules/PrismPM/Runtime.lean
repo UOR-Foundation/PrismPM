@@ -1,6 +1,7 @@
 module
 public import Init
 public import PrismPM.Foundation.Holo
+public import PrismPM.Foundation.View.Text.V1.Model
 public import PrismPM.Production.ControlCoverage
 public import PrismPM.Production.ControlCoverageCorpus
 public import PrismPM.Production.System

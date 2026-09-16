@@ -3,12 +3,12 @@
 use crate::error::PrismError;
 use crate::holo::archive::{compose_application, ApplicationArchiveInput, ArchiveProvenance};
 use crate::holo::canonical::{content_id, encode_value};
-use crate::holo::model_document::{ApplicationModel, ModelDocument};
+use crate::holo::model_document::{Application, ApplicationModel, ModelDocument};
 use crate::verification::{executable, run_process};
 use prod_codegen::{
-    generate_cargo_package, generate_core_wasm_package, generate_view_v1, BrowserAdapterBinding,
-    CargoDependency, CargoPackageSpec, CoreWasmSpec, EvaluatedViewV1, GeneratedPackage,
-    ViewOperation,
+    generate_cargo_package, generate_core_wasm_package, generate_text_view_v1, generate_view_v1,
+    BrowserAdapterBinding, CargoDependency, CargoPackageSpec, CoreWasmSpec, EvaluatedViewV1,
+    GeneratedPackage, GeneratedViewV1, TextBrowserAdapterBinding, TextViewV1, ViewOperation,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -171,6 +171,75 @@ fn view_value(
     }
 }
 
+fn application_view(
+    model: &ModelDocument,
+    application: &Application,
+    core_sha: &str,
+) -> Result<(GeneratedViewV1, String, String), PrismError> {
+    let (generated, model_id, view_model_id) = match application {
+        Application::Legacy(application) => {
+            let evaluated = view_value(model, application, core_sha);
+            let generated = generate_view_v1(
+                &evaluated,
+                &BrowserAdapterBinding {
+                    package_name: format!("{}-browser", application.cargo_name),
+                    package_version: application.cargo_version.clone(),
+                    core_crate_name: application.cargo_name.clone(),
+                    core_crate_version: application.cargo_version.clone(),
+                    core_operation_type: application.operation_type.clone(),
+                    core_error_type: application.error_type.clone(),
+                    core_function: application.function_name.clone(),
+                },
+            );
+            (generated, evaluated.model_id, evaluated.view_model_id)
+        }
+        Application::Text(application) => {
+            let model_id = content_id(&encode_value(
+                &serde_json::to_value(model)
+                    .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+            )?);
+            let view_model_id = content_id(&encode_value(
+                &serde_json::to_value(&application.view)
+                    .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+            )?);
+            let entry =
+                application.entry_root.rsplit('.').next().ok_or_else(|| {
+                    PrismError::new("PP2001", "application entry root is malformed")
+                })?;
+            let evaluated = TextViewV1 {
+                title: application.view.title.clone(),
+                heading: application.view.heading.clone(),
+                input_label: application.view.input_label.clone(),
+                submit_label: application.view.submit_label.clone(),
+                output_label: application.view.output_label.clone(),
+                input_error: application.view.input_error.clone(),
+                response_error: application.view.response_error.clone(),
+                max_input_bytes: application.request_maximum,
+                max_output_bytes: application.response_maximum,
+                model_id: model_id.clone(),
+                view_model_id: view_model_id.clone(),
+                generated_core_sha256: core_sha.to_owned(),
+            };
+            let generated = generate_text_view_v1(
+                &evaluated,
+                &TextBrowserAdapterBinding {
+                    package_name: format!("{}-browser", application.cargo_name),
+                    package_version: application.cargo_version.clone(),
+                    core_crate_name: application.cargo_name.clone(),
+                    core_crate_version: application.cargo_version.clone(),
+                    core_function: entry.to_owned(),
+                },
+            );
+            (generated, model_id, view_model_id)
+        }
+    };
+    Ok((
+        generated.map_err(|error| PrismError::new("PP5203", error.to_string()))?,
+        model_id,
+        view_model_id,
+    ))
+}
+
 fn source_manifest(
     model: &ModelDocument,
     lex_manifest: &[u8],
@@ -190,19 +259,19 @@ fn source_manifest(
     }))
 }
 
-fn package_readme(application: &ApplicationModel) -> String {
+fn package_readme(application: &Application) -> String {
     let entry = application
-        .entry_root
+        .entry_root()
         .rsplit('.')
         .next()
         .expect("validated application entry root");
     let example = application
-        .acceptance_vectors
+        .acceptance_vectors()
         .first()
         .map(|vector| {
             format!(
                 "use {}::{};\n\nassert_eq!({}(vec!{:?}), vec!{:?});",
-                application.cargo_name.replace('-', "_"),
+                application.cargo_name().replace('-', "_"),
                 entry,
                 entry,
                 vector.request,
@@ -212,14 +281,14 @@ fn package_readme(application: &ApplicationModel) -> String {
         .unwrap_or_else(|| {
             format!(
                 "use {}::{};",
-                application.cargo_name.replace('-', "_"),
+                application.cargo_name().replace('-', "_"),
                 entry
             )
         });
     format!(
         "# {}\n\n{}\n\nThis package is generated from the authoritative Prism application model. Do not edit generated Rust.\n\n```rust\n{}\n```\n",
-        application.name,
-        application.cargo_description,
+        application.name(),
+        application.cargo_description(),
         example
     )
 }
@@ -257,18 +326,19 @@ fn stdlib_registry(workspace: &Path, stdlib: &StdlibRelease) -> Result<PathBuf, 
 
 fn add_application_to_registry(
     registry: &Path,
-    application: &ApplicationModel,
+    application: &Application,
     crate_bytes: &[u8],
     stdlib_sha256: &str,
 ) -> Result<(), PrismError> {
     write(
         &registry.join(format!(
             "{}-{}.crate",
-            application.cargo_name, application.cargo_version
+            application.cargo_name(),
+            application.cargo_version()
         )),
         crate_bytes,
     )?;
-    let name = &application.cargo_name;
+    let name = application.cargo_name();
     let index_path = if name.len() == 1 {
         registry.join("index/1").join(name)
     } else if name.len() == 2 {
@@ -296,7 +366,7 @@ fn add_application_to_registry(
         }],
         "features": {"default":["std"],"std":["prism-stdlib/std"]},
         "name": name,
-        "vers": application.cargo_version,
+        "vers": application.cargo_version(),
         "yanked": false
     });
     let mut row =
@@ -316,7 +386,7 @@ fn add_application_to_registry(
 /// application candidate and return an isolated offline Cargo home.
 pub(crate) fn application_cargo_home(
     workspace: &Path,
-    application: &ApplicationModel,
+    application: &Application,
     crate_bytes: &[u8],
 ) -> Result<PathBuf, PrismError> {
     let stdlib: StdlibRelease = serde_json::from_str(STDLIB_RELEASE_SOURCE)
@@ -346,6 +416,34 @@ fn run(
         .map(|argument| (*argument).to_owned())
         .collect::<Vec<_>>();
     run_process(name, program, &args, cwd, env, replacements, failure).map(|_| ())
+}
+
+fn application_export_arguments(
+    modules: &BTreeSet<String>,
+    application: &Application,
+    export: &Path,
+) -> Vec<String> {
+    let mut arguments = vec!["exe".to_owned(), "prod-export".to_owned()];
+    for module in modules {
+        arguments.push("--module".to_owned());
+        arguments.push(module.clone());
+    }
+    for root in application.library_roots() {
+        arguments.push("--root".to_owned());
+        arguments.push(root.clone());
+    }
+    arguments.extend([
+        "--ir-module".to_owned(),
+        match application {
+            Application::Legacy(application) => application.name.clone(),
+            // Display labels are not IR identifiers. Use the already validated
+            // Cargo identity, preserving the legacy Calculator's exact output.
+            Application::Text(application) => application.cargo_name.replace('-', "_"),
+        },
+        "--out".to_owned(),
+        export.to_string_lossy().into_owned(),
+    ]);
+    arguments
 }
 
 /// Produce every platform-independent target declared by an evaluated
@@ -483,22 +581,7 @@ pub(crate) fn generate(
         "PP5004",
     )?;
     let export = workspace.join("export");
-    let mut export_args = vec![
-        "exe".to_owned(),
-        "prod-export".to_owned(),
-        "--module".to_owned(),
-        modules.iter().next().expect("one module").clone(),
-    ];
-    for root in &application.library_roots {
-        export_args.push("--root".to_owned());
-        export_args.push(root.clone());
-    }
-    export_args.extend([
-        "--ir-module".to_owned(),
-        application.name.clone(),
-        "--out".to_owned(),
-        export.to_string_lossy().into_owned(),
-    ]);
+    let export_args = application_export_arguments(&modules, application, &export);
     let mut export_env = BTreeMap::new();
     export_env.insert(
         "LEAN_PATH".to_owned(),
@@ -527,11 +610,11 @@ pub(crate) fn generate(
     let package = generate_cargo_package(
         &module,
         &CargoPackageSpec {
-            name: application.cargo_name.clone(),
-            version: application.cargo_version.clone(),
-            description: application.cargo_description.clone(),
-            repository: application.cargo_repository.clone(),
-            homepage: application.cargo_homepage.clone(),
+            name: application.cargo_name().clone(),
+            version: application.cargo_version().clone(),
+            description: application.cargo_description().clone(),
+            repository: application.cargo_repository().clone(),
+            homepage: application.cargo_homepage().clone(),
             readme: package_readme(application),
             license_mit: LICENSE_MIT.to_owned(),
             license_apache: LICENSE_APACHE.to_owned(),
@@ -592,7 +675,8 @@ pub(crate) fn generate(
     )?;
     let crate_file = package_root.join("target/package").join(format!(
         "{}-{}.crate",
-        application.cargo_name, application.cargo_version
+        application.cargo_name(),
+        application.cargo_version()
     ));
     let crate_bytes = std::fs::read(&crate_file)
         .map_err(|error| PrismError::new("PP4102", format!("generated crate: {error}")))?;
@@ -636,18 +720,18 @@ pub(crate) fn generate(
     );
 
     let entry = application
-        .entry_root
+        .entry_root()
         .rsplit('.')
         .next()
         .ok_or_else(|| PrismError::new("PP2001", "application entry root is malformed"))?;
     let core_package = generate_core_wasm_package(
         &module,
         &CoreWasmSpec {
-            crate_name: format!("{}-core-wasm", application.cargo_name),
+            crate_name: format!("{}-core-wasm", application.cargo_name()),
             entry: entry.to_owned(),
             export_name: "holo_run".to_owned(),
-            input_allocation_cap: application.guest_allocation_maximum,
-            output_allocation_cap: application.response_maximum,
+            input_allocation_cap: application.guest_allocation_maximum(),
+            output_allocation_cap: application.response_maximum(),
             maximum_pages: 32,
             input_ir_sha256: sha256(&kernel_bytes),
         },
@@ -664,7 +748,7 @@ pub(crate) fn generate(
         &replacements,
         "PP5101",
     )?;
-    let wasm_stem = format!("{}_core_wasm", application.cargo_name.replace('-', "_"));
+    let wasm_stem = format!("{}_core_wasm", application.cargo_name().replace('-', "_"));
     let wasm_path = core_root
         .join("target/wasm32-unknown-unknown/release")
         .join(format!("{wasm_stem}.wasm"));
@@ -680,20 +764,8 @@ pub(crate) fn generate(
             .bytes
             .as_slice(),
     );
-    let evaluated_view = view_value(model, application, &generated_core_sha);
-    let generated_view = generate_view_v1(
-        &evaluated_view,
-        &BrowserAdapterBinding {
-            package_name: format!("{}-browser", application.cargo_name),
-            package_version: application.cargo_version.clone(),
-            core_crate_name: application.cargo_name.clone(),
-            core_crate_version: application.cargo_version.clone(),
-            core_operation_type: application.operation_type.clone(),
-            core_error_type: application.error_type.clone(),
-            core_function: application.function_name.clone(),
-        },
-    )
-    .map_err(|error| PrismError::new("PP5203", error.to_string()))?;
+    let (generated_view, view_document_id, view_model_id) =
+        application_view(model, application, &generated_core_sha)?;
     add_application_to_registry(&registry, application, &crate_bytes, &stdlib.crate_sha256)?;
     let browser_root = workspace.join("browser-adapter");
     publish_package(&browser_root, &generated_view.browser_adapter)?;
@@ -723,7 +795,7 @@ pub(crate) fn generate(
         "PP5203",
     )?;
     let wasm_bindgen = executable("wasm-bindgen")?;
-    let browser_stem = application.cargo_name.replace('-', "_");
+    let browser_stem = application.cargo_name().replace('-', "_");
     let adapter_wasm = browser_root
         .join("target/wasm32-unknown-unknown/release")
         .join(format!("{browser_stem}_browser.wasm"));
@@ -763,21 +835,20 @@ pub(crate) fn generate(
         "adapter_wasm_sha256": sha256(&browser_wasm),
         "binding_javascript_sha256": sha256(&browser_js),
         "generated_core_sha256": generated_core_sha,
-        "model_id": evaluated_view.model_id,
+        "model_id": view_document_id,
         "schema": "prismpm/browser-provenance/1",
         "view_manifest_sha256": sha256(&generated_view.view_manifest.bytes),
-        "view_model_id": evaluated_view.view_model_id
+        "view_model_id": view_model_id
     }))?;
     let browser_projection_sha = sha256(&browser_provenance);
-    let view_model_id = evaluated_view.view_model_id.clone();
     let source_manifest =
         source_manifest(model, lex_manifest_bytes, &kernel_bytes, &coverage_bytes)?;
     let target_profile = encode_value(&json!({
-        "contract": application.core_contract,
+        "contract": application.core_contract(),
         "export": "holo_run",
-        "input_allocation_cap": application.guest_allocation_maximum,
+        "input_allocation_cap": application.guest_allocation_maximum(),
         "maximum_pages": 32,
-        "response_maximum": application.response_maximum,
+        "response_maximum": application.response_maximum(),
         "schema": "lean4-prod/core-wasm-target/1"
     }))?;
     let lcnf_manifest = encode_value(&json!({
@@ -787,7 +858,7 @@ pub(crate) fn generate(
         "schema": "prismpm/lcnf-manifest/1"
     }))?;
     let holo = compose_application(&ApplicationArchiveInput {
-        application_name: application.name.clone(),
+        application_name: application.name().clone(),
         guest_wasm: wasm.clone(),
         view_bundle: generated_view.hologram_bundle.bytes.clone(),
         model_document: model_bytes.to_vec(),
@@ -808,8 +879,8 @@ pub(crate) fn generate(
             lean_manifest_sha256: sha256(lex_manifest_bytes),
             lcnf_manifest_sha256: sha256(&lcnf_manifest),
             generated_core_sha256: generated_core_sha,
-            cargo_name: application.cargo_name.clone(),
-            cargo_version: application.cargo_version.clone(),
+            cargo_name: application.cargo_name().clone(),
+            cargo_version: application.cargo_version().clone(),
             cargo_crate_sha256: sha256(&crate_bytes),
             view_model_id,
             browser_projection_sha256: browser_projection_sha,
@@ -817,7 +888,7 @@ pub(crate) fn generate(
     })?;
 
     let mut artifacts = vec![
-        (format!("{}.holo", application.name), holo.bytes),
+        (format!("{}.holo", application.name()), holo.bytes),
         (
             "application/application-manifest.bin".to_owned(),
             holo.application_manifest,
@@ -850,7 +921,8 @@ pub(crate) fn generate(
         (
             format!(
                 "cargo/{}-{}.crate",
-                application.cargo_name, application.cargo_version
+                application.cargo_name(),
+                application.cargo_version()
             ),
             crate_bytes,
         ),
@@ -910,4 +982,153 @@ pub(crate) fn generate(
         ));
     }
     Ok(artifacts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text_model() -> ModelDocument {
+        serde_json::from_slice(include_bytes!(
+            "../../../tests/data/text-model-document.json"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn application_export_imports_every_generated_module() {
+        let model = text_model();
+        let modules = [
+            "PrismTextRequest.Foundation.View.Text.V1.Model".to_owned(),
+            "PrismTextRequest.TextRequest".to_owned(),
+        ]
+        .into_iter()
+        .collect();
+        let arguments = application_export_arguments(
+            &modules,
+            model.application.as_ref().unwrap(),
+            Path::new("export"),
+        );
+        let imported: BTreeSet<_> = arguments
+            .windows(2)
+            .filter(|pair| pair[0] == "--module")
+            .map(|pair| pair[1].clone())
+            .collect();
+        assert_eq!(
+            imported, modules,
+            "exports must not load only the first module"
+        );
+    }
+
+    #[test]
+    fn application_text_ir_module_is_independent_of_display_name() {
+        let mut model = text_model();
+        for name in [
+            "Text Request",
+            "Text-Request",
+            "Text.Request",
+            "2026 Preview",
+        ] {
+            let Some(Application::Text(application)) = model.application.as_mut() else {
+                panic!("text fixture");
+            };
+            application.name = name.to_owned();
+            let arguments = application_export_arguments(
+                &BTreeSet::new(),
+                model.application.as_ref().unwrap(),
+                Path::new("export"),
+            );
+            let module = &arguments[arguments
+                .iter()
+                .position(|arg| arg == "--ir-module")
+                .unwrap()
+                + 1];
+            let source = format!("(module {module})");
+            let (remaining, parsed) = prod_ir::parser::parse_module(&source).unwrap();
+            assert!(remaining.is_empty());
+            assert_eq!(parsed.name, "prism_text_request");
+        }
+    }
+
+    #[test]
+    fn application_single_module_export_arguments_bind_the_cargo_identity() {
+        let model = text_model();
+        let modules = ["PrismTextRequest.TextRequest".to_owned()]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            application_export_arguments(
+                &modules,
+                model.application.as_ref().unwrap(),
+                Path::new("export")
+            ),
+            [
+                "exe",
+                "prod-export",
+                "--module",
+                "PrismTextRequest.TextRequest",
+                "--root",
+                "PrismTextRequest.TextRequest.dispatch",
+                "--ir-module",
+                "prism_text_request",
+                "--out",
+                "export"
+            ]
+        );
+    }
+
+    #[test]
+    fn text_view_binds_model_entry_limits_and_exact_core() {
+        let model = text_model();
+        let application = model.application.as_ref().unwrap();
+        let core = "12".repeat(32);
+        let (first, model_id, view_id) = application_view(&model, application, &core).unwrap();
+        let (second, _, _) = application_view(&model, application, &core).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(model_id, content_id(&encode_canonical_model(&model)));
+        let manifest: Value = serde_json::from_slice(&first.view_manifest.bytes).unwrap();
+        assert_eq!(manifest["profile"], "prism.text-view/1");
+        assert_eq!(manifest["model_id"], model_id);
+        assert_eq!(manifest["view_model_id"], view_id);
+        assert_eq!(manifest["generated_core_sha256"], core);
+        assert_eq!(manifest["max_input_bytes"], application.request_maximum());
+        assert_eq!(manifest["max_output_bytes"], application.response_maximum());
+        let binding = first
+            .browser_adapter
+            .files
+            .iter()
+            .find(|file| file.path == "generation-manifest.json")
+            .unwrap();
+        let binding: Value = serde_json::from_slice(&binding.bytes).unwrap();
+        assert_eq!(binding["core_function"], "dispatch");
+        assert_eq!(binding["core_crate"], "prism-text-request");
+        let changed_core = application_view(&model, application, &"34".repeat(32))
+            .unwrap()
+            .0;
+        assert_ne!(changed_core.view_manifest, first.view_manifest);
+        assert_ne!(changed_core.browser_adapter, first.browser_adapter);
+    }
+
+    fn encode_canonical_model(model: &ModelDocument) -> Vec<u8> {
+        encode_value(&serde_json::to_value(model).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn text_view_rejects_invalid_evaluated_transport_metadata() {
+        let mut model = text_model();
+        let Some(Application::Text(application)) = model.application.as_mut() else {
+            panic!("text fixture");
+        };
+        application.view.input_label.clear();
+        assert_eq!(
+            application_view(
+                &model,
+                model.application.as_ref().unwrap(),
+                &"12".repeat(32)
+            )
+            .unwrap_err()
+            .code,
+            "PP5203"
+        );
+    }
 }

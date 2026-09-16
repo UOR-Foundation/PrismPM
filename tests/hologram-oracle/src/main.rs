@@ -1,8 +1,6 @@
 use hologram::archive::HoloWriter;
 use hologram::space::{address_bytes, AppManifest, Layer, Realization};
-use hologram_live::holo::{
-    inspect_bytes, plan_bytes, HoloCatalog, HoloExecutor, HoloRuntime,
-};
+use hologram_live::holo::{inspect_bytes, plan_bytes, HoloCatalog, HoloExecutor, HoloRuntime};
 use hologram_live::store::ObjectStore;
 use hologram_view_surface::{
     PortableViewAttachment, PortableViewSurface, SurfaceFuture, ViewAttachmentId,
@@ -100,7 +98,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         || plan["layers"][1]["provider"]["status"] != "unavailable"
         || plan["blockers"][0]["error_code"] != "LIVE_CAPABILITY_MISSING"
     {
-        return Err("upstream headless plan did not report the exact portable-surface blocker".into());
+        return Err(
+            "upstream headless plan did not report the exact portable-surface blocker".into(),
+        );
     }
 
     let registry = Arc::new(hologram_view_surface::ViewSurfaceRegistry::new());
@@ -135,10 +135,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if direct.outputs != vec![response.clone()] {
             return Err("upstream direct execution disagrees with a modeled vector".into());
         }
-        if let (Ok(payload), Ok(expected)) = (
-            String::from_utf8(request),
-            String::from_utf8(response),
-        ) {
+        if let (Ok(payload), Ok(expected)) =
+            (String::from_utf8(request), String::from_utf8(response))
+        {
             let intent = attachment
                 .intents
                 .handle(
@@ -161,16 +160,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_u64()
             .ok_or("model has no guest allocation cap")?,
     )?;
-    let malformed_response = vectors
-        .iter()
-        .find(|vector| vector["request"].as_array().is_some_and(Vec::is_empty))
-        .ok_or("model has no empty malformed-request vector")?;
-    let malformed_response = bytes(malformed_response, "response")?;
-    let at_cap = session
-        .invoke(vec![vec![b'x'; allocation_cap]])
-        .await?;
-    if at_cap.outputs != vec![malformed_response] {
-        return Err("guest allocation cap did not return the modeled malformed response".into());
+    let (boundary_request, boundary_response) =
+        if application["profile"] == "prismpm/text-application/1" {
+            let vector = vectors
+                .iter()
+                .find(|vector| {
+                    bytes(vector, "request").is_ok_and(|request| request.len() == allocation_cap)
+                })
+                .ok_or("text model has no explicit guest-allocation-boundary vector")?;
+            (bytes(vector, "request")?, bytes(vector, "response")?)
+        } else {
+            let vector = vectors
+                .iter()
+                .find(|vector| vector["request"].as_array().is_some_and(Vec::is_empty))
+                .ok_or("model has no empty malformed-request vector")?;
+            (vec![b'x'; allocation_cap], bytes(vector, "response")?)
+        };
+    let at_cap = session.invoke(vec![boundary_request]).await?;
+    if at_cap.outputs != vec![boundary_response] {
+        return Err("guest allocation cap did not return the modeled boundary response".into());
     }
     if session
         .invoke(vec![vec![b'x'; allocation_cap + 1]])

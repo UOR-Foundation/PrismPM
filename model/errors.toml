@@ -78,6 +78,13 @@ exit = 1
 statement = "A circular dependency was detected in facet lexicon package imports."
 
 [[error]]
+code = "PP2009"
+title = "Invalid text application profile"
+class = "semantic"
+exit = 1
+statement = "A text application violates its closed profile, metadata, byte bounds, exported roots, View, or acceptance-vector contract."
+
+[[error]]
 code = "PP3001"
 title = "Malformed Hologram archive header or version"
 class = "holo"
