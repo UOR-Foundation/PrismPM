@@ -2,9 +2,23 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
+source_commit=f378fd3a8dc5711cb4b22cec9ee2f874353628c3
+if test "$#" -gt 1 || { test "$#" -eq 1 && test "$1" != --check-source; }; then
+  printf 'usage: bootstrap-verify.sh [--check-source]\n' >&2
+  exit 2
+fi
+if ! git -C "$root" cat-file -e "$source_commit^{tree}" 2>/dev/null; then
+  printf 'Pinned bootstrap source %s is unavailable; use a full-history checkout (actions/checkout fetch-depth: 0) before verification.\n' \
+    "$source_commit" >&2
+  exit 1
+fi
+if test "$#" -eq 1; then
+  printf 'Pinned bootstrap source %s is available (source preflight only).\n' "$source_commit"
+  exit 0
+fi
+
 archive="$root/.prism/cache/bootstrap/prismpm-0.2.0-x86_64-unknown-linux-gnu.tar.gz"
 archive_sha=f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c
-source_commit=f378fd3a8dc5711cb4b22cec9ee2f874353628c3
 work=$(mktemp -d /tmp/prismpm-bootstrap-verify.XXXXXX)
 cleanup() {
   rm -rf "$work"

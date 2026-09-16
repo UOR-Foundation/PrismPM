@@ -223,6 +223,35 @@ Evidence is retained under `target/control-coverage-driver-*`; original full
 run logs remain `target/control-coverage-vv-954e830{,-retry}.log`. These are
 focused regression results, not completion of the remaining full VV gates.
 
+## CI bootstrap source history
+
+At `d8675e0`, [Verification & Validation 35040425560](https://github.com/UOR-Foundation/PrismPM/actions/runs/35040425560)
+and [Bootstrap Honesty Gate 35040425613](https://github.com/UOR-Foundation/PrismPM/actions/runs/35040425613)
+passed the SDK registry preflight/build/push and VV gates 1–3, then failed in
+gate 4: `git archive` could not find the exact accepted bootstrap source
+`f378fd3a8dc5711cb4b22cec9ee2f874353628c3`. Both workflows had checkout's
+default shallow history. The source pin was valid and present in a full clone;
+the failure was missing checkout input, not a failed model assertion.
+
+The two workflows now request full history and check that exact source tree
+before building the devcontainer. Direct `just vv` performs the same preflight
+before SDK initialization. `bootstrap-verify.sh --check-source` checks only
+source availability and emits no acceptance evidence; the normal no-argument
+bootstrap verification, accepted SDK archive and source revision are unchanged.
+
+A fresh depth-1 clone in the pinned devcontainer reproduced the exact
+`not a tree object` error. The new preflight rejected it with an actionable
+diagnostic before creating verification artifacts; unknown arguments also
+failed. Fetching full history made the same check pass and reproduced the
+historical archive byte-for-byte (SHA256
+`5ee73267db9a7b9f3624e0d08ac85056b5a7382024e0c2b54f0dcf73cdd96db8`).
+Normal complete bootstrap verification then passed for unchanged production
+semantic identity `11bfa1b262f77554964c40ffaa1fc3f8f3dfbfeb66535b5cc4b0b7f68d361c29`.
+Shell syntax, workflow YAML/step ordering, and existing model/SPEC/source audits
+passed. Evidence is retained under `target/bootstrap-history-*`. No compiler,
+model, generated package, golden or verification-gate semantics changed, and
+these focused results do not establish completion of the remaining full VV.
+
 ## Original full-gate falsification campaign
 
 This record covers every gate in `cargo xtask vv`. A gate is considered armed only

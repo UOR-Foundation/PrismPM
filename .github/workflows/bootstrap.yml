@@ -14,7 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          # The bootstrap gate archives its exact accepted historical source.
+          fetch-depth: 0
           submodules: false
+      - name: Check pinned bootstrap source availability
+        run: bash scripts/bootstrap-verify.sh --check-source
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
