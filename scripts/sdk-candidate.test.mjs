@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { validateConfig, validateEnvironment, validateEvidence } from './sdk-candidate.mjs';
 import { compilerRevision, validateAuthorityMetadata } from '../sdk/inventory-metadata.mjs';
+import './sdk-candidate-sbom.test.mjs';
 
 const revision = 'a'.repeat(40);
 const digest = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;

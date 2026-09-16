@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { handleSbom } from './sdk-candidate-sbom.mjs';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const json = path => JSON.parse(readFileSync(path));
@@ -116,6 +117,17 @@ function main([command, ...args]) {
       validateEvidence(json(`${directory}/candidate.json`), architecture, revision, digest,
         readFileSync(`${directory}/inventory.json`), readFileSync(`${directory}/standards.lock`),
         readFileSync(`${directory}/authority-result.json`));
+      break;
+    }
+    case 'sbom-record':
+    case 'sbom-publish':
+    case 'sbom-verify': {
+      assert.equal(args.length, command === 'sbom-record' ? 4 : 5);
+      const [directory, architecture, revision, digest] = args;
+      validateEvidence(json(`${directory}/candidate.json`), architecture, revision, digest,
+        readFileSync(`${directory}/inventory.json`), readFileSync(`${directory}/standards.lock`),
+        readFileSync(`${directory}/authority-result.json`));
+      handleSbom(command, ...args);
       break;
     }
     case 'index': {

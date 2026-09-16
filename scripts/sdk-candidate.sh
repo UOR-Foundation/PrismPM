@@ -8,6 +8,20 @@ inspect_layout() {
 }
 
 case "${1:-}" in
+  install-cosign)
+    directory=${2:?installation directory required}
+    case "$(uname -m)" in
+      x86_64) architecture=amd64; checksum=4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71 ;;
+      aarch64) architecture=arm64; checksum=c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a ;;
+      *) exit 2 ;;
+    esac
+    mkdir -p "$directory"
+    curl --fail --location --silent --show-error \
+      "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-${architecture}" \
+      --output "$directory/cosign"
+    printf '%s  %s\n' "$checksum" "$directory/cosign" | sha256sum --check --strict
+    chmod 0755 "$directory/cosign"
+    ;;
   install-oras)
     directory=${2:?installation directory required}
     case "$(uname -m)" in
@@ -97,5 +111,5 @@ case "${1:-}" in
         "$(docker image inspect "$image" --format '{{.Id}}')" >> "$GITHUB_OUTPUT"
     fi
     ;;
-  *) echo 'usage: sdk-candidate.sh install-oras DIR | inspect|smoke OCI_TAR ARCH SOURCE_SHA EVIDENCE_DIR' >&2; exit 2 ;;
+  *) echo 'usage: sdk-candidate.sh install-oras|install-cosign DIR | inspect|smoke OCI_TAR ARCH SOURCE_SHA EVIDENCE_DIR' >&2; exit 2 ;;
 esac

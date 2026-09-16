@@ -57,9 +57,10 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.23.2
-      - name: Install the SDK's exact ORAS transport tool
+      - name: Install exact transport and verifier tools for infrastructure tests
         run: |
           bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
+          bash scripts/sdk-candidate.sh install-cosign "$RUNNER_TEMP/oras"
           echo "$RUNNER_TEMP/oras" >> "$GITHUB_PATH"
       - name: Assert exact source and prepare output
         run: |
@@ -99,6 +100,11 @@ jobs:
           output-file: ${{ runner.temp }}/candidate/evidence/sbom.spdx.json
           upload-artifact: false
           upload-release-assets: false
+      - name: Bind the complete raw SPDX to the tested platform image
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+          MANIFEST_DIGEST: ${{ steps.smoke.outputs.manifest-digest }}
+        run: node scripts/sdk-candidate.mjs sbom-record "$RUNNER_TEMP/candidate/evidence" "$ARCHITECTURE" "$GITHUB_SHA" "$MANIFEST_DIGEST"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: sdk-candidate-${{ matrix.architecture }}
@@ -136,9 +142,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/sdk-candidate.mjs environment
-      - name: Install the exact transport tool (do not execute candidate code)
+      - name: Install exact transport and signing tools (do not execute candidate code)
         run: |
           bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
+          bash scripts/sdk-candidate.sh install-cosign "$RUNNER_TEMP/oras"
           echo "$RUNNER_TEMP/oras" >> "$GITHUB_PATH"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
@@ -172,18 +179,22 @@ jobs:
           subject-name: ${{ env.REPOSITORY }}
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
-        with:
-          subject-name: ${{ env.REPOSITORY }}
-          subject-digest: ${{ steps.image.outputs.amd64 }}
-          sbom-path: ${{ runner.temp }}/candidates/sdk-candidate-amd64/evidence/sbom.spdx.json
-          push-to-registry: true
-      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
-        with:
-          subject-name: ${{ env.REPOSITORY }}
-          subject-digest: ${{ steps.image.outputs.arm64 }}
-          sbom-path: ${{ runner.temp }}/candidates/sdk-candidate-arm64/evidence/sbom.spdx.json
-          push-to-registry: true
+      # Full SPDX exceeds the inline attest action's 16 MiB predicate limit.
+      # Preserve every byte as an OCI 1.1 SBOM artifact and keylessly sign its
+      # small manifest digest. This is not an inline SPDX attestation.
+      - name: Publish and cryptographically verify complete signed OCI SBOM artifacts
+        env:
+          AMD64_DIGEST: ${{ steps.image.outputs.amd64 }}
+          ARM64_DIGEST: ${{ steps.image.outputs.arm64 }}
+        run: |
+          set -euo pipefail
+          for architecture in amd64 arm64; do
+            if test "$architecture" = amd64; then digest=$AMD64_DIGEST; else digest=$ARM64_DIGEST; fi
+            node scripts/sdk-candidate.mjs sbom-publish \
+              "$RUNNER_TEMP/candidates/sdk-candidate-$architecture/evidence" \
+              "$architecture" "$GITHUB_SHA" "$digest" \
+              standards/trust/sigstore-trusted-root-cosign-3.1.3.json
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: sdk-candidate-reference
@@ -195,5 +206,5 @@ jobs:
           retention-days: 90
       - name: State the development-only boundary
         run: |
-          printf 'Development SDK only: `%s`.\n\nNo production acceptance, public Cargo qualification, full VV, or release promotion is claimed.\n' \
+          printf 'Development SDK only: `%s`.\n\nEach platform has a complete signed OCI SPDX artifact; index provenance is retained. This is not an inline SPDX attestation.\n\nNo production acceptance, public Cargo qualification, full VV, or release promotion is claimed.\n' \
             "$(cat "$RUNNER_TEMP/sdk-candidate-image.txt")" >> "$GITHUB_STEP_SUMMARY"
