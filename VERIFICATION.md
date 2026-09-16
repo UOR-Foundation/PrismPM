@@ -463,6 +463,162 @@ verifies required payload and forbidden-cache closure, rewrites only the
 temporary dependency sources for the offline test, and compiles/runs a
 downstream consumer against the public Controller API.
 
+## Development-only SDK candidate publication
+
+Task 10.8 permits an immutable release-candidate SDK for model development;
+it does not grant production acceptance or waive public Cargo qualification.
+The separate `sdk-candidate.yml` workflow builds `sdk/Dockerfile`'s unchanged
+`runtime` target from one exact main revision on native Linux amd64 and arm64.
+Image version, source labels, and `SOURCE_DATE_EPOCH=0` match the production
+recipe. Candidate identity is recorded outside the image, so registry copying
+can preserve its bytes; no future acceptance or byte-equal rebuild is assumed.
+
+Unprivileged build jobs transport their OCI-layout artifacts through the exact
+pinned Zot registry and test those distribution digests as UID 1000, offline:
+SDK inventory/CLI operation, the modeled Calculator's `check`, and rejection
+of a shadowed tool with `PP5401`. Each retains the real platform inventory,
+manifest/config, standards lock, test results, and an SPDX package inventory.
+These are scoped development checks, not the full VV or formal acceptance gate.
+
+Publication requires the pre-existing `sdk-candidate` environment with exactly
+the `main` branch rule; GitHub enforces any configured reviewers. Its policy
+is checked before building and again before registry login. The separate
+credentialed job never runs candidate code: it verifies the source/platform
+bindings, copies the tested OCI bytes to
+`ghcr.io/uor-foundation/prismpm-sdk-candidate`, assembles the two-platform index,
+and attaches source-bound build provenance and per-platform SBOM attestations.
+Only `sha-<commit>` discovery tags are written; consumers use the resulting
+manifest digest. No production tag, accepted promotion, or Cargo upload occurs.
+`release.yml` and all full VV requirements remain unchanged.
+
+Local devcontainer tests exercise exact revision/platform binding, refusal of
+missing or weakened environment protection, incomplete/swapped/stale evidence,
+and genuine ORAS inspection of valid and tampered OCI fixtures. A successful
+test run is not evidence that the hosted workflow has published an image.
+After a reviewed hosted run, the existing template bootstrap renderer must
+derive locks from the actual digest-selected inventories; no digest or
+cross-platform inventory equality may be invented. Production release remains
+blocked until its independent public dependency and complete acceptance gates
+pass for the exact bytes proposed for promotion.
+
+The `sdk-candidate` environment's real GitHub metadata passed the main-only
+policy validator. No independent reviewer requirement was invented; existing
+reviewer rules remain GitHub-enforced. Both ORAS 1.3.0 native installer hashes
+were checked against the official release checksum file and the SDK recipe.
+Six candidate test groups passed as the devcontainer's `vscode` user,
+including real offline ORAS OCI inspection, transfer, index assembly and
+tampering rejection. The hosted publishing workflow has not yet run.
+Compiler inventory metadata is derived from the exact registered dependency
+revision and checked again when the runtime inventory is assembled; old
+revision strings are rejected even if artifact bytes are otherwise present.
+The corpus version identifies the stable `prismpm/ids/1` schema, not changing
+feature or diagnostic counts. Negative cases reject stale authority metadata.
+
+## Platform-indexed SDK inventory correction
+
+The legacy lock rendered a single native inventory beneath a multi-platform
+image identity. Native binaries necessarily differ, so that lock cannot
+honestly stand for both architectures. The additive `prismpm/sdk-lock/2`
+contract preserves `/1` validation and binds exact index bytes, both native
+child manifests, and their distinct actual inventory hashes and artifact rows.
+The SDK-owned bootstrap helper reads files copied from those image children;
+the template does not execute foreign-architecture binaries or fabricate pins.
+The SBOM retains both platform closures with distinct component identities.
+
+The three Rust `sdk_lock_platforms` tests passed inside the devcontainer:
+exact index membership; both correct native inventories; and unchanged strict
+legacy comparison. They reject missing/duplicate/swapped platforms, changed
+index bytes, unequal artifact identities, wrong architectures and partial
+inventories. The DK-01 conformance case exercises the registered `/2` parser
+and both native selections. Two Node bootstrap test groups passed with explicit
+synthetic fixtures, including swapped inventories, wrong child-image metadata,
+missing files and different standards locks. These fixtures are not publication
+evidence. The full VV SDK boundary runs the candidate and platform-lock Node
+suites offline as UID 1000 with the SDK's exact ORAS; workspace tests also run
+the Rust negative cases. The first source regression attempt was blocked by
+unrelated in-progress compiler imports and is not counted as falsification.
+
+## Multi-platform SDK lock update component verification
+
+The new `sdk-lock-update/2` path was verified in the configured PrismPM
+devcontainer as `vscode`. It captures the exact OCI parent index and both child
+inventories without starting either target image, checks the requested standards
+digest, and produces a review-required proposal without adopting project files.
+Legacy `/1` proposal behavior remains separately tested. The command register
+records its Docker image-cache side effect; it does not claim to be globally
+side-effect-free.
+
+Focused results: four SDK Rust unit tests, three platform-lock integration tests,
+ten model tests, four Node platform helper tests, four driver-isolation tests,
+DK-01 conformance, and workspace all-target Clippy with warnings denied passed
+in the source devcontainer. The combined candidate/platform Node suite initially
+reported nine passes and one missing-ORAS prerequisite there. All ten then passed
+with current sources mounted read-only into the existing SDK tooling image
+`sha256:a6ca6a0ef68697755ee7aa109e4d240dba6b386b9290639ebd48340aea59578f`
+as UID 1000 with networking disabled. This uses its installed tools, not its old
+inventory as evidence for the current release. Capture mutations reject changed
+index bytes, failed pulls/copies,
+substituted child digests or architectures, mismatched standards, and symlinked
+evidence; cleanup targets only the containers created by that capture.
+
+`node sdk/platform-lock.integration.mjs target/debug/prismpm` also passed against
+an isolated pinned Zot registry, using two generations of actual amd64/arm64
+OCI transport-fixture images. Their inventory digests hash files copied into
+those images; they are explicitly synthetic fixtures, not SDK releases or claims
+that fixture commands execute. The current CLI returned all four changed fields
+and the complete captured target lock; a wrong standards digest failed with
+PP5401; both paths preserved the original lock bytes. The test rejects Docker
+manifest lists and indexes with extra attestation descriptors rather than
+loosening the required OCI two-platform shape. Actual execution exposed and
+corrected a trailing newline in the capture producer; the canonical lock parser
+was not weakened.
+
+Ordinary VV now runs that real OCI regression with a CLI built through the
+existing isolated Cargo target and driver identity guard. It intentionally runs
+in the source-bootstrap environment: the shipped SDK correctly refuses a
+synthetic current native inventory. The separate shipped-SDK runtime gate retains
+its actual-image inventory checks. Temporary registry/container/config-volume
+and fixture-image references are removed; logs remain ignored under
+`target/sdk-update-v2-*.log`. These are component results, not a full VV or
+production SDK-release acceptance claim.
+
+## SDK inventory evidence and execution binding
+
+SDK lock `/2` now retains each platform's exact canonical inventory document,
+including its optional final newline. Both documents must match their declared
+SHA-256 and complete artifact rows. Closed command metadata, missing or swapped
+documents, changed non-native rows, and changed digests are rejected. This binds
+the recorded evidence consistently; it does not independently prove OCI layer
+membership offline. The immutable child-image capture remains the source of
+those bytes. Each inventory is bounded to 8 MiB, the index to 1 MiB, and update
+capture output to 64 MiB to accommodate JSON escaping and repeated bounded rows.
+The public aggregate contract matches that 64 MiB lock budget and permits
+192 MiB for an update's old/new field evidence and complete proposed lock.
+An actual canonical lock larger than the former 8 MiB aggregate limit and an
+update larger than its former 32 MiB limit pass the public parsers; byte buffers
+above the new aggregate limits fail before JSON decoding. Per-platform document
+and index bounds remain unchanged. This regression failed at the old lock limit
+before the aggregate-contract correction.
+
+Both SDK lock versions are checked against the actual native inventory at SDK
+inspection, template checking, acceptance, supply-chain generation, and existing
+project-lock loading. An installed SDK's fixed inventory cannot be disabled by
+an environment override or deleted inventory file. The existing SDK profile
+marks an installed SDK; the source devcontainer's oracle-cache directory alone
+does not. Unbound source-bootstrap examples and inert historical parsing retain
+their distinct roles rather than claiming current SDK execution.
+Lock presence uses symlink metadata: only a genuine missing file permits initial
+bootstrap. Dangling/external symlinks, directories, and other inspection errors
+fail with PP5401 instead of silently dropping the binding. A real red/green
+regression reproduced the dangling-link bypass before this correction.
+
+Initial isolated subprocess regressions reproduced wrong-native-inventory
+acceptance before the correction; five public execution-boundary tests now
+reject it with PP5401. Eight SDK unit tests, five platform-lock integration
+tests, five Node test groups, and all-target Clippy for `prismpm` and
+`repo-conformance` passed in the devcontainer. These remain component checks, not a
+claim that an unpublished candidate or the full SDK release has been accepted.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

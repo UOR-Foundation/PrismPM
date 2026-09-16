@@ -505,6 +505,7 @@ fn verify_authorities(root: &Path, id: &str) {
                     .expect("the no-skip authority gate requires an immutable SDK image"),
             );
             sdk_lock["standards_lock"] = Value::String(standards.lock_digest);
+            bind_execution_sdk_fixture(&mut sdk_lock);
             let sdk_lock =
                 prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock)
                     .unwrap();
@@ -836,13 +837,21 @@ fn verify_system(root: &Path, id: &str) {
 
 fn sdk_lock_value() -> Value {
     let digest = format!("sha256:{}", "0".repeat(64));
+    let ids: repo_model::Ids = toml::from_str(include_str!("../../../../model/ids.toml")).unwrap();
+    let errors: repo_model::Errors =
+        toml::from_str(include_str!("../../../../model/errors.toml")).unwrap();
+    let corpus_version = format!(
+        "{}-features-{}-diagnostics",
+        ids.id.len(),
+        errors.error.len()
+    );
     serde_json::json!({
         "inventory":[
             {"digest":digest,"id":"prismpm","kind":"binary","version":"0.3.0"},
             {"digest":format!("sha256:{}", "7".repeat(64)),"id":"runtime-os-lock","kind":"dependency-lock","version":"ubuntu-noble@20260901T000000Z"},
             {"digest":format!("sha256:{}", "1".repeat(64)),"id":"sdk-linux-amd64","kind":"image","version":"0.3.0"},
             {"digest":format!("sha256:{}", "2".repeat(64)),"id":"sdk-linux-arm64","kind":"image","version":"0.3.0"},
-            {"digest":format!("sha256:{}", "6".repeat(64)),"id":"sdk-test-corpus","kind":"test-corpus","version":"148-features-83-diagnostics"},
+            {"digest":format!("sha256:{}", "6".repeat(64)),"id":"sdk-test-corpus","kind":"test-corpus","version":corpus_version},
             {"digest":format!("sha256:{}", "5".repeat(64)),"id":"sigstore-root","kind":"trust-root","version":"2025-10-10"}
         ],
         "schema":"prismpm/sdk-lock/1",
@@ -852,10 +861,43 @@ fn sdk_lock_value() -> Value {
     })
 }
 
+// Execution fixtures must bind the real running native inventory. The image
+// identity remains an explicitly synthetic fixture except AU-05, which supplies
+// its real isolated oracle image. Structural parser fixtures stay independent.
+fn bind_execution_sdk_fixture(lock: &mut Value) {
+    let fixed = Path::new("/opt/prismpm/share/inventory.json");
+    let path = if fixed.exists() || Path::new("/etc/profile.d/prismpm-sdk.sh").exists() {
+        Some(fixed.to_owned())
+    } else {
+        std::env::var_os("PRISMPM_SDK_INVENTORY").map(std::path::PathBuf::from)
+    };
+    if let Some(path) = path {
+        let document: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        let mut inventory = document["artifacts"].as_array().unwrap().clone();
+        let digest = lock["sdk_image"]
+            .as_str()
+            .unwrap()
+            .rsplit_once('@')
+            .unwrap()
+            .1;
+        inventory.push(serde_json::json!({"id":"sdk-manifest","kind":"image","version":"0.3.0","digest":digest}));
+        inventory.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+        lock["inventory"] = Value::Array(inventory);
+    }
+}
+
+fn execution_sdk_lock_value() -> Value {
+    let mut value = sdk_lock_value();
+    bind_execution_sdk_fixture(&mut value);
+    value
+}
+
 fn write_sdk_lock(root: &Path) {
-    let lock =
-        prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock_value())
-            .expect("valid SDK lock fixture");
+    let lock = prismpm::contracts::CanonicalDocument::from_value(
+        "prismpm/sdk-lock/1",
+        execution_sdk_lock_value(),
+    )
+    .expect("valid SDK lock fixture");
     std::fs::write(root.join("prismpm.lock"), lock.bytes()).unwrap();
 }
 
@@ -878,6 +920,83 @@ fn verify_sdk(id: &str) {
             assert_eq!(kinds["sdk-test-corpus"], "test-corpus");
             assert_eq!(kinds["runtime-os-lock"], "dependency-lock");
             assert_eq!(kinds["sigstore-root"], "trust-root");
+            let mut platforms = Vec::new();
+            let mut manifests = Vec::new();
+            let mut inventory_bytes = Vec::new();
+            for architecture in ["amd64", "arm64"] {
+                let mut inventory = lock.value()["inventory"].clone();
+                inventory[0]["digest"] =
+                    serde_json::json!(format!("sha256:{}", sha256(architecture.as_bytes())));
+                let bytes = serde_json::to_vec(&serde_json::json!({
+                    "schema":"prismpm/sdk-inventory/1", "artifacts":inventory,
+                    "commands":[{"command":"prismpm","executable":"/usr/local/bin/prismpm","sha256":"a".repeat(64)}]
+                }))
+                .unwrap();
+                let child = format!(
+                    "sha256:{}",
+                    sha256(format!("test child {architecture}").as_bytes())
+                );
+                manifests.push(serde_json::json!({"mediaType":"application/vnd.oci.image.manifest.v1+json",
+                    "digest":child, "size":100, "platform":{"os":"linux","architecture":architecture}}));
+                platforms.push(serde_json::json!({"platform":format!("linux/{architecture}"),
+                    "manifest_digest":child, "inventory_digest":format!("sha256:{}", sha256(&bytes)), "inventory_document":String::from_utf8(bytes.clone()).unwrap(), "inventory":inventory}));
+                inventory_bytes.push(bytes);
+            }
+            let index = serde_json::to_string(&serde_json::json!({"schemaVersion":2,
+                "mediaType":"application/vnd.oci.image.index.v1+json", "manifests":manifests}))
+            .unwrap();
+            let value = serde_json::json!({"schema":"prismpm/sdk-lock/2", "sdk_version":"0.3.0",
+                "sdk_image":format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{}", sha256(index.as_bytes())),
+                "sdk_index":index, "standards_lock":lock.value()["standards_lock"], "platforms":platforms});
+            let indexed = prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/2",
+                value.clone(),
+            )
+            .unwrap();
+            let proposal = serde_json::json!({"schema":"prismpm/sdk-lock-update/2",
+                "changes":[], "proposed_lock":value,
+                "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});
+            prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock-update/2",
+                proposal.clone(),
+            )
+            .unwrap();
+            let mut unreviewed = proposal;
+            unreviewed["security_review"] = serde_json::json!("passed");
+            assert!(prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock-update/2",
+                unreviewed,
+            )
+            .is_err());
+            for (position, platform) in ["linux/amd64", "linux/arm64"].into_iter().enumerate() {
+                prismpm::sdk::validate_running_inventory(
+                    &indexed,
+                    platform,
+                    &inventory_bytes[position],
+                )
+                .unwrap();
+                assert!(prismpm::sdk::validate_running_inventory(
+                    &indexed,
+                    platform,
+                    &inventory_bytes[1 - position]
+                )
+                .is_err());
+            }
+            let mut missing = value.clone();
+            missing["platforms"].as_array_mut().unwrap().pop();
+            assert!(prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/2",
+                missing
+            )
+            .is_err());
+            let mut swapped = value.clone();
+            swapped["platforms"][0]["manifest_digest"] =
+                value["platforms"][1]["manifest_digest"].clone();
+            assert!(prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/2",
+                swapped
+            )
+            .is_err());
         }
         "DK-02" => {
             let lock = sdk_lock_value();
@@ -913,7 +1032,7 @@ fn verify_sdk(id: &str) {
             let temp = tempfile::tempdir().unwrap();
             write_sdk_lock(temp.path());
             let lock = prismpm::sdk::inspect_lock(temp.path()).unwrap();
-            assert_eq!(lock, sdk_lock_value());
+            assert_eq!(lock, execution_sdk_lock_value());
             assert!(prismpm::sdk::fetch_project_dependencies(temp.path())
                 .unwrap()
                 .is_empty());

@@ -2,7 +2,7 @@ Feature: sdk
 
   @DK-01 @build
   Scenario: One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas.
-    Given the locked PrismPM production fixture
+    Given the locked PrismPM production fixture with exact platform-indexed and legacy native SDK inventories and review-required update proposals
     When the DK-01 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
 

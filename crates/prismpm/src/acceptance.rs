@@ -225,9 +225,7 @@ fn verify_coverage_bindings(value: &Value, coverage_bytes: &[u8]) -> Result<(), 
 }
 
 fn sdk_digest(root: &Path) -> Result<String, PrismError> {
-    let lock_bytes = std::fs::read(root.join("prismpm.lock"))
-        .map_err(|_| PrismError::new("PP5401", "prismpm.lock is required"))?;
-    let lock = CanonicalDocument::parse("prismpm/sdk-lock/1", &lock_bytes)?;
+    let lock = crate::sdk::execution_lock(root)?;
     lock.value()["sdk_image"]
         .as_str()
         .and_then(|value| value.rsplit_once('@'))
@@ -383,6 +381,14 @@ pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn execution_boundary_rejects_wrong_native_inventory() {
+        crate::sdk::execution_binding_regression(
+            "acceptance::tests::execution_boundary_rejects_wrong_native_inventory",
+            |root| super::sdk_digest(root).map(|_| ()),
+        );
+    }
+
     use super::{registered_values, verify_closure};
     use crate::contracts::CanonicalDocument;
     use serde_json::{json, Value};

@@ -1,0 +1,199 @@
+name: PrismPM development SDK candidate
+run-name: Development-only SDK candidate · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      development_only:
+        description: Confirm this candidate is not a production-accepted SDK release
+        required: true
+        type: boolean
+        default: false
+
+permissions: {}
+concurrency:
+  group: sdk-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  policy:
+    if: github.repository == 'UOR-Foundation/PrismPM' && github.ref == 'refs/heads/main' && inputs.development_only
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Require an existing main-only candidate environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/sdk-candidate.mjs environment
+
+  build:
+    needs: policy
+    if: github.repository == 'UOR-Foundation/PrismPM' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Install the SDK's exact ORAS transport tool
+        run: |
+          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
+          echo "$RUNNER_TEMP/oras" >> "$GITHUB_PATH"
+      - name: Assert exact source and prepare output
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.3.0
+          bash -n scripts/sdk-candidate.sh
+          node --test scripts/sdk-candidate.test.mjs
+          mkdir -p "$RUNNER_TEMP/candidate"
+      - name: Build the production image recipe without production acceptance
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: sdk/Dockerfile
+          target: runtime
+          platforms: linux/${{ matrix.architecture }}
+          outputs: type=oci,dest=${{ runner.temp }}/candidate/sdk.oci.tar,rewrite-timestamp=true
+          provenance: false
+          sbom: false
+          build-args: SOURCE_DATE_EPOCH=0
+          labels: |
+            org.opencontainers.image.created=1970-01-01T00:00:00Z
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=0.3.0
+      - name: Test the exact OCI artifact without publication credentials
+        id: smoke
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: bash scripts/sdk-candidate.sh smoke "$RUNNER_TEMP/candidate/sdk.oci.tar" "$ARCHITECTURE" "$GITHUB_SHA" "$RUNNER_TEMP/candidate/evidence"
+      - name: Inventory the tested image's packages
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: docker:${{ steps.smoke.outputs.image-id }}
+          syft-version: v1.51.1
+          format: spdx-json
+          output-file: ${{ runner.temp }}/candidate/evidence/sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-candidate-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    needs: build
+    if: github.repository == 'UOR-Foundation/PrismPM' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: sdk-candidate
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      REPOSITORY: ghcr.io/uor-foundation/prismpm-sdk-candidate
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: sdk-candidate-*
+          path: ${{ runner.temp }}/candidates
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Recheck protected environment policy before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/sdk-candidate.mjs environment
+      - name: Install the exact transport tool (do not execute candidate code)
+        run: |
+          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
+          echo "$RUNNER_TEMP/oras" >> "$GITHUB_PATH"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish only the tested OCI bytes and compose their index
+        id: image
+        run: |
+          set -euo pipefail
+          digests=()
+          for architecture in amd64 arm64; do
+            candidate="$RUNNER_TEMP/candidates/sdk-candidate-$architecture"
+            bash scripts/sdk-candidate.sh inspect "$candidate/sdk.oci.tar" "$architecture" "$GITHUB_SHA" "$RUNNER_TEMP/inspect-$architecture"
+            digest=$(cat "$RUNNER_TEMP/inspect-$architecture/digest.txt")
+            node scripts/sdk-candidate.mjs verify "$candidate/evidence" "$architecture" "$GITHUB_SHA" "$digest"
+            oras cp --from-oci-layout "$candidate/sdk.oci.tar@$digest" "$REPOSITORY:sha-$GITHUB_SHA-$architecture"
+            test "$(oras resolve "$REPOSITORY:sha-$GITHUB_SHA-$architecture")" = "$digest"
+            printf '%s=%s\n' "$architecture" "$digest" >> "$GITHUB_OUTPUT"
+            digests+=("$digest")
+          done
+          oras manifest index create "$REPOSITORY" "${digests[@]}" --output "$RUNNER_TEMP/candidate-index.json"
+          node scripts/sdk-candidate.mjs index "$RUNNER_TEMP/candidate-index.json" "${digests[@]}"
+          digest="sha256:$(sha256sum "$RUNNER_TEMP/candidate-index.json" | cut -d' ' -f1)"
+          oras manifest push "$REPOSITORY:sha-$GITHUB_SHA" "$RUNNER_TEMP/candidate-index.json"
+          test "$(oras resolve "$REPOSITORY:sha-$GITHUB_SHA")" = "$digest"
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          printf '%s@%s\n' "$REPOSITORY" "$digest" > "$RUNNER_TEMP/sdk-candidate-image.txt"
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-name: ${{ env.REPOSITORY }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
+        with:
+          subject-name: ${{ env.REPOSITORY }}
+          subject-digest: ${{ steps.image.outputs.amd64 }}
+          sbom-path: ${{ runner.temp }}/candidates/sdk-candidate-amd64/evidence/sbom.spdx.json
+          push-to-registry: true
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
+        with:
+          subject-name: ${{ env.REPOSITORY }}
+          subject-digest: ${{ steps.image.outputs.arm64 }}
+          sbom-path: ${{ runner.temp }}/candidates/sdk-candidate-arm64/evidence/sbom.spdx.json
+          push-to-registry: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-candidate-reference
+          path: |
+            ${{ runner.temp }}/sdk-candidate-image.txt
+            ${{ runner.temp }}/candidate-index.json
+            ${{ runner.temp }}/candidates/*/evidence/
+          if-no-files-found: error
+          retention-days: 90
+      - name: State the development-only boundary
+        run: |
+          printf 'Development SDK only: `%s`.\n\nNo production acceptance, public Cargo qualification, full VV, or release promotion is claimed.\n' \
+            "$(cat "$RUNNER_TEMP/sdk-candidate-image.txt")" >> "$GITHUB_STEP_SUMMARY"

@@ -12,7 +12,19 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 40] = [
+const CONTRACTS: [Contract; 42] = [
+    Contract {
+        id: "prismpm/sdk-lock-update/2",
+        maximum_bytes: 201_326_592,
+        maximum_items: 262_144,
+        schema: include_bytes!("../schemas/sdk-lock-update-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/sdk-lock/2",
+        maximum_bytes: 67_108_864,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/sdk-lock-v2.schema.json"),
+    },
     Contract {
         id: "prismpm/authority-result/1",
         maximum_bytes: 1_048_576,
@@ -281,6 +293,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         ],
         "prismpm/standards-lock/1" => vec![("authorities", "id"), ("oracles", "id")],
         "prismpm/sdk-lock/1" => vec![("inventory", "id")],
+        "prismpm/sdk-lock/2" => vec![("platforms", "platform")],
         "prismpm/system-model/1" => vec![
             ("acceptance", "id"),
             ("alerts", "id"),
@@ -342,6 +355,30 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             return Err(PrismError::new(
                 "PP1101",
                 format!("{id}.{field} identities are duplicate or noncanonical"),
+            ));
+        }
+    }
+    if id == "prismpm/sdk-lock/2" {
+        crate::sdk::validate_platform_lock(value)?;
+    }
+    if id == "prismpm/sdk-lock-update/2" {
+        crate::sdk::validate_platform_lock(&value["proposed_lock"])?;
+        let changes = value["changes"]
+            .as_array()
+            .expect("schema-validated changes");
+        if !strictly_ordered(changes, |row| row["path"].as_str().map(str::to_owned))
+            || changes.iter().any(|row| {
+                row["from"] == row["to"]
+                    || row["to"]
+                        != value["proposed_lock"][row["path"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .trim_start_matches('/')]
+            })
+        {
+            return Err(PrismError::new(
+                "PP5401",
+                "SDK update changes do not exactly describe the proposed fields",
             ));
         }
     }

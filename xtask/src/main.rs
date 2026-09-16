@@ -299,6 +299,32 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         return Err("SDK runtime boundary requires a digest-qualified image".into());
     }
 
+    let infrastructure_tests = Command::new("docker")
+        .args([
+            "run",
+            "--rm",
+            "--user",
+            "1000:1000",
+            "--network",
+            "none",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--workdir",
+            "/opt/prismpm/share/conformance-root",
+            "--entrypoint",
+            "node",
+            &image,
+            "--test",
+            "scripts/sdk-candidate.test.mjs",
+            "sdk/platform-lock.test.mjs",
+        ])
+        .status()?;
+    if !infrastructure_tests.success() {
+        return Err("SDK candidate transport or platform-lock negative tests failed".into());
+    }
+
     let baseline = docker_sdk_command(&image, &[])?;
     if !baseline.status.success()
         || !String::from_utf8_lossy(&baseline.stdout)
@@ -392,6 +418,32 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     audit_all(root)?;
     command(root, "bash", &["scripts/bootstrap-verify.sh"])?;
     check_sdk_runtime_boundary()?;
+    // The shipped SDK correctly rejects a synthetic current native inventory.
+    // Exercise real OCI update transport separately in the source bootstrap
+    // environment, without weakening that runtime check or replacing xtask.
+    driver.run_cargo(
+        root,
+        &[
+            "build",
+            "-p",
+            "prismpm",
+            "--bin",
+            "prismpm",
+            "--locked",
+            "--offline",
+        ],
+    )?;
+    let update_cli = driver.prismpm_binary();
+    command(
+        root,
+        "node",
+        &[
+            "sdk/platform-lock.integration.mjs",
+            update_cli
+                .to_str()
+                .ok_or("SDK update CLI path is not UTF-8")?,
+        ],
+    )?;
 
     println!("VV gate 5/15: Clippy with warnings denied");
     driver.run_cargo(

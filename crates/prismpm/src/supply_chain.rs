@@ -1,6 +1,5 @@
 //! Release-graph SBOM, provenance-policy, vulnerability, and secret evidence.
 
-use crate::contracts::CanonicalDocument;
 use crate::error::PrismError;
 use crate::holo::canonical::encode_value;
 use crate::oci;
@@ -447,13 +446,8 @@ fn locked_inventory(
     mut inventory: Vec<InventoryComponent>,
     unresolved: &mut Vec<String>,
 ) -> Result<Vec<InventoryComponent>, PrismError> {
-    let sdk_bytes = std::fs::read(root.join("prismpm.lock"))
-        .map_err(|_| PrismError::new("PP5401", "prismpm.lock is absent"))?;
-    let sdk: Value = serde_json::from_slice(&sdk_bytes)
-        .map_err(|error| PrismError::new("PP5401", format!("prismpm.lock: {error}")))?;
-    if sdk["schema"] != "prismpm/sdk-lock/1" {
-        return Err(PrismError::new("PP5401", "prismpm.lock schema changed"));
-    }
+    let sdk_lock = crate::sdk::execution_lock(root)?;
+    let sdk = sdk_lock.value();
     let cargo_licenses = inventory
         .iter()
         .map(|item| {
@@ -463,7 +457,45 @@ fn locked_inventory(
             )
         })
         .collect::<BTreeMap<_, _>>();
-    for item in sdk["inventory"].as_array().into_iter().flatten() {
+    let mut sdk_inventory = Vec::new();
+    if sdk_lock.schema() == "prismpm/sdk-lock/1" {
+        for item in sdk["inventory"].as_array().into_iter().flatten() {
+            sdk_inventory.push((
+                String::new(),
+                sdk["sdk_image"].as_str().unwrap_or_default().to_owned(),
+                item.clone(),
+            ));
+        }
+    } else {
+        let reference = sdk["sdk_image"].as_str().expect("validated SDK image");
+        let (repository, digest) = reference.rsplit_once('@').expect("validated SDK reference");
+        sdk_inventory.push((
+            String::new(),
+            reference.to_owned(),
+            json!({"id":"sdk-manifest", "kind":"image", "version":"0.3.0", "digest":digest}),
+        ));
+        for platform in sdk["platforms"]
+            .as_array()
+            .expect("validated SDK platforms")
+        {
+            let name = platform["platform"]
+                .as_str()
+                .expect("validated SDK platform");
+            let source = format!(
+                "{repository}@{}",
+                platform["manifest_digest"]
+                    .as_str()
+                    .expect("validated SDK manifest")
+            );
+            for item in platform["inventory"]
+                .as_array()
+                .expect("validated SDK inventory")
+            {
+                sdk_inventory.push((format!("/{name}"), source.clone(), item.clone()));
+            }
+        }
+    }
+    for (platform, source, item) in sdk_inventory {
         let name = item["id"].as_str().unwrap_or_default();
         let version = item["version"].as_str().unwrap_or_default();
         let digest = item["digest"].as_str().unwrap_or_default();
@@ -481,7 +513,7 @@ fn locked_inventory(
             unresolved.push(format!("sdk:{name}@{version}"));
         }
         let kind = item["kind"].as_str().unwrap_or("dependency");
-        let identity = format!("{kind}:{name}@{version}");
+        let identity = format!("{kind}:{name}@{version}{platform}");
         inventory.push(InventoryComponent {
             id: format!("urn:spdx:prismpm:sdk:{:x}", Sha256::digest(identity)),
             name: name.to_owned(),
@@ -489,8 +521,8 @@ fn locked_inventory(
             kind: format!("sdk-{kind}"),
             digest: digest.to_owned(),
             license,
-            source: sdk["sdk_image"].as_str().unwrap_or_default().to_owned(),
-            external_reference: format!("urn:prismpm:sdk:{name}:{version}"),
+            source,
+            external_reference: format!("urn:prismpm:sdk:{name}:{version}{platform}"),
         });
     }
     let standards_bytes = std::fs::read(root.join("standards.lock"))
@@ -608,7 +640,7 @@ fn stage_osv_databases(home: &Path, databases: &[(String, PathBuf)]) -> Result<(
 fn required_image_inputs(root: &Path, systems: &[Value]) -> Result<Vec<ImageInput>, PrismError> {
     let sdk_bytes = std::fs::read(root.join("prismpm.lock"))
         .map_err(|_| PrismError::new("PP5401", "prismpm.lock is absent"))?;
-    let sdk = CanonicalDocument::parse("prismpm/sdk-lock/1", &sdk_bytes)?;
+    let sdk = crate::sdk::parse_lock(&sdk_bytes)?;
     let sdk_reference = sdk.value()["sdk_image"]
         .as_str()
         .expect("schema-validated SDK image");
@@ -3474,6 +3506,14 @@ pub(crate) fn attach_build_evidence(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn execution_boundary_rejects_wrong_native_inventory() {
+        crate::sdk::execution_binding_regression(
+            "supply_chain::tests::execution_boundary_rejects_wrong_native_inventory",
+            |root| super::locked_inventory(root, Vec::new(), &mut Vec::new()).map(|_| ()),
+        );
+    }
+
     use super::{
         bare_digest_hex, bundle_certificate_claims, finding_rows, provenance_statement,
         redact_value, secret_marker, validate_advisory_coverage, validate_provenance_policy,

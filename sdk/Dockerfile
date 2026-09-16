@@ -227,6 +227,8 @@ RUN cargo build --locked --release --package prismpm \
 COPY --chmod=0755 sdk/devcontainer-init.sh /usr/local/bin/prismpm-devcontainer-init
 COPY --chmod=0444 sdk/profile.sh /etc/profile.d/prismpm-sdk.sh
 COPY --chmod=0444 sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
+COPY --chmod=0444 sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
+COPY --chmod=0444 sdk/platform-lock.mjs /opt/prismpm/platform-lock.mjs
 
 RUN set -eu; \
     PRISMPM_ARTIFACTS_ONLY=1 node sdk/generate-inventory.mjs /opt/prismpm/artifact-inventory.json

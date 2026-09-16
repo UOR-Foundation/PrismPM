@@ -86,6 +86,13 @@ impl GateDriver {
         }
         Ok(())
     }
+
+    /// CLI produced by a scoped Cargo build, never the running VV driver.
+    pub(crate) fn prismpm_binary(&self) -> PathBuf {
+        self.target_dir
+            .join("debug")
+            .join(format!("prismpm{}", std::env::consts::EXE_SUFFIX))
+    }
 }
 
 #[cfg(test)]
@@ -168,6 +175,8 @@ mod tests {
             Some(&Some(std::ffi::OsStr::new("true")))
         );
         assert_eq!(std::env::var_os("CARGO_TARGET_DIR"), inherited);
+        assert!(driver.prismpm_binary().starts_with(&driver.target_dir));
+        assert_ne!(driver.prismpm_binary(), driver.executable.path);
     }
 
     #[cfg(unix)]

@@ -547,9 +547,62 @@ oracles, adapters, and conformance tooling. Its canonical inventory maps every
 permitted subprocess name to version, platform and SHA-256. An undeclared or
 changed executable, including one found earlier on `PATH`, is rejected.
 
-`prismpm/sdk-lock/1` pins the multi-platform SDK manifest digest, standards
-lock, stdlib, compilers, runtime and base images, adapters, oracles, actions and
-workflow revisions. Ordinary commands never update it. `fetch --locked`
+`prismpm/sdk-lock/2` pins the exact multi-platform SDK index bytes and digest,
+exactly one `linux/amd64` and one `linux/arm64` child manifest, and each child's
+actual inventory digest, exact `inventory_document` bytes (including any final
+newline, bounded to 8 MiB), and artifact rows. The digest must match the full
+closed canonical SDK document and the artifact rows must equal its decoded
+contents for both platforms, including the non-native one. This is evidence
+consistency, not an independent offline proof of filesystem inclusion in OCI
+layers; exact child-image capture and review remain the provenance authority.
+The complete lock is bounded to 64 MiB, including JSON-escaped document strings,
+repeated artifact rows and the 1 MiB index. A review proposal is bounded to
+192 MiB for its old/new field evidence and complete proposed lock. The tighter
+per-document bounds remain independently enforced.
+The two platforms have the same
+artifact identities and versions, but native binary digests may differ. Lock
+generation extracts both inventories from those exact images without executing
+foreign-architecture code; SDK execution compares only the detected native
+platform's complete inventory. Missing, duplicated, swapped or mismatched
+platforms are rejected. The legacy `prismpm/sdk-lock/1` remains valid with its
+original strict native inventory comparison; it is not silently promoted to a
+cross-platform lock. Both formats bind the standards lock, stdlib, compilers,
+runtime and base images, adapters, oracles, actions and workflow revisions.
+Every execution against an existing project lock compares the actual native
+SDK inventory, including fetch, check, build, verify, template checks,
+conformance acceptance and supply-chain generation. Inert historical OCI
+parsing is separate and does not require the inspecting machine to be the
+historical SDK. An installed SDK cannot disable its fixed inventory by removing
+or overriding the environment variable; a missing installed inventory fails.
+Source-bootstrap projects without an installed/configured inventory retain
+their independently pinned devcontainer gate. Initial unbound projects and
+SDK-embedded examples may load without a project lock; this is not release
+acceptance and does not waive the locked production boundary.
+A project lock must be a regular non-symlink file. Only a genuinely absent lock
+permits initial unbound loading; dangling links, links outside the project,
+directories and other inspection failures are rejected with PP5401.
+Ordinary commands never update locks. `lock update --sdk-image <digest-ref>
+--standards-lock <digest>` produces a reviewable proposal, never adopts it.
+For a platform lock it captures the requested exact OCI index, pulls both
+digest-selected children, and copies their inventories and standards locks from
+temporary, never-started containers. Both standards files must match the
+requested digest. Copied evidence must be bounded regular files before parsing,
+and subprocess output is bounded; Docker owns image pull/extraction resources.
+Temporary containers and files are cleaned up, while the normal Docker image
+cache may retain pulled images. This is fresh target-image evidence, not a
+comparison with the updating process's older native inventory and not a
+digest-only patch retaining stale hashes. The closed
+`prismpm/sdk-lock-update/2` proposal includes every changed platform, index,
+image-reference and standards field, plus the complete validated proposed lock;
+compatibility, generated-output and security reviews remain required. A proposal
+is not authenticated release acceptance: validating its JSON alone cannot
+establish its external current-lock baseline or replace the actual capture and
+generation steps. Ordinary V&V exercises real OCI capture/update with explicitly
+synthetic two-architecture images and the isolated source-built CLI; those
+fixtures do not claim to be released SDKs. The separate shipped-SDK runtime
+gate retains its exact native inventory checks. Legacy
+locks retain their existing `prismpm/sdk-lock-update/1` proposal behavior.
+`fetch --locked`
 materializes all content required for subsequent check, build, test, package,
 verify and release assembly with networking disabled. Native Linux archives
 and the OCI SDK implement the same canonical CLI protocol and must produce the

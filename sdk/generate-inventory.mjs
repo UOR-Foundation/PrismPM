@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { compilerRevision, validateAuthorityMetadata } from './inventory-metadata.mjs';
 
 const output = process.argv[2];
 if (!output) throw new Error('inventory output path is required');
@@ -57,6 +58,7 @@ async function treeDigest(root) {
 }
 
 const definitions = [
+  ['sdk-platform-lock', 'schema', '2', '/opt/prismpm/platform-lock.mjs'],
   ['action', 'workflow', '0.3.0', 'action', 'tree'],
   ['adapter-compose', 'adapter', 'compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d', 'adapters/compose.json'],
   ['adapter-github-pages', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages.json'],
@@ -65,7 +67,7 @@ const definitions = [
   ['asyncapi-3.1.0-official-corpus', 'test-corpus', 'b3fac5bb522771428ea57b16129b273cd3ea0180', 'standards/oracles/asyncapi-spec-b3fac5bb', 'tree'],
   ['asyncapi-website-adeo-schemas', 'test-corpus', '20a31a0396b41dd24b1bac877ab7ce3f58037c28', 'standards/oracles/asyncapi-website-20a31a03', 'tree'],
   ['build-base', 'base-image', 'rust-1.97.1-bookworm', null, 'sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'],
-  ['conformance-corpus', 'test-corpus', '148-features-83-diagnostics', '/opt/prismpm/share/conformance-root', 'tree'],
+  ['conformance-corpus', 'test-corpus', 'prismpm/ids/1', '/opt/prismpm/share/conformance-root', 'tree'],
   ['cloudevents-1.0.2-fixtures', 'test-corpus', '1.0.2', 'standards/corpora/cloudevents-1.0.2', 'tree'],
   ['cloudevents-sdk-go-corpus', 'test-corpus', '2.16.2', 'standards/oracles/cloudevents-sdk-go-2.16.2', 'tree'],
   ['cloudevents-sdk-conformance', 'oracle', '2.16.2', '/usr/local/bin/cloudevents-sdk-conformance'],
@@ -77,7 +79,7 @@ const definitions = [
   ['git-tag-root-songy23', 'trust-root', 'github-key-record-276780', 'standards/trust/github-songy23-ssh-sfmatr1d.pub'],
   ['git-tag-root-sudo-bmitch', 'trust-root', 'github-key-record-2155637', 'standards/trust/github-sudo-bmitch-openpgp-6e0ff28c767a8bee.asc'],
   ['lean', 'binary', '4.32.1', '/usr/local/elan/toolchains/leanprover--lean4---v4.32.1/bin/lean'],
-  ['lean4-prod', 'crate', '2bda53877490e7dc032128b472a4a6e0ef07d7d2', 'vendor/lean4-prod/crates/prod-codegen-0.1.0.crate'],
+  ['lean4-prod', 'crate', null, 'vendor/lean4-prod/crates/prod-codegen-0.1.0.crate'],
   ['leanchecker', 'binary', '4.32.1', '/usr/local/elan/toolchains/leanprover--lean4---v4.32.1/bin/leanchecker'],
   ['lexlean', 'binary', '0.3.0', '/usr/local/bin/lexlean'],
   ['oci-distribution-1.1.1-corpus', 'test-corpus', 'a139cc423184af6078077b9b7ee336eddbd03f8f', 'standards/oracles/oci-distribution-1.1.1', 'tree'],
@@ -111,6 +113,9 @@ const definitions = [
   ['workflow-reusable-sdk', 'workflow', '0.3.0', '.github/workflows/sdk.yml'],
 ];
 let artifacts;
+const dependencies = process.env.PRISMPM_ARTIFACT_INVENTORY
+  ? '/opt/prismpm/share/conformance-root/model/dependencies.toml' : 'model/dependencies.toml';
+const revision = compilerRevision(await readFile(dependencies, 'utf8'));
 if (process.env.PRISMPM_ARTIFACT_INVENTORY) {
   const inventory = JSON.parse(await readFile(process.env.PRISMPM_ARTIFACT_INVENTORY, 'utf8'));
   if (!Array.isArray(inventory.artifacts)) throw new Error('artifact inventory is malformed');
@@ -125,10 +130,11 @@ if (process.env.PRISMPM_ARTIFACT_INVENTORY) {
       const resolved = source.startsWith('/') ? await realpath(source) : source;
       digest = sha(await readFile(resolved));
     }
-    artifacts.push({ digest, id, kind, version });
+    artifacts.push({ digest, id, kind, version: id === 'lean4-prod' ? revision : version });
   }
   artifacts.sort((left, right) => Buffer.from(left.id).compare(Buffer.from(right.id)));
 }
+validateAuthorityMetadata(artifacts, revision);
 const value = process.env.PRISMPM_ARTIFACTS_ONLY === '1'
   ? { artifacts, schema: 'prismpm/sdk-artifact-inventory/1' }
   : { artifacts, commands, schema: 'prismpm/sdk-inventory/1' };

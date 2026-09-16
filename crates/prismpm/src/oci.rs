@@ -618,7 +618,7 @@ pub fn assemble(
     }
     let sdk_lock_bytes = std::fs::read(root.join("prismpm.lock"))
         .map_err(|_| PrismError::new("PP5401", "prismpm.lock is required"))?;
-    let sdk_lock = CanonicalDocument::parse("prismpm/sdk-lock/1", &sdk_lock_bytes)?;
+    let sdk_lock = crate::sdk::parse_lock(&sdk_lock_bytes)?;
     let standards_lock_bytes = std::fs::read(root.join("standards.lock"))
         .map_err(|_| PrismError::new("PP1101", "standards.lock is required"))?;
     let _standards_lock =
@@ -1486,8 +1486,7 @@ fn verified_release(
             "release lock layers do not match the declared lock digests",
         ));
     }
-    let sdk_lock = CanonicalDocument::parse(
-        "prismpm/sdk-lock/1",
+    let sdk_lock = crate::sdk::parse_lock(
         &store.read(roles.get("sdk-lock").expect("checked SDK lock layer"))?,
     )?;
     let standards_lock = CanonicalDocument::parse(

@@ -66,6 +66,16 @@ extension_policy = "closed"
 compatibility = "exact-major"
 
 [[contract]]
+schema = "prismpm/sdk-lock/2"
+path = "schemas/sdk-lock-v2.schema.json"
+media_type = "application/vnd.prismpm.sdk-lock.v2+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 67108864
+maximum_items = 65536
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
 schema = "prismpm/sdk-lock/1"
 path = "schemas/sdk-lock.schema.json"
 media_type = "application/vnd.prismpm.sdk-lock.v1+json"
@@ -344,6 +354,16 @@ maximum_bytes = 4194304
 maximum_items = 8192
 extension_policy = "closed"
 compatibility = "exact-major-additive-minor"
+
+[[contract]]
+schema = "prismpm/sdk-lock-update/2"
+path = "schemas/sdk-lock-update-v2.schema.json"
+media_type = "application/vnd.prismpm.sdk-lock-update.v2+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 201326592
+maximum_items = 262144
+extension_policy = "closed"
+compatibility = "exact-major"
 
 [[contract]]
 schema = "prismpm/signature-result/1"

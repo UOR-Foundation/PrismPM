@@ -386,6 +386,9 @@ impl Controller {
         if !root.is_dir() {
             return Err(PrismError::new("PP1002", "project root is not a directory"));
         }
+        // An existing lock binds every SDK execution, not only `lock check`.
+        // Empty/source projects may still load before their initial binding.
+        crate::sdk::check_existing_lock(&root)?;
         Ok(Self { root })
     }
 
@@ -832,6 +835,14 @@ impl Controller {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn execution_boundary_rejects_wrong_native_inventory() {
+        crate::sdk::execution_binding_regression(
+            "controller::tests::execution_boundary_rejects_wrong_native_inventory",
+            |root| super::Controller::load(root).map(|_| ()),
+        );
+    }
+
     #[test]
     fn artifact_publication_retains_nested_paths_and_rejects_overwrite() {
         let temporary = tempfile::tempdir().unwrap();

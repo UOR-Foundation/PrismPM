@@ -74,9 +74,9 @@ result_schema = "prismpm/inspect-result/1"
 
 [[command]]
 name = "lock"
-mutates = "never"
+mutates = "docker-image-cache-only"
 requires_digest = false
-result_schema = "prismpm/sdk-lock-update/1"
+result_schema = "prismpm/sdk-lock-update/2"
 
 [[command]]
 name = "plan"

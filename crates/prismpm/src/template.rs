@@ -1,6 +1,5 @@
 //! Read-only UOR template-contract and reviewable update operations.
 
-use crate::contracts::CanonicalDocument;
 use crate::error::PrismError;
 use crate::holo::canonical::{decode_value, encode_value};
 use serde_json::{json, Value};
@@ -288,6 +287,7 @@ fn verify_native_regeneration(root: &Path) -> Result<(), PrismError> {
 
 /// Verify the universal template contract without changing the repository.
 pub fn check(root: &Path) -> Result<Value, PrismError> {
+    let sdk = crate::sdk::execution_lock(root)?;
     for path in REQUIRED {
         if !root.join(path).is_file() {
             return Err(PrismError::new(
@@ -298,9 +298,6 @@ pub fn check(root: &Path) -> Result<Value, PrismError> {
     }
     let (contract_bytes, contract) = read_canonical(root, "template-contract.json")?;
     validate_contract(&contract)?;
-    let sdk_bytes = std::fs::read(root.join("prismpm.lock"))
-        .map_err(|_| PrismError::new("PP5401", "prismpm.lock is required"))?;
-    let sdk = CanonicalDocument::parse("prismpm/sdk-lock/1", &sdk_bytes)?;
     let (_, lock) = read_canonical(root, "template.lock")?;
     validate_lock(
         root,
@@ -385,6 +382,14 @@ pub fn update(root: &Path, sdk_image: &str, template_revision: &str) -> Result<V
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn execution_boundary_rejects_wrong_native_inventory() {
+        crate::sdk::execution_binding_regression(
+            "template::tests::execution_boundary_rejects_wrong_native_inventory",
+            |root| super::check(root).map(|_| ()),
+        );
+    }
+
     #[test]
     fn update_rejects_mutable_sdk_names() {
         let root = tempfile::tempdir().unwrap();

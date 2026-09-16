@@ -22,6 +22,7 @@ include = [
     "sdk/oracles/asyncapi-parser.mjs",
     "sdk/oracles/go/intoto-statement-validator/main.go",
     "sdk/stdlib-sources.tar",
+    "sdk/platform-lock.mjs",
     "src/**",
     "standards.lock",
     "stdlib/README.md",
