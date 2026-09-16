@@ -1,6 +1,6 @@
 # Production release status
 
-As of 9 September 2026, the 0.3.0 source is under verification and is not an
+As of 15 September 2026, the 0.3.0 source is under verification and is not an
 accepted public SDK release. Clean commits and passing component checks do not
 replace the cross-repository acceptance contract in `current/tasks.md` of the
 development workspace.
@@ -8,7 +8,7 @@ development workspace.
 ## Public dependency prerequisite
 
 Both the standalone package gate and Cargo's own online package preparation
-fail because `uor-hologram` is absent from crates.io:
+have failed to resolve the required public `uor-hologram` package:
 
 ```console
 cargo xtask package-api
@@ -29,6 +29,28 @@ workflow runs were dry runs. The repository owner must supply a credential
 authorized to publish that package closure; credentials must never be
 committed or included in an SDK. The failure is recorded in the
 [upstream publishing job](https://github.com/Hologram-Technologies/hologram/actions/runs/34018837931/job/101447544153).
+
+## SDK oracle advisory disposition
+
+On 15 September, devcontainer `npm audit --package-lock-only --ignore-scripts
+--json` reported eight affected package records (seven high, one moderate) in
+the pinned AsyncAPI official-example harness lockfile. Its affected packages
+are Spectral core/functions, Ajv, brace-expansion, fast-uri, js-yaml, Lodash,
+and minimatch; this is not a count of distinct advisories. The separate
+`sdk/oracles` lockfile used for submitted documents reported zero findings.
+These audits cover lockfile graphs, not installed trees or the complete SDK.
+
+The affected harness is retained in the SDK and executes pinned official
+examples in a read-only, network-disabled container with a timeout. No
+hostile-application exploit was demonstrated; neither these bounds nor passing
+functional tests establish a vulnerability-clean SDK. Resolve the findings
+through reviewed upstream dependency updates and complete oracle reruns, or
+evidence-backed disposition under an approved policy. No disposition is accepted.
+
+Local reports are `target/asyncapi-upstream-audit-20260915.json` (SHA-256
+`831b23c1b993d18026f25ac58f42cf86778be404f5d4b89ffb5ae80d3d534bc7`)
+and `target/asyncapi-sdk-audit-20260915.json` (SHA-256
+`5b4208b5299acc2d0dd8bfd35e914ceb5568f21c34e93cbb864cb64498f8df48`).
 
 ## Remaining release acceptance
 
