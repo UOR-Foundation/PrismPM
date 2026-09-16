@@ -18,14 +18,22 @@ fn root() -> PathBuf {
 }
 
 fn document() -> prismpm::holo::ModelDocument {
-    let project = camino::Utf8PathBuf::from_path_buf(root().join("lexlean.toml")).expect("UTF-8");
-    let snapshot = Engine::load(&project)
-        .expect("LexLean project")
-        .snapshot(LexCheckRequest {
-            selection: Selection::Entrypoints,
+    // The committed fixture is immutable during this test process. Each caller
+    // still owns a deep clone, so property-case mutations cannot affect others.
+    static DOCUMENT: OnceLock<prismpm::holo::ModelDocument> = OnceLock::new();
+    DOCUMENT
+        .get_or_init(|| {
+            let project =
+                camino::Utf8PathBuf::from_path_buf(root().join("lexlean.toml")).expect("UTF-8");
+            let snapshot = Engine::load(&project)
+                .expect("LexLean project")
+                .snapshot(LexCheckRequest {
+                    selection: Selection::Entrypoints,
+                })
+                .expect("snapshot");
+            project_snapshot(&snapshot).expect("model-document projection")
         })
-        .expect("snapshot");
-    project_snapshot(&snapshot).expect("model-document projection")
+        .clone()
 }
 
 fn canonical_bytes() -> &'static [u8] {
