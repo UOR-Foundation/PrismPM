@@ -256,19 +256,21 @@ fn kind(path: &str) -> &'static str {
 fn artifact_relative(path: &str) -> Result<&str, PrismError> {
     if path.is_empty()
         || path.contains('\\')
+        || path.split('/').any(|part| matches!(part, "" | "." | ".."))
         || Path::new(path)
             .components()
             .any(|component| !matches!(component, Component::Normal(_)))
     {
         return Err(PrismError::new(
             "PP4002",
-            "LexLean manifest contains a noncanonical artifact path",
+            "generated artifact path is noncanonical",
         ));
     }
     Ok(path)
 }
 
 fn write_file(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), PrismError> {
+    artifact_relative(relative)?;
     let path = root.join(relative);
     let parent = path
         .parent()
@@ -286,6 +288,9 @@ fn write_file(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), PrismErro
 }
 
 fn verify_existing(root: &Path, files: &[(String, Vec<u8>)]) -> Result<(), PrismError> {
+    for (relative, _) in files {
+        artifact_relative(relative)?;
+    }
     let expected_paths = files
         .iter()
         .map(|(relative, _)| relative.as_str())
@@ -630,6 +635,9 @@ impl Controller {
             }
         }
         artifacts.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+        for (path, _) in &artifacts {
+            artifact_relative(path)?;
+        }
         let model_id = content_id(&prepared.model_bytes);
         let dependency_digest = format!(
             "{:x}",
@@ -824,6 +832,43 @@ impl Controller {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn artifact_publication_retains_nested_paths_and_rejects_overwrite() {
+        let temporary = tempfile::tempdir().unwrap();
+        super::write_file(temporary.path(), "nested/app.holo", b"original").unwrap();
+        assert!(super::write_file(temporary.path(), "nested/app.holo", b"changed").is_err());
+        assert_eq!(
+            std::fs::read(temporary.path().join("nested/app.holo")).unwrap(),
+            b"original"
+        );
+    }
+
+    #[test]
+    fn artifact_publication_rejects_escape_before_creating_files() {
+        for relative in [
+            "../escape.holo",
+            "nested/../../escape.holo",
+            "./app.holo",
+            "nested//app.holo",
+        ] {
+            let temporary = tempfile::tempdir().unwrap();
+            let staging = temporary.path().join("staging");
+            std::fs::create_dir(&staging).unwrap();
+            assert!(
+                super::write_file(&staging, relative, b"test artifact").is_err(),
+                "{relative}"
+            );
+            assert_eq!(std::fs::read_dir(&staging).unwrap().count(), 0);
+            assert!(!temporary.path().join("escape.holo").exists());
+        }
+        let temporary = tempfile::tempdir().unwrap();
+        let staging = temporary.path().join("staging");
+        std::fs::create_dir(&staging).unwrap();
+        let absolute = temporary.path().join("absolute.holo");
+        assert!(super::write_file(&staging, absolute.to_str().unwrap(), b"test artifact").is_err());
+        assert!(!absolute.exists());
+    }
+
     use super::{ensure_verification_not_active, VerifyWorkerGuard};
 
     #[test]
