@@ -759,11 +759,26 @@ The copied CLI remained unchanged and oracle stderr was empty. Focused owning
 validator/tool-integrity tests, all-target/all-feature Clippy, standalone
 harness Clippy, Dockerfile build checks and syntax checks passed. Raw evidence
 is retained under `target/portable-*-integrity-*` in the isolated development
-worktree. These are current-source x64 component results, not hosted SDK
-execution on both architectures or a fresh full-VV receipt. The prior clean
-`d0174e1` full VV passed gates 1–14 but failed gate 15 on the unavailable public
-`uor-hologram` dependency. That earlier run does not accept this new source,
-and no production release acceptance is claimed.
+worktree. These component results do not establish hosted SDK execution on
+both architectures.
+
+On 16 September 2026, complete source-devcontainer `just vv` at clean
+`d1b8506876c28baf8277ad7e179f92edd31fe3a0` passed gates 1–14: 327 workspace
+tests, 150 conformance cases within that count, 18 fixtures, repeated
+Calculator/Text builds and actual eight/ten browser cases, 240 goldens, and
+194 build plus nine verification artifacts identical across two absolute roots.
+The canonical verifier remained
+`5bf0bb397b9f64cab668438c012d0d683dfe5cd98004b31c15c2e325b4d1b701`.
+External tool-corpus checks used the independently authenticated `d0174e1`
+development SDK; portable browser checks used independently pinned source
+tools. This is not execution of a newly published SDK.
+
+Gate 15 verified the stdlib package, then failed the real downstream
+`cargo check --offline`: `no matching package named uor-hologram found`.
+A separate fresh official sparse-index request returned HTTP 404. The run
+exited 1 without `target/vv-evidence.json`; no full-pass or release receipt
+was produced. Log `target/portable-primary-vv-d1b8506.log` has SHA-256
+`0cd4c0754c1875453f28a5f72b056d06d8a99e3dc04d4cd8167ed52e499af0ab`.
 
 ## Release criterion
 

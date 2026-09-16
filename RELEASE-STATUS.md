@@ -1,9 +1,16 @@
 # Production release status
 
-As of 15 September 2026, the 0.3.0 source is under verification and is not an
+As of 16 September 2026, the 0.3.0 source is under verification and is not an
 accepted public SDK release. Clean commits and passing component checks do not
 replace the cross-repository acceptance contract in `current/tasks.md` of the
 development workspace.
+
+Complete source-devcontainer `just vv` at `d1b8506` passed gates 1–14,
+including actual portable browser execution and cross-root reproducibility,
+then failed gate 15 on the public dependency below. No full-pass receipt was
+produced. [Verification evidence](VERIFICATION.md#portable-view-execution-and-tool-integrity-ho-12)
+records the exact source, tools, scope, and log digest; the development SDK
+binding is not a newly accepted production release.
 
 ## Public dependency prerequisite
 
