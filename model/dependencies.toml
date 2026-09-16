@@ -3,18 +3,18 @@ spec = "prismpm/dependencies/1"
 [[dependency]]
 id = "lean4-prod"
 lean_version = "4.32.1"
-revision = "6eca0a557d3fb311f3ace1b0b494dade108a3e0d"
+revision = "7bdd9a8aba27ff16e2fa660953c78638304da672"
 source = "vendored"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/lean.tar"
-sha256 = "069093cc7ccf3b19b5f2b7bf0aa75404b1c64b35767d6780a8aa01124a6c6b5e"
+sha256 = "f356d2960d2e3604c116e4d2c907a67ca77a1370cd31e09492f57306159c69a0"
 
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "35d495b30f7a737717255f57f5689f781c7c16612ad11c949f88460d0c06da51"
+sha256 = "2e14b9b66b506af0b63350eded0ff6412e017198d48b9689edf31f8f0cfdbd8b"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
@@ -25,12 +25,12 @@ sha256 = "3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
-sha256 = "98c9aff51cfb7d71be701cf95cbe87cd22fbff12de868cba5a887537dd25860d"
+sha256 = "69020c3da6e982d0b4631d6991f185d55cd663dd7a1ef61a264711e7f06d077b"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-ir-0.1.0.crate"
-sha256 = "1877337169542a1d428b16cd30cce76b39accc9c17f28240a4439c61e22316b7"
+sha256 = "9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5"
 
 [[dependency]]
 id = "lexlean"
