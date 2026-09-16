@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const json = path => JSON.parse(readFileSync(path));
-const checks = ['non-root', 'inventory', 'model-check', 'shadowed-tool-rejected'];
+const checks = ['non-root', 'inventory', 'standards-lock', 'model-check', 'shadowed-tool-rejected'];
 export function validateConfig(config, architecture, revision) {
   assert.match(revision, /^[0-9a-f]{40}$/);
   assert.ok(['amd64', 'arm64'].includes(architecture));
@@ -30,10 +30,30 @@ export function validateEnvironment(environment, branches) {
   assert.deepEqual(branches.branch_policies.map(row => [row.name, row.type]), [['main', 'branch']]);
 }
 
-export function validateEvidence(evidence, architecture, revision, digest, inventoryBytes) {
+function standardsEvidence(inventoryBytes, standardsBytes, authorityBytes) {
+  const inventory = JSON.parse(inventoryBytes);
+  const standards = JSON.parse(standardsBytes);
+  const result = JSON.parse(authorityBytes);
+  assert.equal(standards.schema, 'prismpm/standards-lock/1');
+  assert.ok(Array.isArray(standards.authorities) && Array.isArray(standards.oracles));
+  const digest = sha(standardsBytes);
+  const bindings = inventory.artifacts.filter(row => row.id === 'standards-and-oracles');
+  assert.equal(bindings.length, 1);
+  assert.equal(bindings[0].digest, digest);
+  // Exact real authority-resolve output, not a caller-supplied success boolean.
+  // Locked mode must compare the shipped bytes without changing the project.
+  assert.deepEqual(result, {
+    schema: 'prismpm/authority-result/1', lock_digest: digest, path: 'standards.lock',
+    authorities: standards.authorities.length, oracles: standards.oracles.length, unchanged: true,
+  });
+  return {standards_lock_digest: digest, authority_result_digest: sha(authorityBytes)};
+}
+
+export function validateEvidence(evidence, architecture, revision, digest, inventoryBytes, standardsBytes, authorityBytes) {
   assert.deepEqual(evidence, {
     source_revision: revision, platform: `linux/${architecture}`, manifest_digest: digest,
     inventory_digest: sha(inventoryBytes), development_only: true, production_accepted: false, checks,
+    ...standardsEvidence(inventoryBytes, standardsBytes, authorityBytes),
   });
 }
 
@@ -84,7 +104,9 @@ function main([command, ...args]) {
       assert.ok(inventory.commands.length > 0 && inventory.artifacts.length > 0);
       const evidence = {source_revision: revision, platform: `linux/${architecture}`, manifest_digest: digest,
         inventory_digest: sha(readFileSync(`${directory}/inventory.json`)),
-        development_only: true, production_accepted: false, checks};
+        development_only: true, production_accepted: false, checks,
+        ...standardsEvidence(readFileSync(`${directory}/inventory.json`),
+          readFileSync(`${directory}/standards.lock`), readFileSync(`${directory}/authority-result.json`))};
       writeFileSync(`${directory}/candidate.json`, `${JSON.stringify(evidence)}\n`);
       break;
     }
@@ -92,7 +114,8 @@ function main([command, ...args]) {
       const [directory, architecture, revision, digest] = args;
       assert.equal(args.length, 4);
       validateEvidence(json(`${directory}/candidate.json`), architecture, revision, digest,
-        readFileSync(`${directory}/inventory.json`));
+        readFileSync(`${directory}/inventory.json`), readFileSync(`${directory}/standards.lock`),
+        readFileSync(`${directory}/authority-result.json`));
       break;
     }
     case 'index': {

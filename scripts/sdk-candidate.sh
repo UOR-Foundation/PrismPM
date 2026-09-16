@@ -72,6 +72,11 @@ case "${1:-}" in
     sdk cat /opt/prismpm/share/inventory.json > "$evidence/inventory.json"
     sdk cat /opt/prismpm/share/standards.lock > "$evidence/standards.lock"
     sdk sh -ec '
+      project=$(mktemp -d /tmp/prismpm-standards.XXXXXXXX)
+      cp /opt/prismpm/share/standards.lock "$project/standards.lock"
+      prismpm --json --project "$project" authority resolve --locked
+    ' > "$evidence/authority-result.json"
+    sdk sh -ec '
       cp -a /opt/prismpm/share/conformance-root/examples/Calculator /tmp/Calculator
       chmod -R u+w /tmp/Calculator
       prismpm --json --project /tmp/Calculator check

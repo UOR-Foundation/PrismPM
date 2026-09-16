@@ -10,6 +10,15 @@ import { compilerRevision, validateAuthorityMetadata } from '../sdk/inventory-me
 
 const revision = 'a'.repeat(40);
 const digest = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+const standardsFixture = () => {
+  const standards = Buffer.from(JSON.stringify({schema: 'prismpm/standards-lock/1',
+    authorities: [{id: 'fixture-authority'}], oracles: [{id: 'fixture-oracle'}]}));
+  const inventory = Buffer.from(JSON.stringify({schema: 'prismpm/sdk-inventory/1',
+    commands: [{command: 'prismpm'}], artifacts: [{id: 'standards-and-oracles', digest: digest(standards)}]}));
+  const authority = Buffer.from(`${JSON.stringify({schema: 'prismpm/authority-result/1',
+    lock_digest: digest(standards), path: 'standards.lock', authorities: 1, oracles: 1, unchanged: true})}\n`);
+  return {standards, inventory, authority};
+};
 const config = () => ({architecture: 'amd64', os: 'linux', rootfs: {type: 'layers', diff_ids: []},
   config: {Labels: {'org.opencontainers.image.revision': revision,
     'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
@@ -74,16 +83,63 @@ test('candidate publication requires a main-only environment and respects option
 });
 
 test('candidate evidence refuses stale, swapped, incomplete or accepted claims', () => {
-  const inventory = Buffer.from('exact platform inventory');
+  const {inventory, standards, authority} = standardsFixture();
   const subject = `sha256:${'b'.repeat(64)}`;
   const evidence = {source_revision: revision, platform: 'linux/amd64', manifest_digest: subject,
     inventory_digest: digest(inventory), development_only: true, production_accepted: false,
-    checks: ['non-root', 'inventory', 'model-check', 'shadowed-tool-rejected']};
-  const check = value => validateEvidence(value, 'amd64', revision, subject, inventory);
+    standards_lock_digest: digest(standards), authority_result_digest: digest(authority),
+    checks: ['non-root', 'inventory', 'standards-lock', 'model-check', 'shadowed-tool-rejected']};
+  const check = value => validateEvidence(value, 'amd64', revision, subject, inventory, standards, authority);
   check(evidence);
   for (const mutation of [{platform: 'linux/arm64'}, {source_revision: 'c'.repeat(40)},
-    {inventory_digest: digest(Buffer.from('other'))}, {production_accepted: true},
+    {inventory_digest: digest(Buffer.from('other'))}, {authority_result_digest: digest(Buffer.from('other'))},
+    {standards_lock_digest: digest(Buffer.from('other'))}, {production_accepted: true},
     {checks: ['non-root']}, {extra: true}]) assert.throws(() => check({...evidence, ...mutation}));
+});
+
+test('candidate publication requires a successful exact shipped standards-lock result', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'prismpm-candidate-standards-'));
+  try {
+    const {inventory, standards, authority} = standardsFixture();
+    const subject = `sha256:${'b'.repeat(64)}`;
+    writeFileSync(join(directory, 'inventory.json'), inventory);
+    writeFileSync(join(directory, 'standards.lock'), standards);
+    writeFileSync(join(directory, 'cli.json'), JSON.stringify({schema: 'prismpm/completion-result/1'}));
+    writeFileSync(join(directory, 'model-check.json'), JSON.stringify({schema: 'prismpm/check-result/1',
+      model_id: 'c'.repeat(64), semantic_id: 'd'.repeat(64), snapshot_id: 'e'.repeat(64)}));
+    const invoke = command => execFileSync(process.execPath, [
+      new URL('./sdk-candidate.mjs', import.meta.url).pathname, command, directory, 'amd64', revision, subject], {stdio: 'pipe'});
+    // Missing evidence must prevent both initial recording and publication.
+    assert.throws(() => invoke('record'));
+    writeFileSync(join(directory, 'authority-result.json'), authority);
+    invoke('record'); invoke('verify');
+    const evidence = JSON.parse(readFileSync(join(directory, 'candidate.json'), 'utf8'));
+    assert.equal(evidence.authority_result_digest, digest(authority));
+    assert.equal(evidence.standards_lock_digest, digest(standards));
+    rmSync(join(directory, 'standards.lock'));
+    assert.throws(() => invoke('record')); assert.throws(() => invoke('verify'));
+    writeFileSync(join(directory, 'standards.lock'), standards);
+    rmSync(join(directory, 'authority-result.json'));
+    assert.throws(() => invoke('verify'));
+    const passed = JSON.parse(authority);
+    for (const value of [
+      {schema: 'prismpm/error-result/1', diagnostic: {code: 'PP1101'}},
+      {...passed, unchanged: false}, {...passed, lock_digest: `sha256:${'0'.repeat(64)}`},
+      {...passed, path: 'other.lock'}, {...passed, authorities: 2}, {...passed, oracles: 0},
+      {...passed, extra: true},
+    ]) {
+      writeFileSync(join(directory, 'authority-result.json'), JSON.stringify(value));
+      assert.throws(() => invoke('record'));
+      assert.throws(() => invoke('verify'));
+    }
+    writeFileSync(join(directory, 'authority-result.json'), authority);
+    writeFileSync(join(directory, 'standards.lock'), Buffer.concat([standards, Buffer.from('\n')]));
+    assert.throws(() => invoke('record')); assert.throws(() => invoke('verify'));
+    writeFileSync(join(directory, 'standards.lock'), standards);
+    const changed = JSON.parse(inventory); changed.artifacts[0].digest = `sha256:${'0'.repeat(64)}`;
+    writeFileSync(join(directory, 'inventory.json'), JSON.stringify(changed));
+    assert.throws(() => invoke('record')); assert.throws(() => invoke('verify'));
+  } finally { rmSync(directory, {recursive: true, force: true}); }
 });
 
 test('real ORAS inspection accepts exact OCI bytes and rejects blob tampering', () => {
