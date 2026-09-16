@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 
 mod audit;
 mod codegen;
+mod gate_driver;
 mod spec_links;
 mod stdlib;
 
@@ -371,6 +372,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         Err(error) => return Err(format!("cannot invalidate prior vv evidence: {error}").into()),
     }
     require_clean_worktree(root)?;
+    let driver = gate_driver::GateDriver::capture(root)?;
 
     println!("VV gate 1/15: formatting");
     command(root, "cargo", &["fmt", "--all", "--", "--check"])?;
@@ -392,9 +394,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     check_sdk_runtime_boundary()?;
 
     println!("VV gate 5/15: Clippy with warnings denied");
-    command(
+    driver.run_cargo(
         root,
-        "cargo",
         &[
             "clippy",
             "--workspace",
@@ -409,9 +410,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     )?;
 
     println!("VV gate 6/15: workspace unit and property tests");
-    command(
+    driver.run_cargo(
         root,
-        "cargo",
         &[
             "test",
             "--workspace",

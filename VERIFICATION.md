@@ -164,6 +164,65 @@ This is a transport regression check, not an authoritative conformance oracle
 or proof of SDK/release acceptance. Prism's OCI artifact validation, independent
 upstream OCI oracle configurations, and all remaining VV gates are unchanged.
 
+## Full-gate driver identity isolation
+
+The first normal clean-HEAD `just vv` at
+`954e83042816f59f4fad767068b43b96e17f439a` stopped during SDK initialization
+because `static.crates.io` temporarily failed DNS resolution while fetching
+`indexmap 2.14.0`. The exact URL subsequently returned HTTP 200. One unchanged
+retry built and published the current-source SDK at local digest
+`sha256:a6ca6a0ef68697755ee7aa109e4d240dba6b386b9290639ebd48340aea59578f`.
+Gates 1–7 then passed, including **276 workspace tests**, all **148 SDK-backed
+conformance scenarios**, and all **16 fixtures**, with no skipped tests. The
+production/property suite passed all 14 tests in 1,051.81 seconds. The nine
+earlier SDK-prerequisite failures did not recur. Gate 8 nevertheless stopped
+with `PP5001: LexLean verification failed`; gates 8–15 were not accepted.
+Both runs' temporary registries and configuration volumes were removed by
+the normal cleanup trap, and the source worktree remained unchanged.
+
+A bounded diagnostic `prismpm --json verify` passed with the same build
+`416d0d8d2033be2322366eed17fcd26bf4ccc9067d5175216ed496150df96f20` and a
+CLI-specific attestation; this did not replace the golden identity or turn
+the failed VV into a pass. A live-driver reproduction then established the
+failure mechanism: `cargo xtask verify-examples` ran executable SHA256
+`667530c0a4d418b86f39a10087524a8e0741ff97d63900ef42e7c08ce5f3bae8`.
+Running the full gate's exact compilation flags,
+`cargo test --workspace --all-features --locked --offline --no-run`, replaced
+its installed path with the all-features executable SHA256
+`7e1d696693d4b622c9c8ae291a37d541c52792bd720b0ab75448a2e17f47b9ec`.
+The still-running process's `/proc/<pid>/exe` link acquired `(deleted)`, and
+the pathname returned by `current_exe()` was no longer readable. The verifier
+then reproduced `PP5001`. LexLean correctly refuses to invent or omit its
+running-executable provenance.
+
+The VV driver now gives only its nested workspace Clippy/test Commands a
+separate persistent target directory. A canonical alternate is selected when
+a caller's custom target contains the executing driver; conflicting symlink
+aliases fail closed. Before and after each nested gate, both the live
+`current_exe()` pathname and its exact SHA-256 must remain unchanged. No
+global environment mutation, arbitrary target deletion, test-flag reduction,
+LexLean provenance change, or attestation normalization is used.
+
+Four focused tests passed for changed/deleted/same-content-replaced driver
+rejection, custom-target and symlink isolation, and exact child flags/scoped
+environment. The actual isolated all-features no-run reproduction preserved
+the live driver pathname, inode and SHA256
+`c4bb31116cb1d7329d43360bdcc10cc8da59c232894fe7e01ec70630f56ab988`.
+Normal `verify-examples` then passed with stdlib attestation
+`85367a8165bc8e9c7718c863e828a376d25e22c1b1cc56c5e42eb612fb5aed25`
+and repeated Calculator attestation
+`b8bff350326d7f45297fafcc168f7e00f78b0cec4de4a2addc175c9ddeb8d88d`.
+Both build identities remained unchanged. Source/model/SPEC audits, formatting
+and denied-warning all-target/all-feature xtask Clippy also passed.
+Fresh golden generation and an independent comparison accepted all 234 files
+with that same final driver. Only the executing-binary hash, derived
+attestation/hash bindings and review reason changed in three golden JSON files;
+the formal model, IR, execution corpus, package source, crate archive and
+release metadata remained byte-identical.
+Evidence is retained under `target/control-coverage-driver-*`; original full
+run logs remain `target/control-coverage-vv-954e830{,-retry}.log`. These are
+focused regression results, not completion of the remaining full VV gates.
+
 ## Original full-gate falsification campaign
 
 This record covers every gate in `cargo xtask vv`. A gate is considered armed only
