@@ -702,6 +702,69 @@ also passed with the genuinely pushed old SDK oracle component image before
 the additional transport-budget test. These remain component checks, not a
 claim that an unpublished candidate or the full SDK release has been accepted.
 
+## Portable View execution and tool integrity (HO-12)
+
+The new oracle runs the archive's actual portable HTML/CSS/JavaScript in pinned
+Chromium through the authoritative Hologram session, intent handler and
+Core-Wasm. Its loopback Axum host is acceptance infrastructure, not a production
+backend. HO-12 calls the owning PP5301 validator; synthetic report mutations
+prove rejection, not browser execution. The current register is 150 features
+and 84 diagnostics. Report `/2` binds all three current Holo identities and
+requires the exact profile cases, applicable vector indices, actual engine,
+one attempt per case, zero skips and zero retries. Declared requests above the
+upstream 64 KiB intent limit or responses above its 1 MiB output limit fail
+before invocation or model-sized probe allocation; no vectors are clamped away.
+
+Real Chromium first exposed Calculator's native form GET disclosure when
+JavaScript was unavailable. No host CSP masked the attachment defect. The
+reviewed compiler correction is pinned at
+`5fd0c82a70019e8033f2a6f449f3c919a4e37151`; full compiler CI passed, including
+eight numeric and eleven Text browser tests. An independently planted
+oracle-transport defect accepting a forged Origin also failed the real browser
+suite; restoring the normal host restored byte-identical Text reports with
+empty stderr. A separate labeled DOM-boundary mutation rendering the injected
+markup response through innerHTML also failed the real text-rendering probe;
+the restored driver produced a byte-identical report to the final public CLI.
+Lifecycle evidence replays the same successful modeled intent
+immediately before stop and then requires that request to be rejected after
+stop. This does not substitute a hardcoded numeric request for a Text request.
+
+The first complete public CLI runs correctly failed PP5301 because the scrubbed
+subprocess environment did not pass a caller's browser-cache override. The
+final correction passes verified absolute Node and browser executables and
+checks installed Playwright driver/core and headless-shell tree bytes before
+loading JavaScript. Source-bootstrap digests were independently reproduced
+from locked npm inputs, a never-started checksum-pinned browser image and the
+checksum-verified official Node archive. SDK execution instead requires its
+native inventory's corresponding artifact digests. Actual modified driver,
+PATH-shadowed Node, symlink, writable-file, oversized-file and malformed
+inventory-row regressions reject the altered inputs.
+
+Both final public `check`, `build` and `verify` sequences passed in the x64
+source devcontainer using immutable CLI SHA256
+`6f70b32a0afe6204ffcd150213e05bf4d4ab45d04f53f42df1e765ee1b63895f`,
+with the deliberately incorrect caller browser path
+`/tmp/forbidden-browser-override`:
+
+- Calculator: build `b1abf58b789f0dd6013e8494ef67f8195f1ea79c6fcb746265f712d3cc6fb70b`,
+  attestation `482530227a036eb54f904984d70e0726d6fb6eb663a548c1b0908d1f5c130194`;
+  all eight actual numeric Chromium cases, browser vectors 0–14, 22 direct and
+  resident vectors, and 21 UTF-8 intents passed.
+- Text Request: build `00b3479c6d4962bf78913e21aa1241598cb8456143b212b74fcecb8141913974`,
+  attestation `2ab666425e7b690a6c3609b5b115d63f3b2a533e848c8ea2f83f2640ba53d489`;
+  all ten actual Text Chromium cases, browser vectors `[0,2,3]`, six direct and
+  resident vectors, and five UTF-8 intents passed.
+
+The copied CLI remained unchanged and oracle stderr was empty. Focused owning
+validator/tool-integrity tests, all-target/all-feature Clippy, standalone
+harness Clippy, Dockerfile build checks and syntax checks passed. Raw evidence
+is retained under `target/portable-*-integrity-*` in the isolated development
+worktree. These are current-source x64 component results, not hosted SDK
+execution on both architectures or a fresh full-VV receipt. The prior clean
+`d0174e1` full VV passed gates 1–14 but failed gate 15 on the unavailable public
+`uor-hologram` dependency. That earlier run does not accept this new source,
+and no production release acceptance is claimed.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

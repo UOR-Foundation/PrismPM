@@ -1,5 +1,17 @@
 //! Execution of exact, imported upstream standards conformance assets.
 
+/// Validate complete Hologram and actual portable-browser execution evidence.
+///
+/// This is the same fail-closed PP5301 check used by application verification;
+/// validating a document alone does not authenticate or execute its producer.
+pub fn validate_hologram_oracle_report(
+    report: &serde_json::Value,
+    application: &crate::holo::model_document::Application,
+    identities: &serde_json::Value,
+) -> Result<(), crate::error::PrismError> {
+    crate::verification::validate_hologram_oracle_report(report, application, identities)
+}
+
 use crate::error::PrismError;
 use base64::Engine;
 use serde::Serialize;

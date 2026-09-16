@@ -113,6 +113,7 @@ The three honesty levels:
 | `HO-09` | `build` | Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources. |
 | `HO-10` | `build` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. |
 | `HO-11` | `build` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. |
+| `HO-12` | `build` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. |
 
 ## lifecycle
 

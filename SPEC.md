@@ -174,6 +174,39 @@ path/count fields and u64 content lengths. The fixed limits are 4,096 files,
 special files, invalid UTF-8, reserved/non-portable paths, case-folded
 collisions, duplicates, missing entry, wrong order, and trailing bytes fail.
 
+Application verification must execute the exact portable View extracted from
+the application archive in pinned Chromium, with intents handled by the
+authoritative Hologram session and its Core-Wasm runtime. Recording that a View
+was mounted is not evidence that its JavaScript executed or that the modeled
+request and response reached the rendered interface. The verifier requires the
+complete profile-specific browser evidence bound to the application contract;
+its application kappa, archive kappa, and archive fingerprint must equal the
+current build's exact Holo identities. Missing, extra, or inconsistent evidence
+fails with `PP5301`. The `HO-12` conformance case exercises this owning evidence
+validator. Actual browser execution remains a separate required part of
+application verification, including the Calculator and text application examples
+in the ordinary full acceptance gate.
+
+The generic model retains its u32 request and response bounds. The pinned
+Hologram portable intent transport supports at most 65,536 request bytes and
+1,048,576 output bytes. Application verification rejects larger declared bounds
+with `PP5301` before guest invocation or model-sized browser probe allocation;
+it does not clamp the model, omit its vectors, or claim this transport supports
+the model's entire u32 range. The oracle checks these limits against the actual
+upstream constants. Its loopback Axum host is acceptance infrastructure only,
+not a hosted backend or production deployment architecture.
+
+Before loading the browser driver, verification checks the real installed
+Playwright driver/core and Chromium headless-shell trees against the native
+SDK inventory, using the same length-prefixed SHA-256 tree encoding as SDK
+inventory production. Source-bootstrap verification instead uses independently
+reviewed digests from the locked npm packages and pinned x64 browser image.
+Symlinks, special files, writable shared entries, oversized trees and digest
+changes fail with `PP5301`. Node is resolved through the existing tool inventory
+boundary; the verified absolute Node and browser executable paths are passed
+to the harness. Caller browser-cache overrides cannot select another binary.
+The shipped browser tree is read-only to unprivileged runtime users.
+
 The producer extension key is
 `https://uor.foundation/extension/prismpm-model/v1`. Its closed canonical
 `prismpm/model-provenance/1` payload binds the authoritative model blob,
@@ -902,6 +935,11 @@ are not extended in place, and `/1` evidence cannot satisfy these `/2`
 acceptance checks. This does not change Holo/1, `prismpm/verify-result/1`,
 or `prismpm/application-verification-manifest/1`.
 
+Required portable-browser execution evidence uses `prismpm/hologram-oracle/2`.
+The prior recording-only `/1` report cannot satisfy current application
+verification; its archived records remain historical evidence, not a browser
+execution claim.
+
 ## Appendix A. Conformance ID Registry
 
 Every row below is normative, has the honesty level registered in `model/ids.toml`, and is generated from that register.
@@ -941,6 +979,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-09` | `holo` | Shared goldens bind generated Lean, canonical model documents, and binary Holo application projections to their sources. | §3 |
 | `HO-10` | `holo` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. | §3 |
 | `HO-11` | `holo` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. | §3 |
+| `HO-12` | `holo` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

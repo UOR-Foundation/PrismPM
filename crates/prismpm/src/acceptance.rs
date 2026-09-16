@@ -511,11 +511,13 @@ mod tests {
     #[test]
     fn result_counts_come_from_the_complete_current_transcript() {
         let value = complete();
-        assert!(value["cases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|row| row["feature_id"] == "HO-11"));
+        for feature in ["HO-11", "HO-12"] {
+            assert!(value["cases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["feature_id"] == feature));
+        }
         assert!(value["cases"]
             .as_array()
             .unwrap()
@@ -552,6 +554,7 @@ mod tests {
     fn accepted_transcript_rejects_missing_new_cases_even_with_adjusted_counts() {
         for (field, identity, count) in [
             ("feature_id", "HO-11", "feature_count"),
+            ("feature_id", "HO-12", "feature_count"),
             ("diagnostic", "PP2009", "diagnostic_count"),
         ] {
             let mut missing = complete();

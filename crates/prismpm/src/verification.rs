@@ -30,10 +30,13 @@ const HOLOGRAM_ORACLE_SOURCE_SHA256: &str =
 const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.toml");
 const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.lock");
 const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("embedded/hologram-oracle.main.rs");
+const HOLOGRAM_ORACLE_BROWSER: &[u8] = include_bytes!("embedded/hologram-oracle.browser.mjs");
 const ELAN_PROXY_SHA256: &str = "840179e70803ef373c2ec53342d6a45ea7d022533e4145489fc1278b4f716385";
 const RUSTUP_PROXY_SHA256: &str =
     "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c";
 const TIMEOUT_SHA256: &str = "5ef0eaaaa4220593add7716aad74da927ca3bb10605e964330de64fecc3ef15e";
+// Node 22.23.2 x64 binary from the Dockerfile's checksum-verified tarball.
+const NODE_SHA256: &str = "3517c2df0b2f8cd7f422b4b8450ef81c6889f08eb03e281d6de9079b15e6a327";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -284,6 +287,7 @@ pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
                 "lake" | "lean" => Some(ELAN_PROXY_SHA256),
                 "rustc" | "rustfmt" => Some(RUSTUP_PROXY_SHA256),
                 "timeout" => Some(TIMEOUT_SHA256),
+                "node" => Some(NODE_SHA256),
                 _ => None,
             };
             if let Some(expected) = expected {
@@ -510,6 +514,18 @@ fn run_hologram_oracle(
     model_path: &Path,
     wasm_path: &Path,
 ) -> Result<Vec<ProcessRecord>, PrismError> {
+    let document: crate::holo::model_document::ModelDocument = serde_json::from_slice(
+        &std::fs::read(model_path).map_err(|error| PrismError::new("PP5301", error.to_string()))?,
+    )
+    .map_err(|error| PrismError::new("PP5301", error.to_string()))?;
+    let application = document
+        .application
+        .as_ref()
+        .ok_or_else(|| PrismError::new("PP5301", "oracle has no application"))?;
+    validate_portable_target_bounds(
+        application.request_maximum(),
+        application.response_maximum(),
+    )?;
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
         return Err(PrismError::new(
             "PP5301",
@@ -531,8 +547,13 @@ fn run_hologram_oracle(
     write(&harness.join("Cargo.toml"), HOLOGRAM_ORACLE_CARGO)?;
     write(&harness.join("Cargo.lock"), HOLOGRAM_ORACLE_LOCK)?;
     write(&harness.join("src/main.rs"), HOLOGRAM_ORACLE_MAIN)?;
+    write(&harness.join("browser.mjs"), HOLOGRAM_ORACLE_BROWSER)?;
 
     let cargo = executable("cargo")?;
+    let node = executable("node")?
+        .canonicalize()
+        .map_err(|error| PrismError::new("PP5301", format!("browser Node executable: {error}")))?;
+    let browser = crate::browser_oracle::verified_browser()?;
     let replacements = [
         (controller.root.as_path(), "$PROJECT"),
         (build_root, "$BUILD"),
@@ -548,6 +569,21 @@ fn run_hologram_oracle(
             .to_string_lossy()
             .into_owned(),
     );
+    let node_version = run_process(
+        "hologram-browser-node-version",
+        &node,
+        &["--version".to_owned()],
+        &harness,
+        &env,
+        &replacements,
+        "PP5301",
+    )?;
+    if node_version.stdout != "v22.23.2\n" || !node_version.stderr.is_empty() {
+        return Err(PrismError::new(
+            "PP5301",
+            "portable browser requires pinned Node v22.23.2",
+        ));
+    }
     let build = run_process(
         "hologram-oracle-build",
         &cargo,
@@ -576,6 +612,9 @@ fn run_hologram_oracle(
             holo_path.to_string_lossy().into_owned(),
             model_path.to_string_lossy().into_owned(),
             wasm_path.to_string_lossy().into_owned(),
+            harness.join("browser.mjs").to_string_lossy().into_owned(),
+            node.to_string_lossy().into_owned(),
+            browser.to_string_lossy().into_owned(),
         ],
         &harness,
         &env,
@@ -584,15 +623,217 @@ fn run_hologram_oracle(
     )?;
     let report: Value = serde_json::from_str(run.stdout.trim())
         .map_err(|error| PrismError::new("PP5301", format!("Hologram oracle report: {error}")))?;
-    if report.get("schema").and_then(Value::as_str) != Some("prismpm/hologram-oracle/1")
-        || report.get("footer_verified").and_then(Value::as_bool) != Some(true)
-    {
-        return Err(PrismError::new(
-            "PP5301",
-            "pinned Hologram oracle did not return complete acceptance",
-        ));
+    let identities: Value = serde_json::from_slice(
+        &std::fs::read(build_root.join("application/holo-identities.json"))
+            .map_err(|error| PrismError::new("PP5301", error.to_string()))?,
+    )
+    .map_err(|error| PrismError::new("PP5301", error.to_string()))?;
+    validate_hologram_oracle_report(&report, application, &identities)?;
+    Ok(vec![node_version, build, run])
+}
+
+// These are the pinned hologram-view-surface transport limits, not a new model
+// range. The embedded harness asserts equality against the upstream constants
+// and rechecks them before invoking any guest or allocating boundary probes.
+fn validate_portable_target_bounds(
+    request_maximum: u32,
+    response_maximum: u32,
+) -> Result<(), PrismError> {
+    if request_maximum > 64 * 1024 || response_maximum > 1024 * 1024 {
+        return Err(PrismError::new("PP5301", "application bounds exceed pinned portable View transport limits (request: 65536 bytes; response: 1048576 bytes)"));
     }
-    Ok(vec![build, run])
+    Ok(())
+}
+
+pub(crate) fn validate_hologram_oracle_report(
+    report: &Value,
+    application: &crate::holo::model_document::Application,
+    identities: &Value,
+) -> Result<(), PrismError> {
+    use crate::holo::model_document::Application;
+    validate_portable_target_bounds(
+        application.request_maximum(),
+        application.response_maximum(),
+    )?;
+    let invalid = || {
+        PrismError::new(
+            "PP5301",
+            "pinned Hologram oracle did not return complete portable browser acceptance",
+        )
+    };
+    let keys = [
+        "application_kappa",
+        "archive_fingerprint",
+        "archive_kappa",
+        "direct_vectors",
+        "footer_verified",
+        "guest_allocation_boundary",
+        "intent_vectors",
+        "portable_browser",
+        "resident_vectors",
+        "schema",
+        "view_attached",
+        "view_detached",
+    ];
+    if report
+        .as_object()
+        .is_none_or(|object| object.keys().map(String::as_str).ne(keys))
+    {
+        return Err(invalid());
+    }
+    for (field, prefix) in [
+        ("application_kappa", "blake3:"),
+        ("archive_kappa", "blake3:"),
+        ("archive_fingerprint", ""),
+    ] {
+        if report[field] != identities[field] {
+            return Err(invalid());
+        }
+        let digest = report[field]
+            .as_str()
+            .and_then(|value| value.strip_prefix(prefix))
+            .ok_or_else(invalid)?;
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(invalid());
+        }
+    }
+    let vectors = application.acceptance_vectors();
+    let intents = vectors
+        .iter()
+        .filter(|vector| {
+            std::str::from_utf8(&vector.request).is_ok()
+                && std::str::from_utf8(&vector.response).is_ok()
+        })
+        .count();
+    if report["schema"] != "prismpm/hologram-oracle/2"
+        || report["footer_verified"] != true
+        || report["guest_allocation_boundary"] != "verified"
+        || report["view_attached"] != 1
+        || report["view_detached"] != 1
+        || report["direct_vectors"] != vectors.len()
+        || report["resident_vectors"] != vectors.len()
+        || report["intent_vectors"] != intents
+    {
+        return Err(invalid());
+    }
+    let mut indexes = Vec::new();
+    for (index, vector) in vectors.iter().enumerate() {
+        let Ok(request) = std::str::from_utf8(&vector.request) else {
+            continue;
+        };
+        let applicable = match application {
+            Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
+            Application::Legacy(value) => {
+                let fields = request.split('\t').collect::<Vec<_>>();
+                fields.len() == 4
+                    && fields[0] == "1"
+                    && value
+                        .view
+                        .operations
+                        .iter()
+                        .any(|operation| operation.request_name == fields[1])
+                    && fields[2..].iter().all(|field| {
+                        field
+                            .parse::<i64>()
+                            .is_ok_and(|value| value.to_string() == *field)
+                    })
+            }
+        };
+        if applicable {
+            indexes.push(index);
+        }
+    }
+    if indexes.is_empty() {
+        return Err(invalid());
+    }
+    let mut names = vec![
+        "attachment-assets",
+        "modeled-vectors",
+        "input-validation-recovery",
+        "transport-failure-recovery",
+        "pre-init-privacy",
+        "delayed-init",
+        "intent-boundaries",
+    ];
+    let profile = match application {
+        Application::Text(_) => {
+            names.extend(["text-response-bounds", "text-safe-rendering"]);
+            "utf8-text"
+        }
+        Application::Legacy(_) => "legacy-numeric",
+    };
+    names.push("detached-session");
+    let cases = names
+        .into_iter()
+        .map(|name| json!({"name":name,"status":"passed","attempts":1}))
+        .collect::<Vec<_>>();
+    let expected = json!({"schema":"prismpm/portable-browser-oracle/1", "profile":profile,
+        "engine":"chromium", "browser_version":"151.0.7922.34", "playwright":"1.62.1",
+        "cases":cases, "vector_indexes":indexes, "skipped":0, "retries":0, "status":"passed"});
+    if report["portable_browser"] != expected {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod portable_oracle_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn shadowed_node_cannot_reach_browser_harness() {
+        use std::os::unix::fs::PermissionsExt;
+        if std::env::var_os("PRISMPM_NODE_SHADOW_TEST").is_some() {
+            let error = executable("node").unwrap_err();
+            assert!(error.code == "PP5008" || error.code == "PP5401");
+            return;
+        }
+        let shadow = tempfile::tempdir().unwrap();
+        let node = shadow.path().join("node");
+        std::fs::write(&node, b"#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = std::env::var_os("PATH").unwrap();
+        let selected = std::env::join_paths(
+            std::iter::once(shadow.path().to_owned()).chain(std::env::split_paths(&path)),
+        )
+        .unwrap();
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "verification::portable_oracle_tests::shadowed_node_cannot_reach_browser_harness",
+                "--nocapture",
+            ])
+            .env("PATH", selected)
+            .env("PRISMPM_NODE_SHADOW_TEST", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn portable_transport_bounds_fail_before_any_boundary_allocation() {
+        assert!(validate_portable_target_bounds(64 * 1024, 1024 * 1024).is_ok());
+        for (request, response) in [
+            (65537, 1048576),
+            (65536, 1048577),
+            (u32::MAX, 1),
+            (1, u32::MAX),
+        ] {
+            let error = validate_portable_target_bounds(request, response).unwrap_err();
+            assert_eq!(error.code, "PP5301");
+            assert!(error.message.contains("transport limits"));
+        }
+    }
 }
 
 fn pipe<R: Read>(mut reader: R, limit: usize) -> std::io::Result<Vec<u8>> {

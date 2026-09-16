@@ -1,4 +1,5 @@
 FROM docker.io/library/docker:28.4.0-cli@sha256:6a73c9433f2ba4279815be1e60f5739288b939dda1e48151d8c393537802de37 AS docker_cli
+FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS browser_oracle
 FROM docker.io/library/golang:1.19.7-alpine3.17@sha256:04065e607052705ede1ac6308ce56aec4715b0fafb1f0c2f4c2333aab9d84442 AS upstream_oracles
 COPY standards/oracles/oci-distribution-1.1.1 /src/distribution
 COPY standards/oracles/oci-runtime-1.3.0 /src/runtime
@@ -31,16 +32,23 @@ RUN find /root/.m2/repository -type f \( -name '*.lastUpdated' -o -name '_remote
 FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
 COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=browser_oracle /ms-playwright /ms-playwright
+RUN chmod -R a-w /ms-playwright
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     ELAN_HOME=/usr/local/elan \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PATH=/usr/local/cargo/bin:/usr/local/elan/bin:$PATH
 
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
         build-essential ca-certificates coreutils=9.1-1 curl git libgmp10 \
         libssl-dev pkg-config ripgrep xz-utils \
+        libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libcairo2 \
+        libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 \
+        libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 \
+        libxfixes3 libxkbcommon0 libxrandr2 fonts-liberation fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --proto '=https' --tlsv1.2 -sSfL \
@@ -61,6 +69,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSfL \
     && rm /tmp/node.tar.xz \
     && node --version \
     && npm --version
+
+COPY sdk/oracles/package.json sdk/oracles/package-lock.json /opt/prismpm/oracles/
+RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
+    && node -e 'if(require("/opt/prismpm/oracles/node_modules/playwright/package.json").version!=="1.62.1")process.exit(1)'
 
 RUN cargo install --locked wasm-bindgen-cli --version 0.2.122 \
     && cargo install --locked wasm-tools --version 1.258.0 \

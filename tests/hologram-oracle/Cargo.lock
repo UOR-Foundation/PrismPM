@@ -1809,6 +1809,7 @@ dependencies = [
 name = "prismpm-hologram-oracle"
 version = "0.0.0"
 dependencies = [
+ "axum",
  "hologram-live",
  "hologram-view-surface",
  "serde_json",

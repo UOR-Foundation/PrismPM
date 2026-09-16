@@ -1,5 +1,11 @@
 Feature: holo
 
+  @HO-12 @build
+  Scenario: Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence.
+    Given a composed application with its exact portable attachment assets
+    When Chromium exercises modeled requests, transport failures, privacy, and lifecycle
+    Then actual rendered results and complete profile-specific evidence are required
+
   @HO-11 @build
   Scenario: The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations.
     Given typed UTF-8 application metadata and legacy calculator metadata

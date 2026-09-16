@@ -199,6 +199,12 @@ level = "build"
 statement = "The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations."
 
 [[id]]
+id = "HO-12"
+suite = "holo"
+level = "build"
+statement = "Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

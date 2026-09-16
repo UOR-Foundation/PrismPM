@@ -94,6 +94,8 @@ const definitions = [
   ['in-toto-attestation-1.0-source', 'test-corpus', 'ee16c68a11dfcfbdc891600cacd767896fe6e724', 'standards/oracles/in-toto-attestation-ee16c68a', 'tree'],
   ['intoto-statement-validator', 'oracle', '1.0@ee16c68a', '/usr/local/bin/intoto-statement-validator'],
   ['playwright-chromium', 'oracle', '1.62.1', null, 'sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e'],
+  ['playwright-driver', 'oracle', '1.62.1', '/opt/prismpm/oracles/node_modules/playwright', 'tree'],
+  ['playwright-core', 'oracle', '1.62.1', '/opt/prismpm/oracles/node_modules/playwright-core', 'tree'],
   ['prismpm', 'binary', '0.3.0', '/usr/local/bin/prismpm'],
   ['prismpm-conformance', 'binary', '0.3.0', '/usr/local/bin/prismpm-conformance'],
   ['prismpm-platform-equivalence', 'binary', '0.3.0', '/usr/local/bin/prismpm-platform-equivalence'],
@@ -120,6 +122,10 @@ if (process.env.PRISMPM_ARTIFACT_INVENTORY) {
   const inventory = JSON.parse(await readFile(process.env.PRISMPM_ARTIFACT_INVENTORY, 'utf8'));
   if (!Array.isArray(inventory.artifacts)) throw new Error('artifact inventory is malformed');
   artifacts = inventory.artifacts;
+  if (artifacts.some(row => row.id === 'playwright-headless-shell')) throw new Error('browser artifact must be measured from the final runtime');
+  artifacts.push({id: 'playwright-headless-shell', kind: 'oracle', version: '1.62.1',
+    digest: await treeDigest('/ms-playwright/chromium_headless_shell-1234')});
+  artifacts.sort((left, right) => Buffer.from(left.id).compare(Buffer.from(right.id)));
 } else {
   artifacts = [];
   for (const [id, kind, version, source, mode] of definitions) {

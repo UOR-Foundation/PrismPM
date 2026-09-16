@@ -10,6 +10,7 @@
 mod acceptance;
 mod application_build;
 pub mod authority;
+mod browser_oracle;
 pub mod cli;
 pub mod config;
 pub mod contracts;

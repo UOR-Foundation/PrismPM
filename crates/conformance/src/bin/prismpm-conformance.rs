@@ -300,6 +300,7 @@ mod tests {
             ids.replace("id = \"HO-11\"", "id = \"HO-12\""),
             ids.replace("id = \"HO-11\"", "id = \"HO-10\""),
             ids.replace("id = \"HO-11\"", ""),
+            ids.replace("id = \"HO-12\"", ""),
         ] {
             assert_ne!(changed, ids);
             std::fs::write(model.join("ids.toml"), changed).unwrap();

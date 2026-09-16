@@ -54,7 +54,7 @@ and `target/asyncapi-sdk-audit-20260915.json` (SHA-256
 
 ## Diagnostic boundary coverage
 
-The current 149-feature/84-diagnostic register accounting is checked dynamically.
+The current 150-feature/84-diagnostic register accounting is checked dynamically.
 The new PP2009 probe executes the actual text-application validator, but the
 other 83 `diagnostics.rs` probes still test generic local predicates rather than
 their owning implementation boundaries. Passing those probes or counting their

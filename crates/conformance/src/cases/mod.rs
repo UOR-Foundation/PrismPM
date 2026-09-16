@@ -354,7 +354,7 @@ pub fn run_at(root: &Path, id: &str) {
         }
 
         "HO-01" | "HO-02" | "HO-03" | "HO-04" | "HO-05" | "HO-06" | "HO-07" | "HO-08" | "HO-09"
-        | "HO-10" | "HO-11" => {
+        | "HO-10" | "HO-11" | "HO-12" => {
             verify_holo(root, id);
         }
 
@@ -2259,7 +2259,212 @@ fn verify_facets(root: &Path, id: &str) {
     }
 }
 
+// This corpus exercises the owning report validator, not a simulated browser.
+// The ordinary application verification gate separately runs actual Chromium.
+fn verify_portable_view_report(root: &Path) {
+    let document: prismpm::holo::ModelDocument =
+        serde_json::from_value(json(&root.join("tests/data/text-model-document.json"))).unwrap();
+    prismpm::holo::validate::validate(&document).unwrap();
+    let application = document.application.as_ref().unwrap();
+    let identities = serde_json::json!({
+        "application_kappa":format!("blake3:{}", "a".repeat(64)),
+        "archive_fingerprint":"b".repeat(64),
+        "archive_kappa":format!("blake3:{}", "c".repeat(64))
+    });
+    let cases = [
+        "attachment-assets",
+        "modeled-vectors",
+        "input-validation-recovery",
+        "transport-failure-recovery",
+        "pre-init-privacy",
+        "delayed-init",
+        "intent-boundaries",
+        "text-response-bounds",
+        "text-safe-rendering",
+        "detached-session",
+    ]
+    .into_iter()
+    .map(|name| serde_json::json!({"name":name,"status":"passed","attempts":1}))
+    .collect::<Vec<_>>();
+    let report = serde_json::json!({
+        "application_kappa":format!("blake3:{}", "a".repeat(64)),
+        "archive_fingerprint":"b".repeat(64),
+        "archive_kappa":format!("blake3:{}", "c".repeat(64)),
+        "direct_vectors":6,
+        "footer_verified":true,
+        "guest_allocation_boundary":"verified",
+        "intent_vectors":5,
+        "portable_browser":{
+            "schema":"prismpm/portable-browser-oracle/1",
+            "profile":"utf8-text",
+            "engine":"chromium",
+            "browser_version":"151.0.7922.34",
+            "playwright":"1.62.1",
+            "cases":cases,
+            "vector_indexes":[0,2,3],
+            "skipped":0,
+            "retries":0,
+            "status":"passed"
+        },
+        "resident_vectors":6,
+        "schema":"prismpm/hologram-oracle/2",
+        "view_attached":1,
+        "view_detached":1
+    });
+    let validate = prismpm::upstream_conformance::validate_hologram_oracle_report;
+    validate(&report, application, &identities).unwrap();
+    let reject = |bad: &Value| {
+        assert_eq!(
+            validate(bad, application, &identities).unwrap_err().code,
+            "PP5301"
+        );
+    };
+    for field in ["application_kappa", "archive_fingerprint", "archive_kappa"] {
+        let different = if field == "archive_fingerprint" {
+            "d".repeat(64)
+        } else {
+            format!("blake3:{}", "d".repeat(64))
+        };
+        let mut substituted_report = report.clone();
+        substituted_report[field] = serde_json::json!(different);
+        reject(&substituted_report);
+        let mut substituted_build = identities.clone();
+        substituted_build[field] = serde_json::json!(different);
+        assert_eq!(
+            validate(&report, application, &substituted_build)
+                .unwrap_err()
+                .code,
+            "PP5301"
+        );
+    }
+    reject(&serde_json::json!({
+        "schema":"prismpm/hologram-oracle/1",
+        "footer_verified":true
+    }));
+    for pointer in ["", "/portable_browser", "/portable_browser/cases/0"] {
+        for field in report.pointer(pointer).unwrap().as_object().unwrap().keys() {
+            let mut bad = report.clone();
+            bad.pointer_mut(pointer)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
+            reject(&bad);
+        }
+        let mut bad = report.clone();
+        bad.pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("extra".to_owned(), serde_json::json!(true));
+        reject(&bad);
+    }
+    for (pointer, value) in [
+        ("/schema", serde_json::json!("prismpm/hologram-oracle/1")),
+        ("/application_kappa", serde_json::json!("blake3:abc")),
+        (
+            "/archive_kappa",
+            serde_json::json!(format!("blake3:{}", "A".repeat(64))),
+        ),
+        (
+            "/archive_fingerprint",
+            serde_json::json!(format!("blake3:{}", "b".repeat(64))),
+        ),
+        ("/footer_verified", serde_json::json!(false)),
+        ("/guest_allocation_boundary", serde_json::json!("missing")),
+        ("/direct_vectors", serde_json::json!(5)),
+        ("/intent_vectors", serde_json::json!(6)),
+        ("/resident_vectors", serde_json::json!(5)),
+        ("/view_attached", serde_json::json!(2)),
+        ("/view_detached", serde_json::json!(0)),
+        (
+            "/portable_browser/profile",
+            serde_json::json!("legacy-numeric"),
+        ),
+        ("/portable_browser/engine", serde_json::json!("webkit")),
+        (
+            "/portable_browser/browser_version",
+            serde_json::json!("151.0.7922.35"),
+        ),
+        ("/portable_browser/playwright", serde_json::json!("1.62.0")),
+        ("/portable_browser/skipped", serde_json::json!(1)),
+        ("/portable_browser/retries", serde_json::json!(1)),
+        ("/portable_browser/status", serde_json::json!("failed")),
+        (
+            "/portable_browser/cases/0/status",
+            serde_json::json!("failed"),
+        ),
+        ("/portable_browser/cases/0/attempts", serde_json::json!(2)),
+        ("/portable_browser/vector_indexes", serde_json::json!([0])),
+        (
+            "/portable_browser/vector_indexes",
+            serde_json::json!([0, 0, 2, 3]),
+        ),
+        (
+            "/portable_browser/vector_indexes",
+            serde_json::json!([3, 2, 0]),
+        ),
+        (
+            "/portable_browser/vector_indexes",
+            serde_json::json!([0, 1, 2, 3]),
+        ),
+    ] {
+        let mut bad = report.clone();
+        *bad.pointer_mut(pointer).unwrap() = value;
+        reject(&bad);
+    }
+    let mut missing = report.clone();
+    missing["portable_browser"]["cases"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    reject(&missing);
+    let mut reordered = report.clone();
+    reordered["portable_browser"]["cases"]
+        .as_array_mut()
+        .unwrap()
+        .swap(0, 1);
+    reject(&reordered);
+    let mut changed_application = application.clone();
+    let prismpm::holo::model_document::Application::Text(text) = &mut changed_application else {
+        panic!("the HO-12 report fixture must retain the text profile");
+    };
+    text.request_maximum = 2;
+    assert_eq!(
+        validate(&report, &changed_application, &identities)
+            .unwrap_err()
+            .code,
+        "PP5301"
+    );
+    // Generic models retain u32 caps, but this pinned portable target must
+    // reject incompatible declared bounds before invoking or allocating them.
+    for (request, response) in [
+        (65_537, application.response_maximum()),
+        (u32::MAX, application.response_maximum()),
+        (application.request_maximum(), 1_048_577),
+        (application.request_maximum(), u32::MAX),
+    ] {
+        let mut incompatible = application.clone();
+        let prismpm::holo::model_document::Application::Text(text) = &mut incompatible else {
+            panic!("the HO-12 report fixture must retain the text profile");
+        };
+        text.request_maximum = request;
+        text.response_maximum = response;
+        for candidate in [&report, &serde_json::Value::Null] {
+            let error = validate(candidate, &incompatible, &identities).unwrap_err();
+            assert_eq!(error.code, "PP5301");
+            assert!(error
+                .to_string()
+                .contains("application bounds exceed pinned portable View"));
+        }
+    }
+}
+
 fn verify_holo(root: &Path, id: &str) {
+    if id == "HO-12" {
+        verify_portable_view_report(root);
+        return;
+    }
     if id == "HO-11" {
         for relative in [
             "tests/fixtures/holo/ho-11-text-application",
