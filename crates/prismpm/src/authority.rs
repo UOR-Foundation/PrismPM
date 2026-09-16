@@ -1309,6 +1309,92 @@ struct SandboxInvocation {
     mounts: Vec<SandboxMount>,
 }
 
+// Docker cp ownership defaults vary with engine/backend and caller identity.
+// Supply one deterministic archive whose metadata is independent of the host;
+// the staging container never needs to execute chmod or acquire privileges.
+fn oracle_input_archive(
+    invocation: &SandboxInvocation,
+    destination: &Path,
+) -> Result<(), PrismError> {
+    let error = |message: String| PrismError::new("PP5403", message);
+    let file = File::create(destination)
+        .map_err(|cause| error(format!("oracle input archive: {cause}")))?;
+    let mut archive = tar::Builder::new(file);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut mounts = invocation.mounts.iter().collect::<Vec<_>>();
+    mounts.sort_by(|left, right| left.guest.cmp(&right.guest));
+    for mount in mounts {
+        let relative = mount
+            .guest
+            .strip_prefix("/oracle-inputs/")
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| error("oracle input guest path is outside its volume".to_owned()))?;
+        let target = Path::new(relative);
+        if target
+            .components()
+            .any(|part| !matches!(part, std::path::Component::Normal(_)))
+        {
+            return Err(error(
+                "oracle input guest path escapes its volume".to_owned(),
+            ));
+        }
+        for entry in walkdir::WalkDir::new(&mount.host)
+            .follow_links(false)
+            .sort_by_file_name()
+        {
+            let entry = entry.map_err(|cause| error(format!("oracle input traversal: {cause}")))?;
+            let kind = entry.file_type();
+            if !kind.is_file() && !kind.is_dir() {
+                return Err(error(
+                    "oracle input contains a symlink or special file".to_owned(),
+                ));
+            }
+            let suffix = entry
+                .path()
+                .strip_prefix(&mount.host)
+                .map_err(|_| error("oracle input path escaped its source".to_owned()))?;
+            let path = target.join(suffix);
+            if !seen.insert(path.clone()) {
+                return Err(error(
+                    "oracle input archive contains overlapping paths".to_owned(),
+                ));
+            }
+            let mut header = tar::Header::new_gnu();
+            header.set_uid(1000);
+            header.set_gid(1000);
+            header.set_mtime(0);
+            if kind.is_dir() {
+                header.set_entry_type(tar::EntryType::Directory);
+                header.set_mode(0o555);
+                header.set_size(0);
+                header.set_cksum();
+                archive
+                    .append_data(&mut header, &path, std::io::empty())
+                    .map_err(|cause| error(format!("oracle directory archive: {cause}")))?;
+            } else {
+                let input = File::open(entry.path())
+                    .map_err(|cause| error(format!("oracle input archive read: {cause}")))?;
+                let metadata = input
+                    .metadata()
+                    .map_err(|cause| error(format!("oracle input archive metadata: {cause}")))?;
+                if !metadata.is_file() {
+                    return Err(error("oracle input changed its file type".to_owned()));
+                }
+                header.set_entry_type(tar::EntryType::Regular);
+                header.set_mode(0o444);
+                header.set_size(metadata.len());
+                header.set_cksum();
+                archive
+                    .append_data(&mut header, &path, input)
+                    .map_err(|cause| error(format!("oracle file archive: {cause}")))?;
+            }
+        }
+    }
+    archive
+        .finish()
+        .map_err(|cause| error(format!("oracle input archive finalization: {cause}")))
+}
+
 fn mount_source(path: &Path) -> Result<String, PrismError> {
     let canonical = path
         .canonicalize()
@@ -1576,6 +1662,8 @@ fn sandbox_arguments(
         "create".to_owned(),
         "--name".to_owned(),
         container_name.to_owned(),
+        "--user".to_owned(),
+        "1000:1000".to_owned(),
         "--pull".to_owned(),
         "never".to_owned(),
         "--network".to_owned(),
@@ -1746,9 +1834,25 @@ fn run_docker_control(
     arguments: &[String],
     timeout: Duration,
 ) -> Result<(ExitStatus, Vec<u8>, Vec<u8>), PrismError> {
+    run_docker_control_with_input(docker, config, arguments, timeout, None)
+}
+
+fn run_docker_control_with_input(
+    docker: &Path,
+    config: &Path,
+    arguments: &[String],
+    timeout: Duration,
+    input: Option<&Path>,
+) -> Result<(ExitStatus, Vec<u8>, Vec<u8>), PrismError> {
     let mut command = docker_command(docker, config, arguments);
+    let stdin = match input {
+        Some(path) => Stdio::from(File::open(path).map_err(|error| {
+            PrismError::new("PP5403", format!("Docker archive input: {error}"))
+        })?),
+        None => Stdio::null(),
+    };
     command
-        .stdin(Stdio::null())
+        .stdin(stdin)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command
@@ -1881,6 +1985,8 @@ fn run_external_oracle(
     let staging_name = format!("{container_name}-inputs");
     let input_volume = format!("{container_name}-inputs");
     let docker_config = scratch.path().join("docker-config");
+    let input_archive = scratch.path().join("inputs.tar");
+    oracle_input_archive(&invocation, &input_archive)?;
 
     let volume_arguments = vec![
         "volume".to_owned(),
@@ -1903,7 +2009,7 @@ fn run_external_oracle(
         ));
     }
 
-    let mut staging_arguments = vec![
+    let staging_arguments = vec![
         "create".to_owned(),
         "--name".to_owned(),
         staging_name.clone(),
@@ -1923,13 +2029,11 @@ fn run_external_oracle(
         "--user".to_owned(),
         "1000:1000".to_owned(),
         "--entrypoint".to_owned(),
-        "/bin/chmod".to_owned(),
+        "/bin/true".to_owned(),
         "--mount".to_owned(),
         format!("type=volume,source={input_volume},target=/oracle-inputs"),
         sdk_image.clone(),
-        "a+rX".to_owned(),
     ];
-    staging_arguments.extend(invocation.mounts.iter().map(|mount| mount.guest.clone()));
     let created = run_docker_control(
         &docker,
         &docker_config,
@@ -1946,61 +2050,21 @@ fn run_external_oracle(
             return Err(error);
         }
     };
-    for mount in &invocation.mounts {
-        let source = match mount_source(&mount.host) {
-            Ok(source) => source,
-            Err(error) => {
-                let _ = remove_container(&docker, &docker_config, &staging_id);
-                let _ = remove_volume(&docker, &docker_config, &input_volume);
-                return Err(error);
-            }
-        };
-        let copy_arguments = vec![
-            "container".to_owned(),
-            "cp".to_owned(),
-            "--archive=false".to_owned(),
-            source,
-            format!("{staging_id}:{}", mount.guest),
-        ];
-        let copied = run_docker_control(
-            &docker,
-            &docker_config,
-            &copy_arguments,
-            Duration::from_secs(30),
-        );
-        let (status, _, stderr) = match copied {
-            Ok(output) => output,
-            Err(error) => {
-                let _ = remove_container(&docker, &docker_config, &staging_id);
-                let _ = remove_volume(&docker, &docker_config, &input_volume);
-                return Err(error);
-            }
-        };
-        if !status.success() {
-            let _ = remove_container(&docker, &docker_config, &staging_id);
-            let _ = remove_volume(&docker, &docker_config, &input_volume);
-            return Err(PrismError::new(
-                "PP5403",
-                format!(
-                    "copy exact oracle input failed: {}",
-                    String::from_utf8_lossy(&stderr)
-                ),
-            ));
-        }
-    }
-    let permissions_arguments = vec![
+    let copy_arguments = vec![
         "container".to_owned(),
-        "start".to_owned(),
-        "--attach".to_owned(),
-        staging_id.clone(),
+        "cp".to_owned(),
+        "--archive=true".to_owned(),
+        "-".to_owned(),
+        format!("{staging_id}:/oracle-inputs"),
     ];
-    let permissions = run_docker_control(
+    let copied = run_docker_control_with_input(
         &docker,
         &docker_config,
-        &permissions_arguments,
+        &copy_arguments,
         Duration::from_secs(30),
+        Some(&input_archive),
     );
-    let (status, _, stderr) = match permissions {
+    let (status, _, stderr) = match copied {
         Ok(output) => output,
         Err(error) => {
             let _ = remove_container(&docker, &docker_config, &staging_id);
@@ -2014,7 +2078,7 @@ fn run_external_oracle(
         return Err(PrismError::new(
             "PP5403",
             format!(
-                "make isolated oracle inputs readable failed: {}",
+                "copy normalized oracle input archive failed: {}",
                 String::from_utf8_lossy(&stderr)
             ),
         ));
@@ -2320,11 +2384,12 @@ pub fn run_oracle_in_project(
 mod tests {
     use super::{
         acquired_rows, cache_object, catalog, external_invocation, fetch, git_tag_sha1,
-        intoto_policy_accepts, replay_tag_signature, resolved_lock, run_oracle,
-        run_oracle_in_project, run_oracle_with_bindings_in_project, sandbox_arguments,
+        intoto_policy_accepts, oracle_input_archive, replay_tag_signature, resolved_lock,
+        run_oracle, run_oracle_in_project, run_oracle_with_bindings_in_project, sandbox_arguments,
         validate_signature_evidence, verify_project_oracle_binding, verify_signature_evidence_set,
-        AKIHIROSUDA_OPENPGP_ROOT, HAYDEN_IO_SSH_ROOT, OPENAPI_SCHEMA, OSV_SCHEMA,
-        SIGSTORE_TRUSTED_ROOT, SONGY23_SSH_ROOT, SUDO_BMITCH_OPENPGP_ROOT,
+        SandboxInvocation, SandboxMount, AKIHIROSUDA_OPENPGP_ROOT, HAYDEN_IO_SSH_ROOT,
+        OPENAPI_SCHEMA, OSV_SCHEMA, SIGSTORE_TRUSTED_ROOT, SONGY23_SSH_ROOT,
+        SUDO_BMITCH_OPENPGP_ROOT,
     };
     use crate::contracts::CanonicalDocument;
     use crate::error::PrismError;
@@ -2332,7 +2397,8 @@ mod tests {
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::collections::BTreeMap;
-    use std::io::Write;
+    use std::fs::File;
+    use std::io::{Read, Write};
 
     fn write_sdk_lock(root: &std::path::Path, standards_lock: String, sdk_image: String) {
         let lock = CanonicalDocument::from_value(
@@ -2569,6 +2635,7 @@ mod tests {
         let joined = arguments.join("\n");
         for required in [
             "create\n--name\nprismpm-oracle-test",
+            "--user\n1000:1000",
             "--pull\nnever",
             "--network\nnone",
             "--read-only",
@@ -2595,6 +2662,116 @@ mod tests {
         assert_eq!(invocation.mounts[0].guest, "/oracle-inputs/input");
         assert!(!joined.contains("/var/run/docker.sock,target="));
         assert!(!joined.contains("sh -c"));
+    }
+
+    #[test]
+    fn oracle_input_archive_normalizes_host_metadata_without_changing_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        let input = root.path().join("source");
+        std::fs::create_dir(&input).unwrap();
+        std::fs::write(input.join("nested.txt"), b"exact oracle bytes\n").unwrap();
+        let invocation = SandboxInvocation {
+            arguments: Vec::new(),
+            mounts: vec![SandboxMount {
+                host: input.clone(),
+                guest: "/oracle-inputs/input".to_owned(),
+            }],
+        };
+        let first = root.path().join("first.tar");
+        oracle_input_archive(&invocation, &first).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&input, std::fs::Permissions::from_mode(0o700)).unwrap();
+            std::fs::set_permissions(
+                input.join("nested.txt"),
+                std::fs::Permissions::from_mode(0o600),
+            )
+            .unwrap();
+        }
+        let second = root.path().join("second.tar");
+        oracle_input_archive(&invocation, &second).unwrap();
+        assert_eq!(
+            std::fs::read(&first).unwrap(),
+            std::fs::read(&second).unwrap()
+        );
+        let mut archive = tar::Archive::new(File::open(first).unwrap());
+        let mut names = Vec::new();
+        for entry in archive.entries().unwrap() {
+            let mut entry = entry.unwrap();
+            names.push(entry.path().unwrap().to_string_lossy().into_owned());
+            assert_eq!(entry.header().uid().unwrap(), 1000);
+            assert_eq!(entry.header().gid().unwrap(), 1000);
+            assert_eq!(entry.header().mtime().unwrap(), 0);
+            if entry.header().entry_type().is_dir() {
+                assert_eq!(entry.header().mode().unwrap(), 0o555);
+            } else {
+                assert_eq!(entry.header().mode().unwrap(), 0o444);
+                let mut contents = Vec::new();
+                entry.read_to_end(&mut contents).unwrap();
+                assert_eq!(contents, b"exact oracle bytes\n");
+            }
+        }
+        assert_eq!(names, ["input/", "input/nested.txt"]);
+    }
+
+    #[test]
+    fn oracle_input_archive_rejects_escape_overlap_and_nonregular_inputs() {
+        let root = tempfile::tempdir().unwrap();
+        let input = root.path().join("source");
+        std::fs::write(&input, b"input").unwrap();
+        let destination = root.path().join("input.tar");
+        for guest in [
+            "/outside/input",
+            "/oracle-inputs/../escape",
+            "/oracle-inputs/",
+        ] {
+            let invocation = SandboxInvocation {
+                arguments: Vec::new(),
+                mounts: vec![SandboxMount {
+                    host: input.clone(),
+                    guest: guest.to_owned(),
+                }],
+            };
+            assert_eq!(
+                oracle_input_archive(&invocation, &destination)
+                    .unwrap_err()
+                    .code,
+                "PP5403"
+            );
+        }
+        let duplicate = SandboxInvocation {
+            arguments: Vec::new(),
+            mounts: vec![
+                SandboxMount {
+                    host: input.clone(),
+                    guest: "/oracle-inputs/input".to_owned(),
+                },
+                SandboxMount {
+                    host: input.clone(),
+                    guest: "/oracle-inputs/input".to_owned(),
+                },
+            ],
+        };
+        assert!(oracle_input_archive(&duplicate, &destination).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::{fs::symlink, net::UnixListener};
+            let link = root.path().join("link");
+            symlink(&input, &link).unwrap();
+            let socket = root.path().join("socket");
+            let _listener = UnixListener::bind(&socket).unwrap();
+            for source in [link, socket] {
+                let invocation = SandboxInvocation {
+                    arguments: Vec::new(),
+                    mounts: vec![SandboxMount {
+                        host: source,
+                        guest: "/oracle-inputs/input".to_owned(),
+                    }],
+                };
+                assert!(oracle_input_archive(&invocation, &destination).is_err());
+            }
+        }
     }
 
     #[test]
