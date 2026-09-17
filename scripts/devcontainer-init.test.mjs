@@ -23,7 +23,7 @@ const denied = (container, user, args, pattern) => {
 
 // The test uses the current devcontainer's already-built, content-addressed
 // image, not an unpinned pull or the SDK under publication test.
-function createContainer(socket) {
+function createContainer(socket, remap = false) {
   const image = docker(['inspect', hostname(), '--format', '{{.Image}}']);
   assert.match(image, /^sha256:[0-9a-f]{64}$/);
   const container = docker([
@@ -38,11 +38,33 @@ function createContainer(socket) {
     docker(['cp', resolve(root, '.devcontainer/docker-entrypoint.sh'), `${container}:${initializer}`]);
     docker(['start', container]);
     run(container, 'root', ['chmod', '0755', helper, initializer]);
+    if (remap) {
+      // Dev Containers remaps the image account to the checkout owner's IDs.
+      // Reproduce that without rebuilding or modifying the running container.
+      run(container, 'root', ['sh', '-eu', '-c', `
+        identity=23571
+        while getent group "$identity" >/dev/null || getent passwd "$identity" >/dev/null; do
+          identity=$((identity + 1))
+        done
+        groupmod --gid "$identity" "$(id -gn vscode)"
+        usermod --uid "$identity" --gid "$identity" vscode
+        test "$(id -u vscode)" = "$identity"
+        test "$(id -g vscode)" = "$identity"
+      `]);
+      assert.throws(() => run(container, 'root', ['getent', 'group', '1000']));
+    }
     if (socket) {
       // Ensure the test models the race even if the host socket happens to
       // share the image user's primary GID. Changes stay in this container.
-      run(container, 'root', ['sh', '-c',
-        'gid=$(stat -c %g /var/run/docker.sock); primary=1000; if [ "$gid" = 1000 ]; then primary=65534; fi; usermod --gid "$primary" --groups "" vscode']);
+      run(container, 'root', ['sh', '-eu', '-c', `
+        gid=$(stat -c %g /var/run/docker.sock)
+        primary=$(id -g vscode)
+        if [ "$gid" = "$primary" ]; then
+          groupadd prismpm-test-primary
+          primary=$(getent group prismpm-test-primary | cut -d: -f3)
+        fi
+        usermod --gid "$primary" --groups "" vscode
+      `]);
     }
     return container;
   } catch (error) {
@@ -105,8 +127,8 @@ test('devcontainer lifecycle waits before attach and wraps the actual fetch comm
     /COPY --chmod=0755 \.devcontainer\/docker-ready\.sh \/usr\/local\/bin\/prismpm-devcontainer-exec/);
 });
 
-test('real Docker socket: stale shell, fresh shell, restart and bounded failure', { timeout: 90_000 }, async t => {
-  const container = createContainer(true);
+async function checkSocket(t, remap) {
+  const container = createContainer(true, remap);
   try {
     const socketGid = Number(run(container, 'root', ['stat', '-c', '%g', '/var/run/docker.sock']));
     const uid = Number(run(container, 'vscode', ['id', '-u']));
@@ -168,15 +190,20 @@ test('real Docker socket: stale shell, fresh shell, restart and bounded failure'
     docker(['rm', '--force', container]);
     assert.throws(() => docker(['inspect', container]));
   }
-});
+}
 
-test('missing mounted socket fails closed', () => {
-  const container = createContainer(false);
-  try {
-    denied(container, 'vscode', [helper, 'touch', '/tmp/prismpm-no-socket'], /mounted Docker socket is missing/);
-    run(container, 'root', ['test', '!', '-e', '/tmp/prismpm-no-socket']);
-  } finally {
-    docker(['rm', '--force', container]);
-    assert.throws(() => docker(['inspect', container]));
-  }
-});
+for (const remap of [false, true]) {
+  const identity = remap ? 'remapped remote user' : 'image remote user';
+  test(`real Docker socket (${identity}): stale shell, fresh shell, restart and bounded failure`,
+    { timeout: 90_000 }, t => checkSocket(t, remap));
+  test(`missing mounted socket fails closed (${identity})`, () => {
+    const container = createContainer(false, remap);
+    try {
+      denied(container, 'vscode', [helper, 'touch', '/tmp/prismpm-no-socket'], /mounted Docker socket is missing/);
+      run(container, 'root', ['test', '!', '-e', '/tmp/prismpm-no-socket']);
+    } finally {
+      docker(['rm', '--force', container]);
+      assert.throws(() => docker(['inspect', container]));
+    }
+  });
+}

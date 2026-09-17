@@ -17,6 +17,14 @@ root execution fail closed. Host socket ownership/mode are unchanged; all
 owned test containers were removed. The log SHA-256 is
 `7a3f7947b3b1c5be51feec8b13849394bc8c0104e4336cb176e1994f3da92a08`.
 
+Hosted VV/Bootstrap at `f01ae4c` then exposed a fixture assumption: GitHub's
+remapped devcontainer no longer contained group `1000`. The production startup
+hook succeeded; the test's hard-coded group failed before Cargo. Repeating the
+actual UID/GID remap reproduced that failure. The fixture now derives existing
+identities and exercises both original and remapped users; all 11 tests pass
+without changing the production helper or omitting checks. Green log SHA-256:
+`acb0e25ec498d495262d842ae2bd3c5a1af8dc7aaf55501f0ec90d3a6ccdab83`.
+
 ## Source-free release evidence (OC-02, OC-03, OC-04, OC-06)
 
 OCI now retains the original build manifest, every path-bound output, and the
