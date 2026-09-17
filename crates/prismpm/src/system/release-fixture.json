@@ -1,0 +1,2626 @@
+{
+  "model": {
+    "product": {
+      "id": "calculator-system",
+      "owner": "UOR Foundation",
+      "version": "A",
+      "lifecycle": "candidate",
+      "sourcePolicy": "one closed CalculatorSystem.lex.tex graph imports the immutable Calculator application identity",
+      "supportedPlatforms": [
+        "linux-oci",
+        "web-holo"
+      ]
+    },
+    "artifacts": [
+      {
+        "id": "broker-image",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:ffd1b50c522ad20172ffd6716a2f41db375c7269560c8f3fb9a694e210ef0852",
+        "licenseExpression": "MPL-2.0",
+        "path": "docker.io/library/rabbitmq",
+        "role": "runtime-image",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "database-image",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0",
+        "licenseExpression": "PostgreSQL",
+        "path": "docker.io/library/postgres",
+        "role": "runtime-image",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "history-schema",
+        "mediaType": "application/sql",
+        "digest": "sha256:6411f6f429e89989ed9ff7c29563fa2b7f9479c6acdb15dcae377e66d57fbeb1",
+        "licenseExpression": "Apache-2.0 OR MIT",
+        "path": "projections/history.sql",
+        "role": "database-schema",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "kind-ingress-admission",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:01038e7de14b78d702d2849c3aad72fd25903c4765af63cf16aa3398f5d5f2dd",
+        "licenseExpression": "Apache-2.0",
+        "path": "registry.k8s.io/ingress-nginx/kube-webhook-certgen",
+        "role": "ingress-admission-image",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "kind-ingress-controller",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:594ceea76b01c592858f803f9ff4d2cb40542cae2060410b2c95f75907d659e1",
+        "licenseExpression": "Apache-2.0",
+        "path": "registry.k8s.io/ingress-nginx/controller",
+        "role": "ingress-controller-image",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "runtime-image",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": "sha256:004808fae8abec2a0ca4e9b3b7f9f93b0002187f344b0510e6ce3a6e45324515",
+        "licenseExpression": "Apache-2.0 OR MIT",
+        "path": "localhost:5000/prismpm-runtime",
+        "role": "generated-system-runtime",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "telemetry-image",
+        "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+        "digest": "sha256:45392d534c1edcc809c2d112394029246bc679d2ae5ea7081414a1fc74f2c621",
+        "licenseExpression": "Apache-2.0",
+        "path": "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib",
+        "role": "telemetry-image",
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "id": "api",
+        "kind": "api",
+        "version": "A",
+        "artifact": "runtime-image",
+        "capabilities": [
+          "cap-calculation",
+          "cap-workload-identity"
+        ],
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "api"
+        ],
+        "dependsOn": [
+          "broker",
+          "database",
+          "issuer",
+          "migrate",
+          "telemetry"
+        ],
+        "interfaces": [
+          "calculator-http",
+          "database-sql",
+          "identity-oidc",
+          "telemetry-otlp"
+        ],
+        "health": "generated API live ready and startup endpoints plus dependency health",
+        "liveness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "api"
+        ],
+        "parameters": [
+          "broker-host",
+          "database-host",
+          "oidc-issuer",
+          "otel-http-endpoint",
+          "release-label"
+        ],
+        "ports": [
+          "api-port"
+        ],
+        "readiness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "api"
+        ],
+        "resources": {
+          "cpuMillis": 250,
+          "memoryBytes": 268435456,
+          "replicasMin": 2,
+          "replicasMax": 4
+        },
+        "secrets": [
+          "broker-credentials",
+          "database-credentials"
+        ],
+        "startup": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "api"
+        ],
+        "volumes": [],
+        "isolation": "container",
+        "placement": [
+          "stateless-zone-spread"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": "api-scaling",
+        "failurePolicy": "fail-closed",
+        "retryPolicy": "bounded-exponential",
+        "degradationPolicy": "unavailable",
+        "idempotency": "caller-key"
+      },
+      {
+        "id": "audit-worker",
+        "kind": "worker",
+        "version": "A",
+        "artifact": "runtime-image",
+        "capabilities": [],
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "worker"
+        ],
+        "dependsOn": [
+          "broker",
+          "database",
+          "migrate",
+          "telemetry"
+        ],
+        "interfaces": [
+          "calculation-events",
+          "database-sql",
+          "telemetry-otlp"
+        ],
+        "health": "database and broker connectivity",
+        "liveness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "worker"
+        ],
+        "parameters": [
+          "broker-host",
+          "database-host",
+          "otel-http-endpoint",
+          "release-label"
+        ],
+        "ports": [],
+        "readiness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "worker"
+        ],
+        "resources": {
+          "cpuMillis": 100,
+          "memoryBytes": 134217728,
+          "replicasMin": 1,
+          "replicasMax": 2
+        },
+        "secrets": [
+          "broker-credentials",
+          "database-credentials"
+        ],
+        "startup": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "worker"
+        ],
+        "volumes": [],
+        "isolation": "container",
+        "placement": [
+          "stateless-zone-spread"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": "audit-worker-scaling",
+        "failurePolicy": "retry-bounded",
+        "retryPolicy": "transactional-outbox",
+        "degradationPolicy": "none",
+        "idempotency": "event-id"
+      },
+      {
+        "id": "broker",
+        "kind": "broker",
+        "version": "A",
+        "artifact": "broker-image",
+        "capabilities": [],
+        "command": [
+          "rabbitmq-server"
+        ],
+        "dependsOn": [],
+        "interfaces": [
+          "calculation-events"
+        ],
+        "health": "rabbitmq diagnostics ping",
+        "liveness": [
+          "rabbitmq-diagnostics",
+          "-q",
+          "ping"
+        ],
+        "parameters": [
+          "rabbitmq-default-user"
+        ],
+        "ports": [
+          "broker-port"
+        ],
+        "readiness": [
+          "rabbitmq-diagnostics",
+          "-q",
+          "ping"
+        ],
+        "resources": {
+          "cpuMillis": 200,
+          "memoryBytes": 268435456,
+          "replicasMin": 1,
+          "replicasMax": 1
+        },
+        "secrets": [
+          "rabbitmq-default-pass"
+        ],
+        "startup": [
+          "rabbitmq-diagnostics",
+          "-q",
+          "ping"
+        ],
+        "volumes": [
+          "broker-volume"
+        ],
+        "isolation": "container",
+        "placement": [
+          "kind-control-plane"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": null,
+        "failurePolicy": "retry-bounded",
+        "retryPolicy": "bounded-exponential",
+        "degradationPolicy": "unavailable",
+        "idempotency": "event-id"
+      },
+      {
+        "id": "browser",
+        "kind": "browser",
+        "version": "A",
+        "artifact": "runtime-image",
+        "capabilities": [
+          "cap-calculation",
+          "cap-workload-identity"
+        ],
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "browser"
+        ],
+        "dependsOn": [
+          "api",
+          "issuer"
+        ],
+        "interfaces": [
+          "calculator-http",
+          "identity-oidc"
+        ],
+        "health": "generated browser listener",
+        "liveness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "browser"
+        ],
+        "parameters": [
+          "api-host",
+          "issuer-host",
+          "public-hostname",
+          "release-label"
+        ],
+        "ports": [
+          "browser-port"
+        ],
+        "readiness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "browser"
+        ],
+        "resources": {
+          "cpuMillis": 100,
+          "memoryBytes": 67108864,
+          "replicasMin": 2,
+          "replicasMax": 3
+        },
+        "secrets": [
+          "tls-certificate"
+        ],
+        "startup": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "browser"
+        ],
+        "volumes": [],
+        "isolation": "container",
+        "placement": [
+          "stateless-zone-spread"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": "browser-scaling",
+        "failurePolicy": "fail-closed",
+        "retryPolicy": "bounded-exponential",
+        "degradationPolicy": "unavailable",
+        "idempotency": "caller-key"
+      },
+      {
+        "id": "database",
+        "kind": "database",
+        "version": "A",
+        "artifact": "database-image",
+        "capabilities": [
+          "cap-recovery"
+        ],
+        "command": [
+          "postgres"
+        ],
+        "dependsOn": [],
+        "interfaces": [],
+        "health": "pg_isready for modeled database and user",
+        "liveness": [
+          "pg_isready",
+          "-U",
+          "calculator",
+          "-d",
+          "calculator"
+        ],
+        "parameters": [
+          "postgres-db",
+          "postgres-user"
+        ],
+        "ports": [
+          "database-port"
+        ],
+        "readiness": [
+          "pg_isready",
+          "-U",
+          "calculator",
+          "-d",
+          "calculator"
+        ],
+        "resources": {
+          "cpuMillis": 250,
+          "memoryBytes": 536870912,
+          "replicasMin": 1,
+          "replicasMax": 1
+        },
+        "secrets": [
+          "postgres-password"
+        ],
+        "startup": [
+          "pg_isready",
+          "-U",
+          "calculator",
+          "-d",
+          "calculator"
+        ],
+        "volumes": [
+          "database-volume"
+        ],
+        "isolation": "container",
+        "placement": [
+          "kind-control-plane"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": null,
+        "failurePolicy": "fail-closed",
+        "retryPolicy": "bounded-exponential",
+        "degradationPolicy": "unavailable",
+        "idempotency": "caller-key"
+      },
+      {
+        "id": "issuer",
+        "kind": "identity-provider",
+        "version": "A",
+        "artifact": "runtime-image",
+        "capabilities": [
+          "cap-workload-identity"
+        ],
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "issuer"
+        ],
+        "dependsOn": [],
+        "interfaces": [],
+        "health": "OIDC discovery and signing listener",
+        "liveness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "issuer"
+        ],
+        "parameters": [
+          "oidc-issuer",
+          "release-label"
+        ],
+        "ports": [
+          "issuer-port"
+        ],
+        "readiness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "issuer"
+        ],
+        "resources": {
+          "cpuMillis": 100,
+          "memoryBytes": 134217728,
+          "replicasMin": 1,
+          "replicasMax": 1
+        },
+        "secrets": [
+          "oidc-signing-key"
+        ],
+        "startup": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "probe",
+          "issuer"
+        ],
+        "volumes": [],
+        "isolation": "container",
+        "placement": [
+          "private-service-placement"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": null,
+        "failurePolicy": "fail-closed",
+        "retryPolicy": "none",
+        "degradationPolicy": "unavailable",
+        "idempotency": "none"
+      },
+      {
+        "id": "migrate",
+        "kind": "migration",
+        "version": "A",
+        "artifact": "runtime-image",
+        "capabilities": [
+          "cap-recovery"
+        ],
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "migrate"
+        ],
+        "dependsOn": [
+          "database"
+        ],
+        "interfaces": [],
+        "health": "one-shot generated schema migration exits zero",
+        "liveness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "migrate"
+        ],
+        "parameters": [
+          "database-host",
+          "release-label"
+        ],
+        "ports": [],
+        "readiness": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "migrate"
+        ],
+        "resources": {
+          "cpuMillis": 100,
+          "memoryBytes": 67108864,
+          "replicasMin": 1,
+          "replicasMax": 1
+        },
+        "secrets": [
+          "database-credentials"
+        ],
+        "startup": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "migrate"
+        ],
+        "volumes": [],
+        "isolation": "container",
+        "placement": [
+          "private-service-placement"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": null,
+        "failurePolicy": "stop",
+        "retryPolicy": "bounded-exponential",
+        "degradationPolicy": "unavailable",
+        "idempotency": "job-identity"
+      },
+      {
+        "id": "telemetry",
+        "kind": "telemetry-collector",
+        "version": "A",
+        "artifact": "telemetry-image",
+        "capabilities": [],
+        "command": [
+          "/otelcol-contrib",
+          "--config=/opt/prism/release/opentelemetry-collector.json"
+        ],
+        "dependsOn": [],
+        "interfaces": [
+          "telemetry-otlp"
+        ],
+        "health": "Collector configuration validates and health extension listens",
+        "liveness": [
+          "/otelcol-contrib",
+          "validate",
+          "--config=/opt/prism/release/opentelemetry-collector.json"
+        ],
+        "parameters": [],
+        "ports": [
+          "otlp-http-port"
+        ],
+        "readiness": [
+          "/otelcol-contrib",
+          "validate",
+          "--config=/opt/prism/release/opentelemetry-collector.json"
+        ],
+        "resources": {
+          "cpuMillis": 100,
+          "memoryBytes": 134217728,
+          "replicasMin": 1,
+          "replicasMax": 1
+        },
+        "secrets": [],
+        "startup": [
+          "/otelcol-contrib",
+          "validate",
+          "--config=/opt/prism/release/opentelemetry-collector.json"
+        ],
+        "volumes": [],
+        "isolation": "container",
+        "placement": [
+          "private-service-placement"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "scalingPolicy": null,
+        "failurePolicy": "degrade-modeled",
+        "retryPolicy": "bounded-exponential",
+        "degradationPolicy": "none",
+        "idempotency": "none"
+      }
+    ],
+    "interfaces": [
+      {
+        "id": "calculation-events",
+        "kind": "asyncapi",
+        "document": "calculation-event-schema",
+        "authentication": "none",
+        "compatibility": "backward",
+        "protocol": "amqp-0.9.1",
+        "errors": [
+          "broker-unavailable",
+          "duplicate-delivery"
+        ],
+        "acceptance": [
+          "accept-calculate-user",
+          "accept-recovery"
+        ]
+      },
+      {
+        "id": "calculator-http",
+        "kind": "openapi",
+        "document": "calculator-openapi-schema",
+        "authentication": "oidc",
+        "compatibility": "backward",
+        "protocol": "https-json",
+        "errors": [
+          "Unauthenticated",
+          "Forbidden",
+          "MalformedJson",
+          "OversizedInput",
+          "UnsupportedMedia",
+          "UnsupportedMethod",
+          "IdempotencyConflict",
+          "NotFound",
+          "DivisionByZero",
+          "Overflow"
+        ],
+        "acceptance": [
+          "accept-calculate-user",
+          "accept-load",
+          "accept-malformed-request",
+          "accept-outage",
+          "accept-recovery"
+        ]
+      },
+      {
+        "id": "database-sql",
+        "kind": "internal",
+        "document": "database-sql-schema",
+        "authentication": "none",
+        "compatibility": "backward",
+        "protocol": "internal",
+        "errors": [
+          "database-unavailable",
+          "serialization-retry-exhausted"
+        ],
+        "acceptance": [
+          "accept-calculate-user",
+          "accept-load",
+          "accept-outage",
+          "accept-recovery"
+        ]
+      },
+      {
+        "id": "identity-oidc",
+        "kind": "internal",
+        "document": "identity-oidc-schema",
+        "authentication": "oidc",
+        "compatibility": "backward",
+        "protocol": "https-json",
+        "errors": [
+          "invalid-token",
+          "issuer-unavailable",
+          "unknown-key"
+        ],
+        "acceptance": [
+          "accept-calculate-user",
+          "accept-malformed-request",
+          "accept-outage",
+          "accept-recovery"
+        ]
+      },
+      {
+        "id": "telemetry-otlp",
+        "kind": "internal",
+        "document": "telemetry-schema",
+        "authentication": "none",
+        "compatibility": "exact",
+        "protocol": "otlp-grpc-http",
+        "errors": [
+          "collector-unavailable",
+          "bounded-buffer-exhausted"
+        ],
+        "acceptance": [
+          "accept-calculate-user",
+          "accept-outage",
+          "accept-recovery"
+        ]
+      }
+    ],
+    "schemas": [
+      {
+        "id": "calculation-event-schema",
+        "kind": "cloudevents-1.0-json",
+        "value": "canonical calculation fact schema",
+        "dependsOn": [
+          "calculation-rejected",
+          "calculation-succeeded"
+        ],
+        "compatibility": "backward"
+      },
+      {
+        "id": "calculator-openapi-schema",
+        "kind": "openapi-3.2.0",
+        "value": "closed TLS JSON HTTP contract with canonical decimal signed and unsigned 64-bit strings",
+        "dependsOn": [
+          "create-calculation",
+          "get-calculation",
+          "list-calculations"
+        ],
+        "compatibility": "backward"
+      },
+      {
+        "id": "database-sql-schema",
+        "kind": "postgresql-18-sql",
+        "value": "owned history idempotency outbox migration and audit schema",
+        "dependsOn": [
+          "history-schema",
+          "policy-idempotency",
+          "policy-outbox"
+        ],
+        "compatibility": "backward"
+      },
+      {
+        "id": "identity-oidc-schema",
+        "kind": "openid-connect-core-1.0",
+        "value": "issuer audience signature time ASCII subject and closed role claims",
+        "dependsOn": [
+          "policy-authz"
+        ],
+        "compatibility": "exact"
+      },
+      {
+        "id": "telemetry-schema",
+        "kind": "opentelemetry-1.60.0",
+        "value": "OTLP logs metrics traces with semantic conventions 1.37.0",
+        "dependsOn": [],
+        "compatibility": "exact"
+      }
+    ],
+    "calls": [
+      {
+        "id": "api-database-call",
+        "kind": "database",
+        "value": "failure is service unavailable and no accepted attempt",
+        "dependsOn": [
+          "api",
+          "database",
+          "database-sql"
+        ],
+        "fromComponent": "api",
+        "toComponent": "database",
+        "interfaceId": "database-sql",
+        "failurePropagation": "fail-closed",
+        "timeoutMillis": 5000,
+        "retryPolicy": "bounded-exponential",
+        "idempotency": "caller-key"
+      },
+      {
+        "id": "api-issuer-call",
+        "kind": "identity",
+        "value": "fail-closed-authentication",
+        "dependsOn": [
+          "api",
+          "identity-oidc",
+          "issuer"
+        ],
+        "fromComponent": "api",
+        "toComponent": "issuer",
+        "interfaceId": "identity-oidc",
+        "failurePropagation": "fail-closed",
+        "timeoutMillis": 3000,
+        "retryPolicy": "bounded-exponential",
+        "idempotency": "none"
+      },
+      {
+        "id": "audit-worker-database-call",
+        "kind": "database",
+        "value": "retain-delivery-until-deduplicated-audit-commit",
+        "dependsOn": [
+          "audit-worker",
+          "database",
+          "database-sql"
+        ],
+        "fromComponent": "audit-worker",
+        "toComponent": "database",
+        "interfaceId": "database-sql",
+        "failurePropagation": "unavailable",
+        "timeoutMillis": 5000,
+        "retryPolicy": "transactional-outbox",
+        "idempotency": "operation-key"
+      },
+      {
+        "id": "browser-api-call",
+        "kind": "http",
+        "value": "generated OpenAPI client only",
+        "dependsOn": [
+          "browser",
+          "calculator-http"
+        ],
+        "fromComponent": "browser",
+        "toComponent": "api",
+        "interfaceId": "calculator-http",
+        "failurePropagation": "typed-error",
+        "timeoutMillis": 10000,
+        "retryPolicy": "bounded-exponential",
+        "idempotency": "caller-key"
+      },
+      {
+        "id": "browser-issuer-call",
+        "kind": "identity",
+        "value": "render-unauthenticated-or-access-denied",
+        "dependsOn": [
+          "browser",
+          "identity-oidc",
+          "issuer"
+        ],
+        "fromComponent": "browser",
+        "toComponent": "issuer",
+        "interfaceId": "identity-oidc",
+        "failurePropagation": "typed-error",
+        "timeoutMillis": 5000,
+        "retryPolicy": "bounded-exponential",
+        "idempotency": "none"
+      }
+    ],
+    "events": [
+      {
+        "id": "calculation-rejected",
+        "kind": "fact",
+        "value": "CloudEvents 1.0 JSON; at-least-once outbox; deterministic event identity",
+        "dependsOn": [
+          "calculation-event-schema"
+        ],
+        "producer": "api",
+        "channel": "calculation-events",
+        "schemaId": "calculation-event-schema",
+        "owner": "audit-worker",
+        "delivery": "at-least-once",
+        "ordering": "per-key",
+        "idempotency": "event-id",
+        "failurePropagation": "transactional-outbox"
+      },
+      {
+        "id": "calculation-succeeded",
+        "kind": "fact",
+        "value": "CloudEvents 1.0 JSON; at-least-once outbox; deterministic event identity",
+        "dependsOn": [
+          "calculation-event-schema"
+        ],
+        "producer": "api",
+        "channel": "calculation-events",
+        "schemaId": "calculation-event-schema",
+        "owner": "audit-worker",
+        "delivery": "at-least-once",
+        "ordering": "per-key",
+        "idempotency": "event-id",
+        "failurePropagation": "transactional-outbox"
+      }
+    ],
+    "flows": [
+      {
+        "id": "browser-api-flow",
+        "fromComponent": "browser",
+        "toComponent": "api",
+        "interfaceId": "calculator-http",
+        "delivery": "synchronous",
+        "ordering": "none",
+        "idempotency": "caller-key",
+        "failurePropagation": "typed-error"
+      },
+      {
+        "id": "calculation-event-flow",
+        "fromComponent": "api",
+        "toComponent": "audit-worker",
+        "interfaceId": "calculation-events",
+        "delivery": "at-least-once",
+        "ordering": "per-key",
+        "idempotency": "event-id",
+        "failurePropagation": "transactional-outbox"
+      }
+    ],
+    "topology": [
+      {
+        "id": "api-port",
+        "kind": "port",
+        "value": "private generated Calculator HTTP endpoint",
+        "owners": [
+          "api"
+        ],
+        "dependsOn": [
+          "api"
+        ],
+        "network": "backend-network",
+        "port": 8443,
+        "protocol": "TCP",
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "namespace",
+        "placement": null,
+        "scaleMin": 2,
+        "scaleMax": 4,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "backend-network",
+        "kind": "network",
+        "value": "private service network",
+        "owners": [
+          "api",
+          "audit-worker",
+          "broker",
+          "browser",
+          "database",
+          "issuer",
+          "migrate"
+        ],
+        "dependsOn": [
+          "api",
+          "audit-worker",
+          "broker",
+          "browser",
+          "database",
+          "issuer",
+          "migrate"
+        ],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "network",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "broker-port",
+        "kind": "port",
+        "value": "AMQP event transport",
+        "owners": [
+          "broker"
+        ],
+        "dependsOn": [
+          "broker"
+        ],
+        "network": "backend-network",
+        "port": 5672,
+        "protocol": "TCP",
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "namespace",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "broker-volume",
+        "kind": "persistent-volume",
+        "value": "durable event transport state",
+        "owners": [
+          "broker"
+        ],
+        "dependsOn": [
+          "broker"
+        ],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": "/var/lib/rabbitmq",
+        "storageBytes": 1073741824,
+        "storageClass": "kind-static-local",
+        "capabilities": [
+          "cap-recovery"
+        ],
+        "isolation": "node",
+        "placement": "kind-control-plane",
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "browser-port",
+        "kind": "port",
+        "value": "public TLS production View endpoint",
+        "owners": [
+          "browser"
+        ],
+        "dependsOn": [
+          "browser",
+          "calculator-http"
+        ],
+        "network": "backend-network",
+        "port": 8080,
+        "protocol": "TCP",
+        "publiclyAccessible": true,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "network",
+        "placement": null,
+        "scaleMin": 2,
+        "scaleMax": 3,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "database-port",
+        "kind": "port",
+        "value": "PostgreSQL protocol",
+        "owners": [
+          "database"
+        ],
+        "dependsOn": [
+          "database"
+        ],
+        "network": "backend-network",
+        "port": 5432,
+        "protocol": "TCP",
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "namespace",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "database-volume",
+        "kind": "persistent-volume",
+        "value": "persistent history idempotency outbox and audit state",
+        "owners": [
+          "database"
+        ],
+        "dependsOn": [
+          "database",
+          "history-store"
+        ],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": "/var/lib/postgresql/data",
+        "storageBytes": 1073741824,
+        "storageClass": "kind-static-local",
+        "capabilities": [
+          "cap-recovery"
+        ],
+        "isolation": "node",
+        "placement": "kind-control-plane",
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "issuer-port",
+        "kind": "port",
+        "value": "local OIDC conformance issuer",
+        "owners": [
+          "issuer"
+        ],
+        "dependsOn": [
+          "issuer"
+        ],
+        "network": "backend-network",
+        "port": 5556,
+        "protocol": "TCP",
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "namespace",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "kind-control-plane",
+        "kind": "placement",
+        "value": "single Kind control-plane node for deterministic static local storage",
+        "owners": [
+          "broker",
+          "database"
+        ],
+        "dependsOn": [],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-recovery"
+        ],
+        "isolation": "node",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "otlp-http-port",
+        "kind": "port",
+        "value": "OTLP HTTP telemetry receiver",
+        "owners": [
+          "telemetry"
+        ],
+        "dependsOn": [
+          "telemetry"
+        ],
+        "network": "telemetry-network",
+        "port": 4318,
+        "protocol": "TCP",
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "namespace",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "private-service-placement",
+        "kind": "placement",
+        "value": "namespace-private internal services and one-shot migration",
+        "owners": [
+          "issuer",
+          "migrate",
+          "telemetry"
+        ],
+        "dependsOn": [],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-workload-identity"
+        ],
+        "isolation": "node",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "stateless-zone-spread",
+        "kind": "placement",
+        "value": "replicated stateless workloads with rollout availability",
+        "owners": [
+          "api",
+          "audit-worker",
+          "browser"
+        ],
+        "dependsOn": [],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "node",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      },
+      {
+        "id": "telemetry-network",
+        "kind": "network",
+        "value": "private telemetry network",
+        "owners": [
+          "api",
+          "audit-worker",
+          "telemetry"
+        ],
+        "dependsOn": [
+          "api",
+          "audit-worker",
+          "telemetry"
+        ],
+        "network": null,
+        "port": null,
+        "protocol": null,
+        "publiclyAccessible": false,
+        "mountPath": null,
+        "storageBytes": null,
+        "storageClass": null,
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "isolation": "network",
+        "placement": null,
+        "scaleMin": 1,
+        "scaleMax": 1,
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      }
+    ],
+    "platformRequirements": [
+      {
+        "id": "linux-oci",
+        "os": "linux",
+        "architectures": [
+          "amd64",
+          "arm64"
+        ],
+        "runtime": "oci",
+        "runtimeVersion": "runtime-spec-1.3.0",
+        "capabilities": [
+          "cap-calculation",
+          "cap-recovery",
+          "cap-workload-identity"
+        ]
+      },
+      {
+        "id": "web-holo",
+        "os": "browser",
+        "architectures": [
+          "wasm32"
+        ],
+        "runtime": "browser",
+        "runtimeVersion": "1",
+        "capabilities": [
+          "cap-calculation"
+        ]
+      }
+    ],
+    "scalingPolicies": [
+      {
+        "id": "api-scaling",
+        "component": "api",
+        "trigger": "cpu",
+        "minimum": 2,
+        "maximum": 4,
+        "step": 1,
+        "cooldownSeconds": 30
+      },
+      {
+        "id": "audit-worker-scaling",
+        "component": "audit-worker",
+        "trigger": "cpu",
+        "minimum": 1,
+        "maximum": 2,
+        "step": 1,
+        "cooldownSeconds": 30
+      },
+      {
+        "id": "browser-scaling",
+        "component": "browser",
+        "trigger": "cpu",
+        "minimum": 2,
+        "maximum": 3,
+        "step": 1,
+        "cooldownSeconds": 30
+      }
+    ],
+    "storageClasses": [
+      {
+        "id": "kind-static-local",
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "bindingMode": "WaitForFirstConsumer",
+        "provisioning": "static",
+        "retention": "retain",
+        "capabilities": [
+          "cap-recovery"
+        ],
+        "platformRequirements": [
+          "linux-oci"
+        ]
+      }
+    ],
+    "parameters": [
+      {
+        "id": "api-host",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "api",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "broker-host",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "broker",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "database-host",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "database",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "issuer-host",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "issuer",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "oidc-issuer",
+        "valueType": "uri",
+        "allowed": [],
+        "defaultValue": "http://issuer:5556",
+        "required": true,
+        "mutable": true,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "otel-http-endpoint",
+        "valueType": "uri",
+        "allowed": [],
+        "defaultValue": "http://telemetry:4318",
+        "required": true,
+        "mutable": true,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "postgres-db",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "calculator",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "postgres-user",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "calculator",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "public-hostname",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "calculator.local",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "public"
+      },
+      {
+        "id": "rabbitmq-default-user",
+        "valueType": "string",
+        "allowed": [],
+        "defaultValue": "calculator",
+        "required": true,
+        "mutable": false,
+        "lateBound": true,
+        "exposure": "internal"
+      },
+      {
+        "id": "release-label",
+        "valueType": "string",
+        "allowed": [
+          "A",
+          "B"
+        ],
+        "defaultValue": "A",
+        "required": true,
+        "mutable": false,
+        "lateBound": false,
+        "exposure": "internal"
+      }
+    ],
+    "secretReferences": [
+      {
+        "id": "broker-credentials",
+        "providerKey": "calculator/broker-password",
+        "consumers": [
+          "api",
+          "audit-worker"
+        ],
+        "rotation": "restart consumers after platform rotation"
+      },
+      {
+        "id": "database-credentials",
+        "providerKey": "calculator/database-password",
+        "consumers": [
+          "api",
+          "audit-worker",
+          "migrate"
+        ],
+        "rotation": "restart consumers after platform rotation"
+      },
+      {
+        "id": "oidc-signing-key",
+        "providerKey": "calculator/oidc-signing-key",
+        "consumers": [
+          "issuer"
+        ],
+        "rotation": "restart issuer; API refreshes deterministic JWKS"
+      },
+      {
+        "id": "postgres-password",
+        "providerKey": "calculator/database-password",
+        "consumers": [
+          "database"
+        ],
+        "rotation": "restart database after platform rotation"
+      },
+      {
+        "id": "rabbitmq-default-pass",
+        "providerKey": "calculator/broker-password",
+        "consumers": [
+          "broker"
+        ],
+        "rotation": "restart broker after platform rotation"
+      },
+      {
+        "id": "tls-certificate",
+        "providerKey": "calculator/tls-certificate",
+        "consumers": [
+          "browser"
+        ],
+        "rotation": "platform managed before expiration"
+      }
+    ],
+    "identityRequirements": [
+      {
+        "id": "calculator-oidc",
+        "issuerParameter": "oidc-issuer",
+        "audiences": [
+          "calculator-api"
+        ],
+        "subjects": [],
+        "roles": [
+          "calculator.auditor",
+          "calculator.user"
+        ]
+      }
+    ],
+    "persistence": [
+      {
+        "id": "history-store",
+        "owner": "database",
+        "schemaArtifact": "history-schema",
+        "retention": "365d then authorized erasure",
+        "compatibilityWindow": "release-a-through-release-b-contract-gate",
+        "rpoSeconds": 300,
+        "rtoSeconds": 900,
+        "backup": "history-backup",
+        "migrationOrder": [
+          "migration-a"
+        ]
+      }
+    ],
+    "migrations": [
+      {
+        "id": "migration-a",
+        "kind": "initialize",
+        "value": "history idempotency outbox and audit tables",
+        "dependsOn": [
+          "history-store"
+        ]
+      }
+    ],
+    "backups": [
+      {
+        "id": "history-backup",
+        "kind": "logical-postgresql",
+        "value": "backup every owned table; restore to clean target; verify integrity and application acceptance",
+        "dependsOn": [
+          "accept-recovery",
+          "history-store"
+        ]
+      }
+    ],
+    "observability": {
+      "logs": [
+        "authorization-failure",
+        "calculation-outcome",
+        "dependency-fault",
+        "restore"
+      ],
+      "metrics": [
+        "authorization-failures",
+        "calculations",
+        "outbox-lag",
+        "readiness"
+      ],
+      "traces": [
+        "api-request",
+        "audit-event",
+        "database-transaction",
+        "outbox-publish"
+      ],
+      "alerts": [
+        "availability",
+        "outbox-lag"
+      ],
+      "slos": [
+        "availability",
+        "outbox-lag"
+      ],
+      "redactedFields": [
+        "authorization",
+        "client_label",
+        "history",
+        "left",
+        "right",
+        "secret",
+        "token"
+      ]
+    },
+    "slis": [
+      {
+        "id": "sli-availability",
+        "kind": "ratio",
+        "value": "valid authenticated requests without system failure over five minutes",
+        "dependsOn": [
+          "calculator-http"
+        ],
+        "signal": "http.server.request.availability",
+        "unit": "millionths",
+        "windowSeconds": 300
+      },
+      {
+        "id": "sli-outbox-lag",
+        "kind": "milliseconds",
+        "value": "p99 time from committed outbox row to broker confirmation over five minutes",
+        "dependsOn": [
+          "calculation-event-flow"
+        ],
+        "signal": "calculator.outbox.lag",
+        "unit": "ms",
+        "windowSeconds": 300
+      }
+    ],
+    "slos": [
+      {
+        "id": "slo-availability",
+        "kind": "minimum",
+        "value": "990000 millionths over five minutes",
+        "dependsOn": [
+          "sli-availability"
+        ],
+        "comparison": "minimum",
+        "threshold": 990000,
+        "unit": "millionths",
+        "percentileMillionths": null,
+        "windowSeconds": 300
+      },
+      {
+        "id": "slo-outbox-lag",
+        "kind": "maximum",
+        "value": "5000 milliseconds p99 over five minutes",
+        "dependsOn": [
+          "sli-outbox-lag"
+        ],
+        "comparison": "maximum",
+        "threshold": 5000,
+        "unit": "ms",
+        "percentileMillionths": 990000,
+        "windowSeconds": 300
+      }
+    ],
+    "alerts": [
+      {
+        "id": "alert-availability",
+        "kind": "slo-breach",
+        "value": "page after two five-minute windows below 99 percent",
+        "dependsOn": [
+          "slo-availability"
+        ]
+      },
+      {
+        "id": "alert-outbox-lag",
+        "kind": "slo-breach",
+        "value": "page when p99 outbox lag exceeds 5000 milliseconds",
+        "dependsOn": [
+          "slo-outbox-lag"
+        ]
+      }
+    ],
+    "controls": [
+      {
+        "id": "control-authentication",
+        "kind": "required",
+        "value": "validate signature key issuer audience time subject and role; closed 401 challenge",
+        "dependsOn": [
+          "calculator-oidc"
+        ],
+        "owner": "UOR Foundation",
+        "verification": [
+          "accept-calculate-user",
+          "accept-malformed-request"
+        ]
+      },
+      {
+        "id": "control-redaction",
+        "kind": "required",
+        "value": "exclude tokens authorization operands history labels and secrets from signals and evidence",
+        "dependsOn": [
+          "telemetry"
+        ],
+        "owner": "UOR Foundation",
+        "verification": [
+          "accept-calculate-user",
+          "accept-outage"
+        ]
+      },
+      {
+        "id": "control-transaction",
+        "kind": "required",
+        "value": "history idempotency and outbox use one PostgreSQL transaction",
+        "dependsOn": [
+          "history-store"
+        ],
+        "owner": "UOR Foundation",
+        "verification": [
+          "accept-calculate-user",
+          "accept-recovery"
+        ]
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "cap-calculation",
+        "kind": "required",
+        "value": "checked signed-64-bit calculation",
+        "dependsOn": [
+          "api"
+        ]
+      },
+      {
+        "id": "cap-recovery",
+        "kind": "required",
+        "value": "RPO 300 seconds and RTO 900 seconds",
+        "dependsOn": [
+          "history-backup"
+        ]
+      },
+      {
+        "id": "cap-workload-identity",
+        "kind": "required",
+        "value": "OIDC user and auditor authorization",
+        "dependsOn": [
+          "calculator-oidc"
+        ]
+      }
+    ],
+    "architecture": [
+      {
+        "id": "create-calculation",
+        "kind": "http-operation",
+        "value": "POST /v1/calculations",
+        "dependsOn": [
+          "calculator-http"
+        ],
+        "owner": "UOR Foundation",
+        "viewpoint": "api-consumer",
+        "verifies": [
+          "accept-calculate-user",
+          "accept-malformed-request"
+        ],
+        "measurement": "sli-availability"
+      },
+      {
+        "id": "get-calculation",
+        "kind": "http-operation",
+        "value": "GET /v1/calculations/{request_id}",
+        "dependsOn": [
+          "calculator-http"
+        ],
+        "owner": "UOR Foundation",
+        "viewpoint": "api-consumer",
+        "verifies": [
+          "accept-calculate-user",
+          "accept-load"
+        ],
+        "measurement": "sli-availability"
+      },
+      {
+        "id": "list-calculations",
+        "kind": "http-operation",
+        "value": "GET /v1/calculations",
+        "dependsOn": [
+          "calculator-http"
+        ],
+        "owner": "UOR Foundation",
+        "viewpoint": "api-consumer",
+        "verifies": [
+          "accept-load"
+        ],
+        "measurement": "sli-availability"
+      },
+      {
+        "id": "policy-authz",
+        "kind": "decision",
+        "value": "calculator.user owns calculate and personal read; calculator.auditor owns all-history read",
+        "dependsOn": [
+          "calculator-http"
+        ],
+        "owner": "UOR Foundation",
+        "viewpoint": "security-and-reliability",
+        "verifies": [
+          "accept-calculate-user",
+          "accept-malformed-request"
+        ],
+        "measurement": null
+      },
+      {
+        "id": "policy-idempotency",
+        "kind": "decision",
+        "value": "subject plus request_id plus canonical request bytes; conflicts never calculate store or emit",
+        "dependsOn": [
+          "calculation-events"
+        ],
+        "owner": "UOR Foundation",
+        "viewpoint": "security-and-reliability",
+        "verifies": [
+          "accept-calculate-user",
+          "accept-load"
+        ],
+        "measurement": null
+      },
+      {
+        "id": "policy-outbox",
+        "kind": "decision",
+        "value": "attempt history and outbox event commit atomically; consumer deduplicates event identity",
+        "dependsOn": [
+          "calculation-events",
+          "history-store"
+        ],
+        "owner": "UOR Foundation",
+        "viewpoint": "security-and-reliability",
+        "verifies": [
+          "accept-calculate-user",
+          "accept-outage",
+          "accept-recovery"
+        ],
+        "measurement": "sli-outbox-lag"
+      }
+    ],
+    "targets": [
+      {
+        "id": "compose-local",
+        "kind": "compose",
+        "apiVersion": "compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d",
+        "adapterDigest": "sha256:0a74dacc5da9c48e582155a2dcc5e830cf71dd054e62c9e6eeb3ccec1e20c255",
+        "minimumReleaseStatus": "development",
+        "capabilities": [
+          "cap-calculation",
+          "cap-recovery",
+          "cap-workload-identity"
+        ],
+        "credentials": null,
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "storageClass": null,
+        "storageProfile": null,
+        "ingressClassName": null,
+        "ingressControllerArtifact": null
+      },
+      {
+        "id": "github-pages",
+        "kind": "github-pages",
+        "apiVersion": "github-pages-artifact@v4",
+        "adapterDigest": "sha256:db0425b35e875a36af50fb3a73e491af9badc759b6c290a731d6fd23fd62c119",
+        "minimumReleaseStatus": "accepted",
+        "capabilities": [
+          "cap-calculation"
+        ],
+        "credentials": null,
+        "platformRequirements": [
+          "web-holo"
+        ],
+        "storageClass": null,
+        "storageProfile": null,
+        "ingressClassName": null,
+        "ingressControllerArtifact": null
+      },
+      {
+        "id": "kubernetes-kind",
+        "kind": "kubernetes",
+        "apiVersion": "v1.36.4",
+        "adapterDigest": "sha256:12021a034cb9b796f1ab6b4431e5cdbd9803e16181f6378ce580e40764b62ff6",
+        "minimumReleaseStatus": "development",
+        "capabilities": [
+          "cap-calculation",
+          "cap-recovery",
+          "cap-workload-identity"
+        ],
+        "credentials": null,
+        "platformRequirements": [
+          "linux-oci"
+        ],
+        "storageClass": "kind-static-local",
+        "storageProfile": "kind-static-local",
+        "ingressClassName": "nginx",
+        "ingressControllerArtifact": "kind-ingress-controller"
+      }
+    ],
+    "rollouts": [
+      {
+        "id": "rollout-standard",
+        "kind": "rolling",
+        "value": "backup, expand migration, readiness, contract and SLO checks, traffic activation, evidence",
+        "dependsOn": [
+          "accept-upgrade",
+          "slo-availability"
+        ]
+      }
+    ],
+    "rollbacks": [
+      {
+        "id": "rollback-safe",
+        "kind": "automatic-stop",
+        "value": "return to last accepted digest only with compatible data; reject destructive downgrade",
+        "dependsOn": [
+          "migration-a",
+          "rollout-standard"
+        ]
+      }
+    ],
+    "drifts": [
+      {
+        "id": "drift-three-way",
+        "kind": "report",
+        "value": "compare desired, last-applied, and observed identities without adopting unmanaged behavior",
+        "dependsOn": [
+          "rollout-standard"
+        ]
+      }
+    ],
+    "retirements": [
+      {
+        "id": "retirement-authorized",
+        "kind": "retain",
+        "value": "explicit authorization, final backup, retention disposition, and secret revocation",
+        "dependsOn": [
+          "history-backup"
+        ]
+      }
+    ],
+    "acceptance": [
+      {
+        "id": "accept-calculate-user",
+        "kind": "positive",
+        "target": "compose-local",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-calculate-user"
+        ],
+        "evidence": "evidence/acceptance/calculate-user.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-load",
+        "kind": "load",
+        "target": "kubernetes-kind",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-load"
+        ],
+        "evidence": "evidence/acceptance/load.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-malformed-request",
+        "kind": "negative",
+        "target": "compose-local",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-malformed-request"
+        ],
+        "evidence": "evidence/acceptance/malformed-request.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-outage",
+        "kind": "fault",
+        "target": "kubernetes-kind",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-outage"
+        ],
+        "evidence": "evidence/acceptance/dependency-outage.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-recovery",
+        "kind": "recovery",
+        "target": "kubernetes-kind",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-recovery"
+        ],
+        "evidence": "evidence/acceptance/recovery.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-rollback",
+        "kind": "rollback",
+        "target": "kubernetes-kind",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-rollback"
+        ],
+        "evidence": "evidence/acceptance/rollback.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-unsafe-downgrade",
+        "kind": "downgrade",
+        "target": "kubernetes-kind",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-unsafe-downgrade"
+        ],
+        "evidence": "evidence/acceptance/downgrade.json",
+        "bounded": true
+      },
+      {
+        "id": "accept-upgrade",
+        "kind": "upgrade",
+        "target": "kubernetes-kind",
+        "component": "api",
+        "command": [
+          "node",
+          "/opt/prismpm/runtime/runtime.mjs",
+          "acceptance",
+          "--scenario",
+          "accept-upgrade"
+        ],
+        "evidence": "evidence/acceptance/upgrade.json",
+        "bounded": true
+      }
+    ],
+    "lifecycle": {
+      "backup": "logical PostgreSQL backup before expand migration and scheduled every 300 seconds",
+      "drift": "report desired last-applied and observed identities; never adopt unmanaged behavior",
+      "migration": "release B expand adds nullable NFC client_label then gated contract cleanup",
+      "recovery": "restore into clean target then integrity application telemetry and RPO RTO acceptance",
+      "retirement": "authorization plus final backup retention and secret revocation required",
+      "rollback": "stop failed rollout; rollback binary only while schema remains A-compatible; refuse destructive downgrade",
+      "rollout": "authority signature policy backup expand migrate stateless readiness contracts SLO traffic cleanup evidence"
+    },
+    "applicationProfile": {
+      "contract": "prismpm/transactional-command-service/1",
+      "applicationErrors": [
+        {
+          "wireName": "division-by-zero",
+          "modelName": "DivisionByZero"
+        },
+        {
+          "wireName": "overflow",
+          "modelName": "Overflow"
+        }
+      ],
+      "applicationModelDigest": "sha256:3c7870c06fb36b1e3849a426a0309558efe73c32aa7c686bc018c4d7edaf0705",
+      "commandEncoding": "1\\t{operation}\\t{inputA}\\t{inputB}",
+      "responseVersion": "1",
+      "optionalAnnotation": "absent",
+      "coreArtifact": "core.wasm",
+      "identityAudience": "calculator-api",
+      "submitterRole": "calculator.user",
+      "observerRole": "calculator.auditor",
+      "eventSource": "https://uor.foundation/calculator",
+      "acceptedEventType": "org.uor.calculator.calculation.succeeded.v1",
+      "rejectedEventType": "org.uor.calculator.calculation.rejected.v1",
+      "databaseName": "calculator",
+      "databaseUser": "calculator",
+      "eventExchange": "calculator.events",
+      "auditQueue": "calculator.audit",
+      "commandIdPattern": "^[a-z][a-z0-9-]{0,62}$",
+      "commandPath": "/v1/calculations",
+      "tokenPath": "/oidc/token",
+      "commandOperations": [
+        "add",
+        "divide",
+        "multiply",
+        "subtract"
+      ],
+      "annotationMaxScalars": 128,
+      "historyDefaultLimit": 25,
+      "historyMaxLimit": 100,
+      "maxRequestBytes": 16384,
+      "availabilityThresholdMillionths": 990000,
+      "outboxLagThresholdMillis": 5000,
+      "commandIdField": "request_id",
+      "operationField": "operation",
+      "inputAField": "left",
+      "inputBField": "right",
+      "annotationField": "client_label",
+      "commandIdColumn": "request_id",
+      "operationColumn": "operation",
+      "inputAColumn": "left_operand",
+      "inputBColumn": "right_operand",
+      "annotationColumn": "client_label",
+      "acceptanceErrorOperation": "subtract",
+      "acceptanceErrorInputA": "9223372036854775807",
+      "acceptanceErrorInputB": "-1",
+      "acceptanceExpectedError": "Overflow",
+      "acceptanceConflictInputB": "0",
+      "acceptanceSuccessOperation": "multiply",
+      "acceptanceSuccessInputA": "7",
+      "acceptanceSuccessInputB": "6",
+      "acceptanceExpectedResult": "42",
+      "view": {
+        "title": "Calculator system",
+        "heading": "Calculator",
+        "identityHeading": "Local conformance identity",
+        "commandFormHeading": "Calculate",
+        "historyHeading": "History",
+        "principalLabel": "Subject",
+        "principalDefault": "calculator-user",
+        "roleLabel": "Role",
+        "submitterRoleLabel": "User",
+        "observerRoleLabel": "Auditor",
+        "deniedRoleLabel": "No application access",
+        "authenticateLabel": "Authenticate",
+        "commandIdLabel": "Request ID",
+        "inputALabel": "Left operand",
+        "operationLabel": "Operation",
+        "inputBLabel": "Right operand",
+        "annotationLabel": "Client label",
+        "submitLabel": "Calculate",
+        "refreshLabel": "Refresh",
+        "emptyText": "No calculations.",
+        "loadingText": "Loading history…",
+        "authenticatedText": "Authenticated.",
+        "accessDeniedText": "Access denied.",
+        "retryLabel": "Retry",
+        "sequenceHeading": "Sequence",
+        "commandColumnHeading": "Request",
+        "inputSummaryHeading": "Expression",
+        "outcomeHeading": "Outcome",
+        "annotationHeading": "Label",
+        "releasePrefix": "Release",
+        "historyLoadedText": "History loaded.",
+        "historyEmptyText": "History is empty.",
+        "authenticatingText": "Authenticating…",
+        "authenticationFailedText": "Authentication failed",
+        "submittingText": "Calculating…",
+        "outcomePrefix": "Outcome:",
+        "commandFailedText": "Calculation failed:",
+        "historyFailedText": "History failed:"
+      },
+      "brokerUser": "calculator",
+      "historyTable": "command_history",
+      "outboxTable": "command_outbox",
+      "auditTable": "command_audit",
+      "publicHostnameParameter": "public-hostname"
+    },
+    "standards": [
+      "ASYNCAPI-3-1-0",
+      "CLOUDEVENTS-1-0-2",
+      "COMPOSE-FEE041B3",
+      "INTOTO-STATEMENT-1-0",
+      "KUBERNETES-1-36-4",
+      "OCI-IMAGE-1-1-1",
+      "OPENAPI-3-2-0",
+      "OTEL-SEMCONV-1-37-0",
+      "OTEL-SPEC-1-60-0",
+      "SLSA-1-2",
+      "SPDX-3-0-1"
+    ]
+  },
+  "manifest": {
+    "closure": {
+      "bound": "108",
+      "values": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "10",
+        "12",
+        "14",
+        "15",
+        "16",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "41",
+        "42",
+        "43",
+        "44",
+        "48",
+        "49",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "55",
+        "56",
+        "58",
+        "59",
+        "60",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+        "66",
+        "67",
+        "68",
+        "70",
+        "71",
+        "72",
+        "73",
+        "74",
+        "75",
+        "76",
+        "77",
+        "78",
+        "79",
+        "80",
+        "81",
+        "82",
+        "83",
+        "84",
+        "85",
+        "86",
+        "87",
+        "88",
+        "89",
+        "90",
+        "91",
+        "94",
+        "95",
+        "96",
+        "97",
+        "98",
+        "99",
+        "100",
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107"
+      ]
+    },
+    "uniqueness": {
+      "bound": "108",
+      "values": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+        "47",
+        "48",
+        "49",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "55",
+        "56",
+        "57",
+        "58",
+        "59",
+        "60",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+        "66",
+        "67",
+        "68",
+        "69",
+        "70",
+        "71",
+        "72",
+        "73",
+        "74",
+        "75",
+        "76",
+        "77",
+        "78",
+        "79",
+        "80",
+        "81",
+        "82",
+        "83",
+        "84",
+        "85",
+        "86",
+        "87",
+        "88",
+        "89",
+        "90",
+        "91",
+        "92",
+        "93",
+        "94",
+        "95",
+        "96",
+        "97",
+        "98",
+        "99",
+        "100",
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107"
+      ]
+    },
+    "referentialIntegrity": {
+      "bound": "108",
+      "values": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "10",
+        "12",
+        "14",
+        "15",
+        "16",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "41",
+        "42",
+        "43",
+        "44",
+        "48",
+        "49",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "55",
+        "56",
+        "58",
+        "59",
+        "60",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+        "66",
+        "67",
+        "68",
+        "70",
+        "71",
+        "72",
+        "73",
+        "74",
+        "75",
+        "76",
+        "77",
+        "78",
+        "79",
+        "80",
+        "81",
+        "82",
+        "83",
+        "84",
+        "85",
+        "86",
+        "87",
+        "88",
+        "89",
+        "90",
+        "91",
+        "94",
+        "95",
+        "96",
+        "97",
+        "98",
+        "99",
+        "100",
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107"
+      ]
+    },
+    "compatibility": {
+      "bound": "4",
+      "values": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "0"
+      ]
+    },
+    "capabilitySatisfaction": {
+      "bound": "3",
+      "values": [
+        "0",
+        "2",
+        "0",
+        "2",
+        "1",
+        "2",
+        "1"
+      ]
+    },
+    "secretFlow": {
+      "bound": "8",
+      "values": [
+        "0",
+        "1",
+        "0",
+        "1",
+        "6",
+        "5",
+        "4",
+        "2",
+        "3"
+      ]
+    },
+    "deploymentOrder": {
+      "bound": "8",
+      "values": [
+        "2",
+        "4",
+        "5",
+        "6",
+        "7",
+        "0",
+        "1",
+        "3"
+      ]
+    },
+    "migrationOrder": {
+      "bound": "1",
+      "values": [
+        "0"
+      ]
+    },
+    "rollbackSafety": {
+      "bound": "108",
+      "values": [
+        "76",
+        "94"
+      ]
+    },
+    "evidenceClosure": {
+      "bound": "108",
+      "values": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "10",
+        "44",
+        "72"
+      ]
+    },
+    "licenseClosure": {
+      "bound": "257",
+      "values": [
+        "7",
+        "10",
+        "17",
+        "10",
+        "10",
+        "17",
+        "10"
+      ]
+    },
+    "releaseCompleteness": {
+      "bound": "7",
+      "values": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ]
+    }
+  }
+}

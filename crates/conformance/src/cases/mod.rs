@@ -559,6 +559,10 @@ fn verify_authorities(root: &Path, id: &str) {
 
 fn empty_system_relations() -> Value {
     let mut value = serde_json::Map::new();
+    value.insert(
+        "product".to_owned(),
+        serde_json::json!({"id":"system-fixture"}),
+    );
     for name in [
         "acceptance",
         "alerts",
@@ -724,7 +728,7 @@ fn verify_system(root: &Path, id: &str) {
         }
         "SY-02" => {
             let mut system = empty_system_relations();
-            system["components"] = serde_json::json!([{"id":"component"}]);
+            system["components"] = serde_json::json!([{"id":"component","depends_on":[]}]);
             system["artifacts"] = serde_json::json!([{
                 "id":"artifact",
                 "license_expression":"Apache-2.0"

@@ -10,6 +10,47 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const INGRESS_NGINX_KIND: &[u8] = include_bytes!("../adapters/ingress-nginx-kind-v1.15.1.yaml");
 
+// Production.SystemValidation.modelEntityCount counts the product plus these
+// collections; modelIdsGloballyUnique checks that same complete identity set.
+const MODEL_ID_COLLECTIONS: [&str; 29] = [
+    "acceptance",
+    "alerts",
+    "architecture",
+    "artifacts",
+    "backups",
+    "calls",
+    "capabilities",
+    "components",
+    "controls",
+    "drifts",
+    "events",
+    "flows",
+    "identity_requirements",
+    "interfaces",
+    "migrations",
+    "parameters",
+    "platform_requirements",
+    "persistence",
+    "retirements",
+    "rollbacks",
+    "rollouts",
+    "scaling_policies",
+    "schemas",
+    "secret_references",
+    "slis",
+    "slos",
+    "targets",
+    "topology",
+    "storage_classes",
+];
+
+fn product_id(value: &Value) -> Result<&str, PrismError> {
+    value["product"]["id"]
+        .as_str()
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| PrismError::new("PP2101", "system product identity is absent"))
+}
+
 /// One deterministic standard-native projection emitted from a system model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Projection {
@@ -567,6 +608,68 @@ fn relation(bound: usize, values: Vec<usize>) -> Value {
     json!({"bound":bound,"values":values})
 }
 
+fn dependency_order(
+    value: &Value,
+    collection: &str,
+    all_ids: &BTreeMap<String, usize>,
+) -> Result<Vec<usize>, PrismError> {
+    let identifiers = ids(value, collection)?.into_iter().collect::<Vec<_>>();
+    let indexes = identifiers
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (id.as_str(), index))
+        .collect::<BTreeMap<_, _>>();
+    let rows = value[collection]
+        .as_array()
+        .expect("ids validates collection");
+    let mut remaining = vec![0_usize; rows.len()];
+    let mut dependents = vec![Vec::new(); rows.len()];
+    for (index, row) in rows.iter().enumerate() {
+        let dependencies = row["depends_on"].as_array().ok_or_else(|| {
+            PrismError::new(
+                "PP2101",
+                format!("{collection} dependency list is absent or malformed"),
+            )
+        })?;
+        for dependency in dependencies {
+            let dependency = dependency
+                .as_str()
+                .ok_or_else(|| PrismError::new("PP2101", "dependency identity is not a string"))?;
+            if let Some(&dependency_index) = indexes.get(dependency) {
+                remaining[index] += 1;
+                dependents[dependency_index].push(index);
+            } else if collection != "migrations" || !all_ids.contains_key(dependency) {
+                return Err(PrismError::new(
+                    "PP2101",
+                    format!("{collection} contains a dangling dependency"),
+                ));
+            }
+        }
+    }
+    let mut ready = remaining
+        .iter()
+        .enumerate()
+        .filter_map(|(index, count)| (*count == 0).then_some(index))
+        .collect::<BTreeSet<_>>();
+    let mut order = Vec::with_capacity(rows.len());
+    while let Some(index) = ready.pop_first() {
+        order.push(index);
+        for &dependent in &dependents[index] {
+            remaining[dependent] -= 1;
+            if remaining[dependent] == 0 {
+                ready.insert(dependent);
+            }
+        }
+    }
+    if order.len() != rows.len() {
+        return Err(PrismError::new(
+            "PP2101",
+            format!("{collection} dependency graph contains a cycle"),
+        ));
+    }
+    Ok(order)
+}
+
 fn indexed_references(value: &Value, indexes: &BTreeMap<String, usize>) -> Vec<usize> {
     let mut references = Vec::new();
     fn visit(value: &Value, indexes: &BTreeMap<String, usize>, references: &mut Vec<usize>) {
@@ -603,38 +706,8 @@ fn indexed_references(value: &Value, indexes: &BTreeMap<String, usize>) -> Vec<u
 /// their unique canonical indexes so the axiom-free generated Lean/Rust roots can
 /// independently check every relation without reimplementing strings in a target.
 pub fn validation_certificate(value: &Value) -> Result<Value, PrismError> {
-    const COLLECTIONS: [&str; 28] = [
-        "acceptance",
-        "alerts",
-        "architecture",
-        "artifacts",
-        "backups",
-        "calls",
-        "capabilities",
-        "components",
-        "controls",
-        "drifts",
-        "events",
-        "flows",
-        "identity_requirements",
-        "interfaces",
-        "migrations",
-        "parameters",
-        "platform_requirements",
-        "persistence",
-        "retirements",
-        "rollbacks",
-        "rollouts",
-        "scaling_policies",
-        "schemas",
-        "slis",
-        "slos",
-        "targets",
-        "topology",
-        "storage_classes",
-    ];
-    let mut identifiers = Vec::new();
-    for collection in COLLECTIONS {
+    let mut identifiers = vec![product_id(value)?.to_owned()];
+    for collection in MODEL_ID_COLLECTIONS {
         for row in value[collection]
             .as_array()
             .ok_or_else(|| PrismError::new("PP2101", format!("system {collection} is absent")))?
@@ -712,15 +785,17 @@ pub fn validation_certificate(value: &Value) -> Result<Value, PrismError> {
         .collect::<Vec<_>>();
     let component_count = component_ids.len();
     let migration_count = value["migrations"].as_array().map_or(0, Vec::len);
+    let deployment_order = dependency_order(value, "components", &indexes)?;
+    let migration_order = dependency_order(value, "migrations", &indexes)?;
     let canonical = (0..identifiers.len()).collect::<Vec<_>>();
     Ok(json!({
         "capability_satisfaction":relation(capability_ids.len(),capability_links),
         "closure":relation(identifiers.len(),all_references.clone()),
         "compatibility":relation(4,compatibility),
-        "deployment_order":relation(component_count,(0..component_count).collect()),
+        "deployment_order":relation(component_count,deployment_order),
         "evidence_closure":relation(identifiers.len(),evidence_links),
         "license_closure":relation(257,license_lengths),
-        "migration_order":relation(migration_count,(0..migration_count).collect()),
+        "migration_order":relation(migration_count,migration_order),
         "referential_integrity":relation(identifiers.len(),all_references),
         "release_completeness":relation(artifact_count,(0..artifact_count).collect()),
         "rollback_safety":relation(identifiers.len(),rollback_links),
@@ -835,38 +910,8 @@ pub fn validate(value: &Value, manifest: &Value) -> Result<(), PrismError> {
             "system application error, storage, or acceptance bindings are inconsistent",
         ));
     }
-    const COLLECTIONS: [&str; 28] = [
-        "acceptance",
-        "alerts",
-        "architecture",
-        "artifacts",
-        "backups",
-        "calls",
-        "capabilities",
-        "components",
-        "controls",
-        "drifts",
-        "events",
-        "flows",
-        "identity_requirements",
-        "interfaces",
-        "migrations",
-        "parameters",
-        "platform_requirements",
-        "persistence",
-        "retirements",
-        "rollbacks",
-        "rollouts",
-        "scaling_policies",
-        "schemas",
-        "slis",
-        "slos",
-        "targets",
-        "topology",
-        "storage_classes",
-    ];
-    let mut all_ids = BTreeSet::new();
-    for field in COLLECTIONS {
+    let mut all_ids = BTreeSet::from([product_id(value)?.to_owned()]);
+    for field in MODEL_ID_COLLECTIONS {
         for id in ids(value, field)? {
             if !all_ids.insert(id) {
                 return Err(PrismError::new(
@@ -1268,12 +1313,22 @@ pub fn validate(value: &Value, manifest: &Value) -> Result<(), PrismError> {
             "formal license closure contains an empty artifact license expression",
         ));
     }
-    for name in [
-        "deployment_order",
-        "migration_order",
-        "release_completeness",
-        "uniqueness",
-    ] {
+    for name in ["deployment_order", "migration_order"] {
+        let relation = &certificate[name];
+        let bound = relation["bound"].as_u64().unwrap_or(0);
+        let values = relation["values"].as_array().expect("generated relation");
+        let indexes = values
+            .iter()
+            .filter_map(Value::as_u64)
+            .collect::<BTreeSet<_>>();
+        if values.len() as u64 != bound || !indexes.into_iter().eq(0..bound) {
+            return Err(PrismError::new(
+                "PP2101",
+                format!("formal {name} relation is not a complete permutation"),
+            ));
+        }
+    }
+    for name in ["release_completeness", "uniqueness"] {
         let relation = &certificate[name];
         if relation["values"].as_array().is_none_or(|values| {
             values
@@ -2763,6 +2818,9 @@ pub fn projections(
 }
 
 #[cfg(test)]
+mod certificate_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
         acyclic_components, asyncapi, authority_binding_for_feature,
@@ -2828,6 +2886,8 @@ mod tests {
         assert!(!canonical_license_expression_text("Apache-2.0\n"));
 
         let mut system = serde_json::Map::new();
+        system.insert("product".to_owned(), json!({"id":"license-fixture"}));
+        system.insert("secret_references".to_owned(), json!([]));
         for name in [
             "acceptance",
             "alerts",
