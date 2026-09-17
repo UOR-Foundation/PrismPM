@@ -2,6 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+node --test scripts/devcontainer-init.test.mjs
 bash scripts/bootstrap-verify.sh --check-source
 
 # The external-oracle corpus must execute in the SDK image, including on the

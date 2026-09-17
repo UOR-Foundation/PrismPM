@@ -1,5 +1,22 @@
 # PrismPM falsifiability and verification record
 
+## Devcontainer Docker group readiness
+
+[Reproducibility run 35232240458](https://github.com/UOR-Foundation/PrismPM/actions/runs/35232240458)
+failed before comparison: its lifecycle shell inherited groups before the root
+initializer added Docker socket access. In an isolated copy of the actual
+devcontainer image, that stale shell still failed after `usermod`, while a fresh
+shell succeeded. Lifecycle commands now wait for the current socket group and
+refresh their own non-root credentials when necessary; editor readiness waits
+for the post-start hook. Existing terminals are not retroactively repaired.
+
+All six devcontainer regression tests passed against the real daemon: the
+unwrapped stale process fails, refreshed/fresh/restarted processes succeed,
+arguments and exit status are preserved, and missing initialization/socket or
+root execution fail closed. Host socket ownership/mode are unchanged; all
+owned test containers were removed. The log SHA-256 is
+`7a3f7947b3b1c5be51feec8b13849394bc8c0104e4336cb176e1994f3da92a08`.
+
 ## Source-free release evidence (OC-02, OC-03, OC-04, OC-06)
 
 OCI now retains the original build manifest, every path-bound output, and the

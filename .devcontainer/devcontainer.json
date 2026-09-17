@@ -9,7 +9,14 @@
   ],
   "remoteUser": "vscode",
   "overrideCommand": false,
-  "postCreateCommand": "toolchain=$(tr -d '\\n' < lean-toolchain); if ! elan toolchain list | grep -Fqx \"$toolchain\"; then elan toolchain install \"$toolchain\"; fi; lean --version; ./scripts/fetch.sh",
+  "postCreateCommand": [
+    "/usr/local/bin/prismpm-devcontainer-exec",
+    "/bin/sh",
+    "-c",
+    "toolchain=$(tr -d '\\n' < lean-toolchain); if ! elan toolchain list | grep -Fqx \"$toolchain\"; then elan toolchain install \"$toolchain\"; fi; lean --version; ./scripts/fetch.sh"
+  ],
+  "postStartCommand": ["/usr/local/bin/prismpm-devcontainer-exec", "/usr/bin/true"],
+  "waitFor": "postStartCommand",
   "customizations": {
     "vscode": {
       "extensions": [

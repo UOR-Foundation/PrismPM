@@ -114,6 +114,7 @@ COPY --chmod=0755 sdk/oracles/openid-conformance.sh /usr/local/bin/openid-confor
 RUN git config --system --add safe.directory /workspaces/PrismPM
 
 COPY --chmod=0755 .devcontainer/docker-entrypoint.sh /usr/local/bin/prismpm-devcontainer-init
+COPY --chmod=0755 .devcontainer/docker-ready.sh /usr/local/bin/prismpm-devcontainer-exec
 
 RUN groupadd --gid 1000 vscode \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash vscode \
