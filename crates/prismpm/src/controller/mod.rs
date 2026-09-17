@@ -54,6 +54,19 @@ impl Drop for VerifyWorkerGuard {
     }
 }
 
+fn require_verified_build(
+    verified: &VerifyResult,
+    selected: &BuildResult,
+) -> Result<(), PrismError> {
+    if verified.build_id != selected.build_id {
+        return Err(PrismError::new(
+            "PP6101",
+            "verification and selected build identities disagree",
+        ));
+    }
+    Ok(())
+}
+
 /// Controller for one canonical project root.
 #[derive(Debug, Clone)]
 pub struct Controller {
@@ -421,6 +434,12 @@ impl Controller {
             })?;
         crate::holo::projector::validate_snapshot_envelope(&snapshot.canonical_bytes())?;
         let system = crate::system::project(&snapshot, release)?;
+        if release.is_some() && system.is_none() {
+            return Err(PrismError::new(
+                "PP2101",
+                "a release selector requires a named system release in the source graph",
+            ));
+        }
         let application_selection = application_selection(&snapshot)?;
         let application_snapshot = if system.is_some() {
             application_selection
@@ -759,15 +778,19 @@ impl Controller {
         crate::authority::resolve(&self.root, true)?;
         crate::authority::verify(&self.root)?;
         let config_path = request.config_path;
-        let verified = self.verify(VerifyRequest {
-            config_path: config_path.clone(),
-        })?;
+        let verified = self.verify_release(
+            VerifyRequest {
+                config_path: config_path.clone(),
+            },
+            request.release.as_deref(),
+        )?;
         let selected = self.build_release(
             BuildRequest {
                 config_path: config_path.clone(),
             },
             request.release.as_deref(),
         )?;
+        require_verified_build(&verified, &selected)?;
         let validations = if self
             .prepare_release(config_path.as_deref(), request.release.as_deref())?
             .system
@@ -777,12 +800,6 @@ impl Controller {
         } else {
             Vec::new()
         };
-        if verified.build_id != selected.build_id && request.release.is_none() {
-            return Err(PrismError::new(
-                "PP9001",
-                "verification and selected build identities disagree",
-            ));
-        }
         crate::oci::assemble(
             &self.root,
             &selected.build_id,
@@ -814,6 +831,14 @@ impl Controller {
 
     /// Run the complete verified Lean-to-LCNF-to-Rust execution chain.
     pub fn verify(&self, request: VerifyRequest) -> Result<VerifyResult, PrismError> {
+        self.verify_release(request, None)
+    }
+
+    fn verify_release(
+        &self,
+        request: VerifyRequest,
+        release: Option<&str>,
+    ) -> Result<VerifyResult, PrismError> {
         ensure_verification_not_active()?;
         std::thread::scope(|scope| {
             let worker = std::thread::Builder::new()
@@ -821,7 +846,7 @@ impl Controller {
                 .stack_size(VERIFY_WORKER_STACK_BYTES)
                 .spawn_scoped(scope, move || {
                     let _guard = VerifyWorkerGuard::enter()?;
-                    crate::verification::run(self, request)
+                    crate::verification::run(self, request, release)
                 })
                 .map_err(|error| {
                     PrismError::new("PP5008", format!("start verification worker: {error}"))
@@ -832,6 +857,9 @@ impl Controller {
         })
     }
 }
+
+#[cfg(test)]
+mod release_tests;
 
 #[cfg(test)]
 mod tests {

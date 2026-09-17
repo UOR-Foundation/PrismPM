@@ -1,5 +1,26 @@
 # PrismPM falsifiability and verification record
 
+## Release identity and system certificates (OC-02, SY-02)
+
+The host certificate omitted product and secret-reference identities and used
+index order instead of dependency order. Corrected certificates satisfy both
+real Calculator A/B `SystemReleaseReady` proofs and all 12 individual formal
+predicates through LexLean; no formal rule or dependency was removed.
+
+Explicit A and default B passed actual runtime verification with bound receipts.
+Restoring default-only selection failed the receipt/build identity assertion;
+disabling the mismatch guard failed the expected `PP6101` rejection. Both
+mutations were removed byte-for-byte. The two controller tests and the other
+122 library tests passed in separate devcontainer invocations, with none ignored.
+External-oracle tests used the previously authenticated d017 SDK as tooling,
+not as a newly accepted SDK. The positive controller log has SHA-256
+`119bde7d6a503bd394061690b413f067ec35cd03c6ccb7ce84ba90e3bb12ab15`.
+
+The separate public `build --locked --release A` attempt stopped at `PP5403`:
+the copied fixture lacked an accepted canonical SDK lock. It produced no release
+artifact. These regressions do not establish public product-build integration,
+complete SDK acceptance, or Foundry deployment.
+
 ## Text application integration and artifact confinement
 
 `application_export_imports_every_generated_module` failed against the previous

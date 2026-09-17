@@ -2243,10 +2243,14 @@ fn run_application(
 pub(crate) fn run(
     controller: &Controller,
     request: VerifyRequest,
+    release: Option<&str>,
 ) -> Result<VerifyResult, PrismError> {
-    let build = controller.build(BuildRequest {
-        config_path: request.config_path.clone(),
-    })?;
+    let build = controller.build_release(
+        BuildRequest {
+            config_path: request.config_path.clone(),
+        },
+        release,
+    )?;
     let (config, _) = ProjectConfig::load(&controller.root, request.config_path.as_deref())?;
     let project_path = config.lexlean_path(&controller.root)?;
     let project_path = camino::Utf8PathBuf::from_path_buf(project_path)
