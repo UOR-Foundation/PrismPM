@@ -33,3 +33,9 @@
 .idea/
 .vscode/
 .claude/
+
+# These directories are immutable upstream source, not local editor state.
+!/standards/oracles/openid-conformance-suite-3e09b13b/.claude/
+!/standards/oracles/openid-conformance-suite-3e09b13b/.claude/**
+!/standards/oracles/openid-conformance-suite-3e09b13b/.idea/
+!/standards/oracles/openid-conformance-suite-3e09b13b/.idea/**
