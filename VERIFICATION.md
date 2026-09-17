@@ -830,6 +830,21 @@ Log `target/compiler-ee18ad9-stdlib.log` has SHA-256
 `e98f873051adbbc2b5d353980e328becc1b41844344ef1c94a20a7e3fb34ff97`.
 These component results do not establish a new SDK or Foundry acceptance.
 
+The complete source-devcontainer `just vv` ran on clean commit
+`47b7a8e6c8ff1aa4cbda8223ba22d02056b12fff`. Gates 1–14 passed, including
+all 150 conformance cases, repeated Calculator/Text Request verification,
+240 golden files, and 194 build plus nine verification artifacts reproduced
+byte-for-byte across two absolute roots. The authenticated `d0174e1` SDK
+supplied external oracle tools only; changed compiler and application checks
+used current source. This does not qualify a new shipped SDK.
+
+Gate 15 checked the stdlib package, then downstream `cargo check --offline`
+failed because the public crates.io index lacks `uor-hologram`; a separate
+HTTPS sparse-index request also returned 404. No dependency substitution or
+gate waiver was used, and `target/vv-evidence.json` was absent. Log
+`target/compiler-ee18ad9-vv-47b7a8e.log` has SHA-256
+`7445dbd9d73c6757823d0cea6e3a7baa897f355a11b9de6c62faf8a5e062aa95`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
