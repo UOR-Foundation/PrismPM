@@ -36,6 +36,16 @@ extension_policy = "closed"
 compatibility = "exact-major-additive-minor"
 
 [[contract]]
+schema = "prismpm/bootstrap-evidence/2"
+path = "schemas/bootstrap-evidence-v2.schema.json"
+media_type = "application/vnd.prismpm.bootstrap-evidence.v2+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 1048576
+maximum_items = 4096
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
 schema = "prismpm/bootstrap-evidence/1"
 path = "schemas/bootstrap-evidence.schema.json"
 media_type = "application/vnd.prismpm.bootstrap-evidence.v1+json"

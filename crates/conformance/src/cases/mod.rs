@@ -1079,9 +1079,53 @@ fn verify_sdk(id: &str) {
             });
             prismpm::contracts::CanonicalDocument::from_value(
                 "prismpm/bootstrap-evidence/1",
-                evidence,
+                evidence.clone(),
             )
             .expect("bootstrap evidence is a closed canonical contract");
+            // Contract-shape witnesses only; the bootstrap gate compares actual
+            // prior/current captures through scripts/bootstrap-evidence.mjs.
+            let identity = |digit: char| {
+                let value = digit.to_string().repeat(64);
+                serde_json::json!({
+                    "capture_digest": format!("sha256:{value}"),
+                    "compiler_semantics_id": value,
+                    "emitter_semantics_id": "e".repeat(64),
+                    "entity_count": 1,
+                    "lock_digest": format!("sha256:{value}"),
+                    "model_id": value,
+                    "result_digest": format!("sha256:{value}"),
+                    "semantic_id": value,
+                    "snapshot_id": value,
+                    "source_id": value
+                })
+            };
+            let mut content_evidence = evidence;
+            content_evidence["schema"] = serde_json::json!("prismpm/bootstrap-evidence/2");
+            content_evidence["bootstrap"]["archive_digest"] = serde_json::json!(
+                "sha256:f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c"
+            );
+            content_evidence["compatibility_projection"] = serde_json::json!({
+                "current": identity('a'), "prior": identity('b'),
+                "shared_content_digest": format!("sha256:{}", "c".repeat(64)),
+                "shared_model_digest": format!("sha256:{}", "d".repeat(64))
+            });
+            content_evidence["production_model"]["schema"] =
+                serde_json::json!("prismpm/check-result/1");
+            content_evidence["production_model"]["model_id"] = serde_json::json!("1".repeat(64));
+            prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/bootstrap-evidence/2",
+                content_evidence.clone(),
+            )
+            .expect("content-compatible evidence preserves separate compiler identities");
+            content_evidence["compatibility_projection"]["current"]
+                .as_object_mut()
+                .unwrap()
+                .remove("lock_digest");
+            assert!(prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/bootstrap-evidence/2",
+                content_evidence,
+            )
+            .is_err());
         }
         "DK-06" => {
             let temp = tempfile::tempdir().unwrap();

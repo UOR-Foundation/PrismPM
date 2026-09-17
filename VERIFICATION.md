@@ -780,6 +780,56 @@ exited 1 without `target/vv-evidence.json`; no full-pass or release receipt
 was produced. Log `target/portable-primary-vv-d1b8506.log` has SHA-256
 `0cd4c0754c1875453f28a5f72b056d06d8a99e3dc04d4cd8167ed52e499af0ab`.
 
+## Compiler-bound bootstrap compatibility
+
+The original bootstrap equality check rejected the reviewed compiler update:
+LexLean deliberately incorporates compiler semantics in `semantic_id`.
+Closed evidence `/2` preserves the accepted `/1` contract and compares complete
+linked snapshots, lexicon closures and projected model content, while separately
+binding the genuine prior/current compiler, emitter, source and artifact IDs.
+Actual check/build artifacts, their complete manifest closure, all tracked
+source bytes and the modeled source-manifest definitions are verified.
+
+The x64 source-devcontainer component run produced receipt
+`d9e82d12088db37032c3699462d4ecca5d86f32f73fcca9058b84adc4782ffe0`:
+the accepted 0.2.0 archive and current compiler agreed on the full 26-module
+compatibility projection, with 18 entities. A separate current production
+check passed. Independent review reconstructed every projection source from
+the accepted historical tree and separately rehashed the captures and manifest.
+
+Nine owning Node test groups, both Rust bootstrap contract tests, DK-05,
+workspace all-target Clippy and normal model validation passed. Negatives cover
+resealed semantic/proof/closure/domain/facet drift, substituted identities,
+ambiguous locks, source changes, missing/extra/tampered artifacts, symlinks,
+FIFOs, oversized files, duplicate/noncanonical JSON and untracked helpers.
+A genuine isolated source mutation changed `Foundation.Core.portableTrue`
+from true to false, then passed normal current check/build with the same entity
+count; the compatibility validator rejected its complete semantic content.
+Restoring the source reproduced the entire current capture byte-identically.
+Probe log `target/bootstrap-semantic-probe.log` has SHA-256
+`ef8c80aefb54469c47b76218d1353d1b25a55dd4b49338a0153fafdf613ebd1e`.
+These are component checks, not a full VV or public SDK release receipt.
+
+## Verified semantic compiler integration
+
+LexLean `ee18ad907039a82ff5b11ff2117d6dfe95d80365` passed its complete
+[upstream acceptance gate](https://github.com/afflom/LexLean/actions/runs/35112304941),
+including all 222 conformance cases and the complete Atlas verification.
+Two clean-source, offline Cargo package runs reproduced archive SHA-256
+`1b39ba47a7d013a79f5463fc49ab891ef4ca62402b05cb5a2059191bb3d4b8dd`.
+The vendored tree matches that exact package and its source revision.
+Normal LexLean locking updated 19 compiler identities; the deliberately stale
+negative fixture and every formal/application source remain unchanged.
+
+Normal stdlib generation and an independent check reproduced the same
+pre-seal attestation `6f4343171cee8d7341405c374da03778d735dc29d80a5ffac50c693802002fb2`.
+The complete exported LCNF, generated package and all three release crate
+archives remained byte-identical. Only the compiler-bound stdlib semantic
+identity changed to `9d8880e4ab270f05f668bdbe6ad8440ec225dc32fec5b8987f086d2a2197f53a`.
+Log `target/compiler-ee18ad9-stdlib.log` has SHA-256
+`e98f873051adbbc2b5d353980e328becc1b41844344ef1c94a20a7e3fb34ff97`.
+These component results do not establish a new SDK or Foundry acceptance.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

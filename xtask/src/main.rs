@@ -94,6 +94,7 @@ fn validate_contract() -> Result<(), Fail> {
     }
     let id: &'static str = match id.as_str() {
         "prismpm/bootstrap-evidence/1" => "prismpm/bootstrap-evidence/1",
+        "prismpm/bootstrap-evidence/2" => "prismpm/bootstrap-evidence/2",
         _ => return Err(format!("validate-contract does not expose {id}").into()),
     };
     let bytes = std::fs::read(&path)?;

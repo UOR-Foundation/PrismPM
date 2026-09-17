@@ -2,6 +2,8 @@ module
 public import Init
 public import PrismPM.Production.ControlCoverage
 set_option autoImplicit false
+set_option maxRecDepth 100000
+set_option maxHeartbeats 1000000000
 namespace PrismPM.Production.ControlCoverageCorpus
 
 public structure CoverageOctetConstant where

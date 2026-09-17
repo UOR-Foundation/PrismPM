@@ -6,6 +6,8 @@ public import PrismPM.Production.Operations
 public import PrismPM.Production.Runtime
 public import PrismPM.Production.Validation
 set_option autoImplicit false
+set_option maxRecDepth 100000
+set_option maxHeartbeats 1000000000
 namespace PrismPM.Production.System
 
 public structure ModelTerm where

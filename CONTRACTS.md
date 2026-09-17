@@ -12,6 +12,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/model-document/2` | `schemas/model-document-v2.schema.json` | `application/vnd.prismpm.model-document.v2+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
 | `prismpm/system-model/1` | `schemas/system-model.schema.json` | `application/vnd.prismpm.system-model.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/authority-binding/1` | `schemas/authority-binding.schema.json` | `application/vnd.prismpm.authority-binding.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
+| `prismpm/bootstrap-evidence/2` | `schemas/bootstrap-evidence-v2.schema.json` | `application/vnd.prismpm.bootstrap-evidence.v2+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/bootstrap-evidence/1` | `schemas/bootstrap-evidence.schema.json` | `application/vnd.prismpm.bootstrap-evidence.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/standards-lock/1` | `schemas/standards-lock.schema.json` | `application/vnd.prismpm.standards-lock.v1+json` | 8388608 bytes / 16384 items | `closed`; `exact-major` |
 | `prismpm/validation-result/1` | `schemas/validation-result.schema.json` | `application/vnd.prismpm.validation-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |

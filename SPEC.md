@@ -691,12 +691,29 @@ An SDK release is bootstrapped by the prior accepted SDK plus independently
 pinned language and kernel tools. The prior SDK checks a byte-exact manifest of
 the complete new tracked source closure through a source-bootstrap projection
 expressed in the prior language version. The new SDK checks that projection
-with the same semantic identity and separately checks the complete new model;
+with exactly equal semantic content and separately checks the complete new model;
 the compatibility projection is never reported as full conformance to language
 forms introduced after the prior SDK. The new SDK then rebuilds in two clean
 absolute roots, and an independent kernel/tool path verifies formal evidence.
 Provenance records the source manifest and both validation scopes and cannot
 cite the output as its sole input or verifier.
+
+Bootstrap evidence `/2` retains separate prior/current source, compiler,
+semantic, snapshot, emitter and model identities. Compatibility compares every
+snapshot member except the explicitly bound `source_id`, `semantic_id` and
+`compiler_semantics_id`: complete ordered modules, linked IR, declarations,
+proofs, source hashes and lexicon closure must agree. Compiler identity is bound
+to the accepted historical lock and the reviewed current lock; the same
+projection's relock may change only its compiler-semantics line. Complete
+projected model content, including facet-package provenance, must also agree;
+only the five separately cross-bound source/compiler/semantic/snapshot/emitter
+provenance identities may differ. Build manifests and check results bind the
+actual canonical artifacts. The modeled source-manifest digest and count must
+match every tracked file, rehashed after verification, including the verifier
+helpers. Exact captures remain available alongside the final receipt. Legacy
+`bootstrap-evidence/1` remains a closed historical contract, not evidence that
+different compiler identities are equal. This finite compatibility check does
+not establish full current-language, kernel, two-root or release acceptance.
 
 ## 13. OCI product-release graph
 

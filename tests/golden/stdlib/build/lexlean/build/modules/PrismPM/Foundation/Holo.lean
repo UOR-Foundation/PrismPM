@@ -25,6 +25,8 @@ public import PrismPM.Foundation.View.V1.Interaction
 public import PrismPM.Foundation.View.V1.Model
 public import PrismPM.Foundation.View.V1.Projection
 set_option autoImplicit false
+set_option maxRecDepth 100000
+set_option maxHeartbeats 1000000000
 namespace PrismPM.Foundation.Holo
 
 public structure StandardsProfile where

@@ -26,7 +26,7 @@ Feature: sdk
 
   @DK-05 @build
   Scenario: SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle.
-    Given the locked PrismPM production fixture
+    Given the locked PrismPM production fixture and closed legacy and content-compatible bootstrap evidence contracts
     When the DK-05 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
 

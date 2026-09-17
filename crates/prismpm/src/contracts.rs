@@ -12,7 +12,7 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 43] = [
+const CONTRACTS: [Contract; 44] = [
     Contract {
         id: "prismpm/sdk-lock-update/2",
         maximum_bytes: 201_326_592,
@@ -42,6 +42,12 @@ const CONTRACTS: [Contract; 43] = [
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
         schema: include_bytes!("../schemas/authority-binding.schema.json"),
+    },
+    Contract {
+        id: "prismpm/bootstrap-evidence/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/bootstrap-evidence-v2.schema.json"),
     },
     Contract {
         id: "prismpm/bootstrap-evidence/1",
@@ -782,6 +788,67 @@ mod tests {
         });
         CanonicalDocument::from_value("prismpm/bootstrap-evidence/1", value)
             .expect("bootstrap gate must emit the registered canonical contract");
+    }
+
+    #[test]
+    fn bootstrap_v2_binds_separate_identities_and_preserves_legacy_contract() {
+        let identity = |digit: char| {
+            json!({
+                "capture_digest": format!("sha256:{}", digit.to_string().repeat(64)),
+                "compiler_semantics_id": digit.to_string().repeat(64),
+                "emitter_semantics_id": "e".repeat(64),
+                "entity_count": 1,
+                "lock_digest": format!("sha256:{}", "f".repeat(64)),
+                "model_id": digit.to_string().repeat(64),
+                "result_digest": format!("sha256:{}", digit.to_string().repeat(64)),
+                "semantic_id": digit.to_string().repeat(64),
+                "snapshot_id": digit.to_string().repeat(64),
+                "source_id": digit.to_string().repeat(64)
+            })
+        };
+        let value = json!({
+            "bootstrap": {
+                "archive_digest": "sha256:f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c",
+                "binary_digest": format!("sha256:{}", "b".repeat(64)),
+                "source_commit": "f378fd3a8dc5711cb4b22cec9ee2f874353628c3",
+                "version": "0.2.0"
+            },
+            "compatibility_projection": {
+                "current": identity('a'), "prior": identity('b'),
+                "shared_content_digest": format!("sha256:{}", "c".repeat(64)),
+                "shared_model_digest": format!("sha256:{}", "d".repeat(64))
+            },
+            "production_model": {
+                "schema": "prismpm/check-result/1", "entity_count": 18,
+                "model_id": "1".repeat(64), "result_digest": format!("sha256:{}", "1".repeat(64)),
+                "semantic_id": "2".repeat(64), "snapshot_id": "3".repeat(64)
+            },
+            "schema": "prismpm/bootstrap-evidence/2",
+            "source_manifest": {"digest": format!("sha256:{}", "4".repeat(64)), "file_count": 200},
+            "status": "passed"
+        });
+        CanonicalDocument::from_value("prismpm/bootstrap-evidence/2", value.clone()).unwrap();
+        for pointer in [
+            "/compatibility_projection/current/lock_digest",
+            "/compatibility_projection/prior/compiler_semantics_id",
+            "/compatibility_projection/shared_content_digest",
+            "/compatibility_projection/shared_model_digest",
+        ] {
+            let mut changed = value.clone();
+            *changed.pointer_mut(pointer).unwrap() = serde_json::Value::Null;
+            assert!(
+                CanonicalDocument::from_value("prismpm/bootstrap-evidence/2", changed).is_err()
+            );
+        }
+        let mut changed = value.clone();
+        changed["compatibility_projection"]["shared_identity"] = json!({});
+        assert!(CanonicalDocument::from_value("prismpm/bootstrap-evidence/2", changed).is_err());
+        let mut changed = value.clone();
+        changed["schema"] = json!("prismpm/bootstrap-evidence/1");
+        assert!(CanonicalDocument::from_value("prismpm/bootstrap-evidence/1", changed).is_err());
+        let mut changed = value;
+        changed["bootstrap"]["source_commit"] = json!("0".repeat(40));
+        assert!(CanonicalDocument::from_value("prismpm/bootstrap-evidence/2", changed).is_err());
     }
 
     #[test]
