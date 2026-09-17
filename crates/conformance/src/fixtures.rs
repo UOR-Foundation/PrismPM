@@ -559,8 +559,32 @@ pub fn write(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
-    for entry in walkdir::WalkDir::new(from).into_iter().flatten() {
-        let rel = entry.path().strip_prefix(from).unwrap();
+    let metadata = std::fs::symlink_metadata(from)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "fixture source root must be a real directory",
+        ));
+    }
+    let entries = walkdir::WalkDir::new(from)
+        .follow_links(false)
+        .follow_root_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            // Only project-root generated state is excluded. A nested source
+            // directory with the same name remains part of the fixture.
+            entry.depth() != 1
+                || !matches!(
+                    entry.file_name().to_str(),
+                    Some("target" | ".prism" | ".lexlean" | ".lake" | ".git")
+                )
+        });
+    for entry in entries {
+        let entry = entry?;
+        let rel = entry
+            .path()
+            .strip_prefix(from)
+            .map_err(std::io::Error::other)?;
         let target = to.join(rel);
         if entry.file_type().is_dir() {
             std::fs::create_dir_all(&target)?;
@@ -569,7 +593,110 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
                 std::fs::create_dir_all(parent)?;
             }
             std::fs::copy(entry.path(), &target)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "fixture source entry is not a regular file or directory: {}",
+                    entry.path().display()
+                ),
+            ));
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::copy_dir_recursive;
+
+    const GENERATED_ROOTS: [&str; 5] = ["target", ".prism", ".lexlean", ".lake", ".git"];
+
+    #[test]
+    fn fixture_copy_preserves_sources_and_prunes_only_generated_roots() {
+        let source = tempfile::tempdir().unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        let mut expected = vec![
+            ("model.lex.tex".to_owned(), b"model\0bytes".to_vec()),
+            (".fixture-config".to_owned(), b"dotfile".to_vec()),
+            ("src/.hidden".to_owned(), b"nested dotfile".to_vec()),
+        ];
+        for name in GENERATED_ROOTS {
+            let cache = source.path().join(name).join("cache");
+            std::fs::create_dir_all(&cache).unwrap();
+            std::fs::write(cache.join("generated"), b"must not copy").unwrap();
+            expected.push((
+                format!("src/{name}/ordinary-source"),
+                name.as_bytes().to_vec(),
+            ));
+        }
+        for (path, bytes) in &expected {
+            let path = source.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        copy_dir_recursive(source.path(), destination.path()).unwrap();
+        for (path, bytes) in expected {
+            assert_eq!(std::fs::read(destination.path().join(path)).unwrap(), bytes);
+        }
+        for name in GENERATED_ROOTS {
+            assert!(
+                !destination.path().join(name).exists(),
+                "copied generated {name}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn fixture_copy_prunes_dangling_generated_root_links_before_traversal() {
+        let source = tempfile::tempdir().unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        std::fs::write(source.path().join("source"), b"preserved").unwrap();
+        for name in GENERATED_ROOTS {
+            std::os::unix::fs::symlink("missing-cache", source.path().join(name)).unwrap();
+        }
+        copy_dir_recursive(source.path(), destination.path()).unwrap();
+        assert_eq!(
+            std::fs::read(destination.path().join("source")).unwrap(),
+            b"preserved"
+        );
+        for name in GENERATED_ROOTS {
+            assert!(std::fs::symlink_metadata(destination.path().join(name)).is_err());
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn fixture_copy_rejects_source_symlinks_and_nonregular_entries() {
+        let source = tempfile::tempdir().unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        let link = source.path().join("source-link");
+        std::os::unix::fs::symlink("missing-source", &link).unwrap();
+        assert!(copy_dir_recursive(source.path(), destination.path()).is_err());
+        std::fs::remove_file(link).unwrap();
+        let _socket = std::os::unix::net::UnixListener::bind(source.path().join("socket")).unwrap();
+        assert!(copy_dir_recursive(source.path(), destination.path()).is_err());
+    }
+
+    #[test]
+    fn fixture_copy_propagates_missing_source_errors() {
+        let source = tempfile::tempdir().unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        assert!(copy_dir_recursive(&source.path().join("absent"), destination.path()).is_err());
+        assert_eq!(std::fs::read_dir(destination.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn fixture_copy_rejects_a_symlinked_source_root() {
+        let source = tempfile::tempdir().unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        let boundary = tempfile::tempdir().unwrap();
+        std::fs::write(source.path().join("source"), b"outside").unwrap();
+        let link = boundary.path().join("source-link");
+        std::os::unix::fs::symlink(source.path(), &link).unwrap();
+        assert!(copy_dir_recursive(&link, destination.path()).is_err());
+        assert_eq!(std::fs::read_dir(destination.path()).unwrap().count(), 0);
+    }
 }
