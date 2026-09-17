@@ -2130,7 +2130,7 @@ fn ingress_controller_resources(target: &Value) -> Result<Vec<Value>, PrismError
     if target["ingress_class_name"].is_null() {
         return Ok(Vec::new());
     }
-    let resources = serde_yaml::Deserializer::from_slice(INGRESS_NGINX_KIND)
+    let mut resources = serde_yaml::Deserializer::from_slice(INGRESS_NGINX_KIND)
         .map(|document| {
             Value::deserialize(document).map_err(|error| {
                 PrismError::new(
@@ -2144,6 +2144,17 @@ fn ingress_controller_resources(target: &Value) -> Result<Vec<Value>, PrismError
             other => Some(other),
         })
         .collect::<Result<Vec<_>, _>>()?;
+    // The pinned ingress manifest spells the empty ConfigMap as `data: null`.
+    // Emit an empty map, as required by the authoritative core/v1 schema;
+    // preserve the imported source and every configured value unchanged.
+    for resource in &mut resources {
+        if resource["apiVersion"] == "v1"
+            && resource["kind"] == "ConfigMap"
+            && resource.get("data") == Some(&Value::Null)
+        {
+            resource["data"] = json!({});
+        }
+    }
     if resources.is_empty()
         || !resources.iter().any(|resource| {
             resource["kind"] == "IngressClass"
@@ -2829,6 +2840,37 @@ mod tests {
     };
     use serde_json::json;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn ingress_projection_normalizes_only_empty_configmap_data() {
+        use serde::Deserialize;
+        use serde_json::Value;
+
+        let resources = super::ingress_controller_resources(&json!({
+            "ingress_class_name": "nginx"
+        }))
+        .unwrap();
+        let imported = serde_yaml::Deserializer::from_slice(super::INGRESS_NGINX_KIND)
+            .map(|document| Value::deserialize(document).unwrap())
+            .filter(|document| !document.is_null())
+            .collect::<Vec<_>>();
+        assert_eq!(resources.len(), imported.len());
+        let mut normalized = 0;
+        for (actual, mut original) in resources.into_iter().zip(imported) {
+            if original["apiVersion"] == "v1"
+                && original["kind"] == "ConfigMap"
+                && original.get("data") == Some(&Value::Null)
+            {
+                original["data"] = json!({});
+                normalized += 1;
+            }
+            assert_eq!(actual, original);
+        }
+        assert_eq!(normalized, 1);
+        assert!(super::ingress_controller_resources(&json!({}))
+            .unwrap()
+            .is_empty());
+    }
 
     #[test]
     fn capability_authority_links_are_exact_and_honest() {

@@ -1,5 +1,26 @@
 # PrismPM falsifiability and verification record
 
+## Complete generated-projection oracle execution
+
+Real system projections exposed two additional failures: Compose could not
+resolve its modeled secret-directory reference in the cleared sandbox, and
+the Kubernetes wrapper rejected the generated generic `List` before checking
+its resources. Compose now receives a fixed, isolated non-secret directory;
+interpolation and consistency checks remain enabled. The Kubernetes wrapper
+traverses every collection leaf through the unchanged pinned OpenAPI schema.
+That schema then rejected the imported ingress ConfigMap's `data: null`;
+the projection now emits its empty map without modifying imported source.
+
+Compose positive/negative tests and all four Kubernetes wrapper tests pass.
+The actual modeled system passes all seven locked projection oracles in
+`target/projection-oracles-preflight-normalized.log`, after the recorded
+failures in `target/compose-project-environment-red.log` and
+`target/projection-oracles-preflight-complete.log`. The development-only
+oracle image is digest-bound at
+`127.0.0.1:5000/prismpm-oracle-test@sha256:eb5205273cfcc84bb749272115a40a3b527403d2db5a8ec3751c345bbd7a1f7b`;
+it runs the corrected wrapper tests and regenerates its real SDK inventory.
+It supplies external tools, not an accepted SDK release or Foundry deployment.
+
 ## SPDX project-oracle schema binding
 
 The genuine project runner rejected a valid SPDX document with `PP5403`:

@@ -162,7 +162,7 @@ RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/runtime \
     && chmod 0444 /opt/prismpm/runtime/profile.mjs \
     && chmod 0555 /opt/prismpm/runtime/runtime.mjs
 
-COPY sdk/oracles/package.json sdk/oracles/package-lock.json sdk/oracles/asyncapi-parser.mjs sdk/oracles/devcontainer-validator.mjs sdk/oracles/git-signature-validator.mjs sdk/oracles/kubernetes-validator.mjs sdk/oracles/slsa-validator.mjs sdk/oracles/spdx-validator.mjs /opt/prismpm/oracles/
+COPY sdk/oracles/package.json sdk/oracles/package-lock.json sdk/oracles/asyncapi-parser.mjs sdk/oracles/devcontainer-validator.mjs sdk/oracles/git-signature-validator.mjs sdk/oracles/kubernetes-validator.mjs sdk/oracles/kubernetes-validator.test.mjs sdk/oracles/slsa-validator.mjs sdk/oracles/spdx-validator.mjs /opt/prismpm/oracles/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
     && chmod 0555 /opt/prismpm/oracles/asyncapi-parser.mjs /opt/prismpm/oracles/devcontainer-validator.mjs /opt/prismpm/oracles/git-signature-validator.mjs /opt/prismpm/oracles/kubernetes-validator.mjs /opt/prismpm/oracles/slsa-validator.mjs /opt/prismpm/oracles/spdx-validator.mjs \
     && ln -s /opt/prismpm/oracles/asyncapi-parser.mjs /usr/local/bin/asyncapi-parser \
@@ -208,6 +208,7 @@ RUN cargo build --locked --release --package prismpm \
     && ! devcontainer-validator standards/corpora/devcontainer-c95ffeed/invalid-image-type.json \
     && kubernetes-validator standards/corpora/kubernetes-1.36.4/valid-service.yaml \
     && ! kubernetes-validator standards/corpora/kubernetes-1.36.4/invalid-pod.yaml \
+    && node --test /opt/prismpm/oracles/kubernetes-validator.test.mjs \
     && slsa-validator --provenance standards/corpora/slsa-verifier-2.7.1/binary-linux-amd64-workflow_dispatch.intoto.sigstore --trusted-root standards/trust/sigstore-trusted-root-cosign-3.1.3.json --source-uri github.com/slsa-framework/example-package --certificate-identity 'https://github.com/slsa-framework/slsa-github-generator/.github/workflows/builder_container-based_slsa3.yml@refs/tags/v1.7.0' --certificate-oidc-issuer https://token.actions.githubusercontent.com standards/corpora/slsa-verifier-2.7.1/binary-linux-amd64-workflow_dispatch \
     && ! slsa-validator --provenance standards/corpora/slsa-verifier-2.7.1/binary-linux-amd64-workflow_dispatch.intoto.sigstore --trusted-root standards/trust/sigstore-trusted-root-cosign-3.1.3.json --source-uri github.com/slsa-framework/example-package --certificate-identity 'https://github.com/slsa-framework/slsa-github-generator/.github/workflows/builder_container-based_slsa3.yml@refs/tags/v1.7.0' --certificate-oidc-issuer https://token.actions.githubusercontent.com standards/corpora/devcontainer-c95ffeed/invalid-image-type.json \
     && mkdir -p /opt/prismpm/share \

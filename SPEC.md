@@ -523,9 +523,16 @@ identities. Without `--locked` it emits a deterministic reviewable lock diff;
 with `--locked` it compares and fails on change. `fetch --locked` acquires only
 locked URLs, checks signatures where published, checks every digest, and
 atomically moves complete content into the immutable cache. Oracle verification
-reads a populated cache without network, runs a direct executable with an empty
-environment, read-only inputs and bounded scratch, and emits an in-toto
-validation statement whose subject is the validated artifact.
+reads a populated cache without network, runs a direct executable with the host
+environment cleared, fixed SDK environment values, read-only inputs and bounded
+scratch, and emits an in-toto validation statement whose subject is the validated
+artifact.
+
+Compose validation binds `PRISMPM_SECRET_DIR` to the isolated non-secret path
+`/scratch/prismpm-secret-references`; it does not import host paths or credentials.
+Interpolation, normalization and consistency checks stay enabled. This validates
+modeled file references, not secret availability or deployment readiness; the
+target lifecycle separately checks and binds actual authorized secret material.
 
 Every active oracle has upstream positive and negative cases where available
 and a Prism mutation corpus. An oracle that never executes, always succeeds,

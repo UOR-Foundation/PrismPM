@@ -19,6 +19,7 @@ const CATALOG: &str = include_str!("../model/authorities.toml");
 const WRAPPER_SOURCE: &[u8] = include_bytes!("authority.rs");
 const UPSTREAM_CONFORMANCE_SOURCE: &[u8] = include_bytes!("upstream_conformance.rs");
 const ASYNCAPI_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/asyncapi-parser.mjs");
+const KUBERNETES_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/kubernetes-validator.mjs");
 const INTOTO_WRAPPER_SOURCE: &[u8] =
     include_bytes!("../sdk/oracles/go/intoto-statement-validator/main.go");
 const OPENAPI_SCHEMA: &[u8] =
@@ -333,6 +334,7 @@ fn wrapper_sha256(row: &OracleRow) -> Result<String, PrismError> {
         "crates/prismpm/src/authority.rs" => WRAPPER_SOURCE,
         "crates/prismpm/src/upstream_conformance.rs" => UPSTREAM_CONFORMANCE_SOURCE,
         "sdk/oracles/asyncapi-parser.mjs" => ASYNCAPI_WRAPPER_SOURCE,
+        "sdk/oracles/kubernetes-validator.mjs" => KUBERNETES_WRAPPER_SOURCE,
         "sdk/oracles/go/intoto-statement-validator/main.go" => INTOTO_WRAPPER_SOURCE,
         _ => {
             return Err(PrismError::new(
@@ -1700,8 +1702,18 @@ fn sandbox_arguments(
         "LANG=C".to_owned(),
         "PATH=/usr/local/bin:/usr/bin:/bin".to_owned(),
         "PRISMPM_ORACLE_SANDBOX=1".to_owned(),
-        executable.to_owned(),
     ]);
+    if executable == "docker"
+        && invocation
+            .arguments
+            .first()
+            .is_some_and(|argument| argument == "compose")
+    {
+        // Normalize modeled file references without importing host credentials.
+        // The target lifecycle separately validates and supplies real secrets.
+        arguments.push("PRISMPM_SECRET_DIR=/scratch/prismpm-secret-references".to_owned());
+    }
+    arguments.push(executable.to_owned());
     arguments.extend(invocation.arguments.iter().cloned());
     Ok(arguments)
 }
@@ -2735,6 +2747,34 @@ mod tests {
         assert_eq!(invocation.mounts[0].guest, "/oracle-inputs/input");
         assert!(!joined.contains("/var/run/docker.sock,target="));
         assert!(!joined.contains("sh -c"));
+        assert!(!joined.contains("PRISMPM_SECRET_DIR="));
+
+        let compose = catalog
+            .oracle
+            .iter()
+            .find(|oracle| oracle.id == "compose-fee041b3")
+            .unwrap();
+        let invocation = external_invocation(compose, input.path(), &BTreeMap::new()).unwrap();
+        let arguments = sandbox_arguments(
+            &format!("example.test/sdk@sha256:{}", "a".repeat(64)),
+            "docker",
+            &invocation,
+            "prismpm-compose-test",
+            "prismpm-compose-inputs",
+            compose.memory_bytes,
+        )
+        .unwrap();
+        let joined = arguments.join("\n");
+        assert!(joined
+            .contains("PRISMPM_SECRET_DIR=/scratch/prismpm-secret-references\ndocker\ncompose"));
+        for bypass in [
+            "--no-interpolate",
+            "--no-consistency",
+            "--no-normalize",
+            "--no-path-resolution",
+        ] {
+            assert!(!arguments.iter().any(|argument| argument == bypass));
+        }
     }
 
     #[test]
@@ -3060,6 +3100,48 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn docker_sandbox_compose_checks_secret_references_without_credentials() {
+        let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE").unwrap();
+        crate::oci::validate_reference(&sdk_image, true).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let standards = resolved_lock().unwrap();
+        std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();
+        write_sdk_lock(root.path(), standards.digest(), sdk_image);
+        let document = json!({
+            "name":"oracle-secret-reference",
+            "services":{"app":{"image":"example.test/app:fixture","secrets":["credential"]}},
+            "secrets":{"credential":{"file":"${PRISMPM_SECRET_DIR:?required}/credential"}}
+        });
+        for mutation in 0..3 {
+            let mut value = document.clone();
+            match mutation {
+                0 => {}
+                1 => value["services"]["app"]["depends_on"] = json!(["absent"]),
+                2 => {
+                    value["secrets"]["credential"]["file"] =
+                        json!("${UNBOUND_ORACLE_SECRET_ROOT:?required}/credential")
+                }
+                _ => unreachable!(),
+            }
+            let bytes = encode_value(&value).unwrap();
+            let path = root.path().join(format!("compose-{mutation}.json"));
+            std::fs::write(&path, &bytes).unwrap();
+            let result = run_oracle_in_project(root.path(), "compose", &path);
+            if mutation == 0 {
+                assert!(
+                    result
+                        .expect("modeled secret references must validate without credentials")
+                        .valid
+                );
+            } else {
+                assert_eq!(result.unwrap_err().code, "PP5404");
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        }
+        assert!(!root.path().join("credential").exists());
     }
 
     #[test]

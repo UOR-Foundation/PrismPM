@@ -1081,7 +1081,7 @@ memory_bytes = 536870912
 output_bytes = 4194304
 network = "deny"
 normalization = "prismpm/oracle-diagnostics/1"
-covers = ["Docker Compose parsing and normalization with the pinned CLI"]
+covers = ["Docker Compose parsing and normalization with the pinned CLI and a fixed non-secret sandbox directory for modeled secret-file references"]
 does_not_cover = ["service lifecycle, fixture execution, providers, and other implementations require separate deployment evidence"]
 expected_exits = ["0=pass", "nonzero=invalid"]
 upstream_payload_sha256 = "09916fd41b9a36b404c3b99b75c43f771624a8cab74d33d794a237d49d34be81"
@@ -1101,11 +1101,11 @@ memory_bytes = 536870912
 output_bytes = 4194304
 network = "deny"
 normalization = "prismpm/oracle-diagnostics/1"
-covers = ["Kubernetes 1.36.4 YAML decoding, GVK selection, and locked official OpenAPI validation"]
+covers = ["Kubernetes 1.36.4 YAML decoding, generic List collection traversal, GVK selection, and locked official OpenAPI validation of every resource"]
 does_not_cover = ["server admission, rollout, managed-provider extensions, and future Kubernetes minors; those are deployment evidence"]
 expected_exits = ["0=pass", "nonzero=invalid"]
 upstream_payload_sha256 = "dcede2063da1d7ad62ecb5af8adb6d7fabd0b52385a7fa0048afb491dac90450"
-wrapper_source = "crates/prismpm/src/authority.rs"
+wrapper_source = "sdk/oracles/kubernetes-validator.mjs"
 
 [[authority]]
 id = "CLOUDEVENTS-1-0-2"
