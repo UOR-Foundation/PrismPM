@@ -1577,7 +1577,7 @@ fn emit_oracle_attestation(
     valid: bool,
     runner_image: Option<&str>,
 ) -> Result<(String, String, Option<String>), PrismError> {
-    let wrapper = format!("{:x}", Sha256::digest(WRAPPER_SOURCE));
+    let wrapper = wrapper_sha256(oracle)?;
     let oracle_binding = oracle_value(oracle, &wrapper);
     let oracle_digest = format!("sha256:{}", content_id(&encode_value(&oracle_binding)?));
     let statement = json!({
@@ -2383,18 +2383,18 @@ pub fn run_oracle_in_project(
 #[cfg(test)]
 mod tests {
     use super::{
-        acquired_rows, cache_object, catalog, external_invocation, fetch, git_tag_sha1,
-        intoto_policy_accepts, oracle_input_archive, replay_tag_signature, resolved_lock,
-        run_oracle, run_oracle_in_project, run_oracle_with_bindings_in_project, sandbox_arguments,
-        validate_signature_evidence, verify_project_oracle_binding, verify_signature_evidence_set,
-        SandboxInvocation, SandboxMount, AKIHIROSUDA_OPENPGP_ROOT, HAYDEN_IO_SSH_ROOT,
-        OPENAPI_SCHEMA, OSV_SCHEMA, SIGSTORE_TRUSTED_ROOT, SONGY23_SSH_ROOT,
+        acquired_rows, cache_object, catalog, emit_oracle_attestation, external_invocation, fetch,
+        git_tag_sha1, intoto_policy_accepts, oracle_input_archive, replay_tag_signature,
+        resolved_lock, run_oracle, run_oracle_in_project, run_oracle_with_bindings_in_project,
+        sandbox_arguments, validate_signature_evidence, verify_project_oracle_binding,
+        verify_signature_evidence_set, SandboxInvocation, SandboxMount, AKIHIROSUDA_OPENPGP_ROOT,
+        HAYDEN_IO_SSH_ROOT, OPENAPI_SCHEMA, OSV_SCHEMA, SIGSTORE_TRUSTED_ROOT, SONGY23_SSH_ROOT,
         SUDO_BMITCH_OPENPGP_ROOT,
     };
     use crate::contracts::CanonicalDocument;
     use crate::error::PrismError;
-    use crate::holo::canonical::encode_value;
-    use serde_json::json;
+    use crate::holo::canonical::{content_id, encode_value};
+    use serde_json::{json, Value};
     use sha2::{Digest, Sha256};
     use std::collections::BTreeMap;
     use std::fs::File;
@@ -2449,6 +2449,72 @@ mod tests {
         assert!(first.value()["authorities"].as_array().unwrap().len() >= 20);
         assert!(first.value()["oracles"].as_array().unwrap().len() >= 10);
         assert!(!String::from_utf8_lossy(first.bytes()).contains("latest"));
+    }
+
+    #[test]
+    fn oracle_attestation_emitter_unit_binds_every_registered_wrapper() {
+        // Emitter contract test only: no oracle executes on this synthetic subject.
+        let root = tempfile::tempdir().unwrap();
+        let subject = format!("sha256:{}", content_id(b"oracle emitter unit subject"));
+        let lock = resolved_lock().unwrap();
+        let bindings = lock.value()["oracles"].as_array().unwrap();
+        for oracle in catalog().unwrap().oracle {
+            let binding = bindings.iter().find(|row| row["id"] == oracle.id).unwrap();
+            let expected_digest = format!("sha256:{}", content_id(&encode_value(binding).unwrap()));
+            for valid in [false, true] {
+                let (oracle_digest, attestation_digest, path) =
+                    emit_oracle_attestation(Some(root.path()), &oracle, &subject, valid, None)
+                        .unwrap();
+                let bytes = std::fs::read(root.path().join(path.unwrap())).unwrap();
+                let statement: Value = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(encode_value(&statement).unwrap(), bytes);
+                assert_eq!(attestation_digest, format!("sha256:{}", content_id(&bytes)));
+                assert_eq!(oracle_digest, expected_digest, "oracle {}", oracle.id);
+                assert_eq!(
+                    statement,
+                    json!({
+                        "_type":"https://in-toto.io/Statement/v1",
+                        "predicate":{
+                            "authority_ids":binding["authority_ids"],
+                            "covered":binding["covers"],
+                            "edition":binding["edition"],
+                            "normalized_result":if valid { "valid" } else { "invalid" },
+                            "oracle":binding["id"],
+                            "oracle_digest":expected_digest,
+                            "runner_image":null,
+                            "uncovered":binding["does_not_cover"]
+                        },
+                        "predicateType":"https://schemas.uor.foundation/prismpm/oracle-validation/v1",
+                        "subject":[{"digest":{"sha256":subject.trim_start_matches("sha256:")},"name":"projected-artifact"}]
+                    }),
+                    "oracle {}",
+                    oracle.id
+                );
+                let mut substituted = binding.clone();
+                substituted["wrapper_sha256"] = bindings
+                    .iter()
+                    .find(|row| row["wrapper_sha256"] != binding["wrapper_sha256"])
+                    .expect("catalog exercises distinct wrapper implementations")["wrapper_sha256"]
+                    .clone();
+                let substituted_digest = format!(
+                    "sha256:{}",
+                    content_id(&encode_value(&substituted).unwrap())
+                );
+                assert_ne!(statement["predicate"]["oracle_digest"], substituted_digest);
+            }
+        }
+    }
+
+    #[test]
+    fn oracle_attestation_emitter_unit_rejects_unknown_wrapper_without_evidence() {
+        let root = tempfile::tempdir().unwrap();
+        let mut oracle = catalog().unwrap().oracle.remove(0);
+        oracle.wrapper_source = "unregistered-wrapper".to_owned();
+        let subject = format!("sha256:{}", content_id(b"oracle emitter unit subject"));
+        let error =
+            emit_oracle_attestation(Some(root.path()), &oracle, &subject, true, None).unwrap_err();
+        assert_eq!(error.code, "PP5402");
+        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
     }
 
     #[test]
