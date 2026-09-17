@@ -218,14 +218,7 @@ pub fn validate_build(root: &Path, build_id: &str) -> Result<Vec<Value>, PrismEr
                 .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
         );
     }
-    let event = crate::holo::canonical::encode_value(&serde_json::json!({
-        "data":{},
-        "id":"prismpm-validation-fixture",
-        "source":"https://uor.foundation/prismpm/validation",
-        "specversion":"1.0",
-        "subject":"validation-fixture",
-        "type":"org.uor.prismpm.validation.v1"
-    }))?;
+    let event = cloud_event_validation_fixture()?;
     let event_file = tempfile::NamedTempFile::new_in(&base)
         .map_err(|error| PrismError::new("PP5404", format!("CloudEvents fixture: {error}")))?;
     std::fs::write(event_file.path(), event)
@@ -237,6 +230,17 @@ pub fn validate_build(root: &Path, build_id: &str) -> Result<Vec<Value>, PrismEr
     );
     results.sort_by(|left, right| left["oracle"].as_str().cmp(&right["oracle"].as_str()));
     Ok(results)
+}
+
+pub(crate) fn cloud_event_validation_fixture() -> Result<Vec<u8>, PrismError> {
+    crate::holo::canonical::encode_value(&serde_json::json!({
+        "data":{},
+        "id":"prismpm-validation-fixture",
+        "source":"https://uor.foundation/prismpm/validation",
+        "specversion":"1.0",
+        "subject":"validation-fixture",
+        "type":"org.uor.prismpm.validation.v1"
+    }))
 }
 
 #[cfg(test)]

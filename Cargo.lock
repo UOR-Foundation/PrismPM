@@ -1138,6 +1138,7 @@ dependencies = [
  "prod-codegen",
  "prod-ir",
  "proptest",
+ "rustix",
  "same-file",
  "semver",
  "serde",

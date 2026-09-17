@@ -24,7 +24,7 @@ const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com
 const SIGSTORE_TRUSTED_ROOT: &[u8] =
     include_bytes!("../standards/trust/sigstore-trusted-root-cosign-3.1.3.json");
 const SLSA_PROVENANCE_V1: &str = "https://slsa.dev/provenance/v1";
-const PRISM_BUILD_TYPE: &str = "https://uor.foundation/prismpm/build/v1";
+pub(crate) const PRISM_BUILD_TYPE: &str = "https://uor.foundation/prismpm/build/v1";
 const GENERATED_ARTIFACT_LICENSE: &str = "MIT OR Apache-2.0";
 const SIGSTORE_BUNDLE_V03: &str = "application/vnd.dev.sigstore.bundle.v0.3+json";
 const FULCIO_ISSUER: &str = "1.3.6.1.4.1.57264.1.8";

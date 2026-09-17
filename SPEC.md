@@ -435,7 +435,7 @@ the manifest; package generation requires its bytes and declared export union
 to agree with the current authoritative registers.
 The attestation ID is SHA-256 of manifest bytes; the
 manifest does not contain its own ID. Only after all stages pass are the
-manifest and normalized platform-independent evidence atomically published at
+manifest, normalized evidence, and native executable atomically published at
 `<build_root>/verified/<attestation-id>/`. Failed verification publishes no
 verified directory.
 
@@ -734,6 +734,30 @@ vulnerability and license results, and deployment evidence are OCI referrers
 whose `subject` is exact. Roles are unique where policy requires one result.
 Dangling descriptors, digest or size disagreement, confused subjects, and
 cycles fail before a verified root is published.
+
+The original build manifest is a root layer (`build-manifest` role). Every
+manifest-declared output remains a separate, path-bound descriptor even when
+two files share identical bytes. Artifact declarations sort by digest then
+title. A singleton `application/vnd.prismpm.verification.v1+json` subject
+referrer retains the complete runtime verification directory and projection
+oracle attestations through ordinary OCI layer edges. Its closed
+`prismpm/verification-closure/1` config binds the build, model, and verification
+manifest identities. Architecture-specific executable and process evidence
+does not change the architecture-independent product root.
+
+Assembly and source-free replay validate the same exact file sets, byte lengths,
+hashes, canonical framing, LexLean identities, application acceptance or native
+execution corpus, and successful process records. Application-root snapshots
+and LexLean build manifests are retained separately from a containing system's
+full proof closure. `prismpm/release-validation/1` and SLSA resolved dependencies
+bind the verification referrer's digest and original build-manifest digest.
+Oracle results retain their exact attestations, locked contracts, covered and
+uncovered scope, and projected subjects. Evidence integrity is not producer
+authentication or complete operational acceptance; signed promotion policy
+and product acceptance remain separate requirements.
+Each build or verification file map is bounded to 65,536 files and 10 GiB;
+individual verification JSON documents are bounded to 64 MiB. Imported
+LexLean framing and lean4-prod named-export framing are preserved exactly.
 
 `build --locked -t REFERENCE CONTEXT` creates local content only and returns
 `prismpm/product-release-result/1`. It runs all required gates before writing

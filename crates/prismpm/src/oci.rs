@@ -12,6 +12,8 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
+mod verification_closure;
+
 /// OCI image-manifest media type adopted by Prism release graphs.
 pub const OCI_MANIFEST: &str = "application/vnd.oci.image.manifest.v1+json";
 /// OCI image-index media type adopted by Prism release graphs.
@@ -26,6 +28,8 @@ pub const DOCKER_MANIFEST_LIST: &str = "application/vnd.docker.distribution.mani
 pub const PRISM_RELEASE: &str = "application/vnd.prismpm.product.release.v1+json";
 /// Prism validation-attestation media type.
 pub const PRISM_VALIDATION: &str = "application/vnd.prismpm.validation.v1+json";
+/// Lossless runtime and oracle verification closure, attached to an exact release.
+pub const PRISM_VERIFICATION: &str = "application/vnd.prismpm.verification.v1+json";
 /// in-toto Statement media type.
 pub const INTOTO: &str = "application/vnd.in-toto+json";
 /// OCI empty configuration media type used by artifact manifests.
@@ -52,8 +56,14 @@ pub const COSIGN_SIGNATURE: &str = "application/vnd.dev.cosign.artifact.sig.v1+j
 pub const COSIGN_SIMPLE_SIGNING: &str = "application/vnd.dev.cosign.simplesigning.v1+json";
 
 const VERIFIED_SCHEMA: &str = "prismpm/verified-oci-root/1";
-const CORE_REFERRERS: [&str; 2] = [INTOTO, PRISM_VALIDATION];
-const RELEASE_REFERRERS: [&str; 4] = [INTOTO, PRISM_VALIDATION, SPDX, PRISM_SUPPLY_CHAIN];
+const CORE_REFERRERS: [&str; 3] = [INTOTO, PRISM_VALIDATION, PRISM_VERIFICATION];
+const RELEASE_REFERRERS: [&str; 5] = [
+    INTOTO,
+    PRISM_VALIDATION,
+    PRISM_VERIFICATION,
+    SPDX,
+    PRISM_SUPPLY_CHAIN,
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -142,6 +152,8 @@ fn digest_hex(digest: &str) -> Result<&str, PrismError> {
 fn relative(value: &str) -> Result<&str, PrismError> {
     if value.is_empty()
         || value.contains('\\')
+        || value.bytes().any(|byte| byte.is_ascii_control())
+        || value.split('/').any(|part| matches!(part, "" | "." | ".."))
         || Path::new(value)
             .components()
             .any(|part| !matches!(part, Component::Normal(_)))
@@ -185,6 +197,7 @@ fn validate_media_type(value: &str) -> Result<(), PrismError> {
             essence,
             PRISM_RELEASE
                 | PRISM_VALIDATION
+                | PRISM_VERIFICATION
                 | PRISM_SUPPLY_CHAIN
                 | PRISM_PRODUCTION_ACCEPTANCE
                 | PRISM_EVIDENCE_SIGNATURE
@@ -449,6 +462,16 @@ fn file_descriptor(
     Ok(descriptor)
 }
 
+fn artifact_order(row: &Value) -> (String, String) {
+    (
+        row["digest"].as_str().unwrap_or_default().to_owned(),
+        row["annotations"]["org.opencontainers.image.title"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned(),
+    )
+}
+
 fn oci_manifest(
     store: &Store,
     artifact_type: &str,
@@ -510,7 +533,8 @@ fn source_revision(model: &Value) -> Result<String, PrismError> {
 /// Assemble a verified build into a deterministic OCI product graph.
 pub fn assemble(
     root: &Path,
-    build_id: &str,
+    build: &crate::controller::BuildResult,
+    verified: &crate::controller::VerifyResult,
     reference: &str,
     validations: &[Value],
 ) -> Result<ProductBuildResult, PrismError> {
@@ -523,36 +547,13 @@ pub fn assemble(
         .tempdir_in(&prism_root)
         .map_err(|error| PrismError::new("PP6101", format!("OCI staging: {error}")))?;
     let store = Store::open(staging_project.path())?;
-    let build_root = root.join(".prism/build").join(build_id);
-    if !build_root.is_dir() {
-        return Err(PrismError::new(
-            "PP6101",
-            "verified build directory is absent",
-        ));
-    }
-    let manifest_bytes = std::fs::read(build_root.join("manifest.json"))
-        .map_err(|error| PrismError::new("PP6101", format!("build manifest: {error}")))?;
-    let build_manifest: Value = serde_json::from_slice(&manifest_bytes)
-        .map_err(|error| PrismError::new("PP6101", format!("build manifest: {error}")))?;
-    let rows = build_manifest["files"]
-        .as_array()
-        .ok_or_else(|| PrismError::new("PP6101", "build manifest has no files"))?;
+    let captured = verification_closure::capture(root, build, verified, validations)?;
+    let manifest_bytes = &captured.manifest;
+    let build_id = &build.build_id;
     let mut layers = Vec::new();
     let mut release_artifacts = Vec::new();
-    for row in rows {
-        let path = row["path"]
-            .as_str()
-            .ok_or_else(|| PrismError::new("PP6101", "build file path is absent"))?;
-        relative(path)?;
-        let bytes = std::fs::read(build_root.join(path))
-            .map_err(|error| PrismError::new("PP6101", format!("{path}: {error}")))?;
-        let descriptor = file_descriptor(&store, path, "release-artifact", &bytes)?;
-        if row["sha256"].as_str() != Some(descriptor.digest.trim_start_matches("sha256:")) {
-            return Err(PrismError::new(
-                "PP6101",
-                format!("build artifact changed: {path}"),
-            ));
-        }
+    for (path, bytes) in &captured.build_files {
+        let descriptor = file_descriptor(&store, path, "release-artifact", bytes)?;
         release_artifacts.push(json!({
             "annotations": descriptor.annotations,
             "digest": descriptor.digest,
@@ -562,13 +563,20 @@ pub fn assemble(
         }));
         layers.push(descriptor);
     }
-    let model_bytes = std::fs::read(build_root.join("model.prism.json"))
+    let model_bytes = captured
+        .build_files
+        .get("model.prism.json")
+        .ok_or_else(|| PrismError::new("PP6101", "model is absent"))?;
+    let model: Value = serde_json::from_slice(model_bytes)
         .map_err(|error| PrismError::new("PP6101", format!("model: {error}")))?;
-    let model: Value = serde_json::from_slice(&model_bytes)
-        .map_err(|error| PrismError::new("PP6101", format!("model: {error}")))?;
-    let system = std::fs::read(build_root.join("system.prism.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+    let system = captured
+        .build_files
+        .get("system.prism.json")
+        .map(|bytes| {
+            serde_json::from_slice::<Value>(bytes)
+                .map_err(|error| PrismError::new("PP6101", format!("system: {error}")))
+        })
+        .transpose()?;
     let vulnerability = crate::supply_chain::scan_vulnerabilities(
         root,
         &system.iter().cloned().collect::<Vec<_>>(),
@@ -630,6 +638,11 @@ pub fn assemble(
         .ok_or_else(|| PrismError::new("PP5401", "SDK image reference is absent"))?;
     let sdk_image_digest = validate_reference(sdk_image, true)?.to_owned();
     for (path, role, bytes) in [
+        (
+            "build-manifest.json",
+            "build-manifest",
+            manifest_bytes.as_slice(),
+        ),
         ("prismpm.lock", "sdk-lock", sdk_lock_bytes.as_slice()),
         (
             "standards.lock",
@@ -648,11 +661,11 @@ pub fn assemble(
         layers.push(descriptor);
     }
     layers.sort_by(|left, right| left.annotations.cmp(&right.annotations));
-    release_artifacts.sort_by(|left, right| left["digest"].as_str().cmp(&right["digest"].as_str()));
+    release_artifacts.sort_by_key(artifact_order);
     let release_value = json!({
         "artifacts": release_artifacts,
         "external_artifacts": external_artifacts,
-        "model_digest": sha(&model_bytes),
+        "model_digest": sha(model_bytes),
         "product": product,
         "release": release,
         "schema": "prismpm/product-release/1",
@@ -664,6 +677,7 @@ pub fn assemble(
     let release_doc = CanonicalDocument::from_value("prismpm/product-release/1", release_value)?;
     let config = store.put(PRISM_RELEASE, release_doc.bytes())?;
     let root_descriptor = oci_manifest(&store, PRISM_RELEASE, config, layers, None)?;
+    let verification_manifest = verification_closure::retain(&store, &root_descriptor, &captured)?;
 
     let empty = store.put(OCI_EMPTY, b"{}")?;
     let semantic_source_id = model
@@ -691,7 +705,7 @@ pub fn assemble(
             source_uri,
             source_revision,
             external_parameters: json!({
-                "model_digest":sha(&model_bytes),
+                "model_digest":sha(model_bytes),
                 "product_release":release,
                 "semantic_source_id":semantic_source_id,
                 "standards_lock":standards_lock_digest
@@ -703,9 +717,10 @@ pub fn assemble(
                     "urn:prismpm:standards-lock".to_owned(),
                     standards_lock_digest,
                 ),
+                ("urn:prismpm:build-manifest".to_owned(), sha(manifest_bytes)),
                 (
-                    "urn:prismpm:build-manifest".to_owned(),
-                    sha(&manifest_bytes),
+                    "urn:prismpm:verification-closure".to_owned(),
+                    verification_manifest.digest.clone(),
                 ),
             ],
         })?;
@@ -718,11 +733,12 @@ pub fn assemble(
         Some(root_descriptor.clone()),
     )?;
     let validation = encode_value(&json!({
-        "build_digest": format!("sha256:{}", content_id(&manifest_bytes)),
+        "build_digest": format!("sha256:{}", content_id(manifest_bytes)),
         "oracle_results": validations,
         "result": "passed",
         "schema": "prismpm/release-validation/1",
-        "subject": root_descriptor.digest
+        "subject": root_descriptor.digest,
+        "verification_digest": verification_manifest.digest
     }))?;
     let validation_blob = store.put(PRISM_VALIDATION, &validation)?;
     let validation_manifest = oci_manifest(
@@ -736,7 +752,8 @@ pub fn assemble(
         "manifests": [
             {"annotations":{"org.opencontainers.image.ref.name":reference},"artifactType":PRISM_RELEASE,"digest":root_descriptor.digest,"mediaType":root_descriptor.media_type,"size":root_descriptor.size},
             provenance_manifest,
-            validation_manifest
+            validation_manifest,
+            verification_manifest
         ],
         "mediaType": OCI_INDEX,
         "schemaVersion": 2
@@ -770,8 +787,8 @@ pub fn assemble(
         reference: reference.to_owned(),
         product_digest: sha(release_doc.bytes()),
         release_digest: root_descriptor.digest.clone(),
-        model_digest: sha(&model_bytes),
-        build_digest: format!("sha256:{}", content_id(&manifest_bytes)),
+        model_digest: sha(model_bytes),
+        build_digest: format!("sha256:{}", content_id(manifest_bytes)),
         evidence_path: evidence_path.clone(),
     };
     let bytes = encode_value(
@@ -888,7 +905,11 @@ fn manifest(store: &Store, descriptor: &Descriptor) -> Result<Value, PrismError>
         let child: Descriptor = serde_json::from_value(child.clone())
             .map_err(|error| PrismError::new("PP6101", format!("OCI descriptor: {error}")))?;
         validate_descriptor(&child)?;
-        if !edges.insert(child.digest.clone()) {
+        if !edges
+            .insert(encode_value(&serde_json::to_value(&child).map_err(
+                |error| PrismError::new("PP6101", error.to_string()),
+            )?)?)
+        {
             return Err(PrismError::new(
                 "PP6101",
                 "OCI manifest contains a duplicate descriptor edge",
@@ -1096,6 +1117,10 @@ fn validate_referrer(
     }
     let config: Descriptor = serde_json::from_value(value["config"].clone())
         .map_err(|error| PrismError::new("PP6101", format!("OCI config: {error}")))?;
+    if artifact_type == PRISM_VERIFICATION {
+        verification_closure::read(store, descriptor)?;
+        return Ok(artifact_type.to_owned());
+    }
     if config.media_type != OCI_EMPTY || store.read(&config)? != b"{}" {
         return Err(PrismError::new(
             "PP6101",
@@ -1142,6 +1167,10 @@ fn validate_referrer(
                     "OCI evidence claims a different subject digest",
                 ));
             }
+        }
+        if artifact_type == PRISM_VALIDATION {
+            CanonicalDocument::parse("prismpm/release-validation/1", &evidence)
+                .map_err(|error| PrismError::new("PP6101", error.to_string()))?;
         }
         if artifact_type == COSIGN_SIGNATURE {
             let bundle_bytes = encode_value(&document["bundle"])?;
@@ -1322,6 +1351,9 @@ fn validate_referrer(
 
 fn referrer_evidence(store: &Store, descriptor: &Descriptor) -> Result<Value, PrismError> {
     let value = manifest(store, descriptor)?;
+    if value["artifactType"] == PRISM_VERIFICATION {
+        return Ok(verification_closure::read(store, descriptor)?.config);
+    }
     let layers = value["layers"]
         .as_array()
         .ok_or_else(|| PrismError::new("PP6101", "OCI referrer layers are absent"))?;
@@ -1431,14 +1463,18 @@ fn verified_release(
         ));
     }
     let mut titles = BTreeSet::new();
-    let mut digests = BTreeSet::new();
     let mut roles = BTreeMap::new();
+    let mut build_files = BTreeMap::new();
+    let mut build_bytes = 0_u64;
     for layer in layers {
         let layer: Descriptor = serde_json::from_value(layer.clone())
             .map_err(|error| PrismError::new("PP6101", format!("release layer: {error}")))?;
         let declaration = declared
             .iter()
-            .find(|candidate| candidate["digest"] == layer.digest)
+            .find(|candidate| {
+                candidate["digest"] == layer.digest
+                    && candidate["annotations"] == json!(layer.annotations)
+            })
             .ok_or_else(|| {
                 PrismError::new("PP6101", "release layer is absent from its declaration")
             })?;
@@ -1454,7 +1490,7 @@ fn verified_release(
             .ok_or_else(|| PrismError::new("PP6101", "release layer role is absent"))?;
         if !matches!(
             role.as_str(),
-            "release-artifact" | "sdk-lock" | "standards-lock"
+            "release-artifact" | "sdk-lock" | "standards-lock" | "build-manifest"
         ) || declaration["role"] != role.as_str()
             || declaration["digest"] != layer.digest
             || declaration["size"] != layer.size
@@ -1463,17 +1499,35 @@ fn verified_release(
                 != serde_json::to_value(&layer.annotations)
                     .map_err(|error| PrismError::new("PP9001", error.to_string()))?
             || !titles.insert(title.clone())
-            || !digests.insert(layer.digest.clone())
         {
             return Err(PrismError::new(
                 "PP6101",
                 "release artifact role, descriptor, or uniqueness check failed",
             ));
         }
+        relative(title)?;
+        if layer.artifact_type.is_some()
+            || (matches!(role.as_str(), "release-artifact" | "build-manifest")
+                && layer.media_type != file_media(title))
+        {
+            return Err(PrismError::new(
+                "PP6101",
+                "release file descriptor is not a typed file",
+            ));
+        }
+        if role == "release-artifact" {
+            build_bytes = build_bytes
+                .checked_add(layer.size)
+                .filter(|size| *size <= 10_737_418_240)
+                .ok_or_else(|| {
+                    PrismError::new("PP6101", "release build files exceed the byte limit")
+                })?;
+            build_files.insert(title.clone(), store.read(&layer)?);
+        }
         if role != "release-artifact" && roles.insert(role.clone(), layer.clone()).is_some() {
             return Err(PrismError::new(
                 "PP6101",
-                "release contains a duplicate lock role",
+                "release contains a duplicate singleton file role",
             ));
         }
     }
@@ -1519,6 +1573,7 @@ fn verified_release(
             role.as_str(),
             INTOTO
                 | PRISM_VALIDATION
+                | PRISM_VERIFICATION
                 | SPDX
                 | PRISM_SUPPLY_CHAIN
                 | PRISM_PRODUCTION_ACCEPTANCE
@@ -1539,6 +1594,31 @@ fn verified_release(
             ));
         }
     }
+    let build_manifest = roles
+        .get("build-manifest")
+        .ok_or_else(|| PrismError::new("PP6101", "release build manifest is absent"))?;
+    if build_manifest
+        .annotations
+        .as_ref()
+        .and_then(|rows| rows.get("org.opencontainers.image.title"))
+        .map(String::as_str)
+        != Some("build-manifest.json")
+    {
+        return Err(PrismError::new(
+            "PP6101",
+            "release build manifest title is invalid",
+        ));
+    }
+    verification_closure::validate(
+        store,
+        &root,
+        release.value(),
+        &store.read(build_manifest)?,
+        &build_files,
+        &referrers,
+        standards_lock.value(),
+        sdk_lock.value(),
+    )?;
     let mut referrers = referrers;
     referrers.sort_by(|left, right| left.digest.cmp(&right.digest));
     let graph_digest = sha(&encode_value(&json!({"referrers":referrers,"root":root}))?);
@@ -1800,6 +1880,8 @@ pub(crate) fn verified_root_manifest(
 }
 
 /// Read the one verified JSON evidence document for a singleton artifact type.
+/// The multi-file verification closure returns its closed identity configuration;
+/// its retained files remain independently addressed OCI layers.
 pub fn singleton_referrer_evidence(
     root: &Path,
     root_digest: &str,
@@ -2562,22 +2644,127 @@ mod tests {
         require_verified, sha, verified_release, verify_graph, write_verified_marker, Descriptor,
         Store, CORE_REFERRERS, COSIGN_SIGNATURE, INTOTO, OCI_EMPTY, OCI_INDEX, OCI_MANIFEST,
         PRISM_PROMOTION, PRISM_PROMOTION_POLICY, PRISM_RELEASE, PRISM_SUPPLY_CHAIN,
-        PRISM_VALIDATION, RELEASE_REFERRERS, SPDX,
+        PRISM_VALIDATION, PRISM_VERIFICATION, RELEASE_REFERRERS, SPDX,
     };
     use crate::contracts::CanonicalDocument;
+    use crate::controller::{BuildRequest, Controller, VerifyRequest};
     use crate::holo::canonical::encode_value;
     use serde_json::{json, Value};
     use std::collections::BTreeMap;
+    use std::path::Path;
+    use std::sync::OnceLock;
+
+    struct FixtureEvidence {
+        build_id: String,
+        attestation_id: String,
+        build_manifest: Vec<u8>,
+        build_files: BTreeMap<String, Vec<u8>>,
+        verification_files: BTreeMap<String, Vec<u8>>,
+        model: Value,
+    }
+
+    fn fixture_evidence() -> &'static FixtureEvidence {
+        static EVIDENCE: OnceLock<FixtureEvidence> = OnceLock::new();
+        EVIDENCE.get_or_init(|| {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .ancestors()
+                .nth(2)
+                .unwrap();
+            let controller = Controller::load(root).unwrap();
+            let verified = controller
+                .verify(VerifyRequest { config_path: None })
+                .expect("genuine native verification in the pinned devcontainer");
+            let build = controller
+                .build(BuildRequest { config_path: None })
+                .unwrap();
+            assert_eq!(verified.build_id, build.build_id);
+            let manifest_path = root.join(&build.manifest_path);
+            let build_manifest = std::fs::read(&manifest_path).unwrap();
+            let manifest: Value = serde_json::from_slice(&build_manifest).unwrap();
+            let build_files = manifest["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|row| {
+                    let path = row["path"].as_str().unwrap();
+                    let bytes = std::fs::read(manifest_path.parent().unwrap().join(path)).unwrap();
+                    assert_eq!(row["sha256"], sha(&bytes).trim_start_matches("sha256:"));
+                    (path.to_owned(), bytes)
+                })
+                .collect::<BTreeMap<_, _>>();
+            let verified_root = root.join(&verified.verified_root);
+            let mut verification_files = BTreeMap::new();
+            for entry in walkdir::WalkDir::new(&verified_root) {
+                let entry = entry.unwrap();
+                if entry.file_type().is_dir() {
+                    continue;
+                }
+                assert!(entry.file_type().is_file());
+                let path = entry.path().strip_prefix(&verified_root).unwrap();
+                verification_files.insert(
+                    path.to_str().unwrap().to_owned(),
+                    std::fs::read(entry.path()).unwrap(),
+                );
+            }
+            assert!(verification_files.contains_key("validator"));
+            assert_eq!(
+                sha(&verification_files["manifest.json"]),
+                format!("sha256:{}", verified.attestation_id)
+            );
+            crate::release_verification::tests::reject_mutations(
+                &build_manifest,
+                &build_files,
+                &verification_files,
+            );
+            let model = serde_json::from_slice(&build_files["model.prism.json"]).unwrap();
+            FixtureEvidence {
+                build_id: build.build_id,
+                attestation_id: verified.attestation_id,
+                build_manifest,
+                build_files,
+                verification_files,
+                model,
+            }
+        })
+    }
 
     fn fixture(project: &std::path::Path, reference: &str, payload: &[u8]) -> (Store, Descriptor) {
+        let (store, root) = fixture_graph(project, reference, payload, None);
+        let state = verified_release(&store, &root.digest, &RELEASE_REFERRERS, "release").unwrap();
+        write_verified_marker(&store, state).unwrap();
+        (store, root)
+    }
+
+    fn fixture_graph(
+        project: &Path,
+        reference: &str,
+        payload: &[u8],
+        omitted: Option<&str>,
+    ) -> (Store, Descriptor) {
+        let evidence = fixture_evidence();
         let store = Store::open(project).unwrap();
-        let mut layer = store.put("application/octet-stream", payload).unwrap();
-        layer.annotations = Some(BTreeMap::from([
-            ("org.opencontainers.image.title".into(), "app.bin".into()),
-            ("org.prismpm.role".into(), "release-artifact".into()),
-        ]));
+        let mut layers = evidence
+            .build_files
+            .iter()
+            .map(|(path, bytes)| {
+                super::file_descriptor(&store, path, "release-artifact", bytes).unwrap()
+            })
+            .collect::<Vec<_>>();
+        if omitted != Some("build-manifest.json") {
+            layers.push(
+                super::file_descriptor(
+                    &store,
+                    "build-manifest.json",
+                    "build-manifest",
+                    &evidence.build_manifest,
+                )
+                .unwrap(),
+            );
+        }
         let standards_lock_bytes = include_bytes!("../standards.lock");
         CanonicalDocument::parse("prismpm/standards-lock/1", standards_lock_bytes).unwrap();
+        // This explicit synthetic SDK identity exercises transport only. Runtime
+        // verification evidence above is genuine; this is not a production SDK.
         let sdk_lock_document = CanonicalDocument::from_value(
             "prismpm/sdk-lock/1",
             json!({
@@ -2612,31 +2799,32 @@ mod tests {
             ),
             ("org.prismpm.role".into(), "standards-lock".into()),
         ]));
-        let mut artifacts = [
-            (&layer, "release-artifact"),
-            (&sdk_lock, "sdk-lock"),
-            (&standards_lock, "standards-lock"),
-        ]
-        .into_iter()
-        .map(|(descriptor, role)| {
-            json!({
-                "annotations":descriptor.annotations,
-                "digest":descriptor.digest,
-                "media_type":descriptor.media_type,
-                "role":role,
-                "size":descriptor.size
+        layers.extend([sdk_lock.clone(), standards_lock.clone()]);
+        layers.sort_by(|left, right| left.annotations.cmp(&right.annotations));
+        let mut artifacts = layers
+            .iter()
+            .map(|descriptor| {
+                json!({
+                    "annotations":descriptor.annotations,
+                    "digest":descriptor.digest,
+                    "media_type":descriptor.media_type,
+                    "role":descriptor.annotations.as_ref().unwrap()["org.prismpm.role"],
+                    "size":descriptor.size
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>();
         artifacts.sort_by(|left, right| left["digest"].as_str().cmp(&right["digest"].as_str()));
+        let model_digest = sha(&evidence.build_files["model.prism.json"]);
+        let build_digest = sha(&evidence.build_manifest);
+        let release_version = std::str::from_utf8(payload).unwrap();
         let release = CanonicalDocument::from_value(
             "prismpm/product-release/1",
             json!({
                 "artifacts":artifacts,
                 "external_artifacts":[],
-                "model_digest":format!("sha256:{}", "1".repeat(64)),
+                "model_digest":model_digest,
                 "product":"fixture",
-                "release":"1",
+                "release":release_version,
                 "schema":"prismpm/product-release/1",
                 "sdk_digest":format!("sha256:{}", "2".repeat(64)),
                 "sdk_lock":sdk_lock.digest,
@@ -2646,14 +2834,76 @@ mod tests {
         )
         .unwrap();
         let config = store.put(PRISM_RELEASE, release.bytes()).unwrap();
-        let root = oci_manifest(
+        let root = oci_manifest(&store, PRISM_RELEASE, config, layers, None).unwrap();
+        let verification_config = store
+            .put(
+                PRISM_VERIFICATION,
+                &encode_value(&json!({
+                    "attestation_id":evidence.attestation_id,
+                    "build_digest":build_digest,
+                    "build_id":evidence.build_id,
+                    "family":"native",
+                    "model_digest":model_digest,
+                    "schema":"prismpm/verification-closure/1"
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        let verification_layers = evidence
+            .verification_files
+            .iter()
+            .map(|(path, bytes)| (format!("runtime/{path}"), bytes))
+            .filter(|(title, _)| omitted != Some(title.as_str()))
+            .map(|(title, bytes)| {
+                super::file_descriptor(&store, &title, "verification-artifact", bytes).unwrap()
+            })
+            .collect();
+        let verification = oci_manifest(
             &store,
-            PRISM_RELEASE,
-            config,
-            vec![layer, sdk_lock, standards_lock],
-            None,
+            PRISM_VERIFICATION,
+            verification_config,
+            verification_layers,
+            Some(root.clone()),
         )
         .unwrap();
+        let provenance =
+            crate::supply_chain::provenance_statement(&crate::supply_chain::ProvenanceInputs {
+                subject_name: "fixture".into(),
+                subject_digest: root.digest.clone(),
+                builder_id: sdk_lock_document.value()["sdk_image"]
+                    .as_str()
+                    .unwrap()
+                    .into(),
+                invocation_id: evidence.build_id.clone(),
+                source_uri: "https://github.com/UOR-Foundation/PrismPM".into(),
+                source_revision: super::source_revision(&evidence.model).unwrap(),
+                external_parameters: json!({
+                    "model_digest":model_digest,
+                    "product_release":release_version,
+                    "semantic_source_id":evidence.model["provenance"]["source_id"],
+                    "standards_lock":standards_lock.digest
+                }),
+                dependencies: vec![
+                    (
+                        sdk_lock_document.value()["sdk_image"]
+                            .as_str()
+                            .unwrap()
+                            .into(),
+                        format!("sha256:{}", "2".repeat(64)),
+                    ),
+                    ("urn:prismpm:sdk-lock".into(), sdk_lock.digest.clone()),
+                    (
+                        "urn:prismpm:standards-lock".into(),
+                        standards_lock.digest.clone(),
+                    ),
+                    ("urn:prismpm:build-manifest".into(), build_digest.clone()),
+                    (
+                        "urn:prismpm:verification-closure".into(),
+                        verification.digest.clone(),
+                    ),
+                ],
+            })
+            .unwrap();
         let empty = store.put(OCI_EMPTY, b"{}").unwrap();
         let mut rows = vec![serde_json::to_value({
             let mut root = root.clone();
@@ -2664,14 +2914,22 @@ mod tests {
             root
         })
         .unwrap()];
+        if omitted != Some("verification-referrer") {
+            rows.push(serde_json::to_value(&verification).unwrap());
+        }
         for (role, evidence) in [
-            (
-                INTOTO,
-                encode_value(&json!({"subject":root.digest})).unwrap(),
-            ),
+            (INTOTO, provenance),
             (
                 PRISM_VALIDATION,
-                encode_value(&json!({"subject":root.digest})).unwrap(),
+                encode_value(&json!({
+                    "build_digest":build_digest,
+                    "oracle_results":[],
+                    "result":"passed",
+                    "schema":"prismpm/release-validation/1",
+                    "subject":root.digest,
+                    "verification_digest":verification.digest
+                }))
+                .unwrap(),
             ),
             (
                 SPDX,
@@ -2704,8 +2962,6 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        let state = verified_release(&store, &root.digest, &RELEASE_REFERRERS, "release").unwrap();
-        write_verified_marker(&store, state).unwrap();
         (store, root)
     }
 
@@ -2757,8 +3013,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let (store, root) = fixture(directory.path(), "example.invalid/app:v1", b"one");
         let state = require_verified(&store, &root.digest, true).unwrap();
-        assert_eq!(state.referrers.len(), 4);
-        assert_eq!(index_rows(&store).unwrap().len(), 5);
+        assert_eq!(state.referrers.len(), 5);
+        assert_eq!(index_rows(&store).unwrap().len(), 6);
 
         crate::supply_chain::verify_release_transfer_in_store(
             directory.path(),
@@ -2783,6 +3039,183 @@ mod tests {
         )
         .unwrap();
         assert!(require_verified(&store, &root.digest, true).is_err());
+    }
+
+    #[test]
+    fn serialized_release_verifies_without_source_or_a_trusted_marker() {
+        let source = tempfile::tempdir().unwrap();
+        let (store, root) = fixture(source.path(), "example.invalid/app:v1", b"one");
+        let binding =
+            super::singleton_referrer_evidence(source.path(), &root.digest, PRISM_VERIFICATION)
+                .unwrap();
+        assert_eq!(binding["schema"], "prismpm/verification-closure/1");
+        assert_eq!(binding["build_id"], fixture_evidence().build_id);
+        let mut serialized = BTreeMap::new();
+        for entry in walkdir::WalkDir::new(&store.root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            assert!(entry.file_type().is_file());
+            let path = entry.path().strip_prefix(&store.root).unwrap();
+            if path.starts_with("blobs")
+                || path == Path::new("index.json")
+                || path == Path::new("oci-layout")
+            {
+                serialized.insert(path.to_owned(), std::fs::read(entry.path()).unwrap());
+            }
+        }
+        drop(store);
+        source.close().unwrap();
+
+        let destination = tempfile::tempdir().unwrap();
+        let reopened = Store::open(destination.path()).unwrap();
+        for (path, bytes) in serialized {
+            let path = reopened.root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            super::atomic_replace(&path, &bytes).unwrap();
+        }
+        assert!(!destination.path().join("prismpm.toml").exists());
+        assert!(!destination.path().join(".lexlean").exists());
+        assert!(!destination.path().join(".prism/build").exists());
+        assert!(!destination.path().join(".prism/verified").exists());
+        assert!(!marker_path(&reopened, &root.digest).unwrap().exists());
+        let state = verified_release(&reopened, &root.digest, &RELEASE_REFERRERS, "release")
+            .expect("only serialized OCI evidence is available");
+        assert_eq!(state.referrers.len(), 5);
+        write_verified_marker(&reopened, state).unwrap();
+        require_verified(&reopened, &root.digest, true).unwrap();
+    }
+
+    #[test]
+    fn coherently_rehashed_graphs_cannot_omit_build_or_verification_evidence() {
+        for omitted in [
+            "runtime/validator",
+            "runtime/lexlean-attestation.json",
+            "build-manifest.json",
+            "verification-referrer",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let (store, root) = fixture_graph(
+                directory.path(),
+                "example.invalid/app:v1",
+                b"one",
+                Some(omitted),
+            );
+            // The config, subject, validation, provenance and all descriptors
+            // were rebuilt consistently. No stale OCI hash explains rejection.
+            for descriptor in index_rows(&store).unwrap() {
+                verify_graph(&store, &descriptor.digest).unwrap();
+            }
+            let error =
+                verified_release(&store, &root.digest, &RELEASE_REFERRERS, "release").unwrap_err();
+            assert_eq!(error.code, "PP6101", "{omitted}: {error:?}");
+            assert!(!marker_path(&store, &root.digest).unwrap().exists());
+        }
+    }
+
+    #[test]
+    fn coherently_rehashed_provenance_must_bind_the_genuine_release() {
+        for mutation in [
+            "builder",
+            "build-type",
+            "external-model",
+            "external-standards-lock",
+            "sdk-image-dependency",
+            "missing-build-dependency",
+            "verification-dependency",
+            "invocation",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let (store, root) =
+                fixture_graph(directory.path(), "example.invalid/app:v1", b"one", None);
+            verified_release(&store, &root.digest, &RELEASE_REFERRERS, "release")
+                .expect("baseline provenance binds the genuinely verified build");
+            let mut rows = index_rows(&store).unwrap();
+            let provenance = rows
+                .iter_mut()
+                .find(|row| row.artifact_type.as_deref() == Some(INTOTO))
+                .unwrap();
+            let original = super::referrer_evidence(&store, provenance).unwrap();
+            let mut changed = original.clone();
+            match mutation {
+                "builder" => {
+                    changed["predicate"]["runDetails"]["builder"]["id"] =
+                        json!("untrusted-builder");
+                }
+                "build-type" => {
+                    changed["predicate"]["buildDefinition"]["buildType"] =
+                        json!("urn:wrong-build-type");
+                }
+                "external-model" => {
+                    changed["predicate"]["buildDefinition"]["externalParameters"]["model_digest"] =
+                        json!(format!("sha256:{}", "0".repeat(64)));
+                }
+                "external-standards-lock" => {
+                    changed["predicate"]["buildDefinition"]["externalParameters"]
+                        ["standards_lock"] = json!(format!("sha256:{}", "0".repeat(64)));
+                }
+                "sdk-image-dependency" | "verification-dependency" => {
+                    let uri = if mutation == "sdk-image-dependency" {
+                        original["predicate"]["runDetails"]["builder"]["id"]
+                            .as_str()
+                            .unwrap()
+                    } else {
+                        "urn:prismpm:verification-closure"
+                    };
+                    let dependency = changed["predicate"]["buildDefinition"]
+                        ["resolvedDependencies"]
+                        .as_array_mut()
+                        .unwrap()
+                        .iter_mut()
+                        .find(|row| row["uri"] == uri)
+                        .unwrap();
+                    dependency["digest"]["sha256"] = json!("0".repeat(64));
+                }
+                "missing-build-dependency" => {
+                    changed["predicate"]["buildDefinition"]["resolvedDependencies"]
+                        .as_array_mut()
+                        .unwrap()
+                        .retain(|row| row["uri"] != "urn:prismpm:build-manifest");
+                }
+                "invocation" => {
+                    changed["predicate"]["runDetails"]["metadata"]["invocationId"] =
+                        json!("0".repeat(64));
+                }
+                _ => unreachable!("closed mutation set"),
+            }
+            assert_ne!(changed, original, "mutation was inert: {mutation}");
+            let statement = store.put(INTOTO, &encode_value(&changed).unwrap()).unwrap();
+            *provenance = oci_manifest(
+                &store,
+                INTOTO,
+                store.put(OCI_EMPTY, b"{}").unwrap(),
+                vec![statement],
+                Some(root.clone()),
+            )
+            .unwrap();
+            rows.sort_by(|left, right| left.digest.cmp(&right.digest));
+            super::atomic_replace(
+                &store.root.join("index.json"),
+                &encode_value(&json!({
+                    "manifests":rows, "mediaType":OCI_INDEX, "schemaVersion":2
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            for descriptor in index_rows(&store).unwrap() {
+                verify_graph(&store, &descriptor.digest)
+                    .expect("all outer OCI hashes remain valid after the mutation");
+            }
+            let error =
+                verified_release(&store, &root.digest, &RELEASE_REFERRERS, "release").unwrap_err();
+            assert_eq!(error.code, "PP6101", "{mutation}: {error:?}");
+            assert!(
+                error.message.contains("provenance"),
+                "{mutation}: {error:?}"
+            );
+            assert!(!marker_path(&store, &root.digest).unwrap().exists());
+        }
     }
 
     #[test]
@@ -2829,8 +3262,12 @@ mod tests {
             .put(
                 PRISM_VALIDATION,
                 &encode_value(&json!({
-                    "detail":"second",
-                    "subject":duplicate_root.digest
+                    "build_digest":format!("sha256:{}", "0".repeat(64)),
+                    "oracle_results":[],
+                    "result":"passed",
+                    "schema":"prismpm/release-validation/1",
+                    "subject":duplicate_root.digest,
+                    "verification_digest":format!("sha256:{}", "0".repeat(64))
                 }))
                 .unwrap(),
             )
@@ -2860,13 +3297,18 @@ mod tests {
             &encode_value(&index).unwrap(),
         )
         .unwrap();
-        assert!(verified_release(
+        let error = verified_release(
             &duplicate_store,
             &duplicate_root.digest,
             &RELEASE_REFERRERS,
-            "release"
+            "release",
         )
-        .is_err());
+        .unwrap_err();
+        assert!(
+            error.message.contains("duplicate singleton"),
+            "{}",
+            error.message
+        );
     }
 
     #[test]
@@ -2889,6 +3331,30 @@ mod tests {
         let noncanonical = b"{ \"artifactType\":\"application/example\",\"config\":{\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"mediaType\":\"application/json\",\"size\":0},\"layers\":[],\"mediaType\":\"application/vnd.oci.image.manifest.v1+json\",\"schemaVersion\":2}";
         let root = store.put(OCI_MANIFEST, noncanonical).unwrap();
         assert!(verify_graph(&store, &root.digest).is_err());
+    }
+
+    #[test]
+    fn identical_file_bytes_preserve_distinct_logical_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Store::open(directory.path()).unwrap();
+        let first =
+            super::file_descriptor(&store, "first.bin", "release-artifact", b"same bytes").unwrap();
+        let second =
+            super::file_descriptor(&store, "second.bin", "release-artifact", b"same bytes")
+                .unwrap();
+        assert_eq!(first.digest, second.digest);
+        assert_ne!(first.annotations, second.annotations);
+        let root = oci_manifest(
+            &store,
+            "application/octet-stream",
+            store.put(OCI_EMPTY, b"{}").unwrap(),
+            vec![first, second],
+            None,
+        )
+        .unwrap();
+        verify_graph(&store, &root.digest).unwrap();
+        let manifest = super::manifest(&store, &root).unwrap();
+        assert_eq!(manifest["layers"].as_array().unwrap().len(), 2);
     }
 
     #[test]
@@ -2980,7 +3446,7 @@ mod tests {
                 .unwrap()
                 .referrers
                 .len(),
-            5
+            6
         );
 
         let wrong = encode_value(&json!({
@@ -2999,7 +3465,7 @@ mod tests {
                 .unwrap()
                 .referrers
                 .len(),
-            5
+            6
         );
 
         let fake_signature = encode_value(&json!({
@@ -3039,6 +3505,6 @@ mod tests {
         assert_eq!(error.code, "PP7401");
         let state = require_verified(&store, &root.digest, true).unwrap();
         assert_eq!(state.root.digest, root.digest);
-        assert_eq!(state.referrers.len(), 5);
+        assert_eq!(state.referrers.len(), 6);
     }
 }

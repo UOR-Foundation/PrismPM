@@ -528,6 +528,53 @@ mod tests {
     }
 
     #[test]
+    fn public_contract_registry_requires_complete_unique_registration() {
+        let model = Model::load_from_repo_root().expect("load repository model");
+        let root = super::repo_root();
+        model
+            .contracts
+            .check(&root)
+            .expect("all public data contracts must be registered");
+        assert_eq!(model.contracts.contract.len(), 46);
+        for (schema, path) in [
+            (
+                "prismpm/verification-closure/1",
+                "schemas/verification-closure.schema.json",
+            ),
+            (
+                "prismpm/release-validation/1",
+                "schemas/release-validation.schema.json",
+            ),
+        ] {
+            assert!(model
+                .contracts
+                .contract
+                .iter()
+                .any(|row| row.schema == schema && row.path == path));
+        }
+        for index in 0..model.contracts.contract.len() {
+            let mut missing = model.contracts.clone();
+            let removed = missing.contract.remove(index);
+            let error = missing
+                .check(&root)
+                .expect_err("omitting any public contract must fail closed");
+            assert!(
+                error
+                    .to_string()
+                    .contains("public contract registry is incomplete"),
+                "{}: {error}",
+                removed.schema
+            );
+        }
+        let mut duplicate = model.contracts.clone();
+        duplicate.contract[1] = duplicate.contract[0].clone();
+        let error = duplicate
+            .check(&root)
+            .expect_err("duplicate rows cannot satisfy the exact contract count");
+        assert!(error.to_string().contains("invalid public contract row"));
+    }
+
+    #[test]
     fn every_public_command_result_schema_is_registered() {
         let model = Model::load_from_repo_root().expect("load repository model");
         model

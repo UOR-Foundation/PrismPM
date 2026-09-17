@@ -77,6 +77,9 @@ unicode-normalization = { workspace = true }
 walkdir = { workspace = true }
 x509-parser = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
 [dev-dependencies]
 proptest = { workspace = true }
 

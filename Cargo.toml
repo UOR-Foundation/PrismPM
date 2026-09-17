@@ -35,6 +35,7 @@ nom = { version = "7", default-features = false }
 proptest = "1.6"
 jsonschema = { version = "=0.50.1", default-features = false }
 same-file = "1.0"
+rustix = { version = "=1.1.4", features = ["fs"] }
 semver = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

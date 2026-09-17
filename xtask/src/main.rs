@@ -110,6 +110,11 @@ fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
 }
 
 fn audit_all(root: &Path) -> Result<(), Fail> {
+    command(
+        root,
+        "node",
+        &["--test", "scripts/oracle-source-closure.test.mjs"],
+    )?;
     audit::audit_no_handwritten_lean(root)?;
     audit::audit_formal_contract(root)?;
     audit::audit_no_unsafe(root)?;
@@ -631,6 +636,18 @@ fn tree_files(root: &Path) -> Result<Vec<(String, Vec<u8>)>, Fail> {
     Ok(files)
 }
 
+fn golden_verification_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
+    // Reviewed goldens retain artifact descriptors, not regenerated native
+    // payloads. The actual verification and OCI closures retain all three.
+    files.retain(|(relative, _)| {
+        !matches!(
+            relative.as_str(),
+            "generated.rs" | "kernel.ir" | "validator"
+        )
+    });
+    files
+}
+
 fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>)>, Fail> {
     let build_res = build_once(root)?;
     let verify_res = verify_once(root)?;
@@ -650,10 +667,8 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
     for (relative, bytes) in tree_files(&build_root)? {
         files.push((format!("build/{relative}"), bytes));
     }
-    for (relative, bytes) in tree_files(&verified_root)? {
-        if !matches!(relative.as_str(), "generated.rs" | "kernel.ir") {
-            files.push((format!("verified/{relative}"), bytes));
-        }
+    for (relative, bytes) in golden_verification_files(tree_files(&verified_root)?) {
+        files.push((format!("verified/{relative}"), bytes));
     }
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
 
@@ -1396,6 +1411,39 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod golden_tests {
+    #[test]
+    fn native_payload_exclusions_preserve_exact_evidence_and_executable_descriptor() {
+        let executable = b"native payload";
+        let manifest = prismpm::holo::canonical::encode_value(&serde_json::json!({
+            "artifacts": {"executable": {
+                "byte_length": executable.len(),
+                "sha256": prismpm::holo::canonical::content_id(executable)
+            }}
+        }))
+        .unwrap();
+        let mut evidence = [
+            "coverage.json",
+            "execution-corpus.toml",
+            "execution.json",
+            "lexlean-attestation.json",
+            "roots.json",
+            "stdlib-exports.toml",
+            "nested/validator",
+        ]
+        .into_iter()
+        .map(|path| (path.to_owned(), path.as_bytes().to_vec()))
+        .collect::<Vec<_>>();
+        evidence.push(("manifest.json".to_owned(), manifest));
+        let mut files = evidence.clone();
+        for path in ["generated.rs", "kernel.ir", "validator"] {
+            files.push((path.to_owned(), executable.to_vec()));
+        }
+        assert_eq!(super::golden_verification_files(files), evidence);
+    }
 }
 
 #[cfg(test)]

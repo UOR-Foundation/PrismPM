@@ -12,7 +12,19 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 44] = [
+const CONTRACTS: [Contract; 46] = [
+    Contract {
+        id: "prismpm/verification-closure/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/verification-closure.schema.json"),
+    },
+    Contract {
+        id: "prismpm/release-validation/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/release-validation.schema.json"),
+    },
     Contract {
         id: "prismpm/sdk-lock-update/2",
         maximum_bytes: 201_326_592,
@@ -404,10 +416,18 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         let rows = value["artifacts"]
             .as_array()
             .expect("schema-validated array");
-        if !strictly_ordered(rows, |row| row["digest"].as_str().map(str::to_owned)) {
+        if !strictly_ordered(rows, |row| {
+            Some(format!(
+                "{}\0{}",
+                row["digest"].as_str()?,
+                row["annotations"]["org.opencontainers.image.title"]
+                    .as_str()
+                    .unwrap_or_default()
+            ))
+        }) {
             return Err(PrismError::new(
                 "PP1101",
-                "product release artifact digests are duplicate or noncanonical",
+                "product release artifact identities are duplicate or noncanonical",
             ));
         }
         let external = value["external_artifacts"]
@@ -688,7 +708,12 @@ impl CanonicalDocument {
                 format!("{id} exceeds its {} item limit", contract.maximum_items),
             ));
         }
-        if value.get("schema").and_then(Value::as_str) != Some(id) {
+        // The registered oracle attestation is an in-toto Statement, whose
+        // closed external envelope identifies itself with _type/predicateType.
+        // Its schema below rejects an invented Prism `schema` property.
+        if id != "prismpm/oracle-validation-attestation/1"
+            && value.get("schema").and_then(Value::as_str) != Some(id)
+        {
             return Err(PrismError::new(
                 "PP1101",
                 format!("value does not declare {id}"),
@@ -754,6 +779,52 @@ impl CanonicalDocument {
 mod tests {
     use super::{CanonicalDocument, CONTRACTS};
     use serde_json::json;
+
+    #[test]
+    fn oracle_attestation_preserves_the_closed_external_envelope() {
+        // Schema boundary only; this fixture does not assert an oracle ran.
+        let value = json!({
+            "_type":"https://in-toto.io/Statement/v1",
+            "predicateType":"https://schemas.uor.foundation/prismpm/oracle-validation/v1",
+            "subject":[{"name":"projected-artifact","digest":{"sha256":"1".repeat(64)}}],
+            "predicate":{
+                "authority_ids":["TEST"],"covered":["schema"],"uncovered":["operation"],
+                "edition":"1","normalized_result":"valid","oracle":"test",
+                "oracle_digest":format!("sha256:{}","2".repeat(64)),"runner_image":null
+            }
+        });
+        let id = "prismpm/oracle-validation-attestation/1";
+        CanonicalDocument::from_value(id, value.clone()).unwrap();
+        for (field, replacement) in [
+            ("schema", json!(id)),
+            ("_type", json!("Statement/v2")),
+            ("predicateType", json!("unrelated")),
+            ("subject", json!([])),
+        ] {
+            let mut changed = value.clone();
+            changed[field] = replacement;
+            assert!(CanonicalDocument::from_value(id, changed).is_err());
+        }
+    }
+
+    #[test]
+    fn release_validation_rejects_placeholder_and_open_oracle_records() {
+        let id = "prismpm/release-validation/1";
+        let digest = format!("sha256:{}", "1".repeat(64));
+        let value = json!({"schema":id,"build_digest":digest,"subject":digest,
+            "verification_digest":digest,"result":"passed","oracle_results":[]});
+        CanonicalDocument::from_value(id, value.clone()).unwrap();
+        for field in ["schema", "subject", "verification_digest", "build_digest"] {
+            let mut changed = value.clone();
+            changed.as_object_mut().unwrap().remove(field);
+            assert!(CanonicalDocument::from_value(id, changed).is_err());
+        }
+        for records in [json!([{}]), json!([{"verified":true}])] {
+            let mut changed = value.clone();
+            changed["oracle_results"] = records;
+            assert!(CanonicalDocument::from_value(id, changed).is_err());
+        }
+    }
 
     #[test]
     fn bootstrap_evidence_contract_accepts_the_gate_record() {

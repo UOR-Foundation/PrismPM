@@ -22,6 +22,7 @@ pub mod holo;
 pub mod lifecycle;
 pub mod oci;
 pub mod operations;
+mod release_verification;
 pub mod sdk;
 pub mod supply_chain;
 pub mod system;

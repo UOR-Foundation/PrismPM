@@ -1,0 +1,35 @@
+{
+  "$id": "https://schemas.uor.foundation/prismpm/release-validation/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "build_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "oracle_results": {"items": {"$ref": "#/$defs/oracleResult"}, "maxItems": 4096, "type": "array", "uniqueItems": true},
+    "result": {"const": "passed"},
+    "schema": {"const": "prismpm/release-validation/1"},
+    "subject": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "verification_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+  },
+  "required": ["build_digest", "oracle_results", "result", "schema", "subject", "verification_digest"],
+  "type": "object",
+  "$defs": {
+    "digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "scope": {"items": {"maxLength": 4096, "minLength": 1, "type": "string"}, "maxItems": 4096, "minItems": 1, "type": "array", "uniqueItems": true},
+    "oracleResult": {
+      "additionalProperties": false,
+      "properties": {
+        "attestation_digest": {"$ref": "#/$defs/digest"},
+        "covered": {"$ref": "#/$defs/scope"},
+        "evidence_path": {"pattern": "^\\.prism/evidence/oracle-[A-Za-z0-9._-]+-[0-9a-f]{64}-valid\\.intoto\\.json$", "type": "string"},
+        "oracle": {"maxLength": 128, "minLength": 1, "type": "string"},
+        "oracle_digest": {"$ref": "#/$defs/digest"},
+        "schema": {"const": "prismpm/validation-result/1"},
+        "subject": {"$ref": "#/$defs/digest"},
+        "uncovered": {"$ref": "#/$defs/scope"},
+        "valid": {"const": true}
+      },
+      "required": ["attestation_digest", "covered", "evidence_path", "oracle", "oracle_digest", "schema", "subject", "uncovered", "valid"],
+      "type": "object"
+    }
+  }
+}

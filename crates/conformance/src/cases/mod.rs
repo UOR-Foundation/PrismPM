@@ -1156,19 +1156,61 @@ struct OciFixture {
 }
 
 fn oci_fixture() -> OciFixture {
+    // The SDK identity below is a transport fixture, not a shipped-SDK claim.
+    // Build and runtime evidence, however, must come from the real verifier.
+    let source = repo_root();
+    let build = built(&source);
+    let verification = verified(&source);
+    assert_eq!(verification.build_id, build.build_id);
+    let build_manifest_bytes = std::fs::read(build_root(&source).join("manifest.json")).unwrap();
+    let build_manifest: Value = serde_json::from_slice(&build_manifest_bytes).unwrap();
+    let build_digest = format!("sha256:{}", sha256(&build_manifest_bytes));
+    let model_digest = format!("sha256:{}", sha256(&model_bytes(&source)));
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_path_buf();
     let store = prismpm::oci::Store::open(&root).unwrap();
-    let mut layer = store
-        .put("application/octet-stream", b"release payload")
-        .unwrap();
-    layer.annotations = Some(BTreeMap::from([
-        (
-            "org.opencontainers.image.title".to_owned(),
-            "payload.bin".to_owned(),
-        ),
-        ("org.prismpm.role".to_owned(), "release-artifact".to_owned()),
-    ]));
+    fn file(
+        store: &prismpm::oci::Store,
+        path: &str,
+        role: &str,
+        bytes: &[u8],
+    ) -> prismpm::oci::Descriptor {
+        let media_type = if path.ends_with(".holo") {
+            "application/vnd.hologram.archive.v1"
+        } else if path.ends_with(".wasm") {
+            "application/wasm"
+        } else if path.ends_with(".crate") {
+            "application/vnd.rust.crate"
+        } else if path.ends_with(".json") {
+            "application/json"
+        } else {
+            "application/octet-stream"
+        };
+        let mut descriptor = store.put(media_type, bytes).unwrap();
+        descriptor.annotations = Some(BTreeMap::from([
+            ("org.opencontainers.image.title".into(), path.into()),
+            ("org.prismpm.role".into(), role.into()),
+        ]));
+        descriptor
+    }
+    let mut layers = build_manifest["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            let path = row["path"].as_str().unwrap();
+            let bytes = std::fs::read(build_root(&source).join(path)).unwrap();
+            assert_eq!(row["byte_length"], bytes.len());
+            assert_eq!(row["sha256"], sha256(&bytes));
+            file(&store, path, "release-artifact", &bytes)
+        })
+        .collect::<Vec<_>>();
+    layers.push(file(
+        &store,
+        "build-manifest.json",
+        "build-manifest",
+        &build_manifest_bytes,
+    ));
     let standards_lock_bytes = include_bytes!("../../../../standards.lock");
     let standards_lock_digest = format!("sha256:{:x}", sha2::Sha256::digest(standards_lock_bytes));
     let mut sdk_lock_value = sdk_lock_value();
@@ -1194,29 +1236,27 @@ fn oci_fixture() -> OciFixture {
         ),
         ("org.prismpm.role".to_owned(), "standards-lock".to_owned()),
     ]));
-    let mut artifacts = [
-        (&layer, "release-artifact"),
-        (&sdk_lock, "sdk-lock"),
-        (&standards_lock, "standards-lock"),
-    ]
-    .into_iter()
-    .map(|(descriptor, role)| {
-        serde_json::json!({
-            "annotations":descriptor.annotations,
-            "digest":descriptor.digest,
-            "media_type":descriptor.media_type,
-            "role":role,
-            "size":descriptor.size
+    layers.extend([sdk_lock.clone(), standards_lock.clone()]);
+    layers.sort_by(|left, right| left.annotations.cmp(&right.annotations));
+    let mut artifacts = layers
+        .iter()
+        .map(|descriptor| {
+            serde_json::json!({
+                "annotations":descriptor.annotations,
+                "digest":descriptor.digest,
+                "media_type":descriptor.media_type,
+                "role":descriptor.annotations.as_ref().unwrap()["org.prismpm.role"],
+                "size":descriptor.size
+            })
         })
-    })
-    .collect::<Vec<_>>();
+        .collect::<Vec<_>>();
     artifacts.sort_by(|left, right| left["digest"].as_str().cmp(&right["digest"].as_str()));
     let release = prismpm::contracts::CanonicalDocument::from_value(
         "prismpm/product-release/1",
         serde_json::json!({
             "artifacts":artifacts,
             "external_artifacts":[],
-            "model_digest":format!("sha256:{}", "1".repeat(64)),
+            "model_digest":model_digest,
             "product":"conformance-product",
             "release":"fixture",
             "schema":"prismpm/product-release/1",
@@ -1233,7 +1273,7 @@ fn oci_fixture() -> OciFixture {
     let manifest = prismpm::holo::canonical::encode_value(&serde_json::json!({
         "artifactType":"application/vnd.prismpm.product.release.v1+json",
         "config":config,
-        "layers":[layer,sdk_lock,standards_lock],
+        "layers":layers,
         "mediaType":prismpm::oci::OCI_MANIFEST,
         "schemaVersion":2
     }))
@@ -1244,6 +1284,44 @@ fn oci_fixture() -> OciFixture {
         "org.opencontainers.image.ref.name".to_owned(),
         "example.test/product:fixture".to_owned(),
     )]));
+    let verification_config = prismpm::holo::canonical::encode_value(&serde_json::json!({
+        "attestation_id":verification.attestation_id,
+        "build_digest":build_digest,
+        "build_id":build.build_id,
+        "family":"native",
+        "model_digest":model_digest,
+        "schema":"prismpm/verification-closure/1"
+    }))
+    .unwrap();
+    let verification_config = store
+        .put(prismpm::oci::PRISM_VERIFICATION, &verification_config)
+        .unwrap();
+    let runtime_files = tree(&verified_root(&source));
+    assert!(runtime_files.iter().any(|(path, _)| path == "validator"));
+    let runtime_layers = runtime_files
+        .iter()
+        .map(|(path, bytes)| {
+            file(
+                &store,
+                &format!("runtime/{path}"),
+                "verification-artifact",
+                bytes,
+            )
+        })
+        .collect::<Vec<_>>();
+    let verification_manifest = prismpm::holo::canonical::encode_value(&serde_json::json!({
+        "artifactType":prismpm::oci::PRISM_VERIFICATION,
+        "config":verification_config,
+        "layers":runtime_layers,
+        "mediaType":prismpm::oci::OCI_MANIFEST,
+        "schemaVersion":2,
+        "subject":descriptor
+    }))
+    .unwrap();
+    let mut verification_descriptor = store
+        .put(prismpm::oci::OCI_MANIFEST, &verification_manifest)
+        .unwrap();
+    verification_descriptor.artifact_type = Some(prismpm::oci::PRISM_VERIFICATION.to_owned());
     fn referrer(
         store: &prismpm::oci::Store,
         root: &prismpm::oci::Descriptor,
@@ -1268,20 +1346,58 @@ fn oci_fixture() -> OciFixture {
         row.artifact_type = Some(artifact_type.to_owned());
         row
     }
-    let provenance = referrer(
-        &store,
-        &descriptor,
-        prismpm::oci::INTOTO,
-        provenance_statement(serde_json::json!([{
-            "digest":{"sha256":descriptor.digest.trim_start_matches("sha256:")},
-            "name":"conformance-product"
-        }])),
-    );
+    let model = model(&source);
+    let semantic_source_id = model["provenance"]["source_id"].as_str().unwrap();
+    let sdk_image = sdk_lock_document.value()["sdk_image"].as_str().unwrap();
+    let provenance_bytes =
+        prismpm::supply_chain::provenance_statement(&prismpm::supply_chain::ProvenanceInputs {
+            subject_name: release.value()["product"].as_str().unwrap().to_owned(),
+            subject_digest: descriptor.digest.clone(),
+            builder_id: sdk_image.to_owned(),
+            invocation_id: build.build_id.clone(),
+            source_uri: "urn:prismpm:source:conformance-product".to_owned(),
+            source_revision: semantic_source_id.to_owned(),
+            external_parameters: serde_json::json!({
+                "model_digest":release.value()["model_digest"],
+                "product_release":release.value()["release"],
+                "semantic_source_id":semantic_source_id,
+                "standards_lock":release.value()["standards_lock"]
+            }),
+            dependencies: vec![
+                (
+                    sdk_image.to_owned(),
+                    release.value()["sdk_digest"].as_str().unwrap().to_owned(),
+                ),
+                ("urn:prismpm:sdk-lock".to_owned(), sdk_lock.digest.clone()),
+                (
+                    "urn:prismpm:standards-lock".to_owned(),
+                    standards_lock.digest.clone(),
+                ),
+                (
+                    "urn:prismpm:build-manifest".to_owned(),
+                    build_digest.clone(),
+                ),
+                (
+                    "urn:prismpm:verification-closure".to_owned(),
+                    verification_descriptor.digest.clone(),
+                ),
+            ],
+        })
+        .unwrap();
+    let provenance_value = serde_json::from_slice(&provenance_bytes).unwrap();
+    let provenance = referrer(&store, &descriptor, prismpm::oci::INTOTO, provenance_value);
     let validation = referrer(
         &store,
         &descriptor,
         prismpm::oci::PRISM_VALIDATION,
-        serde_json::json!({"result":"passed","subject":descriptor.digest}),
+        serde_json::json!({
+            "build_digest":build_digest,
+            "oracle_results":[],
+            "result":"passed",
+            "schema":"prismpm/release-validation/1",
+            "subject":descriptor.digest,
+            "verification_digest":verification_descriptor.digest
+        }),
     );
     let spdx = referrer(
         &store,
@@ -1295,7 +1411,14 @@ fn oci_fixture() -> OciFixture {
         "application/vnd.prismpm.supply-chain.v1+json",
         serde_json::json!({"release_digest":descriptor.digest,"status":"passed"}),
     );
-    let mut rows = vec![descriptor.clone(), provenance, validation, spdx, supply];
+    let mut rows = vec![
+        descriptor.clone(),
+        verification_descriptor,
+        provenance,
+        validation,
+        spdx,
+        supply,
+    ];
     rows.sort_by(|left, right| left.digest.cmp(&right.digest));
     let index = prismpm::holo::canonical::encode_value(&serde_json::json!({
         "manifests":rows,
@@ -1405,7 +1528,7 @@ fn verify_oci(id: &str) {
                 &format!("example.test/product@{}", fixture.descriptor.digest),
             )
             .unwrap();
-            assert_eq!(inspected["referrers"].as_array().unwrap().len(), 5);
+            assert_eq!(inspected["referrers"].as_array().unwrap().len(), 6);
         }
         "OC-04" => {
             let reference = format!("example.test/product@{}", fixture.descriptor.digest);
@@ -1413,9 +1536,13 @@ fn verify_oci(id: &str) {
             let second = prismpm::oci::inspect(&fixture.root, &reference).unwrap();
             assert_eq!(first, second);
             assert_eq!(
-                prismpm::oci::artifact(&fixture.root, &fixture.descriptor.digest, "payload.bin")
-                    .unwrap(),
-                b"release payload"
+                prismpm::oci::artifact(
+                    &fixture.root,
+                    &fixture.descriptor.digest,
+                    "model.prism.json"
+                )
+                .unwrap(),
+                model_bytes(&repo_root())
             );
         }
         "OC-05" => {

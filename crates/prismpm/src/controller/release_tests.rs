@@ -229,6 +229,62 @@ fn assert_receipt(root: &Path, receipt: &VerifyResult, build: &BuildResult) {
     assert_eq!(lexlean["source_id"], build.source_id);
     assert_eq!(lexlean["semantic_id"], build.semantic_id);
     assert_eq!(lexlean["status"], "verified");
+
+    let build_root = root.join(&build.manifest_path).parent().unwrap().to_owned();
+    let build_manifest_bytes = std::fs::read(root.join(&build.manifest_path)).unwrap();
+    let build_manifest: Value = serde_json::from_slice(&build_manifest_bytes).unwrap();
+    let build_files = build_manifest["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            let name = row["path"].as_str().unwrap();
+            (
+                name.to_owned(),
+                std::fs::read(build_root.join(name)).unwrap(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let verification_files = walkdir::WalkDir::new(&verified)
+        .min_depth(1)
+        .into_iter()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            assert!(entry.file_type().is_file() && !entry.file_type().is_symlink());
+            (
+                entry
+                    .path()
+                    .strip_prefix(&verified)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+                std::fs::read(entry.path()).unwrap(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let binding = crate::release_verification::validate(
+        &build_manifest_bytes,
+        &build_files,
+        &verification_files,
+    )
+    .unwrap();
+    assert_eq!(binding.build_id, build.build_id);
+    assert_eq!(
+        binding.build_digest,
+        format!("sha256:{}", content_id(&build_manifest_bytes))
+    );
+    assert_eq!(
+        binding.model_digest,
+        format!("sha256:{}", content_id(&build_files["model.prism.json"]))
+    );
+    assert_eq!(binding.attestation_id, receipt.attestation_id);
+    assert_eq!(binding.family, "application");
+    crate::release_verification::tests::reject_mutations(
+        &build_manifest_bytes,
+        &build_files,
+        &verification_files,
+    );
 }
 
 #[test]

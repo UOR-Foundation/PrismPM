@@ -1,0 +1,15 @@
+{
+  "$id": "https://schemas.uor.foundation/prismpm/verification-closure/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attestation_id": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "build_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "build_id": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "family": {"enum": ["application", "native"]},
+    "model_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema": {"const": "prismpm/verification-closure/1"}
+  },
+  "required": ["attestation_id", "build_digest", "build_id", "family", "model_digest", "schema"],
+  "type": "object"
+}

@@ -1723,6 +1723,43 @@ fn validate_execution(
     Ok(())
 }
 
+/// Recheck retained native records using the same authoritative registers and
+/// predicates as execution. This performs no subprocess or filesystem access.
+pub(crate) fn validate_release_native_evidence(
+    manifest: &Value,
+    execution: &Value,
+    coverage: &Value,
+    lexlean_attestation: &Value,
+    snapshot: &Value,
+) -> Result<(), PrismError> {
+    let roots: RuntimeRoots = toml::from_str(ROOTS_SOURCE)
+        .map_err(|error| PrismError::new("PP9001", format!("runtime roots: {error}")))?;
+    let (corpus, corpus_sha256) = execution_corpus(&roots)?;
+    let package_roots = package_export_roots(STDLIB_EXPORTS_SOURCE, &roots)?;
+    let export_roots = roots
+        .roots
+        .iter()
+        .chain(&package_roots)
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if manifest["runtime_roots"] != json!(roots.roots)
+        || manifest["package_export_roots"] != json!(package_roots)
+        || manifest["export_roots"] != json!(export_roots)
+        || manifest["execution"] != *execution
+    {
+        return Err(PrismError::new(
+            "PP5006",
+            "retained native roots or execution differ",
+        ));
+    }
+    validate_execution(execution, &corpus, &corpus_sha256)?;
+    validate_coverage(coverage, &export_roots)?;
+    validate_lexlean_declarations(lexlean_attestation, snapshot, &corpus)?;
+    validate_control_coverage_corpus(snapshot, &corpus)
+}
+
 fn publish(
     output_root: &Path,
     attestation_id: &str,
@@ -2793,6 +2830,11 @@ pub(crate) fn run(
         (
             "generated.rs".to_owned(),
             std::fs::read(&generated_path)
+                .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
+        ),
+        (
+            "validator".to_owned(),
+            std::fs::read(&executable_path)
                 .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
         ),
         (

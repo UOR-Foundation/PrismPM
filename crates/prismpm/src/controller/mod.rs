@@ -176,6 +176,7 @@ struct Prepared {
     config: ProjectConfig,
     engine: Engine,
     snapshot: lexlean::SemanticSnapshot,
+    application_snapshot: Option<lexlean::SemanticSnapshot>,
     application_selection: Option<Selection>,
     model: ModelDocument,
     model_bytes: Vec<u8>,
@@ -491,6 +492,7 @@ impl Controller {
             config,
             engine,
             snapshot,
+            application_snapshot,
             application_selection,
             model,
             model_bytes,
@@ -642,6 +644,51 @@ impl Controller {
                 std::fs::read(application_lex_root.join("manifest.json")).map_err(|error| {
                     PrismError::new("PP4002", format!("application LexLean manifest: {error}"))
                 })?;
+            artifacts.push((
+                "application/lexlean-snapshot.json".to_owned(),
+                prepared
+                    .application_snapshot
+                    .as_ref()
+                    .unwrap_or(&prepared.snapshot)
+                    .canonical_bytes(),
+            ));
+            artifacts.push((
+                "application/lexlean-build-manifest.json".to_owned(),
+                application_lex_manifest.clone(),
+            ));
+            let selected_manifest: serde_json::Value =
+                serde_json::from_slice(&application_lex_manifest).map_err(|error| {
+                    PrismError::new("PP4002", format!("application LexLean manifest: {error}"))
+                })?;
+            let mut selected_paths = BTreeSet::new();
+            for output in selected_manifest["outputs"].as_array().ok_or_else(|| {
+                PrismError::new("PP4002", "application LexLean outputs are absent")
+            })? {
+                let path = output["path"].as_str().ok_or_else(|| {
+                    PrismError::new("PP4002", "application LexLean output path is absent")
+                })?;
+                artifact_relative(path)?;
+                if !selected_paths.insert(path) {
+                    return Err(PrismError::new(
+                        "PP4002",
+                        "application LexLean output path is duplicated",
+                    ));
+                }
+                let source = application_lex_root.join(path);
+                let metadata = std::fs::symlink_metadata(&source)
+                    .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
+                if !metadata.is_file() || metadata.file_type().is_symlink() {
+                    return Err(PrismError::new(
+                        "PP4002",
+                        "application LexLean output is not a regular file",
+                    ));
+                }
+                artifacts.push((
+                    format!("application/lexlean-build/{path}"),
+                    std::fs::read(source)
+                        .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
+                ));
+            }
             artifacts.extend(crate::application_build::generate(
                 &self.root,
                 &prepared.model,
@@ -669,7 +716,8 @@ impl Controller {
             "application_generator_sha256": format!("{:x}", Sha256::digest([
                 include_bytes!("../application_build.rs").as_slice(),
                 include_bytes!("../holo/archive.rs").as_slice(),
-                include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice()
+                include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
+                b"prismpm/build-artifacts/2".as_slice()
             ].concat())),
             "dependency_register_sha256": dependency_digest,
             "emitter_semantics_id": prepared.model.provenance.emitter_semantics_id,
@@ -802,7 +850,8 @@ impl Controller {
         };
         crate::oci::assemble(
             &self.root,
-            &selected.build_id,
+            &selected,
+            &verified,
             &request.reference,
             &validations,
         )

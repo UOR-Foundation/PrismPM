@@ -1,5 +1,70 @@
 # PrismPM falsifiability and verification record
 
+## Source-free release evidence (OC-02, OC-03, OC-04, OC-06)
+
+OCI now retains the original build manifest, every path-bound output, and the
+complete runtime/oracle proof closure. Replay checks the same records without
+source access or execution. Native executable bytes remain in the real closure;
+reviewed goldens retain their descriptor, as for generated Rust and kernel IR.
+Integrity does not establish producer authorization or product acceptance.
+
+The first real A/B application replay rejected selected-module source maps:
+their identities legitimately differ from the containing system's full snapshot.
+The controller now retains the actual selected snapshot, manifest and outputs;
+no map is rewritten or comparison omitted. Both releases then passed runtime
+verification and replay, including coherently rehashed evidence mutations.
+The log SHA-256 is
+`c783bbf2d956058e5063b0b16d02b05d24b18d6c245d80e5d3511082dcf829c3`.
+
+The other 139 library tests passed with none ignored, including genuine native
+evidence, missing executable/proof/build-manifest rejection, source-free OCI
+round trips, path confinement, and coherently rehashed provenance substitutions.
+The log SHA-256 is
+`041402a8de8fcf01ff6d2bbd2119b17652cd8441b4c9619ea774ef898f8b509b`.
+All four owning conformance scenarios passed; their log SHA-256 is
+`f29dfef6632c376fed2a0029adae5b6e412a7d0e765bb4aa12026fc19151f255`.
+These runs used the repository devcontainer and the previously authenticated
+d017 SDK for external tooling, not as acceptance of this new SDK or Foundry.
+
+The model gate exposed its stale 44-contract count after the two new contracts
+were registered. The corrected exact 46-contract gate rejects every individual
+omission and same-cardinality duplicate; generated contract documentation and
+the model/spec linkage gate pass. Oracle attestations also preserve their
+registered in-toto envelope rather than inventing a Prism `schema` property.
+
+Denied-warning workspace Clippy passed with all targets and features. Fresh
+stdlib generation checks and all three release-crate archive comparisons pass
+without changing package bytes. The downstream `package-api` gate failed:
+`uor-hologram` is absent from the public Cargo index. Its log SHA-256 is
+`375ff6f77cf400b9532301832b9ba76a155cfdd539d8462634d50b4ddf8d1630`.
+No Git/path substitute was introduced. Full release acceptance remains unmet.
+
+The old golden comparison rejected the changed build/verifier identities.
+After reviewed regeneration, an independent check matched all 240 files;
+all 193 native build-output descriptors remain unchanged. Only the build
+manifest, LexLean attestation, verification manifest and golden manifest changed.
+The passing comparison log has SHA-256
+`c35161c7f3d8b91500181207c6f07094bcbc2543aea3e5092f0f3a07dd2d85be`.
+
+## OpenID source-closure reproducibility
+
+[Bootstrap run 35226604960](https://github.com/UOR-Foundation/PrismPM/actions/runs/35226604960)
+passed the repaired Docker/OCI integration, then eight conformance scenarios
+failed at the same OpenID corpus digest check. Ten upstream `.claude`/`.idea`
+files were present locally but ignored by Git. All 6,021 local files match the
+unchanged pinned archive
+`d33d7eb40b6db0080a48563fe6e8d1073393d18fe9f4afcb3de83f1679197bbb`.
+Its complete tree hashes to the required
+`a35012f67dccd4296ab0e380eb86a0e053dbbf6bf52522aca3ed961c83812197`;
+the incomplete Git tree exactly reproduced CI's
+`1cfc37b89be7e0e7325013deabd485e581c8ffff8aedcad143f51155d3e66dcd`.
+
+Tracking those exact files restores the closure without changing oracle bytes
+or pins. The source-audit regression failed before staging and passed afterward;
+isolated-index missing/changed/extra/symlink mutations fail, and local untracked
+bytes cannot satisfy it. This repairs the shared prerequisite, not evidence
+that the eight complete external scenarios have already rerun successfully.
+
 ## Release identity and system certificates (OC-02, SY-02)
 
 The host certificate omitted product and secret-reference identities and used
