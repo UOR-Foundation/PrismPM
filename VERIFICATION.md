@@ -90,6 +90,15 @@ isolated-index missing/changed/extra/symlink mutations fail, and local untracked
 bytes cannot satisfy it. This repairs the shared prerequisite, not evidence
 that the eight complete external scenarios have already rerun successfully.
 
+A subsequent complete devcontainer conformance run passed all 150 scenarios,
+with zero failures, ignored cases or filters, including all eight previously
+blocked scenarios. Log SHA-256:
+`1c8419c046afb96043510e12f6e562fd02226b97c10b8c477187b568e04bf3a4`.
+External tools used the previously authenticated d017 SDK image; this validates
+the corrected source/OCI boundary, not a newly accepted SDK or Foundry release.
+The separate public-package failure and absent complete producer/publisher
+implementation remain production and Pages deployment blockers.
+
 ## Release identity and system certificates (OC-02, SY-02)
 
 The host certificate omitted product and secret-reference identities and used
