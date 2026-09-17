@@ -353,9 +353,9 @@ PrismPM completion was requested before all registry, archive, reference reposit
 
 Class: `acceptance`. Exit code: 1.
 
-## `PP8001` --- Path traversal rejected
+## `PP8001` --- Unsafe filesystem access rejected
 
-An operation attempted to access a path outside the project root.
+An operation selected an unsafe path, filesystem object, existing destination, or ownership boundary, or attempted to escape the project root.
 
 Class: `security`. Exit code: 1.
 

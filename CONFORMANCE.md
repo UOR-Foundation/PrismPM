@@ -136,6 +136,7 @@ The three honesty levels:
 | `OC-04` | `build` | Push, pull, and inspect preserve and validate complete OCI graph closure without executing artifact content or rebuilding. |
 | `OC-05` | `build` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. |
 | `OC-06` | `build` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. |
+| `OC-07` | `build` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. |
 
 ## operations
 

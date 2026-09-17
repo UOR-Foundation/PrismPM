@@ -1,7 +1,8 @@
 //! CLI command parsing, canonical machine output, and stable exit classes.
 
 use crate::controller::{
-    BuildRequest, CheckRequest, CleanRequest, Controller, ProductBuildRequest, VerifyRequest,
+    BuildRequest, CheckRequest, CleanRequest, Controller, ExportBrowserRequest,
+    ProductBuildRequest, VerifyRequest,
 };
 use crate::error::PrismError;
 use crate::holo::canonical::encode_value;
@@ -80,6 +81,14 @@ pub enum Commands {
     Inspect {
         /// Registry-qualified digest reference.
         reference: String,
+    },
+    /// Export unchanged browser artifacts after source-free release integrity replay.
+    ExportBrowser {
+        /// Registry-qualified immutable reference of a locally acquired release.
+        reference: String,
+        /// New project-child directory name; no existing file or directory is replaced.
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Replay the complete release signature closure from stored OCI evidence.
     VerifyRelease {
@@ -596,6 +605,19 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             let result = crate::oci::inspect(&controller.root, reference)?;
             Ok((result, format!("verified local release: {reference}")))
         }
+        Commands::ExportBrowser { reference, output } => {
+            let result = controller.export_browser(ExportBrowserRequest {
+                reference: reference.clone(),
+                output: output.clone(),
+            })?;
+            Ok((
+                result,
+                format!(
+                    "browser artifacts exported: {} (integrity only)",
+                    output.display()
+                ),
+            ))
+        }
         Commands::VerifyRelease { reference } => {
             let digest = crate::oci::validate_reference(reference, true)?;
             let result = crate::supply_chain::verify_release_trust(&controller.root, digest)?;
@@ -949,6 +971,53 @@ pub fn run() -> ExitCode {
 mod tests {
     use super::{Cli, Commands};
     use clap::Parser;
+
+    #[test]
+    fn browser_export_has_no_build_or_publication_bypass_flags() {
+        let reference = format!("example.test/product@sha256:{}", "a".repeat(64));
+        let cli = Cli::try_parse_from([
+            "prismpm",
+            "--json",
+            "export-browser",
+            &reference,
+            "--output",
+            "site",
+        ])
+        .unwrap();
+        assert!(matches!(cli.command, Commands::ExportBrowser { .. }));
+        assert!(Cli::try_parse_from(["prismpm", "export-browser", &reference]).is_err());
+        for flag in [
+            "--force",
+            "--skip-verify",
+            "--accept",
+            "--build",
+            "--deploy",
+        ] {
+            assert!(Cli::try_parse_from([
+                "prismpm",
+                "export-browser",
+                &reference,
+                "--output",
+                "site",
+                flag,
+            ])
+            .is_err());
+        }
+        let root = tempfile::tempdir().unwrap();
+        let cli = Cli::try_parse_from([
+            "prismpm",
+            "--project",
+            root.path().to_str().unwrap(),
+            "--json",
+            "export-browser",
+            &reference,
+            "--output",
+            "site",
+        ])
+        .unwrap();
+        assert_eq!(super::execute(&cli).unwrap_err().code, "PP6101");
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    }
 
     #[test]
     fn run_is_foreground_by_default_and_detach_is_explicit() {

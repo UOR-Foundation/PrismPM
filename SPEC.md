@@ -774,6 +774,30 @@ cache before atomic publication. `inspect` parses without executing. Promotion
 from development to candidate to accepted adds signed evidence or discovery
 pointers around the same digest and never rebuilds it.
 
+`export-browser NAME@sha256:DIGEST --output DIRECTORY` replays the complete
+local release and retained verification closure without application source,
+network acquisition, artifact execution, or rebuilding. It exports exactly the
+six generated `view/browser/` files of the current application profiles, with
+that prefix removed and bytes unchanged. The existing OCI layout is read-only;
+an absent store is an error. A native-only release has no browser export.
+The output is a new direct child of the project root: 1–128 ASCII characters,
+an alphanumeric first character, then only alphanumerics, underscores or hyphens.
+Publication requires a caller-owned project directory without group or other
+write permission. The SDK checks the published directory's identity against its
+held staging descriptor before returning success. This does not claim protection
+from later mutation by the directory owner or a privileged host process.
+Symlinks, special files, unsafe names and existing destinations fail with
+`PP8001`; invalid or incomplete release evidence fails with `PP6101`.
+The SDK stages files privately and publishes with an atomic no-replace rename;
+it never overwrites a prior export or leaves a partially populated destination.
+The `prismpm/browser-export/1` receipt binds the exact release, model, build,
+relative destination and lexically sorted file paths, lengths and SHA-256
+digests. Its tree digest is SHA-256 of the canonical file-descriptor array.
+The receipt is returned separately; no receipt, CNAME, `.nojekyll`, URL rewrite
+or other unmodeled file is added to the exported tree. This operation verifies
+integrity only. Independent producer authorization, target policy, readiness,
+publication and deployed-product acceptance remain mandatory and separate.
+
 `verify-signature NAME@sha256:DIGEST --bundle PATH --trusted-root PATH
 --policy PATH` verifies a standard Sigstore v0.3 bundle over the canonical local
 root-manifest bytes. The SDK accepts only its pinned Cosign 3.1.3 executable and
@@ -882,7 +906,12 @@ It runs in the foreground by default, streams runtime logs only to stderr, and
 performs graceful Compose shutdown after SIGINT or SIGTERM. Automation must
 request `run --detach` explicitly; detached mode returns only after readiness
 and acceptance and leaves the isolated deployment active.
-Hologram remains the sole `.holo` runtime host.
+PrismPM does not itself host `.holo` execution. The pinned Hologram runtime is
+an independent interoperability oracle, not the authority for generated Prism
+application behavior or a required production service. The generated browser
+application executes its generated Wasm directly. New modeled runtime
+capabilities require generated implementations and complete acceptance; a
+prototype runtime cannot silently replace those model-owned semantics.
 
 Public exit classes are fixed by `model/errors.toml`: configuration 2, invalid
 model 3, authority 4, unverified artifact 5, registry 6, policy 7, target 8,
@@ -1114,6 +1143,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `OC-04` | `oci` | Push, pull, and inspect preserve and validate complete OCI graph closure without executing artifact content or rebuilding. | §13 |
 | `OC-05` | `oci` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. | §13 |
 | `OC-06` | `oci` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. | §13 |
+| `OC-07` | `oci` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. | §13 |
 | `LC-01` | `lifecycle` | The Controller owns fetch, build, push, pull, inspect, run, plan, deploy, status, rollback, and explicit destroy operations. | §14 |
 | `LC-02` | `lifecycle` | Build, push, run, and deploy accept Docker-simple command forms and return stable pipe-safe canonical result values. | §14 |
 | `LC-03` | `lifecycle` | Local run uses unmodified OCI, container, Compose, and Hologram runtimes with modeled isolation, readiness, acceptance, signals, and shutdown. | §14 |

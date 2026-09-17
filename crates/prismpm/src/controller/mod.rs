@@ -116,6 +116,15 @@ pub struct ProductBuildRequest {
     pub release: Option<String>,
 }
 
+/// Request to export the exact browser closure of an immutable local release.
+#[derive(Debug, Clone)]
+pub struct ExportBrowserRequest {
+    /// Registry-qualified immutable release reference, never a mutable tag.
+    pub reference: String,
+    /// New direct child directory of the project; existing paths are not replaced.
+    pub output: PathBuf,
+}
+
 /// Successful build publication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -531,6 +540,17 @@ impl Controller {
             model_id: content_id(&prepared.model_bytes),
             entity_count: count_entities(&prepared.model)?,
         })
+    }
+
+    /// Replay release integrity and atomically export unchanged browser bytes.
+    ///
+    /// This does not load application source, execute artifacts, acquire inputs,
+    /// authorize publication, or establish operational product acceptance.
+    pub fn export_browser(
+        &self,
+        request: ExportBrowserRequest,
+    ) -> Result<serde_json::Value, PrismError> {
+        crate::oci::export_browser(&self.root, &request.reference, &request.output)
     }
 
     /// Build LexLean artifacts and atomically publish the fixed Prism artifact set.

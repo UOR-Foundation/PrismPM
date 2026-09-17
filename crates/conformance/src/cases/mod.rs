@@ -392,6 +392,7 @@ pub fn run_at(root: &Path, id: &str) {
             verify_system(root, id)
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
+        "OC-07" => verify_browser_export(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
         "DP-01" | "DP-02" | "DP-03" | "DP-04" | "DP-05" | "DP-06" => verify_deployment(id),
@@ -1156,16 +1157,33 @@ struct OciFixture {
 }
 
 fn oci_fixture() -> OciFixture {
-    // The SDK identity below is a transport fixture, not a shipped-SDK claim.
-    // Build and runtime evidence, however, must come from the real verifier.
     let source = repo_root();
     let build = built(&source);
     let verification = verified(&source);
+    oci_fixture_from_verification(&source, build, verification)
+}
+
+fn oci_fixture_from_verification(
+    source: &Path,
+    build: &prismpm::controller::BuildResult,
+    verification: &prismpm::controller::VerifyResult,
+) -> OciFixture {
+    // The SDK identity below is a transport fixture, not a shipped-SDK claim.
+    // Build and runtime evidence, however, must come from the real verifier.
     assert_eq!(verification.build_id, build.build_id);
-    let build_manifest_bytes = std::fs::read(build_root(&source).join("manifest.json")).unwrap();
+    let build_directory = source.join(".prism/build").join(&build.build_id);
+    let verification_directory = source.join(&verification.verified_root);
+    let model_bytes = std::fs::read(build_directory.join("model.prism.json")).unwrap();
+    let model: Value = serde_json::from_slice(&model_bytes).unwrap();
+    let family = if model.get("application").is_some() {
+        "application"
+    } else {
+        "native"
+    };
+    let build_manifest_bytes = std::fs::read(build_directory.join("manifest.json")).unwrap();
     let build_manifest: Value = serde_json::from_slice(&build_manifest_bytes).unwrap();
     let build_digest = format!("sha256:{}", sha256(&build_manifest_bytes));
-    let model_digest = format!("sha256:{}", sha256(&model_bytes(&source)));
+    let model_digest = format!("sha256:{}", sha256(&model_bytes));
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_path_buf();
     let store = prismpm::oci::Store::open(&root).unwrap();
@@ -1199,7 +1217,7 @@ fn oci_fixture() -> OciFixture {
         .iter()
         .map(|row| {
             let path = row["path"].as_str().unwrap();
-            let bytes = std::fs::read(build_root(&source).join(path)).unwrap();
+            let bytes = std::fs::read(build_directory.join(path)).unwrap();
             assert_eq!(row["byte_length"], bytes.len());
             assert_eq!(row["sha256"], sha256(&bytes));
             file(&store, path, "release-artifact", &bytes)
@@ -1288,7 +1306,7 @@ fn oci_fixture() -> OciFixture {
         "attestation_id":verification.attestation_id,
         "build_digest":build_digest,
         "build_id":build.build_id,
-        "family":"native",
+        "family":family,
         "model_digest":model_digest,
         "schema":"prismpm/verification-closure/1"
     }))
@@ -1296,8 +1314,15 @@ fn oci_fixture() -> OciFixture {
     let verification_config = store
         .put(prismpm::oci::PRISM_VERIFICATION, &verification_config)
         .unwrap();
-    let runtime_files = tree(&verified_root(&source));
-    assert!(runtime_files.iter().any(|(path, _)| path == "validator"));
+    let runtime_files = tree(&verification_directory);
+    let required_runtime = if family == "native" {
+        "validator"
+    } else {
+        "application-acceptance.json"
+    };
+    assert!(runtime_files
+        .iter()
+        .any(|(path, _)| path == required_runtime));
     let runtime_layers = runtime_files
         .iter()
         .map(|(path, bytes)| {
@@ -1346,7 +1371,6 @@ fn oci_fixture() -> OciFixture {
         row.artifact_type = Some(artifact_type.to_owned());
         row
     }
-    let model = model(&source);
     let semantic_source_id = model["provenance"]["source_id"].as_str().unwrap();
     let sdk_image = sdk_lock_document.value()["sdk_image"].as_str().unwrap();
     let provenance_bytes =
@@ -1459,6 +1483,277 @@ fn oci_fixture() -> OciFixture {
         _temp: temp,
         root,
         descriptor,
+    }
+}
+
+fn verify_browser_export(root: &Path) {
+    use prismpm::controller::{BuildRequest, ExportBrowserRequest, VerifyRequest};
+
+    fn materialize(root: &Path, files: &[(String, Vec<u8>)]) {
+        for (relative, bytes) in files {
+            let path = root.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+    }
+
+    let source = tempfile::tempdir().unwrap();
+    let source_path = source.path().to_owned();
+    let example = root.join("examples/Calculator");
+    materialize(&source_path.join("src"), &tree(&example.join("src")));
+    for name in [
+        "lexlean.toml",
+        "lexlean.lock",
+        "prismpm.toml",
+        "lakefile.toml",
+        "lake-manifest.json",
+        "lean-toolchain",
+    ] {
+        // Exact example bytes need no test-only relock or alternate semantics.
+        std::fs::copy(example.join(name), source_path.join(name)).unwrap();
+    }
+    let controller = prismpm::Controller::load(&source_path).unwrap();
+    let build = controller
+        .build(BuildRequest { config_path: None })
+        .unwrap();
+    let verification = controller
+        .verify(VerifyRequest { config_path: None })
+        .unwrap();
+    assert_eq!(build.build_id, verification.build_id);
+    let build_directory = source_path.join(".prism/build").join(&build.build_id);
+    let browser = tree(&build_directory.join("view/browser"));
+    assert_eq!(
+        browser
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "app.css",
+            "app.js",
+            "index.html",
+            "prism_calculator.js",
+            "prism_calculator_bg.wasm",
+            "provenance.json",
+        ]
+    );
+    let model_digest = format!(
+        "sha256:{}",
+        sha256(&std::fs::read(build_directory.join("model.prism.json")).unwrap())
+    );
+    let build_digest = format!(
+        "sha256:{}",
+        sha256(&std::fs::read(build_directory.join("manifest.json")).unwrap())
+    );
+    let fixture = oci_fixture_from_verification(&source_path, &build, &verification);
+    drop(controller);
+    source.close().unwrap();
+    assert!(
+        !source_path.exists(),
+        "export must not have an available source project"
+    );
+
+    let release_digest = fixture.descriptor.digest.clone();
+    let reference = format!("example.test/product@{release_digest}");
+    let layout = tree(&fixture.root.join(".prism/oci"));
+    assert!(layout.iter().all(|(path, _)| {
+        matches!(path.as_str(), "oci-layout" | "index.json")
+            || path.starts_with("blobs/sha256/")
+            || path.starts_with("verified/")
+    }));
+    assert!(layout.iter().any(|(path, _)| path.starts_with("verified/")));
+    let original_store = fixture.root.clone();
+    fixture._temp.close().unwrap();
+    assert!(!original_store.exists());
+
+    let receiver = tempfile::tempdir().unwrap();
+    materialize(&receiver.path().join(".prism/oci"), &layout);
+    for absent in [
+        "prismpm.toml",
+        "prismpm.lock",
+        "src",
+        ".lexlean",
+        ".prism/build",
+        ".prism/verified",
+    ] {
+        assert!(
+            !receiver.path().join(absent).exists(),
+            "source-free receiver has {absent}"
+        );
+    }
+    let controller = prismpm::Controller::load(receiver.path()).unwrap();
+    let files = browser
+        .iter()
+        .map(|(path, bytes)| {
+            serde_json::json!({
+                "digest":format!("sha256:{}", sha256(bytes)),
+                "path":path,
+                "size":bytes.len()
+            })
+        })
+        .collect::<Vec<_>>();
+    let tree_digest = format!(
+        "sha256:{}",
+        sha256(&prismpm::holo::canonical::encode_value(&serde_json::json!(files)).unwrap())
+    );
+    let mut receipts = Vec::new();
+    for output in ["site-one", "site-two"] {
+        let receipt = controller
+            .export_browser(ExportBrowserRequest {
+                reference: reference.clone(),
+                output: PathBuf::from(output),
+            })
+            .unwrap();
+        assert_eq!(
+            receipt,
+            serde_json::json!({
+                "build_digest":build_digest,
+                "files":files,
+                "model_digest":model_digest,
+                "output":output,
+                "reference":reference,
+                "release_digest":release_digest,
+                "schema":"prismpm/browser-export/1",
+                "tree_digest":tree_digest
+            })
+        );
+        let document = prismpm::contracts::CanonicalDocument::from_value(
+            "prismpm/browser-export/1",
+            receipt.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            document.bytes(),
+            prismpm::holo::canonical::encode_value(&receipt).unwrap()
+        );
+        assert_eq!(tree(&receiver.path().join(output)), browser);
+        assert_eq!(
+            std::fs::read_dir(receiver.path().join(output))
+                .unwrap()
+                .count(),
+            6
+        );
+        receipts.push(receipt);
+    }
+    receipts[0]["output"] = receipts[1]["output"].clone();
+    assert_eq!(
+        receipts[0], receipts[1],
+        "export content identities must be deterministic"
+    );
+    assert_eq!(
+        tree(&receiver.path().join(".prism/oci")),
+        layout,
+        "export must not rewrite the source OCI store"
+    );
+    for output in [
+        "site-one",
+        "../escape",
+        "/outside",
+        "nested/site",
+        ".prism",
+        "site/",
+        "site\\escape",
+    ] {
+        assert_eq!(
+            controller
+                .export_browser(ExportBrowserRequest {
+                    reference: reference.clone(),
+                    output: PathBuf::from(output),
+                })
+                .unwrap_err()
+                .code,
+            "PP8001",
+            "{output}"
+        );
+    }
+    std::fs::write(receiver.path().join("owned"), b"preserve existing file").unwrap();
+    assert_eq!(
+        controller
+            .export_browser(ExportBrowserRequest {
+                reference: reference.clone(),
+                output: PathBuf::from("owned"),
+            })
+            .unwrap_err()
+            .code,
+        "PP8001"
+    );
+    assert_eq!(
+        std::fs::read(receiver.path().join("owned")).unwrap(),
+        b"preserve existing file"
+    );
+    assert_eq!(tree(&receiver.path().join("site-one")), browser);
+    assert!(!receiver.path().join("nested").exists());
+
+    for mutation in ["proof", "artifact", "referrer"] {
+        let rejected = tempfile::tempdir().unwrap();
+        let store_root = rejected.path().join(".prism/oci");
+        materialize(&store_root, &layout);
+        let blob = |digest: &str| {
+            store_root
+                .join("blobs/sha256")
+                .join(digest.strip_prefix("sha256:").unwrap())
+        };
+        let mut index = json(&store_root.join("index.json"));
+        let proof = index["manifests"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["artifactType"] == prismpm::oci::PRISM_VERIFICATION)
+            .unwrap()
+            .clone();
+        match mutation {
+            "proof" | "artifact" => {
+                let manifest = if mutation == "proof" {
+                    json(&blob(proof["digest"].as_str().unwrap()))
+                } else {
+                    json(&blob(&release_digest))
+                };
+                let title = if mutation == "proof" {
+                    "runtime/application-acceptance.json"
+                } else {
+                    "view/browser/app.js"
+                };
+                let layer = manifest["layers"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["annotations"]["org.opencontainers.image.title"] == title)
+                    .unwrap();
+                let path = blob(layer["digest"].as_str().unwrap());
+                let mut bytes = std::fs::read(&path).unwrap();
+                bytes[0] ^= 1;
+                std::fs::write(path, bytes).unwrap();
+            }
+            "referrer" => {
+                index["manifests"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|row| row["digest"] != proof["digest"]);
+                std::fs::write(
+                    store_root.join("index.json"),
+                    prismpm::holo::canonical::encode_value(&index).unwrap(),
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let before = tree(rejected.path());
+        let error = prismpm::Controller::load(rejected.path())
+            .unwrap()
+            .export_browser(ExportBrowserRequest {
+                reference: reference.clone(),
+                output: PathBuf::from("site"),
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "PP6101", "{mutation}: {error}");
+        assert!(
+            !rejected.path().join("site").exists(),
+            "{mutation} published an output"
+        );
+        assert_eq!(
+            tree(rejected.path()),
+            before,
+            "{mutation} changed the receiver on rejection"
+        );
     }
 }
 

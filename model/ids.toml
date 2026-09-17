@@ -721,6 +721,12 @@ level = "build"
 statement = "Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content."
 
 [[id]]
+id = "OC-07"
+suite = "oci"
+level = "build"
+statement = "Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority."
+
+[[id]]
 id = "LC-01"
 suite = "lifecycle"
 level = "build"

@@ -55,6 +55,12 @@ requires_digest = true
 result_schema = "prismpm/deployment-evidence/1"
 
 [[command]]
+name = "export-browser"
+mutates = "new-local-browser-directory"
+requires_digest = true
+result_schema = "prismpm/browser-export/1"
+
+[[command]]
 name = "fetch"
 mutates = "immutable-cache"
 requires_digest = false

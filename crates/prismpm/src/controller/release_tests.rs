@@ -287,6 +287,347 @@ fn assert_receipt(root: &Path, receipt: &VerifyResult, build: &BuildResult) {
     );
 }
 
+struct BrowserRelease {
+    reference: String,
+    digest: String,
+    model_digest: String,
+    build_digest: String,
+    files: BTreeMap<String, Vec<u8>>,
+    layout: BTreeMap<String, Vec<u8>>,
+}
+
+fn browser_release(root: &Path, build: &BuildResult, verified: &VerifyResult) -> BrowserRelease {
+    let staging = tempfile::tempdir().unwrap();
+    let (store, descriptor) = crate::oci::browser_export_fixture(
+        staging.path(),
+        "example.invalid/calculator:fixture",
+        root,
+        build,
+        verified,
+    );
+    let build_root = root.join(&build.manifest_path).parent().unwrap().to_owned();
+    let files = [
+        "app.css",
+        "app.js",
+        "index.html",
+        "prism_calculator.js",
+        "prism_calculator_bg.wasm",
+        "provenance.json",
+    ]
+    .into_iter()
+    .map(|name| {
+        (
+            name.to_owned(),
+            std::fs::read(build_root.join("view/browser").join(name)).unwrap(),
+        )
+    })
+    .collect();
+    let mut layout = BTreeMap::new();
+    let marker = format!(
+        "verified/{}.json",
+        descriptor.digest.strip_prefix("sha256:").unwrap()
+    );
+    for entry in walkdir::WalkDir::new(store.root()).min_depth(1) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_dir() {
+            continue;
+        }
+        assert!(entry.file_type().is_file() && !entry.file_type().is_symlink());
+        let name = entry.path().strip_prefix(store.root()).unwrap();
+        if name.starts_with("blobs")
+            || name == Path::new("index.json")
+            || name == Path::new("oci-layout")
+            || name == Path::new(&marker)
+        {
+            layout.insert(
+                name.to_str().unwrap().to_owned(),
+                std::fs::read(entry.path()).unwrap(),
+            );
+        }
+    }
+    // This is publication-consistency metadata, not a substitute for replaying
+    // the complete proof closure. Its removal/forgery is tested below.
+    assert!(layout.contains_key(&marker));
+    let release = BrowserRelease {
+        reference: format!("example.invalid/calculator@{}", descriptor.digest),
+        digest: descriptor.digest,
+        model_digest: format!(
+            "sha256:{}",
+            content_id(&std::fs::read(root.join(&build.model_path)).unwrap())
+        ),
+        build_digest: format!(
+            "sha256:{}",
+            content_id(&std::fs::read(root.join(&build.manifest_path)).unwrap())
+        ),
+        files,
+        layout,
+    };
+    drop(store);
+    staging.close().unwrap();
+    release
+}
+
+fn browser_receiver(release: &BrowserRelease) -> tempfile::TempDir {
+    let boundary = tempfile::tempdir().unwrap();
+    let receiver = boundary.path().join("receiver");
+    std::fs::create_dir(&receiver).unwrap();
+    for (name, bytes) in &release.layout {
+        let destination = receiver.join(".prism/oci").join(name);
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        std::fs::write(destination, bytes).unwrap();
+    }
+    for absent in [
+        "src",
+        "prismpm.toml",
+        ".lexlean",
+        ".prism/build",
+        ".prism/verified",
+    ] {
+        assert!(!receiver.join(absent).exists());
+    }
+    boundary
+}
+
+fn assert_browser_refused(root: &Path, reference: &str, output: &Path) {
+    let before = std::fs::read_dir(root)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<BTreeSet<_>>();
+    let error = Controller::load(root)
+        .unwrap()
+        .export_browser(ExportBrowserRequest {
+            reference: reference.to_owned(),
+            output: output.to_owned(),
+        })
+        .unwrap_err();
+    assert!(
+        matches!(error.code.as_str(), "PP6101" | "PP8001"),
+        "{error:?}"
+    );
+    let after = std::fs::read_dir(root)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(after, before, "failure left an output or staging directory");
+}
+
+fn assert_source_free_browser_export(release: &BrowserRelease) {
+    let boundary = browser_receiver(release);
+    let root = boundary.path().join("receiver");
+    let result = Controller::load(&root)
+        .unwrap()
+        .export_browser(ExportBrowserRequest {
+            reference: release.reference.clone(),
+            output: "browser-output".into(),
+        })
+        .unwrap();
+    let rows = release
+        .files
+        .iter()
+        .map(|(path, bytes)| {
+            json!({"path":path,"digest":format!("sha256:{}",content_id(bytes)),"size":bytes.len()})
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        result,
+        json!({
+            "schema":"prismpm/browser-export/1",
+            "reference":release.reference,
+            "release_digest":release.digest,
+            "model_digest":release.model_digest,
+            "build_digest":release.build_digest,
+            "output":"browser-output",
+            "files":rows,
+            "tree_digest":format!("sha256:{}",content_id(&encode_value(&json!(rows)).unwrap()))
+        })
+    );
+    let exported = std::fs::read_dir(root.join("browser-output"))
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            assert!(entry.file_type().unwrap().is_file());
+            (
+                entry.file_name().to_str().unwrap().to_owned(),
+                std::fs::read(entry.path()).unwrap(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(exported, release.files);
+    for absent in [
+        "src",
+        "prismpm.toml",
+        ".lexlean",
+        ".prism/build",
+        ".prism/verified",
+    ] {
+        assert!(!root.join(absent).exists(), "export rebuilt {absent}");
+    }
+    for (name, bytes) in &release.layout {
+        assert_eq!(
+            std::fs::read(root.join(".prism/oci").join(name)).unwrap(),
+            *bytes,
+            "export modified the copied OCI closure"
+        );
+    }
+    assert_eq!(
+        walkdir::WalkDir::new(root.join(".prism/oci"))
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(|entry| entry.file_type().is_file())
+            .count(),
+        release.layout.len(),
+        "export created additional OCI evidence"
+    );
+
+    // Existing directory/file/symlink destinations must never be replaced.
+    assert_browser_refused(&root, &release.reference, Path::new("browser-output"));
+    for (name, bytes) in &release.files {
+        assert_eq!(
+            std::fs::read(root.join("browser-output").join(name)).unwrap(),
+            *bytes
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(root.join("browser-output"))
+            .unwrap()
+            .count(),
+        6
+    );
+    std::fs::write(root.join("existing-file"), b"preserve").unwrap();
+    assert_browser_refused(&root, &release.reference, Path::new("existing-file"));
+    assert_eq!(
+        std::fs::read(root.join("existing-file")).unwrap(),
+        b"preserve"
+    );
+    for name in [
+        "",
+        ".",
+        "..",
+        "../escape",
+        "nested/output",
+        "./output",
+        ".hidden",
+        "-output",
+        "with space",
+        "with\\slash",
+        "with:colon",
+        "é",
+    ] {
+        assert_browser_refused(&root, &release.reference, Path::new(name));
+    }
+    assert_browser_refused(&root, &release.reference, Path::new(&"a".repeat(129)));
+    assert_browser_refused(
+        &root,
+        &release.reference,
+        &boundary.path().join("absolute-output"),
+    );
+    assert!(!boundary.path().join("absolute-output").exists());
+    assert!(!boundary.path().join("escape").exists());
+    assert_browser_refused(
+        &root,
+        "example.invalid/calculator:fixture",
+        Path::new("tag-output"),
+    );
+
+    #[cfg(unix)]
+    {
+        let outside = boundary.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        std::fs::write(outside.join("sentinel"), b"preserve").unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("linked-output")).unwrap();
+        assert_browser_refused(&root, &release.reference, Path::new("linked-output"));
+        assert_eq!(
+            std::fs::read(outside.join("sentinel")).unwrap(),
+            b"preserve"
+        );
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 1);
+    }
+
+    for mutation in [
+        "browser-bytes",
+        "missing-proof",
+        "missing-proof-blob",
+        "missing-marker",
+        "forged-marker",
+    ] {
+        let damaged = browser_receiver(release);
+        let root = damaged.path().join("receiver");
+        let layout = root.join(".prism/oci");
+        let mut index: Value =
+            serde_json::from_slice(&std::fs::read(layout.join("index.json")).unwrap()).unwrap();
+        if matches!(mutation, "missing-marker" | "forged-marker") {
+            let marker = layout.join("verified").join(format!(
+                "{}.json",
+                release.digest.strip_prefix("sha256:").unwrap()
+            ));
+            if mutation == "missing-marker" {
+                std::fs::remove_file(marker).unwrap();
+            } else {
+                let mut value: Value =
+                    serde_json::from_slice(&std::fs::read(&marker).unwrap()).unwrap();
+                value["graph_digest"] = json!(format!("sha256:{}", "0".repeat(64)));
+                std::fs::write(marker, encode_value(&value).unwrap()).unwrap();
+            }
+        } else if mutation == "missing-proof" {
+            index["manifests"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|row| row["artifactType"] != crate::oci::PRISM_VERIFICATION);
+            std::fs::write(layout.join("index.json"), encode_value(&index).unwrap()).unwrap();
+        } else {
+            let digest = if mutation == "browser-bytes" {
+                content_id(&release.files["app.js"])
+            } else {
+                index["manifests"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["artifactType"] == crate::oci::PRISM_VERIFICATION)
+                    .unwrap()["digest"]
+                    .as_str()
+                    .unwrap()
+                    .strip_prefix("sha256:")
+                    .unwrap()
+                    .to_owned()
+            };
+            let blob = layout.join("blobs/sha256").join(digest);
+            if mutation == "browser-bytes" {
+                std::fs::write(blob, b"tampered browser code").unwrap();
+            } else {
+                std::fs::remove_file(blob).unwrap();
+            }
+        }
+        assert_browser_refused(&root, &release.reference, Path::new("browser-output"));
+        assert!(!root.join("browser-output").exists());
+    }
+
+    #[cfg(unix)]
+    {
+        let linked = browser_receiver(release);
+        let root = linked.path().join("receiver");
+        let outside = linked.path().join("external-blob");
+        std::fs::write(&outside, &release.files["app.js"]).unwrap();
+        let blob = root
+            .join(".prism/oci/blobs/sha256")
+            .join(content_id(&release.files["app.js"]));
+        std::fs::remove_file(&blob).unwrap();
+        std::os::unix::fs::symlink(&outside, &blob).unwrap();
+        assert_browser_refused(&root, &release.reference, Path::new("browser-output"));
+        assert_eq!(std::fs::read(outside).unwrap(), release.files["app.js"]);
+    }
+}
+
+#[test]
+fn browser_export_without_a_store_is_no_write() {
+    let root = tempfile::tempdir().unwrap();
+    assert_browser_refused(
+        root.path(),
+        &format!("example.invalid/calculator@sha256:{}", "1".repeat(64)),
+        Path::new("browser-output"),
+    );
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+}
+
 #[test]
 fn explicit_release_requires_a_system_graph() {
     let temporary = calculator_project();
@@ -300,6 +641,41 @@ fn explicit_release_requires_a_system_graph() {
     }
     assert!(!temporary.path().join(".prism/verified").exists());
     assert!(!temporary.path().join(".prism/build").exists());
+}
+
+#[test]
+fn modeled_system_projections_pass_all_seven_locked_oracles() {
+    let temporary = named_releases();
+    let root = temporary.path();
+    let controller = Controller::load(root).unwrap();
+    let build = controller
+        .build_release(BuildRequest { config_path: None }, Some("A"))
+        .unwrap();
+    let manifest_path = root.join(&build.manifest_path);
+    let manifest = std::fs::read(&manifest_path).unwrap();
+    let results = crate::oci::projection_oracle_fixture(root, &build);
+    assert_eq!(
+        results
+            .iter()
+            .map(|result| result["oracle"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "asyncapi-3.1-schema",
+            "cloudevents-1.0-json",
+            "compose-fee041b3",
+            "kubernetes-1.36.4",
+            "openapi-3.2-schema",
+            "otel-collector-0.136.0",
+            "spdx-3.0.1-model",
+        ]
+    );
+    for result in results {
+        assert_eq!(result["schema"], "prismpm/validation-result/1");
+        assert_eq!(result["valid"], true);
+        assert!(result["evidence_path"].as_str().is_some());
+    }
+    assert_eq!(std::fs::read(manifest_path).unwrap(), manifest);
+    assert!(!root.join(".prism/verified").exists());
 }
 
 #[test]
@@ -354,5 +730,17 @@ fn alternate_release_verification_is_bound_to_the_selected_build() {
                 .code,
             "PP2101"
         );
+    }
+    let releases = [
+        browser_release(root, &a, &verified_a),
+        browser_release(root, &b, &verified_b),
+    ];
+    assert_ne!(releases[0].digest, releases[1].digest);
+    let deleted_source = root.to_owned();
+    drop(controller);
+    temporary.close().unwrap();
+    assert!(!deleted_source.exists());
+    for release in releases {
+        assert_source_free_browser_export(&release);
     }
 }

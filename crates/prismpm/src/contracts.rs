@@ -12,7 +12,13 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 46] = [
+const CONTRACTS: [Contract; 47] = [
+    Contract {
+        id: "prismpm/browser-export/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-export.schema.json"),
+    },
     Contract {
         id: "prismpm/verification-closure/1",
         maximum_bytes: 1_048_576,
@@ -314,6 +320,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         return crate::holo::validate::validate(&document);
     }
     let arrays: Vec<(&str, &str)> = match id {
+        "prismpm/browser-export/1" => vec![("files", "path")],
         "prismpm/capability-coverage/1" => {
             vec![("diagnostics", "code"), ("features", "feature_id")]
         }
@@ -669,6 +676,19 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             }
         }
     }
+    if id == "prismpm/browser-export/1" {
+        let reference = value["reference"]
+            .as_str()
+            .expect("schema-validated reference");
+        let digest = crate::oci::validate_reference(reference, true)?;
+        let tree_digest = format!("sha256:{}", content_id(&encode_value(&value["files"])?));
+        if value["release_digest"] != digest || value["tree_digest"] != tree_digest {
+            return Err(PrismError::new(
+                "PP1101",
+                "browser export receipt identities disagree",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -779,6 +799,91 @@ impl CanonicalDocument {
 mod tests {
     use super::{CanonicalDocument, CONTRACTS};
     use serde_json::json;
+
+    #[test]
+    fn browser_export_receipt_binds_exact_identity_and_order_without_authority_claims() {
+        let files = [
+            "app.css",
+            "app.js",
+            "core.js",
+            "core_bg.wasm",
+            "index.html",
+            "provenance.json",
+        ]
+        .map(|path| json!({"path":path,"digest":format!("sha256:{}","1".repeat(64)),"size":1}));
+        let files = json!(files);
+        let digest = format!("sha256:{}", "2".repeat(64));
+        let id = "prismpm/browser-export/1";
+        let receipt = json!({
+            "schema":id,
+            "reference":format!("example.test/product@{digest}"),
+            "release_digest":digest,
+            "model_digest":format!("sha256:{}","3".repeat(64)),
+            "build_digest":format!("sha256:{}","4".repeat(64)),
+            "tree_digest":format!("sha256:{}",crate::holo::canonical::content_id(&crate::holo::canonical::encode_value(&files).unwrap())),
+            "output":"site",
+            "files":files,
+        });
+        CanonicalDocument::from_value(id, receipt.clone()).unwrap();
+        for (field, replacement) in [
+            ("reference", json!("example.test/product:main")),
+            (
+                "release_digest",
+                json!(format!("sha256:{}", "5".repeat(64))),
+            ),
+            ("tree_digest", json!(format!("sha256:{}", "6".repeat(64)))),
+            ("output", json!("../site")),
+            ("output", json!("site/child")),
+            ("output", json!(".prism")),
+            ("output", json!("")),
+            ("authorized", json!(true)),
+            ("accepted", json!(true)),
+        ] {
+            let mut changed = receipt.clone();
+            changed[field] = replacement;
+            assert!(
+                CanonicalDocument::from_value(id, changed).is_err(),
+                "accepted changed {field}"
+            );
+        }
+        for field in receipt.as_object().unwrap().keys() {
+            let mut changed = receipt.clone();
+            changed.as_object_mut().unwrap().remove(field);
+            assert!(
+                CanonicalDocument::from_value(id, changed).is_err(),
+                "accepted missing {field}"
+            );
+        }
+        for mutation in 0..4 {
+            let mut changed = receipt.clone();
+            let files = changed["files"].as_array_mut().unwrap();
+            match mutation {
+                0 => {
+                    files.swap(0, 1);
+                }
+                1 => {
+                    files[1]["path"] = files[0]["path"].clone();
+                }
+                2 => {
+                    files.remove(0);
+                }
+                3 => {
+                    files[0]["path"] = json!("../app.css");
+                }
+                _ => unreachable!(),
+            }
+            changed["tree_digest"] = json!(format!(
+                "sha256:{}",
+                crate::holo::canonical::content_id(
+                    &crate::holo::canonical::encode_value(&changed["files"]).unwrap()
+                )
+            ));
+            assert!(
+                CanonicalDocument::from_value(id, changed).is_err(),
+                "accepted file mutation {mutation}"
+            );
+        }
+    }
 
     #[test]
     fn oracle_attestation_preserves_the_closed_external_envelope() {

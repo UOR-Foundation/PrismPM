@@ -35,3 +35,9 @@ Feature: oci
     Given the locked PrismPM production fixture
     When the OC-06 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @OC-07 @build
+  Scenario: Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority.
+    Given the locked PrismPM production fixture
+    When the OC-07 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

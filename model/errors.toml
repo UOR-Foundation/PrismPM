@@ -408,10 +408,10 @@ statement = "PrismPM completion was requested before all registry, archive, refe
 
 [[error]]
 code = "PP8001"
-title = "Path traversal rejected"
+title = "Unsafe filesystem access rejected"
 class = "security"
 exit = 1
-statement = "An operation attempted to access a path outside the project root."
+statement = "An operation selected an unsafe path, filesystem object, existing destination, or ownership boundary, or attempted to escape the project root."
 
 [[error]]
 code = "PP8002"

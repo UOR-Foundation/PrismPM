@@ -113,3 +113,9 @@ NAME@sha256:DIGEST` runs the SDK-contained registered feature and diagnostic cor
 and attaches its digest-bound canonical production-acceptance transcript. The
 same command is available through the shared action; it does not rebuild the
 release or infer coverage from registry membership.
+
+`prismpm export-browser NAME@sha256:DIGEST --output site` exports an already
+acquired release's exact browser files after source-free integrity replay.
+The destination must be new, in a caller-owned project directory without group
+or other write permission. This does not authorize publication or establish
+product acceptance; a publisher must verify those separately before deployment.

@@ -12,7 +12,7 @@ produced. [Verification evidence](VERIFICATION.md#portable-view-execution-and-to
 records the exact source, tools, scope, and log digest; the development SDK
 binding is not a newly accepted production release.
 
-## Public dependency prerequisite
+## Current SDK dependency coupling
 
 Both the standalone package gate and Cargo's own online package preparation
 have failed to resolve the required public `uor-hologram` package:
@@ -26,8 +26,13 @@ The package gate resolves registry dependencies as Cargo does when publishing;
 the development Git checkout is not a substitute for a public registry crate.
 The former Hologram 0.12.1 source predates registry versions on its internal
 path dependencies. PrismPM now pins the publishable Hologram 0.13.1 source at
-`96769f16be454ab1572fddff4613704ccfbebf5e`; the corresponding packages must be
-published before the public PrismPM package can be accepted.
+`96769f16be454ab1572fddff4613704ccfbebf5e`. With this dependency unchanged, its
+public registry closure is required for PrismPM package acceptance. This is an
+SDK archive-codec dependency, not a requirement that Foundry run a Hologram
+service. Replacing that coupling requires a fully implemented, model-driven
+SDK/stdlib format adapter and complete compatibility verification; deleting the
+dependency or its checks is not a replacement. Hologram Live remains the
+independent interoperability oracle, not the application model authority.
 
 Hologram's existing publication workflow publishes its complete 19-crate
 workspace. Its last real upload failed with HTTP 403 because
@@ -61,7 +66,7 @@ and `target/asyncapi-sdk-audit-20260915.json` (SHA-256
 
 ## Diagnostic boundary coverage
 
-The current 150-feature/84-diagnostic register accounting is checked dynamically.
+The current 151-feature/84-diagnostic register accounting is checked dynamically.
 The new PP2009 probe executes the actual text-application validator, but the
 other 83 `diagnostics.rs` probes still test generic local predicates rather than
 their owning implementation boundaries. Passing those probes or counting their
@@ -72,10 +77,12 @@ excluded by the current text-profile work.
 
 ## Remaining release acceptance
 
-After dependency publication is authorized, complete the existing release plan:
+Complete the existing release plan without treating a prototype implementation
+as a mandatory application dependency:
 
-1. Accept and publish the Hologram dependency closure, and verify the downloaded
-   bytes. Verify the generic compiler release packages and their publishing
+1. Resolve the current archive-codec dependency coupling and verify the complete
+   resulting public dependency closure. Preserve independent Holo oracle
+   acceptance. Verify the generic compiler release packages and their publishing
    identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes.
 2. Reproduce the PrismPM dependency closure and its package, golden
    artifacts, Calculator regression, and all source/package/image checks.

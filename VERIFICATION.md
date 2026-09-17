@@ -1,5 +1,48 @@
 # PrismPM falsifiability and verification record
 
+## Source-free browser export (OC-07)
+
+`export-browser` replays the retained release closure and atomically publishes
+only its six exact generated browser files. Genuine named releases A and B
+are built and verified before source removal; an empty receiver then exports
+their unchanged bytes. Missing or substituted evidence, changed assets,
+symlinks, hardlinks, special files, unsafe paths, existing outputs and staged
+directory replacement are rejected. The CLI first failed with the command
+absent; removing the post-publication identity checks made the owning race
+regression fail. Both defects were restored before verification.
+
+All 157 library tests passed without skips or filters in the devcontainer;
+`target/browser-export-library-complete.log` has SHA-256
+`3fa9339257f1b7c3369eb16b449b6b1d3926701450d07a41a0dd8d4584a6f95a`.
+All-target/all-feature Clippy, formatting, source/model/spec audits and all
+33 model/driver/compatibility tests passed. The final complete conformance
+package passed all 151 scenarios and eight unit tests, with none ignored or
+filtered; log `target/browser-export-conformance-clean.log` has SHA-256
+`dbe3311464c34b31ac0a3a9a3cb9a1b19141e3a78e1805f3abad635f7a5f1e48`.
+Golden review preserved all 194 build files and native execution evidence;
+only verifier provenance and its two derived records changed. An independent
+check reproduced all 240 golden files. Final static checks and golden replay
+are recorded in `target/browser-export-final-audit.log`, SHA-256
+`4128bcfa6a31361d25b8f0a4dc327a9e306ce14cbf54add278a5cc689384dfeb`.
+
+The real package/API gate still fails on the absent public `uor-hologram`
+dependency. No gate is waived and no new SDK release, production-acceptance
+receipt or Foundry deployment is claimed. The digest-bound development image
+below supplies external oracle tools only. Export integrity does not establish
+producer readiness, authorization, full artifact coverage or live acceptance.
+
+## Fixture source isolation
+
+The complete conformance rerun passed 149 cases and failed HO-11/OC-07 with
+`ENOSPC`: the text fixture contained 17 GiB of ignored generated cache, which
+the fixture copier duplicated into temporary projects. Only those confirmed
+untracked generated directories were removed. The copier now prunes generated
+state at the project root, preserves source/dotfiles/nested names, and rejects
+unreadable, symlinked or nonregular source inputs instead of silently omitting
+them. Four owning regressions failed before the correction; all five passed
+afterward. Logs: `target/fixture-source-copy-red.log` and
+`target/fixture-source-copy-green.log`. No expected outcome or gate was reduced.
+
 ## Complete generated-projection oracle execution
 
 Real system projections exposed two additional failures: Compose could not
@@ -15,7 +58,9 @@ Compose positive/negative tests and all four Kubernetes wrapper tests pass.
 The actual modeled system passes all seven locked projection oracles in
 `target/projection-oracles-preflight-normalized.log`, after the recorded
 failures in `target/compose-project-environment-red.log` and
-`target/projection-oracles-preflight-complete.log`. The development-only
+`target/projection-oracles-preflight-complete.log`. Six validate generated
+documents; CloudEvents uses the production runner's fixed envelope fixture,
+not evidence of runtime-event acceptance. The development-only
 oracle image is digest-bound at
 `127.0.0.1:5000/prismpm-oracle-test@sha256:eb5205273cfcc84bb749272115a40a3b527403d2db5a8ec3751c345bbd7a1f7b`;
 it runs the corrected wrapper tests and regenerates its real SDK inventory.
