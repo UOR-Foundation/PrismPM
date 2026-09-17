@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { validateConfig, validateEnvironment, validateEvidence } from './sdk-candidate.mjs';
-import { compilerRevision, validateAuthorityMetadata } from '../sdk/inventory-metadata.mjs';
+import { compilerRevision, encodeInventory, validateAuthorityMetadata } from '../sdk/inventory-metadata.mjs';
 import './sdk-candidate-sbom.test.mjs';
 
 const revision = 'a'.repeat(40);
@@ -25,6 +25,31 @@ const config = () => ({architecture: 'amd64', os: 'linux', rootfs: {type: 'layer
     'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
     'org.opencontainers.image.version': '0.3.0',
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z'}}});
+
+test('final runtime inventory is canonical after appending measured browser artifacts', () => {
+  const artifact = {id: 'playwright-headless-shell', kind: 'oracle', version: '1.62.1',
+    digest: `sha256:${'a'.repeat(64)}`};
+  const command = {sha256: 'b'.repeat(64), executable: '/usr/local/bin/prismpm', command: 'prismpm'};
+  const value = {schema: 'prismpm/sdk-inventory/1', commands: [command], artifacts: [artifact]};
+  const expected = `{"artifacts":[{"digest":"sha256:${'a'.repeat(64)}","id":"playwright-headless-shell","kind":"oracle","version":"1.62.1"}],"commands":[{"command":"prismpm","executable":"/usr/local/bin/prismpm","sha256":"${'b'.repeat(64)}"}],"schema":"prismpm/sdk-inventory/1"}\n`;
+  assert.equal(encodeInventory(value), expected);
+  assert.deepEqual(JSON.parse(expected), value, 'canonicalization must not change measured facts');
+  assert.equal(encodeInventory(JSON.parse(expected)), expected, 'encoding must be idempotent');
+  assert.notEqual(`${JSON.stringify(value)}\n`, expected, 'the former insertion-order writer must fail');
+  const generator = readFileSync(new URL('../sdk/generate-inventory.mjs', import.meta.url), 'utf8');
+  assert.ok(generator.includes("await writeFile(output, encodeInventory(value), { flag: 'wx', mode: 0o444 })"),
+    'both generator modes must use the checked canonical writer');
+});
+
+test('artifact-only inventory has the same canonical framing without reordering artifact arrays', () => {
+  const artifacts = [{version: '2', kind: 'binary', id: 'z', digest: `sha256:${'c'.repeat(64)}`},
+    {version: '1', kind: 'binary', id: 'a', digest: `sha256:${'d'.repeat(64)}`}];
+  const value = {schema: 'prismpm/sdk-artifact-inventory/1', artifacts};
+  const encoded = encodeInventory(value);
+  assert.ok(encoded.startsWith('{"artifacts":[{"digest":'));
+  assert.ok(encoded.endsWith('"schema":"prismpm/sdk-artifact-inventory/1"}\n'));
+  assert.deepEqual(JSON.parse(encoded).artifacts, artifacts, 'array order is validated by the inventory gate, not repaired');
+});
 
 test('SDK inventory compiler metadata follows the exact authoritative register, never a stale literal', () => {
   const source = readFileSync(new URL('../model/dependencies.toml', import.meta.url), 'utf8');

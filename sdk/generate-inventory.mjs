@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { compilerRevision, validateAuthorityMetadata } from './inventory-metadata.mjs';
+import { compilerRevision, encodeInventory, validateAuthorityMetadata } from './inventory-metadata.mjs';
 
 const output = process.argv[2];
 if (!output) throw new Error('inventory output path is required');
@@ -144,4 +144,4 @@ validateAuthorityMetadata(artifacts, revision);
 const value = process.env.PRISMPM_ARTIFACTS_ONLY === '1'
   ? { artifacts, schema: 'prismpm/sdk-artifact-inventory/1' }
   : { artifacts, commands, schema: 'prismpm/sdk-inventory/1' };
-await writeFile(output, `${JSON.stringify(value)}\n`, { flag: 'wx', mode: 0o444 });
+await writeFile(output, encodeInventory(value), { flag: 'wx', mode: 0o444 });

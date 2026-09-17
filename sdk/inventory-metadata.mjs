@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
 
+export function encodeInventory(value) {
+  const canonical = item => Array.isArray(item) ? item.map(canonical)
+    : item && typeof item === 'object'
+    ? Object.fromEntries(Object.keys(item).sort((a, b) => Buffer.from(a).compare(Buffer.from(b)))
+      .map(key => [key, canonical(item[key])])) : item;
+  return `${JSON.stringify(canonical(value))}\n`;
+}
+
 // This bootstrap reader intentionally accepts only the register's closed
 // string-valued TOML shape, not arbitrary TOML. A representation change fails
 // closed and must update this reader alongside the authoritative Rust model.
