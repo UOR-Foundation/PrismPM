@@ -6,12 +6,58 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { copyFileSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
 import { capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
+import { ociFixtureManifest } from './oci-test-fixture.mjs';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const encode = value => Buffer.from(JSON.stringify(canonical(value)));
 const standards = Buffer.from('synthetic test standards, not a published lock');
+
+test('test-image conversion changes only the supported descriptor labels and retains all blob identities', () => {
+  const original = {
+    schemaVersion: 2, mediaType: 'application/vnd.docker.distribution.manifest.v2+json',
+    config: {mediaType: 'application/vnd.docker.container.image.v1+json', digest: sha('actual config'), size: 13},
+    layers: [{mediaType: 'application/vnd.docker.image.rootfs.diff.tar.gzip', digest: sha('actual layer'), size: 12,
+      annotations: {'test.fixture/retained': 'layer metadata'}}],
+    annotations: {'test.fixture/retained': 'manifest metadata'},
+  };
+  const expected = structuredClone(original);
+  expected.mediaType = 'application/vnd.oci.image.manifest.v1+json';
+  expected.config.mediaType = 'application/vnd.oci.image.config.v1+json';
+  expected.layers[0].mediaType = 'application/vnd.oci.image.layer.v1.tar+gzip';
+  const bytes = ociFixtureManifest(encode(original));
+  assert.deepEqual(JSON.parse(bytes), expected);
+  const exactOci = Buffer.from(`${JSON.stringify(expected, null, 2)}\n`);
+  assert.deepEqual(ociFixtureManifest(exactOci), exactOci);
+  for (const mutation of ['schema', 'manifest-list', 'config', 'layer', 'zstd', 'empty-layers', 'digest', 'size']) {
+    const changed = structuredClone(original);
+    if (mutation === 'schema') changed.schemaVersion = 1;
+    if (mutation === 'manifest-list') changed.mediaType = 'application/vnd.docker.distribution.manifest.list.v2+json';
+    if (mutation === 'config') changed.config.mediaType = 'application/octet-stream';
+    if (mutation === 'layer') changed.layers[0].mediaType = 'application/octet-stream';
+    if (mutation === 'zstd') changed.layers[0].mediaType = 'application/vnd.oci.image.layer.v1.tar+zstd';
+    if (mutation === 'empty-layers') changed.layers = [];
+    if (mutation === 'digest') changed.config.digest = 'sha256:invalid';
+    if (mutation === 'size') changed.layers[0].size = -1;
+    assert.throws(() => ociFixtureManifest(encode(changed)), mutation);
+  }
+  assert.throws(() => ociFixtureManifest(Buffer.alloc(1024 * 1024 + 1)), /byte bound/);
+});
+
+test('SDK capture continues to reject Docker manifest lists and Docker child descriptors', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-lock-'));
+  try {
+    const {index} = await fixture(directory);
+    for (const mutation of ['index', 'child']) {
+      const changed = JSON.parse(index);
+      if (mutation === 'index') changed.mediaType = 'application/vnd.docker.distribution.manifest.list.v2+json';
+      else changed.manifests[0].mediaType = 'application/vnd.docker.distribution.manifest.v2+json';
+      const bytes = encode(changed);
+      assert.throws(() => parseSdkIndex(bytes, `example.invalid/test-sdk@${sha(bytes)}`));
+    }
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
 
 async function fixture(directory) {
   const inventories = new Map();

@@ -9,6 +9,8 @@ import {createServer, connect} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {promisify} from 'node:util';
+import {ociFixtureManifest} from './oci-test-fixture.mjs';
+import {parseSdkIndex} from './platform-lock.mjs';
 
 const exec = promisify(execFile);
 const run = async (program, args) => (await exec(program, args, {timeout: 180_000, maxBuffer: 16 * 1024 * 1024})).stdout;
@@ -60,7 +62,7 @@ try {
   const captures = [];
   for (const generation of ['old', 'new']) {
     const standards = Buffer.from(`Synthetic standards-lock transport fixture ${generation}\n`);
-    const tags = [];
+    const children = [], dockerChildren = [];
     for (const architecture of ['amd64', 'arm64']) {
       const context = join(directory, generation, architecture);
       await mkdir(join(context, 'facts'), {recursive: true});
@@ -81,17 +83,53 @@ try {
       await writeFile(join(context, 'standards.lock'), standards);
       await writeFile(join(context, 'Dockerfile'), 'FROM scratch\nCOPY facts /test-facts\nCOPY inventory.json standards.lock /opt/prismpm/share/\nCMD ["/never-executed-test-fixture"]\n');
       const tag = `${endpoint}/test-sdk-${nonce}:${generation}-${architecture}`;
-      imageReferences.add(tag); tags.push(tag);
+      imageReferences.add(tag);
       // This transport fixture has no release-attestation claims; the locked
       // profile requires exactly its two platform manifests, not extra indexes.
       await docker('build', '--provenance=false', '--platform', `linux/${architecture}`,
-        '--output', 'type=image,oci-mediatypes=true', '--tag', tag, context);
+        '--output', `type=image,oci-mediatypes=${generation === 'new'}`, '--tag', tag, context);
       await docker('push', tag);
+      // Classic Docker stores rewrite pushed OCI images to schema2. Exercise
+      // that path deliberately for old, then publish the exact OCI descriptor
+      // without changing the real config/layer blobs or relaxing the SDK parser.
+      const source = Buffer.from(await docker('buildx', 'imagetools', 'inspect', '--raw', tag));
+      const sourceManifest = JSON.parse(source);
+      if (generation === 'old') assert.equal(sourceManifest.mediaType,
+        'application/vnd.docker.distribution.manifest.v2+json');
+      dockerChildren.push(`${endpoint}/test-sdk-${nonce}@${sha(source)}`);
+      for (const descriptor of [sourceManifest.config, ...sourceManifest.layers]) {
+        assert.ok(descriptor.size > 0 && descriptor.size <= 16 * 1024 * 1024);
+        const blob = await fetch(`http://${endpoint}/v2/test-sdk-${nonce}/blobs/${descriptor.digest}`);
+        assert.equal(blob.status, 200);
+        const bytes = Buffer.from(await blob.arrayBuffer());
+        assert.equal(bytes.length, descriptor.size);
+        assert.equal(sha(bytes), descriptor.digest);
+      }
+      const manifest = ociFixtureManifest(source);
+      const digest = sha(manifest);
+      const url = `http://${endpoint}/v2/test-sdk-${nonce}/manifests/${digest}`;
+      const headers = {'Content-Type': 'application/vnd.oci.image.manifest.v1+json'};
+      const published = await fetch(url, {method: 'PUT', headers, body: manifest});
+      assert.equal(published.status, 201);
+      assert.equal(published.headers.get('Docker-Content-Digest'), digest);
+      const fetched = await fetch(url, {headers: {Accept: headers['Content-Type']}});
+      assert.equal(fetched.status, 200);
+      assert.equal(fetched.headers.get('Docker-Content-Digest'), digest);
+      assert.deepEqual(Buffer.from(await fetched.arrayBuffer()), manifest);
+      children.push(`${endpoint}/test-sdk-${nonce}@${digest}`);
+    }
+    if (generation === 'old') {
+      const dockerTag = `${endpoint}/test-sdk-${nonce}:docker-negative`;
+      await docker('buildx', 'imagetools', 'create', '--tag', dockerTag, ...dockerChildren);
+      const raw = Buffer.from(await docker('buildx', 'imagetools', 'inspect', '--raw', dockerTag));
+      assert.equal(JSON.parse(raw).mediaType, 'application/vnd.docker.distribution.manifest.list.v2+json');
+      assert.throws(() => parseSdkIndex(raw, `${endpoint}/test-sdk-${nonce}@${sha(raw)}`));
     }
     const indexTag = `${endpoint}/test-sdk-${nonce}:${generation}`;
-    await docker('buildx', 'imagetools', 'create', '--tag', indexTag, ...tags);
+    await docker('buildx', 'imagetools', 'create', '--tag', indexTag, ...children);
     const index = await docker('buildx', 'imagetools', 'inspect', '--raw', indexTag);
     const reference = `${endpoint}/test-sdk-${nonce}@${sha(index)}`;
+    assert.deepEqual(parseSdkIndex(Buffer.from(index), reference).map(child => child.reference), children);
     const lock = JSON.parse(await run(process.execPath, ['sdk/platform-lock.mjs', 'capture', reference, sha(standards), '/usr/local/bin/docker']));
     assert.equal(lock.sdk_index, index);
     assert.equal(lock.standards_lock, sha(standards));
@@ -117,7 +155,7 @@ try {
   args[args.length - 1] = sha('wrong requested standards');
   await assert.rejects(run(cli, args), error => error.stderr.includes('PP5401') || error.stdout.includes('PP5401'));
   assert.equal(await readFile(join(project, 'prismpm.lock'), 'utf8'), committed);
-  console.log('PASS actual Docker/OCI two-generation, two-architecture capture; current CLI review proposal; standards mismatch rejection; no lock adoption');
+  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture capture; Docker-list rejection; exact OCI registry blobs/manifests; current CLI review proposal; standards mismatch rejection; no lock adoption');
 } finally {
   for (const socket of connections) socket.destroy();
   if (proxy) await new Promise(resolveClose => proxy.close(resolveClose));
