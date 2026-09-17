@@ -1,5 +1,22 @@
 # PrismPM falsifiability and verification record
 
+## SPDX project-oracle schema binding
+
+The genuine project runner rejected a valid SPDX document with `PP5403`:
+the catalog's relative schema path was resolved from sandbox `/scratch`.
+The SDK already includes and inventory-binds that exact authoritative schema.
+The catalog now selects its existing absolute SDK path; the installed schema,
+SDK wrapper and validation rules are unchanged. The regenerated lock also
+retains the source hashes changed by adding the regression tests.
+
+The focused regression runs without a project standards directory. It accepts
+the valid corpus, rejects the invalid corpus with `PP5404`, and checks both
+original attestations' subject, result and actual SDK image bindings. It failed
+before the correction and passed afterward in the devcontainer. Logs are
+`target/spdx-project-schema-red.log` and
+`target/spdx-project-schema-green.log`. This fixes project-oracle execution,
+not complete SDK release or Foundry acceptance.
+
 ## Devcontainer Docker group readiness
 
 [Reproducibility run 35232240458](https://github.com/UOR-Foundation/PrismPM/actions/runs/35232240458)

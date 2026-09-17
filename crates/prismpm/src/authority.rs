@@ -2401,22 +2401,29 @@ mod tests {
     use std::io::{Read, Write};
 
     fn write_sdk_lock(root: &std::path::Path, standards_lock: String, sdk_image: String) {
-        let lock = CanonicalDocument::from_value(
-            "prismpm/sdk-lock/1",
-            json!({
-                "inventory":[{
-                    "digest":format!("sha256:{}", "0".repeat(64)),
-                    "id":"test-oracle",
-                    "kind":"oracle",
-                    "version":"0.3.0"
-                }],
-                "schema":"prismpm/sdk-lock/1",
-                "sdk_image":sdk_image,
-                "sdk_version":"0.3.0",
-                "standards_lock":standards_lock
-            }),
-        )
-        .unwrap();
+        let mut value = json!({
+            "inventory":[{
+                "digest":format!("sha256:{}", "0".repeat(64)),
+                "id":"test-oracle",
+                "kind":"oracle",
+                "version":"0.3.0"
+            }],
+            "schema":"prismpm/sdk-lock/1",
+            "sdk_image":sdk_image,
+            "sdk_version":"0.3.0",
+            "standards_lock":standards_lock
+        });
+        if let Some(path) = crate::sdk::inventory_path() {
+            let inventory: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            let mut rows = inventory["artifacts"].as_array().unwrap().clone();
+            rows.push(json!({
+                "id":"sdk-manifest", "kind":"image", "version":"0.3.0",
+                "digest":sdk_image.rsplit_once('@').unwrap().1
+            }));
+            rows.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+            value["inventory"] = json!(rows);
+        }
+        let lock = CanonicalDocument::from_value("prismpm/sdk-lock/1", value).unwrap();
         std::fs::write(root.join("prismpm.lock"), lock.bytes()).unwrap();
     }
 
@@ -2989,6 +2996,70 @@ mod tests {
         let error = verify_project_oracle_binding(root.path(), oracle).unwrap_err();
         assert_eq!(error.code, "PP5403");
         assert!(error.message.contains("does not select"));
+    }
+
+    #[test]
+    fn docker_sandbox_spdx_uses_locked_sdk_schema_for_project_validation() {
+        let sdk_image = std::env::var("PRISMPM_TEST_SDK_IMAGE")
+            .expect("PRISMPM_TEST_SDK_IMAGE must be an exact locally available image digest");
+        crate::oci::validate_reference(&sdk_image, true).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let standards = resolved_lock().unwrap();
+        std::fs::write(root.path().join("standards.lock"), standards.bytes()).unwrap();
+        write_sdk_lock(root.path(), standards.digest(), sdk_image.clone());
+        // No project-side schema: the sandbox must use the inventory-bound SDK resource.
+        assert!(!root.path().join("standards").exists());
+        for (name, bytes, valid) in [
+            (
+                "valid.json",
+                include_bytes!("../standards/corpora/spdx-3.0.1/valid-core-software.json")
+                    .as_slice(),
+                true,
+            ),
+            (
+                "invalid.json",
+                include_bytes!("../standards/corpora/spdx-3.0.1/invalid-unknown-element.json")
+                    .as_slice(),
+                false,
+            ),
+        ] {
+            let input = root.path().join(name);
+            std::fs::write(&input, bytes).unwrap();
+            let result = run_oracle_in_project(root.path(), "spdx", &input);
+            let normalized = if valid { "valid" } else { "invalid" };
+            let relative = format!(
+                ".prism/evidence/oracle-spdx-3.0.1-model-{}-{normalized}.intoto.json",
+                content_id(bytes)
+            );
+            if valid {
+                let accepted = result.expect("valid SPDX corpus must pass the project runner");
+                assert!(accepted.valid);
+                assert_eq!(accepted.oracle, "spdx-3.0.1-model");
+                assert_eq!(accepted.evidence_path.as_deref(), Some(relative.as_str()));
+                let attestation = std::fs::read(root.path().join(&relative)).unwrap();
+                assert_eq!(
+                    accepted.attestation_digest,
+                    format!("sha256:{}", content_id(&attestation))
+                );
+            } else {
+                assert_eq!(result.unwrap_err().code, "PP5404");
+            }
+            let bytes = std::fs::read(root.path().join(relative)).unwrap();
+            let statement: Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(encode_value(&statement).unwrap(), bytes);
+            assert_eq!(statement["predicate"]["normalized_result"], normalized);
+            assert_eq!(statement["predicate"]["runner_image"], sdk_image);
+            assert_eq!(
+                statement["subject"][0]["digest"]["sha256"],
+                content_id(&std::fs::read(&input).unwrap())
+            );
+        }
+        assert_eq!(
+            std::fs::read_dir(root.path().join(".prism/evidence"))
+                .unwrap()
+                .count(),
+            2
+        );
     }
 
     #[test]

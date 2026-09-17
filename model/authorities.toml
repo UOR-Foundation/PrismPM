@@ -377,7 +377,7 @@ executable = "spdx-validator"
 supported_platforms = ["linux/amd64", "linux/arm64"]
 input_media_types = ["application/spdx+json;version=3.0.1"]
 output_schema = "prismpm/validation-result/1"
-arguments = ["standards/oracles/spdx-json-schema-3.0.1/spdx-json-schema.json", "{input}"]
+arguments = ["/opt/prismpm/share/standards/oracles/spdx-json-schema-3.0.1/spdx-json-schema.json", "{input}"]
 timeout_ms = 30000
 memory_bytes = 268435456
 output_bytes = 1048576
