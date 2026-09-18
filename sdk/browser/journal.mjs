@@ -191,7 +191,10 @@ class Journal {
       const prior = expected === null ? zero() : hashBytes(expected);
       const next = await digestBytes(candidate.head), nextBytes = hashBytes(next);
       const intent = accepted(this.#call(concatenate([5], prior, nextBytes, object)));
-      const session = concatenate([0], crypto.getRandomValues(new Uint8Array(32)), prior,
+      let nonce;
+      try { nonce = crypto.getRandomValues(new Uint8Array(32)); }
+      catch { throw new BrowserEffectError('crypto-unavailable'); }
+      const session = concatenate([0], nonce, prior,
         nextBytes, hashBytes(await digestBytes(intent)));
       let status = 0, observed = nextBytes;
       this.#requiresReplay = true;

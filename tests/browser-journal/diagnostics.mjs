@@ -23,7 +23,7 @@ export async function verifyDiagnostics({wasmBytes, native, work}) {
     await page.goto(baseURL);
     return page.evaluate(async wasmBytes => {
       const {openJournal, __negativeBoundary: guard} = await import('/journal.mjs');
-      const {createIdentity, digestBytes, signBytes} = await import('/identity.mjs');
+      const {BrowserEffectError, createIdentity, digestBytes, signBytes} = await import('/identity.mjs');
       const {openStore} = await import('/store.mjs');
       const cases = [], module = await WebAssembly.compile(new Uint8Array(wasmBytes));
       const fail = message => { throw Error(message); };
@@ -64,6 +64,24 @@ export async function verifyDiagnostics({wasmBytes, native, work}) {
       const store = await openStore('journal-diagnostics-actual');
       const mismatchedStore = await openStore('journal-diagnostics-mismatched');
       try {
+        for(const mode of['throwing','missing']){
+          let commits=0;
+          const name='entropy-'+mode,storage={
+            readHead:(...args)=>store.readHead(...args),readObject:(...args)=>store.readObject(...args),
+            commit:(...args)=>{commits++;return store.commit(...args);},
+          };
+          const journal=await openJournal(module,storage,name),before=journal.snapshot();
+          const original=crypto.getRandomValues;
+          crypto.getRandomValues=mode==='missing'?undefined:()=>{throw new DOMException('private entropy failure','OperationError');};
+          let error;try{error=await reject('journal '+mode+' session entropy','crypto-unavailable',()=>journal.append(valid));}
+          finally{crypto.getRandomValues=original;}
+          check(error instanceof BrowserEffectError&&error.message==='crypto-unavailable'&&error.cause===undefined&&error.payload===undefined,'raw entropy exception escaped');
+          check(commits===0&&await store.readHead(name)===null,'entropy failure committed a head');
+          const after=journal.snapshot();check(Object.keys(before).sort().join(',')==='head,state'&&Object.keys(after).sort().join(',')==='head,state','snapshot shape changed');
+          check(hex(after.head)===hex(before.head)&&hex(after.state)===hex(before.state),'entropy failure changed private state');
+          await journal.append(valid);check(commits===1,'explicit new append did not recover capacity after entropy failure');
+          await journal.refresh();check(journal.snapshot().state.length>0,'actual entropy recovery did not replay');
+        }
         const actual=await openJournal(module,store,'workspace');await actual.append(valid);await actual.refresh();
         await reject('real signature cannot claim another author','author-mismatch', async()=>actual.append(await genesis(new Uint8Array(32).fill(8))));
         const mismatched=await openJournal(module,{
@@ -85,7 +103,7 @@ export async function verifyDiagnostics({wasmBytes, native, work}) {
       return {cases,generatedCalls:globalThis.__generatedJournalCalls};
     },Array.from(wasmBytes));
   });
-  assert.equal(cases.length,30);
+  assert.equal(cases.length,32);
   await replayNative('diagnostics',generatedCalls,wasmBytes,{native,work});
   return {cases, sourceSha256:createHash('sha256').update(source).digest('hex')};
 }
