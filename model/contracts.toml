@@ -11,6 +11,16 @@ extension_policy = "closed"
 compatibility = "exact-major"
 
 [[contract]]
+schema = "prismpm/workspace-view-labels/1"
+path = "schemas/workspace-view-labels.schema.json"
+media_type = "application/vnd.prismpm.workspace-view-labels.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 8192
+maximum_items = 78
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
 schema = "prismpm/verification-closure/1"
 path = "schemas/verification-closure.schema.json"
 media_type = "application/vnd.prismpm.verification.v1+json"

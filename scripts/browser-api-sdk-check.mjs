@@ -11,7 +11,7 @@ export const sourceRoots=Object.freeze([
  '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','model','language',
  'stdlib/src','sdk/browser','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
- 'tests/browser-command','tests/browser-query','tests/browser-api',
+ 'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'vendor/lexlean','vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust',
  'scripts/browser-api-sdk-check.mjs',
 ]);
@@ -24,6 +24,8 @@ export const suites=Object.freeze([
  {id:'DK-12',minimum:13,files:['journal-model-test.mjs']},
  {id:'DK-13',minimum:12,files:['command-model-test.mjs']},
  {id:'DK-14',minimum:11,files:['query-model-test.mjs']},
+ {id:'DK-15',minimum:7,files:['view-model-test.mjs']},
+ {id:'DK-16',minimum:10,files:['view-host-test.mjs']},
 ].map(row=>Object.freeze({...row,files:Object.freeze(row.files)})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
@@ -106,8 +108,9 @@ export function verifyTap(tap,minimum){
 export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(text)){
  const completed=[],env={...process.env};delete env.NODE_TEST_CONTEXT;
  for(const suite of suites){
-  const args=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=1500000',...suite.files.map(file=>'sdk/browser/'+file)];
-  const output=launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:1600000,maxBuffer:64*1024*1024,env});
+  const deadline=['DK-15','DK-16'].includes(suite.id)?3600000:1500000;
+  const args=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout='+deadline,...suite.files.map(file=>'sdk/browser/'+file)];
+  const output=launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:deadline+100000,maxBuffer:64*1024*1024,env});
   emit('SDK browser suite '+suite.id+'\n'+(output.stdout??'')+(output.stderr??''));
   assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+suite.id);
   const tests=verifyTap(output.stdout,suite.minimum);completed.push({id:suite.id,tests});

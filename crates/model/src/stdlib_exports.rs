@@ -38,7 +38,7 @@ impl StdlibExports {
         if self.spec != "prismpm/stdlib-exports/1"
             || self.lean_module != "PrismPM.Runtime"
             || self.ir_module != "PrismPM"
-            || self.export.len() != 41
+            || self.export.len() != 43
             || self
                 .export
                 .windows(2)
@@ -69,6 +69,10 @@ impl StdlibExports {
                 ),
                 "workspaceJournalBytes" => (
                     "Browser.V1.WorkspaceJournal",
+                    "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
+                ),
+                "workspaceInteractionBytes" | "workspacePresentationBytes" => (
+                    "View.Workspace.V1.Interaction",
                     "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
                 ),
                 "appendBytes" => ("Bytes", "fn(Vec<u8>, Vec<u8>) -> Vec<u8>"),
@@ -171,7 +175,7 @@ mod tests {
         let exports: StdlibExports = toml::from_str(SOURCE).unwrap();
         let runtime = vec!["PrismPM.Foundation.Holo.validateComponentIndexes".to_owned()];
         let union = exports.union_with_runtime(&runtime).unwrap();
-        assert_eq!(union.len(), 42);
+        assert_eq!(union.len(), 44);
         assert_eq!(runtime.len(), 1);
         assert!(union.contains(&runtime[0]));
         let mut document: toml::Value = toml::from_str(SOURCE).unwrap();

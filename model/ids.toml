@@ -733,6 +733,18 @@ level = "build"
 statement = "Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure."
 
 [[id]]
+id = "DK-15"
+suite = "sdk"
+level = "build"
+statement = "The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector."
+
+[[id]]
+id = "DK-16"
+suite = "sdk"
+level = "build"
+statement = "The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

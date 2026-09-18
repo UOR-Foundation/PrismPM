@@ -892,11 +892,51 @@ Post-build SDK acceptance is separate from source V&V and its external-oracle
 image input. scripts/browser-api-sdk-check.sh takes an immutable current SDK
 image digest and exact clean source commit. It independently compares the
 installed source/compiler/test/helper closure and public modules, then runs all
-DK-07..14 browser suites in that image with read-only sources, no network, and
+DK-07..16 browser suites in that image with read-only sources, no network, and
 only temporary writable caches. Complete TAP summaries, no omissions/skips, and
 native architecture/revision labels are required. Both native SDK architectures
 run this check in release.yml's required reproducibility job. A prior oracle SDK
 may support source bootstrap; it cannot satisfy this shipped-SDK acceptance.
+
+### 12.5 Modeled workspace interaction and private View host
+
+DK-15 owns Foundation.View.Workspace.V1.Interaction and its complete 206-vector
+corpus. Generated interaction owns selection, single-flight state, exact private
+session/counter correlation, replay recovery and terminal close. Presentation
+preserves all admitted Query rows and existing Workspace limits. Public intents
+contain no principal, state, cursor, completion or authority assertion.
+
+DK-16 owns view-host.mjs, view-dom.mjs and view-error.mjs. Trusted SDK bootstrap
+supplies the exact four generated View/Command/Query/Journal modules, store,
+head name, connected DOM root and same-snapshot modeled labels. Its only public
+methods are dispatch(bytes) and close(). Capture is synchronous; the generated
+model chooses effects and lifecycle. Actual Command status classifies refresh
+requirements after failure. Unknown promotion failures close the host and clear
+the display without fabricating success or rolling back durable work. Failure
+after mounting during initialization also clears the display and detaches its
+listeners, even when no public View handle was returned.
+
+Labels use prismpm/workspace-view-labels/1: exactly the registered 39 string
+properties including spec, canonical UTF-8 JSON of at most 8,192 bytes, each
+value 1..256 UTF-8 bytes. All content renders as text, never HTML, URLs or scripts.
+Semantic labels, table, keyboard actions, live status and focus follow generated
+presentation. These finite checks do not certify an accessibility standard.
+
+View allocation caps are 133,728 input bytes, 71,055 output bytes and 128 pages
+per fresh guest. Query and Command limits and all existing profiles are unchanged.
+DK-15 includes fresh source/kernel/C/native/no_std/Wasm execution and actual
+compiled session-correlation/presentation mutants. DK-16 freshly builds all four
+guests, replays every genuine browser transcript twice natively, and rejects
+altered transcripts, nine host mutants, eight promotion-failure cases and three
+mounted initialization-failure cases.
+Retained-artifact or diagnostic bypass modes never satisfy normal acceptance.
+
+ViewHostError and all 14 generated rejection details are separately registered
+in model/browser-view-diagnostics.toml. Negative-only guard exports do not ship.
+The byte contract is stdlib/src/Foundation/View/Workspace/V1/Interaction.md.
+These reusable SDK components do not appoint Foundation authority, establish
+mailbox ownership, add encryption or Kappa replication, certify OSCAL controls,
+or replace the independent application-profile and release acceptance gates.
 
 ## 13. OCI product-release graph
 
@@ -1321,6 +1361,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-12` | `sdk` | The modeled journal and private browser adapter authenticate complete replay, preserve exact bounded native/Wasm transitions, and promote state only after an atomic bound commit; conflicts and uncertain outcomes require replay without automatic branch selection. | §12 |
 | `DK-13` | `sdk` | Generated workspace commands bind actual identity, current head, hashes and signatures before authenticated atomic journal admission; product callers receive status or commit acknowledgments, never raw state. | §12 |
 | `DK-14` | `sdk` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. | §12 |
+| `DK-15` | `sdk` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. | §12 |
+| `DK-16` | `sdk` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

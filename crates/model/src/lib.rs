@@ -5,6 +5,7 @@
 
 mod browser_adapter_diagnostics;
 mod browser_diagnostics;
+mod browser_view_diagnostics;
 pub mod codegen;
 pub mod registry;
 pub mod release;
@@ -15,6 +16,7 @@ pub use browser_adapter_diagnostics::{
     BrowserAdapterDiagnostic, BrowserAdapterDiagnostics, BrowserModelRejection,
 };
 pub use browser_diagnostics::{BrowserDiagnostic, BrowserDiagnostics};
+pub use browser_view_diagnostics::BrowserViewDiagnostics;
 pub use stdlib_exports::{StdlibExport, StdlibExports};
 pub use stdlib_package::StdlibPackage;
 
@@ -58,6 +60,8 @@ pub struct Model {
     pub browser_diagnostics: BrowserDiagnostics,
     /// model/browser-adapter-diagnostics.toml
     pub browser_adapter_diagnostics: BrowserAdapterDiagnostics,
+    /// model/browser-view-diagnostics.toml
+    pub browser_view_diagnostics: BrowserViewDiagnostics,
 }
 
 /// Model load/check failure.
@@ -101,6 +105,7 @@ impl Model {
             stdlib_exports: read(dir, "stdlib-exports.toml")?,
             browser_diagnostics: read(dir, "browser-diagnostics.toml")?,
             browser_adapter_diagnostics: read(dir, "browser-adapter-diagnostics.toml")?,
+            browser_view_diagnostics: read(dir, "browser-view-diagnostics.toml")?,
         })
     }
 
@@ -114,6 +119,7 @@ impl Model {
         self.stdlib_exports.check()?;
         self.browser_diagnostics.check()?;
         self.browser_adapter_diagnostics.check()?;
+        self.browser_view_diagnostics.check()?;
         self.ledger.check()?;
         self.check_ids()?;
         self.check_authorities()?;
@@ -549,7 +555,7 @@ mod tests {
             .contracts
             .check(&root)
             .expect("all public data contracts must be registered");
-        assert_eq!(model.contracts.contract.len(), 47);
+        assert_eq!(model.contracts.contract.len(), 48);
         for (schema, path) in [
             (
                 "prismpm/verification-closure/1",
@@ -558,6 +564,10 @@ mod tests {
             (
                 "prismpm/release-validation/1",
                 "schemas/release-validation.schema.json",
+            ),
+            (
+                "prismpm/workspace-view-labels/1",
+                "schemas/workspace-view-labels.schema.json",
             ),
         ] {
             assert!(model

@@ -23,6 +23,8 @@ const pinned = [
   'tests/browser-command/driver/Cargo.lock',
   'tests/browser-query/driver/Cargo.toml',
   'tests/browser-query/driver/Cargo.lock',
+  'tests/browser-view/driver/Cargo.toml',
+  'tests/browser-view/driver/Cargo.lock',
   'crates/prismpm/vendor/hologram-live.tar',
 ];
 const embedded = [
@@ -85,4 +87,31 @@ test('source and SDK acquisition share the helper before the SDK cache is frozen
   const acquisition = dockerfile.indexOf(invocation);
   const snapshot = dockerfile.indexOf('cp -a /usr/local/cargo/registry /opt/prismpm/cargo-home/');
   assert.ok(acquisition >= 0 && snapshot > acquisition);
+});
+
+test('full acquisition loop invokes exactly every reviewed manifest and offline check', () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'prismpm-acquisition-arguments-'));
+  try {
+    const log = join(scratch, 'calls');
+    const result = spawnSync('bash', ['-c', `
+      cargo() { printf '%s\\0' "$@" >> "$PRISMPM_ACQUIRE_LOG"; printf '\\0' >> "$PRISMPM_ACQUIRE_LOG"; }
+      export -f cargo
+      bash scripts/fetch-oracle-cargo.sh
+    `], {cwd: root, encoding: 'utf8', timeout: 10_000, env: {...process.env, PRISMPM_ACQUIRE_LOG: log}});
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const captured = readFileSync(log, 'utf8');
+    assert.ok(captured.endsWith('\0\0'));
+    const calls = captured.slice(0, -2).split('\0\0').map(row => row.split('\0'));
+    const manifests = pinned.filter(path => path.endsWith('/Cargo.toml'));
+    assert.equal(calls.length, manifests.length * 2);
+    for (let index = 0; index < manifests.length; index++) {
+      const manifest = index === 0 ? calls[0][3] : manifests[index];
+      if (index === 0) assert.match(manifest, /^\/[^\0]+\/harness\/Cargo\.toml$/);
+      assert.deepEqual(calls[index * 2], ['fetch', '--locked', '--manifest-path', manifest]);
+      assert.deepEqual(calls[index * 2 + 1], ['metadata', '--locked', '--offline', '--format-version', '1', '--manifest-path', manifest]);
+    }
+  } finally {
+    rmSync(scratch, {recursive: true});
+  }
 });

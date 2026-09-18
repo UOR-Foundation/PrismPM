@@ -10,6 +10,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | Schema | JSON Schema | Media type | Limits | Compatibility |
 | --- | --- | --- | --- | --- |
 | `prismpm/browser-export/1` | `schemas/browser-export.schema.json` | `application/vnd.prismpm.browser-export.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
+| `prismpm/workspace-view-labels/1` | `schemas/workspace-view-labels.schema.json` | `application/vnd.prismpm.workspace-view-labels.v1+json` | 8192 bytes / 78 items | `closed`; `exact-major` |
 | `prismpm/verification-closure/1` | `schemas/verification-closure.schema.json` | `application/vnd.prismpm.verification.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/release-validation/1` | `schemas/release-validation.schema.json` | `application/vnd.prismpm.validation.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
 | `prismpm/model-document/2` | `schemas/model-document-v2.schema.json` | `application/vnd.prismpm.model-document.v2+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |

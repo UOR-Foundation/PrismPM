@@ -1,0 +1,106 @@
+spec = "prismpm/browser-view-diagnostics/1"
+error_class = "ViewHostError"
+source = ["sdk/browser/view-dom.mjs", "sdk/browser/view-error.mjs", "sdk/browser/view-host.mjs"]
+capability = "DK-16"
+model_source = "stdlib/src/Foundation/View/Workspace/V1/Interaction.lex.tex"
+rejection_error = "model-rejected"
+
+[[error]]
+code = "generated-execution-failed"
+statement = "The private generated View guest trapped or failed execution; no successful transition is exposed."
+
+[[error]]
+code = "host-unavailable"
+statement = "Bootstrap or private execution failed; the public boundary exposes no exception payload and an opened View terminalizes and clears its display."
+
+[[error]]
+code = "invalid-effect-result"
+statement = "A private admitted Query result has invalid fields or bounds and cannot become generated presentation."
+
+[[error]]
+code = "invalid-generated-module"
+statement = "Trusted bootstrap did not provide the exact import-free guest contract."
+
+[[error]]
+code = "invalid-generated-output"
+statement = "A private generated transition, effect or presentation violates its registered framing or bounds."
+
+[[error]]
+code = "invalid-input"
+statement = "A public dispatch or close call has invalid arity, type or byte bounds; no input is asynchronously recaptured."
+
+[[error]]
+code = "invalid-labels"
+statement = "The modeled labels artifact is not the closed canonical UTF-8 JSON schema within its exact byte limits."
+
+[[error]]
+code = "invalid-root"
+statement = "The private renderer did not receive a connected same-realm HTML element."
+
+[[error]]
+code = "model-rejected"
+statement = "The generated View rejected the operation with exactly one registered rejection byte; no replacement state or effect is accepted."
+
+[[error]]
+code = "request-limit"
+statement = "The private generated View input exceeds its fixed allocation cap before guest execution."
+
+[[error]]
+code = "view-closed"
+statement = "The View is terminal; public dispatch cannot begin work or restore presentation."
+
+[[rejection]]
+byte = 1
+name = "BadEncoding"
+
+[[rejection]]
+byte = 2
+name = "InvalidState"
+
+[[rejection]]
+byte = 3
+name = "InvalidIntent"
+
+[[rejection]]
+byte = 4
+name = "Busy"
+
+[[rejection]]
+byte = 5
+name = "ReplayRequired"
+
+[[rejection]]
+byte = 6
+name = "Closed"
+
+[[rejection]]
+byte = 7
+name = "CounterExhausted"
+
+[[rejection]]
+byte = 8
+name = "NoSelection"
+
+[[rejection]]
+byte = 9
+name = "NoNextPage"
+
+[[rejection]]
+byte = 10
+name = "WrongPhase"
+
+[[rejection]]
+byte = 11
+name = "CorrelationMismatch"
+
+[[rejection]]
+byte = 12
+name = "InvalidOutcome"
+
+[[rejection]]
+byte = 13
+name = "InvalidPage"
+
+[[rejection]]
+byte = 14
+name = "UnknownOperation"

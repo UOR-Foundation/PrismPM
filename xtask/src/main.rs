@@ -434,6 +434,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         "tests/browser-journal/driver/Cargo.toml",
         "tests/browser-command/driver/Cargo.toml",
         "tests/browser-query/driver/Cargo.toml",
+        "tests/browser-view/driver/Cargo.toml",
         "tests/holo-codec-oracle/Cargo.toml",
     ] {
         command(
@@ -454,6 +455,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "tests/browser-journal/runner.rs",
             "tests/browser-command/runner.rs",
             "tests/browser-query/runner.rs",
+            "tests/browser-view/runner.rs",
         ],
     )?;
 
@@ -997,12 +999,16 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "model/stdlib-exports.toml",
         "model/browser-diagnostics.toml",
         "model/browser-adapter-diagnostics.toml",
+        "model/browser-view-diagnostics.toml",
         "sdk/browser/identity.mjs",
         "sdk/browser/store.mjs",
         "sdk/browser/peer.mjs",
         "sdk/browser/journal.mjs",
         "sdk/browser/commands.mjs",
         "sdk/browser/queries.mjs",
+        "sdk/browser/view-host.mjs",
+        "sdk/browser/view-dom.mjs",
+        "sdk/browser/view-error.mjs",
         "tests/browser_stdlib_api.rs",
         "model/stdlib-package.toml",
         "schemas/model-document.schema.json",
@@ -1019,6 +1025,8 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "stdlib/src/Foundation/Browser/V1/WorkspaceCommandCorpus.lex.tex",
         "stdlib/src/Foundation/Browser/V1/WorkspaceQuery.lex.tex",
         "stdlib/src/Foundation/Browser/V1/WorkspaceQueryCorpus.lex.tex",
+        "stdlib/src/Foundation/View/Workspace/V1/Interaction.lex.tex",
+        "stdlib/src/Foundation/View/Workspace/V1/Corpus.lex.tex",
         "stdlib/LICENSE-APACHE",
         "stdlib/LICENSE-MIT",
         "vendor/lean4-prod/lean.tar",

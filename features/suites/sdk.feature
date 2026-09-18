@@ -1,5 +1,17 @@
 Feature: sdk
 
+  @DK-15 @build
+  Scenario: The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector.
+    Given the complete modeled View corpus and freshly generated private browser dependencies
+    When the owning native and browser gates execute complete journeys and planted defects
+    Then exact modeled decisions and typed failures hold without caller-supplied authority
+
+  @DK-16 @build
+  Scenario: The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure.
+    Given the complete modeled View corpus and freshly generated private browser dependencies
+    When the owning native and browser gates execute complete journeys and planted defects
+    Then exact modeled decisions and typed failures hold without caller-supplied authority
+
   @DK-13 @build
   Scenario: Generated workspace commands bind actual identity, current head, hashes and signatures before authenticated atomic journal admission; product callers receive status or commit acknowledgments, never raw state.
     Given the complete modeled command corpus and real private browser effects

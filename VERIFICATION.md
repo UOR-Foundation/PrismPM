@@ -1,5 +1,30 @@
 # PrismPM falsifiability and verification record
 
+## Generated workspace View (DK-15, DK-16)
+
+Registered owning tests first rejected the absent implementation. The complete
+fresh modeled gate then passed all 206 vectors in native, no_std and bounded
+Wasm execution, including actual compiled session/row mutations. The private
+host gate freshly built View, Command, Query and Journal, exercised genuine
+browser identity/storage journeys and replayed all 6,562 observed calls twice
+natively. All ten host-suite tests passed without skips.
+
+Review reproduced initialization failure leaving one mounted node and seven
+listeners. The corrected constructor clears both before returning failure.
+The complete host rerun covers three initialization faults, eight promotion
+faults and nine host mutants; its log SHA-256 is
+`cea54c6b5d65f98ce235ed9911653a5622478c50c51600fc0212f1e14bd54f98`.
+
+Normal writers regenerated the model, stdlib and reviewed goldens. Independent
+readers matched all 324 golden files and passed generated-package, downstream
+API and all three actual Cargo archive comparisons. The package/API log SHA-256
+is `037a3543c5c8a3230b4368d1bb37a1e54709360aabdcdbc5b8d438f92b9121ac`.
+All 14 model tests, 15 contract tests, ten SDK/acquisition script tests and
+14 release-phase tests passed, as did authored formatting and workspace Clippy.
+Clean-tree full V&V and installed dual-architecture SDK acceptance remain
+separate requirements. These components do not establish Foundation authority,
+email ownership, Kappa replication or Foundry publication.
+
 ## Release archive target ownership
 
 An inherited `CARGO_TARGET_DIR` sent verified archives outside their prepared

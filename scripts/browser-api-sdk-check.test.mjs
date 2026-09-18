@@ -63,7 +63,7 @@ function testFixtures(root){for(const suite of suites)for(const file of suite.fi
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.equal(runSuites(root,launch,()=>{}).length,8);
+ assert.equal(runSuites(root,launch,()=>{}).length,10);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files.map(file=>'sdk/browser/'+file)));
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';
  put(root,path,testSource(1));put(root,second,testSource(1));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/);

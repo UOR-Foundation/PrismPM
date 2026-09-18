@@ -12,12 +12,19 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 47] = [
+const CONTRACTS: [Contract; 48] = [
     Contract {
         id: "prismpm/browser-export/1",
         maximum_bytes: 1_048_576,
         maximum_items: 4_096,
         schema: include_bytes!("../schemas/browser-export.schema.json"),
+    },
+    Contract {
+        id: "prismpm/workspace-view-labels/1",
+        maximum_bytes: 8_192,
+        // Each of the 39 closed properties contributes a key and a scalar.
+        maximum_items: 78,
+        schema: include_bytes!("../schemas/workspace-view-labels.schema.json"),
     },
     Contract {
         id: "prismpm/verification-closure/1",
@@ -313,6 +320,19 @@ fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> b
 }
 
 fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
+    if id == "prismpm/workspace-view-labels/1" {
+        // JSON Schema maxLength counts Unicode scalars; the host contract
+        // instead bounds the encoded UTF-8 bytes of every label value.
+        for label in value.as_object().expect("schema-validated labels").values() {
+            let label = label.as_str().expect("schema-validated label string");
+            if !(1..=256).contains(&label.len()) {
+                return Err(PrismError::new(
+                    "PP7601",
+                    "workspace View label exceeds its 1..256 UTF-8 byte bound",
+                ));
+            }
+        }
+    }
     if id == "prismpm/model-document/2" {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
             PrismError::new("PP2009", format!("text application shape: {error}"))
@@ -728,12 +748,14 @@ impl CanonicalDocument {
                 format!("{id} exceeds its {} item limit", contract.maximum_items),
             ));
         }
-        // The registered oracle attestation is an in-toto Statement, whose
-        // closed external envelope identifies itself with _type/predicateType.
-        // Its schema below rejects an invented Prism `schema` property.
-        if id != "prismpm/oracle-validation-attestation/1"
-            && value.get("schema").and_then(Value::as_str) != Some(id)
-        {
+        // Only these registered closed envelopes use a different discriminator.
+        // Their schemas still reject an invented Prism `schema` property.
+        let discriminator = match id {
+            "prismpm/oracle-validation-attestation/1" => None,
+            "prismpm/workspace-view-labels/1" => Some("spec"),
+            _ => Some("schema"),
+        };
+        if discriminator.is_some_and(|key| value.get(key).and_then(Value::as_str) != Some(id)) {
             return Err(PrismError::new(
                 "PP1101",
                 format!("value does not declare {id}"),
@@ -799,6 +821,202 @@ impl CanonicalDocument {
 mod tests {
     use super::{CanonicalDocument, CONTRACTS};
     use serde_json::json;
+
+    const LABELS_ID: &str = "prismpm/workspace-view-labels/1";
+
+    fn workspace_labels() -> serde_json::Value {
+        let mut labels = serde_json::Map::new();
+        for key in [
+            "action",
+            "action0",
+            "action1",
+            "action2",
+            "action3",
+            "action4",
+            "asOf",
+            "author",
+            "body",
+            "close",
+            "closed",
+            "conflict",
+            "contributor",
+            "event",
+            "inputError",
+            "members",
+            "message",
+            "messages",
+            "next",
+            "none",
+            "offset",
+            "owner",
+            "pending",
+            "principal",
+            "reader",
+            "ready",
+            "refresh",
+            "rejected",
+            "replay",
+            "result",
+            "role",
+            "select",
+            "submit",
+            "title",
+            "total",
+            "unavailable",
+            "unknown",
+            "workspace",
+        ] {
+            labels.insert(key.to_owned(), json!("x"));
+        }
+        labels.insert("spec".to_owned(), json!(LABELS_ID));
+        serde_json::Value::Object(labels)
+    }
+
+    #[test]
+    fn workspace_labels_use_only_the_closed_spec_discriminator() {
+        let labels = workspace_labels();
+        assert_eq!(labels.as_object().unwrap().len(), 39);
+        let parsed = CanonicalDocument::from_value(LABELS_ID, labels.clone()).unwrap();
+        assert_eq!(parsed.schema(), LABELS_ID);
+        assert_eq!(parsed.value(), &labels);
+        for (field, value) in [
+            ("spec", json!("prismpm/workspace-view-labels/2")),
+            ("spec", json!(null)),
+            ("schema", json!(LABELS_ID)),
+            ("extra", json!("x")),
+            ("title", json!(0)),
+            ("title", json!("")),
+        ] {
+            let mut changed = labels.clone();
+            changed[field] = value;
+            assert!(
+                CanonicalDocument::from_value(LABELS_ID, changed).is_err(),
+                "{field}"
+            );
+        }
+        for key in labels.as_object().unwrap().keys() {
+            let mut changed = labels.clone();
+            changed.as_object_mut().unwrap().remove(key);
+            assert!(
+                CanonicalDocument::from_value(LABELS_ID, changed).is_err(),
+                "{key}"
+            );
+        }
+        let mut wrong_discriminator = labels;
+        wrong_discriminator.as_object_mut().unwrap().remove("spec");
+        wrong_discriminator["schema"] = json!(LABELS_ID);
+        assert!(CanonicalDocument::from_value(LABELS_ID, wrong_discriminator).is_err());
+    }
+
+    #[test]
+    fn workspace_labels_enforce_utf8_byte_and_exact_document_bounds() {
+        for value in ["a".repeat(256), "é".repeat(128), "😀".repeat(64)] {
+            let mut labels = workspace_labels();
+            labels["title"] = json!(value);
+            CanonicalDocument::from_value(LABELS_ID, labels).unwrap();
+        }
+        for value in [
+            "a".repeat(257),
+            format!("{}a", "é".repeat(128)),
+            format!("{}a", "😀".repeat(64)),
+        ] {
+            let mut labels = workspace_labels();
+            labels["title"] = json!(value);
+            assert!(CanonicalDocument::from_value(LABELS_ID, labels).is_err());
+        }
+        let mut labels = workspace_labels();
+        let base_size = crate::holo::canonical::encode_value(&labels).unwrap().len();
+        let mut remaining = 8_192 - base_size;
+        for (key, value) in labels.as_object_mut().unwrap() {
+            if key != "spec" {
+                let extra = remaining.min(255);
+                *value = json!("x".repeat(1 + extra));
+                remaining -= extra;
+            }
+        }
+        assert_eq!(remaining, 0);
+        let bytes = crate::holo::canonical::encode_value(&labels).unwrap();
+        assert_eq!(bytes.len(), 8_192);
+        CanonicalDocument::parse(LABELS_ID, &bytes).unwrap();
+        labels["workspace"] = json!("xx");
+        let bytes = crate::holo::canonical::encode_value(&labels).unwrap();
+        assert_eq!(bytes.len(), 8_193);
+        assert_eq!(
+            CanonicalDocument::parse(LABELS_ID, &bytes)
+                .unwrap_err()
+                .code
+                .as_str(),
+            "PP7601"
+        );
+    }
+
+    #[test]
+    fn workspace_labels_reject_noncanonical_bytes_but_preserve_display_bom() {
+        let mut labels = workspace_labels();
+        labels["title"] = json!("\u{feff}<script>literal text</script>");
+        let parsed = CanonicalDocument::from_value(LABELS_ID, labels.clone()).unwrap();
+        assert_eq!(parsed.value()["title"], labels["title"]);
+        let canonical = parsed.bytes();
+        let mut leading_bom = b"\xef\xbb\xbf".to_vec();
+        leading_bom.extend_from_slice(canonical);
+        let mut newline = canonical.to_vec();
+        newline.push(b'\n');
+        let mut duplicate = b"{\"action\":\"x\",".to_vec();
+        duplicate.extend_from_slice(&canonical[1..]);
+        let pretty = serde_json::to_vec_pretty(&labels).unwrap();
+        for bytes in [leading_bom, newline, duplicate, pretty] {
+            assert!(CanonicalDocument::parse(LABELS_ID, &bytes).is_err());
+        }
+    }
+
+    fn runtime_contract_limits() -> std::collections::BTreeMap<String, (usize, usize)> {
+        CONTRACTS
+            .iter()
+            .map(|contract| {
+                (
+                    contract.id.to_owned(),
+                    (contract.maximum_bytes, contract.maximum_items),
+                )
+            })
+            .collect()
+    }
+
+    fn modeled_contract_limits(
+        model: &toml::Value,
+    ) -> std::collections::BTreeMap<String, (usize, usize)> {
+        model["contract"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                (
+                    row["schema"].as_str().unwrap().to_owned(),
+                    (
+                        usize::try_from(row["maximum_bytes"].as_integer().unwrap()).unwrap(),
+                        usize::try_from(row["maximum_items"].as_integer().unwrap()).unwrap(),
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn runtime_contract_parity_detects_independent_bound_drift() {
+        let model: toml::Value = toml::from_str(include_str!("../model/contracts.toml")).unwrap();
+        let runtime = runtime_contract_limits();
+        assert_eq!(runtime, modeled_contract_limits(&model));
+        for (field, replacement) in [("maximum_bytes", 8_193), ("maximum_items", 79)] {
+            let mut changed = model.clone();
+            let labels = changed["contract"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|row| row["schema"].as_str() == Some(LABELS_ID))
+                .unwrap();
+            labels[field] = toml::Value::Integer(replacement);
+            assert_ne!(runtime, modeled_contract_limits(&changed), "{field}");
+        }
+    }
 
     #[test]
     fn browser_export_receipt_binds_exact_identity_and_order_without_authority_claims() {
@@ -1065,16 +1283,10 @@ mod tests {
     #[test]
     fn runtime_contracts_are_exactly_the_modeled_contracts() {
         let modeled: toml::Value = toml::from_str(include_str!("../model/contracts.toml")).unwrap();
-        let modeled = modeled["contract"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|row| row["schema"].as_str().unwrap())
-            .collect::<std::collections::BTreeSet<_>>();
-        let runtime = CONTRACTS
-            .iter()
-            .map(|contract| contract.id)
-            .collect::<std::collections::BTreeSet<_>>();
+        let row_count = modeled["contract"].as_array().unwrap().len();
+        let modeled = modeled_contract_limits(&modeled);
+        let runtime = runtime_contract_limits();
+        assert_eq!(modeled.len(), row_count, "duplicate modeled contract");
         assert_eq!(runtime.len(), CONTRACTS.len(), "duplicate runtime contract");
         assert_eq!(runtime, modeled, "runtime and modeled contracts diverged");
     }

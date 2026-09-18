@@ -211,3 +211,13 @@ rust_signature = "fn(Vec<u8>) -> Option<String>"
 lean_name = "PrismPM.Foundation.Utf8.encode"
 rust_name = "encode"
 rust_signature = "fn(String) -> Vec<u8>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.View.Workspace.V1.Interaction.workspaceInteractionBytes"
+rust_name = "workspaceInteractionBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.View.Workspace.V1.Interaction.workspacePresentationBytes"
+rust_name = "workspacePresentationBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"

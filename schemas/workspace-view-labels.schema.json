@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prismpm/workspace-view-labels/1",
+  "title": "PrismPM workspace View labels/1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action",
+    "action0",
+    "action1",
+    "action2",
+    "action3",
+    "action4",
+    "asOf",
+    "author",
+    "body",
+    "close",
+    "closed",
+    "conflict",
+    "contributor",
+    "event",
+    "inputError",
+    "members",
+    "message",
+    "messages",
+    "next",
+    "none",
+    "offset",
+    "owner",
+    "pending",
+    "principal",
+    "reader",
+    "ready",
+    "refresh",
+    "rejected",
+    "replay",
+    "result",
+    "role",
+    "select",
+    "spec",
+    "submit",
+    "title",
+    "total",
+    "unavailable",
+    "unknown",
+    "workspace"
+  ],
+  "properties": {
+    "action": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "action0": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "action1": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "action2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "action3": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "action4": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "asOf": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "close": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "closed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "conflict": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "contributor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "event": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "inputError": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "members": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "messages": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "next": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "none": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "offset": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "pending": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "reader": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "ready": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "refresh": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "rejected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "result": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "select": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "spec": {
+      "const": "prismpm/workspace-view-labels/1"
+    },
+    "submit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "total": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "unavailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "unknown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  },
+  "$comment": "Runtime additionally requires exact canonical UTF-8 JSON, 8192 total bytes, well-formed strings and 256 UTF-8 bytes per value; JSON Schema character lengths alone do not enforce byte lengths."
+}

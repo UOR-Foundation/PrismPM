@@ -33,7 +33,7 @@ while IFS= read -r path; do
   docker container cp "$container:/opt/prismpm/share/conformance-root/$path" "$sdk_work/source/$path"
 done < <(node "$helper" roots)
 node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"
-for module in identity store peer journal commands queries; do
+for module in identity store peer journal commands queries view-host view-dom view-error; do
   docker container cp "$container:/opt/prismpm/browser/$module.mjs" "$sdk_work/browser/$module.mjs"
   cmp "$root/sdk/browser/$module.mjs" "$sdk_work/browser/$module.mjs"
 done
