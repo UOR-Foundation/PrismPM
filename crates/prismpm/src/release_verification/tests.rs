@@ -74,6 +74,45 @@ pub(crate) fn reject_mutations(
         assert_eq!(error.code, "PP6101");
         assert!(error.message.contains(expected), "{}", error.message);
     };
+    if binding.family == "native" {
+        // A genuine successful transcript cannot replace semantic replay.
+        // Rebind the outer file descriptor after changing linked source, while
+        // retaining its old claimed semantic identity and all process evidence.
+        let path = "lexlean/snapshot.json";
+        let mut snapshot = canonical_json(&build_files[path], true).unwrap();
+        let core = snapshot["modules"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|module| module["name"] == "Foundation.Core")
+            .unwrap();
+        let definition = core["linked_ir"]["semantic"]["declarations"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|declaration| declaration["name"] == "portableTrue")
+            .unwrap();
+        assert_eq!(definition["body"], json!({"kind":"bool","value":true}));
+        definition["body"]["value"] = json!(false);
+        let mut bytes = encode_value(&snapshot).unwrap();
+        bytes.push(b'\n');
+        let mut build = canonical_json(build_manifest, false).unwrap();
+        let descriptor = build["files"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|row| row["path"] == path)
+            .unwrap();
+        descriptor["byte_length"] = json!(bytes.len());
+        descriptor["sha256"] = json!(hex(&bytes));
+        let mut files = build_files.clone();
+        files.insert(path.into(), bytes);
+        rejected_build(
+            &encode_value(&build).unwrap(),
+            &files,
+            "LexLean snapshot semantic recipe differs",
+        );
+    }
     for name in verification_files.keys() {
         let mut changed = verification_files.clone();
         changed.remove(name);

@@ -1082,6 +1082,16 @@ the other three browser tests passed; the unchanged production module then
 passed the complete suite. Log `target/identity-browser-mutant.log` has SHA-256
 `253e45293c7ba619c14e7bde2a20b3791c90c7c6659df3e73b11d235ad2a2916`.
 
+Source-free native verification rejects malformed process evidence before
+expensive source reconstruction, without omitting semantic, proof or artifact
+checks. The full native OCI test passed; ignoring semantic-validation failure
+then made the altered-source test fail on false acceptance. Correct source was
+restored byte-for-byte; primitive tests and full-workspace Clippy passed.
+Baseline log `target/native-early-rejection-baseline.log` has SHA-256
+`1b0432259ac20a68763807d59c130f187f8db3b5df80eca3a7765ad08c58adde`;
+mutant log `target/native-early-rejection-mutant.log` has SHA-256
+`48ba6e706c3c0840d015496ca2e1c2980e2adb40585c8d39a1fe21520e338b05`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

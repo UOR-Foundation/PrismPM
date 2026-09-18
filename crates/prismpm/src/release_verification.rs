@@ -306,10 +306,20 @@ pub(crate) fn validate(
         manifest["build_id"] == build_id,
         "verification build identity differs",
     )?;
+    let processes = process_records(&manifest["processes"], false)?;
+    if model.application.is_none() {
+        // Reject malformed native transcripts before reconstructing the full
+        // source graph. These untrusted declarations authorize no success:
+        // lexlean_binding and native_binding still verify every proof and
+        // artifact binding below, including this module and execution closure.
+        let lex_manifest = canonical_json(file(build_files, "lexlean/build/manifest.json")?, true)?;
+        let modules = lexlean_modules(&lex_manifest)?;
+        let execution = canonical_json(file(verification_files, "execution.json")?, false)?;
+        native_processes(&manifest, &modules, &execution, processes)?;
+    }
     let lex = canonical_json(file(verification_files, "lexlean-attestation.json")?, true)?;
     let snapshot = canonical_json(file(build_files, "lexlean/snapshot.json")?, true)?;
-    let modules = lexlean_binding(&build, build_files, &model, &lex, &snapshot)?;
-    let processes = process_records(&manifest["processes"], false)?;
+    lexlean_binding(&build, build_files, &model, &lex, &snapshot)?;
     if let Some(application) = &model.application {
         application_binding(
             &manifest,
@@ -322,15 +332,7 @@ pub(crate) fn validate(
             processes,
         )?;
     } else {
-        native_binding(
-            &manifest,
-            &lex,
-            &snapshot,
-            &modules,
-            build_files,
-            verification_files,
-            processes,
-        )?;
+        native_binding(&manifest, &lex, &snapshot, build_files, verification_files)?;
     }
     Ok(Binding {
         build_id,
@@ -347,7 +349,7 @@ fn lexlean_binding(
     model: &ModelDocument,
     lex: &Value,
     snapshot: &Value,
-) -> Result<BTreeSet<String>, PrismError> {
+) -> Result<(), PrismError> {
     let lex_manifest_bytes = file(files, "lexlean/build/manifest.json")?;
     let manifest = canonical_json(lex_manifest_bytes, true)?;
     keys(
@@ -448,18 +450,7 @@ fn lexlean_binding(
                 .collect(),
         "LexLean output closure is not exact",
     )?;
-    let mut modules = BTreeSet::new();
-    for row in array(&manifest["outputs"])? {
-        if row["kind"] == "lean" {
-            let module = string(&row["path"])?
-                .strip_prefix("modules/")
-                .and_then(|path| path.strip_suffix(".lean"))
-                .ok_or_else(|| invalid("LexLean module path is not canonical"))?
-                .replace('/', ".");
-            ensure(modules.insert(module), "duplicate LexLean module")?;
-        }
-    }
-    ensure(!modules.is_empty(), "LexLean evidence has no modules")?;
+    let modules = lexlean_modules(&manifest)?;
     let snapshot_modules = array(&snapshot["modules"])?;
     ensure(
         snapshot_modules
@@ -509,6 +500,22 @@ fn lexlean_binding(
     }
     declaration_audits(lex, snapshot_modules)?;
     lexlean_processes(lex, &modules)?;
+    Ok(())
+}
+
+fn lexlean_modules(manifest: &Value) -> Result<BTreeSet<String>, PrismError> {
+    let mut modules = BTreeSet::new();
+    for row in array(&manifest["outputs"])? {
+        if row["kind"] == "lean" {
+            let module = string(&row["path"])?
+                .strip_prefix("modules/")
+                .and_then(|path| path.strip_suffix(".lean"))
+                .ok_or_else(|| invalid("LexLean module path is not canonical"))?
+                .replace('/', ".");
+            ensure(modules.insert(module), "duplicate LexLean module")?;
+        }
+    }
+    ensure(!modules.is_empty(), "LexLean evidence has no modules")?;
     Ok(modules)
 }
 
@@ -1308,10 +1315,8 @@ fn native_binding(
     manifest: &Value,
     lex: &Value,
     snapshot: &Value,
-    modules: &BTreeSet<String>,
     build_files: &BTreeMap<String, Vec<u8>>,
     files: &BTreeMap<String, Vec<u8>>,
-    processes: &[Value],
 ) -> Result<(), PrismError> {
     keys(
         manifest,
@@ -1371,6 +1376,15 @@ fn native_binding(
             == json!({"erased_proof_dependencies":coverage["erased_proof_dependencies"],"included_definitions":coverage["included_definitions"],"requested_roots":coverage["requested_roots"]}),
         "native coverage root evidence differs",
     )?;
+    Ok(())
+}
+
+fn native_processes(
+    manifest: &Value,
+    modules: &BTreeSet<String>,
+    execution: &Value,
+    processes: &[Value],
+) -> Result<(), PrismError> {
     let mut expected = PREFLIGHT.to_vec();
     expected.push("lake-build-generated");
     expected.extend(std::iter::repeat_n("leanchecker", modules.len()));
@@ -1503,7 +1517,7 @@ fn native_binding(
         ensure(
             row["argv"] == json!([])
                 && row["executable_sha256"] == manifest["artifacts"]["executable"]["sha256"]
-                && output == execution,
+                && &output == execution,
             "native execution process evidence differs",
         )?;
     }
