@@ -12,8 +12,11 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 cp -a /opt/prismpm/share/standards/oracles/openid-conformance-suite-3e09b13b/. "$work/"
+# Preserve immutable input bytes; only disposable copy directories need writes.
+find "$work" -type d -exec chmod u+w -- {} +
 cd "$work"
 cp -a /opt/prismpm/openid-target ./target
+find target -type d -exec chmod u+w -- {} +
 rm -rf target/surefire-reports
 /opt/prismpm/openid-maven/bin/mvn \
     --offline \

@@ -2204,6 +2204,105 @@ pub fn verify(root: &Path) -> Result<UpstreamConformanceEvidence, PrismError> {
 mod tests {
     use super::*;
 
+    fn run_openid_wrapper_source(
+        image: &str,
+        source: &str,
+        selection: &str,
+    ) -> (ExitStatus, Vec<u8>, Vec<u8>) {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(source);
+        let script = format!(
+            r#"set -eu
+work=$(mktemp -d)
+mkdir "$work/scratch"
+printf '%s' '{encoded}' | base64 -d > "$work/wrapper.sh"
+immutable() {{
+  stat -c '%a:%u:%g' /opt/prismpm/share/standards/oracles/openid-conformance-suite-3e09b13b /opt/prismpm/openid-target
+  sha256sum /opt/prismpm/share/standards/oracles/openid-conformance-suite-3e09b13b/pom.xml /usr/local/bin/openid-conformance
+}}
+before=$(immutable)
+test -z "$(find "$work/scratch" -mindepth 1 -print -quit)"
+set +e
+TMPDIR="$work/scratch" /bin/sh "$work/wrapper.sh" "$1" > "$work/stdout" 2> "$work/stderr"
+status=$?
+set -e
+cat "$work/stdout"
+cat "$work/stderr" >&2
+test "$before" = "$(immutable)"
+if test -n "$(find "$work/scratch" -mindepth 1 -print -quit)"; then
+  printf '%s\n' OPENID_SCRATCH_LEAK >&2
+  exit 97
+fi
+exit "$status"
+"#
+        );
+        docker(
+            &[
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--read-only",
+                "--user",
+                "1000:1000",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--tmpfs",
+                "/tmp:rw,exec,nosuid,nodev,size=1g",
+                "--entrypoint",
+                "/bin/sh",
+                image,
+                "-ec",
+                &script,
+                "openid-wrapper-source-regression",
+                selection,
+            ],
+            Duration::from_secs(120),
+        )
+        .expect("execute exact owned OpenID wrapper source in an immutable SDK")
+    }
+
+    #[test]
+    fn openid_wrapper_scratch_is_writable_but_inputs_stay_immutable() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("repository root");
+        let source = fs::read_to_string(root.join("sdk/oracles/openid-conformance.sh"))
+            .expect("owned OpenID wrapper");
+        let image = sdk_image().expect("exact SDK image required");
+        let (status, stdout, stderr) =
+            run_openid_wrapper_source(&image, &source, "--official-selection");
+        assert!(status.success(), "{}", String::from_utf8_lossy(&stderr));
+        let marker = "{\"errors\":0,\"failures\":0,\"officialTests\":29,\"skipped\":0}";
+        assert_eq!(String::from_utf8_lossy(&stdout).matches(marker).count(), 1);
+
+        let (status, stdout, stderr) =
+            run_openid_wrapper_source(&image, &source, "PlantedAbsentOpenIdCondition_UnitTest");
+        assert!(!status.success());
+        assert_ne!(status.code(), Some(97));
+        assert!(!String::from_utf8_lossy(&stdout).contains(marker));
+        assert!(!String::from_utf8_lossy(&stderr).contains("OPENID_SCRATCH_LEAK"));
+
+        let start = source
+            .find("/opt/prismpm/openid-maven/bin/mvn \\\n")
+            .expect("the real Maven invocation");
+        let end = start
+            + source[start..]
+                .find("    surefire:test\n")
+                .expect("the complete official test invocation")
+            + "    surefire:test\n".len();
+        let mut omitted = source.clone();
+        omitted.replace_range(start..end, ":\n");
+        let (status, stdout, stderr) =
+            run_openid_wrapper_source(&image, &omitted, "--official-selection");
+        assert!(!status.success(), "wrapper accepted without running Maven");
+        assert_ne!(status.code(), Some(97));
+        assert!(!String::from_utf8_lossy(&stdout).contains(marker));
+        assert!(!String::from_utf8_lossy(&stderr).contains("OPENID_SCRATCH_LEAK"));
+    }
+
     #[test]
     fn oci_image_official_corpus_and_graph_probes_execute() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
