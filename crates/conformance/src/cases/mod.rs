@@ -392,6 +392,7 @@ pub fn run_at(root: &Path, id: &str) {
             verify_system(root, id)
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
+        "DK-07" | "DK-08" | "DK-09" | "DK-10" => verify_browser_host(root, id),
         "OC-07" => verify_browser_export(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
@@ -401,6 +402,66 @@ pub fn run_at(root: &Path, id: &str) {
         "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(id),
 
         _ => panic!("unhandled conformance id: {id}"),
+    }
+}
+
+fn verify_browser_host(root: &Path, id: &str) {
+    let (files, minimum_tests): (&[&str], usize) = match id {
+        "DK-07" => (
+            &[
+                "sdk/browser/identity.test.mjs",
+                "sdk/browser/identity.browser.test.mjs",
+            ],
+            10,
+        ),
+        "DK-08" => (
+            &[
+                "sdk/browser/store.test.mjs",
+                "sdk/browser/boundary.test.mjs",
+            ],
+            14,
+        ),
+        "DK-09" => (&["sdk/browser/peer.test.mjs"], 24),
+        "DK-10" => (&["sdk/browser/workspace-model-test.mjs"], 5),
+        _ => unreachable!("closed browser host capability"),
+    };
+    // Node also applies this limit to the file-level wrapper. The complete
+    // model build has its own 20-minute test bound and must not inherit the
+    // short host-only suite deadline.
+    let timeout = if id == "DK-10" { "1500000" } else { "120000" };
+    let output = Command::new("node")
+        .args(["--test", "--test-reporter=tap", "--test-timeout", timeout])
+        .args(files)
+        .current_dir(root)
+        .output()
+        .expect("execute complete browser host suite in the devcontainer");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 TAP output");
+    assert!(
+        output.status.success(),
+        "{id}: {stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let count = |name: &str| {
+        let prefix = format!("# {name} ");
+        let values = stdout
+            .lines()
+            .filter_map(|line| line.strip_prefix(&prefix))
+            .map(|value| value.parse::<usize>().expect("numeric TAP summary"))
+            .collect::<Vec<_>>();
+        assert_eq!(values.len(), 1, "{id}: missing or duplicate {name} summary");
+        values[0]
+    };
+    assert!(
+        count("tests") >= minimum_tests,
+        "{id}: incomplete test suite"
+    );
+    assert_eq!(count("tests"), count("pass"), "{id}: incomplete pass set");
+    for outcome in ["fail", "cancelled", "skipped", "todo"] {
+        assert_eq!(
+            count(outcome),
+            0,
+            "{id}: {outcome} tests cannot satisfy acceptance"
+        );
     }
 }
 

@@ -1,4 +1,4 @@
-//! The frozen 0.1.x application API preserved by the standard-library package.
+//! Closed standard-library exports, preserving the original application API.
 
 use crate::ModelError;
 use serde::Deserialize;
@@ -14,31 +14,31 @@ pub struct StdlibExports {
     pub lean_module: String,
     /// Name of the single verified LCNF module.
     pub ir_module: String,
-    /// Canonically ordered, explicitly preserved legacy entry points.
+    /// Canonically ordered, explicitly registered package entry points.
     pub export: Vec<StdlibExport>,
 }
 
-/// One source declaration and its original public Rust function type.
+/// One source declaration and its public Rust function type.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StdlibExport {
     /// Fully qualified generated Lean declaration, never handwritten Lean.
     pub lean_name: String,
-    /// Original public Rust symbol.
+    /// Registered public Rust symbol.
     pub rust_name: String,
     /// Consumer-facing function type; this describes an ABI, not semantics.
     pub rust_signature: String,
 }
 
 impl StdlibExports {
-    /// Reject missing, duplicated, substituted, or incompatible legacy exports.
+    /// Reject missing, duplicated, substituted, or incompatible package exports.
     pub fn check(&self) -> Result<(), ModelError> {
         let invalid =
             || ModelError::Inconsistent("invalid standard-library package exports".to_owned());
         if self.spec != "prismpm/stdlib-exports/1"
             || self.lean_module != "PrismPM.Runtime"
             || self.ir_module != "PrismPM"
-            || self.export.len() != 20
+            || self.export.len() != 37
             || self
                 .export
                 .windows(2)
@@ -48,9 +48,13 @@ impl StdlibExports {
         }
         let mut names = BTreeSet::new();
         for row in &self.export {
-            // The compatibility policy is frozen for the 0.2.0 package. It
-            // cannot be waived by deleting or renaming a register row.
+            // The complete export set is closed. Original signatures cannot be
+            // waived by deleting or renaming a register row when adding APIs.
             let (module, signature) = match row.rust_name.as_str() {
+                "reduceWorkspaceBytes" => (
+                    "Browser.V1.Workspace",
+                    "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
+                ),
                 "appendBytes" => ("Bytes", "fn(Vec<u8>, Vec<u8>) -> Vec<u8>"),
                 "byteAt" => ("Bytes", "fn(Vec<u8>, u64) -> Option<u8>"),
                 "byteLength" => ("Bytes", "fn(Vec<u8>) -> u64"),
@@ -64,6 +68,22 @@ impl StdlibExports {
                 | "controlEdition"
                 | "qualityEdition"
                 | "riskEdition" => ("Holo.StandardsProfile", "fn(StandardsProfile) -> u64"),
+                "contractName" => ("Holo.V1.CoreWasm", "fn() -> String"),
+                "appManifest" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"),
+                "archiveBody" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "archiveBodyBytes" => ("Holo.V1.Wire", "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "archiveExtension" => ("Holo.V1.Wire", "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "archiveFooter" => ("Holo.V1.Wire", "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "archiveSection" => ("Holo.V1.Wire", "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "contentBlob" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"),
+                "contentBlobBytes" => ("Holo.V1.Wire", "fn(Vec<u8>) -> Option<Vec<u8>>"),
+                "contentBlobLabel" => ("Holo.V1.Wire", "fn(Vec<u8>) -> Option<Vec<u8>>"),
+                "emptyCapabilities" => ("Holo.V1.Wire", "fn() -> Vec<u8>"),
+                "frameArchive" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "manifestReference" => ("Holo.V1.Wire", "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "validAppManifest" => ("Holo.V1.Wire", "fn(&[u8]) -> bool"),
+                "validArchiveBody" => ("Holo.V1.Wire", "fn(&[u8]) -> Result<bool, ComputeError>"),
+                "validArchiveFrame" => ("Holo.V1.Wire", "fn(&[u8]) -> Result<bool, ComputeError>"),
                 "checkedAddInt64"
                 | "checkedDivideInt64"
                 | "checkedMultiplyInt64"
@@ -135,7 +155,7 @@ mod tests {
         let exports: StdlibExports = toml::from_str(SOURCE).unwrap();
         let runtime = vec!["PrismPM.Foundation.Holo.validateComponentIndexes".to_owned()];
         let union = exports.union_with_runtime(&runtime).unwrap();
-        assert_eq!(union.len(), 21);
+        assert_eq!(union.len(), 38);
         assert_eq!(runtime.len(), 1);
         assert!(union.contains(&runtime[0]));
         let mut document: toml::Value = toml::from_str(SOURCE).unwrap();

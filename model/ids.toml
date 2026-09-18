@@ -685,6 +685,30 @@ level = "build"
 statement = "SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation."
 
 [[id]]
+id = "DK-07"
+suite = "sdk"
+level = "build"
+statement = "The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority."
+
+[[id]]
+id = "DK-08"
+suite = "sdk"
+level = "build"
+statement = "The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes."
+
+[[id]]
+id = "DK-09"
+suite = "sdk"
+level = "build"
+statement = "The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery."
+
+[[id]]
+id = "DK-10"
+suite = "sdk"
+level = "build"
+statement = "The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

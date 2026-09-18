@@ -1,0 +1,15 @@
+[package]
+name = "prismpm-holo-codec-oracle"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+blake3 = "=1.5.5"
+hologram = { package = "uor-hologram", git = "https://github.com/Hologram-Technologies/hologram", rev = "2bda6a9a9476872dade705bd61ece4209607f6da", default-features = false, features = ["archive", "space"] }
+serde_json = "=1.0.151"
+
+[lints.rust]
+unsafe_code = "forbid"

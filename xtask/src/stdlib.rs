@@ -721,6 +721,9 @@ mod tests {
                 "\n[[dependency]]\nid = {id:?}\nrevision = {:?}\nsource = {source:?}\n",
                 "1".repeat(40)
             ));
+            if matches!(id, "hologram-live" | "uor-hologram") {
+                register.push_str("role = \"validation-oracle\"\n");
+            }
             if source == "vendored" {
                 let relative = format!("vendor/{id}/source.tar");
                 let path = root.path().join(&relative);

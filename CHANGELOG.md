@@ -18,6 +18,10 @@ see [RELEASE-STATUS.md](RELEASE-STATUS.md) for the verified prerequisites.
   support while preserving Holo/1 and the 0.1 application runtime API.
 - Correct generated View field layout in `lean4-prod`; Calculator behavior and
   Holo/1 remain compatible.
+- Generate the Holo/1 wire codec and bounded workspace reducer from LexLean;
+  keep independent Hologram oracles outside the production dependency graph.
+- Add bounded browser cryptography, transactional storage and direct peer
+  bindings. These prerequisites do not constitute a Foundry application release.
 
 ### Compatibility
 

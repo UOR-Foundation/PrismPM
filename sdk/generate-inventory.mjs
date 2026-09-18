@@ -67,6 +67,7 @@ const definitions = [
   ['asyncapi-3.1.0-official-corpus', 'test-corpus', 'b3fac5bb522771428ea57b16129b273cd3ea0180', 'standards/oracles/asyncapi-spec-b3fac5bb', 'tree'],
   ['asyncapi-website-adeo-schemas', 'test-corpus', '20a31a0396b41dd24b1bac877ab7ce3f58037c28', 'standards/oracles/asyncapi-website-20a31a03', 'tree'],
   ['build-base', 'base-image', 'rust-1.97.1-bookworm', null, 'sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'],
+  ['browser-host-primitives', 'adapter', '1', '/opt/prismpm/browser', 'tree'],
   ['conformance-corpus', 'test-corpus', 'prismpm/ids/1', '/opt/prismpm/share/conformance-root', 'tree'],
   ['cloudevents-1.0.2-fixtures', 'test-corpus', '1.0.2', 'standards/corpora/cloudevents-1.0.2', 'tree'],
   ['cloudevents-sdk-go-corpus', 'test-corpus', '2.16.2', 'standards/oracles/cloudevents-sdk-go-2.16.2', 'tree'],

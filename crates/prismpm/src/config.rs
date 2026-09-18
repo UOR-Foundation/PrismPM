@@ -8,12 +8,22 @@ use std::path::{Component, Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectLimits {
-    /// Maximum canonical Holo byte length.
+    /// Maximum canonical model document and physical Holo archive byte length.
     pub max_holo_bytes: u64,
     /// Maximum total Holo entities and catalog rows.
     pub max_entities: u64,
     /// Maximum returned diagnostics.
     pub max_diagnostics: u64,
+}
+
+impl ProjectLimits {
+    pub(crate) fn check_holo_length(&self, length: usize) -> Result<(), PrismError> {
+        if u64::try_from(length).is_ok_and(|length| length <= self.max_holo_bytes) {
+            Ok(())
+        } else {
+            Err(PrismError::new("PP1003", "max_holo_bytes exceeded"))
+        }
+    }
 }
 
 /// Closed prismpm/project/1 configuration.
@@ -180,5 +190,25 @@ impl ProjectConfig {
             }
         }
         Ok(root.join(relative))
+    }
+}
+
+#[cfg(test)]
+mod limit_tests {
+    use super::ProjectLimits;
+
+    #[test]
+    fn holo_length_limit_includes_the_boundary_and_rejects_larger_bytes() {
+        let limits = ProjectLimits {
+            max_holo_bytes: 128,
+            max_entities: 1,
+            max_diagnostics: 1,
+        };
+        for length in [0, 127, 128] {
+            limits.check_holo_length(length).unwrap();
+        }
+        for length in [129, 1048576, usize::MAX] {
+            assert_eq!(limits.check_holo_length(length).unwrap_err().code, "PP1003");
+        }
     }
 }

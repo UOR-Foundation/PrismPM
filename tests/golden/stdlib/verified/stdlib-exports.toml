@@ -8,6 +8,11 @@ ir_module = "PrismPM"
 # Baseline: 94697b1ff196ef362f4a6137ba72145e2ac68faf,
 # stdlib/generated/package/src/lib.rs (acceptance needs no network or Git history).
 [[export]]
+lean_name = "PrismPM.Foundation.Browser.V1.Workspace.reduceWorkspaceBytes"
+rust_name = "reduceWorkspaceBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
+
+[[export]]
 lean_name = "PrismPM.Foundation.Bytes.appendBytes"
 rust_name = "appendBytes"
 rust_signature = "fn(Vec<u8>, Vec<u8>) -> Vec<u8>"
@@ -71,6 +76,86 @@ rust_signature = "fn(StandardsProfile) -> u64"
 lean_name = "PrismPM.Foundation.Holo.StandardsProfile.riskEdition"
 rust_name = "riskEdition"
 rust_signature = "fn(StandardsProfile) -> u64"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.CoreWasm.contractName"
+rust_name = "contractName"
+rust_signature = "fn() -> String"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.appManifest"
+rust_name = "appManifest"
+rust_signature = "fn(Vec<u8>, Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.archiveBody"
+rust_name = "archiveBody"
+rust_signature = "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.archiveBodyBytes"
+rust_name = "archiveBodyBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.archiveExtension"
+rust_name = "archiveExtension"
+rust_signature = "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.archiveFooter"
+rust_name = "archiveFooter"
+rust_signature = "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.archiveSection"
+rust_name = "archiveSection"
+rust_signature = "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.contentBlob"
+rust_name = "contentBlob"
+rust_signature = "fn(Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.contentBlobBytes"
+rust_name = "contentBlobBytes"
+rust_signature = "fn(Vec<u8>) -> Option<Vec<u8>>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.contentBlobLabel"
+rust_name = "contentBlobLabel"
+rust_signature = "fn(Vec<u8>) -> Option<Vec<u8>>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.emptyCapabilities"
+rust_name = "emptyCapabilities"
+rust_signature = "fn() -> Vec<u8>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.frameArchive"
+rust_name = "frameArchive"
+rust_signature = "fn(Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.manifestReference"
+rust_name = "manifestReference"
+rust_signature = "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.validAppManifest"
+rust_name = "validAppManifest"
+rust_signature = "fn(&[u8]) -> bool"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.validArchiveBody"
+rust_name = "validArchiveBody"
+rust_signature = "fn(&[u8]) -> Result<bool, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.Wire.validArchiveFrame"
+rust_name = "validArchiveFrame"
+rust_signature = "fn(&[u8]) -> Result<bool, ComputeError>"
 
 [[export]]
 lean_name = "PrismPM.Foundation.Integer.checkedAddInt64"

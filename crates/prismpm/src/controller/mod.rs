@@ -494,9 +494,7 @@ impl Controller {
         if entities > config.limits.max_entities {
             return Err(PrismError::new("PP1003", "max_entities exceeded"));
         }
-        if model_bytes.len() as u64 > config.limits.max_holo_bytes {
-            return Err(PrismError::new("PP1003", "max_holo_bytes exceeded"));
-        }
+        config.limits.check_holo_length(model_bytes.len())?;
         Ok(Prepared {
             config,
             engine,
@@ -709,13 +707,19 @@ impl Controller {
                         .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
                 ));
             }
-            artifacts.extend(crate::application_build::generate(
+            let application_artifacts = crate::application_build::generate(
                 &self.root,
                 &prepared.model,
                 &prepared.model_bytes,
                 &application_lex_root,
                 &application_lex_manifest,
-            )?);
+            )?;
+            for (path, bytes) in &application_artifacts {
+                if path.ends_with(".holo") {
+                    prepared.config.limits.check_holo_length(bytes.len())?;
+                }
+            }
+            artifacts.extend(application_artifacts);
         }
         if let Some(system) = &prepared.system {
             artifacts.push(("system.prism.json".to_owned(), system.bytes().to_vec()));

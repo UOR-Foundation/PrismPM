@@ -7,8 +7,6 @@
 use crate::error::PrismError;
 use crate::holo::canonical::{content_id, decode_canonical, encode_value};
 use crate::holo::model_document::{Application, ModelDocument};
-use hologram::archive::HoloLoader;
-use hologram::space::{address_bytes, AppManifest};
 use lexlean::artifact::content_id as lex_ids;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1137,8 +1135,12 @@ fn application_binding(
         "application oracle Node path differs",
     )?;
     let browser = match lex["host"]["arch"].as_str() {
-        Some("x86_64") => "/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell",
-        Some("aarch64") => "/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell",
+        Some("x86_64") => {
+            "/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell"
+        }
+        Some("aarch64") => {
+            "/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell"
+        }
         _ => return Err(invalid("application oracle host architecture differs")),
     };
     ensure(
@@ -1188,50 +1190,31 @@ fn application_archive(
     guest: &[u8],
 ) -> Result<Value, PrismError> {
     let bytes = file(files, &format!("{}.holo", application.name()))?;
-    crate::holo::archive::validate_application(bytes)
+    let archive = crate::holo::archive::parse_application(bytes)
         .map_err(|error| invalid(format!("application archive: {}", error.message)))?;
-    let plan = HoloLoader::from_bytes(bytes)
-        .map_err(|error| invalid(error.to_string()))?
-        .into_plan()
-        .map_err(|error| invalid(error.to_string()))?;
-    let app_bytes = plan
-        .app_manifest()
-        .ok_or_else(|| invalid("application archive manifest absent"))?;
-    let app = AppManifest::decode(app_bytes)
-        .map_err(|error| invalid(format!("application manifest: {error:?}")))?;
     let model_bytes = file(files, "model.prism.json")?;
-    let blobs = plan
-        .content_blobs()
-        .map_err(|error| invalid(error.to_string()))?;
     ensure(
-        blobs.iter().any(|(_, content)| *content == model_bytes)
-            && blobs.iter().any(|(_, content)| *content == guest)
-            && app_bytes == file(files, "application/application-manifest.bin")?
-            && app.layers[0].content.to_string() == address_bytes(guest).to_string(),
+        archive.blobs.values().any(|content| content == model_bytes)
+            && archive.blobs.values().any(|content| content == guest)
+            && archive.application_manifest == file(files, "application/application-manifest.bin")?
+            && archive.metadata == file(files, "application/source-manifest.json")?
+            && archive.identities.guest_content_kappa == crate::holo::archive::content_kappa(guest)
+            && archive.identities.model_content_kappa
+                == crate::holo::archive::content_kappa(model_bytes),
         "application archive content differs from release artifacts",
     )?;
-    let fingerprint = bytes[bytes.len() - 32..]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    let identities = json!({
-        "application_kappa":address_bytes(app_bytes).to_string(), "archive_fingerprint":fingerprint,
-        "archive_kappa":address_bytes(bytes).to_string(), "guest_content_kappa":address_bytes(guest).to_string(),
-        "model_content_kappa":address_bytes(model_bytes).to_string(), "view_content_kappa":app.layers[1].content.to_string()
-    });
+    let identities = serde_json::to_value(&archive.identities)
+        .map_err(|error| invalid(format!("application identities: {error}")))?;
     ensure(
         identities == canonical_json(file(files, "application/holo-identities.json")?, false)?,
         "application Holo identities differ",
     )?;
-    let extensions = plan
-        .extensions()
-        .map_err(|error| invalid(error.to_string()))?;
     ensure(
-        extensions[0].1 == file(files, "application/directory.json")?
-            && extensions[1].1 == file(files, "application/model-provenance.json")?,
+        archive.directory == file(files, "application/directory.json")?
+            && archive.prism_extension == file(files, "application/model-provenance.json")?,
         "application archive extension bytes differ",
     )?;
-    let provenance = canonical_json(extensions[1].1, false)?;
+    let provenance = canonical_json(&archive.prism_extension, false)?;
     for (key, expected) in [
         ("source_id", &model.provenance.source_id),
         ("semantic_id", &model.provenance.semantic_id),

@@ -43,6 +43,8 @@ max_diagnostics = 256
 All five top-level fields and all three limit fields are required; unknown
 fields are errors. The three limits are positive and capped respectively at
 1,073,741,824 bytes, 10,000,000 entities, and 10,000 diagnostics.
+The byte limit applies independently to the canonical model document and
+each generated physical `.holo` archive, before atomic publication.
 `lexlean_project`, `build_root`, and an optional CLI `--config` are confined,
 nonempty, slash-separated project-relative paths whose components use ASCII
 letters, digits, dot, hyphen, and underscore, never `.` or `..`. `build_root`
@@ -114,8 +116,11 @@ sorting external IDs before assigning indexes.
 ## 3. Canonical Holo contract
 
 Holo/1 is the Prism application profile defined by the generated declarations
-under `Foundation.Holo.V1`; it is not a physical version number. Holo/1 maps to
-the Hologram v4 container pinned by `model/dependencies.toml`. A file named
+under `Foundation.Holo.V1`; it is not a physical version number. Its physical
+v4 encoding is implemented by the LexLean-generated `Foundation.Holo.V1.Wire`
+codec in `prism-stdlib`. The independent upstream compatibility oracles are
+pinned by `model/dependencies.toml`; neither Hologram platform code nor its
+archive implementation is a production Cargo dependency of PrismPM. A file named
 `*.holo` begins with `HOLO` followed by little-endian physical version 4 and
 canonical flags. Legacy JSON, including the prototype `prismpm/holo/1` JSON,
 is rejected as a `.holo` file. The old logical projection is now the separate
@@ -176,7 +181,7 @@ collisions, duplicates, missing entry, wrong order, and trailing bytes fail.
 
 Application verification must execute the exact portable View extracted from
 the application archive in pinned Chromium, with intents handled by the
-authoritative Hologram session and its Core-Wasm runtime. Recording that a View
+independent Hologram oracle session and its Core-Wasm runtime. Recording that a View
 was mounted is not evidence that its JavaScript executed or that the modeled
 request and response reached the rendered interface. The verifier requires the
 complete profile-specific browser evidence bound to the application contract;
@@ -273,7 +278,10 @@ path or Git dependency. `model/stdlib-package.toml` owns its package metadata;
 the current contract and packaging tooling require exactly version 0.2.0.
 `model/stdlib-exports.toml` separately fixes the original 0.1.x application
 entry points and public Rust function types, including owned byte/string
-arguments and the five `StandardsProfile` accessors. The exact sorted union
+arguments and the five `StandardsProfile` accessors. It also registers the
+modeled physical codec, Core-Wasm contract name and pure workspace reducer.
+Checked arithmetic failures remain explicit generated `ComputeError` results.
+The exact sorted union
 of those package exports and `model/runtime-roots.toml` is exported and checked
 by the native verification pipeline. Verification binds the package-export
 register bytes and requested union to the accepted LCNF and coverage evidence.
@@ -309,8 +317,10 @@ quality chains, including its intentionally legal graph cycle.
 
 All Prism theorem policies are empty. Verification acceptance requires Lean
 elaboration, same-toolchain `leanchecker` replay, and an exact empty observed
-axiom array for every generated `PrismPM.*` declaration. Goldens are reviewed
-output, never a substitute for direct verification.
+axiom array for every generated `PrismPM.*` theorem. Executable definitions
+retain their individually declared, audited axiom policies; an inherited
+library axiom is not an axiom-free theorem or a proof of runtime acceptance.
+Goldens are reviewed output, never a substitute for direct verification.
 
 ## 6. Build artifacts and identities
 
@@ -721,6 +731,72 @@ helpers. Exact captures remain available alongside the final receipt. Legacy
 `bootstrap-evidence/1` remains a closed historical contract, not evidence that
 different compiler identities are equal. This finite compatibility check does
 not establish full current-language, kernel, two-root or release acceptance.
+
+### 12.1 Browser host prerequisites
+
+`sdk/browser` contains generic host bindings, not a stateful application
+profile or a portal implementation. Application commands, authorization,
+state transitions, Views and effect selection remain generated-model
+obligations. These bindings do not enable effects in the capability-free
+Text application profile or change Holo/1 capability negotiation.
+
+- `identity.mjs` binds ECDSA P-256/SHA-256 to nonextractable browser keys.
+  The signed bytes are the UTF-8 `prismpm/browser-signature/1` domain, NUL,
+  a big-endian two-byte context length, ASCII context and opaque payload.
+  Contexts are 1–128 permitted identifier bytes; payloads are at most 1 MiB.
+  Public keys are 65-byte uncompressed points and signatures are 64-byte
+  P1363 values. Principal IDs are SHA-256 of the exact public-key encoding;
+  they neither assert a civil/organizational identity nor a Kappa address.
+  Persisted identities are checked by real key possession, not key hashes alone.
+- `store.mjs` binds IndexedDB strict transactions to a fixed namespace policy:
+  at most 1 MiB/object, 4096 objects, 64 named heads and 16 objects/transaction;
+  a namespace can select smaller limits but cannot silently change them.
+  Head updates compare the exact prior digest and atomically add verified
+  objects. The next head's bytes must be supplied even for an existing object.
+  Reads verify content identity and bounds. Keys survive normal reopening;
+  replacement, deletion, backup, key recovery, authorization and replication
+  are not provided by this storage primitive. Browser eviction or erasure can
+  still destroy the only copy; transaction completion is local durability,
+  never a replicated or globally confirmed receipt.
+- `peer.mjs` binds ordered reliable WebRTC data channels to bounded binary
+  frames and a closed manually exchanged offer/answer envelope. No STUN/TURN,
+  signaling service, automatic discovery or peer authentication is supplied.
+  Pairing can disclose local network addresses and requires direct reachability.
+  Applications must authenticate records and authorize replication separately.
+  Backpressure, deadlines and teardown are explicit, not silent message loss.
+
+Host error codes are carried without payload/key material. Cryptography uses
+`invalid-input`, `identity-corrupt`, `crypto-unavailable`. Storage additionally
+uses `identity-exists`, `head-conflict`, `missing-object`, `object-corrupt`,
+`store-limit`, `store-policy-mismatch`, `store-closed`, `storage-blocked`,
+`storage-quota`, `storage-unavailable`. Peer failures are `PEER_CONFIG`,
+`PEER_SIGNAL`, `PEER_STATE`, `PEER_CLOSED`, `PEER_UNAVAILABLE`, `PEER_TIMEOUT`,
+`PEER_CHANNEL`, `PEER_DISCONNECTED`, `PEER_MESSAGE`, `PEER_BACKPRESSURE`,
+`PEER_CALLBACK`. Browser tests exercise
+real cryptography, storage and peer sessions with negative and planted-defect
+cases. This evidence is local adapter acceptance, not full Web Cryptography,
+IndexedDB or WebRTC standards conformance, Kappa interoperability, or product
+readiness. No application may claim those broader properties from these tests.
+
+### 12.2 Modeled workspace reducer
+
+`Foundation.Browser.V1.Workspace` defines the pure byte-state reducer; its
+normative wire, authentication, replay and resource contract is
+`stdlib/src/Foundation/Browser/V1/CONTRACT.md`. It permits one immutable owner,
+owner-granted contributors/readers, revocation and bounded UTF-8 messages.
+It rejects stale parents/sequences, duplicate events, unauthorized transitions,
+malformed state and exhausted limits without changing state. Workspace roles
+do not confer Foundation appointments or independently prove identity.
+
+The complete 45-case modeled corpus runs twice through freshly generated
+standard Rust, `no_std` Rust and Core-Wasm, including combined maximum-size
+states and all 19 modeled rejection variants. The guest admits 1,104,664
+input bytes and 1,100,428 output bytes within 512 memory pages. Each command
+requires a fresh guest instance; only the compiled module may be reused.
+Native decoder rejection and guest allocation traps are separately checked.
+This finite corpus is reducer evidence, not an authenticated application:
+signature verification, authenticated replay, atomic durable event/head writes,
+peer authorization, a generated View and end-to-end acceptance remain required.
 
 ## 13. OCI product-release graph
 
@@ -1137,6 +1213,10 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-04` | `sdk` | The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline. | §12 |
 | `DK-05` | `sdk` | SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle. | §12 |
 | `DK-06` | `sdk` | SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation. | §12 |
+| `DK-07` | `sdk` | The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority. | §12 |
+| `DK-08` | `sdk` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. | §12 |
+| `DK-09` | `sdk` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. | §12 |
+| `DK-10` | `sdk` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

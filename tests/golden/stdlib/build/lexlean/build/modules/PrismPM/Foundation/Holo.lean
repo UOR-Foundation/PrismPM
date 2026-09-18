@@ -15,6 +15,7 @@ public import PrismPM.Foundation.Holo.V1.Manifest
 public import PrismPM.Foundation.Holo.V1.PrismExtension
 public import PrismPM.Foundation.Holo.V1.SourceManifest
 public import PrismPM.Foundation.Holo.V1.View
+public import PrismPM.Foundation.Holo.V1.Wire
 public import PrismPM.Foundation.Integer
 public import PrismPM.Foundation.Qual
 public import PrismPM.Foundation.Result

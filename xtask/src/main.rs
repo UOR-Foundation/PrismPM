@@ -116,6 +116,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
         &[
             "--test",
             "scripts/oracle-source-closure.test.mjs",
+            "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/release-phases.test.mjs",
         ],
     )?;
@@ -124,6 +125,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
     audit::audit_no_unsafe(root)?;
     audit::audit_shipped(root)?;
     audit::audit_dependencies(root)?;
+    audit::audit_runtime_oracle_separation(root)?;
     audit::audit_tools_ci(root)?;
     let model = repo_model::Model::load_from_repo_root()?;
     audit::audit_errors(root, &model)?;
@@ -411,7 +413,40 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     let driver = gate_driver::GateDriver::capture(root)?;
 
     println!("VV gate 1/15: formatting");
-    command(root, "cargo", &["fmt", "--all", "--", "--check"])?;
+    // The generated stdlib is a local runtime dependency, but its exact bytes
+    // are checked by the regeneration gate, not rewritten by rustfmt. Check
+    // every authored workspace and pinned compiler source separately.
+    command(root, "cargo", &["fmt", "--", "--check"])?;
+    for manifest in [
+        "vendor/lean4-prod/rust/Cargo.toml",
+        "vendor/lexlean/Cargo.toml",
+    ] {
+        command(
+            root,
+            "cargo",
+            &["fmt", "--manifest-path", manifest, "--all", "--", "--check"],
+        )?;
+    }
+    for manifest in [
+        "tests/browser-workspace/Cargo.toml",
+        "tests/holo-codec-oracle/Cargo.toml",
+    ] {
+        command(
+            root,
+            "cargo",
+            &["fmt", "--manifest-path", manifest, "--", "--check"],
+        )?;
+    }
+    command(
+        root,
+        "rustfmt",
+        &[
+            "--edition",
+            "2021",
+            "--check",
+            "tests/browser-workspace/runner.rs",
+        ],
+    )?;
 
     println!("VV gate 2/15: model, diagnostics, standards, and generated documentation");
     codegen::check_model(root, false)?;
@@ -485,6 +520,19 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
 
     println!("VV gate 7/15: feature, conformance, and negative fixtures");
     check_fixtures(root, false)?;
+    command(
+        root,
+        "cargo",
+        &[
+            "run",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "tests/holo-codec-oracle/Cargo.toml",
+            "--target-dir",
+            "target/holo-codec-oracle",
+        ],
+    )?;
 
     println!("VV gate 8/15: generated Lean build, replay, axiom audit, and source audit");
     verify_examples(root, false)?;
@@ -940,6 +988,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "model/stdlib-exports.toml",
         "model/stdlib-package.toml",
         "schemas/model-document.schema.json",
+        "sdk/oracles/kubernetes-validator.mjs",
         "src/prod_alloc_counter.rs.inc",
         "standards.lock",
         "stdlib/src/Foundation/Holo.lex.tex",
@@ -967,11 +1016,12 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
     let downstream = temp.path().join("downstream");
     std::fs::create_dir(&downstream)?;
     let cargo_toml = format!(
-        "[package]\nname = \"prismpm-downstream\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\nprismpm = {{ path = {:?} }}\n\n[patch.crates-io]\nlexlean = {{ path = {:?} }}\nprod-codegen = {{ path = {:?} }}\nprod-ir = {{ path = {:?} }}\n",
+        "[package]\nname = \"prismpm-downstream\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[dependencies]\nprismpm = {{ path = {:?} }}\n\n[patch.crates-io]\nlexlean = {{ path = {:?} }}\nprod-codegen = {{ path = {:?} }}\nprod-ir = {{ path = {:?} }}\nprism-stdlib = {{ path = {:?} }}\n",
         packaged,
         root.join("vendor/lexlean"),
         root.join("vendor/lean4-prod/rust/prod-codegen"),
         root.join("vendor/lean4-prod/rust/prod-ir"),
+        root.join("stdlib/generated/package"),
     );
     std::fs::write(downstream.join("Cargo.toml"), cargo_toml)?;
     std::fs::create_dir(downstream.join("src"))?;

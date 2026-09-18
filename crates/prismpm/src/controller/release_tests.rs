@@ -42,6 +42,61 @@ fn calculator_project() -> tempfile::TempDir {
     temporary
 }
 
+#[test]
+fn physical_archive_limit_rejects_before_publishing_any_build() {
+    let temporary = calculator_project();
+    let root = temporary.path();
+    let controller = Controller::load(root).unwrap();
+    let initial = controller
+        .build(BuildRequest { config_path: None })
+        .unwrap();
+    let directory = root.join(".prism/build").join(&initial.build_id);
+    let archive = walkdir::WalkDir::new(&directory)
+        .into_iter()
+        .map(Result::unwrap)
+        .find(|entry| {
+            entry.file_type().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .is_some_and(|value| value == "holo")
+        })
+        .unwrap();
+    let archive_bytes = std::fs::read(archive.path()).unwrap();
+    let model_bytes = std::fs::read(root.join(&initial.model_path)).unwrap();
+    assert!(archive_bytes.len() > model_bytes.len());
+    let builds = || {
+        std::fs::read_dir(root.join(".prism/build"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<BTreeSet<_>>()
+    };
+    let initial_builds = builds();
+    let config_path = root.join("prismpm.toml");
+    let mut config: toml::Value =
+        toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+    config["limits"]["max_holo_bytes"] = toml::Value::Integer(archive_bytes.len() as i64 - 1);
+    std::fs::write(&config_path, toml::to_string(&config).unwrap()).unwrap();
+    // The model fits; it is the physical archive boundary that must reject.
+    controller
+        .check(CheckRequest { config_path: None })
+        .unwrap();
+    assert_eq!(
+        controller
+            .build(BuildRequest { config_path: None })
+            .unwrap_err()
+            .code,
+        "PP1003"
+    );
+    assert_eq!(builds(), initial_builds);
+    assert_eq!(std::fs::read(archive.path()).unwrap(), archive_bytes);
+    config["limits"]["max_holo_bytes"] = toml::Value::Integer(archive_bytes.len() as i64);
+    std::fs::write(&config_path, toml::to_string(&config).unwrap()).unwrap();
+    controller
+        .build(BuildRequest { config_path: None })
+        .unwrap();
+}
+
 fn relock(root: &Path) {
     Engine::load(&utf8(root.join("lexlean.toml")).unwrap())
         .unwrap()

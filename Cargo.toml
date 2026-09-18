@@ -24,13 +24,14 @@ prismpm = { version = "0.3.0", path = "crates/prismpm" }
 lexlean = { version = "0.3.0", path = "vendor/lexlean" }
 prod-codegen = { version = "0.1.0", path = "vendor/lean4-prod/rust/prod-codegen" }
 prod-ir = { version = "0.1.0", path = "vendor/lean4-prod/rust/prod-ir" }
+prism-stdlib = { version = "=0.2.0", path = "stdlib/generated/package" }
 
 camino = "1.2"
 base64 = "=0.22.1"
+blake3 = "=1.5.5"
 clap = { version = "4.5", features = ["derive"] }
 ctrlc = "=3.5.2"
 fs4 = { version = "0.13", features = ["sync"] }
-hologram = { package = "uor-hologram", version = "0.13.1", git = "https://github.com/Hologram-Technologies/hologram", rev = "96769f16be454ab1572fddff4613704ccfbebf5e", default-features = false, features = ["archive", "space"] }
 nom = { version = "7", default-features = false }
 proptest = "1.6"
 jsonschema = { version = "=0.50.1", default-features = false }
@@ -67,3 +68,4 @@ codegen-units = 1
 lexlean = { path = "vendor/lexlean" }
 prod-codegen = { path = "vendor/lean4-prod/rust/prod-codegen" }
 prod-ir = { path = "vendor/lean4-prod/rust/prod-ir" }
+prism-stdlib = { path = "stdlib/generated/package" }

@@ -125,6 +125,11 @@ pub struct Topology {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceByteView {
+    pub bytes: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlObligation {
     pub id: u64,
     pub control: u64,
@@ -293,6 +298,17 @@ pub struct Call {
     pub timeoutMillis: u64,
     pub retryPolicy: alloc::string::String,
     pub idempotency: alloc::string::String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthenticatedEvent {
+    pub workspace: alloc::vec::Vec<u8>,
+    pub eventId: alloc::vec::Vec<u8>,
+    pub parent: alloc::vec::Vec<u8>,
+    pub sequence: u64,
+    pub author: alloc::vec::Vec<u8>,
+    pub action: crate::WorkspaceAction,
+    pub body: alloc::vec::Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -510,6 +526,16 @@ pub struct SecretReference {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+pub enum WorkspaceAction {
+    Genesis = 0,
+    GrantContributor = 1,
+    GrantReader = 2,
+    Revoke = 3,
+    PostMessage = 4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum ControlRequirementMode {
     LocalRequired = 0,
     InheritedRequired = 1,
@@ -521,6 +547,30 @@ pub struct Alert {
     pub kind: alloc::string::String,
     pub value: alloc::string::String,
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum WorkspaceError {
+    BadEncoding = 0,
+    BadState = 1,
+    BadIdentity = 2,
+    WrongWorkspace = 3,
+    Replay = 4,
+    StaleParent = 5,
+    StaleSequence = 6,
+    NotOwner = 7,
+    OwnerImmutable = 8,
+    AlreadyMember = 9,
+    UnknownMember = 10,
+    CannotPost = 11,
+    MemberLimit = 12,
+    MessageLimit = 13,
+    EventLimit = 14,
+    MessageBodyLimit = 15,
+    InvalidUtf8 = 16,
+    GenesisRequired = 17,
+    AlreadyInitialized = 18,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -592,6 +642,18 @@ pub struct Observability {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceState {
+    pub workspace: alloc::vec::Vec<u8>,
+    pub owner: alloc::vec::Vec<u8>,
+    pub head: alloc::vec::Vec<u8>,
+    pub sequence: u64,
+    pub members: alloc::vec::Vec<u8>,
+    pub messages: alloc::vec::Vec<u8>,
+    pub messageCount: u64,
+    pub seen: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlSubmission {
     pub contributions: alloc::vec::Vec<crate::ControlContribution>,
 }
@@ -616,6 +678,775 @@ pub struct PlatformRequirement {
     pub runtime: alloc::string::String,
     pub runtimeVersion: alloc::string::String,
     pub capabilities: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceTransition {
+    Accepted { field_0: crate::WorkspaceState },
+    Rejected { field_0: crate::WorkspaceError },
+}
+
+pub fn applyWorkspaceAction(state: &crate::WorkspaceState, event: &crate::AuthenticatedEvent) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok({ let _x_242 = (event).action; match _x_242 {
+        crate::WorkspaceAction::Genesis => { let _x_808 = crate::WorkspaceError::AlreadyInitialized; { let _x_809 = crate::WorkspaceTransition::Rejected { field_0: _x_808 }; _x_809 } },
+        crate::WorkspaceAction::GrantContributor => { let _x_817 = grantMember(&(state), &(event), alloc::vec![1])?; _x_817 },
+        crate::WorkspaceAction::GrantReader => { let _x_825 = grantMember(&(state), &(event), alloc::vec![2])?; _x_825 },
+        crate::WorkspaceAction::Revoke => { let _x_827 = &(event).body; { let _x_828 = (_x_827).len() as u64; { let _x_829 = 32; { let _x_830 = (_x_828 == _x_829); match _x_830 {
+        false => { let _x_1520 = crate::WorkspaceError::BadIdentity; { let _x_1521 = crate::WorkspaceTransition::Rejected { field_0: _x_1520 }; _x_1521 } },
+        true => { let _x_1522 = &(event).author; { let _x_1523 = &(state).owner; { let _x_1524 = workspaceBytesEqual((_x_1522).as_ref(), (_x_1523).as_ref()); match _x_1524 {
+        false => { let _x_1557 = crate::WorkspaceError::NotOwner; { let _x_1558 = crate::WorkspaceTransition::Rejected { field_0: _x_1557 }; _x_1558 } },
+        true => { let _x_1559 = workspaceBytesEqual((_x_827).as_ref(), (_x_1523).as_ref()); match _x_1559 {
+        false => { let _x_1560 = &(state).members; { let _x_1561 = 33; { let _x_1563 = (_x_1560).len() as u64; { let _x_1564 = 0; { let _x_1565 = if _x_1561 == 0 { _x_1564 } else { _x_1563 / _x_1561 }; { let _x_1566 = digestPresent((_x_827).as_ref(), (_x_1560).as_ref(), _x_1561, _x_1565)?; { let _jp_1567 = /* jp "_jp_1567" inlined at its jump site */ (); match _x_1566 {
+        false => { { let _x_1568 = crate::WorkspaceError::UnknownMember; { let _x_1569 = crate::WorkspaceTransition::Rejected { field_0: _x_1568 }; _x_1569 } } },
+        true => match _x_1559 {
+        false => { let _x_1570 = &(state).workspace; { let _x_1571 = &(event).eventId; { let _x_1572 = (event).sequence; { let _x_1573 = removeMember(alloc::borrow::ToOwned::to_owned(_x_827), alloc::borrow::ToOwned::to_owned(_x_1560), _x_1565)?; { let _x_1574 = &(state).messages; { let _x_1575 = (state).messageCount; { let _x_1580 = &(state).seen; { let _x_1581 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1580); __value }; { let _x_1582 = { let mut __value = _x_1581; __value.extend_from_slice(&_x_1571); __value }; { let _x_1583 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_1570), owner: alloc::borrow::ToOwned::to_owned(_x_1523), head: alloc::borrow::ToOwned::to_owned(_x_1571), sequence: _x_1572, members: _x_1573, messages: alloc::borrow::ToOwned::to_owned(_x_1574), messageCount: _x_1575, seen: _x_1582 }; { let _x_1584 = crate::WorkspaceTransition::Accepted { field_0: _x_1583 }; _x_1584 } } } } } } } } } } },
+        true => { { let _x_1568 = crate::WorkspaceError::UnknownMember; { let _x_1569 = crate::WorkspaceTransition::Rejected { field_0: _x_1568 }; _x_1569 } } },
+    },
+    } } } } } } } },
+        true => { let _x_1585 = crate::WorkspaceError::OwnerImmutable; { let _x_1586 = crate::WorkspaceTransition::Rejected { field_0: _x_1585 }; _x_1586 } },
+    } },
+    } } } },
+    } } } } },
+        crate::WorkspaceAction::PostMessage => { let _x_929 = &(event).author; { let _x_930 = &(state).owner; { let _x_931 = workspaceBytesEqual((_x_929).as_ref(), (_x_930).as_ref()); { let _jp_932 = /* jp "_jp_932" inlined at its jump site */ (); match _x_931 {
+        false => { let _x_1035 = &(event).author; { let _x_1036 = &(state).members; { let _x_1039 = (_x_1036).len() as u64; { let _x_1040 = 33; { let _x_1041 = 0; { let _x_1042 = if _x_1040 == 0 { _x_1041 } else { _x_1039 / _x_1040 }; { let _x_1043 = memberRoleCode(alloc::borrow::ToOwned::to_owned(_x_1035), alloc::borrow::ToOwned::to_owned(_x_1036), _x_1042)?; { let _x_1051 = workspaceBytesEqual((_x_1043).as_ref(), &[1]); { let _y_933 = _x_1051; match _y_933 {
+        false => { let _x_1587 = crate::WorkspaceError::CannotPost; { let _x_1588 = crate::WorkspaceTransition::Rejected { field_0: _x_1587 }; _x_1588 } },
+        true => { let _x_1590 = &(event).body; { let _x_1591 = (_x_1590).len() as u64; { let _x_1592 = 0; { let _x_1593 = (_x_1591 == _x_1592); { let _jp_1594 = /* jp "_jp_1594" inlined at its jump site */ (); match _x_1593 {
+        false => { let _x_1630 = 4096; { let _x_1632 = &(event).body; { let _x_1633 = (_x_1632).len() as u64; { let _x_1634 = (_x_1630 < _x_1633); { let _y_1595 = _x_1634; match _y_1595 {
+        false => { let _x_1596 = validMessageText((_x_1590).as_ref()); match _x_1596 {
+        false => { let _x_1635 = crate::WorkspaceError::InvalidUtf8; { let _x_1636 = crate::WorkspaceTransition::Rejected { field_0: _x_1635 }; _x_1636 } },
+        true => { let _x_1637 = 256; { let _x_1638 = (state).messageCount; { let _x_1639 = (_x_1637 <= _x_1638); match _x_1639 {
+        false => { let _x_1640 = &(state).workspace; { let _x_1641 = &(event).eventId; { let _x_1642 = (event).sequence; { let _x_1643 = &(state).members; { let _x_1648 = &(state).messages; { let _x_1649 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1648); __value }; { let _x_1650 = { let mut __value = _x_1649; __value.extend_from_slice(&_x_1641); __value }; { let _x_1651 = { let mut __value = _x_1650; __value.extend_from_slice(&_x_929); __value }; { let _x_1652 = encodeU16(_x_1591); { let _x_1653 = { let mut __value = _x_1651; __value.extend_from_slice(&_x_1652); __value }; { let _x_1654 = { let mut __value = _x_1653; __value.extend_from_slice(&_x_1590); __value }; { let _x_1655 = 1; { let _x_1656 = ((_x_1638) as u64).checked_add(_x_1655).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1657 = &(state).seen; { let _x_1658 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1657); __value }; { let _x_1659 = { let mut __value = _x_1658; __value.extend_from_slice(&_x_1641); __value }; { let _x_1660 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_1640), owner: alloc::borrow::ToOwned::to_owned(_x_930), head: alloc::borrow::ToOwned::to_owned(_x_1641), sequence: _x_1642, members: alloc::borrow::ToOwned::to_owned(_x_1643), messages: _x_1654, messageCount: _x_1656, seen: _x_1659 }; { let _x_1661 = crate::WorkspaceTransition::Accepted { field_0: _x_1660 }; _x_1661 } } } } } } } } } } } } } } } } } },
+        true => { let _x_1662 = crate::WorkspaceError::MessageLimit; { let _x_1663 = crate::WorkspaceTransition::Rejected { field_0: _x_1662 }; _x_1663 } },
+    } } } },
+    } },
+        true => { let _x_1628 = crate::WorkspaceError::MessageBodyLimit; { let _x_1629 = crate::WorkspaceTransition::Rejected { field_0: _x_1628 }; _x_1629 } },
+    } } } } } },
+        true => { let _y_1595 = _x_1593; match _y_1595 {
+        false => { let _x_1596 = validMessageText((_x_1590).as_ref()); match _x_1596 {
+        false => { let _x_1635 = crate::WorkspaceError::InvalidUtf8; { let _x_1636 = crate::WorkspaceTransition::Rejected { field_0: _x_1635 }; _x_1636 } },
+        true => { let _x_1637 = 256; { let _x_1638 = (state).messageCount; { let _x_1639 = (_x_1637 <= _x_1638); match _x_1639 {
+        false => { let _x_1640 = &(state).workspace; { let _x_1641 = &(event).eventId; { let _x_1642 = (event).sequence; { let _x_1643 = &(state).members; { let _x_1648 = &(state).messages; { let _x_1649 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1648); __value }; { let _x_1650 = { let mut __value = _x_1649; __value.extend_from_slice(&_x_1641); __value }; { let _x_1651 = { let mut __value = _x_1650; __value.extend_from_slice(&_x_929); __value }; { let _x_1652 = encodeU16(_x_1591); { let _x_1653 = { let mut __value = _x_1651; __value.extend_from_slice(&_x_1652); __value }; { let _x_1654 = { let mut __value = _x_1653; __value.extend_from_slice(&_x_1590); __value }; { let _x_1655 = 1; { let _x_1656 = ((_x_1638) as u64).checked_add(_x_1655).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1657 = &(state).seen; { let _x_1658 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1657); __value }; { let _x_1659 = { let mut __value = _x_1658; __value.extend_from_slice(&_x_1641); __value }; { let _x_1660 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_1640), owner: alloc::borrow::ToOwned::to_owned(_x_930), head: alloc::borrow::ToOwned::to_owned(_x_1641), sequence: _x_1642, members: alloc::borrow::ToOwned::to_owned(_x_1643), messages: _x_1654, messageCount: _x_1656, seen: _x_1659 }; { let _x_1661 = crate::WorkspaceTransition::Accepted { field_0: _x_1660 }; _x_1661 } } } } } } } } } } } } } } } } } },
+        true => { let _x_1662 = crate::WorkspaceError::MessageLimit; { let _x_1663 = crate::WorkspaceTransition::Rejected { field_0: _x_1662 }; _x_1663 } },
+    } } } },
+    } },
+        true => { let _x_1628 = crate::WorkspaceError::MessageBodyLimit; { let _x_1629 = crate::WorkspaceTransition::Rejected { field_0: _x_1628 }; _x_1629 } },
+    } },
+    } } } } } },
+    } } } } } } } } } },
+        true => { let _y_933 = _x_931; match _y_933 {
+        false => { let _x_1587 = crate::WorkspaceError::CannotPost; { let _x_1588 = crate::WorkspaceTransition::Rejected { field_0: _x_1587 }; _x_1588 } },
+        true => { let _x_1590 = &(event).body; { let _x_1591 = (_x_1590).len() as u64; { let _x_1592 = 0; { let _x_1593 = (_x_1591 == _x_1592); { let _jp_1594 = /* jp "_jp_1594" inlined at its jump site */ (); match _x_1593 {
+        false => { let _x_1630 = 4096; { let _x_1632 = &(event).body; { let _x_1633 = (_x_1632).len() as u64; { let _x_1634 = (_x_1630 < _x_1633); { let _y_1595 = _x_1634; match _y_1595 {
+        false => { let _x_1596 = validMessageText((_x_1590).as_ref()); match _x_1596 {
+        false => { let _x_1635 = crate::WorkspaceError::InvalidUtf8; { let _x_1636 = crate::WorkspaceTransition::Rejected { field_0: _x_1635 }; _x_1636 } },
+        true => { let _x_1637 = 256; { let _x_1638 = (state).messageCount; { let _x_1639 = (_x_1637 <= _x_1638); match _x_1639 {
+        false => { let _x_1640 = &(state).workspace; { let _x_1641 = &(event).eventId; { let _x_1642 = (event).sequence; { let _x_1643 = &(state).members; { let _x_1648 = &(state).messages; { let _x_1649 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1648); __value }; { let _x_1650 = { let mut __value = _x_1649; __value.extend_from_slice(&_x_1641); __value }; { let _x_1651 = { let mut __value = _x_1650; __value.extend_from_slice(&_x_929); __value }; { let _x_1652 = encodeU16(_x_1591); { let _x_1653 = { let mut __value = _x_1651; __value.extend_from_slice(&_x_1652); __value }; { let _x_1654 = { let mut __value = _x_1653; __value.extend_from_slice(&_x_1590); __value }; { let _x_1655 = 1; { let _x_1656 = ((_x_1638) as u64).checked_add(_x_1655).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1657 = &(state).seen; { let _x_1658 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1657); __value }; { let _x_1659 = { let mut __value = _x_1658; __value.extend_from_slice(&_x_1641); __value }; { let _x_1660 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_1640), owner: alloc::borrow::ToOwned::to_owned(_x_930), head: alloc::borrow::ToOwned::to_owned(_x_1641), sequence: _x_1642, members: alloc::borrow::ToOwned::to_owned(_x_1643), messages: _x_1654, messageCount: _x_1656, seen: _x_1659 }; { let _x_1661 = crate::WorkspaceTransition::Accepted { field_0: _x_1660 }; _x_1661 } } } } } } } } } } } } } } } } } },
+        true => { let _x_1662 = crate::WorkspaceError::MessageLimit; { let _x_1663 = crate::WorkspaceTransition::Rejected { field_0: _x_1662 }; _x_1663 } },
+    } } } },
+    } },
+        true => { let _x_1628 = crate::WorkspaceError::MessageBodyLimit; { let _x_1629 = crate::WorkspaceTransition::Rejected { field_0: _x_1628 }; _x_1629 } },
+    } } } } } },
+        true => { let _y_1595 = _x_1593; match _y_1595 {
+        false => { let _x_1596 = validMessageText((_x_1590).as_ref()); match _x_1596 {
+        false => { let _x_1635 = crate::WorkspaceError::InvalidUtf8; { let _x_1636 = crate::WorkspaceTransition::Rejected { field_0: _x_1635 }; _x_1636 } },
+        true => { let _x_1637 = 256; { let _x_1638 = (state).messageCount; { let _x_1639 = (_x_1637 <= _x_1638); match _x_1639 {
+        false => { let _x_1640 = &(state).workspace; { let _x_1641 = &(event).eventId; { let _x_1642 = (event).sequence; { let _x_1643 = &(state).members; { let _x_1648 = &(state).messages; { let _x_1649 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1648); __value }; { let _x_1650 = { let mut __value = _x_1649; __value.extend_from_slice(&_x_1641); __value }; { let _x_1651 = { let mut __value = _x_1650; __value.extend_from_slice(&_x_929); __value }; { let _x_1652 = encodeU16(_x_1591); { let _x_1653 = { let mut __value = _x_1651; __value.extend_from_slice(&_x_1652); __value }; { let _x_1654 = { let mut __value = _x_1653; __value.extend_from_slice(&_x_1590); __value }; { let _x_1655 = 1; { let _x_1656 = ((_x_1638) as u64).checked_add(_x_1655).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1657 = &(state).seen; { let _x_1658 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_1657); __value }; { let _x_1659 = { let mut __value = _x_1658; __value.extend_from_slice(&_x_1641); __value }; { let _x_1660 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_1640), owner: alloc::borrow::ToOwned::to_owned(_x_930), head: alloc::borrow::ToOwned::to_owned(_x_1641), sequence: _x_1642, members: alloc::borrow::ToOwned::to_owned(_x_1643), messages: _x_1654, messageCount: _x_1656, seen: _x_1659 }; { let _x_1661 = crate::WorkspaceTransition::Accepted { field_0: _x_1660 }; _x_1661 } } } } } } } } } } } } } } } } } },
+        true => { let _x_1662 = crate::WorkspaceError::MessageLimit; { let _x_1663 = crate::WorkspaceTransition::Rejected { field_0: _x_1662 }; _x_1663 } },
+    } } } },
+    } },
+        true => { let _x_1628 = crate::WorkspaceError::MessageBodyLimit; { let _x_1629 = crate::WorkspaceTransition::Rejected { field_0: _x_1628 }; _x_1629 } },
+    } },
+    } } } } } },
+    } },
+    } } } } },
+    } })
+}
+
+pub fn byteWindow(value: alloc::vec::Vec<u8>, start: u64, count: u64) -> alloc::vec::Vec<u8> {
+    { let _x_9 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_9 {
+        None => alloc::vec![],
+        Some(val_12) => val_12,
+    } }
+}
+
+pub fn byteWindowView(view: &crate::WorkspaceByteView, start: u64, count: u64) -> alloc::vec::Vec<u8> {
+    { let _x_9 = &(view).bytes; { let _x_10 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (_x_9).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_10 {
+        None => alloc::vec![],
+        Some(val_13) => val_13,
+    } } }
+}
+
+pub fn createWorkspace(event: &crate::AuthenticatedEvent) -> crate::WorkspaceTransition {
+    { let _x_87 = (event).action; match _x_87 {
+        crate::WorkspaceAction::Genesis => { let _x_277 = &(event).parent; { let _x_278 = 0; { let _x_316 = workspaceBytesEqual((_x_277).as_ref(), &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); match _x_316 {
+        false => { let _x_507 = crate::WorkspaceError::StaleParent; { let _x_508 = crate::WorkspaceTransition::Rejected { field_0: _x_507 }; _x_508 } },
+        true => { let _x_509 = (event).sequence; { let _x_510 = (_x_509 == _x_278); match _x_510 {
+        false => { let _x_531 = crate::WorkspaceError::StaleSequence; { let _x_532 = crate::WorkspaceTransition::Rejected { field_0: _x_531 }; _x_532 } },
+        true => { let _x_534 = &(event).body; { let _x_535 = (_x_534).len() as u64; { let _x_536 = (_x_535 == _x_278); match _x_536 {
+        false => { let _x_549 = crate::WorkspaceError::BadEncoding; { let _x_550 = crate::WorkspaceTransition::Rejected { field_0: _x_549 }; _x_550 } },
+        true => { let _x_551 = &(event).workspace; { let _x_552 = &(event).author; { let _x_553 = &(event).eventId; { let _x_557 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_551), owner: alloc::borrow::ToOwned::to_owned(_x_552), head: alloc::borrow::ToOwned::to_owned(_x_553), sequence: _x_278, members: alloc::vec![], messages: alloc::vec![], messageCount: _x_278, seen: alloc::borrow::ToOwned::to_owned(_x_553) }; { let _x_558 = crate::WorkspaceTransition::Accepted { field_0: _x_557 }; _x_558 } } } } },
+    } } } },
+    } } },
+    } } } },
+        _ => { let _x_374 = crate::WorkspaceError::GenesisRequired; { let _x_375 = crate::WorkspaceTransition::Rejected { field_0: _x_374 }; _x_375 } },
+    } }
+}
+
+pub fn decodeAuthenticatedEvent(value: alloc::vec::Vec<u8>) -> Result<Option<crate::AuthenticatedEvent>, crate::ComputeError> {
+    Ok({ let _x_69 = 134; { let _x_73 = (value.clone()).len() as u64; { let _x_74 = (_x_69 <= _x_73); { let _jp_300 = /* jp "_jp_300" inlined at its jump site */ (); match _x_74 {
+        false => { let _y_79 = _x_74; match _y_79 {
+        false => None,
+        true => { let _x_1071 = (value.clone()).len() as u64; { let _x_1072 = 134; { let _x_1073 = 132; { let _x_1074 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1073)?; { let _x_1075 = ((_x_1072) as u64).checked_add(_x_1074).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1076 = (_x_1071 == _x_1075); match _x_1076 {
+        false => None,
+        true => { let _x_1563 = 1; { let _x_1564 = byteWindow(value.clone(), _x_1563, _x_1563); { let _x_1570 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[0]); match _x_1570 {
+        false => { let _x_1576 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[1]); match _x_1576 {
+        false => { let _x_1577 = 2; { let _x_1583 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[2]); match _x_1583 {
+        false => { let _x_1589 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[3]); match _x_1589 {
+        false => { let _x_1595 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[4]); match _x_1595 {
+        false => None,
+        true => { let _x_1597 = 32; { let _x_1598 = byteWindow(value.clone(), _x_1577, _x_1597); { let _x_1599 = 34; { let _x_1600 = byteWindow(value.clone(), _x_1599, _x_1597); { let _x_1601 = 66; { let _x_1602 = byteWindow(value.clone(), _x_1601, _x_1597); { let _x_1603 = 130; { let _x_1604 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1603)?; { let _x_1605 = 98; { let _x_1606 = byteWindow(value.clone(), _x_1605, _x_1597); { let _x_1607 = crate::WorkspaceAction::PostMessage; { let _x_1609 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1610 = byteWindow(value.clone(), _x_69, _x_1609); { let _x_1611 = crate::AuthenticatedEvent { workspace: _x_1598, eventId: _x_1600, parent: _x_1602, sequence: _x_1604, author: _x_1606, action: _x_1607, body: _x_1610 }; { let _x_1612 = Some(_x_1611); _x_1612 } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1613 = 32; { let _x_1614 = byteWindow(value.clone(), _x_1577, _x_1613); { let _x_1615 = 34; { let _x_1616 = byteWindow(value.clone(), _x_1615, _x_1613); { let _x_1617 = 66; { let _x_1618 = byteWindow(value.clone(), _x_1617, _x_1613); { let _x_1619 = 130; { let _x_1620 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1619)?; { let _x_1621 = 98; { let _x_1622 = byteWindow(value.clone(), _x_1621, _x_1613); { let _x_1623 = crate::WorkspaceAction::Revoke; { let _x_1625 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1626 = byteWindow(value.clone(), _x_69, _x_1625); { let _x_1627 = crate::AuthenticatedEvent { workspace: _x_1614, eventId: _x_1616, parent: _x_1618, sequence: _x_1620, author: _x_1622, action: _x_1623, body: _x_1626 }; { let _x_1628 = Some(_x_1627); _x_1628 } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1629 = 32; { let _x_1630 = byteWindow(value.clone(), _x_1577, _x_1629); { let _x_1631 = 34; { let _x_1632 = byteWindow(value.clone(), _x_1631, _x_1629); { let _x_1633 = 66; { let _x_1634 = byteWindow(value.clone(), _x_1633, _x_1629); { let _x_1635 = 130; { let _x_1636 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1635)?; { let _x_1637 = 98; { let _x_1638 = byteWindow(value.clone(), _x_1637, _x_1629); { let _x_1639 = crate::WorkspaceAction::GrantReader; { let _x_1641 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1642 = byteWindow(value.clone(), _x_69, _x_1641); { let _x_1643 = crate::AuthenticatedEvent { workspace: _x_1630, eventId: _x_1632, parent: _x_1634, sequence: _x_1636, author: _x_1638, action: _x_1639, body: _x_1642 }; { let _x_1644 = Some(_x_1643); _x_1644 } } } } } } } } } } } } } } },
+    } } },
+        true => { let _x_1645 = 2; { let _x_1646 = 32; { let _x_1647 = byteWindow(value.clone(), _x_1645, _x_1646); { let _x_1648 = 34; { let _x_1649 = byteWindow(value.clone(), _x_1648, _x_1646); { let _x_1650 = 66; { let _x_1651 = byteWindow(value.clone(), _x_1650, _x_1646); { let _x_1652 = 130; { let _x_1653 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1652)?; { let _x_1654 = 98; { let _x_1655 = byteWindow(value.clone(), _x_1654, _x_1646); { let _x_1656 = crate::WorkspaceAction::GrantContributor; { let _x_1658 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1659 = byteWindow(value.clone(), _x_69, _x_1658); { let _x_1660 = crate::AuthenticatedEvent { workspace: _x_1647, eventId: _x_1649, parent: _x_1651, sequence: _x_1653, author: _x_1655, action: _x_1656, body: _x_1659 }; { let _x_1661 = Some(_x_1660); _x_1661 } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1662 = 2; { let _x_1663 = 32; { let _x_1664 = byteWindow(value.clone(), _x_1662, _x_1663); { let _x_1665 = 34; { let _x_1666 = byteWindow(value.clone(), _x_1665, _x_1663); { let _x_1667 = 66; { let _x_1668 = byteWindow(value.clone(), _x_1667, _x_1663); { let _x_1669 = 130; { let _x_1670 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1669)?; { let _x_1671 = 98; { let _x_1672 = byteWindow(value.clone(), _x_1671, _x_1663); { let _x_1673 = crate::WorkspaceAction::Genesis; { let _x_1675 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1676 = byteWindow(value.clone(), _x_69, _x_1675); { let _x_1677 = crate::AuthenticatedEvent { workspace: _x_1664, eventId: _x_1666, parent: _x_1668, sequence: _x_1670, author: _x_1672, action: _x_1673, body: _x_1676 }; { let _x_1678 = Some(_x_1677); _x_1678 } } } } } } } } } } } } } } } },
+    } } } },
+    } } } } } } },
+    } },
+        true => { let _x_1091 = (value.clone()).len() as u64; { let _x_1092 = 4230; { let _x_1093 = (_x_1091 <= _x_1092); match _x_1093 {
+        false => { let _y_79 = _x_1093; match _y_79 {
+        false => None,
+        true => { let _x_1071 = (value.clone()).len() as u64; { let _x_1072 = 134; { let _x_1073 = 132; { let _x_1074 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1073)?; { let _x_1075 = ((_x_1072) as u64).checked_add(_x_1074).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1076 = (_x_1071 == _x_1075); match _x_1076 {
+        false => None,
+        true => { let _x_1563 = 1; { let _x_1564 = byteWindow(value.clone(), _x_1563, _x_1563); { let _x_1570 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[0]); match _x_1570 {
+        false => { let _x_1576 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[1]); match _x_1576 {
+        false => { let _x_1577 = 2; { let _x_1583 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[2]); match _x_1583 {
+        false => { let _x_1589 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[3]); match _x_1589 {
+        false => { let _x_1595 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[4]); match _x_1595 {
+        false => None,
+        true => { let _x_1597 = 32; { let _x_1598 = byteWindow(value.clone(), _x_1577, _x_1597); { let _x_1599 = 34; { let _x_1600 = byteWindow(value.clone(), _x_1599, _x_1597); { let _x_1601 = 66; { let _x_1602 = byteWindow(value.clone(), _x_1601, _x_1597); { let _x_1603 = 130; { let _x_1604 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1603)?; { let _x_1605 = 98; { let _x_1606 = byteWindow(value.clone(), _x_1605, _x_1597); { let _x_1607 = crate::WorkspaceAction::PostMessage; { let _x_1609 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1610 = byteWindow(value.clone(), _x_69, _x_1609); { let _x_1611 = crate::AuthenticatedEvent { workspace: _x_1598, eventId: _x_1600, parent: _x_1602, sequence: _x_1604, author: _x_1606, action: _x_1607, body: _x_1610 }; { let _x_1612 = Some(_x_1611); _x_1612 } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1613 = 32; { let _x_1614 = byteWindow(value.clone(), _x_1577, _x_1613); { let _x_1615 = 34; { let _x_1616 = byteWindow(value.clone(), _x_1615, _x_1613); { let _x_1617 = 66; { let _x_1618 = byteWindow(value.clone(), _x_1617, _x_1613); { let _x_1619 = 130; { let _x_1620 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1619)?; { let _x_1621 = 98; { let _x_1622 = byteWindow(value.clone(), _x_1621, _x_1613); { let _x_1623 = crate::WorkspaceAction::Revoke; { let _x_1625 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1626 = byteWindow(value.clone(), _x_69, _x_1625); { let _x_1627 = crate::AuthenticatedEvent { workspace: _x_1614, eventId: _x_1616, parent: _x_1618, sequence: _x_1620, author: _x_1622, action: _x_1623, body: _x_1626 }; { let _x_1628 = Some(_x_1627); _x_1628 } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1629 = 32; { let _x_1630 = byteWindow(value.clone(), _x_1577, _x_1629); { let _x_1631 = 34; { let _x_1632 = byteWindow(value.clone(), _x_1631, _x_1629); { let _x_1633 = 66; { let _x_1634 = byteWindow(value.clone(), _x_1633, _x_1629); { let _x_1635 = 130; { let _x_1636 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1635)?; { let _x_1637 = 98; { let _x_1638 = byteWindow(value.clone(), _x_1637, _x_1629); { let _x_1639 = crate::WorkspaceAction::GrantReader; { let _x_1641 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1642 = byteWindow(value.clone(), _x_69, _x_1641); { let _x_1643 = crate::AuthenticatedEvent { workspace: _x_1630, eventId: _x_1632, parent: _x_1634, sequence: _x_1636, author: _x_1638, action: _x_1639, body: _x_1642 }; { let _x_1644 = Some(_x_1643); _x_1644 } } } } } } } } } } } } } } },
+    } } },
+        true => { let _x_1645 = 2; { let _x_1646 = 32; { let _x_1647 = byteWindow(value.clone(), _x_1645, _x_1646); { let _x_1648 = 34; { let _x_1649 = byteWindow(value.clone(), _x_1648, _x_1646); { let _x_1650 = 66; { let _x_1651 = byteWindow(value.clone(), _x_1650, _x_1646); { let _x_1652 = 130; { let _x_1653 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1652)?; { let _x_1654 = 98; { let _x_1655 = byteWindow(value.clone(), _x_1654, _x_1646); { let _x_1656 = crate::WorkspaceAction::GrantContributor; { let _x_1658 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1659 = byteWindow(value.clone(), _x_69, _x_1658); { let _x_1660 = crate::AuthenticatedEvent { workspace: _x_1647, eventId: _x_1649, parent: _x_1651, sequence: _x_1653, author: _x_1655, action: _x_1656, body: _x_1659 }; { let _x_1661 = Some(_x_1660); _x_1661 } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1662 = 2; { let _x_1663 = 32; { let _x_1664 = byteWindow(value.clone(), _x_1662, _x_1663); { let _x_1665 = 34; { let _x_1666 = byteWindow(value.clone(), _x_1665, _x_1663); { let _x_1667 = 66; { let _x_1668 = byteWindow(value.clone(), _x_1667, _x_1663); { let _x_1669 = 130; { let _x_1670 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1669)?; { let _x_1671 = 98; { let _x_1672 = byteWindow(value.clone(), _x_1671, _x_1663); { let _x_1673 = crate::WorkspaceAction::Genesis; { let _x_1675 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1676 = byteWindow(value.clone(), _x_69, _x_1675); { let _x_1677 = crate::AuthenticatedEvent { workspace: _x_1664, eventId: _x_1666, parent: _x_1668, sequence: _x_1670, author: _x_1672, action: _x_1673, body: _x_1676 }; { let _x_1678 = Some(_x_1677); _x_1678 } } } } } } } } } } } } } } } },
+    } } } },
+    } } } } } } },
+    } },
+        true => { let _x_1097 = 0; { let _x_1098 = 1; { let _x_1099 = byteWindow(value.clone(), _x_1097, _x_1098); { let _x_1106 = workspaceBytesEqual((_x_1099).as_ref(), &[1]); { let _y_79 = _x_1106; match _y_79 {
+        false => None,
+        true => { let _x_1071 = (value.clone()).len() as u64; { let _x_1072 = 134; { let _x_1073 = 132; { let _x_1074 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1073)?; { let _x_1075 = ((_x_1072) as u64).checked_add(_x_1074).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1076 = (_x_1071 == _x_1075); match _x_1076 {
+        false => None,
+        true => { let _x_1563 = 1; { let _x_1564 = byteWindow(value.clone(), _x_1563, _x_1563); { let _x_1570 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[0]); match _x_1570 {
+        false => { let _x_1576 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[1]); match _x_1576 {
+        false => { let _x_1577 = 2; { let _x_1583 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[2]); match _x_1583 {
+        false => { let _x_1589 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[3]); match _x_1589 {
+        false => { let _x_1595 = workspaceBytesEqual((_x_1564.clone()).as_ref(), &[4]); match _x_1595 {
+        false => None,
+        true => { let _x_1597 = 32; { let _x_1598 = byteWindow(value.clone(), _x_1577, _x_1597); { let _x_1599 = 34; { let _x_1600 = byteWindow(value.clone(), _x_1599, _x_1597); { let _x_1601 = 66; { let _x_1602 = byteWindow(value.clone(), _x_1601, _x_1597); { let _x_1603 = 130; { let _x_1604 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1603)?; { let _x_1605 = 98; { let _x_1606 = byteWindow(value.clone(), _x_1605, _x_1597); { let _x_1607 = crate::WorkspaceAction::PostMessage; { let _x_1609 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1610 = byteWindow(value.clone(), _x_69, _x_1609); { let _x_1611 = crate::AuthenticatedEvent { workspace: _x_1598, eventId: _x_1600, parent: _x_1602, sequence: _x_1604, author: _x_1606, action: _x_1607, body: _x_1610 }; { let _x_1612 = Some(_x_1611); _x_1612 } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1613 = 32; { let _x_1614 = byteWindow(value.clone(), _x_1577, _x_1613); { let _x_1615 = 34; { let _x_1616 = byteWindow(value.clone(), _x_1615, _x_1613); { let _x_1617 = 66; { let _x_1618 = byteWindow(value.clone(), _x_1617, _x_1613); { let _x_1619 = 130; { let _x_1620 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1619)?; { let _x_1621 = 98; { let _x_1622 = byteWindow(value.clone(), _x_1621, _x_1613); { let _x_1623 = crate::WorkspaceAction::Revoke; { let _x_1625 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1626 = byteWindow(value.clone(), _x_69, _x_1625); { let _x_1627 = crate::AuthenticatedEvent { workspace: _x_1614, eventId: _x_1616, parent: _x_1618, sequence: _x_1620, author: _x_1622, action: _x_1623, body: _x_1626 }; { let _x_1628 = Some(_x_1627); _x_1628 } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1629 = 32; { let _x_1630 = byteWindow(value.clone(), _x_1577, _x_1629); { let _x_1631 = 34; { let _x_1632 = byteWindow(value.clone(), _x_1631, _x_1629); { let _x_1633 = 66; { let _x_1634 = byteWindow(value.clone(), _x_1633, _x_1629); { let _x_1635 = 130; { let _x_1636 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1635)?; { let _x_1637 = 98; { let _x_1638 = byteWindow(value.clone(), _x_1637, _x_1629); { let _x_1639 = crate::WorkspaceAction::GrantReader; { let _x_1641 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1642 = byteWindow(value.clone(), _x_69, _x_1641); { let _x_1643 = crate::AuthenticatedEvent { workspace: _x_1630, eventId: _x_1632, parent: _x_1634, sequence: _x_1636, author: _x_1638, action: _x_1639, body: _x_1642 }; { let _x_1644 = Some(_x_1643); _x_1644 } } } } } } } } } } } } } } },
+    } } },
+        true => { let _x_1645 = 2; { let _x_1646 = 32; { let _x_1647 = byteWindow(value.clone(), _x_1645, _x_1646); { let _x_1648 = 34; { let _x_1649 = byteWindow(value.clone(), _x_1648, _x_1646); { let _x_1650 = 66; { let _x_1651 = byteWindow(value.clone(), _x_1650, _x_1646); { let _x_1652 = 130; { let _x_1653 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1652)?; { let _x_1654 = 98; { let _x_1655 = byteWindow(value.clone(), _x_1654, _x_1646); { let _x_1656 = crate::WorkspaceAction::GrantContributor; { let _x_1658 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1659 = byteWindow(value.clone(), _x_69, _x_1658); { let _x_1660 = crate::AuthenticatedEvent { workspace: _x_1647, eventId: _x_1649, parent: _x_1651, sequence: _x_1653, author: _x_1655, action: _x_1656, body: _x_1659 }; { let _x_1661 = Some(_x_1660); _x_1661 } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_1662 = 2; { let _x_1663 = 32; { let _x_1664 = byteWindow(value.clone(), _x_1662, _x_1663); { let _x_1665 = 34; { let _x_1666 = byteWindow(value.clone(), _x_1665, _x_1663); { let _x_1667 = 66; { let _x_1668 = byteWindow(value.clone(), _x_1667, _x_1663); { let _x_1669 = 130; { let _x_1670 = __prod_borrowed_readU16At((value.clone()).as_ref(), _x_1669)?; { let _x_1671 = 98; { let _x_1672 = byteWindow(value.clone(), _x_1671, _x_1663); { let _x_1673 = crate::WorkspaceAction::Genesis; { let _x_1675 = ((_x_73) as u64).saturating_sub(_x_69); { let _x_1676 = byteWindow(value.clone(), _x_69, _x_1675); { let _x_1677 = crate::AuthenticatedEvent { workspace: _x_1664, eventId: _x_1666, parent: _x_1668, sequence: _x_1670, author: _x_1672, action: _x_1673, body: _x_1676 }; { let _x_1678 = Some(_x_1677); _x_1678 } } } } } } } } } } } } } } } },
+    } } } },
+    } } } } } } },
+    } } } } } },
+    } } } },
+    } } } } })
+}
+
+pub fn decodeOctet(value: alloc::vec::Vec<u8>) -> u64 {
+    __prod_borrowed_decodeOctet(value.as_ref())
+}
+
+fn __prod_borrowed_decodeOctet(value: &[u8]) -> u64 {
+    { let _x_1 = 256; { let _x_4 = __prod_borrowed_decodeOctetSearch((value).as_ref(), _x_1); _x_4 } }
+}
+
+pub fn decodeOctetSearch(x_1: alloc::vec::Vec<u8>, x_2: u64) -> u64 {
+    __prod_borrowed_decodeOctetSearch(x_1.as_ref(), x_2)
+}
+
+fn __prod_borrowed_decodeOctetSearch(x_1: &[u8], x_2: u64) -> u64 {
+    match x_2 {
+        0 => { let _x_30 = 0; _x_30 },
+        _ => { let n_19 = (x_2).saturating_sub(1); { let _x_36 = encodeOctet(n_19); { let _x_37 = workspaceBytesEqual((x_1).as_ref(), (_x_36).as_ref()); match _x_37 {
+        false => { let _x_48 = __prod_borrowed_decodeOctetSearch((x_1).as_ref(), n_19); _x_48 },
+        true => n_19,
+    } } } },
+    }
+}
+
+pub fn decodeU16(value: alloc::vec::Vec<u8>) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_decodeU16(value.as_ref())
+}
+
+fn __prod_borrowed_decodeU16(value: &[u8]) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_5 = 0; { let _x_8 = 1; { let _x_11 = byteWindow(alloc::borrow::ToOwned::to_owned(value), _x_5, _x_8); { let _x_12 = __prod_borrowed_decodeOctet((_x_11).as_ref()); { let _x_13 = 256; { let _x_16 = ((_x_12) as u64).checked_mul(_x_13).ok_or(crate::ComputeError::MulOverflow)?; { let _x_17 = byteWindow(alloc::borrow::ToOwned::to_owned(value), _x_8, _x_8); { let _x_18 = __prod_borrowed_decodeOctet((_x_17).as_ref()); { let _x_29 = ((_x_16) as u64).checked_add(_x_18).ok_or(crate::ComputeError::AddOverflow)?; _x_29 } } } } } } } } })
+}
+
+pub fn decodeU24(value: alloc::vec::Vec<u8>) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_decodeU24(value.as_ref())
+}
+
+fn __prod_borrowed_decodeU24(value: &[u8]) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_5 = 0; { let _x_8 = 1; { let _x_11 = byteWindow(alloc::borrow::ToOwned::to_owned(value), _x_5, _x_8); { let _x_12 = __prod_borrowed_decodeOctet((_x_11).as_ref()); { let _x_13 = 65536; { let _x_16 = ((_x_12) as u64).checked_mul(_x_13).ok_or(crate::ComputeError::MulOverflow)?; { let _x_17 = __prod_borrowed_readU16At((value).as_ref(), _x_8)?; { let _x_28 = ((_x_16) as u64).checked_add(_x_17).ok_or(crate::ComputeError::AddOverflow)?; _x_28 } } } } } } } })
+}
+
+pub fn decodeWorkspaceState(value: alloc::vec::Vec<u8>) -> Result<Option<crate::WorkspaceState>, crate::ComputeError> {
+    Ok({ let _x_1 = crate::WorkspaceByteView { bytes: value }; { let _x_2 = decodeWorkspaceStateView(&(_x_1))?; _x_2 } })
+}
+
+pub fn decodeWorkspaceStateFieldsView(view: &crate::WorkspaceByteView, memberSize: u64, messageSize: u64, seenSize: u64) -> Result<Option<crate::WorkspaceState>, crate::ComputeError> {
+    Ok({ let _x_52 = 2079; { let _x_55 = (memberSize <= _x_52); { let _jp_105 = /* jp "_jp_105" inlined at its jump site */ (); match _x_55 {
+        false => { let _y_60 = _x_55; match _y_60 {
+        false => None,
+        true => { let _x_252 = 1; { let _x_253 = 32; { let _x_254 = byteWindowView(&(view), _x_252, _x_253); { let _x_255 = 33; { let _x_256 = byteWindowView(&(view), _x_255, _x_253); { let _x_257 = 65; { let _x_258 = byteWindowView(&(view), _x_257, _x_253); { let _x_259 = &(view).bytes; { let _x_260 = 97; { let _x_261 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_260)?; { let _x_262 = 108; { let _x_263 = byteWindowView(&(view), _x_262, memberSize); { let _x_264 = ((_x_262) as u64).checked_add(memberSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_265 = byteWindowView(&(view), _x_264, messageSize); { let _x_266 = 99; { let _x_267 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_266)?; { let _x_268 = ((memberSize) as u64).checked_add(messageSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_269 = ((_x_262) as u64).checked_add(_x_268).ok_or(crate::ComputeError::AddOverflow)?; { let _x_270 = byteWindowView(&(view), _x_269, seenSize); { let _x_271 = crate::WorkspaceState { workspace: _x_254, owner: _x_256, head: _x_258, sequence: _x_261, members: _x_263, messages: _x_265, messageCount: _x_267, seen: _x_270 }; { let _x_272 = Some(_x_271); _x_272 } } } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_221 = 1065472; { let _x_222 = (messageSize <= _x_221); match _x_222 {
+        false => { let _y_60 = _x_222; match _y_60 {
+        false => None,
+        true => { let _x_252 = 1; { let _x_253 = 32; { let _x_254 = byteWindowView(&(view), _x_252, _x_253); { let _x_255 = 33; { let _x_256 = byteWindowView(&(view), _x_255, _x_253); { let _x_257 = 65; { let _x_258 = byteWindowView(&(view), _x_257, _x_253); { let _x_259 = &(view).bytes; { let _x_260 = 97; { let _x_261 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_260)?; { let _x_262 = 108; { let _x_263 = byteWindowView(&(view), _x_262, memberSize); { let _x_264 = ((_x_262) as u64).checked_add(memberSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_265 = byteWindowView(&(view), _x_264, messageSize); { let _x_266 = 99; { let _x_267 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_266)?; { let _x_268 = ((memberSize) as u64).checked_add(messageSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_269 = ((_x_262) as u64).checked_add(_x_268).ok_or(crate::ComputeError::AddOverflow)?; { let _x_270 = byteWindowView(&(view), _x_269, seenSize); { let _x_271 = crate::WorkspaceState { workspace: _x_254, owner: _x_256, head: _x_258, sequence: _x_261, members: _x_263, messages: _x_265, messageCount: _x_267, seen: _x_270 }; { let _x_272 = Some(_x_271); _x_272 } } } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_236 = 32768; { let _x_237 = (seenSize <= _x_236); match _x_237 {
+        false => { let _y_60 = _x_237; match _y_60 {
+        false => None,
+        true => { let _x_252 = 1; { let _x_253 = 32; { let _x_254 = byteWindowView(&(view), _x_252, _x_253); { let _x_255 = 33; { let _x_256 = byteWindowView(&(view), _x_255, _x_253); { let _x_257 = 65; { let _x_258 = byteWindowView(&(view), _x_257, _x_253); { let _x_259 = &(view).bytes; { let _x_260 = 97; { let _x_261 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_260)?; { let _x_262 = 108; { let _x_263 = byteWindowView(&(view), _x_262, memberSize); { let _x_264 = ((_x_262) as u64).checked_add(memberSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_265 = byteWindowView(&(view), _x_264, messageSize); { let _x_266 = 99; { let _x_267 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_266)?; { let _x_268 = ((memberSize) as u64).checked_add(messageSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_269 = ((_x_262) as u64).checked_add(_x_268).ok_or(crate::ComputeError::AddOverflow)?; { let _x_270 = byteWindowView(&(view), _x_269, seenSize); { let _x_271 = crate::WorkspaceState { workspace: _x_254, owner: _x_256, head: _x_258, sequence: _x_261, members: _x_263, messages: _x_265, messageCount: _x_267, seen: _x_270 }; { let _x_272 = Some(_x_271); _x_272 } } } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_242 = &(view).bytes; { let _x_243 = (_x_242).len() as u64; { let _x_244 = 108; { let _x_245 = ((messageSize) as u64).checked_add(seenSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_246 = ((memberSize) as u64).checked_add(_x_245).ok_or(crate::ComputeError::AddOverflow)?; { let _x_247 = ((_x_244) as u64).checked_add(_x_246).ok_or(crate::ComputeError::AddOverflow)?; { let _x_248 = (_x_243 == _x_247); { let _y_60 = _x_248; match _y_60 {
+        false => None,
+        true => { let _x_252 = 1; { let _x_253 = 32; { let _x_254 = byteWindowView(&(view), _x_252, _x_253); { let _x_255 = 33; { let _x_256 = byteWindowView(&(view), _x_255, _x_253); { let _x_257 = 65; { let _x_258 = byteWindowView(&(view), _x_257, _x_253); { let _x_259 = &(view).bytes; { let _x_260 = 97; { let _x_261 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_260)?; { let _x_262 = 108; { let _x_263 = byteWindowView(&(view), _x_262, memberSize); { let _x_264 = ((_x_262) as u64).checked_add(memberSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_265 = byteWindowView(&(view), _x_264, messageSize); { let _x_266 = 99; { let _x_267 = __prod_borrowed_readU16At((_x_259).as_ref(), _x_266)?; { let _x_268 = ((memberSize) as u64).checked_add(messageSize).ok_or(crate::ComputeError::AddOverflow)?; { let _x_269 = ((_x_262) as u64).checked_add(_x_268).ok_or(crate::ComputeError::AddOverflow)?; { let _x_270 = byteWindowView(&(view), _x_269, seenSize); { let _x_271 = crate::WorkspaceState { workspace: _x_254, owner: _x_256, head: _x_258, sequence: _x_261, members: _x_263, messages: _x_265, messageCount: _x_267, seen: _x_270 }; { let _x_272 = Some(_x_271); _x_272 } } } } } } } } } } } } } } } } } } } } },
+    } } } } } } } } },
+    } } },
+    } } },
+    } } } })
+}
+
+pub fn decodeWorkspaceStateView(view: &crate::WorkspaceByteView) -> Result<Option<crate::WorkspaceState>, crate::ComputeError> {
+    Ok({ let _x_44 = 108; { let _x_48 = &(view).bytes; { let _x_49 = (_x_48).len() as u64; { let _x_50 = (_x_44 <= _x_49); { let _jp_75 = /* jp "_jp_75" inlined at its jump site */ (); match _x_50 {
+        false => { let _y_55 = _x_50; match _y_55 {
+        false => None,
+        true => { let _x_160 = 101; { let _x_161 = __prod_borrowed_readU16At((_x_48).as_ref(), _x_160)?; { let _x_162 = 103; { let _x_163 = __prod_borrowed_readU24At((_x_48).as_ref(), _x_162)?; { let _x_164 = 106; { let _x_165 = __prod_borrowed_readU16At((_x_48).as_ref(), _x_164)?; { let _x_166 = decodeWorkspaceStateFieldsView(&(view), _x_161, _x_163, _x_165)?; _x_166 } } } } } } },
+    } },
+        true => { let _x_140 = &(view).bytes; { let _x_141 = (_x_140).len() as u64; { let _x_142 = 1100427; { let _x_143 = (_x_141 <= _x_142); match _x_143 {
+        false => { let _y_55 = _x_143; match _y_55 {
+        false => None,
+        true => { let _x_160 = 101; { let _x_161 = __prod_borrowed_readU16At((_x_48).as_ref(), _x_160)?; { let _x_162 = 103; { let _x_163 = __prod_borrowed_readU24At((_x_48).as_ref(), _x_162)?; { let _x_164 = 106; { let _x_165 = __prod_borrowed_readU16At((_x_48).as_ref(), _x_164)?; { let _x_166 = decodeWorkspaceStateFieldsView(&(view), _x_161, _x_163, _x_165)?; _x_166 } } } } } } },
+    } },
+        true => { let _x_147 = 0; { let _x_148 = 1; { let _x_149 = byteWindowView(&(view), _x_147, _x_148); { let _x_156 = workspaceBytesEqual((_x_149).as_ref(), &[1]); { let _y_55 = _x_156; match _y_55 {
+        false => None,
+        true => { let _x_160 = 101; { let _x_161 = __prod_borrowed_readU16At((_x_48).as_ref(), _x_160)?; { let _x_162 = 103; { let _x_163 = __prod_borrowed_readU24At((_x_48).as_ref(), _x_162)?; { let _x_164 = 106; { let _x_165 = __prod_borrowed_readU16At((_x_48).as_ref(), _x_164)?; { let _x_166 = decodeWorkspaceStateFieldsView(&(view), _x_161, _x_163, _x_165)?; _x_166 } } } } } } },
+    } } } } } },
+    } } } } },
+    } } } } } })
+}
+
+pub fn digestPresent(x_1: &[u8], x_2: &[u8], x_3: u64, x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_49 = false; _x_49 },
+        _ => { let n_37 = (x_4).saturating_sub(1); { let _x_54 = ((n_37) as u64).checked_mul(x_3).ok_or(crate::ComputeError::MulOverflow)?; { let _x_55 = 32; { let _x_56 = workspaceWindowEqual((x_2).as_ref(), _x_54, _x_55, (x_1).as_ref())?; match _x_56 {
+        false => { let _x_60 = digestPresent((x_1).as_ref(), (x_2).as_ref(), x_3, n_37)?; _x_60 },
+        true => _x_56,
+    } } } } },
+    })
+}
+
+pub fn digestsUnique(x_1: &[u8], x_2: u64, x_3: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_42 = true; _x_42 },
+        _ => { let n_31 = (x_3).saturating_sub(1); { let _x_46 = workspaceRowUnique((x_1).as_ref(), x_2, n_31)?; match _x_46 {
+        false => _x_46,
+        true => { let _x_50 = digestsUnique((x_1).as_ref(), x_2, n_31)?; _x_50 },
+    } } },
+    })
+}
+
+pub fn encodeOctet(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 128; { let _x_4 = (value < _x_1); match _x_4 {
+        false => { let _x_6187 = 192; { let _x_6188 = (value < _x_6187); match _x_6188 {
+        false => { let _x_6527 = 224; { let _x_6528 = (value < _x_6527); match _x_6528 {
+        false => { let _x_6695 = 240; { let _x_6696 = (value < _x_6695); match _x_6696 {
+        false => { let _x_6813 = ((value) as u64).saturating_sub(_x_6695); { let _x_6814 = 1; { let _x_6815 = byteWindow(alloc::vec![240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255], _x_6813, _x_6814); _x_6815 } } },
+        true => { let _x_6852 = ((value) as u64).saturating_sub(_x_6527); { let _x_6853 = 1; { let _x_6854 = byteWindow(alloc::vec![224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239], _x_6852, _x_6853); _x_6854 } } },
+    } } },
+        true => { let _x_6855 = 208; { let _x_6856 = (value < _x_6855); match _x_6856 {
+        false => { let _x_6973 = ((value) as u64).saturating_sub(_x_6855); { let _x_6974 = 1; { let _x_6975 = byteWindow(alloc::vec![208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223], _x_6973, _x_6974); _x_6975 } } },
+        true => { let _x_7012 = ((value) as u64).saturating_sub(_x_6187); { let _x_7013 = 1; { let _x_7014 = byteWindow(alloc::vec![192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207], _x_7012, _x_7013); _x_7014 } } },
+    } } },
+    } } },
+        true => { let _x_7015 = 160; { let _x_7016 = (value < _x_7015); match _x_7016 {
+        false => { let _x_7183 = 176; { let _x_7184 = (value < _x_7183); match _x_7184 {
+        false => { let _x_7301 = ((value) as u64).saturating_sub(_x_7183); { let _x_7302 = 1; { let _x_7303 = byteWindow(alloc::vec![176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191], _x_7301, _x_7302); _x_7303 } } },
+        true => { let _x_7340 = ((value) as u64).saturating_sub(_x_7015); { let _x_7341 = 1; { let _x_7342 = byteWindow(alloc::vec![160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175], _x_7340, _x_7341); _x_7342 } } },
+    } } },
+        true => { let _x_7343 = 144; { let _x_7344 = (value < _x_7343); match _x_7344 {
+        false => { let _x_7461 = ((value) as u64).saturating_sub(_x_7343); { let _x_7462 = 1; { let _x_7463 = byteWindow(alloc::vec![144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], _x_7461, _x_7462); _x_7463 } } },
+        true => { let _x_7500 = ((value) as u64).saturating_sub(_x_1); { let _x_7501 = 1; { let _x_7502 = byteWindow(alloc::vec![128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143], _x_7500, _x_7501); _x_7502 } } },
+    } } },
+    } } },
+    } } },
+        true => { let _x_7503 = 64; { let _x_7504 = (value < _x_7503); match _x_7504 {
+        false => { let _x_7844 = 96; { let _x_7845 = (value < _x_7844); match _x_7845 {
+        false => { let _x_8012 = 112; { let _x_8013 = (value < _x_8012); match _x_8013 {
+        false => { let _x_8130 = ((value) as u64).saturating_sub(_x_8012); { let _x_8131 = 1; { let _x_8132 = byteWindow(alloc::vec![112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127], _x_8130, _x_8131); _x_8132 } } },
+        true => { let _x_8169 = ((value) as u64).saturating_sub(_x_7844); { let _x_8170 = 1; { let _x_8171 = byteWindow(alloc::vec![96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111], _x_8169, _x_8170); _x_8171 } } },
+    } } },
+        true => { let _x_8172 = 80; { let _x_8173 = (value < _x_8172); match _x_8173 {
+        false => { let _x_8290 = ((value) as u64).saturating_sub(_x_8172); { let _x_8291 = 1; { let _x_8292 = byteWindow(alloc::vec![80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95], _x_8290, _x_8291); _x_8292 } } },
+        true => { let _x_8329 = ((value) as u64).saturating_sub(_x_7503); { let _x_8330 = 1; { let _x_8331 = byteWindow(alloc::vec![64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79], _x_8329, _x_8330); _x_8331 } } },
+    } } },
+    } } },
+        true => { let _x_8332 = 32; { let _x_8333 = (value < _x_8332); match _x_8333 {
+        false => { let _x_8501 = 48; { let _x_8502 = (value < _x_8501); match _x_8502 {
+        false => { let _x_8619 = ((value) as u64).saturating_sub(_x_8501); { let _x_8620 = 1; { let _x_8621 = byteWindow(alloc::vec![48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63], _x_8619, _x_8620); _x_8621 } } },
+        true => { let _x_8658 = ((value) as u64).saturating_sub(_x_8332); { let _x_8659 = 1; { let _x_8660 = byteWindow(alloc::vec![32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], _x_8658, _x_8659); _x_8660 } } },
+    } } },
+        true => { let _x_8661 = 16; { let _x_8662 = (value < _x_8661); match _x_8662 {
+        false => { let _x_8780 = ((value) as u64).saturating_sub(_x_8661); { let _x_8781 = 1; { let _x_8782 = byteWindow(alloc::vec![16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], _x_8780, _x_8781); _x_8782 } } },
+        true => { let _x_8783 = 0; { let _x_8785 = 1; { let _x_8821 = ((value) as u64).saturating_sub(_x_8783); { let _x_8822 = byteWindow(alloc::vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], _x_8821, _x_8785); _x_8822 } } } },
+    } } },
+    } } },
+    } } },
+    } } }
+}
+
+pub fn encodeU16(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_6 = 256; { let _x_9 = 0; { let _x_12 = if _x_6 == 0 { _x_9 } else { value / _x_6 }; { let _x_13 = encodeOctet(_x_12); { let _x_14 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_13); __value }; { let _x_15 = if _x_6 == 0 { _x_9 } else { value % _x_6 }; { let _x_16 = encodeOctet(_x_15); { let _x_17 = { let mut __value = _x_14; __value.extend_from_slice(&_x_16); __value }; _x_17 } } } } } } } }
+}
+
+pub fn encodeU24(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_6 = 65536; { let _x_9 = 0; { let _x_12 = if _x_6 == 0 { _x_9 } else { value / _x_6 }; { let _x_13 = encodeOctet(_x_12); { let _x_14 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_13); __value }; { let _x_15 = if _x_6 == 0 { _x_9 } else { value % _x_6 }; { let _x_16 = encodeU16(_x_15); { let _x_17 = { let mut __value = _x_14; __value.extend_from_slice(&_x_16); __value }; _x_17 } } } } } } } }
+}
+
+pub fn encodeWorkspaceError(error: crate::WorkspaceError) -> alloc::vec::Vec<u8> {
+    match error {
+        crate::WorkspaceError::BadEncoding => alloc::vec![1],
+        crate::WorkspaceError::BadState => alloc::vec![2],
+        crate::WorkspaceError::BadIdentity => alloc::vec![3],
+        crate::WorkspaceError::WrongWorkspace => alloc::vec![4],
+        crate::WorkspaceError::Replay => alloc::vec![5],
+        crate::WorkspaceError::StaleParent => alloc::vec![6],
+        crate::WorkspaceError::StaleSequence => alloc::vec![7],
+        crate::WorkspaceError::NotOwner => alloc::vec![8],
+        crate::WorkspaceError::OwnerImmutable => alloc::vec![9],
+        crate::WorkspaceError::AlreadyMember => alloc::vec![10],
+        crate::WorkspaceError::UnknownMember => alloc::vec![11],
+        crate::WorkspaceError::CannotPost => alloc::vec![12],
+        crate::WorkspaceError::MemberLimit => alloc::vec![13],
+        crate::WorkspaceError::MessageLimit => alloc::vec![14],
+        crate::WorkspaceError::EventLimit => alloc::vec![15],
+        crate::WorkspaceError::MessageBodyLimit => alloc::vec![16],
+        crate::WorkspaceError::InvalidUtf8 => alloc::vec![17],
+        crate::WorkspaceError::GenesisRequired => alloc::vec![18],
+        crate::WorkspaceError::AlreadyInitialized => alloc::vec![19],
+    }
+}
+
+pub fn encodeWorkspaceState(state: &crate::WorkspaceState) -> alloc::vec::Vec<u8> {
+    { let _x_11 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![1]); __value }; { let _x_12 = &(state).workspace; { let _x_13 = { let mut __value = _x_11; __value.extend_from_slice(&_x_12); __value }; { let _x_14 = &(state).owner; { let _x_15 = { let mut __value = _x_13; __value.extend_from_slice(&_x_14); __value }; { let _x_16 = &(state).head; { let _x_17 = { let mut __value = _x_15; __value.extend_from_slice(&_x_16); __value }; { let _x_18 = (state).sequence; { let _x_19 = encodeU16(_x_18); { let _x_20 = { let mut __value = _x_17; __value.extend_from_slice(&_x_19); __value }; { let _x_21 = (state).messageCount; { let _x_22 = encodeU16(_x_21); { let _x_23 = { let mut __value = _x_20; __value.extend_from_slice(&_x_22); __value }; { let _x_25 = &(state).members; { let _x_26 = (_x_25).len() as u64; { let _x_27 = encodeU16(_x_26); { let _x_28 = { let mut __value = _x_23; __value.extend_from_slice(&_x_27); __value }; { let _x_29 = &(state).messages; { let _x_30 = (_x_29).len() as u64; { let _x_31 = encodeU24(_x_30); { let _x_32 = { let mut __value = _x_28; __value.extend_from_slice(&_x_31); __value }; { let _x_33 = &(state).seen; { let _x_34 = (_x_33).len() as u64; { let _x_35 = encodeU16(_x_34); { let _x_36 = { let mut __value = _x_32; __value.extend_from_slice(&_x_35); __value }; { let _x_37 = { let mut __value = _x_36; __value.extend_from_slice(&_x_25); __value }; { let _x_38 = { let mut __value = _x_37; __value.extend_from_slice(&_x_29); __value }; { let _x_39 = { let mut __value = _x_38; __value.extend_from_slice(&_x_33); __value }; _x_39 } } } } } } } } } } } } } } } } } } } } } } } } } } } }
+}
+
+pub fn encodeWorkspaceTransition(transition: &crate::WorkspaceTransition) -> alloc::vec::Vec<u8> {
+    match transition {
+        crate::WorkspaceTransition::Accepted { field_0: x_19 } => { let _x_45 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_46 = encodeWorkspaceState(&(x_19)); { let _x_47 = { let mut __value = _x_45; __value.extend_from_slice(&_x_46); __value }; _x_47 } } },
+        crate::WorkspaceTransition::Rejected { field_0: x_21 } => { let x_21 = x_21.clone(); { let _x_32 = encodeWorkspaceError(x_21); _x_32 } },
+    }
+}
+
+pub fn eventPosition(x_1: alloc::vec::Vec<u8>, x_2: alloc::vec::Vec<u8>, x_3: u64) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_eventPosition(x_1.as_ref(), x_2.as_ref(), x_3)
+}
+
+fn __prod_borrowed_eventPosition(x_1: &[u8], x_2: &[u8], x_3: u64) -> Result<u64, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_52 = 0; _x_52 },
+        _ => { let n_31 = (x_3).saturating_sub(1); { let _x_61 = 32; { let _x_62 = ((n_31) as u64).checked_mul(_x_61).ok_or(crate::ComputeError::MulOverflow)?; { let _x_63 = workspaceWindowEqual((x_2).as_ref(), _x_62, _x_61, (x_1).as_ref())?; match _x_63 {
+        false => { let _x_76 = __prod_borrowed_eventPosition((x_1).as_ref(), (x_2).as_ref(), n_31)?; _x_76 },
+        true => { let _x_77 = 1; { let _x_78 = ((n_31) as u64).checked_add(_x_77).ok_or(crate::ComputeError::AddOverflow)?; _x_78 } },
+    } } } } },
+    })
+}
+
+pub fn grantMember(state: &crate::WorkspaceState, event: &crate::AuthenticatedEvent, role: alloc::vec::Vec<u8>) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok({ let _x_2 = &(event).body; { let _x_3 = (_x_2).len() as u64; { let _x_4 = 32; { let _x_7 = (_x_3 == _x_4); match _x_7 {
+        false => { let _x_657 = crate::WorkspaceError::BadIdentity; { let _x_658 = crate::WorkspaceTransition::Rejected { field_0: _x_657 }; _x_658 } },
+        true => { let _x_659 = &(event).author; { let _x_660 = &(state).owner; { let _x_661 = workspaceBytesEqual((_x_659).as_ref(), (_x_660).as_ref()); match _x_661 {
+        false => { let _x_699 = crate::WorkspaceError::NotOwner; { let _x_700 = crate::WorkspaceTransition::Rejected { field_0: _x_699 }; _x_700 } },
+        true => { let _x_701 = workspaceBytesEqual((_x_2).as_ref(), (_x_660).as_ref()); match _x_701 {
+        false => { let _x_702 = &(state).members; { let _x_703 = 33; { let _x_705 = (_x_702).len() as u64; { let _x_706 = 0; { let _x_707 = if _x_703 == 0 { _x_706 } else { _x_705 / _x_703 }; { let _x_708 = digestPresent((_x_2).as_ref(), (_x_702).as_ref(), _x_703, _x_707)?; match _x_708 {
+        false => { let _x_709 = 2079; { let _x_710 = (_x_709 <= _x_705); match _x_710 {
+        false => { let _x_711 = &(state).workspace; { let _x_712 = &(event).eventId; { let _x_713 = (event).sequence; { let _x_718 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_702); __value }; { let _x_719 = { let mut __value = _x_718; __value.extend_from_slice(&_x_2); __value }; { let _x_720 = { let mut __value = _x_719; __value.extend_from_slice(&role); __value }; { let _x_721 = &(state).messages; { let _x_722 = (state).messageCount; { let _x_723 = &(state).seen; { let _x_724 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_723); __value }; { let _x_725 = { let mut __value = _x_724; __value.extend_from_slice(&_x_712); __value }; { let _x_726 = crate::WorkspaceState { workspace: alloc::borrow::ToOwned::to_owned(_x_711), owner: alloc::borrow::ToOwned::to_owned(_x_660), head: alloc::borrow::ToOwned::to_owned(_x_712), sequence: _x_713, members: _x_720, messages: alloc::borrow::ToOwned::to_owned(_x_721), messageCount: _x_722, seen: _x_725 }; { let _x_727 = crate::WorkspaceTransition::Accepted { field_0: _x_726 }; _x_727 } } } } } } } } } } } } },
+        true => { let _x_728 = crate::WorkspaceError::MemberLimit; { let _x_729 = crate::WorkspaceTransition::Rejected { field_0: _x_728 }; _x_729 } },
+    } } },
+        true => { let _x_730 = crate::WorkspaceError::AlreadyMember; { let _x_731 = crate::WorkspaceTransition::Rejected { field_0: _x_730 }; _x_731 } },
+    } } } } } } },
+        true => { let _x_732 = crate::WorkspaceError::OwnerImmutable; { let _x_733 = crate::WorkspaceTransition::Rejected { field_0: _x_732 }; _x_733 } },
+    } },
+    } } } },
+    } } } } })
+}
+
+pub fn memberRoleCode(x_1: alloc::vec::Vec<u8>, x_2: alloc::vec::Vec<u8>, x_3: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => alloc::vec![0],
+        _ => { let n_40 = (x_3).saturating_sub(1); { let _x_82 = 33; { let _x_83 = ((n_40) as u64).checked_mul(_x_82).ok_or(crate::ComputeError::MulOverflow)?; { let _x_84 = 32; { let _x_85 = byteWindow(x_2.clone(), _x_83, _x_84); { let _x_86 = workspaceBytesEqual((x_1.clone()).as_ref(), (_x_85).as_ref()); match _x_86 {
+        false => { let _x_100 = memberRoleCode(x_1.clone(), x_2.clone(), n_40)?; _x_100 },
+        true => { let _x_101 = ((_x_83) as u64).checked_add(_x_84).ok_or(crate::ComputeError::AddOverflow)?; { let _x_102 = 1; { let _x_103 = byteWindow(x_2.clone(), _x_101, _x_102); _x_103 } } },
+    } } } } } } },
+    })
+}
+
+pub fn membersWellFormed(x_1: &[u8], x_2: &[u8], x_3: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_181 = true; _x_181 },
+        _ => { let n_120 = (x_3).saturating_sub(1); { let _x_232 = 33; { let _x_233 = ((n_120) as u64).checked_mul(_x_232).ok_or(crate::ComputeError::MulOverflow)?; { let _x_234 = 32; { let _x_235 = byteWindow(alloc::borrow::ToOwned::to_owned(x_2), _x_233, _x_234); { let _x_236 = workspaceBytesEqual((x_1).as_ref(), (_x_235).as_ref()); match _x_236 {
+        false => { let _x_308 = 33; { let _x_309 = ((n_120) as u64).checked_mul(_x_308).ok_or(crate::ComputeError::MulOverflow)?; { let _x_310 = 32; { let _x_311 = ((_x_309) as u64).checked_add(_x_310).ok_or(crate::ComputeError::AddOverflow)?; { let _x_312 = 1; { let _x_313 = byteWindow(alloc::borrow::ToOwned::to_owned(x_2), _x_311, _x_312); { let _x_319 = workspaceBytesEqual((_x_313).as_ref(), &[1]); { let _jp_320 = /* jp "_jp_320" inlined at its jump site */ (); match _x_319 {
+        false => { let _x_324 = 33; { let _x_325 = ((n_120) as u64).checked_mul(_x_324).ok_or(crate::ComputeError::MulOverflow)?; { let _x_326 = 32; { let _x_327 = ((_x_325) as u64).checked_add(_x_326).ok_or(crate::ComputeError::AddOverflow)?; { let _x_328 = 1; { let _x_329 = byteWindow(alloc::borrow::ToOwned::to_owned(x_2), _x_327, _x_328); { let _x_335 = workspaceBytesEqual((_x_329).as_ref(), &[2]); { let _y_321 = _x_335; match _y_321.clone() {
+        false => _y_321.clone(),
+        true => { let _x_322 = membersWellFormed((x_1).as_ref(), (x_2).as_ref(), n_120)?; _x_322 },
+    } } } } } } } } },
+        true => { let _y_321 = _x_319; match _y_321.clone() {
+        false => _y_321.clone(),
+        true => { let _x_322 = membersWellFormed((x_1).as_ref(), (x_2).as_ref(), n_120)?; _x_322 },
+    } },
+    } } } } } } } } },
+        true => { let _x_246 = false; _x_246 },
+    } } } } } } },
+    })
+}
+
+pub fn messageBodyWellFormed(messages: &[u8], offset: u64, count: u64) -> bool {
+    { let _x_8 = { let __start = usize::try_from(offset).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (messages).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_8 {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_17 = validMessageText((val_11).as_ref()); _x_17 },
+    } }
+}
+
+pub fn messagePosition(messages: alloc::vec::Vec<u8>, seen: alloc::vec::Vec<u8>, offset: u64) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_messagePosition(messages.as_ref(), seen.as_ref(), offset)
+}
+
+fn __prod_borrowed_messagePosition(messages: &[u8], seen: &[u8], offset: u64) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_20 = 32; { let _x_23 = { let __start = usize::try_from(offset).ok(); let __count = usize::try_from(_x_20).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (messages).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_23 {
+        None => { let _x_35 = 0; _x_35 },
+        Some(val_26) => { let _x_38 = (seen).len() as u64; { let _x_39 = 32; { let _x_40 = 0; { let _x_41 = if _x_39 == 0 { _x_40 } else { _x_38 / _x_39 }; { let _x_42 = __prod_borrowed_eventPosition((val_26).as_ref(), (seen).as_ref(), _x_41)?; _x_42 } } } } },
+    } } })
+}
+
+pub fn messagesWellFormed(x_1: &[u8], x_2: &[u8], x_3: u64, x_4: u64, x_5: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_148 = (x_1).len() as u64; { let _x_149 = (x_3 == _x_148); _x_149 } },
+        _ => { let n_89 = (x_4).saturating_sub(1); { let _x_176 = 66; { let _x_177 = ((x_3) as u64).checked_add(_x_176).ok_or(crate::ComputeError::AddOverflow)?; { let _x_179 = (x_1).len() as u64; { let _x_180 = (_x_177 <= _x_179); match _x_180 {
+        false => _x_180,
+        true => { let _x_204 = __prod_borrowed_messagePosition((x_1).as_ref(), (x_2).as_ref(), x_3)?; { let _x_205 = (x_5 < _x_204); match _x_205 {
+        false => _x_205,
+        true => { let _x_219 = 66; { let _x_220 = ((x_3) as u64).checked_add(_x_219).ok_or(crate::ComputeError::AddOverflow)?; { let _x_221 = 64; { let _x_222 = ((x_3) as u64).checked_add(_x_221).ok_or(crate::ComputeError::AddOverflow)?; { let _x_223 = __prod_borrowed_readU16At((x_1).as_ref(), _x_222)?; { let _x_224 = messageBodyWellFormed((x_1).as_ref(), _x_220, _x_223); match _x_224 {
+        false => _x_224,
+        true => { let _x_228 = 66; { let _x_229 = ((x_3) as u64).checked_add(_x_228).ok_or(crate::ComputeError::AddOverflow)?; { let _x_230 = 64; { let _x_231 = ((x_3) as u64).checked_add(_x_230).ok_or(crate::ComputeError::AddOverflow)?; { let _x_232 = __prod_borrowed_readU16At((x_1).as_ref(), _x_231)?; { let _x_233 = ((_x_229) as u64).checked_add(_x_232).ok_or(crate::ComputeError::AddOverflow)?; { let _x_234 = __prod_borrowed_messagePosition((x_1).as_ref(), (x_2).as_ref(), x_3)?; { let _x_235 = messagesWellFormed((x_1).as_ref(), (x_2).as_ref(), _x_233, n_89, _x_234)?; _x_235 } } } } } } } },
+    } } } } } } },
+    } } },
+    } } } } } },
+    })
+}
+
+pub fn readU16At(value: alloc::vec::Vec<u8>, offset: u64) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_readU16At(value.as_ref(), offset)
+}
+
+fn __prod_borrowed_readU16At(value: &[u8], offset: u64) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_10 = 2; { let _x_13 = { let __start = usize::try_from(offset).ok(); let __count = usize::try_from(_x_10).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_13 {
+        None => { let _x_23 = 0; _x_23 },
+        Some(val_16) => { let _x_24 = __prod_borrowed_decodeU16((val_16).as_ref())?; _x_24 },
+    } } })
+}
+
+pub fn readU24At(value: alloc::vec::Vec<u8>, offset: u64) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_readU24At(value.as_ref(), offset)
+}
+
+fn __prod_borrowed_readU24At(value: &[u8], offset: u64) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_10 = 3; { let _x_13 = { let __start = usize::try_from(offset).ok(); let __count = usize::try_from(_x_10).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_13 {
+        None => { let _x_23 = 0; _x_23 },
+        Some(val_16) => { let _x_24 = __prod_borrowed_decodeU24((val_16).as_ref())?; _x_24 },
+    } } })
+}
+
+pub fn reduceAuthenticatedEvent(state: Option<crate::WorkspaceState>, event: &crate::AuthenticatedEvent) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok({ let _x_102 = &(event).workspace; { let _x_103 = (_x_102).len() as u64; { let _x_104 = 32; { let _x_107 = (_x_103 == _x_104); { let _jp_550 = /* jp "_jp_550" inlined at its jump site */ (); { let _jp_144 = /* jp "_jp_144" inlined at its jump site */ (); match _x_107 {
+        false => { let _y_112 = _x_107; match _y_112 {
+        false => { { let _x_548 = crate::WorkspaceError::BadIdentity; { let _x_549 = crate::WorkspaceTransition::Rejected { field_0: _x_548 }; _x_549 } } },
+        true => { let _x_539 = 4096; { let _x_540 = &(event).body; { let _x_541 = (_x_540).len() as u64; { let _x_542 = (_x_539 < _x_541); match _x_542 {
+        false => match state {
+        None => { let _x_543 = createWorkspace(&(event)); _x_543 },
+        Some(val_544) => { let _x_545 = reduceExistingWorkspace(&(val_544), &(event))?; _x_545 },
+    },
+        true => { let _x_546 = crate::WorkspaceError::MessageBodyLimit; { let _x_547 = crate::WorkspaceTransition::Rejected { field_0: _x_546 }; _x_547 } },
+    } } } } },
+    } },
+        true => { let _x_335 = &(event).eventId; { let _x_336 = (_x_335).len() as u64; { let _x_337 = 32; { let _x_338 = (_x_336 == _x_337); match _x_338 {
+        false => { let _y_112 = _x_338; match _y_112 {
+        false => { { let _x_548 = crate::WorkspaceError::BadIdentity; { let _x_549 = crate::WorkspaceTransition::Rejected { field_0: _x_548 }; _x_549 } } },
+        true => { let _x_539 = 4096; { let _x_540 = &(event).body; { let _x_541 = (_x_540).len() as u64; { let _x_542 = (_x_539 < _x_541); match _x_542 {
+        false => match state {
+        None => { let _x_543 = createWorkspace(&(event)); _x_543 },
+        Some(val_544) => { let _x_545 = reduceExistingWorkspace(&(val_544), &(event))?; _x_545 },
+    },
+        true => { let _x_546 = crate::WorkspaceError::MessageBodyLimit; { let _x_547 = crate::WorkspaceTransition::Rejected { field_0: _x_546 }; _x_547 } },
+    } } } } },
+    } },
+        true => { let _x_398 = &(event).parent; { let _x_399 = (_x_398).len() as u64; { let _x_400 = 32; { let _x_401 = (_x_399 == _x_400); match _x_401 {
+        false => { let _y_112 = _x_401; match _y_112 {
+        false => { { let _x_548 = crate::WorkspaceError::BadIdentity; { let _x_549 = crate::WorkspaceTransition::Rejected { field_0: _x_548 }; _x_549 } } },
+        true => { let _x_539 = 4096; { let _x_540 = &(event).body; { let _x_541 = (_x_540).len() as u64; { let _x_542 = (_x_539 < _x_541); match _x_542 {
+        false => match state {
+        None => { let _x_543 = createWorkspace(&(event)); _x_543 },
+        Some(val_544) => { let _x_545 = reduceExistingWorkspace(&(val_544), &(event))?; _x_545 },
+    },
+        true => { let _x_546 = crate::WorkspaceError::MessageBodyLimit; { let _x_547 = crate::WorkspaceTransition::Rejected { field_0: _x_546 }; _x_547 } },
+    } } } } },
+    } },
+        true => { let _x_452 = &(event).author; { let _x_453 = (_x_452).len() as u64; { let _x_454 = 32; { let _x_455 = (_x_453 == _x_454); match _x_455 {
+        false => { let _y_112 = _x_455; match _y_112 {
+        false => { { let _x_548 = crate::WorkspaceError::BadIdentity; { let _x_549 = crate::WorkspaceTransition::Rejected { field_0: _x_548 }; _x_549 } } },
+        true => { let _x_539 = 4096; { let _x_540 = &(event).body; { let _x_541 = (_x_540).len() as u64; { let _x_542 = (_x_539 < _x_541); match _x_542 {
+        false => match state {
+        None => { let _x_543 = createWorkspace(&(event)); _x_543 },
+        Some(val_544) => { let _x_545 = reduceExistingWorkspace(&(val_544), &(event))?; _x_545 },
+    },
+        true => { let _x_546 = crate::WorkspaceError::MessageBodyLimit; { let _x_547 = crate::WorkspaceTransition::Rejected { field_0: _x_546 }; _x_547 } },
+    } } } } },
+    } },
+        true => { let _x_459 = &(event).eventId; { let _x_498 = workspaceBytesEqual((_x_459).as_ref(), &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); match _x_498 {
+        false => { let _y_112 = _x_455; match _y_112 {
+        false => { { let _x_548 = crate::WorkspaceError::BadIdentity; { let _x_549 = crate::WorkspaceTransition::Rejected { field_0: _x_548 }; _x_549 } } },
+        true => { let _x_539 = 4096; { let _x_540 = &(event).body; { let _x_541 = (_x_540).len() as u64; { let _x_542 = (_x_539 < _x_541); match _x_542 {
+        false => match state {
+        None => { let _x_543 = createWorkspace(&(event)); _x_543 },
+        Some(val_544) => { let _x_545 = reduceExistingWorkspace(&(val_544), &(event))?; _x_545 },
+    },
+        true => { let _x_546 = crate::WorkspaceError::MessageBodyLimit; { let _x_547 = crate::WorkspaceTransition::Rejected { field_0: _x_546 }; _x_547 } },
+    } } } } },
+    } },
+        true => { { let _x_548 = crate::WorkspaceError::BadIdentity; { let _x_549 = crate::WorkspaceTransition::Rejected { field_0: _x_548 }; _x_549 } } },
+    } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } } } })
+}
+
+pub fn reduceDecodedState(state: Option<crate::WorkspaceState>, event: &crate::AuthenticatedEvent) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok(match state.clone() {
+        None => { let _x_16 = crate::WorkspaceError::BadEncoding; { let _x_17 = crate::WorkspaceTransition::Rejected { field_0: _x_16 }; _x_17 } },
+        Some(val_11) => { let _x_19 = reduceAuthenticatedEvent(state.clone(), &(event))?; _x_19 },
+    })
+}
+
+pub fn reduceExistingWorkspace(state: &crate::WorkspaceState, event: &crate::AuthenticatedEvent) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceStateValid(&(state))?; match _x_1 {
+        false => { let _x_690 = crate::WorkspaceError::BadState; { let _x_691 = crate::WorkspaceTransition::Rejected { field_0: _x_690 }; _x_691 } },
+        true => { let _x_692 = &(state).workspace; { let _x_693 = &(event).workspace; { let _x_694 = workspaceBytesEqual((_x_692).as_ref(), (_x_693).as_ref()); match _x_694 {
+        false => { let _x_725 = crate::WorkspaceError::WrongWorkspace; { let _x_726 = crate::WorkspaceTransition::Rejected { field_0: _x_725 }; _x_726 } },
+        true => { let _x_727 = &(event).eventId; { let _x_728 = &(state).seen; { let _x_729 = 32; { let _x_730 = (state).sequence; { let _x_731 = 1; { let _x_732 = ((_x_730) as u64).checked_add(_x_731).ok_or(crate::ComputeError::AddOverflow)?; { let _x_733 = digestPresent((_x_727).as_ref(), (_x_728).as_ref(), _x_729, _x_732)?; match _x_733 {
+        false => { let _x_734 = &(state).head; { let _x_735 = &(event).parent; { let _x_736 = workspaceBytesEqual((_x_734).as_ref(), (_x_735).as_ref()); { let _jp_737 = /* jp "_jp_737" inlined at its jump site */ (); match _x_736 {
+        false => { { let _x_738 = crate::WorkspaceError::StaleParent; { let _x_739 = crate::WorkspaceTransition::Rejected { field_0: _x_738 }; _x_739 } } },
+        true => match _x_733 {
+        false => { let _x_740 = (event).sequence; { let _x_741 = (_x_740 == _x_732); match _x_741 {
+        false => { let _x_753 = crate::WorkspaceError::StaleSequence; { let _x_754 = crate::WorkspaceTransition::Rejected { field_0: _x_753 }; _x_754 } },
+        true => { let _x_755 = 1023; { let _x_756 = (_x_755 <= _x_730); match _x_756 {
+        false => { let _x_757 = applyWorkspaceAction(&(state), &(event))?; _x_757 },
+        true => { let _x_758 = crate::WorkspaceError::EventLimit; { let _x_759 = crate::WorkspaceTransition::Rejected { field_0: _x_758 }; _x_759 } },
+    } } },
+    } } },
+        true => { { let _x_738 = crate::WorkspaceError::StaleParent; { let _x_739 = crate::WorkspaceTransition::Rejected { field_0: _x_738 }; _x_739 } } },
+    },
+    } } } } },
+        true => { let _x_751 = crate::WorkspaceError::Replay; { let _x_752 = crate::WorkspaceTransition::Rejected { field_0: _x_751 }; _x_752 } },
+    } } } } } } } },
+    } } } },
+    } })
+}
+
+pub fn reduceWorkspaceBytes(request: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_1 = crate::WorkspaceByteView { bytes: request }; { let _x_2 = reduceWorkspaceBytesView(&(_x_1))?; _x_2 } })
+}
+
+pub fn reduceWorkspaceBytesEvent(stateBytes: alloc::vec::Vec<u8>, event: &crate::AuthenticatedEvent) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok({ let _x_2 = (stateBytes.clone()).len() as u64; { let _x_3 = 0; { let _x_6 = (_x_2 == _x_3); match _x_6 {
+        false => { let _x_32 = decodeWorkspaceState(stateBytes.clone())?; { let _x_33 = reduceDecodedState(_x_32, &(event))?; _x_33 } },
+        true => { let _x_35 = reduceAuthenticatedEvent(None, &(event))?; _x_35 },
+    } } } })
+}
+
+pub fn reduceWorkspaceBytesParts(stateBytes: alloc::vec::Vec<u8>, eventBytes: alloc::vec::Vec<u8>) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
+    Ok({ let _x_8 = decodeAuthenticatedEvent(eventBytes)?; match _x_8 {
+        None => { let _x_17 = crate::WorkspaceError::BadEncoding; { let _x_18 = crate::WorkspaceTransition::Rejected { field_0: _x_17 }; _x_18 } },
+        Some(val_11) => { let _x_16 = reduceWorkspaceBytesEvent(stateBytes, &(val_11))?; _x_16 },
+    } })
+}
+
+pub fn reduceWorkspaceBytesView(view: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_78 = 7; { let _x_82 = &(view).bytes; { let _x_83 = (_x_82).len() as u64; { let _x_84 = (_x_78 <= _x_83); { let _jp_112 = /* jp "_jp_112" inlined at its jump site */ (); match _x_84 {
+        false => { let _y_89 = _x_84; match _y_89 {
+        false => { let _x_275 = crate::WorkspaceError::BadEncoding; { let _x_276 = encodeWorkspaceError(_x_275); _x_276 } },
+        true => { let _x_277 = 4; { let _x_278 = __prod_borrowed_readU24At((_x_82).as_ref(), _x_277)?; { let _x_279 = byteWindowView(&(view), _x_78, _x_278); { let _x_280 = ((_x_78) as u64).checked_add(_x_278).ok_or(crate::ComputeError::AddOverflow)?; { let _x_282 = ((_x_83) as u64).saturating_sub(_x_78); { let _x_283 = ((_x_282) as u64).saturating_sub(_x_278); { let _x_284 = byteWindowView(&(view), _x_280, _x_283); { let _x_285 = reduceWorkspaceBytesParts(_x_279, _x_284)?; { let _x_286 = encodeWorkspaceTransition(&(_x_285)); _x_286 } } } } } } } } },
+    } },
+        true => { let _x_222 = &(view).bytes; { let _x_223 = (_x_222).len() as u64; { let _x_224 = 1104664; { let _x_225 = (_x_223 <= _x_224); match _x_225 {
+        false => { let _y_89 = _x_225; match _y_89 {
+        false => { let _x_275 = crate::WorkspaceError::BadEncoding; { let _x_276 = encodeWorkspaceError(_x_275); _x_276 } },
+        true => { let _x_277 = 4; { let _x_278 = __prod_borrowed_readU24At((_x_82).as_ref(), _x_277)?; { let _x_279 = byteWindowView(&(view), _x_78, _x_278); { let _x_280 = ((_x_78) as u64).checked_add(_x_278).ok_or(crate::ComputeError::AddOverflow)?; { let _x_282 = ((_x_83) as u64).saturating_sub(_x_78); { let _x_283 = ((_x_282) as u64).saturating_sub(_x_278); { let _x_284 = byteWindowView(&(view), _x_280, _x_283); { let _x_285 = reduceWorkspaceBytesParts(_x_279, _x_284)?; { let _x_286 = encodeWorkspaceTransition(&(_x_285)); _x_286 } } } } } } } } },
+    } },
+        true => { let _x_240 = 0; { let _x_241 = 4; { let _x_242 = byteWindowView(&(view), _x_240, _x_241); { let _x_259 = workspaceBytesEqual((_x_242).as_ref(), &[80, 87, 82, 1]); match _x_259 {
+        false => { let _y_89 = _x_259; match _y_89 {
+        false => { let _x_275 = crate::WorkspaceError::BadEncoding; { let _x_276 = encodeWorkspaceError(_x_275); _x_276 } },
+        true => { let _x_277 = 4; { let _x_278 = __prod_borrowed_readU24At((_x_82).as_ref(), _x_277)?; { let _x_279 = byteWindowView(&(view), _x_78, _x_278); { let _x_280 = ((_x_78) as u64).checked_add(_x_278).ok_or(crate::ComputeError::AddOverflow)?; { let _x_282 = ((_x_83) as u64).saturating_sub(_x_78); { let _x_283 = ((_x_282) as u64).saturating_sub(_x_278); { let _x_284 = byteWindowView(&(view), _x_280, _x_283); { let _x_285 = reduceWorkspaceBytesParts(_x_279, _x_284)?; { let _x_286 = encodeWorkspaceTransition(&(_x_285)); _x_286 } } } } } } } } },
+    } },
+        true => { let _x_263 = &(view).bytes; { let _x_264 = 4; { let _x_265 = __prod_borrowed_readU24At((_x_263).as_ref(), _x_264)?; { let _x_268 = (_x_263).len() as u64; { let _x_269 = 7; { let _x_270 = ((_x_268) as u64).saturating_sub(_x_269); { let _x_271 = (_x_265 <= _x_270); { let _y_89 = _x_271; match _y_89 {
+        false => { let _x_275 = crate::WorkspaceError::BadEncoding; { let _x_276 = encodeWorkspaceError(_x_275); _x_276 } },
+        true => { let _x_277 = 4; { let _x_278 = __prod_borrowed_readU24At((_x_82).as_ref(), _x_277)?; { let _x_279 = byteWindowView(&(view), _x_78, _x_278); { let _x_280 = ((_x_78) as u64).checked_add(_x_278).ok_or(crate::ComputeError::AddOverflow)?; { let _x_282 = ((_x_83) as u64).saturating_sub(_x_78); { let _x_283 = ((_x_282) as u64).saturating_sub(_x_278); { let _x_284 = byteWindowView(&(view), _x_280, _x_283); { let _x_285 = reduceWorkspaceBytesParts(_x_279, _x_284)?; { let _x_286 = encodeWorkspaceTransition(&(_x_285)); _x_286 } } } } } } } } },
+    } } } } } } } } },
+    } } } } },
+    } } } } },
+    } } } } } })
+}
+
+pub fn removeMember(x_1: alloc::vec::Vec<u8>, x_2: alloc::vec::Vec<u8>, x_3: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => alloc::vec![],
+        _ => { let n_39 = (x_3).saturating_sub(1); { let _x_76 = 33; { let _x_77 = ((n_39) as u64).checked_mul(_x_76).ok_or(crate::ComputeError::MulOverflow)?; { let _x_78 = 32; { let _x_79 = byteWindow(x_2.clone(), _x_77, _x_78); { let _x_80 = workspaceBytesEqual((x_1.clone()).as_ref(), (_x_79).as_ref()); match _x_80 {
+        false => { let _x_104 = removeMember(x_1.clone(), x_2.clone(), n_39)?; { let _x_105 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_104); __value }; { let _x_106 = byteWindow(x_2.clone(), _x_77, _x_76); { let _x_107 = { let mut __value = _x_105; __value.extend_from_slice(&_x_106); __value }; _x_107 } } } },
+        true => { let _x_108 = 0; { let _x_109 = byteWindow(x_2.clone(), _x_108, _x_77); _x_109 } },
+    } } } } } } },
+    })
+}
+
+pub fn validMessageText(body: &[u8]) -> bool {
+    { let _x_53 = 0; { let _x_57 = (body).len() as u64; { let _x_58 = (_x_53 < _x_57); match _x_58 {
+        false => _x_58,
+        true => { let _x_100 = (body).len() as u64; { let _x_101 = 4096; { let _x_102 = (_x_100 <= _x_101); match _x_102 {
+        false => _x_102,
+        true => { let _x_111 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![]); __value }; { let _x_112 = { let mut __value = _x_111; __value.extend_from_slice(&body); __value }; { let _x_113 = alloc::string::String::from_utf8(_x_112).ok(); match _x_113 {
+        None => { let _x_115 = false; _x_115 },
+        Some(val_116) => _x_102,
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn workspaceBytesEqual(left: &[u8], right: &[u8]) -> bool {
+    { let _x_3 = (left).cmp(&right); { let _x_11 = (alloc::vec![0]).cmp(&alloc::vec![0]); { let _x_12 = (_x_3 == _x_11); _x_12 } } }
+}
+
+pub fn workspaceDigestOctetsEqual(x_1: &[u8], x_2: u64, x_3: &[u8], x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_55 = true; _x_55 },
+        _ => { let n_36 = (x_4).saturating_sub(1); { let _x_59 = ((x_2) as u64).checked_add(n_36).ok_or(crate::ComputeError::AddOverflow)?; { let _x_60 = workspaceOctetsEqualAt((x_1).as_ref(), _x_59, (x_3).as_ref(), n_36); match _x_60 {
+        false => _x_60,
+        true => { let _x_64 = workspaceDigestOctetsEqual((x_1).as_ref(), x_2, (x_3).as_ref(), n_36)?; _x_64 },
+    } } } },
+    })
+}
+
+pub fn workspaceOctetMatches(value: &[u8], offset: u64, expected: u8) -> bool {
+    { let _x_10 = usize::try_from(offset).ok().and_then(|__index| (value).get(__index).cloned()); match _x_10 {
+        None => { let _x_18 = false; _x_18 },
+        Some(val_13) => { let _x_21 = (val_13 == expected); _x_21 },
+    } }
+}
+
+pub fn workspaceOctetsEqualAt(value: &[u8], offset: u64, expected: &[u8], position: u64) -> bool {
+    { let _x_8 = usize::try_from(offset).ok().and_then(|__index| (value).get(__index).cloned()); match _x_8 {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_17 = workspaceOctetMatches((expected).as_ref(), position, val_11); _x_17 },
+    } }
+}
+
+pub fn workspaceRowUnique(table: &[u8], width: u64, position: u64) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_10 = ((position) as u64).checked_mul(width).ok_or(crate::ComputeError::MulOverflow)?; { let _x_11 = 32; { let _x_14 = { let __start = usize::try_from(_x_10).ok(); let __count = usize::try_from(_x_11).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (table).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_14 {
+        None => { let _x_25 = false; _x_25 },
+        Some(val_17) => { let _x_26 = digestPresent((val_17).as_ref(), (table).as_ref(), width, position)?; match _x_26 {
+        false => { let _x_27 = true; _x_27 },
+        true => { let _x_28 = false; _x_28 },
+    } },
+    } } } })
+}
+
+pub fn workspaceStateValid(state: &crate::WorkspaceState) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_337 = &(state).members; { let _x_338 = (_x_337).len() as u64; { let _x_339 = 33; { let _x_342 = 0; { let _x_345 = if _x_339 == 0 { _x_342 } else { _x_338 / _x_339 }; { let _x_346 = (state).sequence; { let _x_347 = (_x_345 <= _x_346); match _x_347 {
+        false => _x_347,
+        true => { let _x_702 = (state).messageCount; { let _x_703 = (state).sequence; { let _x_704 = (_x_702 <= _x_703); match _x_704 {
+        false => _x_704,
+        true => { let _x_894 = &(state).workspace; { let _x_895 = (_x_894).len() as u64; { let _x_896 = 32; { let _x_897 = (_x_895 == _x_896); match _x_897 {
+        false => _x_897,
+        true => { let _x_1078 = &(state).owner; { let _x_1079 = (_x_1078).len() as u64; { let _x_1080 = 32; { let _x_1081 = (_x_1079 == _x_1080); match _x_1081 {
+        false => _x_1081,
+        true => { let _x_1253 = &(state).head; { let _x_1254 = (_x_1253).len() as u64; { let _x_1255 = 32; { let _x_1256 = (_x_1254 == _x_1255); match _x_1256 {
+        false => _x_1256,
+        true => { let _x_1420 = (state).sequence; { let _x_1421 = 1024; { let _x_1422 = (_x_1420 < _x_1421); match _x_1422 {
+        false => _x_1422,
+        true => { let _x_1573 = &(state).seen; { let _x_1574 = (_x_1573).len() as u64; { let _x_1576 = (state).sequence; { let _x_1577 = 1; { let _x_1578 = ((_x_1576) as u64).checked_add(_x_1577).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1579 = 32; { let _x_1580 = ((_x_1578) as u64).checked_mul(_x_1579).ok_or(crate::ComputeError::MulOverflow)?; { let _x_1581 = (_x_1574 == _x_1580); match _x_1581 {
+        false => _x_1581,
+        true => { let _x_1723 = &(state).members; { let _x_1724 = (_x_1723).len() as u64; { let _x_1725 = 2079; { let _x_1726 = (_x_1724 <= _x_1725); match _x_1726 {
+        false => _x_1726,
+        true => { let _x_1857 = &(state).members; { let _x_1858 = (_x_1857).len() as u64; { let _x_1859 = 33; { let _x_1860 = 0; { let _x_1861 = if _x_1859 == 0 { _x_1860 } else { _x_1858 % _x_1859 }; { let _x_1862 = (_x_1861 == _x_1860); match _x_1862 {
+        false => _x_1862,
+        true => { let _x_1984 = (state).messageCount; { let _x_1985 = 256; { let _x_1986 = (_x_1984 <= _x_1985); match _x_1986 {
+        false => _x_1986,
+        true => { let _x_2100 = &(state).messages; { let _x_2101 = (_x_2100).len() as u64; { let _x_2102 = 1065472; { let _x_2103 = (_x_2101 <= _x_2102); match _x_2103 {
+        false => _x_2103,
+        true => { let _x_2205 = &(state).seen; { let _x_2207 = (state).sequence; { let _x_2208 = 32; { let _x_2209 = ((_x_2207) as u64).checked_mul(_x_2208).ok_or(crate::ComputeError::MulOverflow)?; { let _x_2210 = &(state).head; { let _x_2211 = workspaceWindowEqual((_x_2205).as_ref(), _x_2209, _x_2208, (_x_2210).as_ref())?; match _x_2211 {
+        false => _x_2211,
+        true => { let _x_2296 = &(state).seen; { let _x_2297 = 32; { let _x_2298 = (state).sequence; { let _x_2299 = 1; { let _x_2300 = ((_x_2298) as u64).checked_add(_x_2299).ok_or(crate::ComputeError::AddOverflow)?; { let _x_2301 = digestPresent(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], (_x_2296).as_ref(), _x_2297, _x_2300)?; match _x_2301 {
+        false => { let _x_2413 = &(state).seen; { let _x_2414 = 32; { let _x_2415 = (state).sequence; { let _x_2416 = 1; { let _x_2417 = ((_x_2415) as u64).checked_add(_x_2416).ok_or(crate::ComputeError::AddOverflow)?; { let _x_2418 = digestsUnique((_x_2413).as_ref(), _x_2414, _x_2417)?; match _x_2418 {
+        false => _x_2418,
+        true => { let _x_2419 = &(state).members; { let _x_2420 = 33; { let _x_2423 = (_x_2419).len() as u64; { let _x_2424 = 0; { let _x_2425 = if _x_2420 == 0 { _x_2424 } else { _x_2423 / _x_2420 }; { let _x_2426 = digestsUnique((_x_2419).as_ref(), _x_2420, _x_2425)?; match _x_2426 {
+        false => _x_2426,
+        true => { let _x_2427 = &(state).owner; { let _x_2428 = &(state).members; { let _x_2431 = (_x_2428).len() as u64; { let _x_2432 = 33; { let _x_2433 = 0; { let _x_2434 = if _x_2432 == 0 { _x_2433 } else { _x_2431 / _x_2432 }; { let _x_2435 = membersWellFormed((_x_2427).as_ref(), (_x_2428).as_ref(), _x_2434)?; match _x_2435 {
+        false => _x_2435,
+        true => { let _x_2436 = &(state).messages; { let _x_2437 = &(state).seen; { let _x_2438 = 0; { let _x_2439 = (state).messageCount; { let _x_2440 = 1; { let _x_2441 = messagesWellFormed((_x_2436).as_ref(), (_x_2437).as_ref(), _x_2438, _x_2439, _x_2440)?; _x_2441 } } } } } },
+    } } } } } } } },
+    } } } } } } },
+    } } } } } } },
+        true => { let _x_2311 = false; _x_2311 },
+    } } } } } } },
+    } } } } } } },
+    } } } } },
+    } } } },
+    } } } } } } },
+    } } } } },
+    } } } } } } } } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } },
+    } } } } } } } })
+}
+
+pub fn workspaceWindowEqual(value: &[u8], start: u64, count: u64, expected: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_1 = 32; { let _x_4 = (count == _x_1); match _x_4 {
+        false => { let _x_129 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_129 {
+        None => _x_4,
+        Some(val_131) => { let _x_132 = workspaceBytesEqual((val_131).as_ref(), (expected).as_ref()); _x_132 },
+    } },
+        true => { let _x_133 = ((start) as u64).checked_add(_x_1).ok_or(crate::ComputeError::AddOverflow)?; { let _x_135 = (value).len() as u64; { let _x_136 = (_x_133 <= _x_135); match _x_136 {
+        false => _x_136,
+        true => { let _x_138 = (expected).len() as u64; { let _x_139 = (_x_138 == _x_1); match _x_139 {
+        false => _x_139,
+        true => { let _x_140 = workspaceDigestOctetsEqual((value).as_ref(), start, (expected).as_ref(), _x_1)?; _x_140 },
+    } } },
+    } } } },
+    } } })
 }
 
 pub fn appendBytes(left: alloc::vec::Vec<u8>, right: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
@@ -684,6 +1515,656 @@ pub fn qualityEdition(__prod_self: crate::StandardsProfile) -> u64 {
 
 pub fn riskEdition(__prod_self: crate::StandardsProfile) -> u64 {
     { let _x_1 = (__prod_self).riskEdition; _x_1 }
+}
+
+pub fn contractName() -> alloc::string::String {
+    alloc::string::String::from("hologram:guest/core-wasm@1")
+}
+
+pub fn appManifest(requires: alloc::vec::Vec<u8>, guest: alloc::vec::Vec<u8>, view: alloc::vec::Vec<u8>) -> Option<alloc::vec::Vec<u8>> {
+    { let _x_25 = wireKappaLabelValid((requires.clone()).as_ref()); { let _jp_49 = /* jp "_jp_49" inlined at its jump site */ (); match _x_25 {
+        false => { let _y_30 = _x_25; match _y_30 {
+        false => None,
+        true => { let _x_112 = wireManifestPrefix(); { let _x_113 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_112); __value }; { let _x_114 = { let mut __value = _x_113; __value.extend_from_slice(&requires.clone()); __value }; { let _x_115 = { let mut __value = _x_114; __value.extend_from_slice(&guest.clone()); __value }; { let _x_116 = { let mut __value = _x_115; __value.extend_from_slice(&view.clone()); __value }; { let _x_117 = wireManifestSuffix(); { let _x_118 = { let mut __value = _x_116; __value.extend_from_slice(&_x_117); __value }; { let _x_119 = Some(_x_118); _x_119 } } } } } } } },
+    } },
+        true => { let _x_100 = wireKappaLabelValid((guest.clone()).as_ref()); match _x_100 {
+        false => { let _y_30 = _x_100; match _y_30 {
+        false => None,
+        true => { let _x_112 = wireManifestPrefix(); { let _x_113 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_112); __value }; { let _x_114 = { let mut __value = _x_113; __value.extend_from_slice(&requires.clone()); __value }; { let _x_115 = { let mut __value = _x_114; __value.extend_from_slice(&guest.clone()); __value }; { let _x_116 = { let mut __value = _x_115; __value.extend_from_slice(&view.clone()); __value }; { let _x_117 = wireManifestSuffix(); { let _x_118 = { let mut __value = _x_116; __value.extend_from_slice(&_x_117); __value }; { let _x_119 = Some(_x_118); _x_119 } } } } } } } },
+    } },
+        true => { let _x_104 = wireKappaLabelValid((view.clone()).as_ref()); { let _y_30 = _x_104; match _y_30 {
+        false => None,
+        true => { let _x_112 = wireManifestPrefix(); { let _x_113 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_112); __value }; { let _x_114 = { let mut __value = _x_113; __value.extend_from_slice(&requires.clone()); __value }; { let _x_115 = { let mut __value = _x_114; __value.extend_from_slice(&guest.clone()); __value }; { let _x_116 = { let mut __value = _x_115; __value.extend_from_slice(&view.clone()); __value }; { let _x_117 = wireManifestSuffix(); { let _x_118 = { let mut __value = _x_116; __value.extend_from_slice(&_x_117); __value }; { let _x_119 = Some(_x_118); _x_119 } } } } } } } },
+    } } },
+    } },
+    } } }
+}
+
+pub fn archiveBody(manifest: alloc::vec::Vec<u8>, metadata: alloc::vec::Vec<u8>, directory: alloc::vec::Vec<u8>, provenance: alloc::vec::Vec<u8>, blob0: alloc::vec::Vec<u8>, blob1: alloc::vec::Vec<u8>, blob2: alloc::vec::Vec<u8>, blob3: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = wirePayloadsValid((manifest.clone()).as_ref(), (blob0.clone()).as_ref(), (blob1.clone()).as_ref(), (blob2.clone()).as_ref(), (blob3.clone()).as_ref()); match _x_1 {
+        false => None,
+        true => { let _x_53 = wireDirectoryPrefix(); { let _x_54 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_53); __value }; { let _x_55 = { let mut __value = _x_54; __value.extend_from_slice(&directory); __value }; { let _x_56 = wireProvenancePrefix(); { let _x_57 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_56); __value }; { let _x_58 = { let mut __value = _x_57; __value.extend_from_slice(&provenance); __value }; { let _x_59 = wireComposeBodyUnchecked(manifest.clone(), metadata, _x_55, _x_58, blob0.clone(), blob1.clone(), blob2.clone(), blob3.clone())?; { let _x_60 = Some(_x_59); _x_60 } } } } } } } },
+    } })
+}
+
+pub fn archiveBodyBytes(value: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = validArchiveFrame((value.clone()).as_ref())?; match _x_1 {
+        false => None,
+        true => { let _x_44 = 0; { let _x_47 = (value.clone()).len() as u64; { let _x_48 = 32; { let _x_49 = ((_x_47) as u64).saturating_sub(_x_48); { let _x_50 = wireSlice(value.clone(), _x_44, _x_49); { let _x_51 = Some(_x_50); _x_51 } } } } } },
+    } })
+}
+
+pub fn archiveExtension(value: alloc::vec::Vec<u8>, index: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_19 = validArchiveFrame((value.clone()).as_ref())?; { let _jp_71 = /* jp "_jp_71" inlined at its jump site */ (); match _x_19 {
+        false => { let _y_24 = _x_19; match _y_24 {
+        false => None,
+        true => { let _x_190 = 0; { let _x_191 = (index == _x_190); match _x_191 {
+        false => { let _x_216 = 2; { let _x_217 = ((index) as u64).checked_add(_x_216).ok_or(crate::ComputeError::AddOverflow)?; { let _x_218 = wireSectionBytesUnchecked(value.clone(), _x_217)?; { let _x_220 = wireProvenancePrefix(); { let _x_221 = (_x_220).len() as u64; { let _x_223 = (_x_218.clone()).len() as u64; { let _x_224 = ((_x_223) as u64).saturating_sub(_x_221); { let _x_225 = wireSlice(_x_218.clone(), _x_221, _x_224); { let _x_226 = Some(_x_225); _x_226 } } } } } } } } },
+        true => { let _x_227 = 2; { let _x_228 = ((index) as u64).checked_add(_x_227).ok_or(crate::ComputeError::AddOverflow)?; { let _x_229 = wireSectionBytesUnchecked(value.clone(), _x_228)?; { let _x_231 = wireDirectoryPrefix(); { let _x_232 = (_x_231).len() as u64; { let _x_234 = (_x_229.clone()).len() as u64; { let _x_235 = ((_x_234) as u64).saturating_sub(_x_232); { let _x_236 = wireSlice(_x_229.clone(), _x_232, _x_235); { let _x_237 = Some(_x_236); _x_237 } } } } } } } } },
+    } } },
+    } },
+        true => { let _x_187 = 2; { let _x_188 = (index < _x_187); { let _y_24 = _x_188; match _y_24 {
+        false => None,
+        true => { let _x_190 = 0; { let _x_191 = (index == _x_190); match _x_191 {
+        false => { let _x_216 = 2; { let _x_217 = ((index) as u64).checked_add(_x_216).ok_or(crate::ComputeError::AddOverflow)?; { let _x_218 = wireSectionBytesUnchecked(value.clone(), _x_217)?; { let _x_220 = wireProvenancePrefix(); { let _x_221 = (_x_220).len() as u64; { let _x_223 = (_x_218.clone()).len() as u64; { let _x_224 = ((_x_223) as u64).saturating_sub(_x_221); { let _x_225 = wireSlice(_x_218.clone(), _x_221, _x_224); { let _x_226 = Some(_x_225); _x_226 } } } } } } } } },
+        true => { let _x_227 = 2; { let _x_228 = ((index) as u64).checked_add(_x_227).ok_or(crate::ComputeError::AddOverflow)?; { let _x_229 = wireSectionBytesUnchecked(value.clone(), _x_228)?; { let _x_231 = wireDirectoryPrefix(); { let _x_232 = (_x_231).len() as u64; { let _x_234 = (_x_229.clone()).len() as u64; { let _x_235 = ((_x_234) as u64).saturating_sub(_x_232); { let _x_236 = wireSlice(_x_229.clone(), _x_232, _x_235); { let _x_237 = Some(_x_236); _x_237 } } } } } } } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn archiveFooter(value: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = validArchiveFrame((value.clone()).as_ref())?; match _x_1 {
+        false => None,
+        true => { let _x_41 = (value.clone()).len() as u64; { let _x_42 = 32; { let _x_43 = ((_x_41) as u64).saturating_sub(_x_42); { let _x_44 = wireSlice(value.clone(), _x_43, _x_42); { let _x_45 = Some(_x_44); _x_45 } } } } },
+    } })
+}
+
+pub fn archiveSection(value: alloc::vec::Vec<u8>, index: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_19 = validArchiveFrame((value.clone()).as_ref())?; { let _jp_33 = /* jp "_jp_33" inlined at its jump site */ (); match _x_19 {
+        false => { let _y_24 = _x_19; match _y_24 {
+        false => None,
+        true => { let _x_69 = wireSectionBytesUnchecked(value.clone(), index)?; { let _x_70 = Some(_x_69); _x_70 } },
+    } },
+        true => { let _x_66 = 8; { let _x_67 = (index < _x_66); { let _y_24 = _x_67; match _y_24 {
+        false => None,
+        true => { let _x_69 = wireSectionBytesUnchecked(value.clone(), index)?; { let _x_70 = Some(_x_69); _x_70 } },
+    } } } },
+    } } })
+}
+
+pub fn contentBlob(label: alloc::vec::Vec<u8>, content: alloc::vec::Vec<u8>) -> Option<alloc::vec::Vec<u8>> {
+    { let _x_1 = wireKappaLabelValid((label.clone()).as_ref()); match _x_1 {
+        false => None,
+        true => { let _x_43 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&label.clone()); __value }; { let _x_44 = { let mut __value = _x_43; __value.extend_from_slice(&content); __value }; { let _x_45 = Some(_x_44); _x_45 } } },
+    } }
+}
+
+pub fn contentBlobBytes(value: alloc::vec::Vec<u8>) -> Option<alloc::vec::Vec<u8>> {
+    { let _x_1 = wireBlobValid((value.clone()).as_ref()); match _x_1 {
+        false => None,
+        true => { let _x_26 = wireBlobContent(value.clone()); { let _x_27 = Some(_x_26); _x_27 } },
+    } }
+}
+
+pub fn contentBlobLabel(value: alloc::vec::Vec<u8>) -> Option<alloc::vec::Vec<u8>> {
+    { let _x_1 = wireBlobValid((value.clone()).as_ref()); match _x_1 {
+        false => None,
+        true => { let _x_26 = wireBlobLabel(value.clone()); { let _x_27 = Some(_x_26); _x_27 } },
+    } }
+}
+
+pub fn emptyCapabilities() -> alloc::vec::Vec<u8> {
+    { let _x_140 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![104, 116, 116, 112, 115, 58, 47, 47, 104, 111, 108, 111, 103, 114, 97, 109, 46, 102, 111, 117, 110, 100, 97, 116, 105, 111, 110, 47, 114, 101, 97, 108, 105, 122, 97, 116, 105, 111, 110, 47, 99, 97, 112, 97, 98, 105, 108, 105, 116, 121, 45, 115, 101, 116]); __value }; { let _x_147 = { let mut __value = _x_140; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_160 = { let mut __value = _x_147; __value.extend_from_slice(&alloc::vec![0, 0, 0, 0, 41, 0, 0, 0]); __value }; { let _x_208 = { let mut __value = _x_160; __value.extend_from_slice(&alloc::vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); __value }; _x_208 } } } }
+}
+
+pub fn frameArchive(body: alloc::vec::Vec<u8>, footer: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_21 = validArchiveBody((body.clone()).as_ref())?; { let _jp_40 = /* jp "_jp_40" inlined at its jump site */ (); match _x_21 {
+        false => { let _y_26 = _x_21; match _y_26 {
+        false => None,
+        true => { let _x_90 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&body.clone()); __value }; { let _x_91 = { let mut __value = _x_90; __value.extend_from_slice(&footer.clone()); __value }; { let _x_92 = Some(_x_91); _x_92 } } },
+    } },
+        true => { let _x_82 = (footer.clone()).len() as u64; { let _x_83 = 32; { let _x_84 = (_x_82 == _x_83); { let _y_26 = _x_84; match _y_26 {
+        false => None,
+        true => { let _x_90 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&body.clone()); __value }; { let _x_91 = { let mut __value = _x_90; __value.extend_from_slice(&footer.clone()); __value }; { let _x_92 = Some(_x_91); _x_92 } } },
+    } } } } },
+    } } })
+}
+
+pub fn manifestReference(value: alloc::vec::Vec<u8>, index: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_19 = validAppManifest((value.clone()).as_ref()); { let _jp_45 = /* jp "_jp_45" inlined at its jump site */ (); match _x_19 {
+        false => { let _y_24 = _x_19; match _y_24 {
+        false => None,
+        true => { let _x_96 = 57; { let _x_98 = 71; { let _x_99 = ((index) as u64).checked_mul(_x_98).ok_or(crate::ComputeError::MulOverflow)?; { let _x_100 = ((_x_96) as u64).checked_add(_x_99).ok_or(crate::ComputeError::AddOverflow)?; { let _x_101 = wireSlice(value.clone(), _x_100, _x_98); { let _x_102 = Some(_x_101); _x_102 } } } } } },
+    } },
+        true => { let _x_93 = 3; { let _x_94 = (index < _x_93); { let _y_24 = _x_94; match _y_24 {
+        false => None,
+        true => { let _x_96 = 57; { let _x_98 = 71; { let _x_99 = ((index) as u64).checked_mul(_x_98).ok_or(crate::ComputeError::MulOverflow)?; { let _x_100 = ((_x_96) as u64).checked_add(_x_99).ok_or(crate::ComputeError::AddOverflow)?; { let _x_101 = wireSlice(value.clone(), _x_100, _x_98); { let _x_102 = Some(_x_101); _x_102 } } } } } },
+    } } } },
+    } } })
+}
+
+pub fn validAppManifest(value: &[u8]) -> bool {
+    { let _x_88 = (value).len() as u64; { let _x_89 = 356; { let _x_92 = (_x_88 == _x_89); match _x_92 {
+        false => _x_92,
+        true => { let _x_159 = 0; { let _x_160 = 57; { let _x_161 = wireManifestPrefix(); { let _x_162 = wireWindowEquals((value).as_ref(), _x_159, _x_160, (_x_161).as_ref()); match _x_162 {
+        false => _x_162,
+        true => { let _x_188 = 270; { let _x_189 = 86; { let _x_190 = wireManifestSuffix(); { let _x_191 = wireWindowEquals((value).as_ref(), _x_188, _x_189, (_x_190).as_ref()); match _x_191 {
+        false => _x_191,
+        true => { let _x_209 = 57; { let _x_210 = 71; { let _x_211 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_209, _x_210); { let _x_212 = wireKappaLabelValid((_x_211).as_ref()); match _x_212 {
+        false => _x_212,
+        true => { let _x_222 = 128; { let _x_223 = 71; { let _x_224 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_222, _x_223); { let _x_225 = wireKappaLabelValid((_x_224).as_ref()); match _x_225 {
+        false => _x_225,
+        true => { let _x_229 = 199; { let _x_230 = 71; { let _x_231 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_229, _x_230); { let _x_232 = wireKappaLabelValid((_x_231).as_ref()); _x_232 } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } }
+}
+
+pub fn validArchiveBody(body: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_52 = 202; { let _x_56 = (body).len() as u64; { let _x_57 = (_x_52 <= _x_56); { let _jp_82 = /* jp "_jp_82" inlined at its jump site */ (); match _x_57 {
+        false => { let _y_62 = _x_57; match _y_62.clone() {
+        false => _y_62.clone(),
+        true => { let _x_201 = 0; { let _x_202 = 8; { let _x_203 = wireRowsValid((body).as_ref(), _x_201, _x_52, _x_202)?; match _x_203 {
+        false => _x_203,
+        true => { let _x_204 = wireBodyPayloadsValid((body).as_ref())?; _x_204 },
+    } } } },
+    } },
+        true => { let _x_172 = 0; { let _x_173 = 10; { let _x_199 = wireWindowEquals((body).as_ref(), _x_172, _x_173, &[72, 79, 76, 79, 4, 0, 0, 0, 8, 0]); { let _y_62 = _x_199; match _y_62.clone() {
+        false => _y_62.clone(),
+        true => { let _x_201 = 0; { let _x_202 = 8; { let _x_203 = wireRowsValid((body).as_ref(), _x_201, _x_52, _x_202)?; match _x_203 {
+        false => _x_203,
+        true => { let _x_204 = wireBodyPayloadsValid((body).as_ref())?; _x_204 },
+    } } } },
+    } } } } },
+    } } } } })
+}
+
+pub fn validArchiveFrame(value: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_1 = 234; { let _x_5 = (value).len() as u64; { let _x_6 = (_x_1 <= _x_5); match _x_6 {
+        false => _x_6,
+        true => { let _x_46 = 0; { let _x_48 = 32; { let _x_49 = ((_x_5) as u64).saturating_sub(_x_48); { let _x_50 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_46, _x_49); { let _x_51 = validArchiveBody((_x_50).as_ref())?; _x_51 } } } } },
+    } } } })
+}
+
+pub fn wireBlobContent(value: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 71; { let _x_6 = (value.clone()).len() as u64; { let _x_7 = ((_x_6) as u64).saturating_sub(_x_1); { let _x_8 = wireSlice(value.clone(), _x_1, _x_7); _x_8 } } } }
+}
+
+pub fn wireBlobLabel(value: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 0; { let _x_4 = 71; { let _x_7 = wireSlice(value, _x_1, _x_4); _x_7 } } }
+}
+
+pub fn wireBlobValid(value: &[u8]) -> bool {
+    { let _x_17 = 71; { let _x_21 = (value).len() as u64; { let _x_22 = (_x_17 <= _x_21); match _x_22 {
+        false => _x_22,
+        true => { let _x_37 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(value)); { let _x_38 = wireKappaLabelValid((_x_37).as_ref()); _x_38 } },
+    } } } }
+}
+
+pub fn wireBlobsValid(blob0: &[u8], blob1: &[u8], blob2: &[u8], blob3: &[u8]) -> bool {
+    { let _x_67 = wireBlobValid((blob0).as_ref()); match _x_67 {
+        false => _x_67,
+        true => { let _x_125 = wireBlobValid((blob1).as_ref()); match _x_125 {
+        false => _x_125,
+        true => { let _x_153 = wireBlobValid((blob2).as_ref()); match _x_153 {
+        false => _x_153,
+        true => { let _x_176 = wireBlobValid((blob3).as_ref()); match _x_176 {
+        false => _x_176,
+        true => { let _x_192 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob0)); { let _x_193 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_194 = wireBytesLess((_x_192).as_ref(), (_x_193).as_ref()); match _x_194 {
+        false => _x_194,
+        true => { let _x_203 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_204 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_205 = wireBytesLess((_x_203).as_ref(), (_x_204).as_ref()); match _x_205 {
+        false => _x_205,
+        true => { let _x_209 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_210 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_211 = wireBytesLess((_x_209).as_ref(), (_x_210).as_ref()); _x_211 } } },
+    } } } },
+    } } } },
+    } },
+    } },
+    } },
+    } }
+}
+
+pub fn wireBodyPayloadsValid(body: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_55 = 2; { let _x_58 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_55)?; { let _x_59 = 0; { let _x_63 = wireDirectoryPrefix(); { let _x_64 = (_x_63.clone()).len() as u64; { let _x_65 = wireWindowEquals((_x_58).as_ref(), _x_59, _x_64, (_x_63.clone()).as_ref()); match _x_65 {
+        false => _x_65,
+        true => { let _x_104 = 3; { let _x_105 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_104)?; { let _x_106 = 0; { let _x_108 = wireProvenancePrefix(); { let _x_109 = (_x_108.clone()).len() as u64; { let _x_110 = wireWindowEquals((_x_105).as_ref(), _x_106, _x_109, (_x_108.clone()).as_ref()); match _x_110 {
+        false => _x_110,
+        true => { let _x_114 = 0; { let _x_115 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_114)?; { let _x_116 = 4; { let _x_117 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_116)?; { let _x_118 = 5; { let _x_119 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_118)?; { let _x_120 = 6; { let _x_121 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_120)?; { let _x_122 = 7; { let _x_123 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_122)?; { let _x_124 = wirePayloadsValid((_x_115).as_ref(), (_x_117).as_ref(), (_x_119).as_ref(), (_x_121).as_ref(), (_x_123).as_ref()); _x_124 } } } } } } } } } } },
+    } } } } } } },
+    } } } } } } })
+}
+
+pub fn wireBytesEqual(left: &[u8], right: &[u8]) -> bool {
+    { let _x_3 = (left).cmp(&right); { let _x_11 = (alloc::vec![0]).cmp(&alloc::vec![0]); { let _x_12 = (_x_3 == _x_11); _x_12 } } }
+}
+
+pub fn wireBytesLess(left: &[u8], right: &[u8]) -> bool {
+    { let _x_3 = (left).cmp(&right); { let _x_17 = (alloc::vec![0]).cmp(&alloc::vec![1]); { let _x_18 = (_x_3 == _x_17); _x_18 } } }
+}
+
+pub fn wireCapabilitiesPresent(label: &[u8], blob0: &[u8], blob1: &[u8], blob2: &[u8], blob3: &[u8]) -> bool {
+    { let _x_131 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob0)); { let _x_132 = wireBytesEqual((label).as_ref(), (_x_131).as_ref()); { let _jp_143 = /* jp "_jp_143" inlined at its jump site */ (); match _x_132 {
+        false => { let _y_137 = _x_132; match _y_137.clone() {
+        false => { let _x_234 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_235 = wireBytesEqual((label).as_ref(), (_x_234).as_ref()); { let _jp_236 = /* jp "_jp_236" inlined at its jump site */ (); match _x_235 {
+        false => { let _y_237 = _x_235; match _y_237.clone() {
+        false => { let _x_260 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_261 = wireBytesEqual((label).as_ref(), (_x_260).as_ref()); { let _jp_262 = /* jp "_jp_262" inlined at its jump site */ (); match _x_261 {
+        false => { let _y_263 = _x_261; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } },
+        true => { let _x_284 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_285 = emptyCapabilities(); { let _x_286 = wireBytesEqual((_x_284).as_ref(), (_x_285).as_ref()); { let _y_263 = _x_286; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } } } } },
+    } } } },
+        true => _y_237.clone(),
+    } },
+        true => { let _x_288 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_289 = emptyCapabilities(); { let _x_290 = wireBytesEqual((_x_288).as_ref(), (_x_289).as_ref()); { let _y_237 = _x_290; match _y_237.clone() {
+        false => { let _x_260 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_261 = wireBytesEqual((label).as_ref(), (_x_260).as_ref()); { let _jp_262 = /* jp "_jp_262" inlined at its jump site */ (); match _x_261 {
+        false => { let _y_263 = _x_261; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } },
+        true => { let _x_284 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_285 = emptyCapabilities(); { let _x_286 = wireBytesEqual((_x_284).as_ref(), (_x_285).as_ref()); { let _y_263 = _x_286; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } } } } },
+    } } } },
+        true => _y_237.clone(),
+    } } } } },
+    } } } },
+        true => _y_137.clone(),
+    } },
+        true => { let _x_292 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob0)); { let _x_293 = emptyCapabilities(); { let _x_294 = wireBytesEqual((_x_292).as_ref(), (_x_293).as_ref()); { let _y_137 = _x_294; match _y_137.clone() {
+        false => { let _x_234 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_235 = wireBytesEqual((label).as_ref(), (_x_234).as_ref()); { let _jp_236 = /* jp "_jp_236" inlined at its jump site */ (); match _x_235 {
+        false => { let _y_237 = _x_235; match _y_237.clone() {
+        false => { let _x_260 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_261 = wireBytesEqual((label).as_ref(), (_x_260).as_ref()); { let _jp_262 = /* jp "_jp_262" inlined at its jump site */ (); match _x_261 {
+        false => { let _y_263 = _x_261; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } },
+        true => { let _x_284 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_285 = emptyCapabilities(); { let _x_286 = wireBytesEqual((_x_284).as_ref(), (_x_285).as_ref()); { let _y_263 = _x_286; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } } } } },
+    } } } },
+        true => _y_237.clone(),
+    } },
+        true => { let _x_288 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_289 = emptyCapabilities(); { let _x_290 = wireBytesEqual((_x_288).as_ref(), (_x_289).as_ref()); { let _y_237 = _x_290; match _y_237.clone() {
+        false => { let _x_260 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_261 = wireBytesEqual((label).as_ref(), (_x_260).as_ref()); { let _jp_262 = /* jp "_jp_262" inlined at its jump site */ (); match _x_261 {
+        false => { let _y_263 = _x_261; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } },
+        true => { let _x_284 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_285 = emptyCapabilities(); { let _x_286 = wireBytesEqual((_x_284).as_ref(), (_x_285).as_ref()); { let _y_263 = _x_286; match _y_263.clone() {
+        false => { let _x_275 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_276 = wireBytesEqual((label).as_ref(), (_x_275).as_ref()); match _x_276 {
+        false => _x_276,
+        true => { let _x_280 = wireBlobContent(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_281 = emptyCapabilities(); { let _x_282 = wireBytesEqual((_x_280).as_ref(), (_x_281).as_ref()); _x_282 } } },
+    } } },
+        true => _y_263.clone(),
+    } } } } },
+    } } } },
+        true => _y_237.clone(),
+    } } } } },
+    } } } },
+        true => _y_137.clone(),
+    } } } } },
+    } } } }
+}
+
+pub fn wireComposeBodyUnchecked(manifest: alloc::vec::Vec<u8>, metadata: alloc::vec::Vec<u8>, directory: alloc::vec::Vec<u8>, provenance: alloc::vec::Vec<u8>, blob0: alloc::vec::Vec<u8>, blob1: alloc::vec::Vec<u8>, blob2: alloc::vec::Vec<u8>, blob3: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_14 = 4; { let _x_17 = 0; { let _x_35 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![72, 79, 76, 79, 4, 0, 0, 0, 8, 0]); __value }; { let _x_38 = 202; { let _x_42 = (manifest.clone()).len() as u64; { let _x_43 = wireTableRow(_x_17, _x_38, _x_42); { let _x_44 = { let mut __value = _x_35; __value.extend_from_slice(&_x_43); __value }; { let _x_45 = 1; { let _x_139 = ((_x_38) as u64).checked_add(_x_42).ok_or(crate::ComputeError::AddOverflow)?; { let _x_52 = (metadata.clone()).len() as u64; { let _x_53 = wireTableRow(_x_45, _x_139, _x_52); { let _x_54 = { let mut __value = _x_44; __value.extend_from_slice(&_x_53); __value }; { let _x_55 = 2; { let _x_144 = ((_x_139) as u64).checked_add(_x_52).ok_or(crate::ComputeError::AddOverflow)?; { let _x_59 = (directory.clone()).len() as u64; { let _x_60 = wireTableRow(_x_55, _x_144, _x_59); { let _x_61 = { let mut __value = _x_54; __value.extend_from_slice(&_x_60); __value }; { let _x_62 = 3; { let _x_149 = ((_x_144) as u64).checked_add(_x_59).ok_or(crate::ComputeError::AddOverflow)?; { let _x_66 = (provenance.clone()).len() as u64; { let _x_67 = wireTableRow(_x_62, _x_149, _x_66); { let _x_68 = { let mut __value = _x_61; __value.extend_from_slice(&_x_67); __value }; { let _x_154 = ((_x_149) as u64).checked_add(_x_66).ok_or(crate::ComputeError::AddOverflow)?; { let _x_72 = (blob0.clone()).len() as u64; { let _x_73 = wireTableRow(_x_14, _x_154, _x_72); { let _x_74 = { let mut __value = _x_68; __value.extend_from_slice(&_x_73); __value }; { let _x_75 = 5; { let _x_159 = ((_x_154) as u64).checked_add(_x_72).ok_or(crate::ComputeError::AddOverflow)?; { let _x_79 = (blob1.clone()).len() as u64; { let _x_80 = wireTableRow(_x_75, _x_159, _x_79); { let _x_81 = { let mut __value = _x_74; __value.extend_from_slice(&_x_80); __value }; { let _x_82 = 6; { let _x_164 = ((_x_159) as u64).checked_add(_x_79).ok_or(crate::ComputeError::AddOverflow)?; { let _x_86 = (blob2.clone()).len() as u64; { let _x_87 = wireTableRow(_x_82, _x_164, _x_86); { let _x_88 = { let mut __value = _x_81; __value.extend_from_slice(&_x_87); __value }; { let _x_89 = 7; { let _x_169 = ((_x_164) as u64).checked_add(_x_86).ok_or(crate::ComputeError::AddOverflow)?; { let _x_93 = (blob3.clone()).len() as u64; { let _x_94 = wireTableRow(_x_89, _x_169, _x_93); { let _x_95 = { let mut __value = _x_88; __value.extend_from_slice(&_x_94); __value }; { let _x_96 = { let mut __value = _x_95; __value.extend_from_slice(&manifest.clone()); __value }; { let _x_97 = { let mut __value = _x_96; __value.extend_from_slice(&metadata.clone()); __value }; { let _x_98 = { let mut __value = _x_97; __value.extend_from_slice(&directory.clone()); __value }; { let _x_99 = { let mut __value = _x_98; __value.extend_from_slice(&provenance.clone()); __value }; { let _x_100 = { let mut __value = _x_99; __value.extend_from_slice(&blob0.clone()); __value }; { let _x_101 = { let mut __value = _x_100; __value.extend_from_slice(&blob1.clone()); __value }; { let _x_102 = { let mut __value = _x_101; __value.extend_from_slice(&blob2.clone()); __value }; { let _x_103 = { let mut __value = _x_102; __value.extend_from_slice(&blob3.clone()); __value }; _x_103 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn wireDecodeLe64(value: alloc::vec::Vec<u8>) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_wireDecodeLe64(value.as_ref())
+}
+
+fn __prod_borrowed_wireDecodeLe64(value: &[u8]) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_4 = 0; { let _x_8 = 1; { let _x_11 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_4, _x_8); { let _x_12 = __prod_borrowed_wireDecodeOctet((_x_11).as_ref()); { let _x_13 = ((_x_12) as u64).checked_mul(_x_8).ok_or(crate::ComputeError::MulOverflow)?; { let _x_15 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_8, _x_8); { let _x_16 = __prod_borrowed_wireDecodeOctet((_x_15).as_ref()); { let _x_17 = 256; { let _x_20 = ((_x_16) as u64).checked_mul(_x_17).ok_or(crate::ComputeError::MulOverflow)?; { let _x_95 = ((_x_13) as u64).checked_add(_x_20).ok_or(crate::ComputeError::AddOverflow)?; { let _x_22 = 2; { let _x_25 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_22, _x_8); { let _x_26 = __prod_borrowed_wireDecodeOctet((_x_25).as_ref()); { let _x_27 = 65536; { let _x_30 = ((_x_26) as u64).checked_mul(_x_27).ok_or(crate::ComputeError::MulOverflow)?; { let _x_101 = ((_x_95) as u64).checked_add(_x_30).ok_or(crate::ComputeError::AddOverflow)?; { let _x_32 = 3; { let _x_35 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_32, _x_8); { let _x_36 = __prod_borrowed_wireDecodeOctet((_x_35).as_ref()); { let _x_37 = 16777216; { let _x_40 = ((_x_36) as u64).checked_mul(_x_37).ok_or(crate::ComputeError::MulOverflow)?; { let _x_107 = ((_x_101) as u64).checked_add(_x_40).ok_or(crate::ComputeError::AddOverflow)?; { let _x_42 = 4; { let _x_45 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_42, _x_8); { let _x_46 = __prod_borrowed_wireDecodeOctet((_x_45).as_ref()); { let _x_47 = 4294967296; { let _x_50 = ((_x_46) as u64).checked_mul(_x_47).ok_or(crate::ComputeError::MulOverflow)?; { let _x_113 = ((_x_107) as u64).checked_add(_x_50).ok_or(crate::ComputeError::AddOverflow)?; { let _x_52 = 5; { let _x_55 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_52, _x_8); { let _x_56 = __prod_borrowed_wireDecodeOctet((_x_55).as_ref()); { let _x_57 = 1099511627776; { let _x_60 = ((_x_56) as u64).checked_mul(_x_57).ok_or(crate::ComputeError::MulOverflow)?; { let _x_119 = ((_x_113) as u64).checked_add(_x_60).ok_or(crate::ComputeError::AddOverflow)?; { let _x_62 = 6; { let _x_65 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_62, _x_8); { let _x_66 = __prod_borrowed_wireDecodeOctet((_x_65).as_ref()); { let _x_67 = 281474976710656; { let _x_70 = ((_x_66) as u64).checked_mul(_x_67).ok_or(crate::ComputeError::MulOverflow)?; { let _x_125 = ((_x_119) as u64).checked_add(_x_70).ok_or(crate::ComputeError::AddOverflow)?; { let _x_72 = 7; { let _x_75 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_72, _x_8); { let _x_76 = __prod_borrowed_wireDecodeOctet((_x_75).as_ref()); { let _x_77 = 72057594037927936; { let _x_80 = ((_x_76) as u64).checked_mul(_x_77).ok_or(crate::ComputeError::MulOverflow)?; { let _x_131 = ((_x_125) as u64).checked_add(_x_80).ok_or(crate::ComputeError::AddOverflow)?; _x_131 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn wireDecodeOctet(value: alloc::vec::Vec<u8>) -> u64 {
+    __prod_borrowed_wireDecodeOctet(value.as_ref())
+}
+
+fn __prod_borrowed_wireDecodeOctet(value: &[u8]) -> u64 {
+    { let _x_1 = 256; { let _x_4 = __prod_borrowed_wireDecodeOctetSearch((value).as_ref(), _x_1); _x_4 } }
+}
+
+pub fn wireDecodeOctetSearch(x_1: alloc::vec::Vec<u8>, x_2: u64) -> u64 {
+    __prod_borrowed_wireDecodeOctetSearch(x_1.as_ref(), x_2)
+}
+
+fn __prod_borrowed_wireDecodeOctetSearch(x_1: &[u8], x_2: u64) -> u64 {
+    match x_2 {
+        0 => { let _x_30 = 0; _x_30 },
+        _ => { let n_19 = (x_2).saturating_sub(1); { let _x_36 = wireEncodeOctet(n_19); { let _x_37 = wireBytesEqual((x_1).as_ref(), (_x_36).as_ref()); match _x_37 {
+        false => { let _x_48 = __prod_borrowed_wireDecodeOctetSearch((x_1).as_ref(), n_19); _x_48 },
+        true => n_19,
+    } } } },
+    }
+}
+
+pub fn wireDirectoryPrefix() -> alloc::vec::Vec<u8> {
+    { let _x_5 = 62; { let _x_8 = wireEncodeLe16(_x_5); { let _x_9 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_8); __value }; { let _x_162 = { let mut __value = _x_9; __value.extend_from_slice(&alloc::vec![104, 116, 116, 112, 115, 58, 47, 47, 104, 111, 108, 111, 103, 114, 97, 109, 46, 102, 111, 117, 110, 100, 97, 116, 105, 111, 110, 47, 101, 120, 116, 101, 110, 115, 105, 111, 110, 47, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 45, 100, 105, 114, 101, 99, 116, 111, 114, 121, 47, 118, 49]); __value }; _x_162 } } } }
+}
+
+pub fn wireEncodeLe16(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 65535; { let _x_4 = (value <= _x_1); match _x_4 {
+        false => alloc::vec![],
+        true => { let _x_83 = 1; { let _x_84 = 0; { let _x_85 = if _x_83 == 0 { _x_84 } else { value / _x_83 }; { let _x_86 = 256; { let _x_87 = if _x_86 == 0 { _x_84 } else { _x_85 % _x_86 }; { let _x_88 = wireEncodeOctet(_x_87); { let _x_89 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_88); __value }; { let _x_90 = if _x_86 == 0 { _x_84 } else { value / _x_86 }; { let _x_91 = if _x_86 == 0 { _x_84 } else { _x_90 % _x_86 }; { let _x_92 = wireEncodeOctet(_x_91); { let _x_93 = { let mut __value = _x_89; __value.extend_from_slice(&_x_92); __value }; _x_93 } } } } } } } } } } },
+    } } }
+}
+
+pub fn wireEncodeLe64(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 18446744073709551615; { let _x_4 = (value <= _x_1); match _x_4 {
+        false => alloc::vec![],
+        true => { let _x_161 = 1; { let _x_162 = 0; { let _x_163 = if _x_161 == 0 { _x_162 } else { value / _x_161 }; { let _x_164 = 256; { let _x_165 = if _x_164 == 0 { _x_162 } else { _x_163 % _x_164 }; { let _x_166 = wireEncodeOctet(_x_165); { let _x_167 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_166); __value }; { let _x_168 = if _x_164 == 0 { _x_162 } else { value / _x_164 }; { let _x_169 = if _x_164 == 0 { _x_162 } else { _x_168 % _x_164 }; { let _x_170 = wireEncodeOctet(_x_169); { let _x_171 = { let mut __value = _x_167; __value.extend_from_slice(&_x_170); __value }; { let _x_172 = 65536; { let _x_173 = if _x_172 == 0 { _x_162 } else { value / _x_172 }; { let _x_174 = if _x_164 == 0 { _x_162 } else { _x_173 % _x_164 }; { let _x_175 = wireEncodeOctet(_x_174); { let _x_176 = { let mut __value = _x_171; __value.extend_from_slice(&_x_175); __value }; { let _x_177 = 16777216; { let _x_178 = if _x_177 == 0 { _x_162 } else { value / _x_177 }; { let _x_179 = if _x_164 == 0 { _x_162 } else { _x_178 % _x_164 }; { let _x_180 = wireEncodeOctet(_x_179); { let _x_181 = { let mut __value = _x_176; __value.extend_from_slice(&_x_180); __value }; { let _x_182 = 4294967296; { let _x_183 = if _x_182 == 0 { _x_162 } else { value / _x_182 }; { let _x_184 = if _x_164 == 0 { _x_162 } else { _x_183 % _x_164 }; { let _x_185 = wireEncodeOctet(_x_184); { let _x_186 = { let mut __value = _x_181; __value.extend_from_slice(&_x_185); __value }; { let _x_187 = 1099511627776; { let _x_188 = if _x_187 == 0 { _x_162 } else { value / _x_187 }; { let _x_189 = if _x_164 == 0 { _x_162 } else { _x_188 % _x_164 }; { let _x_190 = wireEncodeOctet(_x_189); { let _x_191 = { let mut __value = _x_186; __value.extend_from_slice(&_x_190); __value }; { let _x_192 = 281474976710656; { let _x_193 = if _x_192 == 0 { _x_162 } else { value / _x_192 }; { let _x_194 = if _x_164 == 0 { _x_162 } else { _x_193 % _x_164 }; { let _x_195 = wireEncodeOctet(_x_194); { let _x_196 = { let mut __value = _x_191; __value.extend_from_slice(&_x_195); __value }; { let _x_197 = 72057594037927936; { let _x_198 = if _x_197 == 0 { _x_162 } else { value / _x_197 }; { let _x_199 = if _x_164 == 0 { _x_162 } else { _x_198 % _x_164 }; { let _x_200 = wireEncodeOctet(_x_199); { let _x_201 = { let mut __value = _x_196; __value.extend_from_slice(&_x_200); __value }; _x_201 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } },
+    } } }
+}
+
+pub fn wireEncodeOctet(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 256; { let _x_4 = (value < _x_1); match _x_4 {
+        false => alloc::vec![],
+        true => { let _x_7278 = 128; { let _x_7279 = (value < _x_7278); match _x_7279 {
+        false => { let _x_7963 = 192; { let _x_7964 = (value < _x_7963); match _x_7964 {
+        false => { let _x_8303 = 224; { let _x_8304 = (value < _x_8303); match _x_8304 {
+        false => { let _x_8471 = 240; { let _x_8472 = (value < _x_8471); match _x_8472 {
+        false => { let _x_8589 = ((value) as u64).saturating_sub(_x_8471); { let _x_8590 = 1; { let _x_8591 = wireSlice(alloc::vec![240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255], _x_8589, _x_8590); _x_8591 } } },
+        true => { let _x_8628 = ((value) as u64).saturating_sub(_x_8303); { let _x_8629 = 1; { let _x_8630 = wireSlice(alloc::vec![224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239], _x_8628, _x_8629); _x_8630 } } },
+    } } },
+        true => { let _x_8631 = 208; { let _x_8632 = (value < _x_8631); match _x_8632 {
+        false => { let _x_8749 = ((value) as u64).saturating_sub(_x_8631); { let _x_8750 = 1; { let _x_8751 = wireSlice(alloc::vec![208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223], _x_8749, _x_8750); _x_8751 } } },
+        true => { let _x_8788 = ((value) as u64).saturating_sub(_x_7963); { let _x_8789 = 1; { let _x_8790 = wireSlice(alloc::vec![192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207], _x_8788, _x_8789); _x_8790 } } },
+    } } },
+    } } },
+        true => { let _x_8791 = 160; { let _x_8792 = (value < _x_8791); match _x_8792 {
+        false => { let _x_8959 = 176; { let _x_8960 = (value < _x_8959); match _x_8960 {
+        false => { let _x_9077 = ((value) as u64).saturating_sub(_x_8959); { let _x_9078 = 1; { let _x_9079 = wireSlice(alloc::vec![176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191], _x_9077, _x_9078); _x_9079 } } },
+        true => { let _x_9116 = ((value) as u64).saturating_sub(_x_8791); { let _x_9117 = 1; { let _x_9118 = wireSlice(alloc::vec![160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175], _x_9116, _x_9117); _x_9118 } } },
+    } } },
+        true => { let _x_9119 = 144; { let _x_9120 = (value < _x_9119); match _x_9120 {
+        false => { let _x_9237 = ((value) as u64).saturating_sub(_x_9119); { let _x_9238 = 1; { let _x_9239 = wireSlice(alloc::vec![144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], _x_9237, _x_9238); _x_9239 } } },
+        true => { let _x_9276 = ((value) as u64).saturating_sub(_x_7278); { let _x_9277 = 1; { let _x_9278 = wireSlice(alloc::vec![128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143], _x_9276, _x_9277); _x_9278 } } },
+    } } },
+    } } },
+    } } },
+        true => { let _x_9279 = 64; { let _x_9280 = (value < _x_9279); match _x_9280 {
+        false => { let _x_9620 = 96; { let _x_9621 = (value < _x_9620); match _x_9621 {
+        false => { let _x_9788 = 112; { let _x_9789 = (value < _x_9788); match _x_9789 {
+        false => { let _x_9906 = ((value) as u64).saturating_sub(_x_9788); { let _x_9907 = 1; { let _x_9908 = wireSlice(alloc::vec![112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127], _x_9906, _x_9907); _x_9908 } } },
+        true => { let _x_9945 = ((value) as u64).saturating_sub(_x_9620); { let _x_9946 = 1; { let _x_9947 = wireSlice(alloc::vec![96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111], _x_9945, _x_9946); _x_9947 } } },
+    } } },
+        true => { let _x_9948 = 80; { let _x_9949 = (value < _x_9948); match _x_9949 {
+        false => { let _x_10066 = ((value) as u64).saturating_sub(_x_9948); { let _x_10067 = 1; { let _x_10068 = wireSlice(alloc::vec![80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95], _x_10066, _x_10067); _x_10068 } } },
+        true => { let _x_10105 = ((value) as u64).saturating_sub(_x_9279); { let _x_10106 = 1; { let _x_10107 = wireSlice(alloc::vec![64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79], _x_10105, _x_10106); _x_10107 } } },
+    } } },
+    } } },
+        true => { let _x_10108 = 32; { let _x_10109 = (value < _x_10108); match _x_10109 {
+        false => { let _x_10277 = 48; { let _x_10278 = (value < _x_10277); match _x_10278 {
+        false => { let _x_10395 = ((value) as u64).saturating_sub(_x_10277); { let _x_10396 = 1; { let _x_10397 = wireSlice(alloc::vec![48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63], _x_10395, _x_10396); _x_10397 } } },
+        true => { let _x_10434 = ((value) as u64).saturating_sub(_x_10108); { let _x_10435 = 1; { let _x_10436 = wireSlice(alloc::vec![32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], _x_10434, _x_10435); _x_10436 } } },
+    } } },
+        true => { let _x_10437 = 16; { let _x_10438 = (value < _x_10437); match _x_10438 {
+        false => { let _x_10556 = ((value) as u64).saturating_sub(_x_10437); { let _x_10557 = 1; { let _x_10558 = wireSlice(alloc::vec![16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], _x_10556, _x_10557); _x_10558 } } },
+        true => { let _x_10559 = 0; { let _x_10561 = 1; { let _x_10597 = ((value) as u64).saturating_sub(_x_10559); { let _x_10598 = wireSlice(alloc::vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], _x_10597, _x_10561); _x_10598 } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } }
+}
+
+pub fn wireHexBytesValid(x_1: &[u8], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_46 = true; _x_46 },
+        _ => { let n_34 = (x_2).saturating_sub(1); { let _x_50 = 1; { let _x_51 = wireSlice(alloc::borrow::ToOwned::to_owned(x_1), n_34, _x_50); { let _x_52 = wireHexOctetValid((_x_51).as_ref()); match _x_52 {
+        false => _x_52,
+        true => { let _x_56 = wireHexBytesValid((x_1).as_ref(), n_34); _x_56 },
+    } } } } },
+    }
+}
+
+pub fn wireHexOctetValid(value: &[u8]) -> bool {
+    { let _x_254 = wireBytesEqual((value).as_ref(), &[48]); match _x_254 {
+        false => { let _x_563 = wireBytesEqual((value).as_ref(), &[49]); match _x_563 {
+        false => { let _x_728 = wireBytesEqual((value).as_ref(), &[50]); match _x_728 {
+        false => { let _x_881 = wireBytesEqual((value).as_ref(), &[51]); match _x_881 {
+        false => { let _x_1022 = wireBytesEqual((value).as_ref(), &[52]); match _x_1022 {
+        false => { let _x_1151 = wireBytesEqual((value).as_ref(), &[53]); match _x_1151 {
+        false => { let _x_1268 = wireBytesEqual((value).as_ref(), &[54]); match _x_1268 {
+        false => { let _x_1373 = wireBytesEqual((value).as_ref(), &[55]); match _x_1373 {
+        false => { let _x_1466 = wireBytesEqual((value).as_ref(), &[56]); match _x_1466 {
+        false => { let _x_1547 = wireBytesEqual((value).as_ref(), &[57]); match _x_1547 {
+        false => { let _x_1616 = wireBytesEqual((value).as_ref(), &[97]); match _x_1616 {
+        false => { let _x_1673 = wireBytesEqual((value).as_ref(), &[98]); match _x_1673 {
+        false => { let _x_1718 = wireBytesEqual((value).as_ref(), &[99]); match _x_1718 {
+        false => { let _x_1751 = wireBytesEqual((value).as_ref(), &[100]); match _x_1751 {
+        false => { let _x_1772 = wireBytesEqual((value).as_ref(), &[101]); match _x_1772 {
+        false => { let _x_1783 = wireBytesEqual((value).as_ref(), &[102]); _x_1783 },
+        true => _x_1772,
+    } },
+        true => _x_1751,
+    } },
+        true => _x_1718,
+    } },
+        true => _x_1673,
+    } },
+        true => _x_1616,
+    } },
+        true => _x_1547,
+    } },
+        true => _x_1466,
+    } },
+        true => _x_1373,
+    } },
+        true => _x_1268,
+    } },
+        true => _x_1151,
+    } },
+        true => _x_1022,
+    } },
+        true => _x_881,
+    } },
+        true => _x_728,
+    } },
+        true => _x_563,
+    } },
+        true => _x_254,
+    } }
+}
+
+pub fn wireKappaLabelValid(value: &[u8]) -> bool {
+    { let _x_70 = (value).len() as u64; { let _x_71 = 71; { let _x_74 = (_x_70 == _x_71); match _x_74 {
+        false => _x_74,
+        true => { let _x_125 = 0; { let _x_126 = 7; { let _x_152 = wireWindowEquals((value).as_ref(), _x_125, _x_126, &[98, 108, 97, 107, 101, 51, 58]); match _x_152 {
+        false => _x_152,
+        true => { let _x_156 = 7; { let _x_157 = 64; { let _x_158 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_156, _x_157); { let _x_159 = wireHexBytesValid((_x_158).as_ref(), _x_157); _x_159 } } } },
+    } } } },
+    } } } }
+}
+
+pub fn wireManifestPrefix() -> alloc::vec::Vec<u8> {
+    { let _x_129 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![104, 116, 116, 112, 115, 58, 47, 47, 104, 111, 108, 111, 103, 114, 97, 109, 46, 102, 111, 117, 110, 100, 97, 116, 105, 111, 110, 47, 114, 101, 97, 108, 105, 122, 97, 116, 105, 111, 110, 47, 97, 112, 112, 45, 109, 97, 110, 105, 102, 101, 115, 116]); __value }; { let _x_136 = { let mut __value = _x_129; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_145 = { let mut __value = _x_136; __value.extend_from_slice(&alloc::vec![3, 0, 0, 0]); __value }; _x_145 } } }
+}
+
+pub fn wireManifestSuffix() -> alloc::vec::Vec<u8> {
+    { let _x_17 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![82, 0, 0, 0]); __value }; { let _x_36 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0, 0, 0, 0, 2, 0, 0, 0, 0, 8, 0, 0, 0]); __value }; { let _x_68 = { let mut __value = _x_36; __value.extend_from_slice(&alloc::vec![104, 111, 108, 111, 95, 114, 117, 110]); __value }; { let _x_75 = { let mut __value = _x_68; __value.extend_from_slice(&alloc::vec![26, 0, 0, 0]); __value }; { let _x_143 = { let mut __value = _x_75; __value.extend_from_slice(&alloc::vec![104, 111, 108, 111, 103, 114, 97, 109, 58, 103, 117, 101, 115, 116, 47, 99, 111, 114, 101, 45, 119, 97, 115, 109, 64, 49]); __value }; { let _x_154 = { let mut __value = _x_143; __value.extend_from_slice(&alloc::vec![3, 10, 0, 0, 0]); __value }; { let _x_179 = { let mut __value = _x_154; __value.extend_from_slice(&alloc::vec![105, 110, 100, 101, 120, 46, 104, 116, 109, 108]); __value }; { let _x_182 = { let mut __value = _x_179; __value.extend_from_slice(&alloc::vec![8, 0, 0, 0]); __value }; { let _x_199 = { let mut __value = _x_182; __value.extend_from_slice(&alloc::vec![112, 111, 114, 116, 97, 98, 108, 101]); __value }; { let _x_203 = { let mut __value = _x_199; __value.extend_from_slice(&alloc::vec![0, 0, 0, 0]); __value }; { let _x_204 = { let mut __value = _x_17; __value.extend_from_slice(&_x_203); __value }; _x_204 } } } } } } } } } } }
+}
+
+pub fn wirePayloadsValid(manifest: &[u8], blob0: &[u8], blob1: &[u8], blob2: &[u8], blob3: &[u8]) -> bool {
+    { let _x_64 = validAppManifest((manifest).as_ref()); match _x_64 {
+        false => _x_64,
+        true => { let _x_115 = wireBlobsValid((blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_115 {
+        false => _x_115,
+        true => { let _x_133 = 57; { let _x_134 = 71; { let _x_135 = wireSlice(alloc::borrow::ToOwned::to_owned(manifest), _x_133, _x_134); { let _x_136 = wireCapabilitiesPresent((_x_135).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_136 {
+        false => _x_136,
+        true => { let _x_146 = 128; { let _x_147 = 71; { let _x_148 = wireSlice(alloc::borrow::ToOwned::to_owned(manifest), _x_146, _x_147); { let _x_149 = wireReferencePresent((_x_148).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_149 {
+        false => _x_149,
+        true => { let _x_153 = 199; { let _x_154 = 71; { let _x_155 = wireSlice(alloc::borrow::ToOwned::to_owned(manifest), _x_153, _x_154); { let _x_156 = wireReferencePresent((_x_155).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); _x_156 } } } },
+    } } } } },
+    } } } } },
+    } },
+    } }
+}
+
+pub fn wireProvenancePrefix() -> alloc::vec::Vec<u8> {
+    { let _x_5 = 49; { let _x_8 = wireEncodeLe16(_x_5); { let _x_9 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_8); __value }; { let _x_133 = { let mut __value = _x_9; __value.extend_from_slice(&alloc::vec![104, 116, 116, 112, 115, 58, 47, 47, 117, 111, 114, 46, 102, 111, 117, 110, 100, 97, 116, 105, 111, 110, 47, 101, 120, 116, 101, 110, 115, 105, 111, 110, 47, 112, 114, 105, 115, 109, 112, 109, 45, 109, 111, 100, 101, 108, 47, 118, 49]); __value }; _x_133 } } } }
+}
+
+pub fn wireReferencePresent(label: &[u8], blob0: &[u8], blob1: &[u8], blob2: &[u8], blob3: &[u8]) -> bool {
+    { let _x_37 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob0)); { let _x_38 = wireBytesEqual((label).as_ref(), (_x_37).as_ref()); match _x_38 {
+        false => { let _x_68 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob1)); { let _x_69 = wireBytesEqual((label).as_ref(), (_x_68).as_ref()); match _x_69 {
+        false => { let _x_77 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob2)); { let _x_78 = wireBytesEqual((label).as_ref(), (_x_77).as_ref()); match _x_78 {
+        false => { let _x_82 = wireBlobLabel(alloc::borrow::ToOwned::to_owned(blob3)); { let _x_83 = wireBytesEqual((label).as_ref(), (_x_82).as_ref()); _x_83 } },
+        true => _x_78,
+    } } },
+        true => _x_69,
+    } } },
+        true => _x_38,
+    } } }
+}
+
+pub fn wireRowLength(body: alloc::vec::Vec<u8>, index: u64) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_wireRowLength(body.as_ref(), index)
+}
+
+fn __prod_borrowed_wireRowLength(body: &[u8], index: u64) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_13 = 26; { let _x_17 = 24; { let _x_20 = ((index) as u64).checked_mul(_x_17).ok_or(crate::ComputeError::MulOverflow)?; { let _x_40 = ((_x_13) as u64).checked_add(_x_20).ok_or(crate::ComputeError::AddOverflow)?; { let _x_22 = 8; { let _x_25 = { let __start = usize::try_from(_x_40).ok(); let __count = usize::try_from(_x_22).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (body).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_25 {
+        None => { let _x_45 = 0; _x_45 },
+        Some(val_28) => { let _x_46 = __prod_borrowed_wireDecodeLe64((val_28).as_ref())?; _x_46 },
+    } } } } } } })
+}
+
+pub fn wireRowOffset(body: alloc::vec::Vec<u8>, index: u64) -> Result<u64, crate::ComputeError> {
+    __prod_borrowed_wireRowOffset(body.as_ref(), index)
+}
+
+fn __prod_borrowed_wireRowOffset(body: &[u8], index: u64) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_13 = 18; { let _x_17 = 24; { let _x_20 = ((index) as u64).checked_mul(_x_17).ok_or(crate::ComputeError::MulOverflow)?; { let _x_40 = ((_x_13) as u64).checked_add(_x_20).ok_or(crate::ComputeError::AddOverflow)?; { let _x_22 = 8; { let _x_25 = { let __start = usize::try_from(_x_40).ok(); let __count = usize::try_from(_x_22).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (body).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_25 {
+        None => { let _x_45 = 0; _x_45 },
+        Some(val_28) => { let _x_46 = __prod_borrowed_wireDecodeLe64((val_28).as_ref())?; _x_46 },
+    } } } } } } })
+}
+
+pub fn wireRowsValid(x_1: &[u8], x_2: u64, x_3: u64, x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_318 = (x_1).len() as u64; { let _x_319 = (x_3 == _x_318); _x_319 } },
+        _ => { let n_155 = (x_4).saturating_sub(1); { let _x_325 = 8; { let _x_326 = (x_2 < _x_325); { let _jp_327 = /* jp "_jp_327" inlined at its jump site */ (); match _x_326 {
+        false => { let _y_328 = _x_326; match _y_328.clone() {
+        false => _y_328.clone(),
+        true => { let _x_472 = 10; { let _x_474 = 24; { let _x_475 = ((x_2) as u64).checked_mul(_x_474).ok_or(crate::ComputeError::MulOverflow)?; { let _x_476 = ((_x_472) as u64).checked_add(_x_475).ok_or(crate::ComputeError::AddOverflow)?; { let _x_477 = 1; { let _x_478 = wireSectionKind(x_2); { let _x_479 = wireWindowEquals((x_1).as_ref(), _x_476, _x_477, (_x_478).as_ref()); { let _jp_480 = /* jp "_jp_480" inlined at its jump site */ (); match _x_479 {
+        false => { let _y_481 = _x_479; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } },
+        true => { let _x_489 = 11; { let _x_491 = 24; { let _x_492 = ((x_2) as u64).checked_mul(_x_491).ok_or(crate::ComputeError::MulOverflow)?; { let _x_493 = ((_x_489) as u64).checked_add(_x_492).ok_or(crate::ComputeError::AddOverflow)?; { let _x_494 = 7; { let _x_506 = wireWindowEquals((x_1).as_ref(), _x_493, _x_494, &[0, 0, 0, 0, 0, 0, 0]); match _x_506 {
+        false => { let _y_481 = _x_506; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } },
+        true => { let _x_507 = __prod_borrowed_wireRowOffset((x_1).as_ref(), x_2)?; { let _x_508 = (_x_507 == x_3); match _x_508 {
+        false => { let _y_481 = _x_508; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } },
+        true => { let _x_509 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_512 = (x_1).len() as u64; { let _x_513 = ((_x_512) as u64).saturating_sub(x_3); { let _x_514 = (_x_509 <= _x_513); { let _y_481 = _x_514; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } } } } } },
+    } } },
+    } } } } } } },
+    } } } } } } } } },
+    } },
+        true => { let _x_469 = (x_1).len() as u64; { let _x_470 = (x_3 <= _x_469); { let _y_328 = _x_470; match _y_328.clone() {
+        false => _y_328.clone(),
+        true => { let _x_472 = 10; { let _x_474 = 24; { let _x_475 = ((x_2) as u64).checked_mul(_x_474).ok_or(crate::ComputeError::MulOverflow)?; { let _x_476 = ((_x_472) as u64).checked_add(_x_475).ok_or(crate::ComputeError::AddOverflow)?; { let _x_477 = 1; { let _x_478 = wireSectionKind(x_2); { let _x_479 = wireWindowEquals((x_1).as_ref(), _x_476, _x_477, (_x_478).as_ref()); { let _jp_480 = /* jp "_jp_480" inlined at its jump site */ (); match _x_479 {
+        false => { let _y_481 = _x_479; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } },
+        true => { let _x_489 = 11; { let _x_491 = 24; { let _x_492 = ((x_2) as u64).checked_mul(_x_491).ok_or(crate::ComputeError::MulOverflow)?; { let _x_493 = ((_x_489) as u64).checked_add(_x_492).ok_or(crate::ComputeError::AddOverflow)?; { let _x_494 = 7; { let _x_506 = wireWindowEquals((x_1).as_ref(), _x_493, _x_494, &[0, 0, 0, 0, 0, 0, 0]); match _x_506 {
+        false => { let _y_481 = _x_506; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } },
+        true => { let _x_507 = __prod_borrowed_wireRowOffset((x_1).as_ref(), x_2)?; { let _x_508 = (_x_507 == x_3); match _x_508 {
+        false => { let _y_481 = _x_508; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } },
+        true => { let _x_509 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_512 = (x_1).len() as u64; { let _x_513 = ((_x_512) as u64).saturating_sub(x_3); { let _x_514 = (_x_509 <= _x_513); { let _y_481 = _x_514; match _y_481.clone() {
+        false => _y_481.clone(),
+        true => { let _x_515 = ((x_2) as u64).checked_add(_x_477).ok_or(crate::ComputeError::AddOverflow)?; { let _x_516 = __prod_borrowed_wireRowLength((x_1).as_ref(), x_2)?; { let _x_517 = ((x_3) as u64).checked_add(_x_516).ok_or(crate::ComputeError::AddOverflow)?; { let _x_518 = wireRowsValid((x_1).as_ref(), _x_515, _x_517, n_155)?; _x_518 } } } },
+    } } } } } },
+    } } },
+    } } } } } } },
+    } } } } } } } } },
+    } } } },
+    } } } } },
+    })
+}
+
+pub fn wireSectionBytesUnchecked(body: alloc::vec::Vec<u8>, index: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_1 = __prod_borrowed_wireRowOffset((body.clone()).as_ref(), index)?; { let _x_2 = __prod_borrowed_wireRowLength((body.clone()).as_ref(), index)?; { let _x_3 = wireSlice(body.clone(), _x_1, _x_2); _x_3 } } })
+}
+
+pub fn wireSectionKind(index: u64) -> alloc::vec::Vec<u8> {
+    { let _x_1 = 8; { let _x_4 = (index < _x_1); match _x_4 {
+        false => alloc::vec![],
+        true => { let _x_298 = 0; { let _x_299 = (index == _x_298); match _x_299 {
+        false => { let _x_330 = 1; { let _x_331 = (index == _x_330); match _x_331 {
+        false => { let _x_353 = 4; { let _x_354 = (index < _x_353); match _x_354 {
+        false => alloc::vec![16],
+        true => alloc::vec![14],
+    } } },
+        true => alloc::vec![8],
+    } } },
+        true => alloc::vec![15],
+    } } },
+    } } }
+}
+
+pub fn wireSlice(value: alloc::vec::Vec<u8>, start: u64, count: u64) -> alloc::vec::Vec<u8> {
+    { let _x_9 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_9 {
+        None => alloc::vec![],
+        Some(val_12) => val_12,
+    } }
+}
+
+pub fn wireTableRow(index: u64, offset: u64, length: u64) -> alloc::vec::Vec<u8> {
+    { let _x_5 = wireSectionKind(index); { let _x_6 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_5); __value }; { let _x_19 = { let mut __value = _x_6; __value.extend_from_slice(&alloc::vec![0, 0, 0, 0, 0, 0, 0]); __value }; { let _x_20 = wireEncodeLe64(offset); { let _x_21 = { let mut __value = _x_19; __value.extend_from_slice(&_x_20); __value }; { let _x_22 = wireEncodeLe64(length); { let _x_23 = { let mut __value = _x_21; __value.extend_from_slice(&_x_22); __value }; _x_23 } } } } } } }
+}
+
+pub fn wireWindowEquals(value: &[u8], start: u64, count: u64, expected: &[u8]) -> bool {
+    { let _x_8 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_8 {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_17 = wireBytesEqual((val_11).as_ref(), (expected).as_ref()); _x_17 },
+    } }
 }
 
 pub fn allBelow(x_1: u64, x_2: &[u64]) -> bool {

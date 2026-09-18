@@ -493,6 +493,11 @@ pub fn audit_dependencies(root: &Path) -> Result<(), Fail> {
             .get("id")
             .and_then(toml::Value::as_str)
             .ok_or("dependency row lacks id")?;
+        if matches!(id, "hologram-live" | "uor-hologram")
+            && row.get("role").and_then(toml::Value::as_str) != Some("validation-oracle")
+        {
+            return Err(format!("{id} must be registered as a validation-only oracle").into());
+        }
         let revision = row
             .get("revision")
             .and_then(toml::Value::as_str)
@@ -570,6 +575,73 @@ pub fn audit_dependencies(root: &Path) -> Result<(), Fail> {
                 }
                 _ => return Err(format!("unknown dependency artifact kind {kind}").into()),
             }
+        }
+    }
+    Ok(())
+}
+
+fn check_runtime_oracle_separation(source: &str) -> Result<(), Fail> {
+    let lock: toml::Value = toml::from_str(source)?;
+    let packages = lock
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .ok_or("runtime Cargo lock has no packages")?;
+    for package in packages {
+        let name = package
+            .get("name")
+            .and_then(toml::Value::as_str)
+            .ok_or("runtime Cargo package has no name")?;
+        let origin = match package.get("source") {
+            Some(value) => value.as_str().ok_or("runtime Cargo source is malformed")?,
+            None => "",
+        };
+        if matches!(name, "hologram" | "uor-hologram")
+            || name.starts_with("hologram-")
+            || origin
+                .to_ascii_lowercase()
+                .contains("github.com/hologram-technologies/hologram")
+        {
+            return Err(
+                format!("runtime Cargo graph includes validation-only oracle {name}").into(),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Keep independent Holo oracles outside the production dependency graph.
+pub fn audit_runtime_oracle_separation(root: &Path) -> Result<(), Fail> {
+    check_runtime_oracle_separation(&std::fs::read_to_string(root.join("Cargo.lock"))?)?;
+    let dependencies: toml::Value = toml::from_str(&std::fs::read_to_string(
+        root.join("model/dependencies.toml"),
+    )?)?;
+    let revision = dependencies
+        .get("dependency")
+        .and_then(toml::Value::as_array)
+        .ok_or("dependency rows absent")?
+        .iter()
+        .find(|row| row.get("id").and_then(toml::Value::as_str) == Some("uor-hologram"))
+        .and_then(|row| row.get("revision").and_then(toml::Value::as_str))
+        .ok_or("Holo oracle revision absent")?;
+    for path in [
+        "tests/hologram-oracle/Cargo.toml",
+        "tests/holo-codec-oracle/Cargo.toml",
+    ] {
+        let manifest: toml::Value = toml::from_str(&std::fs::read_to_string(root.join(path))?)?;
+        if manifest
+            .get("dependencies")
+            .and_then(|value| value.get("hologram"))
+            .and_then(|value| value.get("rev"))
+            .and_then(toml::Value::as_str)
+            != Some(revision)
+            || manifest
+                .get("workspace")
+                .and_then(toml::Value::as_table)
+                .is_none()
+        {
+            return Err(
+                format!("{path} is not an isolated oracle at the registered revision").into(),
+            );
         }
     }
     Ok(())
@@ -907,4 +979,25 @@ pub fn audit_standards_map(root: &Path, model: &Model) -> Result<(), Fail> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod oracle_separation_tests {
+    use super::check_runtime_oracle_separation;
+
+    #[test]
+    fn runtime_lock_rejects_oracle_packages_and_renamed_upstream_crates() {
+        check_runtime_oracle_separation(
+            "version = 4\n[[package]]\nname = 'prism-stdlib'\nversion = '0.2.0'\n",
+        )
+        .unwrap();
+        for row in [
+            "name = 'hologram'", "name = 'uor-hologram'", "name = 'hologram-archive'",
+            "name = 'renamed-codec'\nsource = 'git+https://github.com/Hologram-Technologies/hologram?rev=abc#abc'",
+            "name = 'invalid'\nsource = false",
+        ] {
+            assert!(check_runtime_oracle_separation(&format!("version = 4\n[[package]]\n{row}\n")).is_err());
+        }
+        assert!(check_runtime_oracle_separation("version = 4").is_err());
+    }
 }

@@ -20,6 +20,7 @@ include = [
     "model/**",
     "schemas/**",
     "sdk/oracles/asyncapi-parser.mjs",
+    "sdk/oracles/kubernetes-validator.mjs",
     "sdk/oracles/go/intoto-statement-validator/main.go",
     "sdk/stdlib-sources.tar",
     "sdk/platform-lock.mjs",
@@ -40,6 +41,7 @@ include = [
     "standards/oracles/osv-b388-schema.json",
     "standards/trust/**",
     "tests/production.rs",
+    "tests/data/holo-codec-v1.json",
     "vendor/hologram-live.tar",
     "vendor/lean4-prod/lean.tar",
     "vendor/registry.tar",
@@ -54,15 +56,16 @@ categories.workspace = true
 
 [dependencies]
 base64 = { workspace = true }
+blake3 = { workspace = true }
 camino = { workspace = true }
 clap = { workspace = true }
 ctrlc = { workspace = true }
 fs4 = { workspace = true }
-hologram = { workspace = true }
 jsonschema = { workspace = true }
 lexlean = { workspace = true }
 prod-codegen = { workspace = true }
 prod-ir = { workspace = true }
+prism-stdlib = { workspace = true }
 same-file = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

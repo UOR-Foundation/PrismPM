@@ -3,7 +3,7 @@ spec = "prismpm/dependencies/1"
 [[dependency]]
 id = "lean4-prod"
 lean_version = "4.32.1"
-revision = "5fd0c82a70019e8033f2a6f449f3c919a4e37151"
+revision = "ac84a4de575e2e531ddb6453c86b84a6794fe48b"
 source = "vendored"
 
 [[dependency.artifact]]
@@ -14,7 +14,7 @@ sha256 = "74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5"
 [[dependency.artifact]]
 kind = "tree-manifest"
 path = "vendor/lean4-prod/rust/MANIFEST.sha256"
-sha256 = "b03221734b04c16830474d2c8ddae10c8ff0758e3432a0e0fe5b087f0c5ac20b"
+sha256 = "3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc"
 tree_root = "vendor/lean4-prod/rust"
 
 [[dependency.artifact]]
@@ -25,7 +25,7 @@ sha256 = "3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e"
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate"
-sha256 = "e0a8c755add6316415a92303fc651b7bcb74960a86324888cfb73ad97c6faa44"
+sha256 = "5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6"
 
 [[dependency.artifact]]
 kind = "file"
@@ -54,6 +54,7 @@ id = "hologram-live"
 version = "1.0.0"
 revision = "d8208266d8abdc2445b7bbc0cef412a566adfaf1"
 source = "vendored"
+role = "validation-oracle"
 
 [[dependency.artifact]]
 kind = "file"
@@ -62,5 +63,6 @@ sha256 = "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66"
 
 [[dependency]]
 id = "uor-hologram"
-revision = "96769f16be454ab1572fddff4613704ccfbebf5e"
+revision = "2bda6a9a9476872dade705bd61ece4209607f6da"
 source = "git"
+role = "validation-oracle"

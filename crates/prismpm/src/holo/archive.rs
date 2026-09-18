@@ -1,14 +1,9 @@
-//! Exact Hologram v4 application composition and strict Holo/1 validation.
+//! Modeled physical-v4 application composition and strict Holo/1 validation.
 
 use crate::error::PrismError;
 use crate::holo::canonical::{content_id, encode_value};
-use hologram::archive::{HoloLoader, HoloWriter, SectionKind};
-use hologram::space::{
-    address_bytes, AppManifest, Capabilities, CapabilitySet, Layer, LayerKind, Realization,
-    WASM_CONTRACT_CORE_V1,
-};
+use prism_stdlib as wire;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// Hologram's required application-directory extension.
@@ -56,9 +51,9 @@ pub struct ArchiveProvenance {
     pub lexlean_package_sha256: String,
     /// Exact lean4-prod source revision.
     pub lean4_prod_commit: String,
-    /// Pinned Hologram Live revision.
+    /// Pinned independent Hologram Live interoperability-oracle revision.
     pub hologram_live_commit: String,
-    /// Pinned uor-hologram revision.
+    /// Pinned independent uor-hologram wire-oracle revision.
     pub uor_hologram_commit: String,
     /// Core-Wasm target profile identity.
     pub target_profile_id: String,
@@ -205,32 +200,56 @@ struct DirectoryBlob {
     byte_length: u64,
 }
 
-fn empty_capabilities() -> Capabilities {
-    Capabilities {
-        storage_roots: Vec::new(),
-        storage_quota_bytes: 0,
-        network_fetch_endpoints: Vec::new(),
-        network_announce_endpoints: Vec::new(),
-        publish_channels: Vec::new(),
-        subscribe_channels: Vec::new(),
-        memory_max_bytes: 0,
-        cpu_time_per_event_ms: 0,
-        priority_weight: 0,
-    }
+/// The standard BLAKE3 primitive supplies the digest; modeled wire functions
+/// own the archive, manifest, capability and content-blob representations.
+pub(crate) fn content_kappa(bytes: &[u8]) -> String {
+    format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
 
-fn extension(key: &str, value: &[u8]) -> Result<Vec<u8>, PrismError> {
-    let length = u16::try_from(key.len())
-        .map_err(|_| PrismError::new("PP3013", "extension key is too long"))?;
-    let mut bytes = Vec::with_capacity(2 + key.len() + value.len());
-    bytes.extend_from_slice(&length.to_le_bytes());
-    bytes.extend_from_slice(key.as_bytes());
-    bytes.extend_from_slice(value);
-    Ok(bytes)
+fn modeled<T>(value: Result<T, wire::ComputeError>) -> Result<T, PrismError> {
+    value.map_err(|error| {
+        PrismError::new("PP3003", format!("modeled Holo wire arithmetic: {error:?}"))
+    })
+}
+
+fn required<T>(value: Option<T>, code: &'static str, message: &str) -> Result<T, PrismError> {
+    value.ok_or_else(|| PrismError::new(code, message))
+}
+
+fn directory_layers(guest: &str, view: &str) -> Vec<DirectoryLayer> {
+    vec![
+        DirectoryLayer {
+            position: 0,
+            kind: "wasm".to_owned(),
+            content_kappa: guest.to_owned(),
+            entry: "holo_run".to_owned(),
+            contract: Some(wire::contractName()),
+            architecture: None,
+            surface: None,
+            engine: None,
+        },
+        DirectoryLayer {
+            position: 1,
+            kind: "view".to_owned(),
+            content_kappa: view.to_owned(),
+            entry: "index.html".to_owned(),
+            contract: None,
+            architecture: None,
+            surface: Some("portable".to_owned()),
+            engine: None,
+        },
+    ]
 }
 
 fn digest_is_valid(value: &str) -> bool {
     value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn revision_is_valid(value: &str) -> bool {
+    value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
@@ -254,10 +273,10 @@ fn validate_provenance(value: &ArchiveProvenance) -> Result<(), PrismError> {
         &value.browser_projection_sha256,
     ];
     if digests.into_iter().any(|digest| !digest_is_valid(digest))
-        || value.lexlean_commit.len() != 40
-        || value.lean4_prod_commit.len() != 40
-        || value.hologram_live_commit.len() != 40
-        || value.uor_hologram_commit.len() != 40
+        || !revision_is_valid(&value.lexlean_commit)
+        || !revision_is_valid(&value.lean4_prod_commit)
+        || !revision_is_valid(&value.hologram_live_commit)
+        || !revision_is_valid(&value.uor_hologram_commit)
         || value.cargo_name.is_empty()
         || value.cargo_version.is_empty()
     {
@@ -283,64 +302,34 @@ pub fn compose_application(input: &ApplicationArchiveInput) -> Result<GeneratedH
         ));
     }
 
-    let capability_request = CapabilitySet::new(empty_capabilities()).canonicalize();
-    let capability_kappa = address_bytes(&capability_request);
-    let guest_kappa = address_bytes(&input.guest_wasm);
-    let view_kappa = address_bytes(&input.view_bundle);
-    let model_kappa = address_bytes(&input.model_document);
-    let manifest = AppManifest {
-        primary: Some(0),
-        requires: capability_kappa,
-        layers: vec![
-            Layer::wasm_with_contract(guest_kappa, "holo_run", WASM_CONTRACT_CORE_V1),
-            Layer {
-                kind: LayerKind::View,
-                content: view_kappa,
-                entry: "index.html".to_owned(),
-                aux: "portable".to_owned(),
-            },
-        ],
-        children: Vec::new(),
-    };
-    manifest.validate().map_err(|error| {
-        PrismError::new("PP3011", format!("invalid application manifest: {error:?}"))
-    })?;
-    let application_manifest = manifest.canonicalize();
-    let application_kappa = address_bytes(&application_manifest);
+    let capability_request = wire::emptyCapabilities();
+    let capability_kappa = content_kappa(&capability_request);
+    let guest_kappa = content_kappa(&input.guest_wasm);
+    let view_kappa = content_kappa(&input.view_bundle);
+    let model_kappa = content_kappa(&input.model_document);
+    let application_manifest = required(
+        wire::appManifest(
+            capability_kappa.as_bytes().to_vec(),
+            guest_kappa.as_bytes().to_vec(),
+            view_kappa.as_bytes().to_vec(),
+        ),
+        "PP3011",
+        "modeled application manifest rejected its references",
+    )?;
+    let application_kappa = content_kappa(&application_manifest);
 
     let mut blob_rows = [
-        (capability_kappa, capability_request.as_slice()),
-        (guest_kappa, input.guest_wasm.as_slice()),
-        (model_kappa, input.model_document.as_slice()),
-        (view_kappa, input.view_bundle.as_slice()),
+        (capability_kappa.as_str(), capability_request.as_slice()),
+        (guest_kappa.as_str(), input.guest_wasm.as_slice()),
+        (model_kappa.as_str(), input.model_document.as_slice()),
+        (view_kappa.as_str(), input.view_bundle.as_slice()),
     ];
     blob_rows.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
     let directory_value = Directory {
         schema_version: 1,
         primary_layer: Some(0),
         requires_kappa: capability_kappa.to_string(),
-        layers: vec![
-            DirectoryLayer {
-                position: 0,
-                kind: "wasm".to_owned(),
-                content_kappa: guest_kappa.to_string(),
-                entry: "holo_run".to_owned(),
-                contract: Some(WASM_CONTRACT_CORE_V1.to_owned()),
-                architecture: None,
-                surface: None,
-                engine: None,
-            },
-            DirectoryLayer {
-                position: 1,
-                kind: "view".to_owned(),
-                content_kappa: view_kappa.to_string(),
-                entry: "index.html".to_owned(),
-                contract: None,
-                architecture: None,
-                surface: Some("portable".to_owned()),
-                engine: None,
-            },
-        ],
+        layers: directory_layers(&guest_kappa, &view_kappa),
         children: Vec::new(),
         blobs: blob_rows
             .iter()
@@ -371,7 +360,7 @@ pub fn compose_application(input: &ApplicationArchiveInput) -> Result<GeneratedH
         hologram_live_commit: provenance.hologram_live_commit.clone(),
         uor_hologram_commit: provenance.uor_hologram_commit.clone(),
         target_profile_id: provenance.target_profile_id.clone(),
-        core_wasm_contract: WASM_CONTRACT_CORE_V1.to_owned(),
+        core_wasm_contract: wire::contractName(),
         lean_manifest_sha256: provenance.lean_manifest_sha256.clone(),
         lcnf_manifest_sha256: provenance.lcnf_manifest_sha256.clone(),
         generated_core_sha256: provenance.generated_core_sha256.clone(),
@@ -391,38 +380,47 @@ pub fn compose_application(input: &ApplicationArchiveInput) -> Result<GeneratedH
     .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
     let prism_extension = encode_value(&prism_extension_value)?;
 
-    let mut sections = vec![
-        (SectionKind::AppManifest, application_manifest.clone()),
-        (SectionKind::Metadata, input.source_manifest.clone()),
-        (
-            SectionKind::Extension,
-            extension(DIRECTORY_EXTENSION, &directory)?,
-        ),
-        (
-            SectionKind::Extension,
-            extension(PRISM_EXTENSION, &prism_extension)?,
-        ),
-    ];
+    let mut blobs = Vec::with_capacity(4);
     for (kappa, bytes) in blob_rows {
-        let mut blob = Vec::with_capacity(71 + bytes.len());
-        blob.extend_from_slice(kappa.as_bytes());
-        blob.extend_from_slice(bytes);
-        sections.push((SectionKind::ContentBlob, blob));
+        blobs.push(required(
+            wire::contentBlob(kappa.as_bytes().to_vec(), bytes.to_vec()),
+            "PP3008",
+            "modeled content blob rejected its label",
+        )?);
     }
-    let bytes = HoloWriter::assemble(sections);
-    let fingerprint = bytes
-        .get(bytes.len().saturating_sub(32)..)
-        .ok_or_else(|| PrismError::new("PP3001", "archive has no footer"))?;
+    let [blob0, blob1, blob2, blob3]: [Vec<u8>; 4] = blobs.try_into().map_err(|_| {
+        PrismError::new(
+            "PP3003",
+            "archive does not contain exactly four content blobs",
+        )
+    })?;
+    let body = required(
+        modeled(wire::archiveBody(
+            application_manifest.clone(),
+            input.source_manifest.clone(),
+            directory.clone(),
+            prism_extension.clone(),
+            blob0,
+            blob1,
+            blob2,
+            blob3,
+        ))?,
+        "PP3003",
+        "modeled archive composer rejected the closed Holo/1 content",
+    )?;
+    let fingerprint = blake3::hash(&body);
+    let bytes = required(
+        modeled(wire::frameArchive(body, fingerprint.as_bytes().to_vec()))?,
+        "PP3001",
+        "modeled archive framing rejected body or footer",
+    )?;
     let identities = HoloIdentities {
         guest_content_kappa: guest_kappa.to_string(),
         view_content_kappa: view_kappa.to_string(),
         model_content_kappa: model_kappa.to_string(),
         application_kappa: application_kappa.to_string(),
-        archive_fingerprint: fingerprint
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect(),
-        archive_kappa: address_bytes(&bytes).to_string(),
+        archive_fingerprint: fingerprint.to_hex().to_string(),
+        archive_kappa: content_kappa(&bytes),
     };
     validate_application(&bytes)?;
     Ok(GeneratedHolo {
@@ -437,120 +435,149 @@ pub fn compose_application(input: &ApplicationArchiveInput) -> Result<GeneratedH
 
 /// Strictly validate the closed Holo/1 Calculator/portable-app archive profile.
 pub fn validate_application(bytes: &[u8]) -> Result<(), PrismError> {
+    parse_application(bytes).map(|_| ())
+}
+
+/// Already validated owned wire values shared by archive and release validation.
+pub(crate) struct ParsedApplicationArchive {
+    pub(crate) application_manifest: Vec<u8>,
+    pub(crate) metadata: Vec<u8>,
+    pub(crate) directory: Vec<u8>,
+    pub(crate) prism_extension: Vec<u8>,
+    pub(crate) blobs: BTreeMap<String, Vec<u8>>,
+    pub(crate) identities: HoloIdentities,
+}
+
+struct DecodedWireArchive {
+    manifest: Vec<u8>,
+    metadata: Vec<u8>,
+    directory: Vec<u8>,
+    prism_extension: Vec<u8>,
+    blobs: BTreeMap<String, Vec<u8>>,
+    references: [String; 3],
+    fingerprint: String,
+}
+
+fn decode_wire_archive(bytes: &[u8]) -> Result<DecodedWireArchive, PrismError> {
     if bytes.starts_with(b"{") || !bytes.starts_with(b"HOLO\x04\0") {
         return Err(PrismError::new(
             "PP3001",
-            "a .holo file must be a binary Hologram v4 archive",
+            "a .holo file must be a binary physical-v4 archive",
         ));
     }
-    let loader = HoloLoader::from_bytes(bytes)
-        .map_err(|error| PrismError::new("PP3001", format!("Hologram archive: {error}")))?;
-    let plan = loader
-        .into_plan()
-        .map_err(|error| PrismError::new("PP3001", format!("Hologram plan: {error}")))?;
-    let expected = [
-        SectionKind::AppManifest,
-        SectionKind::Metadata,
-        SectionKind::Extension,
-        SectionKind::Extension,
-        SectionKind::ContentBlob,
-        SectionKind::ContentBlob,
-        SectionKind::ContentBlob,
-        SectionKind::ContentBlob,
-    ];
-    if plan.sections().len() != expected.len()
-        || plan
-            .sections()
-            .iter()
-            .zip(expected)
-            .any(|(actual, expected)| actual.kind != expected)
-    {
+    // These modeled accessors reject the complete closed structure before
+    // exposing payloads. No host-side table, length or manifest parser exists.
+    let body = required(
+        modeled(wire::archiveBodyBytes(bytes.to_vec()))?,
+        "PP3003",
+        "archive structure is not the closed Holo/1 profile",
+    )?;
+    let footer = required(
+        modeled(wire::archiveFooter(bytes.to_vec()))?,
+        "PP3001",
+        "archive has no modeled footer",
+    )?;
+    let fingerprint = blake3::hash(&body);
+    drop(body);
+    if fingerprint.as_bytes().as_slice() != footer.as_slice() {
         return Err(PrismError::new(
+            "PP3001",
+            "archive footer does not match its body",
+        ));
+    }
+    let section = |index| {
+        required(
+            modeled(wire::archiveSection(bytes.to_vec(), index))?,
             "PP3003",
-            "archive section set or order is not the closed Holo/1 profile",
-        ));
-    }
-    let manifest_bytes = plan
-        .app_manifest()
-        .ok_or_else(|| PrismError::new("PP3005", "archive has no AppManifest"))?;
-    let manifest = AppManifest::decode(manifest_bytes)
-        .map_err(|error| PrismError::new("PP3005", format!("AppManifest: {error:?}")))?;
-    if manifest.canonicalize() != manifest_bytes
-        || manifest.validate().is_err()
-        || manifest.primary != Some(0)
-        || manifest.layers.len() != 2
-        || manifest.layers[0].kind != LayerKind::WasmCodemodule
-        || manifest.layers[0].entry != "holo_run"
-        || manifest.layers[0].aux != WASM_CONTRACT_CORE_V1
-        || manifest.layers[1].kind != LayerKind::View
-        || manifest.layers[1].entry != "index.html"
-        || manifest.layers[1].aux != "portable"
-        || !manifest.children.is_empty()
-    {
-        return Err(PrismError::new(
+            "archive omits a modeled section",
+        )
+    };
+    let manifest = section(0)?;
+    let metadata = section(1)?;
+    let mut references = Vec::with_capacity(3);
+    for index in 0..3 {
+        let reference = required(
+            modeled(wire::manifestReference(manifest.clone(), index))?,
             "PP3005",
-            "application manifest disagrees with Holo/1",
-        ));
+            "manifest omits a modeled reference",
+        )?;
+        references.push(
+            String::from_utf8(reference)
+                .map_err(|error| PrismError::new("PP3005", format!("manifest label: {error}")))?,
+        );
     }
-    let blobs = plan
-        .content_blobs()
-        .map_err(|error| PrismError::new("PP3003", error.to_string()))?;
     let mut seen = BTreeMap::new();
-    for (label, content) in &blobs {
-        let expected = address_bytes(content);
-        if expected.as_bytes() != *label || seen.insert(label.to_vec(), *content).is_some() {
+    for index in 4..8 {
+        let blob = section(index)?;
+        let label = required(
+            wire::contentBlobLabel(blob.clone()),
+            "PP3008",
+            "invalid blob label",
+        )?;
+        let content = required(
+            wire::contentBlobBytes(blob),
+            "PP3008",
+            "invalid blob payload",
+        )?;
+        let label = String::from_utf8(label)
+            .map_err(|error| PrismError::new("PP3008", format!("blob label: {error}")))?;
+        if content_kappa(&content) != label || seen.insert(label, content).is_some() {
             return Err(PrismError::new(
                 "PP3008",
                 "content blob label is duplicate or does not match its bytes",
             ));
         }
     }
-    let refs = <AppManifest as Realization>::references(manifest_bytes)
-        .map_err(|error| PrismError::new("PP3005", format!("manifest references: {error:?}")))?;
-    if refs
-        .iter()
-        .any(|reference| !seen.contains_key(reference.as_bytes()))
-    {
-        return Err(PrismError::new(
-            "PP3009",
-            "fat archive omits a manifest dependency",
-        ));
-    }
-    let extensions = plan
-        .extensions()
-        .map_err(|error| PrismError::new("PP3013", error.to_string()))?;
-    if extensions.len() != 2
-        || extensions[0].0 != DIRECTORY_EXTENSION
-        || extensions[1].0 != PRISM_EXTENSION
-    {
-        return Err(PrismError::new(
+    let extension = |index| {
+        required(
+            modeled(wire::archiveExtension(bytes.to_vec(), index))?,
             "PP3013",
-            "archive extension set is not canonical",
-        ));
-    }
-    let declared: Directory = serde_json::from_slice(extensions[0].1)
+            "archive omits a modeled extension",
+        )
+    };
+    Ok(DecodedWireArchive {
+        manifest,
+        metadata,
+        directory: extension(0)?,
+        prism_extension: extension(1)?,
+        blobs: seen,
+        references: references
+            .try_into()
+            .map_err(|_| PrismError::new("PP3005", "manifest reference count differs"))?,
+        fingerprint: fingerprint.to_hex().to_string(),
+    })
+}
+
+pub(crate) fn parse_application(bytes: &[u8]) -> Result<ParsedApplicationArchive, PrismError> {
+    let decoded = decode_wire_archive(bytes)?;
+    let manifest_bytes = &decoded.manifest;
+    let [requires, guest, view] = &decoded.references;
+    let seen = &decoded.blobs;
+    let declared: Directory = serde_json::from_slice(&decoded.directory)
         .map_err(|error| PrismError::new("PP3012", format!("directory: {error}")))?;
-    let mut expected_blobs = blobs
+    let expected_blobs = seen
         .iter()
         .map(|(label, content)| DirectoryBlob {
-            kappa: std::str::from_utf8(label).unwrap_or_default().to_owned(),
+            kappa: label.clone(),
             byte_length: content.len() as u64,
         })
         .collect::<Vec<_>>();
-    expected_blobs.sort_by(|left, right| left.kappa.as_bytes().cmp(right.kappa.as_bytes()));
     if declared.schema_version != 1
         || declared.primary_layer != Some(0)
-        || declared.requires_kappa != manifest.requires.to_string()
-        || declared.layers.len() != 2
+        || declared.requires_kappa != *requires
+        || declared.layers != directory_layers(guest, view)
         || declared.children != Vec::<DirectoryChild>::new()
         || declared.blobs != expected_blobs
+        || serde_json::to_vec(&declared)
+            .map_err(|error| PrismError::new("PP3012", error.to_string()))?
+            != decoded.directory
     {
         return Err(PrismError::new(
             "PP3012",
             "application directory disagrees with manifest or blobs",
         ));
     }
-    let provenance: ModelProvenanceV1 = serde_json::from_slice(extensions[1].1)
+    let provenance: ModelProvenanceV1 = serde_json::from_slice(&decoded.prism_extension)
         .map_err(|error| PrismError::new("PP3015", format!("Prism extension: {error}")))?;
     let (view_model_id, view_content_kappa, browser_sha256) = match &provenance.view_binding {
         ViewBinding::Present {
@@ -565,9 +592,9 @@ pub fn validate_application(bytes: &[u8]) -> Result<(), PrismError> {
             ));
         }
     };
-    let model_bytes = seen.get(provenance.model_content_kappa.as_bytes());
-    let guest_bytes = seen.get(provenance.guest_content_kappa.as_bytes());
-    let view_bytes = seen.get(view_content_kappa.as_bytes());
+    let model_bytes = seen.get(&provenance.model_content_kappa);
+    let guest_bytes = seen.get(&provenance.guest_content_kappa);
+    let view_bytes = seen.get(view_content_kappa);
     let digest_fields = [
         &provenance.model_id,
         &provenance.source_id,
@@ -586,10 +613,10 @@ pub fn validate_application(bytes: &[u8]) -> Result<(), PrismError> {
         browser_sha256,
     ];
     if provenance.schema != "prismpm/model-provenance/1"
-        || provenance.core_wasm_contract != WASM_CONTRACT_CORE_V1
-        || provenance.application_kappa != address_bytes(manifest_bytes).to_string()
-        || provenance.guest_content_kappa != manifest.layers[0].content.to_string()
-        || *view_content_kappa != manifest.layers[1].content.to_string()
+        || provenance.core_wasm_contract != wire::contractName()
+        || provenance.application_kappa != content_kappa(manifest_bytes)
+        || provenance.guest_content_kappa != *guest
+        || *view_content_kappa != *view
         || model_bytes.is_none()
         || guest_bytes.is_none_or(|bytes| !bytes.starts_with(b"\0asm"))
         || view_bytes.is_none_or(|bytes| !bytes.starts_with(b"HOLOVIEW\0\x01"))
@@ -597,18 +624,44 @@ pub fn validate_application(bytes: &[u8]) -> Result<(), PrismError> {
         || digest_fields
             .into_iter()
             .any(|digest| !digest_is_valid(digest))
-        || provenance.lexlean_commit.len() != 40
-        || provenance.lean4_prod_commit.len() != 40
-        || provenance.hologram_live_commit.len() != 40
-        || provenance.uor_hologram_commit.len() != 40
+        || !revision_is_valid(&provenance.lexlean_commit)
+        || !revision_is_valid(&provenance.lean4_prod_commit)
+        || !revision_is_valid(&provenance.hologram_live_commit)
+        || !revision_is_valid(&provenance.uor_hologram_commit)
         || provenance.cargo_name.is_empty()
         || provenance.cargo_version.is_empty()
+        || [requires, guest, view, &provenance.model_content_kappa]
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            != seen.keys().collect::<std::collections::BTreeSet<_>>()
+        || encode_value(
+            &serde_json::to_value(&provenance)
+                .map_err(|error| PrismError::new("PP3015", error.to_string()))?,
+        )? != decoded.prism_extension
     {
         return Err(PrismError::new(
             "PP3015",
             "Prism provenance is missing or disagrees with archive content",
         ));
     }
-    let _ = Sha256::digest(extensions[1].1);
-    Ok(())
+    let identities = HoloIdentities {
+        guest_content_kappa: guest.clone(),
+        view_content_kappa: view.clone(),
+        model_content_kappa: provenance.model_content_kappa,
+        application_kappa: content_kappa(manifest_bytes),
+        archive_fingerprint: decoded.fingerprint,
+        archive_kappa: content_kappa(bytes),
+    };
+    Ok(ParsedApplicationArchive {
+        application_manifest: decoded.manifest,
+        metadata: decoded.metadata,
+        directory: decoded.directory,
+        prism_extension: decoded.prism_extension,
+        blobs: decoded.blobs,
+        identities,
+    })
 }
+
+#[cfg(test)]
+#[path = "archive_tests.rs"]
+mod tests;

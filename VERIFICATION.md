@@ -1048,6 +1048,40 @@ gate waiver was used, and `target/vv-evidence.json` was absent. Log
 `target/compiler-ee18ad9-vv-47b7a8e.log` has SHA-256
 `7445dbd9d73c6757823d0cea6e3a7baa897f355a11b9de6c62faf8a5e062aa95`.
 
+## Modeled browser and archive prerequisites
+
+The 17 September source-devcontainer checks below are component evidence, not
+a shipped SDK, Foundry application, Pages deployment, or full VV receipt.
+
+| Boundary | Executed evidence |
+| --- | --- |
+| Holo/1 codec | All 57 modeled vectors matched generated native std/no_std execution; integrated archive and wire tests passed against the frozen independent upstream fixture, including resealed malformed archives. |
+| Physical archive limit | An actual Calculator build failed with PP1003 at one byte below its physical archive size, preserved the prior build, and succeeded at the exact limit. |
+| Browser host primitives | 48 identity, IndexedDB, boundary and two-context WebRTC tests passed without skips, including direct Chromium identity conformance. These are generic host facilities, not Kappa discovery or internet availability. |
+| Workspace reducer | All 45 modeled cases replayed twice through generated std, no_std and Core-Wasm. A generated-native 1,024-event history reached the exact maximum response before rejecting the next event. |
+| Read-only SDK inputs | The Workspace gate passed with source writes denied and a hostile inherited Cargo target overridden. Full Corpus Lean C generation passed; maximum Wasm memory was 28,180,480 bytes within 32 MiB. |
+| Cold oracle closure | An initially empty Cargo cache acquired both pinned oracle graphs; subsequent offline builds reproduced the wire fixture and replayed retained Calculator artifacts, including eight actual browser cases. This is not acceptance of newly generated application artifacts. |
+
+Ordinary `stdlib-package --write` verified all 42 modules and reproduced all
+seven generated package files byte-for-byte against an independent bootstrap.
+Its attestation is `d32fbcc639e69b4ed393204b57ae2c603c0cc6f22cee973f0c70165b0960c298`;
+the exported IR is `43adea717fd65367f95e57ddf031dafbaa39ab8f5f4ba255fa63a7058b36865d`.
+The exact modeled source remains authoritative; finite corpus agreement is not
+a universal protocol-equivalence or authentication proof.
+
+Retained local log SHA-256 values:
+
+- `target/stdlib-ordinary-write.log`: `871108f3685ce68995bad9448c1e6ea8cfa4c03882a2aae9c4d9209c75e8731d`.
+- `target/holo-archive-modeled-focused.log`: `35fb407901f3cd8f8eba0172ac659a6d66998dfbc1760cca31c38df2f37b17b2`.
+- `target/browser-host-acceptance-with-chromium.tap`: `2fc48ce936db0c4d16622e9df099e32fa9c065c7ef68b9249d43e4563818c001`.
+- `target/browser-workspace-reachable-readonly.log`: `e1291af949988a60de4a45e0579b66a539f1f34d0e0b3e434742201ffb6991e2`.
+
+The DK-07 Chromium gate also rejected an isolated-copy mutation that made
+signature verification return true. Its semantic rejection test failed while
+the other three browser tests passed; the unchanged production module then
+passed the complete suite. Log `target/identity-browser-mutant.log` has SHA-256
+`253e45293c7ba619c14e7bde2a20b3791c90c7c6659df3e73b11d235ad2a2916`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
