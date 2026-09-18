@@ -1,9 +1,11 @@
 module
 public import Init
 public import PrismPM.Foundation.Browser.V1.Workspace
+public import PrismPM.Foundation.Browser.V1.WorkspaceCommandCorpus
 public import PrismPM.Foundation.Browser.V1.WorkspaceCorpus
 public import PrismPM.Foundation.Browser.V1.WorkspaceEnvelopeCorpus
 public import PrismPM.Foundation.Browser.V1.WorkspaceJournalCorpus
+public import PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus
 public import PrismPM.Foundation.Holo
 public import PrismPM.Foundation.Holo.V1.WireCorpus
 public import PrismPM.Foundation.View.Text.V1.Model

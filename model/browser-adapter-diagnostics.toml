@@ -1,0 +1,215 @@
+spec = "prismpm/browser-adapter-diagnostics/1"
+
+[[adapter]]
+error_class = "CommandAdapterError"
+source = "sdk/browser/commands.mjs"
+capability = "DK-13"
+model_source = "stdlib/src/Foundation/Browser/V1/WorkspaceCommand.lex.tex"
+rejection_error = "command-rejected"
+
+[[adapter.error]]
+code = "adapter-busy"
+statement = "Two operations are already owned; additional work is rejected before intent capture."
+
+[[adapter.error]]
+code = "adapter-closed"
+statement = "The adapter is closed; captured or late work cannot expose a result or begin a new effect."
+
+[[adapter.error]]
+code = "command-rejected"
+statement = "The generated Command rejected the operation; detail is exactly its registered one-byte failure."
+
+[[adapter.error]]
+code = "commit-outcome-unknown"
+statement = "Close occurred during an already started durable write; no rollback is claimed and reopening must replay."
+
+[[adapter.error]]
+code = "generated-execution-failed"
+statement = "The trusted generated guest trapped or could not execute; no successful result is exposed."
+
+[[adapter.error]]
+code = "identity-missing"
+statement = "The private storage namespace has no persisted identity."
+
+[[adapter.error]]
+code = "invalid-effect-result"
+statement = "A trusted-boundary hash is not a canonical lowercase SHA-256 identifier."
+
+[[adapter.error]]
+code = "invalid-generated-module"
+statement = "Trusted bootstrap did not provide the expected import-free generated module and exports."
+
+[[adapter.error]]
+code = "invalid-generated-output"
+statement = "Generated output framing, bounds or required fields are invalid."
+
+[[adapter.error]]
+code = "invalid-input"
+statement = "The call has an invalid argument count, closed intent shape, type or byte bound."
+
+[[adapter.error]]
+code = "refresh-required"
+statement = "A failed or uncertain command requires explicit complete authenticated replay before another write."
+
+[[adapter.error]]
+code = "request-limit"
+statement = "The private guest request exceeds the exact modeled allocation cap before guest execution."
+
+[[adapter.error]]
+code = "storage-outcome-unknown"
+statement = "An unknown storage exception is replaced by a stable code without retaining its message, payload or cause."
+
+[[adapter.rejection]]
+byte = 1
+name = "BadEncoding"
+
+[[adapter.rejection]]
+byte = 2
+name = "InvalidCommand"
+
+[[adapter.rejection]]
+byte = 3
+name = "InvalidHead"
+
+[[adapter.rejection]]
+byte = 4
+name = "WorkspaceMismatch"
+
+[[adapter.rejection]]
+byte = 5
+name = "EventLimit"
+
+[[adapter.rejection]]
+byte = 6
+name = "WrongPhase"
+
+[[adapter.rejection]]
+byte = 7
+name = "CorrelationMismatch"
+
+[[adapter.rejection]]
+byte = 8
+name = "StaleHead"
+
+[[adapter.rejection]]
+byte = 9
+name = "EffectMismatch"
+
+[[adapter.rejection]]
+byte = 10
+name = "InvalidResult"
+
+[[adapter.rejection]]
+byte = 11
+name = "UnknownOperation"
+
+[[adapter.rejection]]
+byte = 12
+name = "InvalidPending"
+
+[[adapter]]
+error_class = "QueryAdapterError"
+source = "sdk/browser/queries.mjs"
+capability = "DK-14"
+model_source = "stdlib/src/Foundation/Browser/V1/WorkspaceQuery.lex.tex"
+rejection_error = "query-rejected"
+
+[[adapter.error]]
+code = "adapter-busy"
+statement = "Two operations are already owned; additional work is rejected before intent capture."
+
+[[adapter.error]]
+code = "adapter-closed"
+statement = "The adapter is closed; captured or late work cannot expose a result or begin a new effect."
+
+[[adapter.error]]
+code = "generated-execution-failed"
+statement = "The trusted generated guest trapped or could not execute; no successful result is exposed."
+
+[[adapter.error]]
+code = "identity-missing"
+statement = "The private storage namespace has no persisted identity."
+
+[[adapter.error]]
+code = "invalid-effect-result"
+statement = "A trusted-boundary hash is not a canonical lowercase SHA-256 identifier."
+
+[[adapter.error]]
+code = "invalid-generated-module"
+statement = "Trusted bootstrap did not provide the expected import-free generated module and exports."
+
+[[adapter.error]]
+code = "invalid-generated-output"
+statement = "Generated output framing, bounds or required fields are invalid."
+
+[[adapter.error]]
+code = "invalid-input"
+statement = "The call has an invalid argument count, closed intent shape, type or byte bound."
+
+[[adapter.error]]
+code = "query-context-changed"
+statement = "Authenticated head or state changed across asynchronous hashing; no stale page is disclosed."
+
+[[adapter.error]]
+code = "query-rejected"
+statement = "The generated Query rejected admission or cursor use; detail is exactly its registered one-byte failure."
+
+[[adapter.error]]
+code = "request-limit"
+statement = "The private guest request exceeds the exact modeled allocation cap before guest execution."
+
+[[adapter.error]]
+code = "storage-outcome-unknown"
+statement = "An unknown storage exception is replaced by a stable code without retaining its message, payload or cause."
+
+[[adapter.rejection]]
+byte = 1
+name = "BadEncoding"
+
+[[adapter.rejection]]
+byte = 2
+name = "InvalidHead"
+
+[[adapter.rejection]]
+byte = 3
+name = "InvalidState"
+
+[[adapter.rejection]]
+byte = 4
+name = "InvalidContext"
+
+[[adapter.rejection]]
+byte = 5
+name = "WrongWorkspace"
+
+[[adapter.rejection]]
+byte = 6
+name = "NotAdmitted"
+
+[[adapter.rejection]]
+byte = 7
+name = "InvalidCursor"
+
+[[adapter.rejection]]
+byte = 8
+name = "StaleCursor"
+
+[[adapter.rejection]]
+byte = 9
+name = "CursorSession"
+
+[[adapter.rejection]]
+byte = 10
+name = "CursorPrincipal"
+
+[[adapter.rejection]]
+byte = 11
+name = "CursorTable"
+
+[[adapter.rejection]]
+byte = 12
+name = "CursorRange"
+
+[[adapter.rejection]]
+byte = 13
+name = "UnknownTable"

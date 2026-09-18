@@ -721,6 +721,18 @@ level = "build"
 statement = "The modeled journal and private browser adapter authenticate complete replay, preserve exact bounded native/Wasm transitions, and promote state only after an atomic bound commit; conflicts and uncertain outcomes require replay without automatic branch selection."
 
 [[id]]
+id = "DK-13"
+suite = "sdk"
+level = "build"
+statement = "Generated workspace commands bind actual identity, current head, hashes and signatures before authenticated atomic journal admission; product callers receive status or commit acknowledgments, never raw state."
+
+[[id]]
+id = "DK-14"
+suite = "sdk"
+level = "build"
+statement = "Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

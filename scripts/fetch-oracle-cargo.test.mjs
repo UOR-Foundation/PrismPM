@@ -19,6 +19,10 @@ const pinned = [
   'tests/browser-envelope/driver/Cargo.lock',
   'tests/browser-journal/driver/Cargo.toml',
   'tests/browser-journal/driver/Cargo.lock',
+  'tests/browser-command/driver/Cargo.toml',
+  'tests/browser-command/driver/Cargo.lock',
+  'tests/browser-query/driver/Cargo.toml',
+  'tests/browser-query/driver/Cargo.lock',
   'crates/prismpm/vendor/hologram-live.tar',
 ];
 const embedded = [

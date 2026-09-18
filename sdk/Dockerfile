@@ -158,7 +158,7 @@ RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/devcontainer-cli \
     && chmod 0755 /opt/prismpm/devcontainer-cli/node_modules/@devcontainers/cli/devcontainer.js
 
 COPY sdk/runtime/package.json sdk/runtime/package-lock.json sdk/runtime/profile.mjs sdk/runtime/runtime.mjs /opt/prismpm/runtime/
-COPY --chmod=0444 sdk/browser/identity.mjs sdk/browser/store.mjs sdk/browser/peer.mjs sdk/browser/journal.mjs /opt/prismpm/browser/
+COPY --chmod=0444 sdk/browser/identity.mjs sdk/browser/store.mjs sdk/browser/peer.mjs sdk/browser/journal.mjs sdk/browser/commands.mjs sdk/browser/queries.mjs /opt/prismpm/browser/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/runtime \
     && chmod 0444 /opt/prismpm/runtime/profile.mjs \
     && chmod 0555 /opt/prismpm/runtime/runtime.mjs

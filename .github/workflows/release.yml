@@ -417,6 +417,21 @@ jobs:
           path: ${{ matrix.name }}-reproducibility.txt
           if-no-files-found: error
           retention-days: 30
+      - name: Verify exact current SDK browser closure offline and read-only
+        if: matrix.image == 'sdk'
+        shell: bash
+        env:
+          RESULT_NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          bash root-a/scripts/browser-api-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-browser-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && matrix.image == 'sdk'
+        with:
+          name: browser-sdk-${{ matrix.name }}
+          path: ${{ matrix.name }}-browser-sdk.log
+          if-no-files-found: error
+          retention-days: 30
 
   native:
     needs: [gate, images]

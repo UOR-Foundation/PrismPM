@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+mod browser_adapter_diagnostics;
 mod browser_diagnostics;
 pub mod codegen;
 pub mod registry;
@@ -10,6 +11,9 @@ pub mod release;
 mod stdlib_exports;
 mod stdlib_package;
 
+pub use browser_adapter_diagnostics::{
+    BrowserAdapterDiagnostic, BrowserAdapterDiagnostics, BrowserModelRejection,
+};
 pub use browser_diagnostics::{BrowserDiagnostic, BrowserDiagnostics};
 pub use stdlib_exports::{StdlibExport, StdlibExports};
 pub use stdlib_package::StdlibPackage;
@@ -52,6 +56,8 @@ pub struct Model {
     pub stdlib_exports: StdlibExports,
     /// model/browser-diagnostics.toml
     pub browser_diagnostics: BrowserDiagnostics,
+    /// model/browser-adapter-diagnostics.toml
+    pub browser_adapter_diagnostics: BrowserAdapterDiagnostics,
 }
 
 /// Model load/check failure.
@@ -94,6 +100,7 @@ impl Model {
             stdlib_package: read(dir, "stdlib-package.toml")?,
             stdlib_exports: read(dir, "stdlib-exports.toml")?,
             browser_diagnostics: read(dir, "browser-diagnostics.toml")?,
+            browser_adapter_diagnostics: read(dir, "browser-adapter-diagnostics.toml")?,
         })
     }
 
@@ -106,6 +113,7 @@ impl Model {
     pub fn check(&self) -> Result<(), ModelError> {
         self.stdlib_exports.check()?;
         self.browser_diagnostics.check()?;
+        self.browser_adapter_diagnostics.check()?;
         self.ledger.check()?;
         self.check_ids()?;
         self.check_authorities()?;

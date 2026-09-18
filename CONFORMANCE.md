@@ -182,6 +182,8 @@ The three honesty levels:
 | `DK-10` | `build` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. |
 | `DK-11` | `build` | The modeled signed-envelope codec rejects malformed framing and binds generated signing projections to actual browser cryptography without treating parsing as authentication. |
 | `DK-12` | `build` | The modeled journal and private browser adapter authenticate complete replay, preserve exact bounded native/Wasm transitions, and promote state only after an atomic bound commit; conflicts and uncertain outcomes require replay without automatic branch selection. |
+| `DK-13` | `build` | Generated workspace commands bind actual identity, current head, hashes and signatures before authenticated atomic journal admission; product callers receive status or commit acknowledgments, never raw state. |
+| `DK-14` | `build` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. |
 
 ## security
 

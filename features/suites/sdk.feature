@@ -1,5 +1,17 @@
 Feature: sdk
 
+  @DK-13 @build
+  Scenario: Generated workspace commands bind actual identity, current head, hashes and signatures before authenticated atomic journal admission; product callers receive status or commit acknowledgments, never raw state.
+    Given the complete modeled command corpus and real private browser effects
+    When fresh native, no_std and Core-Wasm executions replay every browser transcript and planted defect
+    Then exact model decisions hold without caller-supplied authority or raw-state disclosure
+
+  @DK-14 @build
+  Scenario: Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure.
+    Given the complete modeled query corpus and real private browser effects
+    When fresh native, no_std and Core-Wasm executions replay every browser transcript and planted defect
+    Then exact model decisions hold without caller-supplied authority or raw-state disclosure
+
   @DK-11 @build
   Scenario: The modeled signed-envelope codec rejects malformed framing and binds generated signing projections to actual browser cryptography without treating parsing as authentication.
     Given the complete 43-case modeled envelope corpus and pinned production compilers

@@ -849,6 +849,55 @@ read-admission, replication, Kappa or availability acceptance. The maximum
 65,574-byte head exceeds the peer default by 38 bytes; integration needs an
 explicit verified transport budget or modeled fragmentation.
 
+### 12.4 Modeled command and admitted-query prerequisites
+
+DK-13 owns generated Command construction/completion and the private commands.mjs
+binding. Public submit accepts only action/workspace/body, captured synchronously;
+identity, current replayed head and correlation remain private. Actual hashing and
+signing precede generated completions; Journal authenticates and admits the final
+envelope. Stale heads, forged effects and uncertain writes cannot retry or promote
+silently. Product methods submit/status/refresh/close return only frozen identity/
+refresh status or committed:true acknowledgement, never raw state or head bytes.
+
+DK-14 owns generated Query admission and the private queries.mjs binding. Each
+query replays authenticated history, binds the possessed identity and private
+session, hashes its captured head, then replays again before exposing any page.
+Owner/contributor/reader admission is modeled; cursors bind exact workspace,
+principal, session, table and head and convey no authority. Results are as-of that
+head, not instantaneous global revocation. All application read rows go through
+Query; bootstrap storage access is not a public product read API.
+
+The normal gates execute all 75 Command and 62 Query vectors twice in generated
+native/no_std/Core-Wasm, all 258 independent octet-decoder cases, actual Chromium
+journeys, complete 64-member/256-message traversal, genuine native transcripts and
+planted defects. All prior 45/43/61 cases and 1,024-event limits remain unchanged.
+Command: 139,873 input bytes, 74,243 output bytes, 64 pages. Query: 1,166,279 input
+bytes, 66,803 output bytes, 512 pages. Journal remains 640 pages. Every invocation
+uses a fresh guest. These are finite measured gates and hard runtime budgets,
+not universal termination/memory proofs; a Query page exceeds default peer framing.
+
+CommandAdapterError and QueryAdapterError have separately closed registrations in
+model/browser-adapter-diagnostics.toml, including exact generated rejection detail
+bytes. Journal's browser-diagnostics/1 and BrowserEffectError remain distinct and
+unchanged. Actual public failures plus negative-only unchanged private guards cover
+all codes; no test exports ship. Both adapters admit at most two outstanding
+operations before input inspection and release queued captures immediately on close.
+
+The normative byte contracts are stdlib/src/Foundation/Browser/V1/Command.md and
+Query.md. These prerequisites do not establish a BrowserWorkspace application
+profile, generated View, Kappa replication/discovery, organizational identity,
+OSCAL control coverage, network read admission, availability or a deployed portal.
+
+Post-build SDK acceptance is separate from source V&V and its external-oracle
+image input. scripts/browser-api-sdk-check.sh takes an immutable current SDK
+image digest and exact clean source commit. It independently compares the
+installed source/compiler/test/helper closure and public modules, then runs all
+DK-07..14 browser suites in that image with read-only sources, no network, and
+only temporary writable caches. Complete TAP summaries, no omissions/skips, and
+native architecture/revision labels are required. Both native SDK architectures
+run this check in release.yml's required reproducibility job. A prior oracle SDK
+may support source bootstrap; it cannot satisfy this shipped-SDK acceptance.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1270,6 +1319,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-10` | `sdk` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. | §12 |
 | `DK-11` | `sdk` | The modeled signed-envelope codec rejects malformed framing and binds generated signing projections to actual browser cryptography without treating parsing as authentication. | §12 |
 | `DK-12` | `sdk` | The modeled journal and private browser adapter authenticate complete replay, preserve exact bounded native/Wasm transitions, and promote state only after an atomic bound commit; conflicts and uncertain outcomes require replay without automatic branch selection. | §12 |
+| `DK-13` | `sdk` | Generated workspace commands bind actual identity, current head, hashes and signatures before authenticated atomic journal admission; product callers receive status or commit acknowledgments, never raw state. | §12 |
+| `DK-14` | `sdk` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

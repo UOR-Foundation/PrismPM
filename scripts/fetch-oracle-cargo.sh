@@ -23,6 +23,10 @@ a8ddd90c616555741a750f91d820b80827438612523624c5afdc7e0301a76493  tests/browser-
 996a76f015df5c4166e450f67e5016b7ac39817acdd57d3c678aee9c99212681  tests/browser-journal/driver/Cargo.toml
 153bbe47305311f8789d8f720d1d0e5c1d6dbc6aff347ec59a852378f1625dbc  tests/browser-journal/driver/Cargo.lock
 caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66  crates/prismpm/vendor/hologram-live.tar
+feb39fe80f840e1e564b6e07a213ca8f6eace18f85416d5386c699addec3ba87  tests/browser-command/driver/Cargo.toml
+9eaf71006d86d0e4214ee8dc280940e94fdcd4c0756190f7b11bed32d2454d1b  tests/browser-command/driver/Cargo.lock
+f0a86585e2c142af57db2b060e7626accc670ccbcbc42e120f8261429cec5f31  tests/browser-query/driver/Cargo.toml
+01165f79f7a0781566ad21192c9a25eedd160b802e584706290443962c6f839f  tests/browser-query/driver/Cargo.lock
 CHECKSUMS
 cmp tests/hologram-oracle/Cargo.toml crates/prismpm/src/embedded/hologram-oracle.Cargo.toml
 cmp tests/hologram-oracle/Cargo.lock crates/prismpm/src/embedded/hologram-oracle.Cargo.lock
@@ -43,7 +47,9 @@ for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/holo-codec-oracle/Cargo.toml \
   tests/browser-workspace/Cargo.toml \
   tests/browser-envelope/driver/Cargo.toml \
-  tests/browser-journal/driver/Cargo.toml; do
+  tests/browser-journal/driver/Cargo.toml \
+  tests/browser-command/driver/Cargo.toml \
+  tests/browser-query/driver/Cargo.toml; do
   cargo fetch --locked --manifest-path "$manifest"
   cargo metadata --locked --offline --format-version 1 --manifest-path "$manifest" >/dev/null
 done

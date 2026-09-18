@@ -392,7 +392,9 @@ pub fn run_at(root: &Path, id: &str) {
             verify_system(root, id)
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
-        "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" => verify_browser_host(root, id),
+        "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" => {
+            verify_browser_host(root, id)
+        }
         "OC-07" => verify_browser_export(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
@@ -424,13 +426,15 @@ fn verify_browser_host(root: &Path, id: &str) {
         "DK-09" => (&["sdk/browser/peer.test.mjs"], 24),
         "DK-10" => (&["sdk/browser/workspace-model-test.mjs"], 6),
         "DK-11" => (&["sdk/browser/envelope-model-test.mjs"], 6),
-        "DK-12" => (&["sdk/browser/journal-model-test.mjs"], 12),
+        "DK-12" => (&["sdk/browser/journal-model-test.mjs"], 13),
+        "DK-13" => (&["sdk/browser/command-model-test.mjs"], 12),
+        "DK-14" => (&["sdk/browser/query-model-test.mjs"], 11),
         _ => unreachable!("closed browser host capability"),
     };
     // Node also applies this limit to the file-level wrapper. The complete
     // model build has its own 20-minute test bound and must not inherit the
     // short host-only suite deadline.
-    let timeout = if matches!(id, "DK-10" | "DK-11" | "DK-12") {
+    let timeout = if matches!(id, "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14") {
         "1500000"
     } else {
         "120000"

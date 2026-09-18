@@ -117,6 +117,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "--test",
             "scripts/oracle-source-closure.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
+            "scripts/browser-api-sdk-check.test.mjs",
             "scripts/release-phases.test.mjs",
         ],
     )?;
@@ -431,6 +432,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         "tests/browser-workspace/Cargo.toml",
         "tests/browser-envelope/driver/Cargo.toml",
         "tests/browser-journal/driver/Cargo.toml",
+        "tests/browser-command/driver/Cargo.toml",
+        "tests/browser-query/driver/Cargo.toml",
         "tests/holo-codec-oracle/Cargo.toml",
     ] {
         command(
@@ -449,6 +452,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "tests/browser-workspace/runner.rs",
             "tests/browser-envelope/runner.rs",
             "tests/browser-journal/runner.rs",
+            "tests/browser-command/runner.rs",
+            "tests/browser-query/runner.rs",
         ],
     )?;
 
@@ -991,10 +996,14 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "model/dependencies.toml",
         "model/stdlib-exports.toml",
         "model/browser-diagnostics.toml",
+        "model/browser-adapter-diagnostics.toml",
         "sdk/browser/identity.mjs",
         "sdk/browser/store.mjs",
         "sdk/browser/peer.mjs",
         "sdk/browser/journal.mjs",
+        "sdk/browser/commands.mjs",
+        "sdk/browser/queries.mjs",
+        "tests/browser_stdlib_api.rs",
         "model/stdlib-package.toml",
         "schemas/model-document.schema.json",
         "sdk/asyncapi-runtime/package.json",
@@ -1006,6 +1015,10 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "src/prod_alloc_counter.rs.inc",
         "standards.lock",
         "stdlib/src/Foundation/Holo.lex.tex",
+        "stdlib/src/Foundation/Browser/V1/WorkspaceCommand.lex.tex",
+        "stdlib/src/Foundation/Browser/V1/WorkspaceCommandCorpus.lex.tex",
+        "stdlib/src/Foundation/Browser/V1/WorkspaceQuery.lex.tex",
+        "stdlib/src/Foundation/Browser/V1/WorkspaceQueryCorpus.lex.tex",
         "stdlib/LICENSE-APACHE",
         "stdlib/LICENSE-MIT",
         "vendor/lean4-prod/lean.tar",

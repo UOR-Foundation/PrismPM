@@ -1,0 +1,126 @@
+// Release test input binding, not a release receipt or replacement for source V&V.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {constants,closeSync,fstatSync,lstatSync,openSync,readFileSync,readdirSync,readSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {dirname,join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {pathToFileURL} from 'node:url';
+
+export const sourceRoots=Object.freeze([
+ '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','model','language',
+ 'stdlib/src','sdk/browser','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
+ 'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
+ 'tests/browser-command','tests/browser-query','tests/browser-api',
+ 'vendor/lexlean','vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust',
+ 'scripts/browser-api-sdk-check.mjs',
+]);
+export const suites=Object.freeze([
+ {id:'DK-07',minimum:10,files:['identity.test.mjs','identity.browser.test.mjs']},
+ {id:'DK-08',minimum:14,files:['store.test.mjs','boundary.test.mjs']},
+ {id:'DK-09',minimum:24,files:['peer.test.mjs']},
+ {id:'DK-10',minimum:6,files:['workspace-model-test.mjs']},
+ {id:'DK-11',minimum:6,files:['envelope-model-test.mjs']},
+ {id:'DK-12',minimum:13,files:['journal-model-test.mjs']},
+ {id:'DK-13',minimum:12,files:['command-model-test.mjs']},
+ {id:'DK-14',minimum:11,files:['query-model-test.mjs']},
+].map(row=>Object.freeze({...row,files:Object.freeze(row.files)})));
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
+const hex=(value,width)=>{assert.equal(typeof value,'string');assert.match(value,new RegExp('^[0-9a-f]{'+width+'}$'));};
+function boundedBytes(path,before){
+ const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+ try{
+  const first=fstatSync(fd);assert.ok(first.isFile()&&first.size<=64*1024*1024,'bounded regular source '+path);
+  assert.equal(first.dev,before.dev);assert.equal(first.ino,before.ino);assert.equal(first.size,before.size);
+  const bytes=Buffer.alloc(first.size+1);let size=0;
+  while(size<bytes.length){const count=readSync(fd,bytes,size,bytes.length-size,null);if(!count)break;size+=count;}
+  const after=fstatSync(fd),named=lstatSync(path);
+  for(const stat of[after,named]){assert.ok(stat.isFile()&&!stat.isSymbolicLink());for(const key of['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(stat[key],first[key],'source changed '+path);}
+  assert.equal(size,first.size);return bytes.subarray(0,size);
+ }finally{closeSync(fd);}
+}
+
+export function capture(root,revision){
+ hex(revision,40);root=resolve(root);const files=[];
+ function walk(relative){
+  const path=join(root,relative),stat=lstatSync(path);assert.ok(!stat.isSymbolicLink(),'source symlink '+relative);
+  if(stat.isDirectory()){
+   for(const name of readdirSync(path).sort()){
+    // Only generated root caches, never nested ordinary source directories.
+    if(sourceRoots.includes(relative)&&['target','.lake','.lexlean','.prism'].includes(name))continue;
+    walk(relative+'/'+name);
+   }
+  }else{
+   assert.ok(stat.isFile()&&stat.size<=64*1024*1024,'bounded regular source '+relative);
+   const bytes=boundedBytes(path,stat);
+   files.push({path:relative,size:bytes.length,sha256:hash(bytes)});
+  }
+ }
+ for(const path of sourceRoots){
+  let parent=root;assert.ok(lstatSync(parent).isDirectory()&&!lstatSync(parent).isSymbolicLink());
+  for(const part of path.split('/').slice(0,-1)){parent=join(parent,part);const stat=lstatSync(parent);assert.ok(stat.isDirectory()&&!stat.isSymbolicLink(),'source parent alias '+parent);}
+  walk(path);
+ }
+ files.sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);
+ assert.equal(new Set(files.map(row=>row.path)).size,files.length);
+ return{revision,files};
+}
+
+export function verifySource(root,expected){
+ keys(expected,['revision','files']);hex(expected.revision,40);assert.ok(Array.isArray(expected.files));
+ for(const row of expected.files){keys(row,['path','size','sha256']);assert.equal(typeof row.path,'string');hex(row.sha256,64);assert.ok(Number.isSafeInteger(row.size)&&row.size>=0);}
+ assert.deepEqual(capture(root,expected.revision),expected,'exact current source and installed SDK compiler/test closure');
+}
+
+export function verifyImage(value,image,architecture,revision){
+ assert.equal(typeof image,'string');assert.match(image,/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/);
+ assert.ok(['amd64','arm64'].includes(architecture));hex(revision,40);
+ assert.ok(Array.isArray(value)&&value.length===1);const config=value[0];
+ assert.equal(config.Os,'linux');assert.equal(config.Architecture,architecture);
+ assert.ok(Array.isArray(config.RepoDigests)&&config.RepoDigests.every(value=>typeof value==='string')&&config.RepoDigests.includes(image),'exact pulled immutable image reference');
+ assert.deepEqual(config.Config.Entrypoint,['/usr/local/bin/prismpm-devcontainer-init']);
+ const volumes=config.Config.Volumes;
+ assert.ok(volumes===null||volumes===undefined||typeof volumes==='object'&&!Array.isArray(volumes)&&Object.keys(volumes).length===0,'no image-declared writable volumes');
+ assert.equal(config.Config.Labels['org.opencontainers.image.revision'],revision);
+ assert.equal(config.Config.Labels['org.opencontainers.image.source'],'https://github.com/UOR-Foundation/PrismPM');
+ assert.equal(config.Config.Labels['org.opencontainers.image.version'],'0.3.0');
+}
+
+export function verifyTap(tap,minimum){
+ assert.equal(typeof tap,'string');assert.ok(Number.isSafeInteger(minimum)&&minimum>0);
+ const lines=tap.split(/\r?\n/);assert.equal(lines.filter(line=>line==='TAP version 13').length,1,'one TAP document');
+ const count=name=>{const rows=lines.filter(line=>line.startsWith('# '+name+' '));assert.equal(rows.length,1,'missing or duplicate '+name+' summary');const raw=rows[0].slice(name.length+3);assert.match(raw,/^(?:0|[1-9][0-9]*)$/);const number=Number(raw);assert.ok(Number.isSafeInteger(number));return number;};
+ const tests=count('tests');assert.ok(tests>=minimum,'incomplete test suite');assert.equal(count('pass'),tests,'incomplete pass set');
+ for(const name of['fail','cancelled','skipped','todo'])assert.equal(count(name),0,name+' cannot satisfy acceptance');
+ assert.equal(count('suites'),0,'unexpected suite wrapper');
+ assert.ok(!/^\s*not ok(?: |$)/m.test(tap),'negative TAP row');
+ assert.ok(!/^\s*ok\b[^\n]*#\s*(?:SKIP|TODO)\b/im.test(tap),'skipped/TODO TAP row');
+ const plans=lines.filter(line=>/^1\.\./.test(line));assert.equal(plans.length,1,'one outer plan');
+ const match=/^1\.\.([1-9][0-9]*)$/.exec(plans[0]);assert.ok(match);const top=lines.filter(line=>/^ok [1-9][0-9]* - /.test(line));assert.equal(top.length,Number(match[1]),'complete outer test plan');
+ assert.deepEqual(top.map(line=>Number(/^ok ([0-9]+)/.exec(line)[1])),Array.from({length:top.length},(_,index)=>index+1));
+ return tests;
+}
+
+// Invoked only in the inspected current SDK. Source V&V remains independent.
+export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(text)){
+ const completed=[],env={...process.env};delete env.NODE_TEST_CONTEXT;
+ for(const suite of suites){
+  const args=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=1500000',...suite.files.map(file=>'sdk/browser/'+file)];
+  const output=launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:1600000,maxBuffer:64*1024*1024,env});
+  emit('SDK browser suite '+suite.id+'\n'+(output.stdout??'')+(output.stderr??''));
+  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+suite.id);
+  const tests=verifyTap(output.stdout,suite.minimum);completed.push({id:suite.id,tests});
+ }
+ assert.deepEqual(completed.map(row=>row.id),suites.map(row=>row.id));return completed;
+}
+
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+ const[mode,...args]=process.argv.slice(2);
+ if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));
+ else if(mode==='capture'&&args.length===2)console.log(JSON.stringify(capture(...args)));
+ else if(mode==='verify'&&args.length===2)verifySource(args[0],JSON.parse(readFileSync(args[1])));
+ else if(mode==='image'&&args.length===3)verifyImage(JSON.parse(readFileSync(0)),...args);
+ else if(mode==='run'&&args.length===0)console.log(JSON.stringify(runSuites(resolve(dirname(fileURLToPath(import.meta.url)),'..'))));
+ else throw Error('closed browser SDK test binding command');
+}
