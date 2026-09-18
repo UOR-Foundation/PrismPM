@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +29,27 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.release.if, undefined);
   assert.equal(value.jobs.crates.if, "${{ needs.gate.outputs.publish-crates == 'true' }}");
   assert.deepEqual(value.jobs.crates.needs, [...ociNeeds, 'oci-native']);
+  const cargoPublication = value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()'))?.run;
+  assert.ok(cargoPublication, 'Cargo publication must select and verify the exact archive');
+  let previous = -1;
+  for (const checkpoint of [
+    'package_target=${archive%/package/*}',
+    'test "$archive" = "$package_target/package/$package-$version.crate"',
+    'cargo package --locked --manifest-path "$manifest" --target-dir "$package_target"',
+    'test -f "$archive"',
+    'cmp "$archive" "$expected"',
+    'local_checksum=$(sha256sum "$archive" | cut -d" " -f1)',
+    'cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"',
+  ]) {
+    const offset = cargoPublication.indexOf(checkpoint);
+    assert.ok(offset > previous, `Cargo publication omits or misorders ${checkpoint}`);
+    assert.equal(cargoPublication.lastIndexOf(checkpoint), offset, `Cargo publication repeats ${checkpoint}`);
+    previous = offset;
+  }
+  assert.deepEqual(cargoPublication.split('\n').map(line => line.trim()).filter(line => line.startsWith('cargo ')), [
+    'cargo package --locked --manifest-path "$manifest" --target-dir "$package_target"',
+    'cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"',
+  ], 'Cargo must retain complete verification for both selected-target operations');
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert.match(value.jobs.gate.steps.at(-1).with.runCmd, /^set -euo pipefail\njust vv\njust vv\n?$/);
@@ -101,6 +122,23 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs.release.if = '${{ always() }}'; },
     value => value.jobs.release.needs.pop(),
     value => { value.jobs.crates.if = '${{ true }}'; },
+    ...[
+      run => run.replace('package_target=${archive%/package/*}', 'package_target=target'),
+      run => run.replace('test "$archive" = "$package_target/package/$package-$version.crate"', 'true'),
+      run => run.replace('cargo package --locked --manifest-path "$manifest" --target-dir "$package_target"',
+        'cargo package --locked --manifest-path "$manifest"'),
+      run => run.replace('cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"',
+        'cargo publish --locked --manifest-path "$manifest"'),
+      run => run.replace('cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"',
+        'cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target" --no-verify'),
+      run => run.replace('cmp "$archive" "$expected"', 'true'),
+      run => run.replace('cmp "$archive" "$expected"', 'true').replace(
+        'cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"',
+        'cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"\n                cmp "$archive" "$expected"'),
+    ].map(mutate => value => {
+      const step = value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()'));
+      step.run = mutate(step.run);
+    }),
     value => { value.jobs.gate.steps.at(-1).with.runCmd = 'just vv'; },
     value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
@@ -118,6 +156,54 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
   ]) {
     const changed = workflow(); mutate(changed);
     assert.throws(() => validateWorkflow(changed));
+  }
+});
+
+test('release crates use stage-owned targets despite an inherited Cargo target directory', () => {
+  // Exercise real Cargo packaging and its verification builds, not a command
+  // stub. The independent package-api gate also checks these archive bytes.
+  const directory = mkdtempSync(join(tmpdir(), 'prismpm-package-target-'));
+  try {
+    const inherited = join(directory, 'caller target');
+    const stage = join(directory, 'release crates');
+    mkdirSync(inherited);
+    writeFileSync(join(inherited, 'caller-owned'), 'preserve caller artifacts\n');
+    execFileSync('sh', [new URL('./package-release-crates.sh', import.meta.url).pathname,
+      '--prepare', stage], {encoding: 'utf8', timeout: 180_000, stdio: 'pipe',
+      env: {...process.env, CARGO_TARGET_DIR: inherited}});
+    const archives = [
+      ['prod-ir-0.1.0.crate', 'lean4-prod', 'vendor/lean4-prod/crates'],
+      ['prod-codegen-0.1.0.crate', 'lean4-prod', 'vendor/lean4-prod/crates'],
+      ['prism-stdlib-0.2.0.crate', 'stdlib', 'stdlib/generated'],
+    ];
+    assert.deepEqual(readdirSync(join(stage, 'packages')).sort(), archives.map(([name]) => name).sort());
+    for (const [name, owner, reviewed] of archives) {
+      const bytes = readFileSync(join(stage, 'packages', name));
+      assert.deepEqual(bytes, readFileSync(join(stage, owner, 'target/package', name)));
+      assert.deepEqual(bytes, readFileSync(new URL(`../${reviewed}/${name}`, import.meta.url)));
+    }
+    assert.deepEqual(readdirSync(inherited), ['caller-owned']);
+    assert.equal(readFileSync(join(inherited, 'caller-owned'), 'utf8'), 'preserve caller artifacts\n');
+  } finally { rmSync(directory, {recursive: true, force: true}); }
+});
+
+test('Cargo publication target selection binds the exact package and version archive', () => {
+  const body = workflow().jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).run;
+  const selection = body.slice(body.indexOf('package_target='), body.indexOf('cargo package')).trim();
+  const select = (packageName, version, archive) => execFileSync('sh', ['-eu', '-c',
+    `${selection}\nprintf '%s\\n' "$package_target"`], {encoding: 'utf8', stdio: 'pipe',
+    env: {...process.env, package: packageName, version, archive}});
+  for (const [name, version, target] of [
+    ['prod-ir', '0.1.0', '/release sources/lean4-prod/target'],
+    ['prod-codegen', '0.1.0', '/release sources/lean4-prod/target'],
+    ['prism-stdlib', '0.2.0', '/release sources/stdlib/target'],
+    ['prismpm', '0.3.0', '/workspace/target'],
+  ]) {
+    assert.equal(select(name, version, `${target}/package/${name}-${version}.crate`), `${target}\n`);
+    for (const archive of [`${target}/${name}-${version}.crate`,
+      `${target}/package/other-${version}.crate`, `${target}/package/${name}-99.0.0.crate`]) {
+      assert.throws(() => select(name, version, archive), error => error.status !== 0);
+    }
   }
 });
 

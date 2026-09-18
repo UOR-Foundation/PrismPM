@@ -1,5 +1,19 @@
 # PrismPM falsifiability and verification record
 
+## Release archive target ownership
+
+An inherited `CARGO_TARGET_DIR` sent verified archives outside their prepared
+stage, causing the real archive check to fail. Packaging now selects its owned
+target explicitly. The publication workflow selects the target of its expected
+package/version archive while retaining verification and pre-publication byte
+comparison. No Cargo publication was performed.
+
+The real packaging regression and workflow validator both failed before the
+fix. All 14 release-phase tests then passed in the devcontainer, including exact
+archive equality, preservation of caller artifacts, seven workflow mutations,
+and valid/invalid shell path selection. The log SHA-256 is
+`097da6b212e1ce7707a184b14673e50f2aac3d33cabdaad3106410a32d6e0a3b`.
+
 ## Source-free browser export (OC-07)
 
 `export-browser` replays the retained release closure and atomically publishes

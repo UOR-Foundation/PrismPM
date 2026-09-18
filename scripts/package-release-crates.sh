@@ -20,12 +20,14 @@ prepare() {
 
     (
         cd "$destination/lean4-prod"
-        CARGO_NET_OFFLINE=true cargo package --locked --offline --package prod-ir
-        CARGO_NET_OFFLINE=true cargo package --locked --offline --package prod-codegen
+        # Keep archives and verification builds in this stage, irrespective of
+        # a caller's CARGO_TARGET_DIR or Cargo configuration.
+        CARGO_NET_OFFLINE=true cargo package --locked --offline --target-dir target --package prod-ir
+        CARGO_NET_OFFLINE=true cargo package --locked --offline --target-dir target --package prod-codegen
     )
     (
         cd "$destination/stdlib"
-        CARGO_NET_OFFLINE=true cargo package --locked --offline
+        CARGO_NET_OFFLINE=true cargo package --locked --offline --target-dir target
     )
 
     cp "$destination/lean4-prod/target/package/prod-ir-0.1.0.crate" \

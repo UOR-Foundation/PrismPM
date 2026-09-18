@@ -675,7 +675,9 @@ jobs:
               }
               publish_exact() {
                 package=$1 version=$2 manifest=$3 archive=$4 expected=$5
-                cargo package --locked --manifest-path "$manifest"
+                package_target=${archive%/package/*}
+                test "$archive" = "$package_target/package/$package-$version.crate"
+                cargo package --locked --manifest-path "$manifest" --target-dir "$package_target"
                 test -f "$archive"
                 if [ "$expected" != - ]; then
                   cmp "$archive" "$expected"
@@ -685,7 +687,7 @@ jobs:
                   test "$observed" = "$local_checksum"
                   return 0
                 fi
-                cargo publish --locked --manifest-path "$manifest"
+                cargo publish --locked --manifest-path "$manifest" --target-dir "$package_target"
                 wait_for_crate "$package" "$version"
                 observed=$(public_checksum "$package" "$version")
                 test "$observed" = "$local_checksum"
