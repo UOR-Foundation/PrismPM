@@ -74,6 +74,88 @@ pub(crate) fn reject_mutations(
         assert_eq!(error.code, "PP6101");
         assert!(error.message.contains(expected), "{}", error.message);
     };
+    if binding.family == "application" {
+        let original = canonical_json(build_manifest, false).unwrap();
+        let mut legacy = original.clone();
+        legacy["inputs"]["schema"] = json!("prismpm/build-inputs/1");
+        legacy["inputs"]
+            .as_object_mut()
+            .unwrap()
+            .remove("application_artifacts_sha256");
+        rejected_build(
+            &encode_value(&legacy).unwrap(),
+            build_files,
+            "legacy application build inputs lack artifact closure",
+        );
+        for schema in [json!("prismpm/build-inputs/3"), Value::Null] {
+            let mut build = original.clone();
+            build["inputs"]["schema"] = schema;
+            rejected_build(
+                &encode_value(&build).unwrap(),
+                build_files,
+                "unknown build inputs schema",
+            );
+        }
+        let mut extra = original.clone();
+        extra["inputs"]["unrecognized"] = json!(true);
+        rejected_build(
+            &encode_value(&extra).unwrap(),
+            build_files,
+            "evidence object fields are not closed",
+        );
+        for replacement in [
+            None,
+            Some(json!("0".repeat(64))),
+            Some(json!("SHA256:invalid")),
+        ] {
+            let mut build = original.clone();
+            if let Some(value) = replacement {
+                build["inputs"]["application_artifacts_sha256"] = value;
+            } else {
+                build["inputs"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("application_artifacts_sha256");
+            }
+            assert_eq!(
+                validate(
+                    &encode_value(&build).unwrap(),
+                    build_files,
+                    verification_files
+                )
+                .unwrap_err()
+                .code,
+                "PP6101"
+            );
+        }
+        // Rehash a changed actual artifact row, but retain the old build input.
+        // File-descriptor integrity alone must not admit an identity collision.
+        let path = "application/model-provenance.json";
+        let mut bytes = build_files[path].clone();
+        bytes.push(b' ');
+        let mut files = build_files.clone();
+        files.insert(path.into(), bytes.clone());
+        let mut build = original;
+        let row = build["files"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|row| row["path"] == path)
+            .unwrap();
+        row["byte_length"] = json!(bytes.len());
+        row["sha256"] = json!(hex(&bytes));
+        rejected_build(
+            &encode_value(&build).unwrap(),
+            &files,
+            "application artifact closure",
+        );
+    } else {
+        let original = canonical_json(build_manifest, false).unwrap();
+        assert_eq!(original["inputs"]["schema"], "prismpm/build-inputs/1");
+        assert!(original["inputs"]
+            .get("application_artifacts_sha256")
+            .is_none());
+    }
     if binding.family == "native" {
         // A genuine successful transcript cannot replace semantic replay.
         // Rebind the outer file descriptor after changing linked source, while
@@ -222,10 +304,27 @@ pub(crate) fn reject_mutations(
             descriptor["sha256"] = json!(hex(&bytes));
             let mut files = build_files.clone();
             files.insert(path.into(), bytes);
-            rejected_build(
-                &encode_value(&build).unwrap(),
-                &files,
-                "application selected",
+            // Repair the newly bound outer closure and its dependent receipts:
+            // the original semantic gate, not a stale build ID, must reject.
+            build["inputs"]["application_artifacts_sha256"] =
+                json!(hex(&encode_value(&build["files"]).unwrap()));
+            let new_build_id = hex(&encode_value(&build["inputs"]).unwrap());
+            let mut evidence = verification_files.clone();
+            let mut acceptance =
+                canonical_json(&evidence["application-acceptance.json"], false).unwrap();
+            acceptance["build_id"] = json!(new_build_id);
+            let acceptance_bytes = encode_value(&acceptance).unwrap();
+            let mut verified = canonical_json(&evidence["manifest.json"], false).unwrap();
+            verified["build_id"] = json!(new_build_id);
+            verified["acceptance_sha256"] = json!(hex(&acceptance_bytes));
+            evidence.insert("application-acceptance.json".into(), acceptance_bytes);
+            evidence.insert("manifest.json".into(), encode_value(&verified).unwrap());
+            let error = validate(&encode_value(&build).unwrap(), &files, &evidence).unwrap_err();
+            assert_eq!(error.code, "PP6101");
+            assert!(
+                error.message.contains("application selected"),
+                "{}",
+                error.message
             );
         }
         let mut acceptance =

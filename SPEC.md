@@ -342,13 +342,21 @@ directory/provenance values, `ApplicationName.holo`, identities, and build
 manifest. Each file row fixes its relative path, kind, byte length, and
 SHA-256; undeclared extras and symlinks fail reuse.
 
-The Prism build ID is SHA-256 of canonical `prismpm/build-inputs/1` bytes
+The Prism build ID is SHA-256 of canonical build-input bytes
 containing LexLean source, semantic, compiler, snapshot, and build IDs; stdlib
 semantics/package identity; lean4-prod and Hologram pins; target profile;
 generated core, guest, View, browser, manifest, capability, extension, and
-Hologram application identities; and dependency-register digest. Paths and
-environment do not participate. Publication takes an exclusive lock, writes a unique staging
-directory with create-new semantics, synchronizes it, and atomically renames
+Hologram application identities; and dependency-register digest. Non-application
+builds retain `prismpm/build-inputs/1`. Application builds use
+`prismpm/build-inputs/2`, adding `application_artifacts_sha256`: SHA-256 of the
+canonical, path-sorted complete manifest file rows (path, kind, length and hash).
+The self-containing `manifest.json` is excluded. Source-free release verification
+recomputes this binding from checked artifact rows. Legacy application `/1`
+inputs lack that binding and fail with `PP6101`; they require rebuilding and
+reverification, not relabeling or mutation of an existing release. Holo/1 is
+unchanged. Host paths and environment do not participate. Publication takes an
+exclusive lock, writes a unique staging directory with create-new semantics,
+synchronizes it, and atomically renames
 it. An existing build is reused only after its exact file set, types, and bytes
 match; extra files, symlinks, missing files, and tampering are errors.
 

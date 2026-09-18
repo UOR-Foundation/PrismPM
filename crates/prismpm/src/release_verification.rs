@@ -226,23 +226,38 @@ pub(crate) fn validate(
             .all(|pair| pair[0]["path"].as_str() < pair[1]["path"].as_str()),
         "build file order is not canonical",
     )?;
+    let model_bytes = file(build_files, "model.prism.json")?;
+    let model = decode_canonical(model_bytes)
+        .map_err(|error| invalid(format!("release model: {}", error.message)))?;
     let inputs = &build["inputs"];
-    keys(
-        inputs,
-        &[
-            "application_generator_sha256",
-            "dependency_register_sha256",
-            "emitter_semantics_id",
-            "lexlean_build_id",
-            "lexlean_semantic_id",
-            "lexlean_source_id",
-            "model_id",
-            "schema",
-            "system_id",
-        ],
-    )?;
+    let mut input_fields = vec![
+        "application_generator_sha256",
+        "dependency_register_sha256",
+        "emitter_semantics_id",
+        "lexlean_build_id",
+        "lexlean_semantic_id",
+        "lexlean_source_id",
+        "model_id",
+        "schema",
+        "system_id",
+    ];
+    if model.application.is_some() {
+        if inputs["schema"] == "prismpm/build-inputs/1" {
+            keys(inputs, &input_fields)?;
+            return Err(invalid(
+                "legacy application build inputs lack artifact closure; rebuild and verify with prismpm/build-inputs/2",
+            ));
+        }
+        input_fields.push("application_artifacts_sha256");
+    }
+    keys(inputs, &input_fields)?;
     ensure(
-        inputs["schema"] == "prismpm/build-inputs/1",
+        inputs["schema"]
+            == if model.application.is_some() {
+                "prismpm/build-inputs/2"
+            } else {
+                "prismpm/build-inputs/1"
+            },
         "unknown build inputs schema",
     )?;
     for key in [
@@ -256,10 +271,14 @@ pub(crate) fn validate(
     ] {
         digest(&inputs[key])?;
     }
+    if model.application.is_some() {
+        ensure(
+            digest(&inputs["application_artifacts_sha256"])?
+                == hex(&encode_value(&build["files"]).map_err(|error| invalid(error.message))?),
+            "application artifact closure differs from build inputs",
+        )?;
+    }
     let build_id = hex(&encode_value(inputs).map_err(|error| invalid(error.message))?);
-    let model_bytes = file(build_files, "model.prism.json")?;
-    let model = decode_canonical(model_bytes)
-        .map_err(|error| invalid(format!("release model: {}", error.message)))?;
     ensure(
         inputs["model_id"] == hex(model_bytes),
         "model identity differs from build inputs",

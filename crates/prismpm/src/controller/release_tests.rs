@@ -43,6 +43,50 @@ fn calculator_project() -> tempfile::TempDir {
 }
 
 #[test]
+fn application_build_identity_binds_closed_artifacts_and_rejects_tampering() {
+    let temporary = calculator_project();
+    let root = temporary.path();
+    let controller = Controller::load(root).unwrap();
+    let first = controller
+        .build(BuildRequest { config_path: None })
+        .unwrap();
+    let manifest: Value =
+        serde_json::from_slice(&std::fs::read(root.join(&first.manifest_path)).unwrap()).unwrap();
+    let closure = content_id(&encode_value(&manifest["files"]).unwrap());
+    assert_eq!(manifest["inputs"]["schema"], "prismpm/build-inputs/2");
+    assert_eq!(
+        manifest["inputs"]["application_artifacts_sha256"], closure,
+        "application build identity must bind every actual generated artifact"
+    );
+    assert_eq!(
+        first.build_id,
+        content_id(&encode_value(&manifest["inputs"]).unwrap())
+    );
+    // Exercise the actual publisher twice, not merely a digest helper. Exact
+    // bytes remain reusable; a modified published artifact must still fail.
+    let second = controller
+        .build(BuildRequest { config_path: None })
+        .unwrap();
+    assert_eq!(first.build_id, second.build_id);
+    let archive = root
+        .join(&first.manifest_path)
+        .parent()
+        .unwrap()
+        .join("Calculator.holo");
+    let mut changed = std::fs::read(&archive).unwrap();
+    changed[0] ^= 1;
+    std::fs::write(&archive, changed).unwrap();
+    let error = controller
+        .build(BuildRequest { config_path: None })
+        .unwrap_err();
+    assert_eq!(error.code, "PP4001");
+    assert_eq!(
+        error.message,
+        "published artifact was modified: Calculator.holo"
+    );
+}
+
+#[test]
 fn physical_archive_limit_rejects_before_publishing_any_build() {
     let temporary = calculator_project();
     let root = temporary.path();

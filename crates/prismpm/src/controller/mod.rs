@@ -736,7 +736,7 @@ impl Controller {
             "{:x}",
             Sha256::digest(include_bytes!("../../model/dependencies.toml"))
         );
-        let inputs = json!({
+        let mut inputs = json!({
             "application_generator_sha256": format!("{:x}", Sha256::digest([
                 include_bytes!("../application_build.rs").as_slice(),
                 include_bytes!("../holo/archive.rs").as_slice(),
@@ -752,7 +752,6 @@ impl Controller {
             "lexlean_source_id": prepared.snapshot.source_id().to_string(),
             "schema": "prismpm/build-inputs/1"
         });
-        let build_id = content_id(&encode_value(&inputs)?);
         let rows: Vec<FileRow> = artifacts
             .iter()
             .map(|(path, bytes)| FileRow {
@@ -762,6 +761,15 @@ impl Controller {
                 sha256: format!("{:x}", Sha256::digest(bytes)),
             })
             .collect();
+        if prepared.model.application.is_some() {
+            // Source hashes alone omit embedded dependency changes. Bind the
+            // complete generated closure before selecting a publication path;
+            // manifest.json is excluded because it contains this identity.
+            inputs["application_artifacts_sha256"] =
+                json!(content_id(&encode_value(&json!(rows))?));
+            inputs["schema"] = json!("prismpm/build-inputs/2");
+        }
+        let build_id = content_id(&encode_value(&inputs)?);
         let manifest_value = serde_json::to_value(json!({
             "files": rows,
             "inputs": inputs,

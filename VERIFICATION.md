@@ -1358,6 +1358,26 @@ development container. This is not installed-SDK, producer or Pages acceptance.
 - `target/action-export-browser-final.log`: `5abdeac80f3a3f06c2fb4004466fd1befd529b91c5d8449d32f965c1c68167f6`.
 - `target/action-export-browser-owning-final.log`: `8cd6d5ee6600827d8dfe31e7f7d8cb428c99df595b8d19517bdb625e3d0189d8`.
 
+## Application build identity
+
+The clean `d0ec75d` V&V run passed gates 1–7, then gate 8 rejected
+`Calculator.holo` with PP4001. A fresh build reproduced the same prior identity
+with ten different artifacts: embedded stdlib bytes were not fully bound.
+Application build inputs `/2` now bind the complete generated artifact closure;
+native inputs retain `/1`. Source-free verification independently checks that
+closure and explicitly rejects legacy application `/1` evidence with PP6101.
+
+The owning regression failed before the fix. All six release tests now pass,
+including repeated actual builds, published-artifact tampering, closed input
+schemas and resealed semantic mutants. Calculator builds successfully beside
+the unchanged old cache. Scoped all-target/all-feature Clippy and formatting
+pass. These are targeted checks, not complete SDK or Foundry acceptance.
+
+- `target/build-identity-regression-red.log`: `5ce2b5bfe9943f17945251b2e6da44217e130a8b087e61bb74d2760103265157`.
+- `target/build-identity-release-tests-green.log`: `d2696dc829d3c7bb08ec4e55a07a1cbb4733f3b178bc1f75d252702f4051142b`.
+- `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
+- `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
