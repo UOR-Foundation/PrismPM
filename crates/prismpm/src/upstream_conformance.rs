@@ -1498,6 +1498,50 @@ struct DistributionRun<'a> {
     focus: Option<&'static str>,
 }
 
+fn distribution_report_initializer() -> &'static str {
+    r#"set -eu
+test "$(id -u):$(id -g)" = 0:0
+test ! -L /reports
+test "$(stat -c '%u:%g:%a' /reports)" = 0:0:755
+test -z "$(find /reports -mindepth 1 -maxdepth 1 -print -quit)"
+set -- /reports/zot-manifest-first-auto /reports/zot-blobs-first-auto /reports/reference-manual-crossmount /reports/reference-automatic-disabled /reports/pull-external-setup /reports/discovery-external-setup
+mkdir --mode=0700 -- "$@"
+chown -- 1000:1000 "$@"
+"#
+}
+
+fn initialize_distribution_reports(
+    image: &str,
+    volume: &str,
+    script: &str,
+) -> Result<(ExitStatus, Vec<u8>, Vec<u8>), PrismError> {
+    docker(
+        &[
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--read-only",
+            "--user",
+            "0:0",
+            "--cap-drop",
+            "ALL",
+            "--cap-add",
+            "CHOWN",
+            "--security-opt",
+            "no-new-privileges",
+            "--volume",
+            &format!("{volume}:/reports"),
+            "--entrypoint",
+            "/bin/sh",
+            image,
+            "-ec",
+            script,
+        ],
+        Duration::from_secs(30),
+    )
+}
+
 fn run_distribution_official(
     root: &Path,
     network: &str,
@@ -1509,6 +1553,15 @@ fn run_distribution_official(
     let mut arguments = vec![
         "run".to_owned(),
         "--rm".to_owned(),
+        "--read-only".to_owned(),
+        "--user".to_owned(),
+        "1000:1000".to_owned(),
+        "--cap-drop".to_owned(),
+        "ALL".to_owned(),
+        "--security-opt".to_owned(),
+        "no-new-privileges".to_owned(),
+        "--tmpfs".to_owned(),
+        "/tmp:rw,nosuid,nodev".to_owned(),
         "--network".to_owned(),
         network.to_owned(),
         "--volume".to_owned(),
@@ -1558,8 +1611,15 @@ fn run_distribution_official(
             "--rm",
             "--network",
             "none",
+            "--read-only",
+            "--user",
+            "1000:1000",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
             "--volume",
-            &format!("{}:/reports", run.report_volume),
+            &format!("{}:/reports:ro", run.report_volume),
             "--entrypoint",
             "/usr/bin/cat",
             image,
@@ -1767,27 +1827,10 @@ fn distribution_suite(root: &Path, image: &str) -> Result<DistributionEvidence, 
                 )));
             }
         }
-        let reports_mount = format!("{report_volume}:/reports");
-        let (status, _, stderr) = docker(
-            &[
-                "run",
-                "--rm",
-                "--network",
-                "none",
-                "--volume",
-                &reports_mount,
-                "--entrypoint",
-                "/usr/bin/mkdir",
-                image,
-                "-p",
-                "/reports/zot-manifest-first-auto",
-                "/reports/zot-blobs-first-auto",
-                "/reports/reference-manual-crossmount",
-                "/reports/reference-automatic-disabled",
-                "/reports/pull-external-setup",
-                "/reports/discovery-external-setup",
-            ],
-            Duration::from_secs(30),
+        let (status, _, stderr) = initialize_distribution_reports(
+            image,
+            &report_volume,
+            distribution_report_initializer(),
         )?;
         if !status.success() {
             return Err(unavailable(format!(
@@ -1929,6 +1972,15 @@ fn distribution_suite(root: &Path, image: &str) -> Result<DistributionEvidence, 
                 "--rm",
                 "--network",
                 &network,
+                "--read-only",
+                "--user",
+                "1000:1000",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--tmpfs",
+                "/tmp:rw,nosuid,nodev",
                 "--entrypoint",
                 "/usr/local/bin/oci-distribution-conformance",
                 "--env",
@@ -2203,6 +2255,90 @@ pub fn verify(root: &Path) -> Result<UpstreamConformanceEvidence, PrismError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct ReportVolume(String);
+
+    impl ReportVolume {
+        fn create(label: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let volume = Self(format!(
+                "prismpm-report-regression-{}-{nonce}-{label}",
+                std::process::id()
+            ));
+            let (status, _, stderr) =
+                docker(&["volume", "create", &volume.0], Duration::from_secs(10)).unwrap();
+            assert!(status.success(), "{}", String::from_utf8_lossy(&stderr));
+            volume
+        }
+    }
+
+    impl Drop for ReportVolume {
+        fn drop(&mut self) {
+            let _ = docker(&["volume", "rm", &self.0], Duration::from_secs(10));
+        }
+    }
+
+    fn write_distribution_report_probe(
+        image: &str,
+        volume: &ReportVolume,
+    ) -> (ExitStatus, Vec<u8>, Vec<u8>) {
+        docker(
+            &[
+                "run", "--rm", "--network", "none", "--read-only", "--user", "1000:1000",
+                "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--volume",
+                &format!("{}:/reports", volume.0), "--entrypoint", "/bin/sh", image, "-ec",
+                r#"set -eu
+test "$(id -u):$(id -g)" = 1000:1000
+test "$(stat -c '%u:%g:%a' /reports)" = 0:0:755
+test "$(find /reports -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 6
+for directory in /reports/zot-manifest-first-auto /reports/zot-blobs-first-auto /reports/reference-manual-crossmount /reports/reference-automatic-disabled /reports/pull-external-setup /reports/discovery-external-setup; do
+  printf '%s' actual-nonroot-write > "$directory/owner-write-probe"
+  test "$(stat -c '%u:%g:%a' "$directory")" = 1000:1000:700
+  test "$(cat "$directory/owner-write-probe")" = actual-nonroot-write
+done
+test ! -w /reports
+test ! -w /usr/local/bin
+printf '%s\n' DISTRIBUTION_NONROOT_REPORT_WRITE
+"#,
+            ],
+            Duration::from_secs(30),
+        ).unwrap()
+    }
+
+    #[test]
+    fn distribution_report_volume_is_confined_and_owned_by_oracle_user() {
+        let image = sdk_image().expect("exact SDK image required");
+        let volume = ReportVolume::create("positive");
+        let script = distribution_report_initializer();
+        let (status, _, stderr) =
+            initialize_distribution_reports(&image, &volume.0, script).unwrap();
+        assert!(status.success(), "{}", String::from_utf8_lossy(&stderr));
+        let (status, stdout, stderr) = write_distribution_report_probe(&image, &volume);
+        assert!(status.success(), "{}", String::from_utf8_lossy(&stderr));
+        assert_eq!(stdout, b"DISTRIBUTION_NONROOT_REPORT_WRITE\n");
+        let (status, _, _) = initialize_distribution_reports(&image, &volume.0, script).unwrap();
+        assert!(
+            !status.success(),
+            "nonempty report volume was reinitialized"
+        );
+
+        let without_ownership = script.replace("chown -- 1000:1000 \"$@\"\n", "");
+        assert_ne!(without_ownership, script);
+        let mutant = ReportVolume::create("missing-ownership");
+        let (status, _, stderr) =
+            initialize_distribution_reports(&image, &mutant.0, &without_ownership).unwrap();
+        assert!(status.success(), "{}", String::from_utf8_lossy(&stderr));
+        let (status, stdout, stderr) = write_distribution_report_probe(&image, &mutant);
+        assert!(
+            !status.success(),
+            "nonroot writes succeeded without ownership"
+        );
+        assert!(!String::from_utf8_lossy(&stdout).contains("DISTRIBUTION_NONROOT_REPORT_WRITE"));
+        assert!(String::from_utf8_lossy(&stderr).contains("Permission denied"));
+    }
 
     fn run_openid_wrapper_source(
         image: &str,
