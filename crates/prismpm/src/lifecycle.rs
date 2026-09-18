@@ -3046,6 +3046,17 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn cancellation_stops_log_process_and_keeps_logs_out_of_result_channel() {
+        assert_cancellation_drains_logs("");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cancellation_log_assertions_wait_for_a_delayed_child() {
+        assert_cancellation_drains_logs("sleep 0.25\n");
+    }
+
+    #[cfg(unix)]
+    fn assert_cancellation_drains_logs(startup: &str) {
         use std::os::unix::fs::PermissionsExt;
 
         let directory = tempfile::tempdir().unwrap();
@@ -3054,7 +3065,7 @@ mod tests {
         std::fs::write(
             &program,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf 'stdout-log\\n'\nprintf 'stderr-log\\n' >&2\nwhile :; do :; done\n",
+                "#!/bin/sh\n{startup}printf '%s\\n' \"$@\" > '{}'\nprintf 'stdout-log\\n'\nprintf 'stderr-log\\n' >&2\nwhile :; do :; done\n",
                 argv.display()
             ),
         )
@@ -3064,12 +3075,33 @@ mod tests {
         std::fs::set_permissions(&program, permissions).unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let trigger = Arc::clone(&cancelled);
-        let trigger_thread = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(100));
-            trigger.store(true, Ordering::SeqCst);
-        });
         let sink = Arc::new(Mutex::new(Vec::new()));
-        supervise_process(
+        let observed_sink = Arc::clone(&sink);
+        let trigger_thread = std::thread::spawn(move || {
+            // Cancel after observing both streams, not after assuming the child
+            // received CPU time. The deadline still cancels a broken fixture.
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            let observed = loop {
+                let logs = observed_sink.lock().unwrap();
+                let both = logs
+                    .windows(b"stdout-log".len())
+                    .any(|part| part == b"stdout-log")
+                    && logs
+                        .windows(b"stderr-log".len())
+                        .any(|part| part == b"stderr-log");
+                drop(logs);
+                if both {
+                    break true;
+                }
+                if std::time::Instant::now() >= deadline {
+                    break false;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            };
+            trigger.store(true, Ordering::SeqCst);
+            observed
+        });
+        let result = supervise_process(
             &program,
             &[
                 "compose".to_owned(),
@@ -3079,9 +3111,13 @@ mod tests {
             directory.path(),
             &cancelled,
             Arc::clone(&sink),
-        )
-        .unwrap();
-        trigger_thread.join().unwrap();
+        );
+        let observed = trigger_thread.join().unwrap();
+        result.unwrap();
+        assert!(
+            observed,
+            "child logs were not observed before the cancellation deadline"
+        );
         let logs = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
         assert!(logs.contains("stdout-log"));
         assert!(logs.contains("stderr-log"));
