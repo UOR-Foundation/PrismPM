@@ -6,6 +6,72 @@ const encoder = new TextEncoder();
 const domain = encoder.encode('prismpm/browser-signature/1\0');
 export const MAX_SIGNED_BYTES = 1048576;
 
+// Capture native brands before examining caller-controlled objects. Ordinary
+// typed-array/key properties can be shadowed without changing their backing data.
+const apply = Reflect.apply;
+const ByteArray = Uint8Array;
+const typedArrayPrototype = Object.getPrototypeOf(ByteArray.prototype);
+const byteTag = Object.getOwnPropertyDescriptor(typedArrayPrototype, Symbol.toStringTag)?.get;
+const byteLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')?.get;
+const byteBuffer = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'buffer')?.get;
+const arrayBufferLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')?.get;
+const byteSet = typedArrayPrototype.set;
+const hasOwn = Object.prototype.hasOwnProperty;
+const prototypeOf = Object.getPrototypeOf;
+const descriptorsOf = Object.getOwnPropertyDescriptors;
+const keyPrototype = globalThis.CryptoKey?.prototype;
+const keyFields = ['type', 'extractable', 'algorithm', 'usages'];
+const keyGetters = keyFields.map(field => keyPrototype
+  ? Object.getOwnPropertyDescriptor(keyPrototype, field)?.get : undefined);
+const providerPrototypes = new WeakMap();
+
+function keyMetadata(algorithmValue, usagesValue) {
+  // Providers may cache these otherwise native metadata objects. Read only own
+  // data descriptors so a caller cannot turn a cached field into a callback.
+  const fields = descriptorsOf(algorithmValue), uses = descriptorsOf(usagesValue);
+  return prototypeOf(algorithmValue) === Object.prototype
+    && Object.keys(fields).sort().join(',') === 'name,namedCurve'
+    && fields.name.value === 'ECDSA' && fields.namedCurve.value === 'P-256'
+    && Array.isArray(usagesValue) && prototypeOf(usagesValue) === Array.prototype
+    && Object.keys(uses).sort().join(',') === '0,length'
+    && uses.length.value === 1 && uses[0].value === 'sign';
+}
+
+function validSigningKey(key) {
+  const [type, extractable, keyAlgorithm, usages] = keyGetters.map(getter => apply(getter, key, []));
+  return type === 'private' && extractable === false && keyMetadata(keyAlgorithm, usages)
+    && !keyFields.some(field => apply(hasOwn, key, [field]));
+}
+
+function unchangedKeyPrototype(expected) {
+  // Only the exact provider-derived layer is allowed above the captured native
+  // interface. Inspect descriptors without evaluating any shadowed getter.
+  if (expected !== keyPrototype && (prototypeOf(expected) !== keyPrototype
+      || keyFields.some(field => apply(hasOwn, expected, [field])))) return false;
+  const fields = descriptorsOf(keyPrototype);
+  return keyFields.every((field, index) => fields[field]?.get === keyGetters[index]
+    && fields[field]?.set === undefined);
+}
+
+async function signingPrototype(provider) {
+  let pending = providerPrototypes.get(provider);
+  if (!pending) {
+    pending = Promise.resolve().then(async () => {
+      // Node and browsers expose different genuine native prototype chains.
+      // Learn the exact one only from the already trusted crypto provider.
+      const pair = await provider.generateKey(algorithm, false, ['sign', 'verify']);
+      if (!validSigningKey(pair.privateKey)) throw new BrowserEffectError('crypto-unavailable');
+      return prototypeOf(pair.privateKey);
+    });
+    providerPrototypes.set(provider, pending);
+  }
+  try { return await pending; }
+  catch {
+    if (providerPrototypes.get(provider) === pending) providerPrototypes.delete(provider);
+    throw new BrowserEffectError('crypto-unavailable');
+  }
+}
+
 function subtle() {
   const provider = globalThis.crypto?.subtle;
   if (!provider || ['digest', 'importKey', 'generateKey', 'exportKey', 'sign', 'verify']
@@ -23,10 +89,17 @@ export class BrowserEffectError extends Error {
 
 export function bytesCopy(value, maximum = MAX_SIGNED_BYTES) {
   try {
-    if (!(value instanceof Uint8Array)
-        || (typeof SharedArrayBuffer !== 'undefined' && value.buffer instanceof SharedArrayBuffer)
-        || value.byteLength > maximum) throw new BrowserEffectError('invalid-input');
-    return new Uint8Array(value);
+    if (!Number.isSafeInteger(maximum) || maximum < 0
+        || apply(byteTag, value, []) !== 'Uint8Array') throw new BrowserEffectError('invalid-input');
+    // This native getter rejects SharedArrayBuffer even from another realm.
+    apply(arrayBufferLength, apply(byteBuffer, value, []), []);
+    const length = apply(byteLength, value, []);
+    if (length > maximum) throw new BrowserEffectError('invalid-input');
+    const copy = new ByteArray(length);
+    // Typed-array set uses internal slots, not source iterator/species/getters;
+    // it also rejects detached and out-of-bounds resizable views.
+    apply(byteSet, copy, [value]);
+    return copy;
   } catch {
     throw new BrowserEffectError('invalid-input');
   }
@@ -89,20 +162,34 @@ export async function signBytes(identity, context, value) {
   let key;
   try {
     key = identity?.privateKey;
-    if (typeof CryptoKey === 'undefined' || !(key instanceof CryptoKey)
-        || key.type !== 'private' || key.extractable !== false
-        || key.algorithm?.name !== 'ECDSA' || key.algorithm.namedCurve !== 'P-256'
-        || !Array.isArray(key.usages) || key.usages.length !== 1 || key.usages[0] !== 'sign') {
+    if (!validSigningKey(key)) {
       throw new BrowserEffectError('identity-corrupt');
     }
   } catch {
     throw new BrowserEffectError('identity-corrupt');
   }
+  let provider;
+  try { provider = subtle(); }
+  catch { throw new BrowserEffectError('crypto-unavailable'); }
+  const expectedPrototype = await signingPrototype(provider);
   try {
-    return new Uint8Array(await subtle().sign(signatureAlgorithm, key, message));
+    // Repeat after the only asynchronous preparation gap: callers still own the
+    // key object. No custom prototype/getter may reach the provider's rereads.
+    if (prototypeOf(key) !== expectedPrototype || !unchangedKeyPrototype(expectedPrototype)
+        || !validSigningKey(key)) {
+      throw new BrowserEffectError('identity-corrupt');
+    }
+  } catch { throw new BrowserEffectError('identity-corrupt'); }
+  let signature;
+  try {
+    signature = new ByteArray(await provider.sign(signatureAlgorithm, key, message));
   } catch {
     throw new BrowserEffectError('crypto-unavailable');
   }
+  // Metadata reflection alone cannot establish a provider's actual key curve.
+  // P-256 P1363 signatures have exactly two 32-byte integers.
+  if (signature.length !== 64) throw new BrowserEffectError('identity-corrupt');
+  return signature;
 }
 
 export async function verifyBytes(publicKey, context, value, signature) {
