@@ -22,5 +22,6 @@ jobs:
         with:
           # The second run is the regression test for stale ignored evidence.
           runCmd: |
+            set -euo pipefail
             just vv
             just vv

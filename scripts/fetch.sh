@@ -38,6 +38,16 @@ case "$observed_zot" in
   *) printf 'Zot acquisition did not preserve the locked digest: %s\n' "$observed_zot" >&2; exit 1 ;;
 esac
 
+# The release exporter regression uses the same immutable docker-container
+# builder as release/reproducibility; the Docker driver cannot push by digest.
+buildkit_image='moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa'
+docker pull "$buildkit_image"
+observed_buildkit=$(docker image inspect "$buildkit_image" --format '{{index .RepoDigests 0}}')
+case "$observed_buildkit" in
+  *@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa) ;;
+  *) printf 'BuildKit acquisition did not preserve the locked digest: %s\n' "$observed_buildkit" >&2; exit 1 ;;
+esac
+
 # The previous accepted SDK is an independent bootstrap input, not an output
 # of the 0.3 build. Acquire it explicitly while networking is authorized; the
 # repository gate consumes only these checksum-verified cached bytes.

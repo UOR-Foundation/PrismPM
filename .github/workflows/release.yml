@@ -1,4 +1,4 @@
-name: PrismPM production release
+name: PrismPM OCI/native and Cargo publication
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ on:
       - v0.3.0
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.sha }}
   cancel-in-progress: false
 
 permissions: {}
@@ -34,6 +34,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      publish-crates: ${{ steps.version.outputs.publish-crates }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -43,20 +44,19 @@ jobs:
         shell: bash
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
         run: |
           set -euo pipefail
-          version=${DISPATCH_VERSION:-${GITHUB_REF_NAME#v}}
-          case "$version" in
-            0.3.0) ;;
-            *) printf 'release workflow is closed to PrismPM 0.3.0, got %s\n' "$version" >&2; exit 2 ;;
-          esac
+          node scripts/release-phases.mjs policy >> "$GITHUB_OUTPUT"
           test "$(git status --porcelain)" = ""
-          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$version"
-          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.3.0
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
-          runCmd: just vv
+          runCmd: |
+            set -euo pipefail
+            just vv
+            just vv
 
   images:
     needs: gate
@@ -98,8 +98,16 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+      - name: Require the source-bound publication policy before registry credentials
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+        run: node scripts/release-phases.mjs policy
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
@@ -112,12 +120,10 @@ jobs:
           file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
           platforms: linux/amd64,linux/arm64
-          outputs: type=registry,rewrite-timestamp=true
+          outputs: type=registry,name=${{ matrix.repository }},push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true
           provenance: false
           sbom: false
           build-args: SOURCE_DATE_EPOCH=0
-          tags: |
-            ${{ matrix.repository }}:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.created=1970-01-01T00:00:00Z
             org.opencontainers.image.revision=${{ github.sha }}
@@ -142,52 +148,75 @@ jobs:
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           image: ${{ matrix.repository }}@${{ steps.platforms.outputs.amd64 }}
+          syft-version: v1.51.1
           format: spdx-json
           output-file: ${{ matrix.name }}-linux-amd64.spdx.json
-          artifact-name: ${{ matrix.name }}-linux-amd64-spdx
+          upload-artifact: false
           upload-release-assets: false
       - id: sbom-arm64
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           image: ${{ matrix.repository }}@${{ steps.platforms.outputs.arm64 }}
+          syft-version: v1.51.1
           format: spdx-json
           output-file: ${{ matrix.name }}-linux-arm64.spdx.json
-          artifact-name: ${{ matrix.name }}-linux-arm64-spdx
+          upload-artifact: false
           upload-release-assets: false
-      - id: attest-sbom-amd64
-        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
-        with:
-          subject-name: ${{ matrix.repository }}
-          subject-digest: ${{ steps.platforms.outputs.amd64 }}
-          sbom-path: ${{ matrix.name }}-linux-amd64.spdx.json
-          push-to-registry: true
-      - id: attest-sbom-arm64
-        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
-        with:
-          subject-name: ${{ matrix.repository }}
-          subject-digest: ${{ steps.platforms.outputs.arm64 }}
-          sbom-path: ${{ matrix.name }}-linux-arm64.spdx.json
-          push-to-registry: true
       - id: attest-provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
         with:
           subject-name: ${{ matrix.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-      - name: Stage stable attestation bundle names
+      - name: Stage the image-index provenance bundle
         shell: bash
         env:
-          SBOM_AMD64: ${{ steps.attest-sbom-amd64.outputs.bundle-path }}
-          SBOM_ARM64: ${{ steps.attest-sbom-arm64.outputs.bundle-path }}
           PROVENANCE: ${{ steps.attest-provenance.outputs.bundle-path }}
         run: |
           set -euo pipefail
-          cp "$SBOM_AMD64" "${{ matrix.name }}-linux-amd64.sbom.sigstore.json"
-          cp "$SBOM_ARM64" "${{ matrix.name }}-linux-arm64.sbom.sigstore.json"
           cp "$PROVENANCE" "${{ matrix.name }}-provenance.sigstore.json"
-      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
-          cosign-release: v3.1.3
+          node-version: 22.23.2
+      - name: Install exact OCI transport and signature verifier tools
+        run: |
+          set -euo pipefail
+          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/release-tools"
+          bash scripts/sdk-candidate.sh install-cosign "$RUNNER_TEMP/release-tools"
+          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
+      # Large SPDX remains a complete blob, with its small OCI 1.1 manifest
+      # keylessly signed. This is not an inline SPDX attestation.
+      - name: Publish and verify both complete platform SBOM artifacts
+        env:
+          IMAGE: ${{ matrix.name }}
+          REPOSITORY: ${{ matrix.repository }}
+          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          AMD64_DIGEST: ${{ steps.platforms.outputs.amd64 }}
+          ARM64_DIGEST: ${{ steps.platforms.outputs.arm64 }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+        run: |
+          set -euo pipefail
+          for architecture in amd64 arm64; do
+            if test "$architecture" = amd64; then digest=$AMD64_DIGEST; else digest=$ARM64_DIGEST; fi
+            directory="$RUNNER_TEMP/release-sbom-$IMAGE-$architecture"
+            prefix="$IMAGE-linux-$architecture"
+            mkdir "$directory"
+            cp "$IMAGE-image-index.json" "$directory/index.json"
+            cp "$prefix.spdx.json" "$directory/sbom.spdx.json"
+            oras manifest fetch "$REPOSITORY@$digest" --output "$directory/manifest.json"
+            oras manifest fetch-config "$REPOSITORY@$digest" --output "$directory/config.json"
+            node scripts/release-phases.mjs sbom-record "$directory" "$architecture" "$GITHUB_SHA" \
+              "$REPOSITORY@$INDEX_DIGEST" "$GITHUB_REF"
+            node scripts/release-phases.mjs sbom-publish "$directory" "$architecture" "$GITHUB_SHA" \
+              "$REPOSITORY@$INDEX_DIGEST" "$GITHUB_REF" standards/trust/sigstore-trusted-root-cosign-3.1.3.json
+            cmp "$directory/sbom.spdx.json" "$directory/sbom.received.spdx.json"
+            for evidence in sbom-record.json sbom-manifest.json sbom-artifact.json sbom.sigstore.json sbom-signature-verification.json; do
+              cp "$directory/$evidence" "$prefix.$evidence"
+            done
+            cp "$directory/manifest.json" "$prefix.image-manifest.json"
+            cp "$directory/config.json" "$prefix.image-config.json"
+          done
       - shell: bash
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -195,11 +224,10 @@ jobs:
         run: |
           set -euo pipefail
           case "$DIGEST" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 2 ;; esac
-          cosign sign --yes "$REPOSITORY@$DIGEST"
-          cosign verify \
-            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/(heads/main|tags/v0\\.3\\.0)$" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            "$REPOSITORY@$DIGEST" >/dev/null
+          cosign sign --yes --oidc-provider github-actions \
+            --trusted-root standards/trust/sigstore-trusted-root-cosign-3.1.3.json "$REPOSITORY@$DIGEST"
+          node scripts/release-phases.mjs image-verify "$REPOSITORY@$DIGEST" "$GITHUB_SHA" "$GITHUB_REF" \
+            standards/trust/sigstore-trusted-root-cosign-3.1.3.json >/dev/null
           docker pull "$REPOSITORY@$DIGEST"
           if [ "${{ matrix.name }}" = runtime ]; then
             test "$(docker run --rm --cap-drop ALL --security-opt no-new-privileges "$REPOSITORY@$DIGEST" id -u)" != 0
@@ -236,12 +264,18 @@ jobs:
             ${{ matrix.name }}-linux-arm64.spdx.json
             ${{ matrix.name }}-linux-amd64.sbom.sigstore.json
             ${{ matrix.name }}-linux-arm64.sbom.sigstore.json
+            ${{ matrix.name }}-linux-*.sbom-record.json
+            ${{ matrix.name }}-linux-*.sbom-manifest.json
+            ${{ matrix.name }}-linux-*.sbom-artifact.json
+            ${{ matrix.name }}-linux-*.sbom-signature-verification.json
+            ${{ matrix.name }}-linux-*.image-manifest.json
+            ${{ matrix.name }}-linux-*.image-config.json
             ${{ matrix.name }}-provenance.sigstore.json
           if-no-files-found: error
           retention-days: 30
 
   reproducibility:
-    needs: gate
+    needs: [gate, images]
     strategy:
       fail-fast: false
       matrix:
@@ -251,64 +285,77 @@ jobs:
             dockerfile: sdk/Dockerfile
             target: runtime
             name: sdk-amd64
+            image: sdk
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             dockerfile: sdk/Dockerfile
             target: runtime
             name: sdk-arm64
+            image: sdk
           - os: ubuntu-24.04
             platform: linux/amd64
             dockerfile: sdk/runtime/Dockerfile
             target: ""
             name: runtime-amd64
+            image: runtime
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             dockerfile: sdk/runtime/Dockerfile
             target: ""
             name: runtime-arm64
+            image: runtime
           - os: ubuntu-24.04
             platform: linux/amd64
             dockerfile: sdk/Dockerfile
             target: adapter-compose
             name: adapter-compose-amd64
+            image: adapter-compose
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             dockerfile: sdk/Dockerfile
             target: adapter-compose
             name: adapter-compose-arm64
+            image: adapter-compose
           - os: ubuntu-24.04
             platform: linux/amd64
             dockerfile: sdk/Dockerfile
             target: adapter-kubernetes
             name: adapter-kubernetes-amd64
+            image: adapter-kubernetes
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             dockerfile: sdk/Dockerfile
             target: adapter-kubernetes
             name: adapter-kubernetes-arm64
+            image: adapter-kubernetes
           - os: ubuntu-24.04
             platform: linux/amd64
             dockerfile: sdk/Dockerfile
             target: adapter-github-pages
             name: adapter-github-pages-amd64
+            image: adapter-github-pages
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             dockerfile: sdk/Dockerfile
             target: adapter-github-pages
             name: adapter-github-pages-arm64
+            image: adapter-github-pages
           - os: ubuntu-24.04
             platform: linux/amd64
             dockerfile: sdk/Dockerfile
             target: oracles
             name: oracles-amd64
+            image: oracles
           - os: ubuntu-24.04-arm
             platform: linux/arm64
             dockerfile: sdk/Dockerfile
             target: oracles
             name: oracles-arm64
+            image: oracles
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -319,28 +366,57 @@ jobs:
           path: root-b
           submodules: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ matrix.image }}-image
+          path: .shipped-image
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - shell: bash
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
           PLATFORM: ${{ matrix.platform }}
           TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
+          identity_file=".shipped-image/$IMAGE-image.txt"
+          identity=$(cat "$identity_file")
+          docker buildx imagetools inspect --raw "$identity" > shipped-index.json
           target=()
           if [ -n "$TARGET" ]; then target=(--target "$TARGET"); fi
           for root in root-a root-b; do
             docker buildx build --no-cache --provenance=false --sbom=false \
               --build-arg SOURCE_DATE_EPOCH=0 \
+              --label "org.opencontainers.image.created=1970-01-01T00:00:00Z" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.version=$VERSION" \
               --platform "$PLATFORM" --file "$root/$DOCKERFILE" \
               "${target[@]}" \
-              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true" "$root"
+              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "$root"
             mkdir "$root.oci"
             tar -xf "$root.oci.tar" -C "$root.oci"
             jq -r '.manifests[0].digest' "$root.oci/index.json" > "$root.digest"
           done
           cmp root-a.digest root-b.digest
           cmp root-a.oci/index.json root-b.oci/index.json
-          printf '%s %s\n' "${{ matrix.name }}" "$(cat root-a.digest)"
+          node root-a/scripts/release-phases.mjs reproducibility \
+            "$identity_file" shipped-index.json "${PLATFORM#linux/}" "$GITHUB_SHA" \
+            root-a.oci root-b.oci > "${{ matrix.name }}-reproducibility.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reproducibility-${{ matrix.name }}
+          path: ${{ matrix.name }}-reproducibility.txt
+          if-no-files-found: error
+          retention-days: 30
 
   native:
     needs: [gate, images]
@@ -362,6 +438,9 @@ jobs:
           submodules: false
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: sdk-image
@@ -439,9 +518,76 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  oci-native:
+    name: publish source-addressed OCI/native verification assets
+    needs: [gate, images, native, reproducibility]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Require the source-bound publication policy
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+        run: node scripts/release-phases.mjs policy
+      - name: Require every original non-Cargo prerequisite
+        env:
+          RELEASE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/release-phases.mjs prerequisites oci-native
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: native-*
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: '*-image'
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: '*-supply-chain'
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: reproducibility-*
+          path: release
+          merge-multiple: true
+      - shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          checksums=$(mktemp)
+          trap 'rm -f "$checksums"' EXIT
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$checksums"
+          mv "$checksums" SHA256SUMS
+      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661
+        with:
+          subject-path: release/prismpm-*.tar.gz
+      - name: Publish only exact unaccepted verification assets; never overwrite
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NEEDS: ${{ toJSON(needs) }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+        run: node scripts/release-phases.mjs publish-oci release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: oci-native-publication
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
+
   crates:
-    if: ${{ inputs.publish-crates == true || startsWith(github.ref, 'refs/tags/') }}
-    needs: [gate, images, reproducibility]
+    if: ${{ needs.gate.outputs.publish-crates == 'true' }}
+    needs: [gate, images, native, reproducibility, oci-native]
     runs-on: ubuntu-24.04
     environment: crates.io
     permissions:
@@ -452,6 +598,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+      - name: Require the source-bound publication policy before Cargo credentials
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+        run: node scripts/release-phases.mjs policy
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: sdk-image
@@ -527,7 +678,6 @@ jobs:
               # Independently released inputs must be public before a fresh
               # crates.io consumer can resolve the packaged PrismPM manifest.
               wait_for_crate lexlean 0.3.0
-              wait_for_crate uor-hologram 0.13.1
               release_parent=$(mktemp -d)
               release_sources="$release_parent/release-crates"
               ./scripts/package-release-crates.sh --prepare "$release_sources"
@@ -549,7 +699,7 @@ jobs:
             '
 
   release:
-    needs: [gate, images, native, reproducibility, crates]
+    needs: [gate, images, native, reproducibility, oci-native, crates]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -560,6 +710,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+      - name: Require the source-bound publication policy before versioned aliases
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+        run: node scripts/release-phases.mjs policy
+      - name: Require the complete Cargo-dependent publication prerequisites
+        env:
+          RELEASE_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/release-phases.mjs prerequisites release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: native-*
@@ -576,6 +735,9 @@ jobs:
           path: release
           merge-multiple: true
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io

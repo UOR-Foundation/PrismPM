@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { artifactManifest, describeSpdx, digest, emptyConfig, handleSbom, issuer,
   manifestType, repository, sbomRecord, signingArguments, trustRootDigest,
-  validateArtifact, verificationArguments, workflow } from './sdk-candidate-sbom.mjs';
+  releaseTransportPolicy, validateArtifact, verificationArguments, workflow } from './sdk-candidate-sbom.mjs';
+import { releaseSbomRecord } from './release-phases.mjs';
 
 const revision = 'a'.repeat(40);
 const encode = value => Buffer.from(`${JSON.stringify(value)}\n`);
@@ -28,6 +29,94 @@ function fixture(sbom = rawSpdx()) {
   const manifest = encode(artifactManifest(record));
   return {candidate, child, sbom, record, manifest};
 }
+
+function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/main') {
+  const config = encode({architecture, os: 'linux', config: {Labels: {
+    'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
+    'org.opencontainers.image.revision': revision,
+    'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
+    'org.opencontainers.image.version': '0.3.0'}}});
+  const child = encode({schemaVersion: 2, mediaType: manifestType,
+    config: {mediaType: 'application/vnd.oci.image.config.v1+json', digest: digest(config), size: config.length}, layers: []});
+  const subject = {mediaType: manifestType, digest: digest(child), size: child.length};
+  const index = encode({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json',
+    manifests: ['amd64', 'arm64'].map(arch => ({...subject, platform: {os: 'linux', architecture: arch},
+      digest: arch === architecture ? subject.digest : `sha256:${'b'.repeat(64)}`}))});
+  const repository = `ghcr.io/uor-foundation/prismpm-${imageName}`;
+  const options = releaseTransportPolicy(repository, ref);
+  const record = releaseSbomRecord(`${repository}@${digest(index)}`, index, child, config, sbom, architecture, revision);
+  return {child, sbom, record, options, manifest: encode(artifactManifest(record, options))};
+}
+
+test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
+  for (const ref of ['refs/heads/main', 'refs/tags/v0.3.0']) {
+    for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
+      for (const architecture of ['amd64', 'arm64']) {
+        const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref);
+        validateArtifact(manifest, digest(manifest), record, sbom, options);
+        const subject = `ghcr.io/uor-foundation/prismpm-${name}@${digest(manifest)}`;
+        const args = verificationArguments(record, digest(manifest), '/trusted-root', options);
+        assert.deepEqual(args, ['verify', '--trusted-root', '/trusted-root', '--certificate-identity',
+          `https://github.com/UOR-Foundation/PrismPM/.github/workflows/release.yml@${ref}`,
+          '--certificate-oidc-issuer', issuer, '--certificate-github-workflow-repository', 'UOR-Foundation/PrismPM',
+          '--certificate-github-workflow-ref', ref, '--certificate-github-workflow-sha', revision,
+          '--certificate-github-workflow-trigger', ref === 'refs/heads/main' ? 'workflow_dispatch' : 'push',
+          '--certificate-github-workflow-name', 'PrismPM OCI/native and Cargo publication', subject]);
+        assert.equal(signingArguments(digest(manifest), '/trusted-root', '/bundle', options).at(-1), subject);
+        const annotation = JSON.parse(manifest).annotations;
+        assert.equal(annotation['com.prismpm.sdk.production-accepted'], 'false');
+        assert.equal(annotation['com.prismpm.sdk.publication-phase'], 'oci-native-verification');
+        assert.equal(annotation['com.prismpm.sdk.inventory-digest'], undefined);
+        assert.equal(annotation['com.prismpm.sdk.candidate-evidence-digest'], undefined);
+        assert.equal(annotation['com.prismpm.sdk.development-only'], undefined);
+      }
+    }
+  }
+  const {record, manifest, options, sbom} = releaseFixture();
+  for (const bad of [{...options, repository: 'registry.attacker.test/sdk'}, {...options, ref: 'refs/heads/feature'},
+    {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.4.0'}]) {
+    assert.throws(() => artifactManifest(record, bad));
+    assert.throws(() => verificationArguments(record, digest(manifest), '/root', bad));
+    assert.throws(() => signingArguments(digest(manifest), '/root', '/bundle', bad));
+  }
+  for (const field of ['image_reference', 'image_index_digest', 'image_config_digest', 'platform', 'source_revision']) {
+    const changed = {...record, [field]: 'changed'};
+    const bytes = encode(artifactManifest(changed, options));
+    assert.throws(() => validateArtifact(bytes, digest(bytes), record, sbom, options));
+  }
+  assert.throws(() => artifactManifest({...record, production_accepted: true}, options));
+  execFileSync('cosign', [...verificationArguments(record, digest(manifest), '/root', options), '--help'], {stdio: 'pipe'});
+});
+
+test('release OCI artifact preserves every byte of a >16 MiB SPDX payload through real ORAS', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'prismpm-release-sbom-layout-'));
+  try {
+    const {child, sbom, record, manifest, options} = releaseFixture(rawSpdx('full release license\n'.repeat(1_000_000)));
+    assert.ok(sbom.length > 16 * 1024 * 1024);
+    const layout = join(directory, 'layout');
+    const execute = args => execFileSync('oras', args, {stdio: 'pipe'});
+    for (const [name, bytes] of [['config.json', emptyConfig], ['sbom.spdx.json', sbom], ['child.json', child], ['manifest.json', manifest]]) {
+      writeFileSync(join(directory, name), bytes);
+    }
+    for (const [name, hash] of [['config.json', digest(emptyConfig)], ['sbom.spdx.json', record.spdx.digest]]) {
+      execute(['blob', 'push', '--oci-layout', `${layout}@${hash}`, join(directory, name)]);
+    }
+    for (const [name, bytes] of [['child.json', child], ['manifest.json', manifest]]) {
+      execute(['manifest', 'push', '--oci-layout', `${layout}@${digest(bytes)}`, join(directory, name)]);
+    }
+    execute(['manifest', 'fetch', '--oci-layout', `${layout}@${digest(manifest)}`, '--output', join(directory, 'received.json')]);
+    execute(['blob', 'fetch', '--oci-layout', `${layout}@${record.spdx.digest}`, '--output', join(directory, 'received.spdx.json')]);
+    const received = readFileSync(join(directory, 'received.spdx.json'));
+    assert.deepEqual(received, sbom);
+    validateArtifact(readFileSync(join(directory, 'received.json')), digest(manifest), record, received, options);
+    assert.throws(() => validateArtifact(manifest, digest(manifest), record, received.subarray(0, -1), options));
+    const bad = JSON.parse(manifest); bad.subject.digest = `sha256:${'f'.repeat(64)}`;
+    const wrongSubject = encode(bad);
+    assert.throws(() => validateArtifact(wrongSubject, digest(wrongSubject), record, received, options));
+    assert.throws(() => validateArtifact(manifest, digest(manifest), record, received,
+      releaseTransportPolicy(options.repository, 'refs/tags/v0.3.0')));
+  } finally { rmSync(directory, {recursive: true, force: true}); }
+});
 
 test('complete SPDX artifact binds exact child, all raw bytes, source and development-only evidence', () => {
   const {candidate, child, sbom, record, manifest} = fixture();
@@ -161,7 +250,9 @@ test('pinned real Sigstore verification rejects wrong identity, issuer, digest a
       '--certificate-oidc-issuer', 'https://accounts.google.com', blob];
     const verify = value => execFileSync('cosign', value, {stdio: 'pipe'});
     verify(args);
-    for (const [key, value] of [['--certificate-identity', workflow], ['--certificate-oidc-issuer', issuer],
+    for (const [key, value] of [['--certificate-identity', workflow],
+      ['--certificate-identity', 'https://github.com/UOR-Foundation/PrismPM/.github/workflows/release.yml@refs/heads/main'],
+      ['--certificate-oidc-issuer', issuer],
       ['--bundle', join(directory, 'missing.sigstore.json')]]) {
       const changed = [...args]; changed[changed.indexOf(key) + 1] = value;
       assert.throws(() => verify(changed));

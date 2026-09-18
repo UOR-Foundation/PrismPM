@@ -113,7 +113,11 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
     command(
         root,
         "node",
-        &["--test", "scripts/oracle-source-closure.test.mjs"],
+        &[
+            "--test",
+            "scripts/oracle-source-closure.test.mjs",
+            "scripts/release-phases.test.mjs",
+        ],
     )?;
     audit::audit_no_handwritten_lean(root)?;
     audit::audit_formal_contract(root)?;
