@@ -2,14 +2,31 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { canonical, captureProjection, compare, prepare, publish, sha, sourceManifest, validateCapture } from './bootstrap-evidence.mjs';
+import { canonical, captureProjection, compare, prepare, publish, sha, sha256Base32, sourceManifest, validateCapture } from './bootstrap-evidence.mjs';
 
 const OLD = '4'.repeat(64);
 const NEW = '5'.repeat(64);
 const lock = compiler => `spec = "lexlean/lock/1"\nlanguage = "1.1"\ncompiler_semantics = "${compiler}"\n`;
 const manifest = { files: [{ kind: 'file', path: 'source.lex.tex', sha256: '6'.repeat(64), size: 10 }], schema: 'prismpm/source-manifest/1' };
+const base32Vectors = [
+  ['zero', '00'.repeat(32), 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA===='],
+  ['ff', 'ff'.repeat(32), '777777777777777777777777777777777777777777777777777Q===='],
+  ['mixed', '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f', 'AAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPQ===='],
+  ['regression', '08de670ba6fe6cf458c0f1b07ad948d9fa5030a1462b1e6a2c45572628689084', 'BDPGOC5G7ZWPIWGA6GYHVWKI3H5FAMFBIYVR42RMIVLSMKDISCCA====']
+];
+
+test('RFC4648 padded Base32 preserves all 32 SHA256 bytes and rejects malformed digests', () => {
+  for (const [, value, expected] of base32Vectors) {
+    assert.equal(sha256Base32(value), expected);
+    assert.deepEqual(execFileSync('/usr/bin/base32', ['--decode'], { input: expected, timeout: 10000 }), Buffer.from(value, 'hex'));
+  }
+  for (const invalid of ['', '0'.repeat(63), '0'.repeat(65), 'FF'.repeat(32), 'g'.repeat(64), null, 0]) {
+    assert.throws(() => sha256Base32(invalid), /invalid SHA256/);
+  }
+});
 
 function reseal(capture) {
   capture.check.snapshot_id = sha(`${canonical(capture.snapshot)}\n`);
@@ -54,7 +71,7 @@ function fixture(compiler = OLD) {
     snapshot: {
       compiler_semantics_id: compiler, language: '1.1', lexicon_closure: { packages: ['one'] },
       modules: [{ name: 'Foundation.Core', imports: [], linked_ir: { term: 1, proof: ['refl'] },
-        semantic: { declarations: [definition('sourceManifestDigest', `sha256:${sha(canonical(manifest))}`), definition('sourceManifestFileCount', '1')] },
+        semantic: { declarations: [definition('sourceManifestSha256Base32', sha256Base32(sha(canonical(manifest)))), definition('sourceManifestFileCount', '1')] },
         source: { path: 'source.lex.tex', sha256: sha('source') } }],
       semantic_id: compiler === OLD ? 'a'.repeat(64) : 'b'.repeat(64),
       source_id: compiler === OLD ? 'c'.repeat(64) : 'd'.repeat(64), spec: 'lexlean/semantic-snapshot/1'
@@ -137,7 +154,7 @@ test('exact accepted compiler and projection lock changes cannot be caller subst
 test('modeled manifest digest and count must match the supplied exact source closure', () => {
   const changed = structuredClone(manifest);
   changed.files[0].sha256 = '9'.repeat(64);
-  assert.throws(() => compare(fixture(), fixture(NEW), changed, lock(OLD), lock(NEW)), /sourceManifestDigest/);
+  assert.throws(() => compare(fixture(), fixture(NEW), changed, lock(OLD), lock(NEW)), /sourceManifestSha256Base32/);
   const before = fixture();
   const after = fixture(NEW);
   for (const capture of [before, after]) {
@@ -145,6 +162,85 @@ test('modeled manifest digest and count must match the supplied exact source clo
     reseal(capture);
   }
   assert.throws(() => compare(before, after, manifest, lock(OLD), lock(NEW)), /sourceManifestFileCount/);
+});
+
+test('coherently resealed alternate digest encodings and names cannot replace canonical Base32 binding', () => {
+  const value = sha256Base32(sha(canonical(manifest)));
+  for (const mutate of [
+    declaration => { declaration.name = 'sourceManifestDigest'; },
+    declaration => { declaration.body.value = `sha256:${sha(canonical(manifest))}`; },
+    declaration => { declaration.body.value = value.toLowerCase(); },
+    declaration => { declaration.body.value = value.slice(0, -4); },
+    declaration => { declaration.body.value = 'A'.repeat(52) + '===='; },
+    declaration => { declaration.body.value = value.slice(0, -5) + 'B===='; }
+  ]) {
+    const before = fixture(), after = fixture(NEW);
+    for (const capture of [before, after]) {
+      mutate(capture.snapshot.modules[0].semantic.declarations[0]);
+      reseal(capture);
+    }
+    assert.throws(() => compare(before, after, manifest, lock(OLD), lock(NEW)), /sourceManifestSha256Base32/);
+  }
+});
+
+test('actual pinned 0.2 SDK accepts complete Base32 projection, rejects raw-08 hex and detects rebuilt manifest tampering', { timeout: 120000 }, () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const work = mkdtempSync(join(tmpdir(), 'prismpm-bootstrap-legacy-test.'));
+  const run = (command, args, options = {}) => execFileSync(command, args, { timeout: 30000, maxBuffer: 64 * 1024 * 1024, ...options });
+  try {
+    const archive = join(root, '.prism/cache/bootstrap/prismpm-0.2.0-x86_64-unknown-linux-gnu.tar.gz');
+    assert.equal(sha(readFileSync(archive)), 'f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c');
+    run('tar', ['--extract', '--gzip', '--file', archive, '--directory', work, '--no-same-owner', '--no-same-permissions']);
+    const prior = join(work, 'prismpm-0.2.0-x86_64-unknown-linux-gnu/prismpm');
+    assert.equal(sha(readFileSync(prior)), 'fed990f31a1cdc5f819f5a99e79bc441c7db11f7c8ea45c748d9cec1097ee8e6');
+    const envelope = join(work, 'envelope');
+    mkdirSync(envelope);
+    run('git', ['-C', root, 'archive', '--output', join(work, 'source.tar'), 'f378fd3a8dc5711cb4b22cec9ee2f874353628c3']);
+    run('tar', ['--extract', '--file', join(work, 'source.tar'), '--directory', envelope]);
+    prepare(root, envelope);
+    const core = join(envelope, 'stdlib/src/Foundation/Core.lex.tex');
+    const lines = readFileSync(core, 'utf8').split('\n');
+    const index = lines.findIndex(line => line.startsWith('\\semanticdata{'));
+    const payload = JSON.parse(lines[index].slice('\\semanticdata{'.length, -1));
+    for (const [name, value] of base32Vectors) payload.declarations.push({
+      body: { kind: 'string', value: sha256Base32(value) }, kind: 'definition', name: `base32Probe_${name}`, parameters: [], result: { kind: 'string' }
+    });
+    const save = () => { lines[index] = `\\semanticdata{${canonical(payload)}}`; writeFileSync(core, lines.join('\n')); };
+    const capture = () => {
+      writeFileSync(join(work, 'check.json'), run(prior, ['--project', envelope, 'check', '--json']));
+      writeFileSync(join(work, 'build.json'), run(prior, ['--project', envelope, 'build', '--json']));
+      captureProjection(envelope, join(work, 'check.json'), join(work, 'build.json'), join(work, 'capture.json'));
+      return JSON.parse(readFileSync(join(work, 'capture.json'), 'utf8'));
+    };
+    save();
+    const accepted = capture();
+    const declarations = accepted.snapshot.modules.find(module => module.name === 'Foundation.Core').semantic.declarations;
+    for (const [name, value, expected] of base32Vectors) {
+      const actual = declarations.find(declaration => declaration.name === `base32Probe_${name}`).body.value;
+      assert.equal(actual, expected);
+      assert.deepEqual(run('/usr/bin/base32', ['--decode'], { input: actual }), Buffer.from(value, 'hex'));
+    }
+    const actualManifest = JSON.parse(readFileSync(join(envelope, 'source-manifest.json'), 'utf8'));
+    assert.deepEqual(actualManifest, sourceManifest(root));
+    const binding = declarations.find(declaration => declaration.name === 'sourceManifestSha256Base32').body.value;
+    assert.equal(run('/usr/bin/base32', ['--decode'], { input: binding }).toString('hex'), sha(canonical(actualManifest)));
+    compare(accepted, accepted, actualManifest, accepted.lock, accepted.lock);
+
+    const modeledDigest = payload.declarations.find(declaration => declaration.name === 'sourceManifestSha256Base32');
+    modeledDigest.body.value = base32Vectors[0][2];
+    save();
+    const tampered = capture();
+    assert.throws(() => compare(tampered, tampered, actualManifest, tampered.lock, tampered.lock), /sourceManifestSha256Base32/);
+
+    modeledDigest.name = 'sourceManifestDigest';
+    modeledDigest.body.value = `sha256:${base32Vectors[3][1]}`;
+    save();
+    assert.throws(() => run(prior, ['--project', envelope, 'check', '--json']), error => {
+      const result = JSON.parse(error.stdout.toString('utf8'));
+      return error.status === 1 && result.diagnostic.code === 'PP2001'
+        && result.diagnostic.causes.some(cause => cause.code === 'LLL1003' && cause.message.includes('`08`'));
+    });
+  } finally { rmSync(work, { recursive: true, force: true }); }
 });
 
 test('capture reads real artifact closure and rejects file tampering, extra files, and symlinks', () => {

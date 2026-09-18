@@ -11,6 +11,17 @@ export const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const digest = bytes => `sha256:${sha(bytes)}`;
 const order = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 
+export function sha256Base32(value) {
+  requireThat(hex.test(value), 'invalid SHA256 for bootstrap projection');
+  // The accepted 0.2 lexer scans decimal runs even inside semantic strings.
+  // RFC4648 §6 preserves all digest bits without the problematic 0/1 digits.
+  const encoded = execFileSync('/usr/bin/base32', ['--wrap=0'], {
+    input: Buffer.from(value, 'hex'), encoding: 'utf8', maxBuffer: 128, timeout: 10000
+  });
+  requireThat(/^[A-Z2-7]{51}[AQ]====$/.test(encoded), 'noncanonical SHA256 Base32 encoding');
+  return encoded;
+}
+
 export function canonical(value) {
   if (typeof value === 'number') requireThat(Number.isSafeInteger(value), 'unsafe JSON integer');
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -96,7 +107,7 @@ export function prepare(root, envelope) {
   requireThat(index >= 0 && lines[index].endsWith('}'), 'missing canonical bootstrap semantic data');
   const payload = JSON.parse(lines[index].slice('\\semanticdata{'.length, -1));
   payload.declarations.push(
-    manifestDefinition('sourceManifestDigest', digest(canonical(manifest))),
+    manifestDefinition('sourceManifestSha256Base32', sha256Base32(sha(canonical(manifest)))),
     manifestDefinition('sourceManifestFileCount', String(manifest.files.length))
   );
   lines[index] = `\\semanticdata{${canonical(payload)}}`;
@@ -228,7 +239,7 @@ export function compare(prior, current, manifest, priorLock, currentLock) {
   requireThat(prior.check.entity_count === current.check.entity_count, 'projection entity counts differ');
   const core = before.modules.filter(module => module.name === 'Foundation.Core');
   requireThat(core.length === 1 && Array.isArray(core[0].semantic?.declarations), 'missing manifest semantic module');
-  for (const [name, value] of [['sourceManifestDigest', digest(canonical(manifest))], ['sourceManifestFileCount', String(manifest.files.length)]]) {
+  for (const [name, value] of [['sourceManifestSha256Base32', sha256Base32(sha(canonical(manifest)))], ['sourceManifestFileCount', String(manifest.files.length)]]) {
     const declarations = core[0].semantic.declarations.filter(declaration => declaration.name === name);
     requireThat(declarations.length === 1 && canonical(declarations[0]) === canonical(manifestDefinition(name, value)),
       `modeled ${name} differs from complete tracked source manifest`);
