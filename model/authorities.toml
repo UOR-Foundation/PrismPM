@@ -299,7 +299,7 @@ memory_bytes = 268435456
 output_bytes = 1048576
 network = "deny"
 normalization = "prismpm/oracle-diagnostics/1"
-covers = ["all 24 complete AsyncAPI 3.1.0 documents and all 89 embedded specification examples published by the pinned specification repository through its unmodified locked validation harness; the ADEO example's two external Avro payload schemas are supplied byte-for-byte from the pinned AsyncAPI website source; submitted documents are checked by the exact parser"]
+covers = ["all 24 complete AsyncAPI 3.1.0 documents and all 89 embedded specification examples; unchanged upstream validation source uses parser 3.6.0 with a separately Prism-owned compatible dependency lock, not an upstream-lock replay or upstream-reviewed dependency update; original sources and historical lock remain intact; the ADEO example's two external Avro schemas are byte-locked to the pinned website source; submitted documents use the exact parser"]
 does_not_cover = ["the upstream repository publishes no negative fixture corpus; planted invalid-document rejection is separate evidence, while broker delivery behavior and prose-only interoperability remain outside this oracle"]
 expected_exits = ["0=pass", "4=invalid"]
 upstream_payload_sha256 = "7b9de4debb0f6050bf5c4d6284694876c0cf6ec6bcd72fb250d2b58d66538989"

@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: the owned runtime runs all 89 unchanged upstream examples with parser 3.6.0
+ok 1 - the owned runtime runs all 89 unchanged upstream examples with parser 3.6.0 # SKIP
+  ---
+  duration_ms: 1.096114
+  type: 'test'
+  ...
+# Subtest: the owning launcher rejects changed source, lock, parser, missing modules and shadow resolution
+ok 2 - the owning launcher rejects changed source, lock, parser, missing modules and shadow resolution # SKIP
+  ---
+  duration_ms: 0.188531
+  type: 'test'
+  ...
+# Subtest: fixed inventory binding rejects absent, duplicate, changed, extra-field or noncanonical runtime rows
+ok 3 - fixed inventory binding rejects absent, duplicate, changed, extra-field or noncanonical runtime rows # SKIP
+  ---
+  duration_ms: 0.128245
+  type: 'test'
+  ...
+# Subtest: runtime byte framing matches inventory and allows only in-tree executable aliases
+ok 4 - runtime byte framing matches inventory and allows only in-tree executable aliases # SKIP
+  ---
+  duration_ms: 0.131255
+  type: 'test'
+  ...
+# Subtest: the shell entry rejects ambient preloads before any Node code can execute
+ok 5 - the shell entry rejects ambient preloads before any Node code can execute # SKIP
+  ---
+  duration_ms: 0.137933
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 0
+# fail 0
+# cancelled 0
+# skipped 5
+# todo 0
+# duration_ms 1466.330865

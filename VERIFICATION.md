@@ -1105,6 +1105,55 @@ files were never mutated and disposable containers were removed. Green log
 mutant log `target/devcontainer-shadow-race-mutant.log` has SHA-256
 `3eb92ea5fc8221ab66e7d759be7c7f483ec0d3b3b2657355b1ac214386e69aca`.
 
+The subsequent complete offline workspace suite passed all 390 tests, with no
+failures, ignored tests or filtered tests, including actual OCI/native and
+source-free export checks. The separate package-API gate reproduced all three
+archives and compiled the selected downstream package. Logs
+`target/modeled-stdlib-workspace-oracles-current.log` and
+`target/modeled-stdlib-package-api-fixed.log` have SHA-256
+`7a6606e5cb81eb908bc79feeb179a9811a04598942e56702e5db27156690cd3d` and
+`17d54e8aafab3e949f087bc01b1b44d87cf221a295ec22dae90b81cd840c618b`.
+These precede the AsyncAPI runtime change below; they are not a full VV receipt.
+
+## Owned AsyncAPI runtime
+
+The unchanged upstream example harness uses parser 3.6.0 with the separately
+owned runtime lock `5bd20ce206d3b3b76a7034951c9e19e15291c54eec0a1424139b465c980f1205`.
+It is not a replay of the historical lock or an upstream-reviewed dependency
+update. Lifecycle scripts are disabled. The installed-graph audit reported
+zero findings; the retained historical-lock findings and whole-image acceptance
+requirements remain unchanged.
+
+The actual owning Rust gate passed all 24 documents, 89 embedded examples,
+both negative probes and five runtime-integrity groups. It binds the installed
+byte tree and actual launcher to the fixed SDK inventory; altered source,
+dependencies, resolution, inventory and ambient preloads fail. A real Node run
+that exited zero after skipping every group is explicitly rejected.
+The development-only image was
+`127.0.0.1:5000/prismpm-asyncapi-oracle-test@sha256:4de2cc5dd62c67e899e8941d87cfb9bf2d457af874890b87b9246fd6b8b2d459`;
+it is not an accepted or published SDK.
+
+Formatting, full-workspace/all-target/all-feature Clippy, model validation,
+locked authority resolution and the actual package-API gate passed. Cargo
+selected the TAP fixture and all five runtime assets; downstream compilation
+passed. The 9,555-file source/package closure and all four stdlib seals remained
+byte-identical across the package gate.
+
+Normal golden generation and a separate full recheck matched all 264 files.
+The reviewed three-file change binds the rebuilt in-process `xtask` executable
+(`12071eba91640c3bc0ebfe186c1d985b9ada242d3a47faf077fa4a03db4a3290`)
+and derived attestations. All formal sources, generated Lean, build files and
+other verified artifacts remain byte-identical. The recheck log
+`target/asyncapi-cohort-golden-recheck.log` has SHA-256
+`b09f02b307eb1721a6874c0240a074928fbca7c0bdf95b08d710846d191ec8f9`.
+No executable identity was removed or normalized.
+
+Retained log SHA-256 values:
+
+- `target/asyncapi-owning-rust-regression.log`: `1897578e056692608a121f0080ea3bb087b4c4ad98835a55f9be0a7fa8507d65`.
+- `target/asyncapi-cohort-package-api.log`: `3e82472241cab075227aa424f0f3ebd8674fdccd103d0245058b7649294a64c5`.
+- `target/asyncapi-separate-runtime-installed-audit.json`: `b8fde891683991e0012186fbc02104eb8cd7466830fed82e4ff975d11c03d404`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

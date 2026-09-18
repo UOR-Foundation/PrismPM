@@ -32,6 +32,8 @@ const JSON_SCHEMA_TREE: &str = "8f63dc2d12ed947bfa4ae4cabab2d5926ecc06d86d054b6a
 const UNICODE_TREE: &str = "1885ce2b3409b4f2b4a569c378d243f4a75e22fc10d59a69a69a1cacc16dda9e";
 const CLOUDEVENTS_TREE: &str = "38480c5a48f73d20b8aa0db8366e22ae4ab34c245a370a11b8862cfbdeb5c6d1";
 const ASYNCAPI_TREE: &str = "6bec0a3910568ff84f28b8fd9c2f63e3fcde7986bebf3e24b1f4649c150d735b";
+const ASYNCAPI_RUNTIME_LOCK: &str =
+    "5bd20ce206d3b3b76a7034951c9e19e15291c54eec0a1424139b465c980f1205";
 const ASYNCAPI_ADEO_REQUEST: &str =
     "96c749416552ef404fbfb1f4f894339cb104ffdb06e8694c5045d5aaa79cd020";
 const ASYNCAPI_ADEO_RESPONSE: &str =
@@ -676,10 +678,204 @@ fn verify_asyncapi_adeo_mirrors(root: &Path) -> Result<(), PrismError> {
     Ok(())
 }
 
+fn asyncapi_runtime_probe(root: &Path) -> Result<String, PrismError> {
+    let files = regular_tree(&root.join("sdk/asyncapi-runtime"))?;
+    let mut script = String::from("set -eu\n");
+    for name in [
+        "package.json",
+        "package-lock.json",
+        "launcher.mjs",
+        "launcher.sh",
+        "launcher.test.mjs",
+    ] {
+        let bytes = files
+            .iter()
+            .find(|(path, _)| path == name)
+            .map(|(_, bytes)| bytes)
+            .ok_or_else(|| fail(format!("AsyncAPI runtime source {name} is absent")))?;
+        let digest = format!("{:x}", Sha256::digest(bytes));
+        if (name == "package-lock.json" && digest != ASYNCAPI_RUNTIME_LOCK)
+            || (name == "package.json"
+                && digest != "89f3a5feea766b7d899f5224452bfd0f725aa00c17f241da2cf0818081437d93")
+        {
+            return Err(fail("AsyncAPI owned runtime dependency identity differs"));
+        }
+        script.push_str(&format!(
+            "printf '%s  %s\\n' '{digest}' '/opt/prismpm/asyncapi-official/scripts/{name}' | /usr/bin/sha256sum --check --strict >/dev/null\n"
+        ));
+        if name == "launcher.sh" {
+            script.push_str(&format!(
+                "test \"$(readlink -f /usr/local/bin/asyncapi-official)\" = '/opt/prismpm/asyncapi-official/scripts/launcher.sh'\nprintf '%s  %s\\n' '{digest}' '/usr/local/bin/asyncapi-official' | /usr/bin/sha256sum --check --strict >/dev/null\n"
+            ));
+        }
+    }
+    script.push_str("exec /usr/local/bin/asyncapi-official --check\n");
+    Ok(script)
+}
+
+fn validate_asyncapi_runtime_report(bytes: &[u8]) -> Result<(), PrismError> {
+    let canonical = bytes
+        .strip_suffix(b"\n")
+        .ok_or_else(|| fail("AsyncAPI runtime report must end with one newline"))?;
+    let report = crate::holo::canonical::decode_value(canonical, "AsyncAPI runtime report")
+        .map_err(|error| fail(format!("AsyncAPI runtime report: {error}")))?;
+    if report
+        != serde_json::json!({"parser":"@asyncapi/parser/3.6.0","runtimeLock":ASYNCAPI_RUNTIME_LOCK})
+    {
+        return Err(fail(
+            "AsyncAPI runtime parser or owned dependency lock differs",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_asyncapi_runtime_tests(bytes: &[u8]) -> Result<(), PrismError> {
+    const GROUPS: [&str; 5] = [
+        "the owned runtime runs all 89 unchanged upstream examples with parser 3.6.0",
+        "the owning launcher rejects changed source, lock, parser, missing modules and shadow resolution",
+        "fixed inventory binding rejects absent, duplicate, changed, extra-field or noncanonical runtime rows",
+        "runtime byte framing matches inventory and allows only in-tree executable aliases",
+        "the shell entry rejects ambient preloads before any Node code can execute",
+    ];
+    let text =
+        std::str::from_utf8(bytes).map_err(|_| fail("AsyncAPI runtime TAP output is not UTF-8"))?;
+    let mut version = 0;
+    let mut plan = 0;
+    let mut groups = [0; 5];
+    let mut summaries = std::collections::BTreeMap::new();
+    for line in text.lines() {
+        if line == "TAP version 13" {
+            version += 1;
+        }
+        if line.starts_with("1..") {
+            if line != "1..5" {
+                return Err(fail("AsyncAPI runtime TAP plan differs"));
+            }
+            plan += 1;
+        }
+        if line.starts_with("ok ") {
+            let index = GROUPS
+                .iter()
+                .enumerate()
+                .position(|(index, name)| line == format!("ok {} - {name}", index + 1))
+                .ok_or_else(|| fail("AsyncAPI runtime TAP group differs or was skipped"))?;
+            groups[index] += 1;
+        }
+        if line.starts_with("not ok ") || line.starts_with("Bail out!") {
+            return Err(fail("AsyncAPI runtime TAP reports a failure"));
+        }
+        for key in [
+            "tests",
+            "suites",
+            "pass",
+            "fail",
+            "cancelled",
+            "skipped",
+            "todo",
+        ] {
+            if let Some(raw) = line.strip_prefix(&format!("# {key} ")) {
+                let count = raw
+                    .parse::<u64>()
+                    .map_err(|_| fail("AsyncAPI runtime TAP summary is malformed"))?;
+                if count.to_string() != raw || summaries.insert(key, count).is_some() {
+                    return Err(fail(
+                        "AsyncAPI runtime TAP summary is duplicate or noncanonical",
+                    ));
+                }
+            }
+        }
+    }
+    if version != 1
+        || plan != 1
+        || groups != [1; 5]
+        || summaries
+            != std::collections::BTreeMap::from([
+                ("tests", 5),
+                ("suites", 0),
+                ("pass", 5),
+                ("fail", 0),
+                ("cancelled", 0),
+                ("skipped", 0),
+                ("todo", 0),
+            ])
+    {
+        return Err(fail(
+            "AsyncAPI runtime TAP lacks the complete five passing regression groups",
+        ));
+    }
+    Ok(())
+}
+
 fn asyncapi_suite(root: &Path, image: &str) -> Result<AsyncApiEvidence, PrismError> {
     let corpus = root.join("standards/oracles/asyncapi-spec-b3fac5bb");
     let digest = verify_tree(&corpus, ASYNCAPI_TREE)?;
     verify_asyncapi_adeo_mirrors(root)?;
+    let probe = asyncapi_runtime_probe(root)?;
+    let (status, stdout, stderr) = docker(
+        &[
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--read-only",
+            "--user",
+            "1000:1000",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--entrypoint",
+            "/bin/sh",
+            image,
+            "-c",
+            &probe,
+        ],
+        Duration::from_secs(30),
+    )?;
+    if !status.success() {
+        return Err(fail(format!(
+            "AsyncAPI runtime source/inventory binding failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr)
+        )));
+    }
+    validate_asyncapi_runtime_report(&stdout)?;
+    // The runtime regression executes the real upstream examples, then proves
+    // that changed source, locks, installed JS, modules and shadows fail. It
+    // uses disposable copies; the exact image's runtime remains read-only.
+    let (status, stdout, stderr) = docker(
+        &[
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--read-only",
+            "--user",
+            "1000:1000",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev",
+            "--entrypoint",
+            "/usr/local/bin/node",
+            image,
+            "--test",
+            "--test-reporter=tap",
+            "--test-timeout=180000",
+            "/opt/prismpm/asyncapi-official/scripts/launcher.test.mjs",
+        ],
+        Duration::from_secs(200),
+    )?;
+    if !status.success() {
+        return Err(fail(format!(
+            "AsyncAPI runtime mutation suite failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr)
+        )));
+    }
+    validate_asyncapi_runtime_tests(&stdout)?;
     let mut documents = regular_tree(&corpus)?
         .into_iter()
         .map(|(path, _)| path)
@@ -739,15 +935,9 @@ fn asyncapi_suite(root: &Path, image: &str) -> Result<AsyncApiEvidence, PrismErr
             "/tmp:rw,noexec,nosuid,nodev",
             "--env",
             "HOME=/tmp",
-            "--env",
-            "npm_config_cache=/tmp/npm-cache",
-            "--workdir",
-            "/opt/prismpm/asyncapi-official/scripts/validation",
             "--entrypoint",
-            "/usr/local/bin/npm",
+            "/usr/local/bin/asyncapi-official",
             image,
-            "run",
-            "validate:examples",
         ],
         Duration::from_secs(120),
     )?;
@@ -808,7 +998,7 @@ if asyncapi-parser /tmp/planted.json; then exit 42; fi
         negative_mutations: 1,
         planted_rejections: 1,
         parser: "@asyncapi/parser/3.6.3",
-        upstream_runner: "asyncapi/spec@b3fac5bb/scripts/validation+@asyncapi/parser/3.6.0",
+        upstream_runner: "asyncapi/spec@b3fac5bb/scripts/validation+@asyncapi/parser/3.6.0+Prism-owned-runtime-lock/sha256:5bd20ce206d3b3b76a7034951c9e19e15291c54eec0a1424139b465c980f1205",
     })
 }
 
@@ -2043,10 +2233,95 @@ mod tests {
         )
         .is_ok());
         assert!(verify_asyncapi_adeo_mirrors(root).is_ok());
+        let runtime = asyncapi_runtime_probe(root).expect("owned AsyncAPI runtime source closure");
+        assert!(runtime.contains(ASYNCAPI_RUNTIME_LOCK));
+        assert!(runtime.contains("readlink -f /usr/local/bin/asyncapi-official"));
+        assert!(runtime.contains("exec /usr/local/bin/asyncapi-official --check"));
         assert!(verify_tree(
             &root.join("standards/oracles/in-toto-attestation-ee16c68a"),
             INTOTO_TREE
         )
         .is_ok());
+    }
+
+    #[test]
+    fn asyncapi_owned_runtime_replays_complete_official_corpus() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("repository root");
+        let evidence = asyncapi_suite(root, &sdk_image().expect("exact SDK image required"))
+            .expect("complete AsyncAPI owning gate, including all five runtime regression groups");
+        assert_eq!(evidence.published_documents, 24);
+        assert_eq!(evidence.embedded_examples, 89);
+        assert_eq!(evidence.negative_mutations, 1);
+        assert_eq!(evidence.planted_rejections, 1);
+        assert_eq!(evidence.upstream_negative_fixtures, 0);
+        assert_eq!(evidence.parser, "@asyncapi/parser/3.6.3");
+        assert!(evidence.upstream_runner.ends_with(ASYNCAPI_RUNTIME_LOCK));
+    }
+
+    #[test]
+    fn asyncapi_runtime_report_rejects_other_parsers_locks_and_extra_claims() {
+        let valid = serde_json::json!({"parser":"@asyncapi/parser/3.6.0","runtimeLock":ASYNCAPI_RUNTIME_LOCK});
+        let encode = |value: &Value| format!("{value}\n").into_bytes();
+        let bytes = encode(&valid);
+        assert!(validate_asyncapi_runtime_report(&bytes).is_ok());
+        assert!(validate_asyncapi_runtime_report(&bytes[..bytes.len() - 1]).is_err());
+        assert!(
+            validate_asyncapi_runtime_report(&[bytes.clone(), b"\n".to_vec()].concat()).is_err()
+        );
+        let duplicate = String::from_utf8(bytes)
+            .unwrap()
+            .replace("\"parser\":", "\"parser\":\"wrong\",\"parser\":");
+        assert!(validate_asyncapi_runtime_report(duplicate.as_bytes()).is_err());
+        for changed in [
+            serde_json::json!({"parser":"@asyncapi/parser/3.6.3","runtimeLock":ASYNCAPI_RUNTIME_LOCK}),
+            serde_json::json!({"parser":"@asyncapi/parser/3.6.0","runtimeLock":"historical-lock"}),
+            serde_json::json!({"parser":"@asyncapi/parser/3.6.0","runtimeLock":ASYNCAPI_RUNTIME_LOCK,"accepted":true}),
+            serde_json::json!({"passed":true}),
+        ] {
+            assert!(validate_asyncapi_runtime_report(&encode(&changed)).is_err());
+        }
+    }
+
+    #[test]
+    fn asyncapi_runtime_tap_requires_all_five_groups_without_skips_or_duplicate_summaries() {
+        let valid = concat!(
+            "TAP version 13\n",
+            "ok 1 - the owned runtime runs all 89 unchanged upstream examples with parser 3.6.0\n",
+            "ok 2 - the owning launcher rejects changed source, lock, parser, missing modules and shadow resolution\n",
+            "ok 3 - fixed inventory binding rejects absent, duplicate, changed, extra-field or noncanonical runtime rows\n",
+            "ok 4 - runtime byte framing matches inventory and allows only in-tree executable aliases\n",
+            "ok 5 - the shell entry rejects ambient preloads before any Node code can execute\n",
+            "1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n",
+        );
+        assert!(validate_asyncapi_runtime_tests(valid.as_bytes()).is_ok());
+        // Actual Node execution exited zero despite skipping every registered group.
+        assert!(validate_asyncapi_runtime_tests(include_bytes!(
+            "upstream_conformance_fixtures/asyncapi-runtime-skipped.tap"
+        ))
+        .is_err());
+        for invalid in [
+            String::new(),
+            valid.replace("# tests 5\n", ""),
+            format!("{valid}# tests 5\n"),
+            format!("{valid}1..5\n"),
+            valid.replace("# pass 5", "# pass 4"),
+            valid.replace("# skipped 0", "# skipped 1"),
+            valid.replace("# cancelled 0", "# cancelled 1"),
+            valid.replace("# todo 0", "# todo 1"),
+            valid.replace("# fail 0", "# fail 1"),
+            valid.replace("# tests 5", "# tests 05"),
+            valid.replace("1..5", "1..0"),
+            valid.replace("ok 1 -", "not ok 1 -"),
+            valid.replace("parser 3.6.0\n", "parser 3.6.0 # SKIP\n"),
+            valid[..valid.find("# cancelled").unwrap()].to_owned(),
+        ] {
+            assert!(
+                validate_asyncapi_runtime_tests(invalid.as_bytes()).is_err(),
+                "accepted {invalid:?}"
+            );
+        }
     }
 }

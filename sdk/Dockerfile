@@ -183,9 +183,15 @@ COPY . .
 RUN mkdir -p /opt/prismpm/asyncapi-official/scripts \
     && cp -a standards/oracles/asyncapi-spec-b3fac5bb/spec /opt/prismpm/asyncapi-official/spec \
     && cp -a standards/oracles/asyncapi-spec-b3fac5bb/scripts/validation /opt/prismpm/asyncapi-official/scripts/validation \
-    && npm ci --ignore-scripts --prefix /opt/prismpm/asyncapi-official/scripts/validation \
-    && cd /opt/prismpm/asyncapi-official/scripts/validation \
-    && npm run validate:examples
+    && cp sdk/asyncapi-runtime/package.json sdk/asyncapi-runtime/package-lock.json \
+      sdk/asyncapi-runtime/launcher.mjs sdk/asyncapi-runtime/launcher.sh \
+      sdk/asyncapi-runtime/launcher.test.mjs \
+      /opt/prismpm/asyncapi-official/scripts/ \
+    && npm ci --ignore-scripts --include=dev --no-audit --no-fund --prefix /opt/prismpm/asyncapi-official/scripts \
+    && node --test --test-reporter=tap --test-timeout=180000 /opt/prismpm/asyncapi-official/scripts/launcher.test.mjs \
+    && chmod 0555 /opt/prismpm/asyncapi-official/scripts/launcher.sh \
+    && ln -s /opt/prismpm/asyncapi-official/scripts/launcher.sh /usr/local/bin/asyncapi-official \
+    && chmod -R a-w /opt/prismpm/asyncapi-official
 RUN mkdir -p /opt/prismpm/share/standards/oracles \
     && cp standards/oracles/devcontainer-c95ffeed-base.schema.json \
       /opt/prismpm/share/standards/oracles/devcontainer-c95ffeed-base.schema.json \
@@ -333,6 +339,7 @@ RUN PRISMPM_ARTIFACT_INVENTORY=/opt/prismpm/artifact-inventory.json \
     && rm /opt/prismpm/artifact-inventory.json /opt/prismpm/generate-inventory.mjs \
     && prismpm --json completion bash > /tmp/prismpm-sdk-self-check.json \
     && grep -Fq '"schema":"prismpm/completion-result/1"' /tmp/prismpm-sdk-self-check.json \
+    && /usr/local/bin/asyncapi-official --check \
     && rm /tmp/prismpm-sdk-self-check.json
 
 # The image entrypoint needs its initial root identity only when a devcontainer
