@@ -30,6 +30,26 @@ esac
 group_name=$(getent group "$socket_gid" | cut -d: -f1)
 test -n "$group_name" || fail 'the socket group cannot be resolved'
 
+# usermod updates group and shadow authorization separately. NSS visibility
+# alone does not guarantee that sg can refresh an already-running shell.
+# Probe authorization noninteractively within the same initialization deadline;
+# never retry the caller's command or consume its standard input.
+waiting_for_authorization=false
+while :; do
+  remaining=$((deadline - SECONDS))
+  test "$remaining" -gt 0 || fail 'timed out waiting for socket group authorization'
+  if timeout --signal=TERM --kill-after=1 "${remaining}s" \
+    sg "$group_name" -c true </dev/null >/dev/null 2>&1; then
+    break
+  fi
+  if ! "$waiting_for_authorization"; then
+    printf 'devcontainer Docker initialization: waiting for socket group authorization\n' >&2
+    waiting_for_authorization=true
+  fi
+  test "$SECONDS" -lt "$deadline" || fail 'timed out waiting for socket group authorization'
+  sleep 0.1
+done
+
 # Refresh only the command's group credentials, retaining its non-root UID.
 # sg accepts a shell command: quote every argument, including empty arguments,
 # literal quotes and newlines, rather than interpreting caller-supplied text.

@@ -1092,6 +1092,19 @@ Baseline log `target/native-early-rejection-baseline.log` has SHA-256
 mutant log `target/native-early-rejection-mutant.log` has SHA-256
 `48ba6e706c3c0840d015496ca2e1c2980e2adb40585c8d39a1fe21520e338b05`.
 
+The devcontainer readiness gate passed all 15 real-container tests for image
+and remapped users. A deterministic group/gshadow interleaving reproduced the
+hosted restart failure; the helper now waits for noninteractive `sg`
+authorization within the existing deadline. Commands remained non-root and
+ran exactly once, including exit 17; withheld authorization timed out without
+execution or password prompts. Socket permissions were unchanged. An isolated
+old-helper mutation failed both new authorization cases for each user; source
+files were never mutated and disposable containers were removed. Green log
+`target/devcontainer-shadow-race-green.log` has SHA-256
+`6923c7879c4f95d2d45d3c9d59703100540ef569046b1530de9d6714f3820ad3`;
+mutant log `target/devcontainer-shadow-race-mutant.log` has SHA-256
+`3eb92ea5fc8221ab66e7d759be7c7f483ec0d3b3b2657355b1ac214386e69aca`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

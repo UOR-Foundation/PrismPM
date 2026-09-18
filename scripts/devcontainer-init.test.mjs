@@ -80,6 +80,8 @@ function pendingShell(container, command, args = []) {
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
+  let closed = false;
+  const stderrWaiters = [];
   let readyResolve;
   let readyReject;
   const ready = new Promise((resolveReady, rejectReady) => {
@@ -90,10 +92,19 @@ function pendingShell(container, command, args = []) {
     stdout += chunk;
     if (stdout.includes('\n')) readyResolve(stdout.split('\n')[0]);
   });
-  child.stderr.on('data', chunk => { stderr += chunk; });
+  child.stderr.on('data', chunk => {
+    stderr += chunk;
+    for (const waiter of stderrWaiters) {
+      if (stderr.includes(waiter.fragment)) waiter.resolve();
+    }
+  });
   const finished = new Promise((resolveFinished, rejectFinished) => {
     child.once('error', error => { readyReject(error); rejectFinished(error); });
     child.once('close', code => {
+      closed = true;
+      for (const waiter of stderrWaiters) {
+        waiter.reject(new Error(`shell exited before ${waiter.fragment}: ${stderr}`));
+      }
       if (!stdout.includes('\n')) readyReject(new Error(`shell exited before readiness: ${stderr}`));
       resolveFinished({ code, stdout, stderr });
     });
@@ -103,7 +114,34 @@ function pendingShell(container, command, args = []) {
     child.kill();
   }, 40_000);
   finished.finally(() => clearTimeout(timer));
-  return { child, ready, finished };
+  const waitForStderr = fragment => {
+    if (stderr.includes(fragment)) return Promise.resolve();
+    if (closed) return Promise.reject(new Error(`shell exited before ${fragment}: ${stderr}`));
+    return new Promise((resolve, reject) => stderrWaiters.push({fragment, resolve, reject}));
+  };
+  return { child, ready, finished, waitForStderr };
+}
+
+// Freeze the actual group databases between usermod's separate file updates.
+// Only a disposable container is changed; the host socket stays untouched.
+function addGroupMember(container, database, group) {
+  assert.ok(['/etc/group', '/etc/gshadow'].includes(database));
+  run(container, 'root', ['node', '-e', `
+    const assert = require('node:assert/strict'), fs = require('node:fs');
+    const [path, group] = process.argv.slice(1);
+    let found = false;
+    const lines = fs.readFileSync(path, 'utf8').split('\\n').map(line => {
+      const fields = line.split(':');
+      if (fields[0] !== group) return line;
+      assert.equal(fields.length, 4);
+      const members = fields[3].split(',').filter(Boolean);
+      assert.ok(!members.includes('vscode'), 'fixture member is already present');
+      fields[3] = [...members, 'vscode'].join(','); found = true;
+      return fields.join(':');
+    });
+    assert.ok(found, 'fixture group is absent');
+    fs.writeFileSync(path, lines.join('\\n'));
+  `, database, group]);
 }
 
 const probe = `
@@ -172,6 +210,66 @@ async function checkSocket(t, remap) {
       const restarted = JSON.parse(run(container, 'vscode', [helper, 'node', '-e', probe]));
       assert.equal(restarted.uid, uid);
       assert(restarted.groups.includes(socketGid));
+      assert.equal(run(container, 'root', ['stat', '-c', '%u:%g:%a', '/var/run/docker.sock']), socketBefore);
+    });
+
+    await t.test('group visibility before shadow authorization cannot execute the user command', async () => {
+      run(container, 'root', ['usermod', '--groups', '', 'vscode']);
+      const group = run(container, 'root', ['getent', 'group', String(socketGid)]).split(':')[0];
+      const deniedProbe = pendingShell(container, 'read start; exec sg "$1" -c true', [group]);
+      const repaired = pendingShell(container, 'read start; exec "$@"', [
+        helper, '/bin/sh', '-c', 'printf x >> /tmp/prismpm-skew-command; exec "$@"', '--',
+        'node', '-e', probe, ...args,
+      ]);
+      const failingCommand = pendingShell(container, 'read start; exec "$@"', [
+        helper, '/bin/sh', '-c', 'printf x >> /tmp/prismpm-skew-failure; exit 17',
+      ]);
+      for (const line of await Promise.all([deniedProbe.ready, repaired.ready, failingCommand.ready])) {
+        assert(!line.slice('ready:'.length).split(' ').map(Number).includes(socketGid));
+      }
+      addGroupMember(container, '/etc/group', group);
+      assert(run(container, 'root', ['id', '-G', 'vscode']).split(' ').map(Number).includes(socketGid));
+      deniedProbe.child.stdin.end('\n');
+      const deniedResult = await deniedProbe.finished;
+      assert.equal(deniedResult.code, 1);
+      assert.match(deniedResult.stderr, /Invalid password/);
+      repaired.child.stdin.end('\n');
+      failingCommand.child.stdin.end('\n');
+      await Promise.all([repaired, failingCommand].map(shell =>
+        shell.waitForStderr('waiting for socket group authorization')));
+      run(container, 'root', ['test', '!', '-e', '/tmp/prismpm-skew-command']);
+      run(container, 'root', ['test', '!', '-e', '/tmp/prismpm-skew-failure']);
+      addGroupMember(container, '/etc/gshadow', group);
+      const result = await repaired.finished;
+      assert.equal(result.code, 0, result.stderr);
+      const actual = JSON.parse(result.stdout.split('\n')[1]);
+      assert.equal(actual.uid, uid);
+      assert(actual.groups.includes(socketGid));
+      assert.deepEqual(actual.args, args);
+      assert.match(actual.docker, /^\d+\.\d+\.\d+/);
+      assert.equal(run(container, 'vscode', ['cat', '/tmp/prismpm-skew-command']), 'x');
+      assert.equal((await failingCommand.finished).code, 17);
+      assert.equal(run(container, 'vscode', ['cat', '/tmp/prismpm-skew-failure']), 'x');
+      assert.equal(run(container, 'root', ['stat', '-c', '%u:%g:%a', '/var/run/docker.sock']), socketBefore);
+    });
+
+    await t.test('missing shadow authorization times out without executing the command or prompting', async () => {
+      run(container, 'root', ['usermod', '--groups', '', 'vscode']);
+      const group = run(container, 'root', ['getent', 'group', String(socketGid)]).split(':')[0];
+      const blocked = pendingShell(container, 'read start; exec "$@"', [
+        helper, 'touch', '/tmp/prismpm-unauthorized',
+      ]);
+      assert(!(await blocked.ready).slice('ready:'.length).split(' ').map(Number).includes(socketGid));
+      addGroupMember(container, '/etc/group', group);
+      const started = Date.now();
+      blocked.child.stdin.end('\n');
+      const result = await blocked.finished;
+      assert.equal(result.code, 1);
+      assert.match(result.stderr, /timed out waiting for socket group authorization/);
+      assert.doesNotMatch(result.stderr, /Password:|Invalid password/);
+      assert(Date.now() - started >= 28_000);
+      assert(Date.now() - started < 40_000);
+      run(container, 'root', ['test', '!', '-e', '/tmp/prismpm-unauthorized']);
       assert.equal(run(container, 'root', ['stat', '-c', '%u:%g:%a', '/var/run/docker.sock']), socketBefore);
     });
 
