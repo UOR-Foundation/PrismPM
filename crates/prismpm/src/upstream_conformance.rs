@@ -1047,6 +1047,43 @@ if intoto-statement-validator /tmp/planted.json; then exit 42; fi
     })
 }
 
+fn oci_image_graph_probe() -> &'static str {
+    r#"
+set -eu
+work=$(mktemp -d)
+cd "$work"
+printf '%s' 'prismpm-oci-payload' > payload.txt
+oras push --oci-layout layout:v1 \
+  --artifact-type application/vnd.prismpm.payload \
+  payload.txt:text/plain >/dev/null
+subject=$(oras resolve --oci-layout layout:v1)
+oras manifest fetch --oci-layout layout:v1 > manifest.json
+grep -Fq '"mediaType":"application/vnd.oci.image.manifest.v1+json"' manifest.json
+grep -Fq '"artifactType":"application/vnd.prismpm.payload"' manifest.json
+oras attach --oci-layout \
+  --artifact-type application/vnd.prismpm.evidence \
+  layout:v1 payload.txt:text/plain >/dev/null
+oras discover --oci-layout --format json layout:v1 > referrers.json
+grep -Fq '"artifactType": "application/vnd.prismpm.evidence"' referrers.json
+grep -Fq '"digest": "' referrers.json
+oras manifest index create --oci-layout layout:multi v1 >/dev/null
+oras manifest fetch --oci-layout layout:multi > index.json
+grep -Fq '"mediaType":"application/vnd.oci.image.index.v1+json"' index.json
+grep -Fq "$subject" index.json
+if oras discover --oci-layout --artifact-type application/vnd.prismpm.absent \
+  --format json layout:v1 | grep -Fq 'application/vnd.prismpm.absent'; then
+  exit 41
+fi
+# ORAS stores immutable blobs; change only this disposable corruption fixture.
+chmod u+w -- "layout/blobs/sha256/${subject#sha256:}"
+printf '%s' corrupt > "layout/blobs/sha256/${subject#sha256:}"
+if oras manifest fetch --oci-layout layout:v1 >/dev/null 2>&1; then
+  exit 42
+fi
+printf '%s\n' OCI_GRAPH_OK
+"#
+}
+
 fn oci_image_suite(root: &Path, image: &str) -> Result<CorpusEvidence, PrismError> {
     let corpus = root.join("standards/oracles/oci-image-1.1.1");
     let digest = verify_tree(&corpus, OCI_IMAGE_TREE)?;
@@ -1078,38 +1115,6 @@ fn oci_image_suite(root: &Path, image: &str) -> Result<CorpusEvidence, PrismErro
             String::from_utf8_lossy(&stderr)
         )));
     }
-    let graph_probe = r#"
-set -eu
-work=$(mktemp -d)
-cd "$work"
-printf '%s' 'prismpm-oci-payload' > payload.txt
-oras push --oci-layout layout:v1 \
-  --artifact-type application/vnd.prismpm.payload \
-  payload.txt:text/plain >/dev/null
-subject=$(oras resolve --oci-layout layout:v1)
-oras manifest fetch --oci-layout layout:v1 > manifest.json
-grep -Fq '"mediaType":"application/vnd.oci.image.manifest.v1+json"' manifest.json
-grep -Fq '"artifactType":"application/vnd.prismpm.payload"' manifest.json
-oras attach --oci-layout \
-  --artifact-type application/vnd.prismpm.evidence \
-  layout:v1 payload.txt:text/plain >/dev/null
-oras discover --oci-layout --format json layout:v1 > referrers.json
-grep -Fq '"artifactType": "application/vnd.prismpm.evidence"' referrers.json
-grep -Fq '"digest": "' referrers.json
-oras manifest index create --oci-layout layout:multi v1 >/dev/null
-oras manifest fetch --oci-layout layout:multi > index.json
-grep -Fq '"mediaType":"application/vnd.oci.image.index.v1+json"' index.json
-grep -Fq "$subject" index.json
-if oras discover --oci-layout --artifact-type application/vnd.prismpm.absent \
-  --format json layout:v1 | grep -Fq 'application/vnd.prismpm.absent'; then
-  exit 41
-fi
-printf '%s' corrupt > "layout/blobs/sha256/${subject#sha256:}"
-if oras manifest fetch --oci-layout layout:v1 >/dev/null 2>&1; then
-  exit 42
-fi
-printf '%s\n' OCI_GRAPH_OK
-"#;
     let (graph, graph_stdout, graph_stderr) = docker(
         &[
             "run",
@@ -1123,7 +1128,7 @@ printf '%s\n' OCI_GRAPH_OK
             "/bin/sh",
             image,
             "-ec",
-            graph_probe,
+            oci_image_graph_probe(),
         ],
         Duration::from_secs(60),
     )?;
@@ -2198,6 +2203,72 @@ pub fn verify(root: &Path) -> Result<UpstreamConformanceEvidence, PrismError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oci_image_official_corpus_and_graph_probes_execute() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("repository root");
+        let evidence = oci_image_suite(root, &sdk_image().expect("exact SDK image required"))
+            .expect("all 14 official tests and independent ORAS graph probes");
+        assert_eq!(evidence.positive, 19);
+        assert_eq!(evidence.negative, 2);
+        assert_eq!(evidence.planted_rejections, 2);
+        assert_eq!(
+            evidence.runner,
+            "opencontainers/image-spec/1.1.1+oras/1.3.0"
+        );
+    }
+
+    #[test]
+    fn oci_image_graph_corruption_executes_nonroot_and_cannot_be_omitted() {
+        let image = sdk_image().expect("exact SDK image required");
+        let run = |script: &str| {
+            docker(
+                &[
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
+                    "--read-only",
+                    "--user",
+                    "1000:1000",
+                    "--cap-drop",
+                    "ALL",
+                    "--security-opt",
+                    "no-new-privileges",
+                    "--tmpfs",
+                    "/tmp:rw,noexec,nosuid,nodev",
+                    "--entrypoint",
+                    "/bin/sh",
+                    &image,
+                    "-ec",
+                    script,
+                ],
+                Duration::from_secs(60),
+            )
+            .expect("actual non-root ORAS graph execution")
+        };
+        let script = oci_image_graph_probe();
+        let (status, stdout, stderr) = run(script);
+        assert!(status.success(), "{}", String::from_utf8_lossy(&stderr));
+        assert_eq!(stdout, b"OCI_GRAPH_OK\n");
+
+        let permission = "chmod u+w -- \"layout/blobs/sha256/${subject#sha256:}\"\n";
+        assert_eq!(script.matches(permission).count(), 1);
+        let (status, stdout, stderr) = run(&script.replace(permission, ""));
+        assert!(!status.success());
+        assert_ne!(status.code(), Some(42));
+        assert!(String::from_utf8_lossy(&stderr).contains("Permission denied"));
+        assert!(!String::from_utf8_lossy(&stdout).contains("OCI_GRAPH_OK"));
+
+        let corruption = "printf '%s' corrupt > \"layout/blobs/sha256/${subject#sha256:}\"\n";
+        assert_eq!(script.matches(corruption).count(), 1);
+        let (status, stdout, _) = run(&script.replace(corruption, ":\n"));
+        assert_eq!(status.code(), Some(42));
+        assert!(!String::from_utf8_lossy(&stdout).contains("OCI_GRAPH_OK"));
+    }
 
     #[test]
     fn imported_unicode_corpus_executes_positive_negative_and_planted_cases() {
