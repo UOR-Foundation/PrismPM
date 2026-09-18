@@ -143,7 +143,9 @@ export async function validateIdentity(identity) {
     }
     return Object.freeze(captured);
   } catch (error) {
-    if (error.code === 'crypto-unavailable') throw error;
-    throw new BrowserEffectError('identity-corrupt');
+    let unavailable = false;
+    try { unavailable = error instanceof BrowserEffectError && error.code === 'crypto-unavailable'; }
+    catch { /* Thrown values and their accessors are untrusted. */ }
+    throw new BrowserEffectError(unavailable ? 'crypto-unavailable' : 'identity-corrupt');
   }
 }

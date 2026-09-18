@@ -103,7 +103,7 @@ test('Chromium captures signing, verification, and identity inputs before asynch
 
 test('Chromium enforces malformed input, key, and exact payload bounds', {timeout: 30000}, async () => {
   const result = await inBrowser(async () => {
-    const {createIdentity, signBytes, verifyBytes} = await import('./identity.mjs');
+    const {BrowserEffectError, createIdentity, signBytes, verifyBytes, validateIdentity} = await import('./identity.mjs');
     const identity = await createIdentity(), codes = [];
     const reject = async operation => {
       try { await operation(); codes.push('accepted'); }
@@ -125,8 +125,33 @@ test('Chromium enforces malformed input, key, and exact payload bounds', {timeou
     await reject(() => signBytes({...identity, privateKey: extractable.privateKey}, 'test/1', new Uint8Array()));
     const maximum = new Uint8Array(1048576);
     const signature = await signBytes(identity, 'test/1', maximum);
-    return {codes, maximumValid: await verifyBytes(identity.publicKey, 'test/1', maximum, signature)};
+    const hostileCode = new BrowserEffectError('identity-corrupt');
+    Object.defineProperty(hostileCode, 'code', {get() { throw new Error('untrusted getter'); }});
+    const unavailable = Object.assign(new BrowserEffectError('crypto-unavailable'), {payload: 'untrusted'});
+    const trapped = [];
+    for (const thrown of [null, undefined, 0, false, 'untrusted', {},
+      {code: 'crypto-unavailable', payload: 'untrusted'}, hostileCode,
+      new Proxy({}, {getPrototypeOf() { throw new Error('untrusted prototype'); }}), unavailable]) {
+      try { await validateIdentity(new Proxy({}, {ownKeys() { throw thrown; }})); trapped.push(false); }
+      catch (error) {
+        trapped.push(error instanceof BrowserEffectError && error !== thrown
+          && error.code === (thrown === unavailable ? 'crypto-unavailable' : 'identity-corrupt')
+          && Object.keys(error).sort().join(',') === 'code,name' && !Object.hasOwn(error, 'cause'));
+      }
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    try {
+      Object.defineProperty(globalThis, 'crypto', {configurable: true, value: {}});
+      await reject(() => validateIdentity(identity));
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor);
+      else delete globalThis.crypto;
+    }
+    return {codes, trapped, restored: (await validateIdentity(identity)).privateKey === identity.privateKey,
+      maximumValid: await verifyBytes(identity.publicKey, 'test/1', maximum, signature)};
   });
-  assert.deepEqual(result.codes, [...Array(11).fill('invalid-input'), ...Array(2).fill('identity-corrupt')]);
+  assert.deepEqual(result.codes, [...Array(11).fill('invalid-input'), ...Array(2).fill('identity-corrupt'), 'crypto-unavailable']);
+  assert.deepEqual(result.trapped, Array(10).fill(true));
+  assert.equal(result.restored, true);
   assert.equal(result.maximumValid, true);
 });

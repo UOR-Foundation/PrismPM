@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createPublicKey, verify, webcrypto } from 'node:crypto';
 import test from 'node:test';
-import { createIdentity, identityPrincipal, signBytes, verifyBytes, validateIdentity } from './identity.mjs';
+import { BrowserEffectError, createIdentity, identityPrincipal, signBytes, verifyBytes, validateIdentity } from './identity.mjs';
 
 globalThis.crypto ??= webcrypto;
 
@@ -47,6 +47,30 @@ test('cryptographic boundary rejects malformed and excessive input before dispat
   const bytes = new Uint8Array(1048576);
   const signature = await signBytes(identity, 'test/1', bytes);
   assert.equal(await verifyBytes(identity.publicKey, 'test/1', bytes, signature), true);
+  const hostileCode = new BrowserEffectError('identity-corrupt');
+  Object.defineProperty(hostileCode, 'code', {get() { throw new Error('untrusted getter'); }});
+  const unavailable = Object.assign(new BrowserEffectError('crypto-unavailable'), {payload: 'untrusted'});
+  for (const thrown of [null, undefined, 0, false, 'untrusted', {},
+    {code: 'crypto-unavailable', payload: 'untrusted'}, hostileCode,
+    new Proxy({}, {getPrototypeOf() { throw new Error('untrusted prototype'); }}), unavailable]) {
+    await assert.rejects(validateIdentity(new Proxy({}, {ownKeys() { throw thrown; }})), error => {
+      assert.ok(error instanceof BrowserEffectError);
+      assert.notEqual(error, thrown);
+      assert.equal(error.code, thrown === unavailable ? 'crypto-unavailable' : 'identity-corrupt');
+      assert.deepEqual(Object.keys(error).sort(), ['code', 'name']);
+      assert.equal(Object.hasOwn(error, 'cause'), false);
+      return true;
+    });
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  try {
+    Object.defineProperty(globalThis, 'crypto', {configurable: true, value: {}});
+    await assert.rejects(validateIdentity(identity), {code: 'crypto-unavailable'});
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor);
+    else delete globalThis.crypto;
+  }
+  assert.equal((await validateIdentity(identity)).privateKey, identity.privateKey);
 });
 
 test('signed input is captured before asynchronous key operations', async () => {
