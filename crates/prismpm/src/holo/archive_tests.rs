@@ -183,6 +183,21 @@ fn application_input() -> ApplicationArchiveInput {
     }
 }
 
+#[test]
+fn public_archive_validation_distinguishes_footer_mismatch_from_header_failure() {
+    let archive = compose_application(&application_input()).unwrap();
+    validate_application(&archive.bytes).unwrap();
+    let footer = archive.bytes.len() - 32;
+    for offset in footer..archive.bytes.len() {
+        let mut changed = archive.bytes.clone();
+        changed[offset] ^= 1;
+        assert_eq!(validate_application(&changed).unwrap_err().code, "PP3004");
+    }
+    let mut changed = archive.bytes.clone();
+    changed[0] ^= 1;
+    assert_eq!(validate_application(&changed).unwrap_err().code, "PP3001");
+}
+
 fn recompose(archive: &GeneratedHolo, directory: Vec<u8>, provenance: Vec<u8>) -> Vec<u8> {
     let part = |index| {
         modeled(wire::archiveSection(archive.bytes.clone(), index))

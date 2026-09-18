@@ -481,7 +481,7 @@ fn decode_wire_archive(bytes: &[u8]) -> Result<DecodedWireArchive, PrismError> {
     drop(body);
     if fingerprint.as_bytes().as_slice() != footer.as_slice() {
         return Err(PrismError::new(
-            "PP3001",
+            "PP3004",
             "archive footer does not match its body",
         ));
     }
