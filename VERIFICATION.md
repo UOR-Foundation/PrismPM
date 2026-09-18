@@ -1275,6 +1275,31 @@ review; domain IR and execution bytes did not. The replay log
 Final formatting, all-target/all-feature Clippy and source/model/spec audits
 pass. Complete clean-tree SDK verification remains required.
 
+### Boundary regression checkpoint — 18 September 2026
+
+The workspace attempt passed 156 of 157 conformance cases; AU-01 failed on
+stale oracle-wrapper bindings. Normal authority resolution refreshed those
+bindings, and the independent locked AU-01 replay passed. This is not a
+successful complete V&V run.
+
+The real archive validator now reports PP3004 for each of the 32 corrupted
+footer bytes; all five archive tests and full Clippy pass. Identity validation
+contains hostile thrown values and strips injected payloads. Its actual Node
+and Chromium regression first failed, then all 48 identity/storage/peer tests
+passed without skips, including unavailable-provider recovery.
+
+The independent golden reader matches all 288 files after regeneration with
+verifier `9913b90f9e24e93814a98cedc98e2c414be09e482f48e20992e73bdc6120ea1a`.
+The 12 changed JSON values bind archive-source/verifier provenance and dependent
+identities only; domain IR and generated execution bytes remain unchanged.
+
+Evidence SHA-256:
+
+- `target/authority-wrapper-lock-regression.log`: `325f45872bf5f0554c766585ee6e3391bf97088a2cc67552c6c39b0df4b14880`.
+- `target/diagnostic-footer-draft/archive-green.log`: `6b238e75ac6ac3d9a485cdf9cd157d1f4a523d1b71d938757c911127f0728467`.
+- `target/identity-error-draft/host-regression.log`: `c2bec76c2a9c7aa9849e3f46e521353f84407dfc56afe7cf25455819be6e53dc`.
+- `target/footer-sealed-golden-check.log`: `12d50e274c5123275aa9b94441e274cae35d837bdd1f996d0cd1d30549821d8e`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
