@@ -7,8 +7,14 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
+#[path = "diagnostics/filesystem.rs"]
+mod filesystem;
+
 #[derive(Clone, Copy)]
 enum Rule {
+    ArtifactIntegrity,
+    ConfinedOutput,
+    ImmutableLock,
     ClosedObject,
     Required,
     PositiveBound,
@@ -21,7 +27,6 @@ enum Rule {
     Complete,
     Authorized,
     Fresh,
-    SafePath,
     Offline,
     SecretFree,
     Internal,
@@ -31,6 +36,9 @@ enum Rule {
 impl Rule {
     fn specimens(self) -> (Value, Value) {
         match self {
+            Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
+            Self::ConfinedOutput => filesystem::specimens("PP8001"),
+            Self::ImmutableLock => filesystem::specimens("PP1101"),
             Self::ClosedObject => (json!({"known":true}), json!({"unknown":true})),
             Self::Required => (json!({"required":"present"}), json!({})),
             Self::PositiveBound => (
@@ -64,7 +72,6 @@ impl Rule {
                 json!({"expires":2,"observed":1}),
                 json!({"expires":1,"observed":2}),
             ),
-            Self::SafePath => (json!({"path":"safe/file"}), json!({"path":"../escape"})),
             Self::Offline => (json!({"network":false}), json!({"network":true})),
             Self::SecretFree => (
                 json!({"value":"secret://reference"}),
@@ -99,6 +106,9 @@ impl Rule {
 
     fn accepts(self, value: &Value) -> bool {
         match self {
+            Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
+                filesystem::validate(value).is_ok()
+            }
             Self::ClosedObject => value
                 .as_object()
                 .is_some_and(|object| object.keys().all(|key| key == "known")),
@@ -149,10 +159,6 @@ impl Rule {
                 .as_u64()
                 .zip(value["expires"].as_u64())
                 .is_some_and(|(observed, expires)| observed <= expires),
-            Self::SafePath => value["path"].as_str().is_some_and(|path| {
-                !path.starts_with('/')
-                    && !path.split('/').any(|part| matches!(part, "" | "." | ".."))
-            }),
             Self::Offline => value["network"] == false,
             Self::SecretFree => value["value"]
                 .as_str()
@@ -208,7 +214,7 @@ probes!(
     ("PP3013", "extension-disagreement", Complete),
     ("PP3014", "source-manifest-disagreement", Exact),
     ("PP3015", "prism-provenance-disagreement", Exact),
-    ("PP4001", "artifact-checksum-mismatch", Digest),
+    ("PP4001", "artifact-checksum-mismatch", ArtifactIntegrity),
     ("PP4002", "missing-published-artifact", Required),
     ("PP4003", "emitter-input-digest-drift", Digest),
     ("PP4004", "invalid-manifest-structure", Canonical),
@@ -239,9 +245,9 @@ probes!(
     ("PP6002", "incomplete-application-acceptance", Complete),
     ("PP6003", "application-execution-disagreement", Exact),
     ("PP6004", "ecosystem-release-incomplete", Complete),
-    ("PP8001", "path-traversal", SafePath),
+    ("PP8001", "path-traversal", ConfinedOutput),
     ("PP8002", "offline-network-access", Offline),
-    ("PP1101", "immutable-lock-invalid", Digest),
+    ("PP1101", "immutable-lock-invalid", ImmutableLock),
     ("PP2101", "production-system-closure-invalid", Complete),
     (
         "PP2102",
@@ -296,6 +302,12 @@ fn validate_text_specimen(value: &Value) -> Result<(), PrismError> {
 }
 
 fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
+    if matches!(
+        spec.rule,
+        Rule::ArtifactIntegrity | Rule::ConfinedOutput | Rule::ImmutableLock
+    ) {
+        return filesystem::validate(value);
+    }
     if matches!(spec.rule, Rule::TextApplication) {
         return validate_text_specimen(value);
     }
@@ -348,6 +360,22 @@ pub fn exercise_all() -> Result<Vec<DiagnosticProbeResult>, PrismError> {
 mod tests {
     use super::{exercise_all, validate, Rule, PROBES};
     use std::collections::BTreeSet;
+
+    #[test]
+    fn filesystem_dispatch_preserves_the_real_public_owner_diagnostic() {
+        for code in ["PP4001", "PP8001", "PP1101"] {
+            let spec = *PROBES.iter().find(|row| row.code == code).unwrap();
+            let (valid, invalid) = super::filesystem::specimens(code);
+            validate(spec, &valid).unwrap();
+            let expected = super::filesystem::validate(&invalid).unwrap_err();
+            let actual = validate(spec, &invalid).unwrap_err();
+            assert_eq!(expected.code.as_str(), code);
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+        }
+    }
 
     #[test]
     fn every_registered_diagnostic_has_an_executable_trigger() {
