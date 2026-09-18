@@ -1,0 +1,76 @@
+spec = "prismpm/browser-diagnostics/1"
+source = "sdk/browser/journal.mjs"
+error_class = "JournalAdapterError"
+capability = "DK-12"
+
+[[error]]
+code = "author-mismatch"
+statement = "The signed event author does not match the actual P-256 public-key principal."
+
+[[error]]
+code = "event-id-mismatch"
+statement = "The event ID differs from the SHA-256 digest of its generated domain-separated signing preimage."
+
+[[error]]
+code = "generated-execution-failed"
+statement = "The trusted generated journal guest could not execute; no candidate state is promoted."
+
+[[error]]
+code = "invalid-generated-module"
+statement = "The trusted bootstrap did not provide a WebAssembly module with the required journal exports."
+
+[[error]]
+code = "invalid-generated-output"
+statement = "The generated output framing, bounds or completion binding is invalid."
+
+[[error]]
+code = "invalid-hash"
+statement = "A trusted-boundary content reference is not a canonical lowercase SHA-256 identifier."
+
+[[error]]
+code = "invalid-input"
+statement = "The public journal call has an invalid argument count or head name."
+
+[[error]]
+code = "invalid-length"
+statement = "An internal framing length is not an unsigned integer representable in 24 bits."
+
+[[error]]
+code = "journal-busy"
+statement = "The local host already owns two outstanding append/refresh operations; additional work is rejected before input capture or effects."
+
+[[error]]
+code = "model-rejected"
+statement = "The generated model rejected the candidate; detail carries only its bounded rejection bytes."
+
+[[error]]
+code = "object-corrupt"
+statement = "Retained event or head bytes differ from their exact content identifier."
+
+[[error]]
+code = "object-missing"
+statement = "Complete authenticated replay cannot fetch a referenced retained event object."
+
+[[error]]
+code = "replay-required"
+statement = "A failed or uncertain outcome requires complete authenticated replay before another write."
+
+[[error]]
+code = "request-limit"
+statement = "An internal guest request exceeds the modeled allocation cap before guest execution."
+
+[[error]]
+code = "signature-invalid"
+statement = "Actual browser cryptography rejects the context-bound event signature."
+
+[[error]]
+code = "storage-outcome-unknown"
+statement = "The trusted storage adapter returned an unrecognized exception; its message, payload and cause are discarded and replay is required."
+
+[[error]]
+code = "storage-rejected"
+statement = "The generated completion bound an actual storage conflict or failure; detail carries only the modeled status byte."
+
+[[error]]
+code = "storage-result-mismatch"
+statement = "The real storage call returned a head other than the exact candidate; no promotion or retry occurs before replay."

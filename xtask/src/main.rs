@@ -429,6 +429,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     }
     for manifest in [
         "tests/browser-workspace/Cargo.toml",
+        "tests/browser-envelope/driver/Cargo.toml",
+        "tests/browser-journal/driver/Cargo.toml",
         "tests/holo-codec-oracle/Cargo.toml",
     ] {
         command(
@@ -445,6 +447,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "2021",
             "--check",
             "tests/browser-workspace/runner.rs",
+            "tests/browser-envelope/runner.rs",
+            "tests/browser-journal/runner.rs",
         ],
     )?;
 
@@ -986,6 +990,11 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "language/prism.arch/lexicon.toml",
         "model/dependencies.toml",
         "model/stdlib-exports.toml",
+        "model/browser-diagnostics.toml",
+        "sdk/browser/identity.mjs",
+        "sdk/browser/store.mjs",
+        "sdk/browser/peer.mjs",
+        "sdk/browser/journal.mjs",
         "model/stdlib-package.toml",
         "schemas/model-document.schema.json",
         "sdk/asyncapi-runtime/package.json",

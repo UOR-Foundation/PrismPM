@@ -13,6 +13,16 @@ rust_name = "reduceWorkspaceBytes"
 rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
 
 [[export]]
+lean_name = "PrismPM.Foundation.Browser.V1.WorkspaceEnvelope.workspaceEnvelopeBytes"
+rust_name = "workspaceEnvelopeBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Browser.V1.WorkspaceJournal.workspaceJournalBytes"
+rust_name = "workspaceJournalBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
+
+[[export]]
 lean_name = "PrismPM.Foundation.Bytes.appendBytes"
 rust_name = "appendBytes"
 rust_signature = "fn(Vec<u8>, Vec<u8>) -> Vec<u8>"

@@ -1,6 +1,6 @@
 # Production release status
 
-As of 17 September 2026, the 0.3.0 source is under verification and is not an
+As of 18 September 2026, the 0.3.0 source is under verification and is not an
 accepted public SDK release. Clean commits and passing component checks do not
 replace the cross-repository acceptance contract in `current/tasks.md` of the
 development workspace.
@@ -69,15 +69,23 @@ and `target/asyncapi-sdk-audit-20260915.json` (SHA-256
 ## Diagnostic boundary coverage
 
 Feature and diagnostic register accounting is checked dynamically.
-The new PP2009 probe executes the actual text-application validator, but the
-other 83 `diagnostics.rs` probes still test generic local predicates rather than
-their owning implementation boundaries. Passing those probes or counting their
+PP2009 executes the actual text-application validator; PP4001, PP8001 and
+PP1101 exercise artifact integrity, confined cleanup and immutable lock owners.
+The other 80 `diagnostics.rs` probes still test generic local predicates rather
+than their owning implementation boundaries. Passing those probes or counting their
 IDs is not evidence that all public error paths work. Complete real positive
 and malformed-input subsystem coverage, including emitted-code and execution
 evidence checks, remains required for production SDK acceptance; it is not
 excluded by the current text-profile work.
 
 ## Remaining release acceptance
+
+The signed-envelope and authenticated browser-journal prerequisite gates pass,
+including offline browser crypto/storage checks and complete bounded replay.
+They do not yet implement the generated workspace application profile, its View,
+Kappa replication/read admission or the Foundry portal. These remain required
+for the authorized functional-core release; component tests do not replace
+live faculty/participant journey acceptance.
 
 Complete the existing release plan without treating a prototype implementation
 as a mandatory application dependency:

@@ -392,7 +392,7 @@ pub fn run_at(root: &Path, id: &str) {
             verify_system(root, id)
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
-        "DK-07" | "DK-08" | "DK-09" | "DK-10" => verify_browser_host(root, id),
+        "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" => verify_browser_host(root, id),
         "OC-07" => verify_browser_export(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
@@ -422,14 +422,23 @@ fn verify_browser_host(root: &Path, id: &str) {
             14,
         ),
         "DK-09" => (&["sdk/browser/peer.test.mjs"], 24),
-        "DK-10" => (&["sdk/browser/workspace-model-test.mjs"], 5),
+        "DK-10" => (&["sdk/browser/workspace-model-test.mjs"], 6),
+        "DK-11" => (&["sdk/browser/envelope-model-test.mjs"], 6),
+        "DK-12" => (&["sdk/browser/journal-model-test.mjs"], 12),
         _ => unreachable!("closed browser host capability"),
     };
     // Node also applies this limit to the file-level wrapper. The complete
     // model build has its own 20-minute test bound and must not inherit the
     // short host-only suite deadline.
-    let timeout = if id == "DK-10" { "1500000" } else { "120000" };
+    let timeout = if matches!(id, "DK-10" | "DK-11" | "DK-12") {
+        "1500000"
+    } else {
+        "120000"
+    };
     let output = Command::new("node")
+        // Cargo injects its Rust dynamic-library search path into test binaries.
+        // Browser/compiler subprocesses use the SDK's own loader paths.
+        .env_remove("LD_LIBRARY_PATH")
         .args(["--test", "--test-reporter=tap", "--test-timeout", timeout])
         .args(files)
         .current_dir(root)

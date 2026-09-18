@@ -27,6 +27,22 @@ function readRegular(path, maximum = 32 * 1024 * 1024) {
   return bytes;
 }
 
+function assertSameBytes(actual, expected, label) {
+  assert.ok(Buffer.isBuffer(actual) && Buffer.isBuffer(expected), 'exact byte buffers required');
+  // Buffer diffs can allocate far more memory than the bounded input itself.
+  assert.ok(actual.equals(expected), label);
+}
+
+test('large byte mismatches fail with bounded diagnostics and exact equality', () => {
+  const expected = Buffer.alloc(1_104_665, 97), actual = Buffer.from(expected);
+  assertSameBytes(actual, expected, 'same bytes');
+  actual[actual.length - 1] ^= 1;
+  for (const value of [actual, expected.subarray(1)]) {
+    assert.throws(() => assertSameBytes(value, expected, 'bounded byte mismatch'), error =>
+      error instanceof assert.AssertionError && error.message === 'bounded byte mismatch');
+  }
+});
+
 function run(program, args, cwd, extraEnv = {}) {
   const result = spawnSync(program, args, {
     cwd, encoding: 'utf8', timeout: 300_000, maxBuffer: 16 * 1024 * 1024,
@@ -82,7 +98,20 @@ function corpus(source) {
   assert.equal(declarations.size, data.declarations.length);
   const requests = [...declarations.keys()].filter(name => name.startsWith('request'));
   assert.equal(requests.length, 45, 'complete modeled acceptance corpus');
-  assert.ok(declarations.size <= requests.length * 3 + 16, 'bounded fixture declaration closure');
+  assert.equal(declarations.size, 847, 'exact bounded fixture declaration closure');
+  const helpers = data.declarations.filter(declaration => declaration.name.startsWith('fixtureLiteral'));
+  assert.equal(helpers.length, 706, 'complete bounded literal helper set');
+  for (const [index, helper] of helpers.entries()) {
+    assert.equal(helper.name, `fixtureLiteral${index}`);
+    assert.deepEqual(Object.keys(helper).sort(), ['body', 'kind', 'name', 'parameters', 'result']);
+    assert.equal(helper.kind, 'definition');
+    assert.deepEqual(helper.parameters, []);
+    assert.deepEqual(helper.result, {kind: 'bytes'});
+    assert.deepEqual(Object.keys(helper.body).sort(), ['hex', 'kind']);
+    assert.equal(helper.body.kind, 'bytes');
+    assert.match(helper.body.hex, /^(?:[0-9a-f]{2})*$/);
+    assert.ok(helper.body.hex.length <= 512, 'bounded literal C initializer');
+  }
   const used = new Set();
   const cache = new Map();
   function expand(name, active = new Set()) {
@@ -101,6 +130,7 @@ function corpus(source) {
       if (expression.kind === 'bytes') {
         assert.deepEqual(Object.keys(expression).sort(), ['hex', 'kind']);
         assert.match(expression.hex, /^(?:[0-9a-f]{2})*$/);
+        assert.ok(expression.hex.length <= 512, 'bounded literal C initializer');
         result = Buffer.from(expression.hex, 'hex');
       } else if (expression.kind === 'call') {
         assert.deepEqual(Object.keys(expression).sort(), ['arguments', 'function', 'kind']);
@@ -142,6 +172,8 @@ function corpus(source) {
     return {id, request: expand(name).toString('hex'), response: expand(`response${id}`).toString('hex')};
   });
   assert.deepEqual([...used].sort(), [...declarations.keys()].sort(), 'complete request/response/probe/data closure');
+  assert.equal(sha256(vectors.map(vector => `${vector.id}\t${vector.request}\t${vector.response}\n`).join('')),
+    '70e4ec78bc68029b81943fc2e0dcf4ae320c0e12ddf43d5fc4f1e8def0560147', 'exact original 45 vectors');
   return vectors;
 }
 
@@ -156,6 +188,26 @@ test('corpus collector rejects altered probe bindings and non-data fixture expre
   }
   assert.throws(() => corpus(changed(rows => rows.pop())));
   assert.throws(() => corpus(changed(rows => rows.push(rows[0]))));
+  for (const mutate of [
+    rows => {
+      const helper = rows.find(row => row.name.startsWith('fixtureLiteral') && row.body.hex.length > 0);
+      helper.body.hex = 'ff' + helper.body.hex.slice(2);
+    },
+    rows => rows.push({...structuredClone(rows[0]), name: 'fixtureLiteralUnused'}),
+    rows => rows.splice(0, 1),
+  ]) assert.throws(() => corpus(changed(mutate)));
+  assert.throws(() => corpus(changed(rows => {
+    const helper = rows.find(row => row.name.startsWith('fixtureLiteral') && row.body.hex === '');
+    assert.ok(helper, 'exact empty literal helper');
+    function inline(value) {
+      if (Array.isArray(value)) return value.map(inline);
+      if (!value || typeof value !== 'object') return value;
+      if (value.kind === 'call' && value.function.name === helper.name) return {kind: 'bytes', hex: ''};
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, inline(child)]));
+    }
+    for (const row of rows) row.body = inline(row.body);
+    assert.equal(rows.length, 847, 'unused-helper mutation preserves cardinality and bytes');
+  })), /complete request\/response\/probe\/data closure/);
   assert.throws(() => corpus(changed(rows => {
     rows.find(row => row.name === 'probeGenesis').body.arguments[0].function.name = 'encodeWorkspaceError';
   })));
@@ -333,7 +385,7 @@ browser-workspace-core-probe = { path = "../generated", default-features = ${sta
         let output;
         try { output = invoke(instance, input).bytes; }
         catch (error) { throw new Error(`${vector.id}, repeat ${repeat}, guest memory ${instance.exports.memory.buffer.byteLength}: ${error.message}`, {cause: error}); }
-        assert.deepEqual(output, Buffer.from(vector.response, 'hex'),
+        assertSameBytes(output, Buffer.from(vector.response, 'hex'),
           `actual generated guest exact modeled response: ${vector.id}, repeat ${repeat}`);
       }
       const memory = instance.exports.memory.buffer.byteLength;
@@ -349,15 +401,15 @@ browser-workspace-core-probe = { path = "../generated", default-features = ${sta
   const first = invoke(resident, input);
   let repeated = 'accepted';
   try {
-    assert.deepEqual(invoke(resident, input).bytes, first.bytes);
+    assertSameBytes(invoke(resident, input).bytes, first.bytes, 'repeated guest bytes');
   } catch (error) {
     assert.ok(error instanceof WebAssembly.RuntimeError);
     repeated = 'bounded allocation trap';
   }
-  assert.deepEqual(Buffer.from(new Uint8Array(resident.exports.memory.buffer, first.output, first.size)),
+  assertSameBytes(Buffer.from(new Uint8Array(resident.exports.memory.buffer, first.output, first.size)),
     first.bytes, 'a repeated call never resets or overwrites the first output');
   t.diagnostic(`maximum single-call memory ${maximumMemory}; second resident maximum-state call: ${repeated}; resident memory ${resident.exports.memory.buffer.byteLength}`);
-  for (const [file, bytes] of sources) assert.deepEqual(readRegular(join(repository,
+  for (const [file, bytes] of sources) assertSameBytes(readRegular(join(repository,
     'stdlib/src/Foundation/Browser/V1', file)), bytes, 'modeled sources unchanged');
   assert.deepEqual(readRegular(join(repository, 'rust-toolchain.toml')), rustToolchain);
   assert.equal(readRegular(join(repository, 'lean-toolchain')).toString('utf8').trim(), leanToolchain);

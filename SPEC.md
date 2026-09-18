@@ -798,6 +798,57 @@ This finite corpus is reducer evidence, not an authenticated application:
 signature verification, authenticated replay, atomic durable event/head writes,
 peer authorization, a generated View and end-to-end acceptance remain required.
 
+### 12.3 Modeled signed-envelope and authenticated journal prerequisites
+
+`Foundation.Browser.V1.WorkspaceEnvelope` defines the closed PWE01 codec
+and signing projections in `stdlib/src/Foundation/Browser/V1/Envelope.md`.
+Parsing is not authentication. DK-11 runs all 43 modeled cases through
+fresh generated native/no_std/Core-Wasm and actual WebCrypto, including
+typed encoder rejection, every truncated genesis prefix and forged bindings.
+
+`Foundation.Browser.V1.WorkspaceJournal` defines the immutable event/head,
+append, complete replay and bound completion contract in
+`stdlib/src/Foundation/Browser/V1/Journal.md`. The private `journal.mjs`
+host adapter authenticates keys, authors, event IDs and signatures, captures
+input before awaiting, reconstructs state only by complete replay and uses
+actual atomic storage CAS. Callers cannot supply state, authentication flags,
+receipts or completion tokens. Failures and uncertain outcomes prohibit
+promotion or automatic retry and require authenticated replay.
+
+The local Journal host admits at most two outstanding operations total: one
+active append/refresh and at most one waiter. Additional work fails with
+`journal-busy` before input capture or effects. Success, validation failure,
+replay failure, and storage failure release the admission slot; callers must
+retry explicitly. Closing storage does not promise cancellation of an already
+started transaction. This host budget does not reduce modeled event, message,
+state, or byte limits.
+
+The journal has 61 modeled vectors, both complete 1,024-event maximum
+Grant/Post histories and generated output-head closure checks. All vectors
+run twice on native/no_std and Core-Wasm with full normal corpus C generation.
+The journal guest admits 1,235,980 input bytes, 1,166,008 output bytes and
+640 pages; Envelope admits 4,364 input/output bytes and 32 pages. Each
+invocation is a fresh guest. Workspace's existing 512-page contract is unchanged.
+
+DK-12 additionally exercises real browser fault/recovery and concurrency
+journeys, with every genuine generated response replayed twice natively.
+Signature bypass, delayed capture, disabled CAS and altered transcript
+mutants fail their owning assertions. Negative-only access to unchanged
+private guards tests hash, length, module, request and output bounds; no
+such test exports ship in the SDK.
+
+Journal-origin error codes and meanings are registered in
+`model/browser-diagnostics.toml`. Identity/storage `BrowserEffectError`
+codes retain section 12.1's namespace. Unknown storage exceptions become
+`storage-outcome-unknown` without their message, payload or cause; this
+includes failure after a real commit. Matching completion bytes alone are
+not proof that storage occurred.
+
+These are finite prerequisite gates, not portal, organizational identity,
+read-admission, replication, Kappa or availability acceptance. The maximum
+65,574-byte head exceeds the peer default by 38 bytes; integration needs an
+explicit verified transport budget or modeled fragmentation.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1217,6 +1268,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-08` | `sdk` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. | §12 |
 | `DK-09` | `sdk` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. | §12 |
 | `DK-10` | `sdk` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. | §12 |
+| `DK-11` | `sdk` | The modeled signed-envelope codec rejects malformed framing and binds generated signing projections to actual browser cryptography without treating parsing as authentication. | §12 |
+| `DK-12` | `sdk` | The modeled journal and private browser adapter authenticate complete replay, preserve exact bounded native/Wasm transitions, and promote state only after an atomic bound commit; conflicts and uncertain outcomes require replay without automatic branch selection. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

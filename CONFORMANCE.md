@@ -180,6 +180,8 @@ The three honesty levels:
 | `DK-08` | `build` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. |
 | `DK-09` | `build` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. |
 | `DK-10` | `build` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. |
+| `DK-11` | `build` | The modeled signed-envelope codec rejects malformed framing and binds generated signing projections to actual browser cryptography without treating parsing as authentication. |
+| `DK-12` | `build` | The modeled journal and private browser adapter authenticate complete replay, preserve exact bounded native/Wasm transitions, and promote state only after an atomic bound commit; conflicts and uncertain outcomes require replay without automatic branch selection. |
 
 ## security
 

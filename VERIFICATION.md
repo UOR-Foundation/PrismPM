@@ -1154,6 +1154,127 @@ Retained log SHA-256 values:
 - `target/asyncapi-cohort-package-api.log`: `3e82472241cab075227aa424f0f3ebd8674fdccd103d0245058b7649294a64c5`.
 - `target/asyncapi-separate-runtime-installed-audit.json`: `b8fde891683991e0012186fbc02104eb8cd7466830fed82e4ff975d11c03d404`.
 
+## Signed envelopes and authenticated browser journals (DK-11, DK-12)
+
+Both registered gates failed on their absent implementations before activation.
+The complete owning gates now pass after fresh LexLean verification and normal
+Lean C generation: 43 envelope vectors and 61 journal vectors execute twice on
+generated native/no_std and Core-Wasm.
+Actual browser cryptography, durable replay, storage faults and competing CAS
+writes pass; signature, delayed-capture, CAS and transcript mutants fail their
+owning assertions. Both complete 1,024-event Grant/Post histories pass native
+replay. Maximum measured journal guest memory is 39,518,208 bytes within its
+640-page limit; the existing Workspace limit is unchanged.
+
+Compiler-environment mutations are rejected before child execution. A stubborn
+descendant regression first exposed incomplete process cleanup; the corrected
+runner terminates only its own isolated process group. All 48 existing browser
+host tests pass. The browser-driver dependency acquisition now checks exact
+manifest/lock bytes; its omitted-graph mutation failed before the correction.
+
+The read-only, network-disabled rerun passed all 18 envelope/journal Node tests
+without skips. It used the development oracle image recorded above, supplemented
+with read-only current public Cargo caches and locked SDK oracle dependencies.
+This is component evidence, not acceptance of a new SDK image, peer replication,
+Kappa, organizational identity, a portal or availability guarantees.
+
+Retained log SHA-256 values:
+
+- `target/journal-integration-dk11-final.log`: `20a607517c53af389bc47d6f2818c1a2eb76327be3220c1e0d2f644edf2c95c4`.
+- `target/journal-integration-dk12-final.log`: `d39f99c4dfbe6c317aae535c116ee0f1b537a872cb9fd756c1e0f5c3e8a823e3`.
+- `target/journal-integration-readonly-closure.log`: `09f667c5232f574ba5a23c3c3de890dd7010fe10c877e771121574d584c74a95`.
+- `target/journal-integration-host-regression.log`: `0697d5f53f5121cbd6f3945cbe4b098f6a79439dfe0577196cc2587a6ae48cf8`.
+
+### Workspace corpus and package regression
+
+The unchanged full package check exposed a 300-second Lean C-generation
+timeout in WorkspaceCorpus. Factoring repeated literal data into bounded
+helpers preserves all 45 probes and all 90 expanded request/response values
+(4,502,371 bytes); the reducer IR and generated crate bytes are unchanged.
+The complete DK-10 gate now passes in 178.72 seconds without raising timeouts
+or reducing the corpus. An unused-helper mutation fails its owning assertion;
+large byte mismatches fail with bounded diagnostics. Checks interrupted by the
+host restart were rerun, not counted as passes.
+
+The independent package-API gate passes fresh verification, exact stdlib
+regeneration, Cargo-selected downstream compilation and all three archive
+reproductions. The semantic identity is
+`bf5f8375d421f8d2cb38724d03a16c31dca703b302a141831a25c649dd808859`;
+the checked stdlib IR remains
+`e4906b9dd20f7cb6f4d11775708fdf2574eee7d60ad8389f6ccd38333c314fea`.
+Authored-source formatting, all-feature Clippy and source/model audits pass.
+These results are not full SDK VV or product acceptance.
+
+Normal regeneration and independent replay match all 288 golden files. The
+four new modules add 24 records; 205 prior records are unchanged and none are
+removed. Existing generated Lean changes only in Runtime imports and the
+byte-preserving WorkspaceCorpus factoring. Unrelated source-map contents
+retain their entries and change only source/semantic identities.
+
+An earlier replay failed after a concurrent Cargo build replaced the verifier
+executable; it is not acceptance evidence. Both successful runs kept the normal
+verifier byte-identical; workspace compilation now uses a separate target.
+
+- `target/journal-integration-dk10-post-restart.log`: `0232773de552666630d4551870c7aad5eb93f2181a2f6a1450d337642659e64a`.
+- `target/journal-integration-package-api-post-restart.log`: `d2a2fb3aa4c7b1a6604ac6d37b0a88c92902ca2ac8e49bff4b4d7f44d9652cae`.
+- `target/journal-integration-golden-write-stable.log`: `7b0d602fe8a50c730b4632537fabd66bba28b0caa79d8dd808d13b500d8b5a75`.
+- `target/journal-integration-golden-check-stable.log`: `53c3f5ab595d448b2c543c34d55cdff6b7a9a4c32d8524dc7d2429cfdd15a6a6`.
+
+### Integration regression and bounded admission
+
+Full workspace execution exposed a Journal fixture-authoring stack overflow
+after Workspace literal factoring. Restricting reuse to semantic fixture
+boundaries restores byte-exact Journal corpus generation, all 61 vectors and
+both complete histories; no stack, timeout or domain bound was raised.
+
+The refreshed Journal gate passes all 13 tests without skips, including fresh
+kernel/C/native/no_std/Wasm execution, both full-history append/replay paths,
+34 storage faults, eight concurrency cases and all five deliberate defects.
+The host now admits two outstanding append/refresh operations and rejects
+overflow before capture or effects. All 18 browser diagnostics are registered;
+the ten model tests include rejection of an omitted `journal-busy` entry.
+Final authoring checks also reproduce the exact committed corpus bytes.
+These are component results, not complete SDK or Foundry acceptance.
+
+- `target/journal-authoring-red.log`: `830ee2c95a7fb4afcc7ba32d6e18da2b1bfe6612bb9f117d6864b54b4bcb1028`.
+- `target/journal-final-authoring-admission-full.log`: `428916514c31b29c7ea68b83a7c778619ea38f57f0ea26b6227dddbfcd0198ad`.
+- `target/journal-authoring-final-green.log`: `8a344071cf5a533852b396311c8384d657063488ef45b80724a20600858cd4bf`.
+
+PP4001, PP8001 and PP1101 now execute their actual artifact, cleanup and lock
+owners. Positive controls, exact public errors and unchanged outside sentinels
+pass; replacing owner dispatch with synthetic errors fails the retained
+regressions. The focused four-test replay is
+`target/diagnostic-filesystem/authoritative-final.log`, SHA-256
+`25fc8b546bf6bb69b76888e2a1bc3ad33f6e7a5907b53616b1551d69df9f4aaa`.
+The remaining 80 synthetic probes are not counted as owner-boundary acceptance.
+
+### Non-root oracle execution
+
+The OCI corruption fixture now makes only its disposable blob writable;
+OpenID makes only copied scratch directories writable. Distribution provisions
+six confined report directories before running every oracle as UID 1000 with
+a read-only root filesystem. Actual permission failures and omitted-operation
+mutants reproduce the defects; immutable oracle inputs remain unchanged.
+
+All eight affected conformance scenarios pass in
+`target/openid-overlay/shared-eight.log`, SHA-256
+`5ec61e1ea5ed69c900ad9aaba5010c71c6d7ba6f6101ba8bcb02851862f2e2ea`.
+The official Distribution corpus covers all 79 cases across six configurations;
+the selected OpenID conditions cover 11 positive and 18 negative cases, not
+complete provider certification. The digest-bound development oracle image
+`127.0.0.1:5000/prismpm-openid-oracle-test@sha256:db5ad1aaac7b1d847a5ec6fc2ed33688fc46dc31b449f7f5f2e7b83e70e7228d`
+is component evidence, not an accepted SDK release.
+
+The final Journal checkpoint independently reproduces all 288 golden files
+with verifier SHA-256
+`0797b8a14fa8b46922aa0155c86889bd8896d8eb827631e0fe403f0968afb327`.
+Only verifier provenance and its dependent identities changed from the preceding
+review; domain IR and execution bytes did not. The replay log
+`target/journal-sealed-golden-check.log` has SHA-256
+`53c3f5ab595d448b2c543c34d55cdff6b7a9a4c32d8524dc7d2429cfdd15a6a6`.
+Final formatting, all-target/all-feature Clippy and source/model/spec audits
+pass. Complete clean-tree SDK verification remains required.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

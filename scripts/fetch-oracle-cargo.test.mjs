@@ -13,6 +13,12 @@ const pinned = [
   'tests/hologram-oracle/Cargo.lock',
   'tests/holo-codec-oracle/Cargo.toml',
   'tests/holo-codec-oracle/Cargo.lock',
+  'tests/browser-workspace/Cargo.toml',
+  'tests/browser-workspace/Cargo.lock',
+  'tests/browser-envelope/driver/Cargo.toml',
+  'tests/browser-envelope/driver/Cargo.lock',
+  'tests/browser-journal/driver/Cargo.toml',
+  'tests/browser-journal/driver/Cargo.lock',
   'crates/prismpm/vendor/hologram-live.tar',
 ];
 const embedded = [

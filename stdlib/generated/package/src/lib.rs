@@ -249,6 +249,13 @@ pub struct Flow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceEnvelope {
+    pub publicKey: alloc::vec::Vec<u8>,
+    pub signature: alloc::vec::Vec<u8>,
+    pub eventBytes: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
@@ -1028,6 +1035,20 @@ pub fn encodeU24(value: u64) -> alloc::vec::Vec<u8> {
     { let _x_6 = 65536; { let _x_9 = 0; { let _x_12 = if _x_6 == 0 { _x_9 } else { value / _x_6 }; { let _x_13 = encodeOctet(_x_12); { let _x_14 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_13); __value }; { let _x_15 = if _x_6 == 0 { _x_9 } else { value % _x_6 }; { let _x_16 = encodeU16(_x_15); { let _x_17 = { let mut __value = _x_14; __value.extend_from_slice(&_x_16); __value }; _x_17 } } } } } } } }
 }
 
+pub fn encodeUnsignedEvent(event: &crate::AuthenticatedEvent) -> alloc::vec::Vec<u8> {
+    { let _x_11 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![1]); __value }; { let _x_12 = (event).action; { let _x_13 = encodeWorkspaceAction(_x_12); { let _x_14 = { let mut __value = _x_11; __value.extend_from_slice(&_x_13); __value }; { let _x_15 = &(event).workspace; { let _x_16 = { let mut __value = _x_14; __value.extend_from_slice(&_x_15); __value }; { let _x_17 = &(event).parent; { let _x_18 = { let mut __value = _x_16; __value.extend_from_slice(&_x_17); __value }; { let _x_19 = &(event).author; { let _x_20 = { let mut __value = _x_18; __value.extend_from_slice(&_x_19); __value }; { let _x_21 = (event).sequence; { let _x_22 = encodeU16(_x_21); { let _x_23 = { let mut __value = _x_20; __value.extend_from_slice(&_x_22); __value }; { let _x_25 = &(event).body; { let _x_26 = (_x_25).len() as u64; { let _x_27 = encodeU16(_x_26); { let _x_28 = { let mut __value = _x_23; __value.extend_from_slice(&_x_27); __value }; { let _x_29 = { let mut __value = _x_28; __value.extend_from_slice(&_x_25); __value }; _x_29 } } } } } } } } } } } } } } } } } }
+}
+
+pub fn encodeWorkspaceAction(action: crate::WorkspaceAction) -> alloc::vec::Vec<u8> {
+    match action {
+        crate::WorkspaceAction::Genesis => alloc::vec![0],
+        crate::WorkspaceAction::GrantContributor => alloc::vec![1],
+        crate::WorkspaceAction::GrantReader => alloc::vec![2],
+        crate::WorkspaceAction::Revoke => alloc::vec![3],
+        crate::WorkspaceAction::PostMessage => alloc::vec![4],
+    }
+}
+
 pub fn encodeWorkspaceError(error: crate::WorkspaceError) -> alloc::vec::Vec<u8> {
     match error {
         crate::WorkspaceError::BadEncoding => alloc::vec![1],
@@ -1381,6 +1402,10 @@ pub fn workspaceRowUnique(table: &[u8], width: u64, position: u64) -> Result<boo
     } } } })
 }
 
+pub fn workspaceSigningPreimage(event: &crate::AuthenticatedEvent) -> alloc::vec::Vec<u8> {
+    { let _x_89 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 98, 114, 111, 119, 115, 101, 114, 45, 115, 105, 103, 110, 97, 116, 117, 114, 101, 47, 49, 0]); __value }; { let _x_97 = { let mut __value = _x_89; __value.extend_from_slice(&alloc::vec![0, 25]); __value }; { let _x_134 = { let mut __value = _x_97; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 119, 111, 114, 107, 115, 112, 97, 99, 101, 45, 101, 118, 101, 110, 116, 47, 49]); __value }; { let _x_135 = encodeUnsignedEvent(&(event)); { let _x_136 = { let mut __value = _x_134; __value.extend_from_slice(&_x_135); __value }; _x_136 } } } } }
+}
+
 pub fn workspaceStateValid(state: &crate::WorkspaceState) -> Result<bool, crate::ComputeError> {
     Ok({ let _x_337 = &(state).members; { let _x_338 = (_x_337).len() as u64; { let _x_339 = 33; { let _x_342 = 0; { let _x_345 = if _x_339 == 0 { _x_342 } else { _x_338 / _x_339 }; { let _x_346 = (state).sequence; { let _x_347 = (_x_345 <= _x_346); match _x_347 {
         false => _x_347,
@@ -1446,6 +1471,1031 @@ pub fn workspaceWindowEqual(value: &[u8], start: u64, count: u64, expected: &[u8
         true => { let _x_140 = workspaceDigestOctetsEqual((value).as_ref(), start, (expected).as_ref(), _x_1)?; _x_140 },
     } } },
     } } } },
+    } } })
+}
+
+pub fn zeroDigest() -> alloc::vec::Vec<u8> {
+    alloc::vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}
+
+pub fn decodeWorkspaceEnvelope(value: alloc::vec::Vec<u8>) -> Result<Option<crate::WorkspaceEnvelope>, crate::ComputeError> {
+    Ok({ let _x_56 = 267; { let _x_60 = (value.clone()).len() as u64; { let _x_61 = (_x_56 <= _x_60); { let _jp_75 = /* jp "_jp_75" inlined at its jump site */ (); match _x_61 {
+        false => { let _y_66 = _x_61; match _y_66 {
+        false => None,
+        true => { let _x_180 = workspaceEnvelopeCandidate(value.clone()); { let _x_181 = workspaceEnvelopeCheckedCandidate(&(_x_180))?; _x_181 } },
+    } },
+        true => { let _x_151 = (value.clone()).len() as u64; { let _x_152 = 4363; { let _x_153 = (_x_151 <= _x_152); match _x_153 {
+        false => { let _y_66 = _x_153; match _y_66 {
+        false => None,
+        true => { let _x_180 = workspaceEnvelopeCandidate(value.clone()); { let _x_181 = workspaceEnvelopeCheckedCandidate(&(_x_180))?; _x_181 } },
+    } },
+        true => { let _x_157 = 0; { let _x_158 = 4; { let _x_159 = byteWindow(value.clone(), _x_157, _x_158); { let _x_176 = workspaceBytesEqual((_x_159).as_ref(), &[80, 87, 69, 1]); { let _y_66 = _x_176; match _y_66 {
+        false => None,
+        true => { let _x_180 = workspaceEnvelopeCandidate(value.clone()); { let _x_181 = workspaceEnvelopeCheckedCandidate(&(_x_180))?; _x_181 } },
+    } } } } } },
+    } } } },
+    } } } } })
+}
+
+pub fn encodeWorkspaceEnvelope(candidate: &crate::WorkspaceEnvelope) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceEnvelopeFieldsValid(&(candidate))?; match _x_1 {
+        false => None,
+        true => { let _x_112 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![80, 87, 69, 1]); __value }; { let _x_113 = &(candidate).publicKey; { let _x_114 = { let mut __value = _x_112; __value.extend_from_slice(&_x_113); __value }; { let _x_115 = &(candidate).signature; { let _x_116 = { let mut __value = _x_114; __value.extend_from_slice(&_x_115); __value }; { let _x_117 = &(candidate).eventBytes; { let _x_118 = { let mut __value = _x_116; __value.extend_from_slice(&_x_117); __value }; { let _x_119 = Some(_x_118); _x_119 } } } } } } } },
+    } })
+}
+
+pub fn workspaceEnvelopeAuthor(candidate: &crate::WorkspaceEnvelope) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceEnvelopeFieldsValid(&(candidate))?; match _x_1 {
+        false => None,
+        true => { let _x_28 = &(candidate).eventBytes; { let _x_29 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_28))?; { let _x_30 = workspaceEnvelopeAuthorFromEvent(_x_29); _x_30 } } },
+    } })
+}
+
+pub fn workspaceEnvelopeAuthorFromEvent(event: Option<crate::AuthenticatedEvent>) -> Option<alloc::vec::Vec<u8>> {
+    match event {
+        None => None,
+        Some(val_10) => { let _x_16 = &(val_10).author; { let _x_17 = Some(alloc::borrow::ToOwned::to_owned(_x_16)); _x_17 } },
+    }
+}
+
+pub fn workspaceEnvelopeBytes(request: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_21 = 1; { let _x_25 = (request.clone()).len() as u64; { let _x_26 = (_x_21 <= _x_25); { let _jp_52 = /* jp "_jp_52" inlined at its jump site */ (); match _x_26 {
+        false => { let _y_31 = _x_26; match _y_31 {
+        false => alloc::vec![1],
+        true => { let _x_110 = 0; { let _x_111 = byteWindow(request.clone(), _x_110, _x_21); { let _x_113 = ((_x_25) as u64).saturating_sub(_x_21); { let _x_114 = byteWindow(request.clone(), _x_21, _x_113); { let _x_115 = decodeWorkspaceEnvelope(_x_114)?; { let _x_116 = workspaceEnvelopeDecodedOperation(_x_111, _x_115)?; _x_116 } } } } } },
+    } },
+        true => { let _x_101 = (request.clone()).len() as u64; { let _x_102 = 4364; { let _x_103 = (_x_101 <= _x_102); { let _y_31 = _x_103; match _y_31 {
+        false => alloc::vec![1],
+        true => { let _x_110 = 0; { let _x_111 = byteWindow(request.clone(), _x_110, _x_21); { let _x_113 = ((_x_25) as u64).saturating_sub(_x_21); { let _x_114 = byteWindow(request.clone(), _x_21, _x_113); { let _x_115 = decodeWorkspaceEnvelope(_x_114)?; { let _x_116 = workspaceEnvelopeDecodedOperation(_x_111, _x_115)?; _x_116 } } } } } },
+    } } } } },
+    } } } } })
+}
+
+pub fn workspaceEnvelopeCandidate(value: alloc::vec::Vec<u8>) -> crate::WorkspaceEnvelope {
+    { let _x_1 = 4; { let _x_4 = 65; { let _x_7 = byteWindow(value.clone(), _x_1, _x_4); { let _x_8 = 69; { let _x_11 = 64; { let _x_14 = byteWindow(value.clone(), _x_8, _x_11); { let _x_15 = 133; { let _x_20 = (value.clone()).len() as u64; { let _x_21 = ((_x_20) as u64).saturating_sub(_x_15); { let _x_22 = byteWindow(value.clone(), _x_15, _x_21); { let _x_23 = crate::WorkspaceEnvelope { publicKey: _x_7, signature: _x_14, eventBytes: _x_22 }; _x_23 } } } } } } } } } } }
+}
+
+pub fn workspaceEnvelopeCheckedCandidate(candidate: &crate::WorkspaceEnvelope) -> Result<Option<crate::WorkspaceEnvelope>, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceEnvelopeFieldsValid(&(candidate))?; match _x_1 {
+        false => None,
+        true => { let _x_25 = Some(alloc::borrow::ToOwned::to_owned(candidate)); _x_25 },
+    } })
+}
+
+pub fn workspaceEnvelopeDecodedOperation(operation: alloc::vec::Vec<u8>, candidate: Option<crate::WorkspaceEnvelope>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok(match candidate {
+        None => alloc::vec![1],
+        Some(val_15) => { let _x_25 = workspaceEnvelopeOperation(operation, &(val_15))?; _x_25 },
+    })
+}
+
+pub fn workspaceEnvelopeEventId(candidate: &crate::WorkspaceEnvelope) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceEnvelopeFieldsValid(&(candidate))?; match _x_1 {
+        false => None,
+        true => { let _x_28 = &(candidate).eventBytes; { let _x_29 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_28))?; { let _x_30 = workspaceEnvelopeEventIdFromEvent(_x_29); _x_30 } } },
+    } })
+}
+
+pub fn workspaceEnvelopeEventIdFromEvent(event: Option<crate::AuthenticatedEvent>) -> Option<alloc::vec::Vec<u8>> {
+    match event {
+        None => None,
+        Some(val_10) => { let _x_16 = &(val_10).eventId; { let _x_17 = Some(alloc::borrow::ToOwned::to_owned(_x_16)); _x_17 } },
+    }
+}
+
+pub fn workspaceEnvelopeFieldsValid(candidate: &crate::WorkspaceEnvelope) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_58 = &(candidate).publicKey; { let _x_59 = (_x_58).len() as u64; { let _x_60 = 65; { let _x_63 = (_x_59 == _x_60); match _x_63 {
+        false => _x_63,
+        true => { let _x_106 = &(candidate).publicKey; { let _x_107 = 0; { let _x_108 = 1; { let _x_109 = byteWindow(alloc::borrow::ToOwned::to_owned(_x_106), _x_107, _x_108); { let _x_117 = workspaceBytesEqual((_x_109).as_ref(), &[4]); match _x_117 {
+        false => _x_117,
+        true => { let _x_127 = &(candidate).signature; { let _x_128 = (_x_127).len() as u64; { let _x_129 = 64; { let _x_130 = (_x_128 == _x_129); match _x_130 {
+        false => _x_130,
+        true => { let _x_134 = &(candidate).eventBytes; { let _x_135 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_134))?; { let _x_136 = __prod_borrowed_workspaceEventEncodingPresent(&(_x_135)); _x_136 } } },
+    } } } } },
+    } } } } } },
+    } } } } })
+}
+
+pub fn workspaceEnvelopeOperation(operation: alloc::vec::Vec<u8>, candidate: &crate::WorkspaceEnvelope) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_8 = workspaceBytesEqual((operation.clone()).as_ref(), &[0]); match _x_8 {
+        false => { let _x_838 = workspaceBytesEqual((operation.clone()).as_ref(), &[1]); match _x_838 {
+        false => { let _x_911 = workspaceBytesEqual((operation.clone()).as_ref(), &[2]); match _x_911 {
+        false => { let _x_974 = workspaceBytesEqual((operation.clone()).as_ref(), &[3]); match _x_974 {
+        false => { let _x_1027 = workspaceBytesEqual((operation.clone()).as_ref(), &[4]); match _x_1027 {
+        false => { let _x_1069 = workspaceBytesEqual((operation.clone()).as_ref(), &[5]); match _x_1069 {
+        false => { let _x_1100 = workspaceBytesEqual((operation.clone()).as_ref(), &[6]); match _x_1100 {
+        false => { let _x_1120 = workspaceBytesEqual((operation.clone()).as_ref(), &[7]); match _x_1120 {
+        false => alloc::vec![2],
+        true => { let _x_1125 = workspaceEnvelopeEventId(&(candidate))?; { let _x_1126 = workspaceEnvelopeResponse(_x_1125); _x_1126 } },
+    } },
+        true => { let _x_1127 = workspaceEnvelopeAuthor(&(candidate))?; { let _x_1128 = workspaceEnvelopeResponse(_x_1127); _x_1128 } },
+    } },
+        true => { let _x_1129 = &(candidate).eventBytes; { let _x_1130 = Some(alloc::borrow::ToOwned::to_owned(_x_1129)); { let _x_1131 = workspaceEnvelopeResponse(_x_1130); _x_1131 } } },
+    } },
+        true => { let _x_1132 = &(candidate).signature; { let _x_1133 = Some(alloc::borrow::ToOwned::to_owned(_x_1132)); { let _x_1134 = workspaceEnvelopeResponse(_x_1133); _x_1134 } } },
+    } },
+        true => { let _x_1135 = &(candidate).publicKey; { let _x_1136 = Some(alloc::borrow::ToOwned::to_owned(_x_1135)); { let _x_1137 = workspaceEnvelopeResponse(_x_1136); _x_1137 } } },
+    } },
+        true => { let _x_1138 = workspaceEnvelopeSigningPreimage(&(candidate))?; { let _x_1139 = workspaceEnvelopeResponse(_x_1138); _x_1139 } },
+    } },
+        true => { let _x_1140 = workspaceEnvelopeUnsignedEvent(&(candidate))?; { let _x_1141 = workspaceEnvelopeResponse(_x_1140); _x_1141 } },
+    } },
+        true => { let _x_1142 = encodeWorkspaceEnvelope(&(candidate))?; { let _x_1143 = workspaceEnvelopeResponse(_x_1142); _x_1143 } },
+    } })
+}
+
+pub fn workspaceEnvelopeResponse(value: Option<alloc::vec::Vec<u8>>) -> alloc::vec::Vec<u8> {
+    match value {
+        None => alloc::vec![1],
+        Some(val_26) => { let _x_62 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_63 = { let mut __value = _x_62; __value.extend_from_slice(&val_26); __value }; _x_63 } },
+    }
+}
+
+pub fn workspaceEnvelopeSigningPreimage(candidate: &crate::WorkspaceEnvelope) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceEnvelopeFieldsValid(&(candidate))?; match _x_1 {
+        false => None,
+        true => { let _x_28 = &(candidate).eventBytes; { let _x_29 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_28))?; { let _x_30 = workspaceEnvelopeSigningPreimageFromEvent(_x_29); _x_30 } } },
+    } })
+}
+
+pub fn workspaceEnvelopeSigningPreimageFromEvent(event: Option<crate::AuthenticatedEvent>) -> Option<alloc::vec::Vec<u8>> {
+    match event {
+        None => None,
+        Some(val_10) => { let _x_16 = workspaceSigningPreimage(&(val_10)); { let _x_17 = Some(_x_16); _x_17 } },
+    }
+}
+
+pub fn workspaceEnvelopeUnsignedEvent(candidate: &crate::WorkspaceEnvelope) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = workspaceEnvelopeFieldsValid(&(candidate))?; match _x_1 {
+        false => None,
+        true => { let _x_28 = &(candidate).eventBytes; { let _x_29 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_28))?; { let _x_30 = workspaceEnvelopeUnsignedEventFromEvent(_x_29); _x_30 } } },
+    } })
+}
+
+pub fn workspaceEnvelopeUnsignedEventFromEvent(event: Option<crate::AuthenticatedEvent>) -> Option<alloc::vec::Vec<u8>> {
+    match event {
+        None => None,
+        Some(val_10) => { let _x_16 = encodeUnsignedEvent(&(val_10)); { let _x_17 = Some(_x_16); _x_17 } },
+    }
+}
+
+pub fn workspaceEventEncodingPresent(event: Option<crate::AuthenticatedEvent>) -> bool {
+    __prod_borrowed_workspaceEventEncodingPresent(&event)
+}
+
+fn __prod_borrowed_workspaceEventEncodingPresent(event: &Option<crate::AuthenticatedEvent>) -> bool {
+    match event {
+        None => { let _x_15 = false; _x_15 },
+        Some(val_10) => { let _x_16 = true; _x_16 },
+    }
+}
+
+pub fn finishJournalCommit(session: &crate::WorkspaceByteView, receipt: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_52 = journalCommitBound(&(session), &(receipt)); match _x_52 {
+        false => alloc::vec![9],
+        true => { let _x_161 = 0; { let _x_162 = 1; { let _x_163 = byteWindowView(&(session), _x_161, _x_162); { let _x_169 = workspaceBytesEqual((_x_163).as_ref(), &[0]); match _x_169 {
+        false => alloc::vec![10],
+        true => { let _x_187 = 0; { let _x_188 = 1; { let _x_189 = byteWindowView(&(receipt), _x_187, _x_188); { let _x_190 = __prod_borrowed_decodeOctet((_x_189).as_ref()); { let _x_191 = journalCommitResult(&(session), &(receipt), _x_190)?; _x_191 } } } } },
+    } } } } },
+    } })
+}
+
+pub fn finishJournalReplay(target: &crate::WorkspaceByteView, head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_67 = journalHeadValid(&(target))?; { let _jp_195 = /* jp "_jp_195" inlined at its jump site */ (); { let _jp_78 = /* jp "_jp_78" inlined at its jump site */ (); match _x_67 {
+        false => { let _y_72 = _x_67; match _y_72 {
+        false => { alloc::vec![8] },
+        true => { let _x_145 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_146 = &(state).bytes; { let _x_147 = { let mut __value = _x_145; __value.extend_from_slice(&_x_146); __value }; _x_147 } } },
+    } },
+        true => { let _x_159 = &(target).bytes; { let _x_160 = (_x_159).len() as u64; { let _x_161 = 0; { let _x_162 = (_x_160 == _x_161); match _x_162 {
+        false => { let _x_186 = &(target).bytes; { let _x_187 = &(head).bytes; { let _x_188 = workspaceBytesEqual((_x_186).as_ref(), (_x_187).as_ref()); match _x_188 {
+        false => { let _y_72 = _x_188; match _y_72 {
+        false => { alloc::vec![8] },
+        true => { let _x_145 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_146 = &(state).bytes; { let _x_147 = { let mut __value = _x_145; __value.extend_from_slice(&_x_146); __value }; _x_147 } } },
+    } },
+        true => { let _x_189 = journalStateMatches(&(head), &(state))?; { let _y_72 = _x_189; match _y_72 {
+        false => { alloc::vec![8] },
+        true => { let _x_145 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_146 = &(state).bytes; { let _x_147 = { let mut __value = _x_145; __value.extend_from_slice(&_x_146); __value }; _x_147 } } },
+    } } },
+    } } } },
+        true => { alloc::vec![8] },
+    } } } } },
+    } } } })
+}
+
+pub fn journalAcceptedPlan(head: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent, objectId: &crate::WorkspaceByteView, nextState: &crate::WorkspaceState) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_1 = journalNextHead(&(head), &(event), &(objectId))?; { let _x_2 = crate::WorkspaceByteView { bytes: _x_1 }; { let _x_3 = encodeWorkspaceState(&(nextState)); { let _x_4 = crate::WorkspaceByteView { bytes: _x_3 }; { let _x_5 = journalPlanBytes(&(_x_2), &(_x_4)); _x_5 } } } } })
+}
+
+pub fn journalAppendBytes(request: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_22 = 6; { let _x_26 = &(request).bytes; { let _x_27 = (_x_26).len() as u64; { let _x_28 = (_x_22 <= _x_27); match _x_28 {
+        false => alloc::vec![1],
+        true => { let _x_52 = &(request).bytes; { let _x_53 = 0; { let _x_54 = __prod_borrowed_readU24At((_x_52).as_ref(), _x_53)?; { let _x_55 = 3; { let _x_56 = __prod_borrowed_readU24At((_x_52).as_ref(), _x_55)?; { let _x_57 = journalAppendFields(&(request), _x_54, _x_56)?; _x_57 } } } } } },
+    } } } } })
+}
+
+pub fn journalAppendCandidate(head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView, objectId: &crate::WorkspaceByteView, candidate: &crate::WorkspaceEnvelope) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_13 = &(candidate).eventBytes; { let _x_14 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_13))?; match _x_14 {
+        None => alloc::vec![1],
+        Some(val_17) => { let _x_27 = journalAppendEvent(&(head), &(state), &(objectId), &(val_17))?; _x_27 },
+    } } })
+}
+
+pub fn journalAppendChecked(head: &crate::WorkspaceByteView, state: Option<crate::WorkspaceState>, objectId: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_165 = &(event).workspace; { let _x_166 = (_x_165).len() as u64; { let _x_167 = 32; { let _x_170 = (_x_166 == _x_167); { let _jp_668 = /* jp "_jp_668" inlined at its jump site */ (); { let _jp_182 = /* jp "_jp_182" inlined at its jump site */ (); match _x_170 {
+        false => { let _y_175 = _x_170; match _y_175 {
+        false => { alloc::vec![2] },
+        true => { let _x_562 = &(objectId).bytes; { let _x_563 = (_x_562).len() as u64; { let _x_564 = 32; { let _x_565 = (_x_563 == _x_564); { let _jp_674 = /* jp "_jp_674" inlined at its jump site */ (); { let _jp_566 = /* jp "_jp_566" inlined at its jump site */ (); match _x_565 {
+        false => { let _y_567 = _x_565; match _y_567 {
+        false => { alloc::vec![4] },
+        true => { let _x_622 = 1024; { let _x_623 = journalCount(&(head))?; { let _x_624 = (_x_622 <= _x_623); match _x_624 {
+        false => { let _x_626 = &(head).bytes; { let _x_627 = (_x_626).len() as u64; { let _x_628 = 0; { let _x_629 = (_x_627 == _x_628); { let _jp_630 = /* jp "_jp_630" inlined at its jump site */ (); match _x_629 {
+        false => { let _x_643 = 38; { let _x_646 = &(head).bytes; { let _x_647 = (_x_646).len() as u64; { let _x_648 = ((_x_647) as u64).saturating_sub(_x_643); { let _x_649 = byteWindowView(&(head), _x_643, _x_648); { let _y_631 = _x_649; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } } } } } } },
+        true => { let _y_631 = alloc::vec![]; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } },
+    } } } } } },
+        true => alloc::vec![6],
+    } } } },
+    } },
+        true => { let _x_613 = &(objectId).bytes; { let _x_614 = zeroDigest(); { let _x_615 = workspaceBytesEqual((_x_613).as_ref(), (_x_614).as_ref()); match _x_615 {
+        false => { let _y_567 = _x_565; match _y_567 {
+        false => { alloc::vec![4] },
+        true => { let _x_622 = 1024; { let _x_623 = journalCount(&(head))?; { let _x_624 = (_x_622 <= _x_623); match _x_624 {
+        false => { let _x_626 = &(head).bytes; { let _x_627 = (_x_626).len() as u64; { let _x_628 = 0; { let _x_629 = (_x_627 == _x_628); { let _jp_630 = /* jp "_jp_630" inlined at its jump site */ (); match _x_629 {
+        false => { let _x_643 = 38; { let _x_646 = &(head).bytes; { let _x_647 = (_x_646).len() as u64; { let _x_648 = ((_x_647) as u64).saturating_sub(_x_643); { let _x_649 = byteWindowView(&(head), _x_643, _x_648); { let _y_631 = _x_649; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } } } } } } },
+        true => { let _y_631 = alloc::vec![]; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } },
+    } } } } } },
+        true => alloc::vec![6],
+    } } } },
+    } },
+        true => { alloc::vec![4] },
+    } } } },
+    } } } } } } },
+    } },
+        true => { let _x_546 = &(event).workspace; { let _x_547 = zeroDigest(); { let _x_548 = workspaceBytesEqual((_x_546).as_ref(), (_x_547).as_ref()); match _x_548 {
+        false => { let _y_175 = _x_170; match _y_175 {
+        false => { alloc::vec![2] },
+        true => { let _x_562 = &(objectId).bytes; { let _x_563 = (_x_562).len() as u64; { let _x_564 = 32; { let _x_565 = (_x_563 == _x_564); { let _jp_674 = /* jp "_jp_674" inlined at its jump site */ (); { let _jp_566 = /* jp "_jp_566" inlined at its jump site */ (); match _x_565 {
+        false => { let _y_567 = _x_565; match _y_567 {
+        false => { alloc::vec![4] },
+        true => { let _x_622 = 1024; { let _x_623 = journalCount(&(head))?; { let _x_624 = (_x_622 <= _x_623); match _x_624 {
+        false => { let _x_626 = &(head).bytes; { let _x_627 = (_x_626).len() as u64; { let _x_628 = 0; { let _x_629 = (_x_627 == _x_628); { let _jp_630 = /* jp "_jp_630" inlined at its jump site */ (); match _x_629 {
+        false => { let _x_643 = 38; { let _x_646 = &(head).bytes; { let _x_647 = (_x_646).len() as u64; { let _x_648 = ((_x_647) as u64).saturating_sub(_x_643); { let _x_649 = byteWindowView(&(head), _x_643, _x_648); { let _y_631 = _x_649; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } } } } } } },
+        true => { let _y_631 = alloc::vec![]; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } },
+    } } } } } },
+        true => alloc::vec![6],
+    } } } },
+    } },
+        true => { let _x_613 = &(objectId).bytes; { let _x_614 = zeroDigest(); { let _x_615 = workspaceBytesEqual((_x_613).as_ref(), (_x_614).as_ref()); match _x_615 {
+        false => { let _y_567 = _x_565; match _y_567 {
+        false => { alloc::vec![4] },
+        true => { let _x_622 = 1024; { let _x_623 = journalCount(&(head))?; { let _x_624 = (_x_622 <= _x_623); match _x_624 {
+        false => { let _x_626 = &(head).bytes; { let _x_627 = (_x_626).len() as u64; { let _x_628 = 0; { let _x_629 = (_x_627 == _x_628); { let _jp_630 = /* jp "_jp_630" inlined at its jump site */ (); match _x_629 {
+        false => { let _x_643 = 38; { let _x_646 = &(head).bytes; { let _x_647 = (_x_646).len() as u64; { let _x_648 = ((_x_647) as u64).saturating_sub(_x_643); { let _x_649 = byteWindowView(&(head), _x_643, _x_648); { let _y_631 = _x_649; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } } } } } } },
+        true => { let _y_631 = alloc::vec![]; { let _x_632 = crate::WorkspaceByteView { bytes: _y_631 }; { let _x_633 = 32; { let _x_634 = journalCount(&(head))?; { let _x_635 = journalPriorDigestAbsent(&(_x_632), &(objectId), _x_633, _x_634)?; match _x_635 {
+        false => alloc::vec![5],
+        true => { let _x_642 = journalReduce(&(head), state, &(objectId), &(event))?; _x_642 },
+    } } } } } },
+    } } } } } },
+        true => alloc::vec![6],
+    } } } },
+    } },
+        true => { alloc::vec![4] },
+    } } } },
+    } } } } } } },
+    } },
+        true => { alloc::vec![2] },
+    } } } },
+    } } } } } } })
+}
+
+pub fn journalAppendEvent(head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView, objectId: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_72 = journalHeadValid(&(head))?; match _x_72 {
+        false => alloc::vec![2],
+        true => { let _x_223 = &(head).bytes; { let _x_224 = (_x_223).len() as u64; { let _x_225 = 0; { let _x_226 = (_x_224 == _x_225); match _x_226 {
+        false => { let _x_227 = &(state).bytes; { let _x_228 = decodeWorkspaceState(alloc::borrow::ToOwned::to_owned(_x_227))?; match _x_228 {
+        None => alloc::vec![3],
+        Some(val_234) => { let _x_235 = journalAppendExisting(&(head), &(val_234), &(objectId), &(event))?; _x_235 },
+    } } },
+        true => { let _x_237 = &(state).bytes; { let _x_238 = (_x_237).len() as u64; { let _x_239 = 0; { let _x_240 = (_x_238 == _x_239); match _x_240 {
+        false => alloc::vec![3],
+        true => { let _x_247 = journalAppendChecked(&(head), None, &(objectId), &(event))?; _x_247 },
+    } } } } },
+    } } } } },
+    } })
+}
+
+pub fn journalAppendExisting(head: &crate::WorkspaceByteView, state: &crate::WorkspaceState, objectId: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_14 = journalStateMatchesDecoded(&(head), &(state))?; match _x_14 {
+        false => alloc::vec![3],
+        true => { let _x_35 = Some(alloc::borrow::ToOwned::to_owned(state)); { let _x_36 = journalAppendChecked(&(head), _x_35, &(objectId), &(event))?; _x_36 } },
+    } })
+}
+
+pub fn journalAppendFields(request: &crate::WorkspaceByteView, headLength: u64, stateLength: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_100 = 65574; { let _x_103 = (headLength <= _x_100); { let _jp_114 = /* jp "_jp_114" inlined at its jump site */ (); match _x_103 {
+        false => { let _y_108 = _x_103; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = prepareJournalAppend(&(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_243 = 1100427; { let _x_244 = (stateLength <= _x_243); match _x_244 {
+        false => { let _y_108 = _x_244; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = prepareJournalAppend(&(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_257 = 305; { let _x_258 = ((_x_257) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_259 = ((_x_258) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_261 = &(request).bytes; { let _x_262 = (_x_261).len() as u64; { let _x_263 = (_x_259 <= _x_262); match _x_263 {
+        false => { let _y_108 = _x_263; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = prepareJournalAppend(&(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_268 = &(request).bytes; { let _x_269 = (_x_268).len() as u64; { let _x_270 = 4401; { let _x_271 = ((_x_270) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_272 = ((_x_271) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_273 = (_x_269 <= _x_272); { let _y_108 = _x_273; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = prepareJournalAppend(&(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } } } } } } } },
+    } } } } } } },
+    } } },
+    } } } })
+}
+
+pub fn journalCommitBound(session: &crate::WorkspaceByteView, receipt: &crate::WorkspaceByteView) -> bool {
+    { let _x_196 = &(session).bytes; { let _x_197 = (_x_196).len() as u64; { let _x_198 = 129; { let _x_201 = (_x_197 == _x_198); match _x_201 {
+        false => _x_201,
+        true => { let _x_368 = &(receipt).bytes; { let _x_369 = (_x_368).len() as u64; { let _x_370 = 161; { let _x_371 = (_x_369 == _x_370); match _x_371 {
+        false => _x_371,
+        true => { let _x_446 = 1; { let _x_447 = 32; { let _x_448 = byteWindowView(&(session), _x_446, _x_447); { let _x_449 = (_x_448).len() as u64; { let _x_450 = (_x_449 == _x_447); { let _jp_451 = /* jp "_jp_451" inlined at its jump site */ (); match _x_450 {
+        false => { let _y_452 = _x_450; match _y_452.clone() {
+        false => _y_452.clone(),
+        true => { let _x_504 = 65; { let _x_505 = 32; { let _x_506 = byteWindowView(&(session), _x_504, _x_505); { let _x_507 = (_x_506).len() as u64; { let _x_508 = (_x_507 == _x_505); { let _jp_509 = /* jp "_jp_509" inlined at its jump site */ (); match _x_508 {
+        false => { let _y_510 = _x_508; match _y_510.clone() {
+        false => _y_510.clone(),
+        true => { let _x_536 = 97; { let _x_537 = 32; { let _x_538 = byteWindowView(&(session), _x_536, _x_537); { let _x_539 = (_x_538).len() as u64; { let _x_540 = (_x_539 == _x_537); { let _jp_541 = /* jp "_jp_541" inlined at its jump site */ (); match _x_540 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_555 = 97; { let _x_556 = 32; { let _x_557 = byteWindowView(&(session), _x_555, _x_556); { let _x_558 = zeroDigest(); { let _x_559 = workspaceBytesEqual((_x_557).as_ref(), (_x_558).as_ref()); match _x_559 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_564 = false; _x_564 },
+    } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_567 = 65; { let _x_568 = 32; { let _x_569 = byteWindowView(&(session), _x_567, _x_568); { let _x_570 = zeroDigest(); { let _x_571 = workspaceBytesEqual((_x_569).as_ref(), (_x_570).as_ref()); match _x_571 {
+        false => { let _y_510 = _x_508; match _y_510.clone() {
+        false => _y_510.clone(),
+        true => { let _x_536 = 97; { let _x_537 = 32; { let _x_538 = byteWindowView(&(session), _x_536, _x_537); { let _x_539 = (_x_538).len() as u64; { let _x_540 = (_x_539 == _x_537); { let _jp_541 = /* jp "_jp_541" inlined at its jump site */ (); match _x_540 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_555 = 97; { let _x_556 = 32; { let _x_557 = byteWindowView(&(session), _x_555, _x_556); { let _x_558 = zeroDigest(); { let _x_559 = workspaceBytesEqual((_x_557).as_ref(), (_x_558).as_ref()); match _x_559 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_564 = false; _x_564 },
+    } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_576 = false; _x_576 },
+    } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_579 = 1; { let _x_580 = 32; { let _x_581 = byteWindowView(&(session), _x_579, _x_580); { let _x_582 = zeroDigest(); { let _x_583 = workspaceBytesEqual((_x_581).as_ref(), (_x_582).as_ref()); match _x_583 {
+        false => { let _y_452 = _x_450; match _y_452.clone() {
+        false => _y_452.clone(),
+        true => { let _x_504 = 65; { let _x_505 = 32; { let _x_506 = byteWindowView(&(session), _x_504, _x_505); { let _x_507 = (_x_506).len() as u64; { let _x_508 = (_x_507 == _x_505); { let _jp_509 = /* jp "_jp_509" inlined at its jump site */ (); match _x_508 {
+        false => { let _y_510 = _x_508; match _y_510.clone() {
+        false => _y_510.clone(),
+        true => { let _x_536 = 97; { let _x_537 = 32; { let _x_538 = byteWindowView(&(session), _x_536, _x_537); { let _x_539 = (_x_538).len() as u64; { let _x_540 = (_x_539 == _x_537); { let _jp_541 = /* jp "_jp_541" inlined at its jump site */ (); match _x_540 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_555 = 97; { let _x_556 = 32; { let _x_557 = byteWindowView(&(session), _x_555, _x_556); { let _x_558 = zeroDigest(); { let _x_559 = workspaceBytesEqual((_x_557).as_ref(), (_x_558).as_ref()); match _x_559 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_564 = false; _x_564 },
+    } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_567 = 65; { let _x_568 = 32; { let _x_569 = byteWindowView(&(session), _x_567, _x_568); { let _x_570 = zeroDigest(); { let _x_571 = workspaceBytesEqual((_x_569).as_ref(), (_x_570).as_ref()); match _x_571 {
+        false => { let _y_510 = _x_508; match _y_510.clone() {
+        false => _y_510.clone(),
+        true => { let _x_536 = 97; { let _x_537 = 32; { let _x_538 = byteWindowView(&(session), _x_536, _x_537); { let _x_539 = (_x_538).len() as u64; { let _x_540 = (_x_539 == _x_537); { let _jp_541 = /* jp "_jp_541" inlined at its jump site */ (); match _x_540 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_555 = 97; { let _x_556 = 32; { let _x_557 = byteWindowView(&(session), _x_555, _x_556); { let _x_558 = zeroDigest(); { let _x_559 = workspaceBytesEqual((_x_557).as_ref(), (_x_558).as_ref()); match _x_559 {
+        false => { let _y_542 = _x_540; match _y_542.clone() {
+        false => _y_542.clone(),
+        true => { let _x_549 = 1; { let _x_550 = 128; { let _x_551 = byteWindowView(&(session), _x_549, _x_550); { let _x_552 = byteWindowView(&(receipt), _x_549, _x_550); { let _x_553 = workspaceBytesEqual((_x_551).as_ref(), (_x_552).as_ref()); _x_553 } } } } },
+    } },
+        true => { let _x_564 = false; _x_564 },
+    } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_576 = false; _x_576 },
+    } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_588 = false; _x_588 },
+    } } } } } },
+    } } } } } } },
+    } } } } },
+    } } } } }
+}
+
+pub fn journalCommitResult(session: &crate::WorkspaceByteView, receipt: &crate::WorkspaceByteView, status: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_186 = 0; { let _x_189 = (status == _x_186); match _x_189 {
+        false => { let _x_334 = 1; { let _x_335 = (_x_334 <= status); { let _jp_336 = /* jp "_jp_336" inlined at its jump site */ (); match _x_335 {
+        false => { let _y_337 = _x_335; match _y_337 {
+        false => alloc::vec![9],
+        true => { let _x_357 = 32; { let _x_358 = ((_x_357) as u64).checked_add(status).ok_or(crate::ComputeError::AddOverflow)?; { let _x_359 = encodeOctet(_x_358); { let _x_360 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_359); __value }; { let _x_368 = { let mut __value = _x_360; __value.extend_from_slice(&alloc::vec![2]); __value }; { let _x_369 = 1; { let _x_370 = 128; { let _x_371 = byteWindowView(&(session), _x_369, _x_370); { let _x_372 = { let mut __value = _x_368; __value.extend_from_slice(&_x_371); __value }; _x_372 } } } } } } } } },
+    } },
+        true => { let _x_396 = 5; { let _x_397 = (status <= _x_396); match _x_397 {
+        false => { let _y_337 = _x_397; match _y_337 {
+        false => alloc::vec![9],
+        true => { let _x_357 = 32; { let _x_358 = ((_x_357) as u64).checked_add(status).ok_or(crate::ComputeError::AddOverflow)?; { let _x_359 = encodeOctet(_x_358); { let _x_360 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_359); __value }; { let _x_368 = { let mut __value = _x_360; __value.extend_from_slice(&alloc::vec![2]); __value }; { let _x_369 = 1; { let _x_370 = 128; { let _x_371 = byteWindowView(&(session), _x_369, _x_370); { let _x_372 = { let mut __value = _x_368; __value.extend_from_slice(&_x_371); __value }; _x_372 } } } } } } } } },
+    } },
+        true => { let _x_417 = 1; { let _x_418 = (status == _x_417); match _x_418 {
+        false => { let _x_423 = 129; { let _x_424 = 32; { let _x_425 = byteWindowView(&(receipt), _x_423, _x_424); { let _x_426 = 33; { let _x_427 = byteWindowView(&(session), _x_426, _x_424); { let _x_428 = workspaceBytesEqual((_x_425).as_ref(), (_x_427).as_ref()); { let _y_337 = _x_428; match _y_337 {
+        false => alloc::vec![9],
+        true => { let _x_357 = 32; { let _x_358 = ((_x_357) as u64).checked_add(status).ok_or(crate::ComputeError::AddOverflow)?; { let _x_359 = encodeOctet(_x_358); { let _x_360 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_359); __value }; { let _x_368 = { let mut __value = _x_360; __value.extend_from_slice(&alloc::vec![2]); __value }; { let _x_369 = 1; { let _x_370 = 128; { let _x_371 = byteWindowView(&(session), _x_369, _x_370); { let _x_372 = { let mut __value = _x_368; __value.extend_from_slice(&_x_371); __value }; _x_372 } } } } } } } } },
+    } } } } } } } },
+        true => { let _x_429 = 129; { let _x_430 = 32; { let _x_431 = byteWindowView(&(receipt), _x_429, _x_430); { let _x_432 = 33; { let _x_433 = byteWindowView(&(session), _x_432, _x_430); { let _x_434 = workspaceBytesEqual((_x_431).as_ref(), (_x_433).as_ref()); match _x_434 {
+        false => { let _y_337 = _x_418; match _y_337 {
+        false => alloc::vec![9],
+        true => { let _x_357 = 32; { let _x_358 = ((_x_357) as u64).checked_add(status).ok_or(crate::ComputeError::AddOverflow)?; { let _x_359 = encodeOctet(_x_358); { let _x_360 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_359); __value }; { let _x_368 = { let mut __value = _x_360; __value.extend_from_slice(&alloc::vec![2]); __value }; { let _x_369 = 1; { let _x_370 = 128; { let _x_371 = byteWindowView(&(session), _x_369, _x_370); { let _x_372 = { let mut __value = _x_368; __value.extend_from_slice(&_x_371); __value }; _x_372 } } } } } } } } },
+    } },
+        true => { let _y_337 = _x_189; match _y_337 {
+        false => alloc::vec![9],
+        true => { let _x_357 = 32; { let _x_358 = ((_x_357) as u64).checked_add(status).ok_or(crate::ComputeError::AddOverflow)?; { let _x_359 = encodeOctet(_x_358); { let _x_360 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&_x_359); __value }; { let _x_368 = { let mut __value = _x_360; __value.extend_from_slice(&alloc::vec![2]); __value }; { let _x_369 = 1; { let _x_370 = 128; { let _x_371 = byteWindowView(&(session), _x_369, _x_370); { let _x_372 = { let mut __value = _x_368; __value.extend_from_slice(&_x_371); __value }; _x_372 } } } } } } } } },
+    } },
+    } } } } } } },
+    } } },
+    } } },
+    } } } },
+        true => { let _x_467 = 129; { let _x_468 = 32; { let _x_469 = byteWindowView(&(receipt), _x_467, _x_468); { let _x_470 = 65; { let _x_471 = byteWindowView(&(session), _x_470, _x_468); { let _x_472 = workspaceBytesEqual((_x_469).as_ref(), (_x_471).as_ref()); match _x_472 {
+        false => alloc::vec![9],
+        true => { let _x_491 = 1; { let _x_499 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0, 1]); __value }; { let _x_500 = 128; { let _x_501 = byteWindowView(&(session), _x_491, _x_500); { let _x_502 = { let mut __value = _x_499; __value.extend_from_slice(&_x_501); __value }; _x_502 } } } } },
+    } } } } } } },
+    } } })
+}
+
+pub fn journalCount(head: &crate::WorkspaceByteView) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_14 = &(head).bytes; { let _x_15 = (_x_14).len() as u64; { let _x_16 = 0; { let _x_19 = (_x_15 == _x_16); match _x_19 {
+        false => { let _x_32 = &(head).bytes; { let _x_33 = 36; { let _x_34 = __prod_borrowed_readU16At((_x_32).as_ref(), _x_33)?; _x_34 } } },
+        true => { let _x_31 = 0; _x_31 },
+    } } } } })
+}
+
+pub fn journalHeadValid(head: &crate::WorkspaceByteView) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_198 = &(head).bytes; { let _x_199 = (_x_198).len() as u64; { let _x_200 = 0; { let _x_203 = (_x_199 == _x_200); match _x_203 {
+        false => { let _x_386 = 102; { let _x_388 = &(head).bytes; { let _x_389 = (_x_388).len() as u64; { let _x_390 = (_x_386 <= _x_389); match _x_390 {
+        false => _x_390,
+        true => { let _x_485 = &(head).bytes; { let _x_486 = (_x_485).len() as u64; { let _x_487 = 65574; { let _x_488 = (_x_486 <= _x_487); match _x_488 {
+        false => _x_488,
+        true => { let _x_558 = 0; { let _x_559 = 4; { let _x_560 = byteWindowView(&(head), _x_558, _x_559); { let _x_577 = workspaceBytesEqual((_x_560).as_ref(), &[80, 87, 74, 1]); match _x_577 {
+        false => _x_577,
+        true => { let _x_633 = 4; { let _x_634 = 32; { let _x_635 = byteWindowView(&(head), _x_633, _x_634); { let _x_636 = (_x_635).len() as u64; { let _x_637 = (_x_636 == _x_634); { let _jp_638 = /* jp "_jp_638" inlined at its jump site */ (); match _x_637 {
+        false => { let _y_639 = _x_637; match _y_639.clone() {
+        false => _y_639.clone(),
+        true => { let _x_679 = 1; { let _x_680 = journalCount(&(head))?; { let _x_681 = (_x_679 <= _x_680); match _x_681 {
+        false => _x_681,
+        true => { let _x_711 = journalCount(&(head))?; { let _x_712 = 1024; { let _x_713 = (_x_711 <= _x_712); match _x_713 {
+        false => _x_713,
+        true => { let _x_730 = &(head).bytes; { let _x_731 = (_x_730).len() as u64; { let _x_732 = 38; { let _x_734 = journalCount(&(head))?; { let _x_735 = 64; { let _x_736 = ((_x_734) as u64).checked_mul(_x_735).ok_or(crate::ComputeError::MulOverflow)?; { let _x_737 = ((_x_732) as u64).checked_add(_x_736).ok_or(crate::ComputeError::AddOverflow)?; { let _x_738 = (_x_731 == _x_737); match _x_738 {
+        false => _x_738,
+        true => { let _x_742 = 38; { let _x_745 = &(head).bytes; { let _x_746 = (_x_745).len() as u64; { let _x_747 = ((_x_746) as u64).saturating_sub(_x_742); { let _x_748 = byteWindowView(&(head), _x_742, _x_747); { let _x_749 = crate::WorkspaceByteView { bytes: _x_748 }; { let _x_750 = journalCount(&(head))?; { let _x_751 = journalRowsValid(&(_x_749), _x_750)?; _x_751 } } } } } } } },
+    } } } } } } } } },
+    } } } },
+    } } } },
+    } },
+        true => { let _x_753 = 4; { let _x_754 = 32; { let _x_755 = byteWindowView(&(head), _x_753, _x_754); { let _x_756 = zeroDigest(); { let _x_757 = workspaceBytesEqual((_x_755).as_ref(), (_x_756).as_ref()); match _x_757 {
+        false => { let _y_639 = _x_637; match _y_639.clone() {
+        false => _y_639.clone(),
+        true => { let _x_679 = 1; { let _x_680 = journalCount(&(head))?; { let _x_681 = (_x_679 <= _x_680); match _x_681 {
+        false => _x_681,
+        true => { let _x_711 = journalCount(&(head))?; { let _x_712 = 1024; { let _x_713 = (_x_711 <= _x_712); match _x_713 {
+        false => _x_713,
+        true => { let _x_730 = &(head).bytes; { let _x_731 = (_x_730).len() as u64; { let _x_732 = 38; { let _x_734 = journalCount(&(head))?; { let _x_735 = 64; { let _x_736 = ((_x_734) as u64).checked_mul(_x_735).ok_or(crate::ComputeError::MulOverflow)?; { let _x_737 = ((_x_732) as u64).checked_add(_x_736).ok_or(crate::ComputeError::AddOverflow)?; { let _x_738 = (_x_731 == _x_737); match _x_738 {
+        false => _x_738,
+        true => { let _x_742 = 38; { let _x_745 = &(head).bytes; { let _x_746 = (_x_745).len() as u64; { let _x_747 = ((_x_746) as u64).saturating_sub(_x_742); { let _x_748 = byteWindowView(&(head), _x_742, _x_747); { let _x_749 = crate::WorkspaceByteView { bytes: _x_748 }; { let _x_750 = journalCount(&(head))?; { let _x_751 = journalRowsValid(&(_x_749), _x_750)?; _x_751 } } } } } } } },
+    } } } } } } } } },
+    } } } },
+    } } } },
+    } },
+        true => { let _y_639 = _x_203; match _y_639.clone() {
+        false => _y_639.clone(),
+        true => { let _x_679 = 1; { let _x_680 = journalCount(&(head))?; { let _x_681 = (_x_679 <= _x_680); match _x_681 {
+        false => _x_681,
+        true => { let _x_711 = journalCount(&(head))?; { let _x_712 = 1024; { let _x_713 = (_x_711 <= _x_712); match _x_713 {
+        false => _x_713,
+        true => { let _x_730 = &(head).bytes; { let _x_731 = (_x_730).len() as u64; { let _x_732 = 38; { let _x_734 = journalCount(&(head))?; { let _x_735 = 64; { let _x_736 = ((_x_734) as u64).checked_mul(_x_735).ok_or(crate::ComputeError::MulOverflow)?; { let _x_737 = ((_x_732) as u64).checked_add(_x_736).ok_or(crate::ComputeError::AddOverflow)?; { let _x_738 = (_x_731 == _x_737); match _x_738 {
+        false => _x_738,
+        true => { let _x_742 = 38; { let _x_745 = &(head).bytes; { let _x_746 = (_x_745).len() as u64; { let _x_747 = ((_x_746) as u64).saturating_sub(_x_742); { let _x_748 = byteWindowView(&(head), _x_742, _x_747); { let _x_749 = crate::WorkspaceByteView { bytes: _x_748 }; { let _x_750 = journalCount(&(head))?; { let _x_751 = journalRowsValid(&(_x_749), _x_750)?; _x_751 } } } } } } } },
+    } } } } } } } } },
+    } } } },
+    } } } },
+    } },
+    } } } } } },
+    } } } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+        true => _x_203,
+    } } } } })
+}
+
+pub fn journalNextHead(head: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent, objectId: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_14 = 1; { let _x_23 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![80, 87, 74, 1]); __value }; { let _x_24 = &(event).workspace; { let _x_25 = { let mut __value = _x_23; __value.extend_from_slice(&_x_24); __value }; { let _x_29 = journalCount(&(head))?; { let _x_96 = ((_x_29) as u64).checked_add(_x_14).ok_or(crate::ComputeError::AddOverflow)?; { let _x_33 = encodeU16(_x_96); { let _x_34 = { let mut __value = _x_25; __value.extend_from_slice(&_x_33); __value }; { let _x_50 = &(head).bytes; { let _x_51 = (_x_50).len() as u64; { let _x_52 = 0; { let _x_55 = (_x_51 == _x_52); { let _jp_66 = /* jp "_jp_66" inlined at its jump site */ (); match _x_55 {
+        false => { let _x_106 = 38; { let _x_109 = &(head).bytes; { let _x_110 = (_x_109).len() as u64; { let _x_111 = ((_x_110) as u64).saturating_sub(_x_106); { let _x_112 = byteWindowView(&(head), _x_106, _x_111); { let _y_60 = _x_112; { let _x_61 = { let mut __value = _x_34; __value.extend_from_slice(&_y_60); __value }; { let _x_62 = &(event).eventId; { let _x_63 = { let mut __value = _x_61; __value.extend_from_slice(&_x_62); __value }; { let _x_64 = &(objectId).bytes; { let _x_65 = { let mut __value = _x_63; __value.extend_from_slice(&_x_64); __value }; _x_65 } } } } } } } } } } },
+        true => { let _y_60 = alloc::vec![]; { let _x_61 = { let mut __value = _x_34; __value.extend_from_slice(&_y_60); __value }; { let _x_62 = &(event).eventId; { let _x_63 = { let mut __value = _x_61; __value.extend_from_slice(&_x_62); __value }; { let _x_64 = &(objectId).bytes; { let _x_65 = { let mut __value = _x_63; __value.extend_from_slice(&_x_64); __value }; _x_65 } } } } } },
+    } } } } } } } } } } } } } })
+}
+
+pub fn journalOctetCandidateEqual(left: u8, right: Option<u8>) -> bool {
+    match right {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_19 = (left == val_11); _x_19 },
+    }
+}
+
+pub fn journalOctetsEqual(left: Option<u8>, right: Option<u8>) -> bool {
+    match left {
+        None => { let _x_14 = false; _x_14 },
+        Some(val_9) => { let _x_15 = journalOctetCandidateEqual(val_9, right); _x_15 },
+    }
+}
+
+pub fn journalPlanBytes(nextHead: &crate::WorkspaceByteView, nextState: &crate::WorkspaceByteView) -> alloc::vec::Vec<u8> {
+    { let _x_11 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_13 = &(nextHead).bytes; { let _x_14 = (_x_13).len() as u64; { let _x_15 = encodeU24(_x_14); { let _x_16 = { let mut __value = _x_11; __value.extend_from_slice(&_x_15); __value }; { let _x_17 = &(nextState).bytes; { let _x_18 = (_x_17).len() as u64; { let _x_19 = encodeU24(_x_18); { let _x_20 = { let mut __value = _x_16; __value.extend_from_slice(&_x_19); __value }; { let _x_21 = { let mut __value = _x_20; __value.extend_from_slice(&_x_13); __value }; { let _x_22 = { let mut __value = _x_21; __value.extend_from_slice(&_x_17); __value }; _x_22 } } } } } } } } } } }
+}
+
+pub fn journalPriorDigestAbsent(x_1: &crate::WorkspaceByteView, x_2: &crate::WorkspaceByteView, x_3: u64, x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_72 = true; _x_72 },
+        _ => { let n_47 = (x_4).saturating_sub(1); { let _x_83 = 64; { let _x_84 = ((n_47) as u64).checked_mul(_x_83).ok_or(crate::ComputeError::MulOverflow)?; { let _x_85 = ((_x_84) as u64).checked_add(x_3).ok_or(crate::ComputeError::AddOverflow)?; { let _x_86 = 32; { let _x_87 = byteWindowView(&(x_1), _x_85, _x_86); { let _x_88 = &(x_2).bytes; { let _x_89 = workspaceBytesEqual((_x_87).as_ref(), (_x_88).as_ref()); match _x_89 {
+        false => { let _x_103 = journalPriorDigestAbsent(&(x_1), &(x_2), x_3, n_47)?; _x_103 },
+        true => { let _x_99 = false; _x_99 },
+    } } } } } } } } },
+    })
+}
+
+pub fn journalPriorRowBlock(x_1: &crate::WorkspaceByteView, x_2: u64, x_3: u64, x_4: u64, x_5: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_5 {
+        0 => { let _x_115 = true; _x_115 },
+        _ => { let n_71 = (x_5).saturating_sub(1); { let _x_131 = ((x_4) as u64).checked_add(n_71).ok_or(crate::ComputeError::AddOverflow)?; { let _x_132 = (x_2 <= _x_131); { let _jp_133 = /* jp "_jp_133" inlined at its jump site */ (); match _x_132 {
+        false => { let _x_144 = 64; { let _x_145 = ((x_2) as u64).checked_mul(_x_144).ok_or(crate::ComputeError::MulOverflow)?; { let _x_146 = ((_x_145) as u64).checked_add(x_3).ok_or(crate::ComputeError::AddOverflow)?; { let _x_147 = ((x_4) as u64).checked_add(n_71).ok_or(crate::ComputeError::AddOverflow)?; { let _x_148 = ((_x_147) as u64).checked_mul(_x_144).ok_or(crate::ComputeError::MulOverflow)?; { let _x_149 = ((_x_148) as u64).checked_add(x_3).ok_or(crate::ComputeError::AddOverflow)?; { let _x_150 = 32; { let _x_151 = journalRowBytesEqual(&(x_1), _x_146, _x_149, _x_150)?; match _x_151 {
+        false => { let _x_159 = journalPriorRowBlock(&(x_1), x_2, x_3, x_4, n_71)?; _x_159 },
+        true => { let _y_134 = _x_132; match _y_134.clone() {
+        false => _y_134.clone(),
+        true => { let _x_158 = journalPriorRowBlock(&(x_1), x_2, x_3, x_4, n_71)?; _x_158 },
+    } },
+    } } } } } } } } },
+        true => { let _y_134 = _x_132; match _y_134.clone() {
+        false => _y_134.clone(),
+        true => { let _x_158 = journalPriorRowBlock(&(x_1), x_2, x_3, x_4, n_71)?; _x_158 },
+    } },
+    } } } } },
+    })
+}
+
+pub fn journalPriorRowBlocks(x_1: &crate::WorkspaceByteView, x_2: u64, x_3: u64, x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_78 = true; _x_78 },
+        _ => { let n_60 = (x_4).saturating_sub(1); { let _x_88 = 32; { let _x_89 = ((n_60) as u64).checked_mul(_x_88).ok_or(crate::ComputeError::MulOverflow)?; { let _x_90 = (x_2 <= _x_89); { let _jp_91 = /* jp "_jp_91" inlined at its jump site */ (); match _x_90 {
+        false => { let _x_102 = 32; { let _x_103 = ((n_60) as u64).checked_mul(_x_102).ok_or(crate::ComputeError::MulOverflow)?; { let _x_104 = journalPriorRowBlock(&(x_1), x_2, x_3, _x_103, _x_102)?; { let _y_92 = _x_104; match _y_92.clone() {
+        false => _y_92.clone(),
+        true => { let _x_99 = journalPriorRowBlocks(&(x_1), x_2, x_3, n_60)?; _x_99 },
+    } } } } },
+        true => { let _y_92 = _x_90; match _y_92.clone() {
+        false => _y_92.clone(),
+        true => { let _x_99 = journalPriorRowBlocks(&(x_1), x_2, x_3, n_60)?; _x_99 },
+    } },
+    } } } } } },
+    })
+}
+
+pub fn journalReduce(head: &crate::WorkspaceByteView, state: Option<crate::WorkspaceState>, objectId: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_19 = reduceAuthenticatedEvent(state, &(event))?; match _x_19 {
+        crate::WorkspaceTransition::Accepted { field_0: x_20 } => { let _x_33 = journalAcceptedPlan(&(head), &(event), &(objectId), &(x_20))?; _x_33 },
+        crate::WorkspaceTransition::Rejected { field_0: x_22 } => { let _x_46 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![16]); __value }; { let _x_47 = encodeWorkspaceError(x_22); { let _x_48 = { let mut __value = _x_46; __value.extend_from_slice(&_x_47); __value }; _x_48 } } },
+    } })
+}
+
+pub fn journalReplayBound(target: &crate::WorkspaceByteView, head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView, objectId: &crate::WorkspaceByteView, envelope: &crate::WorkspaceByteView, event: &crate::AuthenticatedEvent) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_158 = journalHeadValid(&(target))?; { let _jp_643 = /* jp "_jp_643" inlined at its jump site */ (); { let _jp_169 = /* jp "_jp_169" inlined at its jump site */ (); match _x_158 {
+        false => { let _y_163 = _x_158; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } },
+        true => { let _x_332 = &(target).bytes; { let _x_333 = (_x_332).len() as u64; { let _x_334 = 0; { let _x_335 = (_x_333 == _x_334); match _x_335 {
+        false => { let _x_594 = journalHeadValid(&(head))?; match _x_594 {
+        false => { let _y_163 = _x_594; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } },
+        true => { let _x_595 = journalCount(&(head))?; { let _x_596 = 1; { let _x_597 = ((_x_595) as u64).checked_add(_x_596).ok_or(crate::ComputeError::AddOverflow)?; { let _x_598 = journalCount(&(target))?; { let _x_599 = (_x_597 <= _x_598); match _x_599 {
+        false => { let _y_163 = _x_599; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } },
+        true => { let _x_600 = 38; { let _x_603 = &(head).bytes; { let _x_604 = (_x_603).len() as u64; { let _x_605 = ((_x_604) as u64).saturating_sub(_x_600); { let _x_606 = byteWindowView(&(head), _x_600, _x_605); { let _x_608 = journalCount(&(head))?; { let _x_609 = 64; { let _x_610 = ((_x_608) as u64).checked_mul(_x_609).ok_or(crate::ComputeError::MulOverflow)?; { let _x_611 = byteWindowView(&(target), _x_600, _x_610); { let _x_612 = workspaceBytesEqual((_x_606).as_ref(), (_x_611).as_ref()); match _x_612 {
+        false => { let _y_163 = _x_612; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } },
+        true => { let _x_613 = &(event).workspace; { let _x_614 = 4; { let _x_615 = 32; { let _x_616 = byteWindowView(&(target), _x_614, _x_615); { let _x_617 = workspaceBytesEqual((_x_613).as_ref(), (_x_616).as_ref()); match _x_617 {
+        false => { let _y_163 = _x_617; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } },
+        true => { let _x_618 = &(event).eventId; { let _x_619 = 38; { let _x_621 = journalCount(&(head))?; { let _x_622 = 64; { let _x_623 = ((_x_621) as u64).checked_mul(_x_622).ok_or(crate::ComputeError::MulOverflow)?; { let _x_624 = ((_x_619) as u64).checked_add(_x_623).ok_or(crate::ComputeError::AddOverflow)?; { let _x_625 = 32; { let _x_626 = byteWindowView(&(target), _x_624, _x_625); { let _x_627 = workspaceBytesEqual((_x_618).as_ref(), (_x_626).as_ref()); match _x_627 {
+        false => { let _y_163 = _x_627; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } },
+        true => { let _x_628 = &(objectId).bytes; { let _x_629 = 70; { let _x_631 = journalCount(&(head))?; { let _x_632 = 64; { let _x_633 = ((_x_631) as u64).checked_mul(_x_632).ok_or(crate::ComputeError::MulOverflow)?; { let _x_634 = ((_x_629) as u64).checked_add(_x_633).ok_or(crate::ComputeError::AddOverflow)?; { let _x_635 = 32; { let _x_636 = byteWindowView(&(target), _x_634, _x_635); { let _x_637 = workspaceBytesEqual((_x_628).as_ref(), (_x_636).as_ref()); { let _y_163 = _x_637; match _y_163 {
+        false => { alloc::vec![7] },
+        true => { let _x_246 = prepareJournalAppend(&(head), &(state), &(objectId), &(envelope))?; _x_246 },
+    } } } } } } } } } } },
+    } } } } } } } } } },
+    } } } } } },
+    } } } } } } } } } } },
+    } } } } } },
+    } },
+        true => { alloc::vec![7] },
+    } } } } },
+    } } } })
+}
+
+pub fn journalReplayBytes(request: &crate::WorkspaceByteView, targetLength: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_54 = 65574; { let _x_57 = (targetLength <= _x_54); { let _jp_68 = /* jp "_jp_68" inlined at its jump site */ (); match _x_57 {
+        false => { let _y_62 = _x_57; match _y_62 {
+        false => alloc::vec![1],
+        true => { let _x_118 = 3; { let _x_119 = byteWindowView(&(request), _x_118, targetLength); { let _x_120 = crate::WorkspaceByteView { bytes: _x_119 }; { let _x_121 = ((_x_118) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_124 = &(request).bytes; { let _x_125 = (_x_124).len() as u64; { let _x_126 = ((_x_125) as u64).saturating_sub(_x_121); { let _x_127 = byteWindowView(&(request), _x_121, _x_126); { let _x_128 = crate::WorkspaceByteView { bytes: _x_127 }; { let _x_129 = journalReplayPayload(&(_x_120), &(_x_128))?; _x_129 } } } } } } } } } },
+    } },
+        true => { let _x_130 = 3; { let _x_131 = ((_x_130) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_133 = &(request).bytes; { let _x_134 = (_x_133).len() as u64; { let _x_135 = (_x_131 <= _x_134); { let _y_62 = _x_135; match _y_62 {
+        false => alloc::vec![1],
+        true => { let _x_118 = 3; { let _x_119 = byteWindowView(&(request), _x_118, targetLength); { let _x_120 = crate::WorkspaceByteView { bytes: _x_119 }; { let _x_121 = ((_x_118) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_124 = &(request).bytes; { let _x_125 = (_x_124).len() as u64; { let _x_126 = ((_x_125) as u64).saturating_sub(_x_121); { let _x_127 = byteWindowView(&(request), _x_121, _x_126); { let _x_128 = crate::WorkspaceByteView { bytes: _x_127 }; { let _x_129 = journalReplayPayload(&(_x_120), &(_x_128))?; _x_129 } } } } } } } } } },
+    } } } } } } },
+    } } } })
+}
+
+pub fn journalReplayCandidate(target: &crate::WorkspaceByteView, head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView, objectId: &crate::WorkspaceByteView, envelope: &crate::WorkspaceByteView, candidate: &crate::WorkspaceEnvelope) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_13 = &(candidate).eventBytes; { let _x_14 = decodeAuthenticatedEvent(alloc::borrow::ToOwned::to_owned(_x_13))?; match _x_14 {
+        None => alloc::vec![1],
+        Some(val_17) => { let _x_27 = journalReplayBound(&(target), &(head), &(state), &(objectId), &(envelope), &(val_17))?; _x_27 },
+    } } })
+}
+
+pub fn journalReplayCompleteFields(request: &crate::WorkspaceByteView, targetLength: u64, headLength: u64, stateLength: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_78 = 65574; { let _x_81 = (targetLength <= _x_78); { let _jp_92 = /* jp "_jp_92" inlined at its jump site */ (); match _x_81 {
+        false => { let _y_86 = _x_81; match _y_86 {
+        false => alloc::vec![1],
+        true => { let _x_162 = 9; { let _x_163 = byteWindowView(&(request), _x_162, targetLength); { let _x_164 = crate::WorkspaceByteView { bytes: _x_163 }; { let _x_165 = ((_x_162) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_166 = byteWindowView(&(request), _x_165, headLength); { let _x_167 = crate::WorkspaceByteView { bytes: _x_166 }; { let _x_168 = ((_x_165) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_169 = byteWindowView(&(request), _x_168, stateLength); { let _x_170 = crate::WorkspaceByteView { bytes: _x_169 }; { let _x_171 = finishJournalReplay(&(_x_164), &(_x_167), &(_x_170))?; _x_171 } } } } } } } } } },
+    } },
+        true => { let _x_188 = 65574; { let _x_189 = (headLength <= _x_188); match _x_189 {
+        false => { let _y_86 = _x_189; match _y_86 {
+        false => alloc::vec![1],
+        true => { let _x_162 = 9; { let _x_163 = byteWindowView(&(request), _x_162, targetLength); { let _x_164 = crate::WorkspaceByteView { bytes: _x_163 }; { let _x_165 = ((_x_162) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_166 = byteWindowView(&(request), _x_165, headLength); { let _x_167 = crate::WorkspaceByteView { bytes: _x_166 }; { let _x_168 = ((_x_165) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_169 = byteWindowView(&(request), _x_168, stateLength); { let _x_170 = crate::WorkspaceByteView { bytes: _x_169 }; { let _x_171 = finishJournalReplay(&(_x_164), &(_x_167), &(_x_170))?; _x_171 } } } } } } } } } },
+    } },
+        true => { let _x_203 = 1100427; { let _x_204 = (stateLength <= _x_203); match _x_204 {
+        false => { let _y_86 = _x_204; match _y_86 {
+        false => alloc::vec![1],
+        true => { let _x_162 = 9; { let _x_163 = byteWindowView(&(request), _x_162, targetLength); { let _x_164 = crate::WorkspaceByteView { bytes: _x_163 }; { let _x_165 = ((_x_162) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_166 = byteWindowView(&(request), _x_165, headLength); { let _x_167 = crate::WorkspaceByteView { bytes: _x_166 }; { let _x_168 = ((_x_165) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_169 = byteWindowView(&(request), _x_168, stateLength); { let _x_170 = crate::WorkspaceByteView { bytes: _x_169 }; { let _x_171 = finishJournalReplay(&(_x_164), &(_x_167), &(_x_170))?; _x_171 } } } } } } } } } },
+    } },
+        true => { let _x_209 = &(request).bytes; { let _x_210 = (_x_209).len() as u64; { let _x_211 = 9; { let _x_212 = ((_x_211) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_215 = (_x_210 == _x_214); { let _y_86 = _x_215; match _y_86 {
+        false => alloc::vec![1],
+        true => { let _x_162 = 9; { let _x_163 = byteWindowView(&(request), _x_162, targetLength); { let _x_164 = crate::WorkspaceByteView { bytes: _x_163 }; { let _x_165 = ((_x_162) as u64).checked_add(targetLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_166 = byteWindowView(&(request), _x_165, headLength); { let _x_167 = crate::WorkspaceByteView { bytes: _x_166 }; { let _x_168 = ((_x_165) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_169 = byteWindowView(&(request), _x_168, stateLength); { let _x_170 = crate::WorkspaceByteView { bytes: _x_169 }; { let _x_171 = finishJournalReplay(&(_x_164), &(_x_167), &(_x_170))?; _x_171 } } } } } } } } } },
+    } } } } } } } } },
+    } } },
+    } } },
+    } } } })
+}
+
+pub fn journalReplayFields(target: &crate::WorkspaceByteView, request: &crate::WorkspaceByteView, headLength: u64, stateLength: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_100 = 65574; { let _x_103 = (headLength <= _x_100); { let _jp_114 = /* jp "_jp_114" inlined at its jump site */ (); match _x_103 {
+        false => { let _y_108 = _x_103; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = replayJournalEntry(&(target), &(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_243 = 1100427; { let _x_244 = (stateLength <= _x_243); match _x_244 {
+        false => { let _y_108 = _x_244; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = replayJournalEntry(&(target), &(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_257 = 305; { let _x_258 = ((_x_257) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_259 = ((_x_258) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_261 = &(request).bytes; { let _x_262 = (_x_261).len() as u64; { let _x_263 = (_x_259 <= _x_262); match _x_263 {
+        false => { let _y_108 = _x_263; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = replayJournalEntry(&(target), &(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } },
+        true => { let _x_268 = &(request).bytes; { let _x_269 = (_x_268).len() as u64; { let _x_270 = 4401; { let _x_271 = ((_x_270) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_272 = ((_x_271) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_273 = (_x_269 <= _x_272); { let _y_108 = _x_273; match _y_108 {
+        false => alloc::vec![1],
+        true => { let _x_202 = 6; { let _x_203 = byteWindowView(&(request), _x_202, headLength); { let _x_204 = crate::WorkspaceByteView { bytes: _x_203 }; { let _x_205 = ((_x_202) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_206 = byteWindowView(&(request), _x_205, stateLength); { let _x_207 = crate::WorkspaceByteView { bytes: _x_206 }; { let _x_208 = ((_x_205) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_209 = 32; { let _x_210 = byteWindowView(&(request), _x_208, _x_209); { let _x_211 = crate::WorkspaceByteView { bytes: _x_210 }; { let _x_212 = 38; { let _x_213 = ((_x_212) as u64).checked_add(headLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_214 = ((_x_213) as u64).checked_add(stateLength).ok_or(crate::ComputeError::AddOverflow)?; { let _x_217 = &(request).bytes; { let _x_218 = (_x_217).len() as u64; { let _x_219 = ((_x_218) as u64).saturating_sub(_x_214); { let _x_220 = byteWindowView(&(request), _x_214, _x_219); { let _x_221 = crate::WorkspaceByteView { bytes: _x_220 }; { let _x_222 = replayJournalEntry(&(target), &(_x_204), &(_x_207), &(_x_211), &(_x_221))?; _x_222 } } } } } } } } } } } } } } } } } } },
+    } } } } } } } },
+    } } } } } } },
+    } } },
+    } } } })
+}
+
+pub fn journalReplayPayload(target: &crate::WorkspaceByteView, request: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_22 = 6; { let _x_26 = &(request).bytes; { let _x_27 = (_x_26).len() as u64; { let _x_28 = (_x_22 <= _x_27); match _x_28 {
+        false => alloc::vec![1],
+        true => { let _x_52 = &(request).bytes; { let _x_53 = 0; { let _x_54 = __prod_borrowed_readU24At((_x_52).as_ref(), _x_53)?; { let _x_55 = 3; { let _x_56 = __prod_borrowed_readU24At((_x_52).as_ref(), _x_55)?; { let _x_57 = journalReplayFields(&(target), &(request), _x_54, _x_56)?; _x_57 } } } } } },
+    } } } } })
+}
+
+pub fn journalRowBytesEqual(x_1: &crate::WorkspaceByteView, x_2: u64, x_3: u64, x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_64 = true; _x_64 },
+        _ => { let n_41 = (x_4).saturating_sub(1); { let _x_69 = &(x_1).bytes; { let _x_70 = ((x_2) as u64).checked_add(n_41).ok_or(crate::ComputeError::AddOverflow)?; { let _x_71 = usize::try_from(_x_70).ok().and_then(|__index| (_x_69).get(__index).cloned()); { let _x_72 = ((x_3) as u64).checked_add(n_41).ok_or(crate::ComputeError::AddOverflow)?; { let _x_73 = usize::try_from(_x_72).ok().and_then(|__index| (_x_69).get(__index).cloned()); { let _x_74 = journalOctetsEqual(_x_71, _x_73); match _x_74 {
+        false => _x_74,
+        true => { let _x_78 = journalRowBytesEqual(&(x_1), x_2, x_3, n_41)?; _x_78 },
+    } } } } } } } },
+    })
+}
+
+pub fn journalRowValid(view: &crate::WorkspaceByteView, position: u64) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_124 = 64; { let _x_127 = ((position) as u64).checked_mul(_x_124).ok_or(crate::ComputeError::MulOverflow)?; { let _x_128 = 32; { let _x_131 = byteWindowView(&(view), _x_127, _x_128); { let _x_132 = (_x_131).len() as u64; { let _x_133 = (_x_132 == _x_128); { let _jp_144 = /* jp "_jp_144" inlined at its jump site */ (); match _x_133 {
+        false => { let _y_138 = _x_133; match _y_138.clone() {
+        false => _y_138.clone(),
+        true => { let _x_245 = 64; { let _x_246 = ((position) as u64).checked_mul(_x_245).ok_or(crate::ComputeError::MulOverflow)?; { let _x_247 = 32; { let _x_248 = ((_x_246) as u64).checked_add(_x_247).ok_or(crate::ComputeError::AddOverflow)?; { let _x_249 = byteWindowView(&(view), _x_248, _x_247); { let _x_250 = (_x_249).len() as u64; { let _x_251 = (_x_250 == _x_247); { let _jp_252 = /* jp "_jp_252" inlined at its jump site */ (); match _x_251 {
+        false => { let _y_253 = _x_251; match _y_253.clone() {
+        false => _y_253.clone(),
+        true => { let _x_264 = 0; { let _x_265 = 32; { let _x_266 = journalPriorRowBlocks(&(view), position, _x_264, _x_265)?; match _x_266 {
+        false => _x_266,
+        true => { let _x_270 = 32; { let _x_271 = journalPriorRowBlocks(&(view), position, _x_270, _x_270)?; _x_271 } },
+    } } } },
+    } },
+        true => { let _x_274 = 64; { let _x_275 = ((position) as u64).checked_mul(_x_274).ok_or(crate::ComputeError::MulOverflow)?; { let _x_276 = 32; { let _x_277 = ((_x_275) as u64).checked_add(_x_276).ok_or(crate::ComputeError::AddOverflow)?; { let _x_278 = byteWindowView(&(view), _x_277, _x_276); { let _x_279 = zeroDigest(); { let _x_280 = workspaceBytesEqual((_x_278).as_ref(), (_x_279).as_ref()); match _x_280 {
+        false => { let _y_253 = _x_251; match _y_253.clone() {
+        false => _y_253.clone(),
+        true => { let _x_264 = 0; { let _x_265 = 32; { let _x_266 = journalPriorRowBlocks(&(view), position, _x_264, _x_265)?; match _x_266 {
+        false => _x_266,
+        true => { let _x_270 = 32; { let _x_271 = journalPriorRowBlocks(&(view), position, _x_270, _x_270)?; _x_271 } },
+    } } } },
+    } },
+        true => { let _x_285 = false; _x_285 },
+    } } } } } } } },
+    } } } } } } } } },
+    } },
+        true => { let _x_289 = 64; { let _x_290 = ((position) as u64).checked_mul(_x_289).ok_or(crate::ComputeError::MulOverflow)?; { let _x_291 = 32; { let _x_292 = byteWindowView(&(view), _x_290, _x_291); { let _x_293 = zeroDigest(); { let _x_294 = workspaceBytesEqual((_x_292).as_ref(), (_x_293).as_ref()); match _x_294 {
+        false => { let _y_138 = _x_133; match _y_138.clone() {
+        false => _y_138.clone(),
+        true => { let _x_245 = 64; { let _x_246 = ((position) as u64).checked_mul(_x_245).ok_or(crate::ComputeError::MulOverflow)?; { let _x_247 = 32; { let _x_248 = ((_x_246) as u64).checked_add(_x_247).ok_or(crate::ComputeError::AddOverflow)?; { let _x_249 = byteWindowView(&(view), _x_248, _x_247); { let _x_250 = (_x_249).len() as u64; { let _x_251 = (_x_250 == _x_247); { let _jp_252 = /* jp "_jp_252" inlined at its jump site */ (); match _x_251 {
+        false => { let _y_253 = _x_251; match _y_253.clone() {
+        false => _y_253.clone(),
+        true => { let _x_264 = 0; { let _x_265 = 32; { let _x_266 = journalPriorRowBlocks(&(view), position, _x_264, _x_265)?; match _x_266 {
+        false => _x_266,
+        true => { let _x_270 = 32; { let _x_271 = journalPriorRowBlocks(&(view), position, _x_270, _x_270)?; _x_271 } },
+    } } } },
+    } },
+        true => { let _x_274 = 64; { let _x_275 = ((position) as u64).checked_mul(_x_274).ok_or(crate::ComputeError::MulOverflow)?; { let _x_276 = 32; { let _x_277 = ((_x_275) as u64).checked_add(_x_276).ok_or(crate::ComputeError::AddOverflow)?; { let _x_278 = byteWindowView(&(view), _x_277, _x_276); { let _x_279 = zeroDigest(); { let _x_280 = workspaceBytesEqual((_x_278).as_ref(), (_x_279).as_ref()); match _x_280 {
+        false => { let _y_253 = _x_251; match _y_253.clone() {
+        false => _y_253.clone(),
+        true => { let _x_264 = 0; { let _x_265 = 32; { let _x_266 = journalPriorRowBlocks(&(view), position, _x_264, _x_265)?; match _x_266 {
+        false => _x_266,
+        true => { let _x_270 = 32; { let _x_271 = journalPriorRowBlocks(&(view), position, _x_270, _x_270)?; _x_271 } },
+    } } } },
+    } },
+        true => { let _x_285 = false; _x_285 },
+    } } } } } } } },
+    } } } } } } } } },
+    } },
+        true => { let _x_299 = false; _x_299 },
+    } } } } } } },
+    } } } } } } } })
+}
+
+pub fn journalRowsBlock(x_1: &crate::WorkspaceByteView, x_2: u64, x_3: u64, x_4: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_90 = true; _x_90 },
+        _ => { let n_58 = (x_4).saturating_sub(1); { let _x_97 = ((x_3) as u64).checked_add(n_58).ok_or(crate::ComputeError::AddOverflow)?; { let _x_98 = (x_2 <= _x_97); { let _jp_99 = /* jp "_jp_99" inlined at its jump site */ (); match _x_98 {
+        false => { let _x_109 = ((x_3) as u64).checked_add(n_58).ok_or(crate::ComputeError::AddOverflow)?; { let _x_110 = journalRowValid(&(x_1), _x_109)?; { let _y_100 = _x_110; match _y_100.clone() {
+        false => _y_100.clone(),
+        true => { let _x_107 = journalRowsBlock(&(x_1), x_2, x_3, n_58)?; _x_107 },
+    } } } },
+        true => { let _y_100 = _x_98; match _y_100.clone() {
+        false => _y_100.clone(),
+        true => { let _x_107 = journalRowsBlock(&(x_1), x_2, x_3, n_58)?; _x_107 },
+    } },
+    } } } } },
+    })
+}
+
+pub fn journalRowsBlocks(x_1: &crate::WorkspaceByteView, x_2: u64, x_3: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_77 = true; _x_77 },
+        _ => { let n_59 = (x_3).saturating_sub(1); { let _x_87 = 32; { let _x_88 = ((n_59) as u64).checked_mul(_x_87).ok_or(crate::ComputeError::MulOverflow)?; { let _x_89 = (x_2 <= _x_88); { let _jp_90 = /* jp "_jp_90" inlined at its jump site */ (); match _x_89 {
+        false => { let _x_101 = 32; { let _x_102 = ((n_59) as u64).checked_mul(_x_101).ok_or(crate::ComputeError::MulOverflow)?; { let _x_103 = journalRowsBlock(&(x_1), x_2, _x_102, _x_101)?; { let _y_91 = _x_103; match _y_91.clone() {
+        false => _y_91.clone(),
+        true => { let _x_98 = journalRowsBlocks(&(x_1), x_2, n_59)?; _x_98 },
+    } } } } },
+        true => { let _y_91 = _x_89; match _y_91.clone() {
+        false => _y_91.clone(),
+        true => { let _x_98 = journalRowsBlocks(&(x_1), x_2, n_59)?; _x_98 },
+    } },
+    } } } } } },
+    })
+}
+
+pub fn journalRowsValid(view: &crate::WorkspaceByteView, count: u64) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_19 = 1024; { let _x_22 = (count <= _x_19); match _x_22 {
+        false => _x_22,
+        true => { let _x_38 = 32; { let _x_39 = journalRowsBlocks(&(view), count, _x_38)?; _x_39 } },
+    } } })
+}
+
+pub fn journalSeenMatches(x_1: &crate::WorkspaceByteView, x_2: &crate::WorkspaceByteView, x_3: u64) -> Result<bool, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_55 = true; _x_55 },
+        _ => { let n_42 = (x_3).saturating_sub(1); { let _x_60 = 64; { let _x_61 = ((n_42) as u64).checked_mul(_x_60).ok_or(crate::ComputeError::MulOverflow)?; { let _x_62 = 32; { let _x_63 = byteWindowView(&(x_1), _x_61, _x_62); { let _x_64 = ((n_42) as u64).checked_mul(_x_62).ok_or(crate::ComputeError::MulOverflow)?; { let _x_65 = byteWindowView(&(x_2), _x_64, _x_62); { let _x_66 = workspaceBytesEqual((_x_63).as_ref(), (_x_65).as_ref()); match _x_66 {
+        false => _x_66,
+        true => { let _x_70 = journalSeenMatches(&(x_1), &(x_2), n_42)?; _x_70 },
+    } } } } } } } } },
+    })
+}
+
+pub fn journalStateMatches(head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_26 = &(head).bytes; { let _x_27 = (_x_26).len() as u64; { let _x_28 = 0; { let _x_31 = (_x_27 == _x_28); match _x_31 {
+        false => { let _x_45 = &(state).bytes; { let _x_46 = decodeWorkspaceState(alloc::borrow::ToOwned::to_owned(_x_45))?; match _x_46 {
+        None => _x_31,
+        Some(val_49) => { let _x_50 = journalStateMatchesDecoded(&(head), &(val_49))?; _x_50 },
+    } } },
+        true => { let _x_52 = &(state).bytes; { let _x_53 = (_x_52).len() as u64; { let _x_54 = 0; { let _x_55 = (_x_53 == _x_54); _x_55 } } } },
+    } } } } })
+}
+
+pub fn journalStateMatchesDecoded(head: &crate::WorkspaceByteView, state: &crate::WorkspaceState) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_97 = 4; { let _x_100 = 32; { let _x_103 = byteWindowView(&(head), _x_97, _x_100); { let _x_104 = &(state).workspace; { let _x_105 = workspaceBytesEqual((_x_103).as_ref(), (_x_104).as_ref()); match _x_105 {
+        false => _x_105,
+        true => { let _x_188 = 38; { let _x_191 = journalCount(&(head))?; { let _x_192 = 1; { let _x_193 = ((_x_191) as u64).saturating_sub(_x_192); { let _x_194 = 64; { let _x_195 = ((_x_193) as u64).checked_mul(_x_194).ok_or(crate::ComputeError::MulOverflow)?; { let _x_196 = ((_x_188) as u64).checked_add(_x_195).ok_or(crate::ComputeError::AddOverflow)?; { let _x_197 = 32; { let _x_198 = byteWindowView(&(head), _x_196, _x_197); { let _x_199 = &(state).head; { let _x_200 = workspaceBytesEqual((_x_198).as_ref(), (_x_199).as_ref()); match _x_200 {
+        false => _x_200,
+        true => { let _x_230 = (state).sequence; { let _x_231 = 1; { let _x_232 = ((_x_230) as u64).checked_add(_x_231).ok_or(crate::ComputeError::AddOverflow)?; { let _x_233 = journalCount(&(head))?; { let _x_234 = (_x_232 == _x_233); match _x_234 {
+        false => _x_234,
+        true => { let _x_253 = &(state).seen; { let _x_254 = (_x_253).len() as u64; { let _x_256 = journalCount(&(head))?; { let _x_257 = 32; { let _x_258 = ((_x_256) as u64).checked_mul(_x_257).ok_or(crate::ComputeError::MulOverflow)?; { let _x_259 = (_x_254 == _x_258); match _x_259 {
+        false => _x_259,
+        true => { let _x_263 = 38; { let _x_266 = &(head).bytes; { let _x_267 = (_x_266).len() as u64; { let _x_268 = ((_x_267) as u64).saturating_sub(_x_263); { let _x_269 = byteWindowView(&(head), _x_263, _x_268); { let _x_270 = crate::WorkspaceByteView { bytes: _x_269 }; { let _x_271 = &(state).seen; { let _x_272 = crate::WorkspaceByteView { bytes: alloc::borrow::ToOwned::to_owned(_x_271) }; { let _x_273 = journalCount(&(head))?; { let _x_274 = journalSeenMatches(&(_x_270), &(_x_272), _x_273)?; _x_274 } } } } } } } } } },
+    } } } } } } },
+    } } } } } },
+    } } } } } } } } } } } },
+    } } } } } })
+}
+
+pub fn prepareJournalAppend(head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView, objectId: &crate::WorkspaceByteView, envelope: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_13 = &(envelope).bytes; { let _x_14 = decodeWorkspaceEnvelope(alloc::borrow::ToOwned::to_owned(_x_13))?; match _x_14 {
+        None => alloc::vec![1],
+        Some(val_17) => { let _x_27 = journalAppendCandidate(&(head), &(state), &(objectId), &(val_17))?; _x_27 },
+    } } })
+}
+
+pub fn replayJournalEntry(target: &crate::WorkspaceByteView, head: &crate::WorkspaceByteView, state: &crate::WorkspaceByteView, objectId: &crate::WorkspaceByteView, envelope: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_13 = &(envelope).bytes; { let _x_14 = decodeWorkspaceEnvelope(alloc::borrow::ToOwned::to_owned(_x_13))?; match _x_14 {
+        None => alloc::vec![1],
+        Some(val_17) => { let _x_27 = journalReplayCandidate(&(target), &(head), &(state), &(objectId), &(envelope), &(val_17))?; _x_27 },
+    } } })
+}
+
+pub fn workspaceJournalBytes(request: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_47 = 1; { let _x_51 = (request.clone()).len() as u64; { let _x_52 = (_x_47 <= _x_51); { let _jp_63 = /* jp "_jp_63" inlined at its jump site */ (); match _x_52 {
+        false => { let _y_57 = _x_52; match _y_57 {
+        false => alloc::vec![1],
+        true => { let _x_98 = 0; { let _x_99 = 1; { let _x_100 = byteWindow(request.clone(), _x_98, _x_99); { let _x_101 = crate::WorkspaceByteView { bytes: _x_100 }; { let _x_104 = (request.clone()).len() as u64; { let _x_105 = ((_x_104) as u64).saturating_sub(_x_99); { let _x_106 = byteWindow(request.clone(), _x_99, _x_105); { let _x_107 = crate::WorkspaceByteView { bytes: _x_106 }; { let _x_108 = workspaceJournalOperation(&(_x_101), &(_x_107))?; _x_108 } } } } } } } } },
+    } },
+        true => { let _x_110 = (request.clone()).len() as u64; { let _x_111 = 1235980; { let _x_112 = (_x_110 <= _x_111); { let _y_57 = _x_112; match _y_57 {
+        false => alloc::vec![1],
+        true => { let _x_98 = 0; { let _x_99 = 1; { let _x_100 = byteWindow(request.clone(), _x_98, _x_99); { let _x_101 = crate::WorkspaceByteView { bytes: _x_100 }; { let _x_104 = (request.clone()).len() as u64; { let _x_105 = ((_x_104) as u64).saturating_sub(_x_99); { let _x_106 = byteWindow(request.clone(), _x_99, _x_105); { let _x_107 = crate::WorkspaceByteView { bytes: _x_106 }; { let _x_108 = workspaceJournalOperation(&(_x_101), &(_x_107))?; _x_108 } } } } } } } } },
+    } } } } },
+    } } } } })
+}
+
+pub fn workspaceJournalOperation(operation: &crate::WorkspaceByteView, payload: &crate::WorkspaceByteView) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_481 = &(operation).bytes; { let _x_489 = workspaceBytesEqual((_x_481).as_ref(), &[0]); match _x_489 {
+        false => { let _x_1020 = &(operation).bytes; { let _x_1028 = workspaceBytesEqual((_x_1020).as_ref(), &[1]); match _x_1028 {
+        false => { let _x_1323 = &(operation).bytes; { let _x_1331 = workspaceBytesEqual((_x_1323).as_ref(), &[2]); match _x_1331 {
+        false => { let _x_1585 = &(operation).bytes; { let _x_1593 = workspaceBytesEqual((_x_1585).as_ref(), &[3]); match _x_1593 {
+        false => { let _x_1810 = &(operation).bytes; { let _x_1818 = workspaceBytesEqual((_x_1810).as_ref(), &[4]); match _x_1818 {
+        false => { let _x_1994 = &(operation).bytes; { let _x_2002 = workspaceBytesEqual((_x_1994).as_ref(), &[5]); match _x_2002 {
+        false => { let _x_2018 = &(operation).bytes; { let _x_2026 = workspaceBytesEqual((_x_2018).as_ref(), &[6]); match _x_2026 {
+        false => alloc::vec![11],
+        true => { let _x_2038 = &(payload).bytes; { let _x_2039 = workspaceEnvelopeBytes(alloc::borrow::ToOwned::to_owned(_x_2038))?; _x_2039 } },
+    } } },
+        true => { let _x_2172 = &(payload).bytes; { let _x_2173 = (_x_2172).len() as u64; { let _x_2174 = 96; { let _x_2175 = (_x_2173 == _x_2174); { let _jp_2527 = /* jp "_jp_2527" inlined at its jump site */ (); { let _jp_2176 = /* jp "_jp_2176" inlined at its jump site */ (); match _x_2175 {
+        false => { let _y_2177 = _x_2175; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _x_2301 = 32; { let _x_2302 = byteWindowView(&(payload), _x_2301, _x_2301); { let _x_2303 = (_x_2302).len() as u64; { let _x_2304 = (_x_2303 == _x_2301); { let _jp_2305 = /* jp "_jp_2305" inlined at its jump site */ (); match _x_2304 {
+        false => { let _y_2306 = _x_2304; match _y_2306 {
+        false => { alloc::vec![9] },
+        true => { let _x_2325 = 64; { let _x_2326 = 32; { let _x_2327 = byteWindowView(&(payload), _x_2325, _x_2326); { let _x_2328 = (_x_2327).len() as u64; { let _x_2329 = (_x_2328 == _x_2326); match _x_2329 {
+        false => { let _y_2177 = _x_2329; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _x_2333 = 64; { let _x_2334 = 32; { let _x_2335 = byteWindowView(&(payload), _x_2333, _x_2334); { let _x_2336 = zeroDigest(); { let _x_2337 = workspaceBytesEqual((_x_2335).as_ref(), (_x_2336).as_ref()); match _x_2337 {
+        false => { let _y_2177 = _x_2329; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _y_2177 = _x_1818; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+    } } } } } },
+    } } } } } },
+    } },
+        true => { let _x_2343 = 32; { let _x_2344 = byteWindowView(&(payload), _x_2343, _x_2343); { let _x_2345 = zeroDigest(); { let _x_2346 = workspaceBytesEqual((_x_2344).as_ref(), (_x_2345).as_ref()); match _x_2346 {
+        false => { let _y_2306 = _x_2304; match _y_2306 {
+        false => { alloc::vec![9] },
+        true => { let _x_2325 = 64; { let _x_2326 = 32; { let _x_2327 = byteWindowView(&(payload), _x_2325, _x_2326); { let _x_2328 = (_x_2327).len() as u64; { let _x_2329 = (_x_2328 == _x_2326); match _x_2329 {
+        false => { let _y_2177 = _x_2329; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _x_2333 = 64; { let _x_2334 = 32; { let _x_2335 = byteWindowView(&(payload), _x_2333, _x_2334); { let _x_2336 = zeroDigest(); { let _x_2337 = workspaceBytesEqual((_x_2335).as_ref(), (_x_2336).as_ref()); match _x_2337 {
+        false => { let _y_2177 = _x_2329; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _y_2177 = _x_1818; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+    } } } } } },
+    } } } } } },
+    } },
+        true => { let _y_2306 = _x_1818; match _y_2306 {
+        false => { alloc::vec![9] },
+        true => { let _x_2325 = 64; { let _x_2326 = 32; { let _x_2327 = byteWindowView(&(payload), _x_2325, _x_2326); { let _x_2328 = (_x_2327).len() as u64; { let _x_2329 = (_x_2328 == _x_2326); match _x_2329 {
+        false => { let _y_2177 = _x_2329; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _x_2333 = 64; { let _x_2334 = 32; { let _x_2335 = byteWindowView(&(payload), _x_2333, _x_2334); { let _x_2336 = zeroDigest(); { let _x_2337 = workspaceBytesEqual((_x_2335).as_ref(), (_x_2336).as_ref()); match _x_2337 {
+        false => { let _y_2177 = _x_2329; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+        true => { let _y_2177 = _x_1818; match _y_2177 {
+        false => { alloc::vec![9] },
+        true => { let _x_2204 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2266 = { let mut __value = _x_2204; __value.extend_from_slice(&alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 106, 111, 117, 114, 110, 97, 108, 45, 99, 111, 109, 109, 105, 116, 47, 49, 0]); __value }; { let _x_2267 = &(payload).bytes; { let _x_2268 = { let mut __value = _x_2266; __value.extend_from_slice(&_x_2267); __value }; _x_2268 } } } },
+    } },
+    } } } } } },
+    } } } } } },
+    } },
+    } } } } },
+    } } } } } },
+    } } } } } } },
+    } } },
+        true => { let _x_2373 = 9; { let _x_2375 = &(payload).bytes; { let _x_2376 = (_x_2375).len() as u64; { let _x_2377 = (_x_2373 <= _x_2376); match _x_2377 {
+        false => alloc::vec![1],
+        true => { let _x_2389 = &(payload).bytes; { let _x_2390 = 0; { let _x_2391 = __prod_borrowed_readU24At((_x_2389).as_ref(), _x_2390)?; { let _x_2392 = 3; { let _x_2393 = __prod_borrowed_readU24At((_x_2389).as_ref(), _x_2392)?; { let _x_2394 = 6; { let _x_2395 = __prod_borrowed_readU24At((_x_2389).as_ref(), _x_2394)?; { let _x_2396 = journalReplayCompleteFields(&(payload), _x_2391, _x_2393, _x_2395)?; _x_2396 } } } } } } } },
+    } } } } },
+    } } },
+        true => { let _x_2410 = 3; { let _x_2412 = &(payload).bytes; { let _x_2413 = (_x_2412).len() as u64; { let _x_2414 = (_x_2410 <= _x_2413); match _x_2414 {
+        false => alloc::vec![1],
+        true => { let _x_2426 = &(payload).bytes; { let _x_2427 = 0; { let _x_2428 = __prod_borrowed_readU24At((_x_2426).as_ref(), _x_2427)?; { let _x_2429 = journalReplayBytes(&(payload), _x_2428)?; _x_2429 } } } },
+    } } } } },
+    } } },
+        true => { let _x_2448 = &(payload).bytes; { let _x_2449 = (_x_2448).len() as u64; { let _x_2450 = 290; { let _x_2451 = (_x_2449 == _x_2450); match _x_2451 {
+        false => alloc::vec![1],
+        true => { let _x_2463 = 0; { let _x_2464 = 129; { let _x_2465 = byteWindowView(&(payload), _x_2463, _x_2464); { let _x_2466 = crate::WorkspaceByteView { bytes: _x_2465 }; { let _x_2467 = 161; { let _x_2468 = byteWindowView(&(payload), _x_2464, _x_2467); { let _x_2469 = crate::WorkspaceByteView { bytes: _x_2468 }; { let _x_2470 = finishJournalCommit(&(_x_2466), &(_x_2469))?; _x_2470 } } } } } } } },
+    } } } } },
+    } } },
+        true => { let _x_1032 = journalAppendBytes(&(payload))?; _x_1032 },
+    } } },
+        true => { let _x_2495 = journalHeadValid(&(payload))?; match _x_2495 {
+        false => alloc::vec![2],
+        true => { let _x_2519 = { let mut __value = alloc::vec![]; __value.extend_from_slice(&alloc::vec![0]); __value }; { let _x_2520 = &(payload).bytes; { let _x_2521 = { let mut __value = _x_2519; __value.extend_from_slice(&_x_2520); __value }; _x_2521 } } },
+    } },
     } } })
 }
 
