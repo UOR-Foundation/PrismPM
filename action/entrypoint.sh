@@ -14,6 +14,7 @@ esac
 project=$GITHUB_WORKSPACE/$context
 command=${PRISMPM_ACTION_COMMAND:-}
 reference=${PRISMPM_ACTION_REFERENCE:-}
+export_output=${PRISMPM_ACTION_OUTPUT:-}
 release=${PRISMPM_ACTION_RELEASE:-}
 target=${PRISMPM_ACTION_TARGET:-}
 plan=${PRISMPM_ACTION_PLAN:-}
@@ -77,6 +78,12 @@ case "$command" in
     test -n "$reference"
     args=(--project "$project" "${args[@]}")
     args+=("$command" "$reference")
+    ;;
+  export-browser)
+    test -n "$reference"
+    test -n "$export_output"
+    args=(--project "$project" "${args[@]}")
+    args+=(export-browser "$reference" --output "$export_output")
     ;;
   conformance)
     test -n "$reference"

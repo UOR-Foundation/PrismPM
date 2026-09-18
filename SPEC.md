@@ -1200,6 +1200,13 @@ defects. Its devcontainer uses the exact SDK image digest and its workflows call
 a full-commit-pinned thin action/reusable workflow that executes the same CLI.
 There is no copied validation, generation, publication or deployment logic.
 
+The shared Action exposes `export-browser` with `reference` and `output` inputs
+passed unchanged to the SDK's existing command. The SDK owns immutable-reference,
+release-evidence and new direct-child destination validation. Export executes
+without network, Docker socket or signing/registry credentials; it returns the
+complete browser-export receipt through `result`, not deployment authorization.
+It never builds from source or falls back to archive extraction.
+
 Untrusted pull requests check and build without write credentials. Protected
 jobs sign and push with short-lived identity. Protected environments authorize
 deployment, and post-deployment verification attaches evidence. The release

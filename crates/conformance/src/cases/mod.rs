@@ -400,7 +400,7 @@ pub fn run_at(root: &Path, id: &str) {
         "DP-01" | "DP-02" | "DP-03" | "DP-04" | "DP-05" | "DP-06" => verify_deployment(id),
         "OP-01" | "OP-02" | "OP-03" | "OP-04" | "OP-05" | "OP-06" => verify_operations(id),
         "SC-01" | "SC-02" | "SC-03" | "SC-04" | "SC-05" | "SC-06" => verify_supply_chain(id),
-        "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(id),
+        "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(root, id),
 
         _ => panic!("unhandled conformance id: {id}"),
     }
@@ -442,15 +442,20 @@ fn verify_browser_host(root: &Path, id: &str) {
     } else {
         "120000"
     };
+    verify_node_suite(root, id, files, minimum_tests, timeout);
+}
+
+fn verify_node_suite(root: &Path, id: &str, files: &[&str], minimum_tests: usize, timeout: &str) {
     let output = Command::new("node")
         // Cargo injects its Rust dynamic-library search path into test binaries.
         // Browser/compiler subprocesses use the SDK's own loader paths.
         .env_remove("LD_LIBRARY_PATH")
+        .env_remove("NODE_TEST_CONTEXT")
         .args(["--test", "--test-reporter=tap", "--test-timeout", timeout])
         .args(files)
         .current_dir(root)
         .output()
-        .expect("execute complete browser host suite in the devcontainer");
+        .expect("execute complete owning Node suite in the devcontainer");
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 TAP output");
     assert!(
         output.status.success(),
@@ -2420,7 +2425,7 @@ fn template_fixture() -> tempfile::TempDir {
     temp
 }
 
-fn verify_template(id: &str) {
+fn verify_template(root: &Path, id: &str) {
     let temp = template_fixture();
     match id {
         "TM-01" => {
@@ -2464,6 +2469,7 @@ fn verify_template(id: &str) {
             );
         }
         "TM-03" => {
+            verify_node_suite(root, id, &["action/entrypoint.test.mjs"], 11, "120000");
             assert!(prismpm::template::check(temp.path()).is_ok());
             std::fs::write(
                 temp.path().join(".github/workflows/bootstrap.yml"),
@@ -3604,5 +3610,46 @@ fn verify_security(root: &Path, id: &str) {
             assert_contains(root, "xtask/src/main.rs", &["deny", "--all-features"]);
         }
         _ => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod node_suite_tests {
+    use super::verify_node_suite;
+
+    #[test]
+    fn owning_node_gate_rejects_incomplete_skipped_missing_and_timed_out_suites() {
+        let root = tempfile::tempdir().unwrap();
+        let suite = root.path().join("suite.mjs");
+        let prefix = "import {test} from 'node:test';\n";
+        let passed = "for(let i=0;i<11;i++)test('case '+i,()=>{});\n";
+        std::fs::write(&suite, format!("{prefix}{passed}")).unwrap();
+        verify_node_suite(root.path(), "TM-03", &["suite.mjs"], 11, "5000");
+
+        for source in [
+            "",
+            "for(let i=0;i<10;i++)test('case '+i,()=>{});",
+            "for(let i=0;i<11;i++)test('case '+i,{skip:i===0},()=>{});",
+            "for(let i=0;i<11;i++)test('case '+i,{todo:i===0},()=>{});",
+        ] {
+            std::fs::write(&suite, format!("{prefix}{source}")).unwrap();
+            assert!(std::panic::catch_unwind(|| {
+                verify_node_suite(root.path(), "TM-03", &["suite.mjs"], 11, "5000");
+            })
+            .is_err());
+        }
+        assert!(std::panic::catch_unwind(|| {
+            verify_node_suite(root.path(), "TM-03", &["missing.mjs"], 11, "5000");
+        })
+        .is_err());
+        std::fs::write(
+            &suite,
+            format!("{prefix}test('deadline',()=>new Promise(resolve=>setTimeout(resolve,5000)));"),
+        )
+        .unwrap();
+        assert!(std::panic::catch_unwind(|| {
+            verify_node_suite(root.path(), "TM-03", &["suite.mjs"], 1, "100");
+        })
+        .is_err());
     }
 }

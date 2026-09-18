@@ -13,6 +13,9 @@ inputs:
   reference:
     description: Immutable product reference, or tagged destination for build
     default: ""
+  output:
+    description: New project-root directory name for export-browser; validated by the SDK
+    default: ""
   release:
     description: Named modeled release selected for build (for example A or B)
     default: ""
@@ -91,6 +94,7 @@ runs:
         PRISMPM_ACTION_AUTHORIZED: ${{ inputs.authorized }}
         PRISMPM_ACTION_PLAN: ${{ inputs.plan }}
         PRISMPM_ACTION_REFERENCE: ${{ inputs.reference }}
+        PRISMPM_ACTION_OUTPUT: ${{ inputs.output }}
         PRISMPM_ACTION_RELEASE: ${{ inputs.release }}
         PRISMPM_ACTION_POLICY: ${{ inputs.policy }}
         PRISMPM_ACTION_PROMOTION_TO: ${{ inputs.promotion-to }}

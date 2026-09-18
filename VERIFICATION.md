@@ -1339,6 +1339,25 @@ Evidence SHA-256:
 - `target/identity-error-draft/host-regression.log`: `c2bec76c2a9c7aa9849e3f46e521353f84407dfc56afe7cf25455819be6e53dc`.
 - `target/footer-sealed-golden-check.log`: `12d50e274c5123275aa9b94441e274cae35d837bdd1f996d0cd1d30549821d8e`.
 
+## Shared Action browser export (TM-03)
+
+The real shell adapter first rejected `export-browser`; its 11 owning tests now
+pass, including exact argument forwarding, isolated host execution and rejection
+of two planted argument/network defects. The recording Docker boundary is an
+adapter test double, not evidence of release validity or installed SDK behavior.
+Immutable references, verified release closure and atomic confined output remain
+owned by the actual SDK CLI/OCI/controller tests.
+
+TM-03 now requires the complete Node pass set with no skipped, cancelled or TODO
+tests and a bounded deadline. Actual empty, incomplete, skipped, TODO, missing-file
+and timed-out suites fail this gate. All seven conformance-library tests, all six
+template conformance cases, authored-package formatting and Clippy pass in the
+development container. This is not installed-SDK, producer or Pages acceptance.
+
+- `target/action-export-browser-red.log`: `29a4c6ec3218104c92ffc2a8bd1a0ba6081b112d85f59f84834852387d8b3395`.
+- `target/action-export-browser-final.log`: `5abdeac80f3a3f06c2fb4004466fd1befd529b91c5d8449d32f965c1c68167f6`.
+- `target/action-export-browser-owning-final.log`: `8cd6d5ee6600827d8dfe31e7f7d8cb428c99df595b8d19517bdb625e3d0189d8`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
