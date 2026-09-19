@@ -3,6 +3,185 @@
 use prismpm::holo::canonical::{decode_canonical, encode_value};
 use serde_json::{json, Value};
 
+#[test]
+fn native_library_projects_all_1024_roots_from_closed_source_chunks() {
+    use prismpm::controller::CheckRequest;
+    use std::path::Path;
+
+    fn copy(source: &Path, destination: &Path) {
+        std::fs::create_dir_all(destination).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let target = destination.join(entry.file_name());
+            let kind = entry.file_type().unwrap();
+            if kind.is_dir() {
+                copy(&entry.path(), &target);
+            } else {
+                assert!(kind.is_file());
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let project = tempfile::tempdir().unwrap();
+    copy(
+        &root.join("tests/fixtures/library/native-library/project"),
+        project.path(),
+    );
+    let path = project.path().join("src/Probe.lex.tex");
+    let original = std::fs::read_to_string(&path).unwrap();
+    let line = original
+        .lines()
+        .find(|line| line.starts_with("\\semanticdata{"))
+        .unwrap();
+    let mut module: Value = serde_json::from_str(
+        line.strip_prefix("\\semanticdata{")
+            .unwrap()
+            .strip_suffix('}')
+            .unwrap(),
+    )
+    .unwrap();
+    let declarations = module["declarations"].as_array_mut().unwrap();
+    let descriptor = declarations
+        .iter()
+        .position(|value| value["name"] == "probeLibrary")
+        .unwrap();
+    let names = (0..1024)
+        .map(|i| format!("LibraryProbe.Probe.vector{i:04}"))
+        .collect::<Vec<_>>();
+    let mut chunks = Vec::new();
+    for (index, values) in names.chunks(16).enumerate() {
+        let list = values.iter().rev().fold(
+            json!({"kind":"nil","element":{"kind":"string"}}),
+            |tail, value| json!({"kind":"cons","head":{"kind":"string","value":value},"tail":tail}),
+        );
+        let name = format!("chunk{index:04}");
+        declarations.push(json!({"kind":"definition","name":name,"parameters":[],
+            "result":{"kind":"list","element":{"kind":"string"}},"body":list}));
+        chunks.push(json!({"kind":"call","function":{"name":name},"arguments":[]}));
+    }
+    while chunks.len() > 1 {
+        chunks = chunks
+            .chunks(2)
+            .map(|pair| {
+                json!({"kind":"primitive","operation":"append",
+            "result":{"kind":"list","element":{"kind":"string"}},"arguments":pair})
+            })
+            .collect();
+    }
+    for index in 0..32 {
+        let name = format!("rootAlias{index:02}");
+        declarations.push(json!({"kind":"definition","name":name,"parameters":[],
+            "result":{"kind":"list","element":{"kind":"string"}},"body":chunks[0]}));
+        chunks[0] = json!({"kind":"call","function":{"name":name},"arguments":[]});
+    }
+    for field in declarations[descriptor]["body"]["fields"]
+        .as_array_mut()
+        .unwrap()
+    {
+        if matches!(
+            field["field"].as_str(),
+            Some("exportRoots" | "acceptanceRoots")
+        ) {
+            field["value"] = chunks[0].clone();
+        }
+    }
+    for name in &names {
+        declarations.push(
+            json!({"kind":"definition","name":name.strip_prefix("LibraryProbe.Probe.").unwrap(),
+            "parameters":[],"result":{"kind":"bool"},"body":{"kind":"bool","value":true}}),
+        );
+    }
+    let descriptor = declarations.remove(descriptor);
+    declarations.push(descriptor);
+    let replacement = format!(
+        "\\semanticdata{{{}}}",
+        serde_json::to_string(&module).unwrap()
+    );
+    std::fs::write(&path, original.replace(line, &replacement)).unwrap();
+    let controller = prismpm::Controller::load(project.path()).unwrap();
+    let checked = controller
+        .check(CheckRequest { config_path: None })
+        .expect("full declared root bound checks through actual LexLean source projection");
+    assert_eq!(checked.entity_count, 1024);
+    let lexlean_path =
+        camino::Utf8PathBuf::from_path_buf(project.path().join("lexlean.toml")).unwrap();
+    let snapshot = lexlean::Engine::load(&lexlean_path)
+        .unwrap()
+        .snapshot(lexlean::CheckRequest {
+            selection: lexlean::Selection::Entrypoints,
+        })
+        .unwrap();
+    let projected = prismpm::holo::library::project_library(&snapshot)
+        .unwrap()
+        .unwrap();
+    let library = projected.library.unwrap();
+    assert_eq!(library.export_roots, names);
+    assert_eq!(library.acceptance_roots, names);
+    assert!(
+        !project.path().join(".prism").exists(),
+        "check stays read-only"
+    );
+    let declarations = module["declarations"].as_array_mut().unwrap();
+    let descriptor = declarations.last_mut().unwrap();
+    for field in descriptor["body"]["fields"].as_array_mut().unwrap() {
+        if matches!(
+            field["field"].as_str(),
+            Some("exportRoots" | "acceptanceRoots")
+        ) {
+            field["value"] = json!({"kind":"primitive","operation":"append",
+                "result":{"kind":"list","element":{"kind":"string"}},
+                "arguments":[field["value"],{"kind":"cons","head":{"kind":"string","value":"LibraryProbe.Probe.vector1024"},"tail":{"kind":"nil","element":{"kind":"string"}}}]});
+        }
+    }
+    let last = declarations.len() - 1;
+    declarations.insert(last, json!({"kind":"definition","name":"vector1024","parameters":[],"result":{"kind":"bool"},"body":{"kind":"bool","value":true}}));
+    let replacement = format!(
+        "\\semanticdata{{{}}}",
+        serde_json::to_string(&module).unwrap()
+    );
+    std::fs::write(&path, original.replace(line, &replacement)).unwrap();
+    let rejected = controller
+        .check(CheckRequest { config_path: None })
+        .unwrap_err();
+    assert_eq!(rejected.code.as_str(), "PP4004");
+    assert!(rejected.message.contains("count or identifier bounds"));
+    assert!(!project.path().join(".prism").exists());
+
+    let declarations = module["declarations"].as_array_mut().unwrap();
+    let mut descriptor = declarations.pop().unwrap();
+    let mut empty = json!({"kind":"nil","element":{"kind":"string"}});
+    for index in 0..17 {
+        let name = format!("emptyChunk{index:02}");
+        declarations.push(json!({"kind":"definition","name":name,"parameters":[],
+            "result":{"kind":"list","element":{"kind":"string"}},"body":empty}));
+        let call = json!({"kind":"call","function":{"name":name},"arguments":[]});
+        empty = json!({"kind":"primitive","operation":"append",
+            "result":{"kind":"list","element":{"kind":"string"}},"arguments":[call,call]});
+    }
+    for field in descriptor["body"]["fields"].as_array_mut().unwrap() {
+        if matches!(
+            field["field"].as_str(),
+            Some("exportRoots" | "acceptanceRoots")
+        ) {
+            field["value"] =
+                json!({"kind":"call","function":{"name":"emptyChunk16"},"arguments":[]});
+        }
+    }
+    declarations.push(descriptor);
+    let replacement = format!(
+        "\\semanticdata{{{}}}",
+        serde_json::to_string(&module).unwrap()
+    );
+    std::fs::write(&path, original.replace(line, &replacement)).unwrap();
+    let rejected = controller
+        .check(CheckRequest { config_path: None })
+        .unwrap_err();
+    assert_eq!(rejected.code.as_str(), "PP2001");
+    assert!(rejected.message.contains("projection budget"));
+    assert!(!project.path().join(".prism").exists());
+}
+
 fn document() -> Value {
     let mut value: Value = serde_json::from_slice(include_bytes!(
         "../../../tests/data/text-model-document.json"

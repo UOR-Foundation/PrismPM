@@ -999,6 +999,12 @@ Each root list has 1..1024 unique bytewise-ordered qualified identifiers,
 each at most 1024 bytes. Every export resolves to an executable typed definition
 in the selected snapshot. Acceptance roots are exported zero-argument Boolean
 definitions; their types come from the graph, not caller-supplied signatures.
+Root metadata admits literal string lists, typed list append and acyclic calls
+to closed list definitions, including imported chunks. Iterative expansion
+preserves order and duplicates for validation; it never sorts or drops roots.
+Each list is limited to 65,536 projection steps before materialization can grow
+unboundedly. Unsupported expressions, cycles or budget exhaustion fail with
+`PP2001`; the 1,024-root limit remains unchanged. Application metadata is unchanged.
 Malformed metadata fails with `PP4004`; unresolved or wrongly typed roots fail
 with `PP2001`.
 

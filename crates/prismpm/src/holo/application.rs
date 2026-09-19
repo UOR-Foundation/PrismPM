@@ -90,6 +90,15 @@ pub(super) fn record<'a>(
     module: &'a str,
     value: &'a Value,
 ) -> Result<BTreeMap<&'a str, (&'a str, &'a Value)>, PrismError> {
+    record_with_unevaluated_fields(definitions, module, value, &[])
+}
+
+pub(super) fn record_with_unevaluated_fields<'a>(
+    definitions: &'a Definitions<'a>,
+    module: &'a str,
+    value: &'a Value,
+    deferred_fields: &[&str],
+) -> Result<BTreeMap<&'a str, (&'a str, &'a Value)>, PrismError> {
     let (module, value) = evaluated(definitions, module, value)?;
     if value.get("kind").and_then(Value::as_str) != Some("record") {
         return Err(PrismError::new(
@@ -110,7 +119,11 @@ pub(super) fn record<'a>(
         let value = field
             .get("value")
             .ok_or_else(|| PrismError::new("PP2001", "application field has no value"))?;
-        let evaluated = evaluated(definitions, module, value)?;
+        let evaluated = if deferred_fields.contains(&name) {
+            (module, value)
+        } else {
+            evaluated(definitions, module, value)?
+        };
         if result.insert(name, evaluated).is_some() {
             return Err(PrismError::new(
                 "PP2001",

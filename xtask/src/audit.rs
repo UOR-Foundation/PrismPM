@@ -892,10 +892,11 @@ pub fn audit_errors(root: &Path, model: &Model) -> Result<(), Fail> {
 
 /// Audit the exact Holo emitter input closure and its stored semantics digest.
 pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
-    const EXPECTED: [&str; 12] = [
+    const EXPECTED: [&str; 13] = [
         "crates/prismpm/src/holo/application.rs",
         "crates/prismpm/src/holo/canonical.rs",
         "crates/prismpm/src/holo/library.rs",
+        "crates/prismpm/src/holo/library/roots.rs",
         "crates/prismpm/src/holo/model_document.rs",
         "crates/prismpm/src/holo/mod.rs",
         "crates/prismpm/src/holo/projector.rs",

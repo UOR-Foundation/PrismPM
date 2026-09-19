@@ -1,11 +1,15 @@
 //! Explicit native-library projection; no implicit facet or application fallback.
 
-use super::application::{exact_fields, member_name, record, string, string_list, Definitions};
+use super::application::{
+    exact_fields, member_name, record_with_unevaluated_fields, string, Definitions,
+};
 use super::model_document::{ModelDocument, ModelLibrary, ProjectionProvenance};
 use crate::error::PrismError;
 use lexlean::SemanticSnapshot;
 use serde_json::Value;
 use std::collections::BTreeMap;
+
+mod roots;
 
 fn invalid(message: &str) -> PrismError {
     PrismError::new("PP4004", message)
@@ -179,7 +183,12 @@ pub fn project_library(snapshot: &SemanticSnapshot) -> Result<Option<ModelDocume
         ));
     }
     let ((module, _), declaration) = candidates[0];
-    let fields = record(&definitions, module, &declaration["body"])?;
+    let fields = record_with_unevaluated_fields(
+        &definitions,
+        module,
+        &declaration["body"],
+        &["exportRoots", "acceptanceRoots"],
+    )?;
     exact_fields(
         &fields,
         &[
@@ -202,8 +211,8 @@ pub fn project_library(snapshot: &SemanticSnapshot) -> Result<Option<ModelDocume
         cargo_description: string(&fields, "cargoDescription")?,
         cargo_repository: string(&fields, "cargoRepository")?,
         cargo_homepage: string(&fields, "cargoHomepage")?,
-        export_roots: string_list(&fields, "exportRoots")?,
-        acceptance_roots: string_list(&fields, "acceptanceRoots")?,
+        export_roots: roots::project(&definitions, &fields, "exportRoots")?,
+        acceptance_roots: roots::project(&definitions, &fields, "acceptanceRoots")?,
     };
     validate_roots(&library, snapshot)?;
     let document = ModelDocument {

@@ -1397,6 +1397,22 @@ handling from merely observing a nonzero test exit. Focused-check log SHA-256:
 Full V&V, both consecutive hosted invocations and installed SDK acceptance
 remain required; these targeted results do not establish their completion.
 
+## Bounded native-library root projection
+
+Actual LexLean source first rejected chunked root metadata with PP2001. The
+iterative projector now checks all 1,024 roots through 32 aliases, preserves
+exact order, and rejects excess roots, cycles and exhausted expansion budgets.
+Dropping one append operand makes that source regression fail (16 vs 1,024).
+Seven integration tests, four owning unit tests, all 69 helper tests, source
+and model audits, all-target Clippy and formatting pass. Restored-source log
+SHA-256: `3bd311575b8b66673c2a7123beb1e5c86d095a94e458fe648595ed162fca9206`.
+
+Independent replay matches all 325 reviewed golden files; changes bind the
+emitter closure and actual verifier identity without changing application bytes.
+The unchanged DK-17 native gate passes its behavioral mutant and restored replay.
+Log SHA-256: `61d5689431bb4b3223de9672063f73ac0d28ed3e7da61ca87d3df3def9d59a8d`.
+This is targeted SDK evidence, not full V&V or Foundry publication acceptance.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
