@@ -10,12 +10,17 @@ use std::collections::BTreeSet;
 #[path = "diagnostics/filesystem.rs"]
 mod filesystem;
 
+#[path = "diagnostics/configuration.rs"]
+mod configuration;
+
 #[derive(Clone, Copy)]
 enum Rule {
     ArtifactIntegrity,
     ConfinedOutput,
     ImmutableLock,
-    ClosedObject,
+    ConfigurationShape,
+    ConfigurationRequired,
+    ConfigurationLimits,
     Required,
     PositiveBound,
     Reference,
@@ -39,7 +44,9 @@ impl Rule {
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
             Self::ImmutableLock => filesystem::specimens("PP1101"),
-            Self::ClosedObject => (json!({"known":true}), json!({"unknown":true})),
+            Self::ConfigurationShape => configuration::specimens("PP1001"),
+            Self::ConfigurationRequired => configuration::specimens("PP1002"),
+            Self::ConfigurationLimits => configuration::specimens("PP1003"),
             Self::Required => (json!({"required":"present"}), json!({})),
             Self::PositiveBound => (
                 json!({"maximum":1,"value":1}),
@@ -109,9 +116,9 @@ impl Rule {
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
-            Self::ClosedObject => value
-                .as_object()
-                .is_some_and(|object| object.keys().all(|key| key == "known")),
+            Self::ConfigurationShape | Self::ConfigurationRequired | Self::ConfigurationLimits => {
+                configuration::validate(value).is_ok()
+            }
             Self::Required => value
                 .get("required")
                 .and_then(Value::as_str)
@@ -183,9 +190,13 @@ macro_rules! probes {
 }
 
 probes!(
-    ("PP1001", "unknown-configuration-field", ClosedObject),
-    ("PP1002", "missing-required-configuration", Required),
-    ("PP1003", "invalid-project-limit", PositiveBound),
+    ("PP1001", "unknown-configuration-field", ConfigurationShape),
+    (
+        "PP1002",
+        "missing-required-configuration",
+        ConfigurationRequired
+    ),
+    ("PP1003", "invalid-project-limit", ConfigurationLimits),
     ("PP2001", "unresolved-document-reference", Reference),
     ("PP2002", "ambiguous-facet-term", Unique),
     ("PP2003", "duplicate-component-id", Unique),
@@ -304,6 +315,12 @@ fn validate_text_specimen(value: &Value) -> Result<(), PrismError> {
 fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     if matches!(
         spec.rule,
+        Rule::ConfigurationShape | Rule::ConfigurationRequired | Rule::ConfigurationLimits
+    ) {
+        return configuration::validate(value);
+    }
+    if matches!(
+        spec.rule,
         Rule::ArtifactIntegrity | Rule::ConfinedOutput | Rule::ImmutableLock
     ) {
         return filesystem::validate(value);
@@ -360,6 +377,32 @@ pub fn exercise_all() -> Result<Vec<DiagnosticProbeResult>, PrismError> {
 mod tests {
     use super::{exercise_all, validate, Rule, PROBES};
     use std::collections::BTreeSet;
+
+    #[test]
+    fn configuration_dispatch_preserves_the_real_loader_diagnostic() {
+        let control = "spec = \"prismpm/project/1\"\nproject = \"Diagnostic\"\nlexlean_project = \"lexlean.toml\"\nbuild_root = \".prism\"\n[limits]\nmax_holo_bytes = 1\nmax_entities = 1\nmax_diagnostics = 1\n";
+        for (code, malformed) in [
+            ("PP1001", format!("unknown = true\n{control}")),
+            ("PP1002", control.replace("project = \"Diagnostic\"\n", "")),
+            (
+                "PP1003",
+                control.replace("max_entities = 1", "max_entities = 0"),
+            ),
+        ] {
+            let spec = *PROBES.iter().find(|row| row.code == code).unwrap();
+            let project = tempfile::tempdir().unwrap();
+            std::fs::write(project.path().join("prismpm.toml"), &malformed).unwrap();
+            let expected = crate::config::ProjectConfig::load(project.path(), None).unwrap_err();
+            assert_eq!(expected.code.as_str(), code);
+            validate(spec, &serde_json::json!({"configuration": control})).unwrap();
+            let actual =
+                validate(spec, &serde_json::json!({"configuration": malformed})).unwrap_err();
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+        }
+    }
 
     #[test]
     fn filesystem_dispatch_preserves_the_real_public_owner_diagnostic() {

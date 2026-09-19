@@ -1413,6 +1413,21 @@ The unchanged DK-17 native gate passes its behavioral mutant and restored replay
 Log SHA-256: `61d5689431bb4b3223de9672063f73ac0d28ed3e7da61ca87d3df3def9d59a8d`.
 This is targeted SDK evidence, not full V&V or Foundry publication acceptance.
 
+## Configuration diagnostic boundaries
+
+PP1001–PP1003 now execute the actual project loader. Absent required fields
+return PP1002; negative, zero and excessive limits return PP1003. Closed-shape
+and type errors remain PP1001. Removing the loader's validation call makes the
+owning test fail on a zero limit. Restored source passes three loader tests,
+four diagnostic tests, both actual CLI contract tests, formatting and
+all-target/all-feature Clippy in the development container. This is targeted
+evidence, not full SDK acceptance; 77 other generic probes remain recorded.
+
+- Missing/negative-field regression: `target/configuration-loader-red.log`, SHA-256 `6a6502bae0e11b5c501d8395e4b72757073813f1b71353d165d686503ddc615f`.
+- Removed-validation mutant: `target/configuration-loader-mutant.log`, SHA-256 `0c59fb427d7daca3a2d1bb2511358b8c0de3a82a1473aaf00adea189da773bd3`.
+- Restored loader: `target/configuration-loader-restored.log`, SHA-256 `ebc296ac6a2cae9338096affd43a2e17358aae6708c44261e82fc87cdd7a9e9b`.
+- Actual CLI codes/bytes/exit classes: `target/configuration-cli-restored.log`, SHA-256 `ea17fc59fad45ba87da4d93c919b2ddc914625dc05b3d91906df7794816a2968`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

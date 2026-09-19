@@ -71,7 +71,9 @@ and `target/asyncapi-sdk-audit-20260915.json` (SHA-256
 Feature and diagnostic register accounting is checked dynamically.
 PP2009 executes the actual text-application validator; PP4001, PP8001 and
 PP1101 exercise artifact integrity, confined cleanup and immutable lock owners.
-The other 80 `diagnostics.rs` probes still test generic local predicates rather
+PP1001–PP1003 exercise the actual strict project loader, including missing
+required fields and signed, zero and excessive resource limits.
+The other 77 `diagnostics.rs` probes still test generic local predicates rather
 than their owning implementation boundaries. Passing those probes or counting their
 IDs is not evidence that all public error paths work. Complete real positive
 and malformed-input subsystem coverage, including emitted-code and execution
