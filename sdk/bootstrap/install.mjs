@@ -72,6 +72,7 @@ export function installRuntime(destination = RUNTIME, cache = null) {
         execFileSync(
           'curl',
           [
+            '--disable',
             '--proto',
             '=https',
             '--proto-redir',

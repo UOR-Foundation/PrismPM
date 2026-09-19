@@ -37,6 +37,39 @@ const lock = JSON.parse(
 );
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+test('bootstrap acquisition disables ambient curl configuration before any download', () => {
+  const work = mkdtempSync(join(tmpdir(), 'bootstrap-curl-config.'));
+  try {
+    writeFileSync(join(work, '.curlrc'), 'unregistered-prismpm-test-option = true\n');
+    const module = new URL('./install.mjs', import.meta.url).href;
+    execFileSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import cp from 'node:child_process';
+      import { syncBuiltinESMExports } from 'node:module';
+      import { installRuntime } from ${JSON.stringify(module)};
+      const original = cp.execFileSync;
+      assert.match(cp.spawnSync('curl', ['--version'], { encoding: 'utf8' }).stderr,
+        /unregistered-prismpm-test-option/);
+      let calls = 0;
+      cp.execFileSync = (command, args, options) => {
+        if (command !== 'curl') return original(command, args, options);
+        calls++;
+        assert.equal(args[0], '--disable', 'curl must ignore user configuration');
+        const result = cp.spawnSync(command, [args[0], '--version'], { encoding: 'utf8' });
+        assert.equal(result.status, 0);
+        assert(!result.stderr.includes('unregistered-prismpm-test-option'));
+        throw Error('verified acquisition boundary');
+      };
+      syncBuiltinESMExports();
+      assert.throws(() => installRuntime(${JSON.stringify(join(work, 'runtime'))}),
+        /verified acquisition boundary/);
+      assert.equal(calls, 1);
+    `], { env: { ...process.env, CURL_HOME: work }, timeout: 15000, stdio: 'pipe' });
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
 test('supported Linux process architectures select direct or explicit emulated historical invocation', () => {
   assert.equal(platformMode('linux', 'x64', 'x86_64'), 'direct-amd64');
   assert.equal(
