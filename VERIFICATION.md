@@ -21,9 +21,22 @@ The canonical compiler-input owning run completed in 462.63 seconds;
 Provider integration, cryptographic proof admission, browser enrollment,
 atomic persistence, SDK release and deployment are not accepted by this gate.
 
+## Exclusive-branch compiler input
+
+The compiler input is now `507b6c4ef44e951bb4bbe8b34e4767803fafa8b5`.
+Owned-value reuse follows execution paths: exclusive branches can move, while
+conditions, scrutinees and sequential uses remain additive. Native allocation
+and pointer-retention regressions plus the unchanged 64-page Wasm accumulator
+fail before the fix and pass afterward. Full compiler `just ci` passes twice;
+log SHA-256 `735a2ca714104353101cf2c1cba18b269af24ab29ff73fdd09a108385c5a5313`
+and `1f3e04b37d1d15ac308f074d088393ce0f6c9cdfa7e58d900587736b1cd173c3`.
+The two changed Rust files reproduce exact tracked Git blobs; the Lean archive
+is unchanged. This accepts compiler inputs only. Current stdlib regeneration,
+goldens, installed SDK and Foundry acceptance are still required.
+
 ## Verified compiler input refresh
 
-The compiler is pinned to `8e97cf8bbae442b18a7c4fac76d8473b837f38de`.
+This checkpoint pinned `8e97cf8bbae442b18a7c4fac76d8473b837f38de`.
 It admits bounded first-order local functions, preserves large Nat literals,
 and owns returned values before branch-local storage expires. Borrowed
 accessors require one correctly typed, stable borrowed input; valid accessor
