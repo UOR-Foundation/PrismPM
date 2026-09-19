@@ -54,13 +54,21 @@ function validateWorkflow(value) {
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert.match(value.jobs.gate.steps.at(-1).with.runCmd, /^set -euo pipefail\njust vv\njust vv\n?$/);
   assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
-  const builds = value.jobs.images.steps.find(step => step.id === 'build').with;
-  assert.equal(builds.outputs, 'type=registry,name=${{ matrix.repository }},push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true');
-  assert.equal(builds.tags, undefined, 'unaccepted publication must not move discovery aliases');
+  const builds = value.jobs.images.steps.find(step => step.id === 'build');
+  assert.equal(builds.uses, undefined);
+  assert.equal(builds.with, undefined);
+  assert.equal(builds.env.REPOSITORY, '${{ matrix.repository }}');
+  assert.match(builds.run, /--output "type=registry,name=\$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
+  assert.ok(!builds.run.includes('--tag'), 'unaccepted publication must not move discovery aliases');
+  assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$TARGET"\)/);
+  assert.match(builds.run, /--platform linux\/amd64,linux\/arm64/);
+  assert.match(builds.run, /--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0/);
+  assert.match(builds.run, /digest=\$\(node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/sdk-build\.json"\)/);
   const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
-  for (const label of builds.labels.trim().split('\n')) {
-    const key = label.split('=')[0];
-    assert.ok(rebuild.run.includes(`--label "${key}=`), `rebuild omits ${key}`);
+  for (const key of ['created', 'revision', 'source', 'version']) {
+    assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
+      || builds.run.includes(`--label org.opencontainers.image.${key}=`), `build omits ${key}`);
+    assert.ok(rebuild.run.includes(`--label "org.opencontainers.image.${key}=`), `rebuild omits ${key}`);
   }
   assert.match(rebuild.run, /--label "org\.opencontainers\.image\.revision=\$GITHUB_SHA"/);
   assert.match(rebuild.run, /--label "org\.opencontainers\.image\.source=https:\/\/github\.com\/\$GITHUB_REPOSITORY"/);
@@ -142,7 +150,13 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs.gate.steps.at(-1).with.runCmd = 'just vv'; },
     value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
-    value => { value.jobs.images.steps.find(step => step.id === 'build').with.tags = '${{ matrix.repository }}:sha-${{ github.sha }}'; },
+    ...[
+      run => run + '\n--tag mutable:unaccepted\n',
+      run => run.replace('push-by-digest=true', 'push-by-digest=false'),
+      run => run.replace('node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET"', 'docker buildx build'),
+      run => run.replace('--platform linux/amd64,linux/arm64', '--platform linux/amd64'),
+      run => run.replace('--provenance=false', '--provenance=true'),
+    ].map(mutate => value => { const step = value.jobs.images.steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
     value => { value.jobs.images.steps.push({uses: 'actions/attest-sbom@fixture'}); },
     value => { value.jobs.images.steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));

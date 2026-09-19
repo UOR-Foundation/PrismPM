@@ -797,6 +797,19 @@ content is limited to 4 GiB, including repeated blobs and the bootstrap archive;
 callers may only lower that bound. This is input reconstruction, not SDK V&V
 execution or acceptance.
 
+`scripts/sdk-image-inputs.mjs` binds SDK image construction to this closure.
+The committed `sdk/vv-inputs.lock.json` selects the reviewed RustSec snapshot;
+the expected source revision is an independent build argument. The image's
+initial stage verifies both helpers and policies against that committed source
+before reconstructing every source-derived build input. It retains the sealed
+closure at `/opt/prismpm/share/vv-inputs` and the closed expected policy at
+`/opt/prismpm/share/vv-input-policy.json`. Inventory rows bind their actual
+bytes and helper/policy identities. Generated Git stores, caller configuration,
+credentials, caches and untracked source do not enter the image. The shared
+build wrapper refuses conflicting context, source, file or target arguments.
+This is image-input construction; full V&V execution, freshness, independent
+native-platform and immutable-image acceptance remain separate gates.
+
 ### 12.1 Browser host prerequisites
 
 `sdk/browser` contains generic host bindings, not a stateful application

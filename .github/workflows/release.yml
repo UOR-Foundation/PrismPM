@@ -98,6 +98,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - name: Require the source-bound publication policy before registry credentials
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
@@ -114,21 +116,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
-          platforms: linux/amd64,linux/arm64
-          outputs: type=registry,name=${{ matrix.repository }},push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true
-          provenance: false
-          sbom: false
-          build-args: SOURCE_DATE_EPOCH=0
-          labels: |
-            org.opencontainers.image.created=1970-01-01T00:00:00Z
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ needs.gate.outputs.version }}
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          TARGET: ${{ matrix.target }}
+          REPOSITORY: ${{ matrix.repository }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
+            build=(node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET")
+          else
+            test "$DOCKERFILE" = sdk/runtime/Dockerfile
+            build=(docker buildx build --file "$DOCKERFILE")
+          fi
+          context=()
+          if [ "$DOCKERFILE" = sdk/runtime/Dockerfile ]; then context=(.); fi
+          "${build[@]}" --platform linux/amd64,linux/arm64 \
+            --output "type=registry,name=$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true" \
+            --metadata-file "$RUNNER_TEMP/sdk-build.json" \
+            --provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0 \
+            --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.version=$VERSION" "${context[@]}"
+          digest=$(node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/sdk-build.json")
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
       - id: platforms
         shell: bash
         env:
@@ -361,10 +373,14 @@ jobs:
         with:
           path: root-a
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: root-b
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
@@ -390,18 +406,23 @@ jobs:
           identity_file=".shipped-image/$IMAGE-image.txt"
           identity=$(cat "$identity_file")
           docker buildx imagetools inspect --raw "$identity" > shipped-index.json
-          target=()
-          if [ -n "$TARGET" ]; then target=(--target "$TARGET"); fi
           for root in root-a root-b; do
-            docker buildx build --no-cache --provenance=false --sbom=false \
+            context=()
+            if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
+              build=(node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$GITHUB_SHA" "$TARGET")
+            else
+              test "$DOCKERFILE" = sdk/runtime/Dockerfile
+              build=(docker buildx build --file "$root/$DOCKERFILE")
+              context=("$root")
+            fi
+            "${build[@]}" --no-cache --provenance=false --sbom=false \
               --build-arg SOURCE_DATE_EPOCH=0 \
               --label "org.opencontainers.image.created=1970-01-01T00:00:00Z" \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
               --label "org.opencontainers.image.version=$VERSION" \
-              --platform "$PLATFORM" --file "$root/$DOCKERFILE" \
-              "${target[@]}" \
-              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "$root"
+              --platform "$PLATFORM" \
+              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "${context[@]}"
             mkdir "$root.oci"
             tar -xf "$root.oci.tar" -C "$root.oci"
             jq -r '.manifests[0].digest' "$root.oci/index.json" > "$root.digest"
@@ -467,6 +488,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
@@ -487,13 +510,10 @@ jobs:
           VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -euo pipefail
-          docker buildx build \
+          node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" cli-archive \
             --build-arg "SDK_VERSION=$VERSION" \
             --platform "$PLATFORM" \
-            --file sdk/Dockerfile \
-            --target cli-archive \
-            --output type=local,dest=.native-release \
-            .
+            --output type=local,dest=.native-release
           archive=$(find .native-release -maxdepth 1 -type f -name 'prismpm-*.tar.gz' -print)
           test -n "$archive"
           test -f "$archive.sha256"

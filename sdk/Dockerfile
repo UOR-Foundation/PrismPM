@@ -1,9 +1,35 @@
 # syntax=docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25
+FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS input_tools
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+      amd64) node_arch=x64; node_sha=d60acfe00a2932254bb0ad20e01b0d74397a0875595de719654b214f4b03f307 ;; \
+      arm64) node_arch=arm64; node_sha=fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8 ;; \
+      *) exit 64 ;; \
+    esac \
+    && curl --fail --location --silent --show-error "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-${node_arch}.tar.xz" --output /tmp/node.tar.xz \
+    && echo "${node_sha}  /tmp/node.tar.xz" | sha256sum --check --strict \
+    && tar --extract --xz --file /tmp/node.tar.xz --strip-components=1 --directory /usr/local \
+    && rm /tmp/node.tar.xz
+
+FROM input_tools AS source_inputs
+ARG SDK_SOURCE_REVISION
+# Only the bounded verifier and its independently selected policy enter from
+# the caller context. All compiled source is reconstructed from verified packs.
+COPY scripts/sdk-vv-inputs.mjs scripts/sdk-image-inputs.mjs /opt/input-policy/scripts/
+COPY sdk/Dockerfile sdk/vv-inputs.lock.json /opt/input-policy/sdk/
+COPY tools.lock /opt/input-policy/
+COPY --from=vv-inputs / /opt/prismpm/share/vv-inputs/
+RUN node /opt/input-policy/scripts/sdk-image-inputs.mjs stage \
+      /opt/prismpm/share/vv-inputs /opt/input-policy "$SDK_SOURCE_REVISION" /prepared \
+    && cp /prepared/policy.json /opt/prismpm/share/vv-input-policy.json \
+    && chmod -R a+rX,a-w /opt/prismpm/share/vv-inputs \
+    && chmod 0444 /opt/prismpm/share/vv-input-policy.json
+
 FROM docker.io/library/docker:28.4.0-cli@sha256:6a73c9433f2ba4279815be1e60f5739288b939dda1e48151d8c393537802de37 AS docker_cli
 FROM docker.io/library/golang:1.19.7-alpine3.17@sha256:04065e607052705ede1ac6308ce56aec4715b0fafb1f0c2f4c2333aab9d84442 AS upstream_oracles
-COPY standards/oracles/oci-distribution-1.1.1 /src/distribution
-COPY standards/oracles/oci-runtime-1.3.0 /src/runtime
-COPY standards/oracles/oci-image-1.1.1 /src/image
+COPY --from=source_inputs /prepared/source/standards/oracles/oci-distribution-1.1.1 /src/distribution
+COPY --from=source_inputs /prepared/source/standards/oracles/oci-runtime-1.3.0 /src/runtime
+COPY --from=source_inputs /prepared/source/standards/oracles/oci-image-1.1.1 /src/image
 RUN cd /src/distribution \
     && CGO_ENABLED=0 go test -c -o /oci-distribution-conformance --ldflags='-X github.com/opencontainers/distribution-spec/conformance.Version=a139cc423184af6078077b9b7ee336eddbd03f8f' \
     && cd /src/runtime \
@@ -11,10 +37,10 @@ RUN cd /src/distribution \
     && cd /src/image \
     && CGO_ENABLED=0 go test -c -o /oci-image-schema-conformance ./schema
 FROM docker.io/library/golang:1.23.8-alpine3.21@sha256:b7486658b87d34ecf95125e5b97e8dfe86c21f712aa36fc0c702e5dc41dc63e1 AS cloudevents_oracle
-COPY standards/oracles/cloudevents-sdk-go-2.16.2 /src/cloudevents
-COPY sdk/oracles/go/cloudevents-validator /src/cloudevents-wrapper
-COPY standards/oracles/in-toto-attestation-ee16c68a /src/intoto
-COPY sdk/oracles/go/intoto-statement-validator /src/intoto-wrapper
+COPY --from=source_inputs /prepared/source/standards/oracles/cloudevents-sdk-go-2.16.2 /src/cloudevents
+COPY --from=source_inputs /prepared/source/sdk/oracles/go/cloudevents-validator /src/cloudevents-wrapper
+COPY --from=source_inputs /prepared/source/standards/oracles/in-toto-attestation-ee16c68a /src/intoto
+COPY --from=source_inputs /prepared/source/sdk/oracles/go/intoto-statement-validator /src/intoto-wrapper
 RUN cd /src/cloudevents/v2 \
     && CGO_ENABLED=0 go test -c -o /cloudevents-sdk-conformance ./event \
     && cd /src/cloudevents-wrapper \
@@ -24,7 +50,7 @@ RUN cd /src/cloudevents/v2 \
     && go mod edit -replace github.com/in-toto/attestation=/src/intoto \
     && CGO_ENABLED=0 go build -trimpath -o /intoto-statement-validator .
 FROM docker.io/library/maven:3.9.11-eclipse-temurin-21@sha256:6fdc855a6ed81d288ca7ca37ac6ff5e9308b612485c0801d70b25a858c83d237 AS openid_oracle
-COPY standards/oracles/openid-conformance-suite-3e09b13b /src/openid
+COPY --from=source_inputs /prepared/source/standards/oracles/openid-conformance-suite-3e09b13b /src/openid
 RUN cd /src/openid \
     && mvn --batch-mode --quiet \
       -Dmaven.gitcommitid.skip=true \
@@ -34,7 +60,7 @@ RUN cd /src/openid \
 RUN find /root/.m2/repository -type f \( -name '*.lastUpdated' -o -name '_remote.repositories' -o -name 'resolver-status.properties' -o -name 'maven-metadata-*.xml' -o -name 'maven-metadata-*.xml.sha1' \) -delete \
     && rm -f /src/openid/target/classes/META-INF/build-info.properties /src/openid/target/classes/git.properties \
     && find /root/.m2/repository /src/openid/target/classes /src/openid/target/test-classes -exec touch -h -d '@0' '{}' +
-FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS build
+FROM input_tools AS build
 
 ARG TARGETARCH
 ARG SOURCE_DATE_EPOCH=0
@@ -63,16 +89,6 @@ RUN case "$TARGETARCH" in \
     && rm /tmp/elan.tar.gz \
     && rm /tmp/elan/elan-init \
     && rmdir /tmp/elan
-
-RUN case "$TARGETARCH" in \
-      amd64) node_arch=x64; node_sha=d60acfe00a2932254bb0ad20e01b0d74397a0875595de719654b214f4b03f307 ;; \
-      arm64) node_arch=arm64; node_sha=fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8 ;; \
-      *) exit 64 ;; \
-    esac \
-    && curl --fail --location --silent --show-error "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-${node_arch}.tar.xz" --output /tmp/node.tar.xz \
-    && echo "${node_sha}  /tmp/node.tar.xz" | sha256sum --check --strict \
-    && tar --extract --xz --file /tmp/node.tar.xz --strip-components=1 --directory /usr/local \
-    && rm /tmp/node.tar.xz
 
 RUN cargo install --locked wasm-bindgen-cli --version 0.2.122
 RUN cargo install --locked wasm-tools --version 1.258.0
@@ -151,19 +167,19 @@ COPY --from=openid_oracle /opt/java/openjdk /opt/prismpm/openid-java
 COPY --from=openid_oracle /root/.m2/repository /opt/prismpm/openid-m2
 COPY --from=openid_oracle /src/openid/target/classes /opt/prismpm/openid-target/classes
 COPY --from=openid_oracle /src/openid/target/test-classes /opt/prismpm/openid-target/test-classes
-COPY --chmod=0755 sdk/oracles/openid-conformance.sh /usr/local/bin/openid-conformance
-COPY sdk/devcontainer-cli/package.json sdk/devcontainer-cli/package-lock.json /opt/prismpm/devcontainer-cli/
+COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/oracles/openid-conformance.sh /usr/local/bin/openid-conformance
+COPY --from=source_inputs /prepared/source/sdk/devcontainer-cli/package.json /prepared/source/sdk/devcontainer-cli/package-lock.json /opt/prismpm/devcontainer-cli/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/devcontainer-cli \
     && ln -s /opt/prismpm/devcontainer-cli/node_modules/@devcontainers/cli/devcontainer.js /usr/local/bin/devcontainer \
     && chmod 0755 /opt/prismpm/devcontainer-cli/node_modules/@devcontainers/cli/devcontainer.js
 
-COPY sdk/runtime/package.json sdk/runtime/package-lock.json sdk/runtime/profile.mjs sdk/runtime/runtime.mjs /opt/prismpm/runtime/
-COPY --chmod=0444 sdk/browser/identity.mjs sdk/browser/store.mjs sdk/browser/peer.mjs sdk/browser/journal.mjs sdk/browser/commands.mjs sdk/browser/queries.mjs sdk/browser/view-host.mjs sdk/browser/view-dom.mjs sdk/browser/view-error.mjs /opt/prismpm/browser/
+COPY --from=source_inputs /prepared/source/sdk/runtime/package.json /prepared/source/sdk/runtime/package-lock.json /prepared/source/sdk/runtime/profile.mjs /prepared/source/sdk/runtime/runtime.mjs /opt/prismpm/runtime/
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/browser/identity.mjs /prepared/source/sdk/browser/store.mjs /prepared/source/sdk/browser/peer.mjs /prepared/source/sdk/browser/journal.mjs /prepared/source/sdk/browser/commands.mjs /prepared/source/sdk/browser/queries.mjs /prepared/source/sdk/browser/view-host.mjs /prepared/source/sdk/browser/view-dom.mjs /prepared/source/sdk/browser/view-error.mjs /opt/prismpm/browser/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/runtime \
     && chmod 0444 /opt/prismpm/runtime/profile.mjs \
     && chmod 0555 /opt/prismpm/runtime/runtime.mjs
 
-COPY sdk/oracles/package.json sdk/oracles/package-lock.json sdk/oracles/asyncapi-parser.mjs sdk/oracles/devcontainer-validator.mjs sdk/oracles/git-signature-validator.mjs sdk/oracles/kubernetes-validator.mjs sdk/oracles/kubernetes-validator.test.mjs sdk/oracles/slsa-validator.mjs sdk/oracles/spdx-validator.mjs /opt/prismpm/oracles/
+COPY --from=source_inputs /prepared/source/sdk/oracles/package.json /prepared/source/sdk/oracles/package-lock.json /prepared/source/sdk/oracles/asyncapi-parser.mjs /prepared/source/sdk/oracles/devcontainer-validator.mjs /prepared/source/sdk/oracles/git-signature-validator.mjs /prepared/source/sdk/oracles/kubernetes-validator.mjs /prepared/source/sdk/oracles/kubernetes-validator.test.mjs /prepared/source/sdk/oracles/slsa-validator.mjs /prepared/source/sdk/oracles/spdx-validator.mjs /opt/prismpm/oracles/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
     && chmod 0555 /opt/prismpm/oracles/asyncapi-parser.mjs /opt/prismpm/oracles/devcontainer-validator.mjs /opt/prismpm/oracles/git-signature-validator.mjs /opt/prismpm/oracles/kubernetes-validator.mjs /opt/prismpm/oracles/slsa-validator.mjs /opt/prismpm/oracles/spdx-validator.mjs \
     && ln -s /opt/prismpm/oracles/asyncapi-parser.mjs /usr/local/bin/asyncapi-parser \
@@ -178,8 +194,10 @@ RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
     && ! /usr/local/bin/asyncapi-parser /tmp/asyncapi-invalid.json \
     && rm /tmp/asyncapi-valid.json /tmp/asyncapi-invalid.json
 
+COPY --from=source_inputs /opt/prismpm/share/vv-inputs/ /opt/prismpm/share/vv-inputs/
+COPY --from=source_inputs /opt/prismpm/share/vv-input-policy.json /opt/prismpm/share/vv-input-policy.json
 WORKDIR /opt/prismpm/source
-COPY . .
+COPY --from=source_inputs /prepared/source/ .
 RUN mkdir -p /opt/prismpm/asyncapi-official/scripts \
     && cp -a standards/oracles/asyncapi-spec-b3fac5bb/spec /opt/prismpm/asyncapi-official/spec \
     && cp -a standards/oracles/asyncapi-spec-b3fac5bb/scripts/validation /opt/prismpm/asyncapi-official/scripts/validation \
@@ -233,11 +251,11 @@ RUN cargo build --locked --release --package prismpm \
     && cp .github/workflows/sdk.yml /opt/prismpm/share/workflows/sdk.yml \
     && rm -rf target vendor/lexlean/target
 
-COPY --chmod=0755 sdk/devcontainer-init.sh /usr/local/bin/prismpm-devcontainer-init
-COPY --chmod=0444 sdk/profile.sh /etc/profile.d/prismpm-sdk.sh
-COPY --chmod=0444 sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
-COPY --chmod=0444 sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
-COPY --chmod=0444 sdk/platform-lock.mjs /opt/prismpm/platform-lock.mjs
+COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/devcontainer-init.sh /usr/local/bin/prismpm-devcontainer-init
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/profile.sh /etc/profile.d/prismpm-sdk.sh
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/platform-lock.mjs /opt/prismpm/platform-lock.mjs
 
 RUN set -eu; \
     PRISMPM_ARTIFACTS_ONLY=1 node sdk/generate-inventory.mjs /opt/prismpm/artifact-inventory.json
@@ -252,7 +270,7 @@ RUN mkdir -p /opt/prismpm/cargo-home \
 FROM build AS cli-archive-package
 ARG SDK_VERSION=0.3.0
 ARG TARGETARCH
-COPY LICENSE-APACHE LICENSE-MIT README.md /tmp/native-licenses/
+COPY --from=source_inputs /prepared/source/LICENSE-APACHE /prepared/source/LICENSE-MIT /prepared/source/README.md /tmp/native-licenses/
 RUN set -eu; \
     case "$TARGETARCH" in \
       amd64) rust_target=x86_64-unknown-linux-gnu ;; \
@@ -277,7 +295,7 @@ FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f281
 RUN chmod -R a-w /ms-playwright
 
 ARG SOURCE_DATE_EPOCH=0
-COPY sdk/runtime-os.lock /tmp/prismpm-runtime-os.lock
+COPY --from=source_inputs /prepared/source/sdk/runtime-os.lock /tmp/prismpm-runtime-os.lock
 
 # Downstream template gates compile their small repository-specific policy
 # crates inside the SDK. Resolve the native linker exclusively from one
