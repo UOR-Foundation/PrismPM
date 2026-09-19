@@ -322,6 +322,25 @@ retain their individually declared, audited axiom policies; an inherited
 library axiom is not an axiom-free theorem or a proof of runtime acceptance.
 Goldens are reviewed output, never a substitute for direct verification.
 
+### Internal mailbox-admission prerequisite
+
+ST-13 owns `Foundation.Sec.V1.MailboxAdmission`, a pure transition over current
+authenticated state and an independently admitted provider-profile assertion.
+Its complete boundary and finite limits are defined in
+`stdlib/src/Foundation/Sec/V1/MailboxAdmission.md`. Ordinary constructors and
+references do not authenticate evidence; no raw-token or public login adapter
+is provided. Historical verified-address facts cannot substitute for an adopted
+profile's current-control proof.
+
+Enrollment, login, recovery and mailbox replacement bind the exact authority
+configuration, stable account, provider subject, audience, mailbox, challenge,
+operation and candidate credential. Accepted transitions consume the challenge
+and preserve current authorization; recovery cannot restore revoked grants.
+ST-13 executes the modeled corpus in generated native `std` and `no_std` packages,
+audits all selected declarations and rejects planted behavioral defects.
+Cryptographic verification, challenge issuance, atomic durable admission,
+provider integration and browser/deployment acceptance remain distinct gates.
+
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
@@ -1399,6 +1418,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-08` | `stdlib` | Prism-stdlib exports registered runtime validator roots. | §5 |
 | `ST-09` | `stdlib` | Prism-stdlib includes golden test outputs for all published artifacts. | §5 |
 | `ST-10` | `stdlib` | Prism-stdlib models validate through the Holo projector and Lean kernel. | §5 |
+| `ST-13` | `stdlib` | The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |

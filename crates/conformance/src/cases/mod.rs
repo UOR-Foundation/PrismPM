@@ -1,5 +1,6 @@
 //! Conformance test cases verifying every registered capability.
 
+mod mailbox_admission;
 mod native_library;
 
 use repo_model::repo_root;
@@ -376,6 +377,7 @@ pub fn run_at(root: &Path, id: &str) {
         | "ST-10" => {
             verify_stdlib(root, id);
         }
+        "ST-13" => mailbox_admission::verify(root),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {

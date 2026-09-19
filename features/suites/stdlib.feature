@@ -59,3 +59,11 @@ Feature: stdlib
     Given stdlib models
     When projected to Holo and checked with Lean
     Then validation succeeds across all facets
+
+  @ST-13 @build
+  Scenario: The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution.
+    Given a current authenticated account and authority snapshot with a separately admitted profile-specific mailbox proof
+    When LexLean and lean4-prod compile the mailbox-admission kernel and complete finite corpus
+    Then generated std and no_std consumers enforce exact intent binding and single-use state transitions
+    And historical-address and replacement-key defects fail at their exact generated runtime roots
+    And restoration reproduces the original accepted artifact identities

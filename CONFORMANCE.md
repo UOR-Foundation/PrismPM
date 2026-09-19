@@ -215,6 +215,7 @@ The three honesty levels:
 | `ST-08` | `build` | Prism-stdlib exports registered runtime validator roots. |
 | `ST-09` | `build` | Prism-stdlib includes golden test outputs for all published artifacts. |
 | `ST-10` | `build` | Prism-stdlib models validate through the Holo projector and Lean kernel. |
+| `ST-13` | `build` | The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution. |
 
 ## supply-chain
 

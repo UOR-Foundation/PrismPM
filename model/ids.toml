@@ -331,6 +331,12 @@ level = "build"
 statement = "Prism-stdlib models validate through the Holo projector and Lean kernel."
 
 [[id]]
+id = "ST-13"
+suite = "stdlib"
+level = "build"
+statement = "The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"

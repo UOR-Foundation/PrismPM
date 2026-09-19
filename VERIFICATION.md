@@ -1,5 +1,26 @@
 # PrismPM falsifiability and verification record
 
+## Internal mailbox assertion admission (ST-13)
+
+The LexLean-owned kernel passed all 93 modeled cases in actual packaged native
+std/no_std consumers and audited all 233 selected declarations. Its authority,
+account, challenge and credential bindings remain internal prerequisites;
+constructing a proof record does not authenticate an email address.
+
+Both weakened guards were rejected by generated runtime assertions:
+`mailboxCurrentControl` at `probeHistoricalPolicy`, and
+`mailboxGateWrongCandidate` at `probeProofCandidateCredentialRef` (exit 101).
+Neither mutation published accepted artifacts. Both pristine restorations
+reproduced build
+`28fbeed7032d521ebab63ae2cd0590badd3f78dd6a3381b530efaed57b6cd504`
+and attestation
+`4b97e0afbfdad30949cdb2dc1eba9d5eb806a46deeccb872fee0daa6352395bc`.
+The canonical compiler-input owning run completed in 462.63 seconds;
+`target/mailbox-admission-owning-canonical.log` has SHA-256
+`ef508f23ca0f83b15abcab67e68bc99090e42c8c0cf551c17e195285196ec6bf`.
+Provider integration, cryptographic proof admission, browser enrollment,
+atomic persistence, SDK release and deployment are not accepted by this gate.
+
 ## Verified compiler input refresh
 
 The compiler is pinned to `8e97cf8bbae442b18a7c4fac76d8473b837f38de`.
