@@ -70,9 +70,30 @@ export function selectPlatform(bytes, expectedDigest, arch) {
   return found[0];
 }
 
-export function validateLoadedImage(value, image, arch, configuration, revision) {
+export function validateLoadedImage(value, image, arch, configuration, revision, chain) {
   reference(image); architecture(arch); digest(configuration);
-  assert.equal(value.Id, configuration); assert.equal(value.Os, 'linux'); assert.equal(value.Architecture, arch);
+  assert.equal(value.Os, 'linux'); assert.equal(value.Architecture, arch);
+  let store = 'classic';
+  if (value.Descriptor !== undefined && value.Descriptor !== null) {
+    assert(chain, 'descriptor image requires independently hashed OCI chain');
+    assert.equal(chain.reference, image); assert.equal(chain.architecture, arch); assert.equal(chain.config_digest, configuration);
+    const descriptor = value.Descriptor;
+    assert(Object.keys(descriptor).every(key => ['digest', 'mediaType', 'size', 'platform', 'annotations'].includes(key)));
+    const expected = [chain.index_descriptor, chain.child_descriptor].find(row => row.digest === descriptor.digest);
+    assert(expected, 'image descriptor is outside the exact OCI chain');
+    for (const key of ['digest', 'mediaType', 'size']) assert.equal(descriptor[key], expected[key]);
+    assert.equal(value.Id, descriptor.digest, 'descriptor image ID differs');
+    if (descriptor.platform !== undefined) {
+      assert(Object.keys(descriptor.platform).every(key => ['os', 'architecture', 'variant'].includes(key)));
+      assert.equal(descriptor.platform.os, 'linux'); assert.equal(descriptor.platform.architecture, arch);
+      assert(descriptor.platform.variant === undefined || (arch === 'arm64' && descriptor.platform.variant === 'v8'));
+    }
+    if (descriptor.annotations !== undefined) {
+      assert(descriptor.annotations && typeof descriptor.annotations === 'object' && !Array.isArray(descriptor.annotations));
+      assert(Object.values(descriptor.annotations).every(value => typeof value === 'string'));
+    }
+    store = 'containerd';
+  } else assert.equal(value.Id, configuration, 'classic image ID differs from OCI configuration');
   // Docker persists Hub references in familiar form. Only the implicit Hub
   // authority and its official-library namespace may be shortened; the exact
   // repository and digest remain bound, and no other registry is an alias.
@@ -89,6 +110,24 @@ export function validateLoadedImage(value, image, arch, configuration, revision)
     oid(revision); assert.equal(value.Config.Labels['org.opencontainers.image.revision'], revision);
     assert(value.Config.Volumes === null || value.Config.Volumes === undefined, 'SDK anonymous volumes prohibited');
   }
+  return {id: value.Id, store};
+}
+
+// Moby 28.4 returns the index ID for default containerd inspection and
+// container.Image, but the selected child ID for explicit platform inspection.
+// The classic store returns the configuration ID for both operations.
+export async function inspectLoadedImage(call, chain, arch, revision) {
+  const inspect = async platform => {
+    const args = ['image', 'inspect', ...(platform ? ['--platform', `linux/${arch}`] : []), chain.reference];
+    const rows = JSON.parse(successful(await call(args), 'inspect exact native image'));
+    assert(Array.isArray(rows) && rows.length === 1);
+    const result = validateLoadedImage(rows[0], chain.reference, arch, chain.config_digest, revision, chain);
+    if (result.store === 'containerd') assert.equal(result.id, platform ? chain.child_descriptor.digest : chain.index_descriptor.digest);
+    return result;
+  };
+  const stored = await inspect(false), selected = await inspect(true);
+  assert.equal(stored.store, selected.store, 'image store changed during inspection');
+  return {id: stored.id, platform_id: selected.id, store: stored.store};
 }
 
 export function validateIsolation(value) {
@@ -196,12 +235,15 @@ export async function acquireImageMetadata(call, image, arch) {
   assert.equal(manifest.length, child.size); assert.equal('sha256:' + hash(manifest), child.digest);
   const parsed = JSON.parse(manifest); assert.equal(parsed.schemaVersion, 2); digest(parsed.config?.digest);
   assert(['application/vnd.oci.image.manifest.v1+json', 'application/vnd.docker.distribution.manifest.v2+json'].includes(parsed.mediaType));
+  assert.equal(child.mediaType, parsed.mediaType, 'OCI child descriptor media type differs');
   assert(Number.isSafeInteger(parsed.config.size) && parsed.config.size > 0 && parsed.config.size <= 4 * 1024 * 1024);
   assert(Array.isArray(parsed.layers) && parsed.layers.length <= 256);
   let compressed = 0;
   for (const layer of parsed.layers) { digest(layer.digest); assert(Number.isSafeInteger(layer.size) && layer.size >= 0); compressed += layer.size; }
   assert(Number.isSafeInteger(compressed) && compressed <= 64 * 1024 ** 3);
   return {reference: image, child_digest: child.digest, config_digest: parsed.config.digest, architecture: arch,
+    index_descriptor: {digest: image.split('@')[1], mediaType: JSON.parse(index).mediaType, size: index.length},
+    child_descriptor: {digest: child.digest, mediaType: child.mediaType, size: child.size},
     compressed_bytes: compressed, index_sha256: hash(index), manifest_sha256: hash(manifest), annotations: child.annotations ?? {}};
 }
 
@@ -284,7 +326,7 @@ export async function runOuter({image, revision, arch, destination, source}, tra
     assert(space.bavail * space.bsize >= imageBytes * 4 + 12 * 1024 ** 3, 'insufficient disk for isolated image closure and reserve');
     writeFileSync(join(destination, 'image-plan.json'), canonical(expected), {flag: 'wx'});
     await outer(['pull', '--platform', `linux/${arch}`, lock.images.dind.reference], {timeout: 1200000});
-    validateLoadedImage(JSON.parse(await outer(['image', 'inspect', lock.images.dind.reference]))[0], lock.images.dind.reference, arch, expected.dind.config_digest);
+    await inspectLoadedImage(call, expected.dind, arch);
     for (const name of [names.data, names.socket, names.work]) await own('volume', name, ['volume', 'create', '--label', `${owner}=${nonce}`, name]);
     await own('network', names.network, ['network', 'create', '--label', `${owner}=${nonce}`, names.network]);
     await own('container', names.daemon, ['create', '--name', names.daemon, '--label', `${owner}=${nonce}`, '--privileged',
@@ -304,13 +346,14 @@ export async function runOuter({image, revision, arch, destination, source}, tra
     assert(ready, 'fresh isolated daemon unavailable');
     assert.equal((await outer(['exec', names.daemon, 'find', '/workspace', '-mindepth', '1', '-maxdepth', '1', '-print', '-quit'])).length, 0);
     await outer(['exec', names.daemon, 'chown', '1000:1000', '/workspace']);
+    const loadedIdentities = {};
     for (const id of ['sdk', 'zot', 'buildkit', 'distribution']) {
       await inner(['pull', '--platform', `linux/${arch}`, expected[id].reference], {timeout: 1200000});
-      validateLoadedImage(JSON.parse(await inner(['image', 'inspect', expected[id].reference]))[0], expected[id].reference, arch,
-        expected[id].config_digest, id === 'sdk' ? revision : undefined);
+      loadedIdentities[id] = await inspectLoadedImage(inside, expected[id], arch, id === 'sdk' ? revision : undefined);
     }
     const loaded = (await inner(['image', 'ls', '--quiet', '--no-trunc'])).toString().trim().split('\n');
-    assert.deepEqual([...new Set(loaded)].sort(), ['sdk', 'zot', 'buildkit', 'distribution'].map(id => expected[id].config_digest).sort());
+    assert.deepEqual([...new Set(loaded)].sort(), Object.values(loadedIdentities).map(row => row.id).sort());
+    writeFileSync(join(destination, 'loaded-identities.json'), canonical(loadedIdentities), {flag: 'wx'});
     phases.push('exact-native-images-acquired');
     await own('container', names.control, ['create', '--name', names.control, '--label', `${owner}=${nonce}`, '--network', names.network,
       '--tmpfs', '/var/lib/docker:rw,nosuid,nodev,size=16777216,mode=0700',
@@ -338,7 +381,7 @@ export async function runOuter({image, revision, arch, destination, source}, tra
     const group = Number((await outer(['exec', names.daemon, 'stat', '-c', '%g', '/var/run/docker.sock'])).toString().trim());
     await inner(sdkContainerArguments(names.sdk, image, group, '/workspace')); await inner(['start', names.sdk]);
     const ownImage = (await sdk(['docker', '--host', SOCKET, 'inspect', names.sdk, '--format', '{{.Image}}'])).toString().trim();
-    assert.equal(ownImage, expected.sdk.config_digest);
+    assert.equal(ownImage, loadedIdentities.sdk.id);
     const boundPaths = ['scripts/sdk-vv-run.mjs', 'scripts/sdk-vv-probe.mjs', 'scripts/sdk-vv-check.mjs', 'sdk/vv-runtime.lock.json'];
     for (const path of boundPaths) assert.deepEqual(await sdk(['cat', `${SHARED}/conformance-root/${path}`]), regular(join(source, path)), 'installed outer/inner source differs');
     const elf = JSON.parse(await sdk(['node', probePath, 'native']));
