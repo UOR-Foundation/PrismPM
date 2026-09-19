@@ -1,5 +1,25 @@
 # PrismPM falsifiability and verification record
 
+## Verified compiler input refresh
+
+The compiler is pinned to `8e97cf8bbae442b18a7c4fac76d8473b837f38de`.
+It admits bounded first-order local functions, preserves large Nat literals,
+and owns returned values before branch-local storage expires. Borrowed
+accessors require one correctly typed, stable borrowed input; valid accessor
+pointer identity is retained. All new regressions execute, including 193
+native cases in four configurations and the exact 66/65-page owned-copy Wasm
+acceptance/denial boundary. Existing application limits are unchanged.
+
+Unchanged compiler `just ci` passed twice in its devcontainer. Log SHA-256:
+`1a8cd5bebf55aae0c1fa0f48df28b967d33b0ccff3cf7be7a36b7fd9130fd8cf`
+and `e06711e4b8ee8779ae0a236d0d53f045643fc710a7b467d0ea95c76b21879ff1`.
+The two pre-existing ignored documentation examples remain unchanged.
+The vendored Lean archive and five changed Rust files reproduce exact tracked
+Git blobs; the new regression fixture is included in the sealed source tree
+and Cargo package. This accepts compiler inputs only. Stdlib regeneration,
+owning model gates, reviewed native goldens and installed-SDK acceptance
+remain required before release; no Foundry deployment is claimed.
+
 ## Generated workspace View (DK-15, DK-16)
 
 Registered owning tests first rejected the absent implementation. The complete

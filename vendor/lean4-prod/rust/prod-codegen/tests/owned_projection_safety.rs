@@ -7,12 +7,82 @@ use std::path::PathBuf;
 use std::process::Command;
 
 const IR: &str = r#"(module OwnedProjectionSafety
+  (type "EmptyRecord" (ctor "EmptyRecord.mk"))
+  (type "EmptyVariant" (ctor "EmptyVariant.first") (ctor "EmptyVariant.second"))
   (type "Parcel" (ctor "Parcel.mk" (bytes Bytes) (marker Nat)))
   (type "Envelope" (ctor "Envelope.mk" (parcel (named "Parcel")) (label String)))
   (type "MaybeEnvelope" (ctor "MaybeEnvelope.mk" (parcel (Option (named "Parcel")))))
   (type "Pair" (ctor "Pair.mk" (first Bytes) (second Bytes)))
   (type "OptionalPair" (ctor "OptionalPair.mk" (first (Option Bytes)) (second (Option Bytes))))
   (type "ParcelList" (ctor "ParcelList.mk" (slots (List (named "Parcel")))))
+  (def choose_label ((left (named "Envelope")) (right (named "Envelope")) (flag Bool)) String
+    (cases flag
+      (alt "Bool.false" () (let label (proj "Envelope" "label" left) label))
+      (alt "Bool.true" () (let label (proj "Envelope" "label" right) label))))
+  (def choose_bytes ((left (named "Parcel")) (right (named "Parcel")) (flag Bool)) Bytes
+    (if flag (proj "Parcel" "bytes" right) (proj "Parcel" "bytes" left)))
+  (def choose_record ((left (named "Envelope")) (right (named "Envelope")) (flag Bool)) (named "Parcel")
+    (cases flag
+      (alt "Bool.false" () (let parcel (proj "Envelope" "parcel" left) parcel))
+      (alt "Bool.true" () (let parcel (proj "Envelope" "parcel" right) parcel))))
+  (def choose_option ((left (named "MaybeEnvelope")) (right (named "MaybeEnvelope")) (flag Bool)) (Option (named "Parcel"))
+    (if flag (proj "MaybeEnvelope" "parcel" right) (proj "MaybeEnvelope" "parcel" left)))
+  (def choose_list_owner ((left (named "ParcelList")) (right (named "ParcelList")) (flag Bool)) (named "ParcelList")
+    (ctor "ParcelList.mk"
+      (cases flag
+        (alt "Bool.false" () (let slots (proj "ParcelList" "slots" left) slots))
+        (alt "Bool.true" () (let slots (proj "ParcelList" "slots" right) slots)))))
+  (def local_owner_label ((input String)) String
+    (let owner (ctor "Envelope.mk" (ctor "Parcel.mk" (bytes 9) 7) input)
+      (let first (proj "Envelope" "label" owner)
+        (let second (proj "Envelope" "label" owner) (if (eq first second) first second)))))
+  (def fallible_label ((left (named "Envelope")) (right (named "Envelope")) (flag Bool) (input Nat)) String
+    (let checked (add input 1)
+      (let counted (ctor "counted_value" checked)
+        (cases flag
+          (alt "Bool.false" () (let label (proj "Envelope" "label" left) label))
+          (alt "Bool.true" () (let label (proj "Envelope" "label" right) label))))))
+  (def borrowed_label_accessor ((owner (named "Envelope"))) String
+    (let label (proj "Envelope" "label" owner) label))
+  (def borrowed_positional_accessor ((owner (named "Envelope"))) String
+    (let label (proj "Envelope" "label" (param 0)) label))
+  (def ambiguous_label_accessor ((owner (named "Envelope")) (other (named "Envelope"))) String
+    (let label (proj "Envelope" "label" owner) label))
+  (def temporary_label () String
+    (let label (proj "Envelope" "label" (ctor "Envelope.mk" (ctor "Parcel.mk" (bytes) 0) (string "temporary"))) label))
+  (def local_nested_return ((input (Option (named "Envelope"))) (flag Bool)) (Option (named "ParcelList"))
+    (cases input
+      (alt "Option.none" () (ctor "Option.none"))
+      (alt "Option.some" (owner)
+        (ctor "Option.some" (ctor "ParcelList.mk"
+          (let local (ctor "ParcelList.mk" (ctor "List.cons" (proj "Envelope" "parcel" owner) (ctor "List.nil")))
+            (let first (proj "ParcelList" "slots" local)
+              (let second (proj "ParcelList" "slots" local) (if flag first second)))))))))
+  (def large_nat_add () Nat (let high 4294967295 (add high 1)))
+  (def large_nat_mul () Nat (let high 4294967296 (mul high 2)))
+  (def large_nat_sub () Nat (let high 18446744073709551615 (let alias high (sub alias 1))))
+  (def large_nat_div () Nat (let high 18446744073709551615 (div high 3)))
+  (def large_nat_mod () Nat (let high 18446744073709551615 (mod high 3)))
+  (def large_nat_shl () Nat (let high 4294967296 (shl high 1)))
+  (def large_nat_shr () Nat (let high 18446744073709551615 (shr high 32)))
+  (def large_nat_pow () Nat (let high 4294967296 (pow high 1)))
+  (def large_nat_add_overflow () Nat (let high 18446744073709551615 (add high 1)))
+  (def large_nat_mul_overflow () Nat (let high 18446744073709551615 (mul high 2)))
+  (def large_nat_divisor () Nat (let high 18446744073709551615 (div 4294967295 high)))
+  (def large_nat_remainder () Nat (let high 18446744073709551615 (mod 4294967295 high)))
+  (def large_nat_shl_exponent () Nat (let high 18446744073709551615 (shl 1 high)))
+  (def large_nat_pow_exponent () Nat (let high 18446744073709551615 (pow 1 high)))
+  (def large_nat_shr_exponent () Nat (let high 18446744073709551615 (shr 1 high)))
+  (def contextual_uint8 () UInt8 (let value 255 value))
+  (def contextual_uint32 () UInt32 (let value 4294967295 value))
+  (def contextual_int32 () Int32 (let value 2147483647 value))
+  (def contextual_int64 () Int64 (let value 9223372036854775807 value))
+  (def empty_record () (named "EmptyRecord") (ctor "EmptyRecord.mk"))
+  (def match_empty_record ((input (named "EmptyRecord"))) Nat
+    (cases input (alt "EmptyRecord.mk" () 17)))
+  (def empty_variant () (named "EmptyVariant") (ctor "EmptyVariant.first"))
+  (def match_empty_variant ((input (named "EmptyVariant"))) Nat
+    (cases input (alt "EmptyVariant.first" () 19) (alt "EmptyVariant.second" () 23)))
   (def empty_order () Ordering (compare-bytes (bytes) (bytes)))
   (def aliased_empty_order () Ordering
     (let empty (bytes) (compare-bytes empty empty)))
@@ -48,6 +118,20 @@ const IR: &str = r#"(module OwnedProjectionSafety
   (def join_partial_failure ((input Nat)) Nat
     (let continuation (jp continuation (first second third) 7)
       (jmp continuation (ctor "counted_value" 1) (add input 1) (ctor "counted_value" 2))))
+  (def non_tail_calls ((capture Nat)) Nat
+    (let function (jp function (value) (add capture value))
+      (let first (jmp function 2)
+        (let second (jmp function 3) (add first second)))))
+  (def non_tail_capture_shadow ((capture Nat)) Nat
+    (let function (jp function (value) (add capture value))
+      (let capture 100 (let result (jmp function 2) (add result capture)))))
+  (def non_tail_unused_failure ((input Nat)) Nat
+    (let function (jp function (unused) 7)
+      (let ignored (jmp function (add input 1)) 19)))
+  (def non_tail_order () Nat
+    (let function (jp function (value) (ctor "counted_value" value))
+      (let first (jmp function 1)
+        (let second (jmp function 2) (ctor "counted_value" 3)))))
   (def borrowed_head ((input (List (named "Parcel")))) (Option (named "Parcel"))
     (cases input
       (alt "List.nil" () (ctor "Option.none"))
@@ -362,7 +446,73 @@ fn main() {
     assert_eq!(join_partial_failure(0), Ok(7));
     assert_eq!((evaluation_calls(), evaluation_order()), (2, 12));
     cases += 4;
-    assert_eq!(cases, 145);
+    assert_eq!(non_tail_calls(5), Ok(15));
+    assert_eq!(non_tail_capture_shadow(5), Ok(107));
+    assert_eq!(non_tail_unused_failure(u64::MAX), Err(ComputeError::AddOverflow));
+    assert_eq!(non_tail_unused_failure(0), Ok(19));
+    reset_evaluation_probe();
+    assert_eq!(non_tail_order(), 3);
+    assert_eq!((evaluation_calls(), evaluation_order()), (3, 123));
+    cases += 5;
+    assert_eq!(match_empty_record(empty_record()), 17);
+    assert_eq!(match_empty_variant(empty_variant()), 19);
+    assert_eq!(match_empty_variant(EmptyVariant::second), 23);
+    cases += 3;
+    assert_eq!(large_nat_add(), Ok(4294967296));
+    assert_eq!(large_nat_mul(), Ok(8589934592));
+    assert_eq!(large_nat_sub(), u64::MAX - 1);
+    assert_eq!(large_nat_div(), u64::MAX / 3);
+    assert_eq!(large_nat_mod(), 0);
+    assert_eq!(large_nat_shl(), Ok(8589934592));
+    assert_eq!(large_nat_shr(), 4294967295);
+    assert_eq!(large_nat_pow(), Ok(4294967296));
+    assert_eq!(large_nat_add_overflow(), Err(ComputeError::AddOverflow));
+    assert_eq!(large_nat_mul_overflow(), Err(ComputeError::MulOverflow));
+    assert_eq!(large_nat_divisor(), 0);
+    assert_eq!(large_nat_remainder(), 4294967295);
+    assert_eq!(large_nat_shl_exponent(), Err(ComputeError::ShiftExponentTooLarge));
+    assert_eq!(large_nat_pow_exponent(), Err(ComputeError::PowExponentTooLarge));
+    assert_eq!(large_nat_shr_exponent(), 0);
+    assert_eq!(contextual_uint8(), u8::MAX);
+    assert_eq!(contextual_uint32(), u32::MAX);
+    assert_eq!(contextual_int32(), i32::MAX);
+    assert_eq!(contextual_int64(), i64::MAX);
+    cases += 19;
+    let left = Envelope { parcel: Parcel { bytes: vec![], marker: 11 }, label: "left".into() };
+    let right = Envelope { parcel: Parcel { bytes: vec![1, 2, 3], marker: 17 }, label: "right".into() };
+    let no_parcel = MaybeEnvelope { parcel: None };
+    let some_parcel = MaybeEnvelope { parcel: Some(right.parcel.clone()) };
+    let left_list = ParcelList { slots: vec![left.parcel.clone(), right.parcel.clone()] };
+    let right_list = ParcelList { slots: vec![right.parcel.clone()] };
+    for flag in [false, true] {
+        let expected = if flag { &right } else { &left };
+        assert_eq!(choose_label(&left, &right, flag), expected.label);
+        assert_eq!(choose_bytes(&left.parcel, &right.parcel, flag), expected.parcel.bytes);
+        assert_eq!(choose_record(&left, &right, flag), expected.parcel);
+        assert_eq!(choose_option(&no_parcel, &some_parcel, flag), if flag { some_parcel.parcel.clone() } else { None });
+        assert_eq!(choose_list_owner(&left_list, &right_list, flag), if flag { right_list.clone() } else { left_list.clone() });
+        reset_evaluation_probe();
+        assert_eq!(fallible_label(&left, &right, flag, 0), Ok(expected.label.clone()));
+        assert_eq!((evaluation_calls(), evaluation_order()), (1, 1));
+        cases += 6;
+    }
+    assert_eq!(local_owner_label("local".into()), "local");
+    reset_evaluation_probe();
+    assert_eq!(fallible_label(&left, &right, false, u64::MAX), Err(ComputeError::AddOverflow));
+    assert_eq!((evaluation_calls(), evaluation_order()), (0, 0));
+    assert!(std::ptr::eq(borrowed_label_accessor(&left), &left.label));
+    cases += 3;
+    for flag in [false, true] {
+        assert_eq!(local_nested_return(Some(left.clone()), flag), Some(ParcelList { slots: vec![left.parcel.clone()] }));
+        cases += 1;
+    }
+    assert_eq!(local_nested_return(None, false), None);
+    cases += 1;
+    assert!(std::ptr::eq(borrowed_positional_accessor(&left), &left.label));
+    assert_eq!(ambiguous_label_accessor(&left, &right), left.label);
+    assert_eq!(temporary_label(), "temporary");
+    cases += 3;
+    assert_eq!(cases, 193);
     println!("owned projection safety: {cases} cases passed");
 }
 "#;
@@ -495,7 +645,7 @@ fn owned_projection_safety_executes_in_std_and_no_std_debug_and_optimized() {
             );
             assert_eq!(
                 succeeds(&mut Command::new(&executable)),
-                "owned projection safety: 145 cases passed\n"
+                "owned projection safety: 193 cases passed\n"
             );
         }
     }
