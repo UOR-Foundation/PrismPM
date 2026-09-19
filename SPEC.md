@@ -516,6 +516,12 @@ invocations remain mandatory. Diagnostics upload runs even after gate failure
 when the runner is reachable; runner loss can prevent upload and never implies
 acceptance or a diagnosed resource cause.
 
+Compiler-heavy owning conformance suites and shared verification initialization
+execute one at a time within a conformance process. Nested requests reuse the
+owning slot; a failed owner releases it without suppressing subsequent tests.
+Scheduling changes neither checks nor deadlines. Cached failures retain their
+structured diagnostics, and failed prerequisites stop dependent browser checks.
+
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
 LexLean 0.2.0, the exact lean4-prod fork revision, `prism-stdlib = 0.1.0`,

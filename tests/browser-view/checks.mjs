@@ -9,6 +9,7 @@ import {prepare as prepareQuery} from '../browser-query/compile.mjs';
 import {corpus as commandCorpus} from './command-corpus.mjs';
 import {corpus as queryCorpus} from './query-corpus.mjs';
 import {interoperability as queryInteroperability} from './query-interop.mjs';
+import {prerequisite} from './prerequisites.mjs';
 
 export function refuseBypasses(){
   for(const key of Object.keys(process.env))assert.ok(!key.startsWith('PRISMPM_VIEW_HOST_'),'diagnostic-only View bypass is not acceptance: '+key);
@@ -35,12 +36,12 @@ export async function verifyView(t){
   assert.deepEqual([...new Set(vectors.filter(v=>v.response.length===1).map(v=>v.response[0]))].sort((a,b)=>a-b),Array.from({length:14},(_,i)=>i+1));
   const build=prepare();t.after(()=>rmSync(build.work,{recursive:true,force:true}));
   const path=join(build.work,'vectors.tsv');writeFileSync(path,tsv(vectors),{flag:'wx'});
-  for(const standard of[true,false])await t.test(standard?'all 206 modeled View vectors twice in native Rust':'all 206 modeled View vectors twice in no_std Rust',()=>{
+  for(const standard of[true,false])await prerequisite(t,standard?'all 206 modeled View vectors twice in native Rust':'all 206 modeled View vectors twice in no_std Rust',()=>{
     const binary=build.compileNative(standard),output=run(binary,[path],build.runner);
     assert.deepEqual([...output.matchAll(/^PASS ([A-Za-z0-9]+) [0-9]+ms$/gm)].map(m=>m[1]),vectors.map(v=>v.id));
     assert.match(output,/PASS 206 complete generated View vectors twice/);assert.equal(run(binary,['--labels'],build.runner),literalLabels);
   });
-  await t.test('all 206 View vectors twice in fresh bounded Wasm',()=>{build.maximum=wasm(build.wasmBytes,vectors,133728,71055,128);});
+  await prerequisite(t,'all 206 View vectors twice in fresh bounded Wasm',()=>{build.maximum=wasm(build.wasmBytes,vectors,133728,71055,128);});
   t.diagnostic(JSON.stringify({source:build.verified.source_id,attestation:build.verified.attestation_id,ir:build.generation.ir_sha256,wasm:sha(build.wasmBytes),labels:sha(literalLabels),maximum:build.maximum}));
   return build;
 }
@@ -57,7 +58,7 @@ export async function verifyDependencies(t){
   const builds={};
   for(const[kind,prepare,corpus,count,inputCap,outputCap,pages]of[
     ['Command',prepareCommand,commandCorpus,75,139873,74243,64],['Query',prepareQuery,queryCorpus,62,1166279,66803,512]]){
-    await t.test('fresh complete '+kind+' source/kernel/C/native/no_std/Wasm dependency',()=>{
+    await prerequisite(t,'fresh complete '+kind+' source/kernel/C/native/no_std/Wasm dependency',()=>{
       const vectors=corpus();assert.equal(vectors.length,count);const build=prepare();t.after(()=>rmSync(build.work,{recursive:true,force:true}));
       const path=join(build.work,'view-dependency.tsv');writeFileSync(path,tsv(vectors),{flag:'wx'});
       const octets=kind==='Query'?Array.from({length:256},(_,i)=>({id:'Decode'+i,request:Buffer.from([i]),response:Buffer.from([0,i])})).concat([

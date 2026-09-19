@@ -8,59 +8,65 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-static CHECK: OnceLock<Result<prismpm::controller::CheckResult, String>> = OnceLock::new();
-static BUILD: OnceLock<Result<prismpm::controller::BuildResult, String>> = OnceLock::new();
-static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, String>> = OnceLock::new();
+mod scheduling;
+
+static CHECK: OnceLock<Result<prismpm::controller::CheckResult, prismpm::PrismError>> =
+    OnceLock::new();
+static BUILD: OnceLock<Result<prismpm::controller::BuildResult, prismpm::PrismError>> =
+    OnceLock::new();
+static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, prismpm::PrismError>> =
+    OnceLock::new();
 static UPSTREAM: OnceLock<
-    Result<prismpm::upstream_conformance::UpstreamConformanceEvidence, String>,
+    Result<prismpm::upstream_conformance::UpstreamConformanceEvidence, prismpm::PrismError>,
 > = OnceLock::new();
 
+fn required<'a, T>(result: &'a Result<T, prismpm::PrismError>, context: &str) -> &'a T {
+    result.as_ref().unwrap_or_else(|error| {
+        panic!(
+            "{context} failed: {}",
+            serde_json::to_string(error).expect("structured Prism diagnostic serializes")
+        )
+    })
+}
+
 fn upstream(root: &Path) -> &'static prismpm::upstream_conformance::UpstreamConformanceEvidence {
-    UPSTREAM
-        .get_or_init(|| {
-            prismpm::upstream_conformance::verify(root).map_err(|error| error.to_string())
-        })
-        .as_ref()
-        .unwrap_or_else(|error| panic!("authoritative upstream conformance failed: {error}"))
+    required(
+        UPSTREAM.get_or_init(|| prismpm::upstream_conformance::verify(root)),
+        "authoritative upstream conformance",
+    )
 }
 
 fn checked(root: &Path) -> &'static prismpm::controller::CheckResult {
-    CHECK
-        .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.check(prismpm::controller::CheckRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
-        })
-        .as_ref()
-        .unwrap_or_else(|error| panic!("shared Prism check failed: {error}"))
+    required(
+        CHECK.get_or_init(|| {
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.check(prismpm::controller::CheckRequest { config_path: None })
+            })
+        }),
+        "shared Prism check",
+    )
 }
 
 fn built(root: &Path) -> &'static prismpm::controller::BuildResult {
-    BUILD
-        .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.build(prismpm::controller::BuildRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
-        })
-        .as_ref()
-        .unwrap_or_else(|error| panic!("shared Prism build failed: {error}"))
+    required(
+        BUILD.get_or_init(|| {
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.build(prismpm::controller::BuildRequest { config_path: None })
+            })
+        }),
+        "shared Prism build",
+    )
 }
 
 fn verified(root: &Path) -> &'static prismpm::controller::VerifyResult {
-    VERIFY
-        .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.verify(prismpm::controller::VerifyRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
-        })
-        .as_ref()
-        .unwrap_or_else(|error| panic!("shared Prism verification failed: {error}"))
+    required(
+        scheduling::compiler_once(&VERIFY, || {
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.verify(prismpm::controller::VerifyRequest { config_path: None })
+            })
+        }),
+        "shared Prism verification",
+    )
 }
 
 fn build_root(root: &Path) -> PathBuf {
@@ -334,6 +340,7 @@ pub fn run_at(root: &Path, id: &str) {
         "{id} must be level build"
     );
 
+    let _compiler_slot = scheduling::for_owner(id);
     match id {
         "RP-01" => verify_rp_01(root),
         "RP-02" => verify_rp_02(root),
@@ -3642,7 +3649,48 @@ fn verify_security(root: &Path, id: &str) {
 
 #[cfg(test)]
 mod node_suite_tests {
-    use super::verify_node_suite;
+    use super::{required, verify_node_suite};
+
+    #[test]
+    fn cached_prism_diagnostic_preserves_the_original_structured_cause() {
+        let mut error = prismpm::PrismError::new("PP5001", "LexLean verification failed");
+        error.causes.push(prismpm::error::PrismCause {
+            subsystem: "lexlean".to_owned(),
+            code: "LL9001".to_owned(),
+            message: "original child failure".to_owned(),
+            primary: None,
+            labels: Vec::new(),
+            notes: vec![prismpm::error::PrismNote {
+                message: "bounded child phase and observed exit".to_owned(),
+                span: None,
+            }],
+            help: Vec::new(),
+        });
+        let cache = std::sync::OnceLock::<Result<(), prismpm::PrismError>>::new();
+        for attempt in 0..2 {
+            let panic = std::panic::catch_unwind(|| {
+                required(
+                    cache.get_or_init(|| {
+                        assert_eq!(attempt, 0, "cached failure must not be recomputed");
+                        Err(error.clone())
+                    }),
+                    "shared Prism verification",
+                );
+            })
+            .unwrap_err();
+            let message = panic.downcast_ref::<String>().unwrap();
+            let encoded = message
+                .strip_prefix("shared Prism verification failed: ")
+                .unwrap();
+            assert_eq!(
+                serde_json::from_str::<prismpm::PrismError>(encoded).unwrap(),
+                error
+            );
+            assert!(encoded.contains("original child failure"));
+            assert!(encoded.contains("bounded child phase and observed exit"));
+        }
+        assert!(!error.to_string().contains("original child failure"));
+    }
 
     #[test]
     fn owning_node_gate_rejects_incomplete_skipped_missing_and_timed_out_suites() {

@@ -1378,6 +1378,25 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## Compiler-fixture scheduling and diagnostic retention
+
+Hosted runs 35416968900, 35417164144 and 35417164140 failed actual conformance
+deadlines; retained samples show resource pressure, not a recorded OOM kill.
+Run 35416968987 instead reports runner shutdown without retained diagnostics.
+The repair serializes owning compiler fixtures and shared verification, keeps
+structured cached failures, and stops browser phases after failed prerequisites.
+It changes no test inventory, timeout, semantic corpus or acceptance gate.
+
+Pinned-devcontainer checks passed: five owning conformance regressions, the
+boxed gate-diagnostic regression, RP-08's unchanged 161-case registry,
+all-target/all-feature Clippy for conformance/xtask, model/spec/source audits,
+54 helper tests without skips, and touched-source formatting. A real Node
+subtest failure plus guard-omission mutant distinguishes failed prerequisite
+handling from merely observing a nonzero test exit. Focused-check log SHA-256:
+`f69b1920969d31649522d09704c3b3e1811f46a9f771cabec31c009c9059f06d`.
+Full V&V, both consecutive hosted invocations and installed SDK acceptance
+remain required; these targeted results do not establish their completion.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
