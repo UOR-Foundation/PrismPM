@@ -10,6 +10,8 @@ publish = false
 [dependencies]
 camino = { workspace = true }
 clap = { workspace = true }
+jsonschema = { workspace = true }
+lexlean = { workspace = true }
 prismpm = { workspace = true }
 repo-model = { workspace = true }
 serde = { workspace = true }
