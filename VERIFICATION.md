@@ -72,6 +72,25 @@ and Cargo package. This accepts compiler inputs only. Stdlib regeneration,
 owning model gates, reviewed native goldens and installed-SDK acceptance
 remain required before release; no Foundry deployment is claimed.
 
+## Bounded application metadata aliases
+
+The original cyclic alias caused a stack overflow; a malformed explicit module
+silently fell back to the current module. Iterative resolution now rejects both
+with `PP2001`, preserves cross-module lookup and independent repeated fields,
+and accepts exactly 65,536 closed calls per scalar metadata value. Native root
+lists retain their separate bounded walker.
+
+All 198 library tests passed without skips in the devcontainer using the
+development-only external-oracle image with the current oracle adapters.
+The log SHA-256 is
+`c87314f49dd6b687cc4ffa9e7a9da95e599da2d672b26216821446fc2ad01e16`.
+Reducing the limit by one failed the actual boundary assertion; restoration
+passed all four regressions, authored formatting, all-target Clippy and model/
+spec checks. The restored log SHA-256 is
+`5ab89497c8fe7233dc0215cd14a3f49f0aeb5c305bae9619936f1860157aa5f0`.
+Earlier runs with missing or stale oracle configuration were interrupted and
+are not acceptance evidence. This is not installed-SDK or deployment acceptance.
+
 ## Generated workspace View (DK-15, DK-16)
 
 Registered owning tests first rejected the absent implementation. The complete

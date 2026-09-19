@@ -1227,6 +1227,13 @@ unboundedly. Unsupported expressions, cycles or budget exhaustion fail with
 Malformed metadata fails with `PP4004`; unresolved or wrongly typed roots fail
 with `PP2001`.
 
+Closed scalar and record metadata aliases, shared by application and library
+projection, resolve iteratively with at most 65,536 calls per value. Explicit
+module names must be strings; only an absent module means the current module.
+Cycles, missing definitions, open calls and budget exhaustion fail with
+`PP2001`, never a stack overflow or a silent module fallback. Independent fields
+may reuse an alias. Root-list expansion retains its separate bounds above.
+
 `check` remains read-only. `build` uses the pinned named exporter and code
 generator to produce the complete native package and `.crate`, typed LCNF,
 roots, coverage and model binding. `prismpm/build-inputs/3` binds the complete
