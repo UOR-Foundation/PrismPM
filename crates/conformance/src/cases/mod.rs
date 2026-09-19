@@ -1,5 +1,7 @@
 //! Conformance test cases verifying every registered capability.
 
+mod native_library;
+
 use repo_model::repo_root;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -394,6 +396,7 @@ pub fn run_at(root: &Path, id: &str) {
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15"
         | "DK-16" => verify_browser_host(root, id),
+        "DK-17" => native_library::verify(root),
         "OC-07" => verify_browser_export(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),

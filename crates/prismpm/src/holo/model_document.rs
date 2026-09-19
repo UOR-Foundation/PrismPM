@@ -22,6 +22,43 @@ pub struct ModelDocument {
     /// Closed portable application declaration, when this is an application model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application: Option<Application>,
+    /// Explicit native-only library, never an application or a deployed system.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_library"
+    )]
+    pub library: Option<ModelLibrary>,
+}
+
+fn present_library<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ModelLibrary>, D::Error> {
+    ModelLibrary::deserialize(deserializer).map(Some)
+}
+
+/// Closed metadata for model-owned, typed native exports and finite acceptance roots.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelLibrary {
+    /// Exact native-library profile identifier.
+    pub profile: String,
+    /// Display name; not a filesystem path.
+    pub name: String,
+    /// Generated Cargo package name.
+    pub cargo_name: String,
+    /// Exact stable generated package version.
+    pub cargo_version: String,
+    /// Generated package description.
+    pub cargo_description: String,
+    /// HTTPS source repository.
+    pub cargo_repository: String,
+    /// HTTPS project homepage.
+    pub cargo_homepage: String,
+    /// Sorted fully qualified executable definitions in the bound semantic graph.
+    pub export_roots: Vec<String>,
+    /// Sorted exported zero-argument Boolean definitions that must all return true.
+    pub acceptance_roots: Vec<String>,
 }
 
 /// Closed application profiles. The legacy variant retains its original JSON shape.

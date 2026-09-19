@@ -10,9 +10,9 @@ use lexlean::SemanticSnapshot;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
+pub(super) type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
 
-fn member_name(value: &Value) -> Option<&str> {
+pub(super) fn member_name(value: &Value) -> Option<&str> {
     value.get("result")?.get("member")?.get("name")?.as_str()
 }
 
@@ -85,7 +85,7 @@ fn evaluated<'a>(
     Ok((module, value))
 }
 
-fn record<'a>(
+pub(super) fn record<'a>(
     definitions: &'a Definitions<'a>,
     module: &'a str,
     value: &'a Value,
@@ -131,7 +131,10 @@ fn field<'a>(
         .ok_or_else(|| PrismError::new("PP2001", format!("application field {name} is absent")))
 }
 
-fn string(fields: &BTreeMap<&str, (&str, &Value)>, name: &str) -> Result<String, PrismError> {
+pub(super) fn string(
+    fields: &BTreeMap<&str, (&str, &Value)>,
+    name: &str,
+) -> Result<String, PrismError> {
     let (_, value) = field(fields, name)?;
     if value.get("kind").and_then(Value::as_str) != Some("string") {
         return Err(PrismError::new(
@@ -247,7 +250,7 @@ fn constructor_list(
     }
 }
 
-fn string_list(
+pub(super) fn string_list(
     fields: &BTreeMap<&str, (&str, &Value)>,
     name: &str,
 ) -> Result<Vec<String>, PrismError> {
@@ -424,7 +427,7 @@ fn view(
     })
 }
 
-fn exact_fields(
+pub(super) fn exact_fields(
     fields: &BTreeMap<&str, (&str, &Value)>,
     expected: &[&str],
 ) -> Result<(), PrismError> {
@@ -623,6 +626,7 @@ pub fn project_application(
         security: SecurityModel::default(),
         quality: QualityModel::default(),
         application: Some(application),
+        library: None,
     };
     super::validate::validate(&document)?;
     Ok(Some(document))

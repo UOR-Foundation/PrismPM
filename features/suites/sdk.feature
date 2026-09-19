@@ -1,5 +1,11 @@
 Feature: sdk
 
+  @DK-17 @build
+  Scenario: Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance.
+    Given a closed native library with typed exports and modeled acceptance roots
+    When the SDK builds and verifies its exact generated source and package
+    Then every acceptance root passes in both feature modes and malformed or false claims fail
+
   @DK-15 @build
   Scenario: The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector.
     Given the complete modeled View corpus and freshly generated private browser dependencies

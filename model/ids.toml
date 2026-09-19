@@ -745,6 +745,12 @@ level = "build"
 statement = "The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure."
 
 [[id]]
+id = "DK-17"
+suite = "sdk"
+level = "build"
+statement = "Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prismpm/library-acceptance/1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "build_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "executions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "std"
+            },
+            "roots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1024,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 1024
+              }
+            },
+            "status": {
+              "const": "passed"
+            }
+          },
+          "required": [
+            "mode",
+            "roots",
+            "status"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "no_std"
+            },
+            "roots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1024,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 1024
+              }
+            },
+            "status": {
+              "const": "passed"
+            }
+          },
+          "required": [
+            "mode",
+            "roots",
+            "status"
+          ]
+        }
+      ],
+      "items": false
+    },
+    "export_roots": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 1024
+      }
+    },
+    "lexlean_attestation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "profile": {
+      "const": "prismpm/native-library/1"
+    },
+    "regeneration": {
+      "const": "byte-identical"
+    },
+    "schema": {
+      "const": "prismpm/library-acceptance/1"
+    },
+    "scope": {
+      "const": "native-library-only"
+    },
+    "status": {
+      "const": "passed"
+    },
+    "unclaimed": {
+      "const": [
+        "application",
+        "browser",
+        "holo",
+        "production-release",
+        "deployment"
+      ]
+    }
+  },
+  "required": [
+    "build_id",
+    "executions",
+    "export_roots",
+    "lexlean_attestation_id",
+    "model_id",
+    "profile",
+    "regeneration",
+    "schema",
+    "scope",
+    "status",
+    "unclaimed"
+  ]
+}

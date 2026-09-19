@@ -19,6 +19,8 @@ pub mod deployment;
 pub mod diagnostics;
 pub mod error;
 pub mod holo;
+mod library_build;
+mod library_verification;
 pub mod lifecycle;
 pub mod oci;
 pub mod operations;

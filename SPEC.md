@@ -946,6 +946,46 @@ These reusable SDK components do not appoint Foundation authority, establish
 mailbox ownership, add encryption or Kappa replication, certify OSCAL controls,
 or replace the independent application-profile and release acceptance gates.
 
+### 12.6 Native model libraries
+
+`Foundation.Library.V1.Model.NativeLibrary` defines the explicit
+`prismpm/native-library/1` profile. A unique closed value supplies package
+metadata, sorted nonempty `exportRoots` and `acceptanceRoots`. The canonical
+projection is `prismpm/model-document/3`, with `library` instead of `application`
+and empty facet sections. Existing /1 and /2 shapes remain closed; a library
+cannot coexist with an application or system declaration. This profile does
+not change Holo/1 or weaken the architecture facet closure.
+
+Names and descriptions are nonempty control-free text bounded to 128 and
+1024 UTF-8 bytes. Cargo names use 1..64 lowercase ASCII letters, digits,
+underscores or hyphens, beginning with a letter; versions are canonical stable
+SemVer. Repository and homepage are ASCII HTTPS URIs of at most 2048 bytes.
+Each root list has 1..1024 unique bytewise-ordered qualified identifiers,
+each at most 1024 bytes. Every export resolves to an executable typed definition
+in the selected snapshot. Acceptance roots are exported zero-argument Boolean
+definitions; their types come from the graph, not caller-supplied signatures.
+Malformed metadata fails with `PP4004`; unresolved or wrongly typed roots fail
+with `PP2001`.
+
+`check` remains read-only. `build` uses the pinned named exporter and code
+generator to produce the complete native package and `.crate`, typed LCNF,
+roots, coverage and model binding. `prismpm/build-inputs/3` binds the complete
+artifact rows and library generator. It makes no acceptance claim. `verify`
+requires the complete selected LexLean declaration audit, including imported
+namespaces, exact source axiom policies and empty theorem axioms, plus generated
+Lean elaboration and kernel replay. Independent regeneration must reproduce
+every library artifact byte. Registry-format consumers of the exact package
+execute every modeled acceptance root under both `std` and `no_std + alloc`;
+false results, computation errors, omissions and changed bytes fail closed.
+
+Only then are `prismpm/library-acceptance/1` and
+`prismpm/library-verification-manifest/1` atomically published. This is finite
+native-code evidence, not a universal semantic proof, standards certification,
+browser profile, `.holo`, or deployed service. Product-release construction and
+source-free product-release replay reject library evidence with `PP6101`.
+The library may supply modeled code to an application, whose own complete
+application and deployment acceptance remains mandatory.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1387,6 +1427,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-14` | `sdk` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. | §12 |
 | `DK-15` | `sdk` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. | §12 |
 | `DK-16` | `sdk` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. | §12 |
+| `DK-17` | `sdk` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
