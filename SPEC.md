@@ -494,6 +494,16 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+CI resource diagnostics are separate from acceptance evidence. Host and
+devcontainer observers record only allowlisted numeric resource measurements,
+at most every 30 seconds for six hours, 721 samples and 8 MiB per observer.
+Gate logs redact inherited credential values and retain a 32 MiB prefix plus
+two rotating 1 MiB tails, explicitly recording truncation. Wrappers preserve
+command exit status and stop only their own observers; both consecutive V&V
+invocations remain mandatory. Diagnostics upload runs even after gate failure
+when the runner is reachable; runner loss can prevent upload and never implies
+acceptance or a diagnosed resource cause.
+
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
 LexLean 0.2.0, the exact lean4-prod fork revision, `prism-stdlib = 0.1.0`,

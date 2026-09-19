@@ -19,7 +19,20 @@ jobs:
           submodules: false
       - name: Check pinned bootstrap source availability
         run: bash scripts/bootstrap-verify.sh --check-source
+      - name: Start bounded host resource diagnostics
+        run: node scripts/ci-observe.mjs start target/ci-diagnostics/host
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
-          runCmd: just vv
+          runCmd: node scripts/ci-observe.mjs run target/ci-diagnostics/bootstrap -- just vv
+      - name: Stop host resource diagnostics
+        if: always()
+        run: node scripts/ci-observe.mjs stop target/ci-diagnostics/host
+      - name: Retain CI diagnostics (not acceptance evidence)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bootstrap-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7

@@ -120,6 +120,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/browser-api-sdk-check.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/refresh-osv.test.mjs",
+            "scripts/ci-observe.test.mjs",
         ],
     )?;
     audit::audit_no_handwritten_lean(root)?;
