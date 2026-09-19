@@ -785,6 +785,18 @@ This prerequisite neither executes the bootstrap archive nor establishes
 advisory freshness, upstream authenticity, redistribution permission, full V&V,
 image inclusion, multi-platform equivalence or product readiness.
 
+The helper's `materialize` operation verifies the complete closure before
+creating a fresh external destination. It reconstructs independent writable
+`source` and `advisory` Git checkouts and the exact bootstrap archive from the
+same captured bytes, without host configuration, remotes, alternate object
+stores or caches. Source history and the pinned `v0.2.0` annotated tag remain
+available; the advisory store is explicitly shallow at its pinned revision.
+Raw blob bytes, executable modes, confined aliases and indexes are checked;
+checkout filters, hooks and source programs are not executed. Combined checkout
+content is limited to 4 GiB, including repeated blobs and the bootstrap archive;
+callers may only lower that bound. This is input reconstruction, not SDK V&V
+execution or acceptance.
+
 ### 12.1 Browser host prerequisites
 
 `sdk/browser` contains generic host bindings, not a stateful application
