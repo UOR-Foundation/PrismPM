@@ -381,6 +381,9 @@ jobs:
           submodules: false
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
@@ -467,6 +470,56 @@ jobs:
         with:
           name: library-sdk-${{ matrix.name }}
           path: ${{ matrix.name }}-library-sdk.log
+          if-no-files-found: error
+          retention-days: 30
+  installed-sdk:
+    needs: [gate, images]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-a
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: .shipped-image
+      - name: Verify both complete installed-SDK runs on the native isolated runner
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+          NATIVE_PLATFORM: linux/${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/sdk-vv-check.mjs tests
+          node root-a/scripts/sdk-vv-check.mjs run "$(cat .shipped-image/sdk-image.txt)" \
+            "$GITHUB_SHA" "${NATIVE_PLATFORM#linux/}" "$RESULT_NAME-full-sdk-vv"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: full-sdk-vv-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-full-sdk-vv/
           if-no-files-found: error
           retention-days: 30
 
@@ -571,7 +624,7 @@ jobs:
 
   oci-native:
     name: publish source-addressed OCI/native verification assets
-    needs: [gate, images, native, reproducibility]
+    needs: [gate, images, native, reproducibility, installed-sdk]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -638,7 +691,7 @@ jobs:
 
   crates:
     if: ${{ needs.gate.outputs.publish-crates == 'true' }}
-    needs: [gate, images, native, reproducibility, oci-native]
+    needs: [gate, images, native, reproducibility, installed-sdk, oci-native]
     runs-on: ubuntu-24.04
     environment: crates.io
     permissions:
@@ -752,7 +805,7 @@ jobs:
             '
 
   release:
-    needs: [gate, images, native, reproducibility, oci-native, crates]
+    needs: [gate, images, native, reproducibility, installed-sdk, oci-native, crates]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -17,7 +17,7 @@ const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}
 const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/main',
   event: 'workflow_dispatch', version: '0.3.0', publishCrates: false, revision});
 const prerequisites = names => Object.fromEntries(names.map(name => [name, {result: 'success'}]));
-const ociNeeds = ['gate', 'images', 'native', 'reproducibility'];
+const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
 const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa';
 const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/main',
   GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.3.0', PUBLISH_CRATES: 'false'});
@@ -54,6 +54,17 @@ function validateWorkflow(value) {
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   assert.match(value.jobs.gate.steps.at(-1).with.runCmd, /^set -euo pipefail\njust vv\njust vv\n?$/);
   assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
+  const installed = value.jobs['installed-sdk'];
+  assert.deepEqual(installed.needs, ['gate', 'images']);
+  assert.equal(installed.if, undefined); assert.equal(installed['continue-on-error'], undefined);
+  assert.equal(installed['runs-on'], '${{ matrix.os }}');
+  assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
+  const complete = installed.steps.find(step => step.run?.includes('sdk-vv-check.mjs run'));
+  assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
+  assert.match(complete.run, /sdk-vv-check\.mjs tests/);
+  assert(installed.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
+  const retained = installed.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}');
+  assert.equal(retained.if, 'always()'); assert.equal(retained.with['if-no-files-found'], 'error');
   const builds = value.jobs.images.steps.find(step => step.id === 'build');
   assert.equal(builds.uses, undefined);
   assert.equal(builds.with, undefined);
@@ -95,7 +106,7 @@ function validateWorkflow(value) {
       || step.uses?.startsWith('rust-lang/crates-io-auth-action') || step.env?.GH_TOKEN);
     assert.ok(firstCredential < 0 || policyStep < firstCredential);
   }
-  for (const name of ['images', 'native', 'reproducibility', 'release']) {
+  for (const name of ['images', 'native', 'reproducibility', 'installed-sdk', 'release']) {
     const builder = value.jobs[name].steps.find(step => step.uses?.startsWith('docker/setup-buildx-action'));
     assert.equal(builder.with.version, 'v0.28.0');
     assert.equal(builder.with['driver-opts'], `image=${buildkit}`);
@@ -126,6 +137,11 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
   for (const mutate of [
     value => value.jobs['oci-native'].needs.push('crates'),
     value => value.jobs['oci-native'].needs.pop(),
+    value => { delete value.jobs['installed-sdk']; },
+    value => { value.jobs['installed-sdk'].if = '${{ false }}'; },
+    value => { value.jobs['installed-sdk'].strategy.matrix.include.pop(); },
+    value => { value.jobs['installed-sdk'].strategy.matrix.include[1].os = 'ubuntu-24.04'; },
+    value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('sdk-vv-check.mjs run')).if = '${{ false }}'; },
     value => { value.jobs['oci-native'].if = '${{ always() }}'; },
     value => { value.jobs.release.if = '${{ always() }}'; },
     value => value.jobs.release.needs.pop(),
