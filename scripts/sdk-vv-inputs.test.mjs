@@ -10,7 +10,9 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs';
@@ -18,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { buildClosure, verifyClosure } from './sdk-vv-inputs.mjs';
+import * as inputs from './sdk-vv-inputs.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const canonical = value => JSON.stringify(value, (_, v) => {
@@ -436,4 +439,138 @@ test('bounded real Git producer failure cleans only its newly owned output', t =
     ...f,
     maxPackBytes: 1024 * 1024 * 1024
   }), /can only lower/);
+});
+
+test('materialization restores exact independent writable source/history and advisory checkouts', t => {
+  const f = fixture(t);
+  buildClosure(f);
+  const destination = join(f.work, 'workspace');
+  const manifest = inputs.materializeClosure(f.destination, f.policy, destination);
+  assert.deepEqual(manifest, verifyClosure(f.destination, f.policy));
+  const source = join(destination, 'source');
+  const advisory = join(destination, 'advisory');
+  assert.equal(git(source, 'rev-parse', 'HEAD'), f.policy.source_revision);
+  assert.equal(git(source, 'rev-parse', 'v0.2.0'), f.policy.historical_tag);
+  assert.equal(git(source, 'show', `${f.policy.historical_revision}:data`), 'historical data');
+  assert.equal(git(advisory, 'rev-parse', 'HEAD'), f.policy.advisory_revision);
+  assert.equal(git(advisory, 'rev-parse', 'HEAD^{tree}'), f.policy.advisory_tree);
+  assert.equal(readFileSync(join(advisory, '.git', 'shallow'), 'utf8'), f.policy.advisory_revision + '\n');
+  assert.equal(readlinkSync(join(source, 'alias')), 'dir/tool');
+  assert.ok(statSync(join(source, 'dir', 'tool')).mode & 0o111);
+  assert.equal(git(source, 'status', '--porcelain'), '');
+  assert.equal(git(advisory, 'status', '--porcelain'), '');
+  assert.equal(git(source, 'remote'), '');
+  assert.equal(git(advisory, 'remote'), '');
+  assert.ok(!existsSync(join(source, '.git', 'objects', 'info', 'alternates')));
+  assert.deepEqual(readFileSync(join(destination, 'bootstrap.tar.gz')), readFileSync(f.bootstrap));
+  for (const name of ['source.pack', 'advisory.pack', 'manifest.json', 'bootstrap.tar.gz']) {
+    assert.equal(statSync(join(f.destination, name)).nlink, 1);
+  }
+  rmSync(f.source, { recursive: true });
+  rmSync(f.advisory, { recursive: true });
+  rmSync(f.destination, { recursive: true });
+  assert.equal(git(source, 'show', `${f.policy.historical_revision}:data`), 'historical data');
+  writeFileSync(join(source, 'data'), 'local verification workspace change\n');
+  assert.ok(git(source, 'status', '--porcelain').includes('data'));
+  assert.equal(readFileSync(join(advisory, 'data'), 'utf8'), 'historical data\n');
+});
+
+test('materialization rejects changed bytes, external-policy drift and occupied destinations without writes', t => {
+  const f = fixture(t);
+  buildClosure(f);
+  const occupied = join(f.work, 'occupied');
+  mkdirSync(occupied);
+  writeFileSync(join(occupied, 'keep'), 'caller data');
+  assert.throws(() => inputs.materializeClosure(f.destination, f.policy, occupied), /destination must not exist/);
+  assert.equal(readFileSync(join(occupied, 'keep'), 'utf8'), 'caller data');
+  const destination = join(f.work, 'rejected');
+  assert.throws(() => inputs.materializeClosure(f.destination, {
+    ...f.policy, source_revision: '0'.repeat(40)
+  }, destination), /external input policy differs/);
+  assert.ok(!existsSync(destination));
+  writeFileSync(join(f.destination, 'source.pack'), 'tampered');
+  assert.throws(() => inputs.materializeClosure(f.destination, f.policy, destination), /artifact bytes differ/);
+  assert.ok(!existsSync(destination));
+});
+
+test('materialization preserves committed raw bytes without executing repository checkout filters', t => {
+  const f = fixture(t);
+  writeFileSync(join(f.source, '.gitattributes'), 'data -text\n');
+  writeFileSync(join(f.source, 'data'), 'raw\r\nbytes\r\n');
+  git(f.source, 'add', '.');
+  git(f.source, 'commit', '--quiet', '-m', 'literal CRLF source');
+  writeFileSync(join(f.source, '.gitattributes'), 'data text eol=lf filter=untrusted\n');
+  git(f.source, 'add', '.gitattributes');
+  git(f.source, 'commit', '--quiet', '-m', 'attributes must not rewrite raw committed blobs');
+  const policy = { ...f.policy, source_revision: git(f.source, 'rev-parse', 'HEAD') };
+  buildClosure({ ...f, policy });
+  const destination = join(f.work, 'raw');
+  inputs.materializeClosure(f.destination, policy, destination);
+  assert.deepEqual(readFileSync(join(destination, 'source', 'data')), Buffer.from('raw\r\nbytes\r\n'));
+  assert.equal(git(join(destination, 'source'), 'show', 'HEAD:data'), 'raw\r\nbytes');
+});
+
+test('materialization bounds total checkout bytes and never places outputs inside the input closure', t => {
+  const f = fixture(t);
+  buildClosure(f);
+  const destination = join(f.work, 'bounded');
+  assert.throws(() => inputs.materializeClosure(f.destination, f.policy, destination, { maxCheckoutBytes: 1 }),
+    /checkout exceeds/);
+  assert.ok(!existsSync(destination));
+  assert.throws(() => inputs.materializeClosure(f.destination, f.policy, destination,
+    { maxCheckoutBytes: 5 * 1024 ** 3 }), /can only lower/);
+  assert.throws(() => inputs.materializeClosure(f.destination, f.policy, join(f.destination, 'output')),
+    /outside/);
+  const alias = join(f.work, 'input-alias');
+  symlinkSync(f.destination, alias);
+  assert.throws(() => inputs.materializeClosure(alias, f.policy, destination), /must not be aliased/);
+  verifyClosure(f.destination, f.policy);
+});
+
+function withGitObserver(work, observe, action) {
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const bin = join(work, 'observed-bin');
+  mkdirSync(bin);
+  const wrapper = join(bin, 'git');
+  writeFileSync(wrapper, `#!${process.execPath}
+const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
+const args = process.argv.slice(2);
+${observe}
+const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: 'inherit' });
+if (result.signal) process.kill(process.pid, result.signal);
+else process.exit(result.status ?? 127);
+`);
+  chmodSync(wrapper, 0o755);
+  const previous = process.env.PATH;
+  process.env.PATH = bin + ':' + previous;
+  try { return action(); }
+  finally { process.env.PATH = previous; }
+}
+
+test('materialization uses captured bytes even if input files change after complete verification', t => {
+  const f = fixture(t);
+  buildClosure(f);
+  const expectedBootstrap = readFileSync(f.bootstrap);
+  const destination = join(f.work, 'captured');
+  withGitObserver(f.work, `if (args.includes('--template=')) {
+  fs.writeFileSync(${JSON.stringify(join(f.destination, 'source.pack'))}, 'changed after verification');
+  fs.writeFileSync(${JSON.stringify(join(f.destination, 'bootstrap.tar.gz'))}, 'changed after verification');
+}`, () => inputs.materializeClosure(f.destination, f.policy, destination));
+  assert.equal(git(join(destination, 'source'), 'rev-parse', 'HEAD'), f.policy.source_revision);
+  assert.deepEqual(readFileSync(join(destination, 'bootstrap.tar.gz')), expectedBootstrap);
+  assert.throws(() => verifyClosure(f.destination, f.policy), /artifact bytes differ/);
+});
+
+test('failed Git reconstruction removes only its fresh partial output and retains all input evidence', t => {
+  const f = fixture(t);
+  buildClosure(f);
+  const destination = join(f.work, 'interrupted');
+  const callerData = join(f.work, 'caller-data');
+  writeFileSync(callerData, 'must survive');
+  withGitObserver(f.work, `if (args.includes('read-tree') && args.includes(${JSON.stringify(f.policy.advisory_revision)})) process.exit(73);`,
+    () => assert.throws(() => inputs.materializeClosure(f.destination, f.policy, destination), /Git read-tree failed/));
+  assert.ok(!existsSync(destination));
+  assert.equal(readFileSync(callerData, 'utf8'), 'must survive');
+  verifyClosure(f.destination, f.policy);
 });

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
   constants,
+  chmodSync,
   closeSync,
   existsSync,
   fstatSync,
@@ -18,6 +19,7 @@ import {
   realpathSync,
   rmSync,
   statfsSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs';
 import {
@@ -609,7 +611,7 @@ function unpack(bytes, root, shallow) {
   git(root, ['fsck', '--strict', '--no-reflogs', '--no-dangling']);
 }
 
-export function verifyClosure(directory, expectedPolicy) {
+function withVerifiedClosure(directory, expectedPolicy, consume) {
   policyCheck(expectedPolicy);
   directory = resolve(directory);
   assert.ok(lstatSync(directory).isDirectory() && !lstatSync(directory).isSymbolicLink());
@@ -644,10 +646,75 @@ export function verifyClosure(directory, expectedPolicy) {
       delete actual.ids;
       assert.deepEqual(manifest[name], actual, 'complete committed file/mode/history closure differs');
     }
+    return consume({ manifest, payloads, work });
   } finally {
     removeOwned(work, identity);
   }
-  return manifest;
+}
+
+export function verifyClosure(directory, expectedPolicy) {
+  return withVerifiedClosure(directory, expectedPolicy, ({ manifest }) => manifest);
+}
+
+// Reconstruct only data. No checked-out script, filter, hook, bootstrap binary
+// or acceptance command executes here, and no caller cache is copied.
+export function materializeClosure(directory, expectedPolicy, destination, {
+  maxCheckoutBytes = 4 * 1024 * MiB
+} = {}) {
+  assert.ok(Number.isSafeInteger(maxCheckoutBytes) && maxCheckoutBytes > 0 && maxCheckoutBytes <= 4 * 1024 * MiB,
+    'operational checkout budget can only lower the hard bound');
+  assert.ok(!lstatSync(directory).isSymbolicLink(), 'input closure must not be aliased');
+  directory = realpathSync(directory);
+  const output = safeDestination(destination);
+  const within = relative(directory, output);
+  assert.ok(within.startsWith('..' + sep) || isAbsolute(within), 'destination must be outside input closure');
+  return withVerifiedClosure(directory, expectedPolicy, ({ manifest, payloads, work }) => {
+    const fileBytes = [...manifest.source.files, ...manifest.advisory.files]
+      .reduce((sum, row) => sum + row.byte_length, payloads.get('bootstrap.tar.gz').length);
+    assert.ok(Number.isSafeInteger(fileBytes) && fileBytes <= maxCheckoutBytes, 'checkout exceeds resource limit');
+    const space = statfsSync(dirname(output));
+    const packedBytes = [...payloads.values()].reduce((sum, bytes) => sum + bytes.length, 0);
+    assert.ok(space.bavail * space.bsize >= fileBytes + packedBytes + 64 * MiB,
+      'insufficient space for materialized inputs');
+    mkdirSync(output, { mode: 0o700 });
+    const identity = lstatSync(output);
+    try {
+      for (const [name, source] of [['source', true], ['advisory', false]]) {
+        const root = join(output, name);
+        const data = manifest[name];
+        mkdirSync(root, { mode: 0o700 });
+        git(root, ['init', '--quiet', '--template=']);
+        if (!source) writeFileSync(join(root, '.git', 'shallow'), data.revision + '\n', { flag: 'wx', mode: 0o600 });
+        git(root, ['index-pack', '--stdin', '--strict'], { input: payloads.get(name + '.pack') });
+        git(root, ['update-ref', '--no-deref', 'HEAD', data.revision]);
+        if (source) git(root, ['update-ref', 'refs/tags/v0.2.0', expectedPolicy.historical_tag]);
+        git(root, ['read-tree', data.revision]);
+        // Git checkout can rewrite blobs through attributes. Restore their
+        // authenticated raw bytes directly, installing aliases last.
+        for (const row of data.files) mkdirSync(dirname(join(root, row.path)), { recursive: true });
+        for (const row of data.files.filter(row => row.mode !== '120000')) {
+          const bytes = object(root, row.oid);
+          assert.equal(bytes.length, row.byte_length);
+          assert.equal(hash(bytes), row.sha256);
+          const mode = row.mode === '100755' ? 0o755 : 0o644;
+          writeFileSync(join(root, row.path), bytes, { flag: 'wx', mode });
+          chmodSync(join(root, row.path), mode);
+        }
+        for (const row of data.files.filter(row => row.mode === '120000')) {
+          symlinkSync(row.target, join(root, row.path));
+        }
+        checkWorktree(privateView(root, data.revision, source, work), data.revision, data.files);
+        assert.equal(line(root, ['remote']), '', 'materialized inputs cannot depend on a remote');
+        if (source) assert.equal(line(root, ['rev-parse', 'refs/tags/v0.2.0']), expectedPolicy.historical_tag);
+      }
+      writeFileSync(join(output, 'bootstrap.tar.gz'), payloads.get('bootstrap.tar.gz'), { flag: 'wx', mode: 0o600 });
+      assert.deepEqual(readdirSync(output).sort(), ['advisory', 'bootstrap.tar.gz', 'source']);
+      return manifest;
+    } catch (error) {
+      removeOwned(output, identity);
+      throw error;
+    }
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -664,5 +731,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } else if (command === 'verify' && args.length === 2) {
     const [directory, policyPath] = args;
     console.log(canonical(verifyClosure(directory, JSON.parse(text(regular(policyPath, MiB))))).trimEnd());
-  } else throw Error('usage: sdk-vv-inputs.mjs build SOURCE ADVISORY BOOTSTRAP POLICY DEST | verify CLOSURE POLICY');
+  } else if (command === 'materialize' && args.length === 3) {
+    const [directory, policyPath, destination] = args;
+    console.log(canonical(materializeClosure(directory, JSON.parse(text(regular(policyPath, MiB))), destination)).trimEnd());
+  } else throw Error('usage: sdk-vv-inputs.mjs build SOURCE ADVISORY BOOTSTRAP POLICY DEST | verify CLOSURE POLICY | materialize CLOSURE POLICY DEST');
 }
