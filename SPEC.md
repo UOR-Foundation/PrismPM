@@ -801,6 +801,23 @@ helpers. Exact captures remain available alongside the final receipt. Legacy
 different compiler identities are equal. This finite compatibility check does
 not establish full current-language, kernel, two-root or release acceptance.
 
+`scripts/sdk-vv-inputs.mjs` prepares an internal, offline verification-input
+closure, not SDK acceptance. Its independently supplied closed policy binds the
+selected source commit, historical commit/tag and bootstrap archive checksum
+from that source's `tools.lock`, plus an explicitly reviewed RustSec commit and
+tree. It does not select or refresh an advisory pin. Deterministic Git packs
+contain exactly the complete selected source ancestry and the advisory snapshot;
+file manifests retain every tracked byte, executable mode and confined symlink.
+Caller Git configuration, hooks, untracked files and unrelated refs are excluded.
+Fresh destinations are mandatory; verification replays the captured pack bytes
+in private Git stores and rejects missing, extra or changed content. Limits are
+256 MiB per pack, 64 MiB per object/bootstrap archive, 32 MiB metadata, 500,000
+objects, 100,000 files per selected tree, 64 symlink expansions per path,
+4 GiB expanded content and 180 seconds per Git/pack-validation operation.
+This prerequisite neither executes the bootstrap archive nor establishes
+advisory freshness, upstream authenticity, redistribution permission, full V&V,
+image inclusion, multi-platform equivalence or product readiness.
+
 ### 12.1 Browser host prerequisites
 
 `sdk/browser` contains generic host bindings, not a stateful application
