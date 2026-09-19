@@ -14,10 +14,9 @@ use x509_parser::prelude::parse_x509_certificate;
 
 const SPDX: &str = "application/spdx+json;version=3.0.1";
 const POLICY: &str = "application/vnd.prismpm.supply-chain.v1+json";
-const OSV_DATABASE_ID: &str = "OSV-CRATES-DB-G1788555739396732";
-const OSV_DATABASE_SHA256: &str =
-    "03f56153d83125941b4b6990be1fb767b968dc97e73459f933464c832362882c";
-const OSV_DATABASE_EXPIRES_UNIX: u64 = 1_789_171_200;
+const OSV_INPUTS: &[u8] = include_bytes!("../model/osv-databases.json");
+const OSV_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
+const OSV_ECOSYSTEMS: [&str; 5] = ["crates.io", "Debian", "Go", "npm", "Ubuntu"];
 const IMAGE_PLATFORMS: [(&str, &str); 2] = [("linux/amd64", "amd64"), ("linux/arm64", "arm64")];
 const INTOTO_STATEMENT_V1: &str = "https://in-toto.io/Statement/v1";
 const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com";
@@ -228,6 +227,7 @@ fn source_tree_digest(root: &Path) -> Result<String, PrismError> {
 #[derive(Debug)]
 pub(crate) struct VulnerabilityScan {
     database_edition: String,
+    database_expires_unix: u64,
     database_source: Value,
     result: Value,
     result_digest: String,
@@ -564,7 +564,113 @@ fn locked_inventory(
     Ok(inventory)
 }
 
+fn osv_input_expiry(lock: &Value, manifest: &Value, now: u64) -> Result<u64, PrismError> {
+    let invalid = || {
+        PrismError::new(
+            "PP7801",
+            "locked OSV database identity or source time changed",
+        )
+    };
+    if manifest["schema"] != "prismpm/osv-inputs/1"
+        || manifest["freshness_policy_seconds"] != OSV_MAX_AGE_SECONDS
+    {
+        return Err(invalid());
+    }
+    let inputs = manifest["databases"].as_array().ok_or_else(invalid)?;
+    let authorities = lock["authorities"].as_array().ok_or_else(invalid)?;
+    let databases = authorities
+        .iter()
+        .filter(|row| {
+            row["canonical_id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("gs://osv-vulnerabilities/"))
+        })
+        .collect::<Vec<_>>();
+    if inputs.len() != OSV_ECOSYSTEMS.len() || databases.len() != OSV_ECOSYSTEMS.len() {
+        return Err(invalid());
+    }
+    let mut oldest = u64::MAX;
+    for (input, ecosystem) in inputs.iter().zip(OSV_ECOSYSTEMS) {
+        let created = input["source_created_unix"].as_u64().ok_or_else(invalid)?;
+        let time = x509_parser::time::ASN1Time::from_timestamp(
+            i64::try_from(created).map_err(|_| invalid())?,
+        )
+        .map_err(|_| invalid())?
+        .to_datetime();
+        let prefix = format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.",
+            time.year(),
+            u8::from(time.month()),
+            time.day(),
+            time.hour(),
+            time.minute(),
+            time.second()
+        );
+        let source_time = input["source_created"].as_str().ok_or_else(invalid)?;
+        let generation = input["generation"].as_str().ok_or_else(invalid)?;
+        let digest = input["sha256"]
+            .as_str()
+            .and_then(bare_digest_hex)
+            .ok_or_else(invalid)?;
+        let expected_url = format!("https://osv-vulnerabilities.storage.googleapis.com/{ecosystem}/all.zip?generation={generation}");
+        let matches = databases
+            .iter()
+            .filter(|row| {
+                row["canonical_id"] == format!("gs://osv-vulnerabilities/{ecosystem}/all.zip")
+            })
+            .collect::<Vec<_>>();
+        if input["ecosystem"] != ecosystem
+            || generation.len() != 16
+            || !generation.bytes().all(|byte| byte.is_ascii_digit())
+            || source_time.len() != 24
+            || !source_time.starts_with(&prefix)
+            || !source_time.as_bytes()[20..23]
+                .iter()
+                .all(u8::is_ascii_digit)
+            || !source_time.ends_with('Z')
+            || input["url"] != expected_url
+            || created > now
+            || matches.len() != 1
+        {
+            return Err(invalid());
+        }
+        let row = matches[0];
+        if row["id"] != input["id"]
+            || row["edition"] != format!("gcs-generation-{generation}")
+            || row["source"]["sha256"] != digest
+            || row["source"]["revision"] != generation
+            || row["source"]["url"] != expected_url
+            || row["source"]["redistribution"] != "citation-only"
+            || row["source"]["signature"] != "gcs-generation-and-acquired-sha256"
+        {
+            return Err(invalid());
+        }
+        oldest = oldest.min(created);
+    }
+    let expires = oldest
+        .checked_add(OSV_MAX_AGE_SECONDS)
+        .ok_or_else(invalid)?;
+    if now >= expires {
+        return Err(PrismError::new(
+            "PP7801",
+            "locked OSV database is stale for the seven-day production policy",
+        ));
+    }
+    Ok(expires)
+}
+
+fn checked_osv_expiry(lock: &Value) -> Result<u64, PrismError> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| PrismError::new("PP7801", format!("system clock: {error}")))?
+        .as_secs();
+    let manifest: Value = serde_json::from_slice(OSV_INPUTS)
+        .map_err(|error| PrismError::new("PP7801", format!("OSV input manifest: {error}")))?;
+    osv_input_expiry(lock, &manifest, now)
+}
+
 fn osv_databases(root: &Path, lock: &Value) -> Result<(Vec<(String, PathBuf)>, Value), PrismError> {
+    checked_osv_expiry(lock)?;
     let mut files = Vec::new();
     let mut facts = Vec::new();
     for database in lock["authorities"].as_array().into_iter().flatten() {
@@ -1207,33 +1313,18 @@ pub(crate) fn scan_vulnerabilities(
     root: &Path,
     systems: &[Value],
 ) -> Result<VulnerabilityScan, PrismError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| PrismError::new("PP7801", format!("system clock: {error}")))?
-        .as_secs();
-    if now >= OSV_DATABASE_EXPIRES_UNIX {
-        return Err(PrismError::new(
-            "PP7801",
-            "locked OSV database is stale for the seven-day production policy",
-        ));
-    }
     let lock: Value = serde_json::from_slice(
         &std::fs::read(root.join("standards.lock"))
             .map_err(|_| PrismError::new("PP1101", "standards.lock is absent"))?,
     )
     .map_err(|error| PrismError::new("PP1101", format!("standards.lock: {error}")))?;
+    let database_expires_unix = checked_osv_expiry(&lock)?;
     let database = lock["authorities"]
         .as_array()
         .into_iter()
         .flatten()
-        .find(|row| row["id"] == OSV_DATABASE_ID)
+        .find(|row| row["canonical_id"] == "gs://osv-vulnerabilities/crates.io/all.zip")
         .ok_or_else(|| PrismError::new("PP7801", "locked OSV database is absent"))?;
-    if database["source"]["sha256"] != OSV_DATABASE_SHA256 {
-        return Err(PrismError::new(
-            "PP7801",
-            "locked OSV database identity changed",
-        ));
-    }
     let (databases, database_facts) = osv_databases(root, &lock)?;
     let database_set_digest = sha(&encode_value(&database_facts)?);
     let (cargo, dependency_relationships, mut unresolved_licenses) = cargo_inventory(root)?;
@@ -1354,6 +1445,7 @@ pub(crate) fn scan_vulnerabilities(
             .cmp(&(right["reference"].as_str(), right["platform"].as_str()))
     });
     Ok(VulnerabilityScan {
+        database_expires_unix,
         database_edition: format!(
             "{} databases through {}",
             database_facts.as_array().map_or(0, Vec::len),
@@ -3460,7 +3552,7 @@ pub(crate) fn attach_build_evidence(
         },
         "vulnerability_input":{
             "edition":vulnerability.database_edition,
-            "expires_unix":OSV_DATABASE_EXPIRES_UNIX,
+            "expires_unix":vulnerability.database_expires_unix,
             "freshness_policy_days":7,
             "source":vulnerability.database_source,
             "status":"within-production-policy"
@@ -3495,7 +3587,7 @@ pub(crate) fn attach_build_evidence(
         vulnerability_scope: format!(
             "{} through unix {}; zero Cargo findings in {} packages; {} retained and {} rejected image findings across {} image-package observations",
             vulnerability.database_edition,
-            OSV_DATABASE_EXPIRES_UNIX,
+            vulnerability.database_expires_unix,
             vulnerability.package_count,
             vulnerability.image_finding_count,
             vulnerability.image_rejected_count,
@@ -3506,6 +3598,140 @@ pub(crate) fn attach_build_evidence(
 
 #[cfg(test)]
 mod tests {
+    fn osv_policy_fixture() -> (tempfile::TempDir, serde_json::Value, serde_json::Value) {
+        let root = tempfile::tempdir().unwrap();
+        crate::authority::resolve(root.path(), false).unwrap();
+        let lock =
+            serde_json::from_slice(&std::fs::read(root.path().join("standards.lock")).unwrap())
+                .unwrap();
+        let inputs = serde_json::from_slice(super::OSV_INPUTS).unwrap();
+        (root, lock, inputs)
+    }
+
+    #[test]
+    fn osv_policy_binds_oldest_of_all_five_source_times_and_exact_expiry_boundary() {
+        let (_, lock, inputs) = osv_policy_fixture();
+        let times = inputs["databases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["source_created_unix"].as_u64().unwrap())
+            .collect::<Vec<_>>();
+        let expiry = times.iter().min().unwrap() + 604800;
+        assert_eq!(
+            super::osv_input_expiry(&lock, &inputs, expiry - 1).unwrap(),
+            expiry
+        );
+        assert!(super::osv_input_expiry(&lock, &inputs, expiry)
+            .unwrap_err()
+            .to_string()
+            .contains("stale"));
+        assert!(super::osv_input_expiry(&lock, &inputs, times.iter().max().unwrap() - 1).is_err());
+
+        // Make each ecosystem the oldest in turn: crates.io is not a privileged clock.
+        let earlier = times.iter().min().unwrap() - 86400;
+        let earlier_time = x509_parser::time::ASN1Time::from_timestamp(earlier as i64)
+            .unwrap()
+            .to_datetime();
+        let earlier_source = format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
+            earlier_time.year(),
+            u8::from(earlier_time.month()),
+            earlier_time.day(),
+            earlier_time.hour(),
+            earlier_time.minute(),
+            earlier_time.second()
+        );
+        for index in 0..5 {
+            let mut changed = inputs.clone();
+            changed["databases"][index]["source_created_unix"] = serde_json::json!(earlier);
+            changed["databases"][index]["source_created"] = serde_json::json!(earlier_source);
+            let expected = earlier + 604800;
+            assert_eq!(
+                super::osv_input_expiry(&lock, &changed, expected - 1).unwrap(),
+                expected
+            );
+            assert!(super::osv_input_expiry(&lock, &changed, expected).is_err());
+        }
+    }
+
+    #[test]
+    fn osv_policy_rejects_every_missing_duplicated_or_substituted_database() {
+        let (_, lock, inputs) = osv_policy_fixture();
+        let now = inputs["databases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["source_created_unix"].as_u64().unwrap())
+            .max()
+            .unwrap();
+        for ecosystem in super::OSV_ECOSYSTEMS {
+            let index = lock["authorities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .position(|row| {
+                    row["canonical_id"] == format!("gs://osv-vulnerabilities/{ecosystem}/all.zip")
+                })
+                .unwrap();
+            for field in ["sha256", "revision", "url", "redistribution", "signature"] {
+                let mut changed = lock.clone();
+                changed["authorities"][index]["source"][field] = serde_json::json!("substituted");
+                assert!(
+                    super::osv_input_expiry(&changed, &inputs, now).is_err(),
+                    "{ecosystem}: {field}"
+                );
+            }
+            let mut missing = lock.clone();
+            missing["authorities"].as_array_mut().unwrap().remove(index);
+            assert!(super::osv_input_expiry(&missing, &inputs, now).is_err());
+            let mut duplicate = lock.clone();
+            duplicate["authorities"]
+                .as_array_mut()
+                .unwrap()
+                .push(lock["authorities"][index].clone());
+            assert!(super::osv_input_expiry(&duplicate, &inputs, now).is_err());
+        }
+        for field in ["source_created", "source_created_unix", "generation", "url"] {
+            let mut changed = inputs.clone();
+            changed["databases"][0][field] = serde_json::json!("substituted");
+            assert!(super::osv_input_expiry(&lock, &changed, now).is_err());
+        }
+        let mut relaxed = inputs.clone();
+        relaxed["freshness_policy_seconds"] = serde_json::json!(604801);
+        assert!(super::osv_input_expiry(&lock, &relaxed, now).is_err());
+    }
+
+    #[test]
+    fn osv_scan_and_image_acquisition_enforce_reviewed_identity_before_execution() {
+        let (root, mut lock, _) = osv_policy_fixture();
+        let row = lock["authorities"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|row| row["canonical_id"] == "gs://osv-vulnerabilities/npm/all.zip")
+            .unwrap();
+        row["source"]["sha256"] = serde_json::json!("0".repeat(64));
+        std::fs::write(
+            root.path().join("standards.lock"),
+            serde_json::to_vec(&lock).unwrap(),
+        )
+        .unwrap();
+        let scan = super::scan_vulnerabilities(root.path(), &[]).unwrap_err();
+        assert!(
+            scan.to_string()
+                .contains("locked OSV database identity or source time changed"),
+            "{scan}"
+        );
+        let acquisition = super::osv_databases(root.path(), &lock).unwrap_err();
+        assert!(
+            acquisition
+                .to_string()
+                .contains("locked OSV database identity or source time changed"),
+            "{acquisition}"
+        );
+    }
+
     #[test]
     fn execution_boundary_rejects_wrong_native_inventory() {
         crate::sdk::execution_binding_regression(

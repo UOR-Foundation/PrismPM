@@ -509,6 +509,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
             measures,
         },
         application: None,
+        library: None,
     };
     if !catalogs.is_empty() {
         return Err(PrismError::new("PP9001", "unconsumed catalog projection"));
@@ -520,7 +521,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 10] = [
+    const INPUTS: [(&str, &[u8]); 12] = [
         (
             "crates/prismpm/src/holo/application.rs",
             include_bytes!("application.rs"),
@@ -528,6 +529,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "crates/prismpm/src/holo/canonical.rs",
             include_bytes!("canonical.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/library.rs",
+            include_bytes!("library.rs"),
         ),
         (
             "crates/prismpm/src/holo/model_document.rs",
@@ -553,6 +558,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "schemas/model-document-v2.schema.json",
             include_bytes!("../../schemas/model-document-v2.schema.json"),
+        ),
+        (
+            "schemas/model-document-v3.schema.json",
+            include_bytes!("../../schemas/model-document-v3.schema.json"),
         ),
         (
             "schemas/model-document.schema.json",

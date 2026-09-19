@@ -17,11 +17,24 @@ jobs:
           fetch-depth: 0
       - name: Check pinned bootstrap source availability
         run: bash scripts/bootstrap-verify.sh --check-source
+      - name: Start bounded host resource diagnostics
+        run: node scripts/ci-observe.mjs start target/ci-diagnostics/host
       - name: Run the complete pinned devcontainer gate
         uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
         with:
           # The second run is the regression test for stale ignored evidence.
           runCmd: |
             set -euo pipefail
-            just vv
-            just vv
+            node scripts/ci-observe.mjs run target/ci-diagnostics/vv-first -- just vv
+            node scripts/ci-observe.mjs run target/ci-diagnostics/vv-second -- just vv
+      - name: Stop host resource diagnostics
+        if: always()
+        run: node scripts/ci-observe.mjs stop target/ci-diagnostics/host
+      - name: Retain CI diagnostics (not acceptance evidence)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vv-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7

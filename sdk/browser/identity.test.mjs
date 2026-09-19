@@ -6,6 +6,78 @@ import { BrowserEffectError, createIdentity, identityPrincipal, signBytes, verif
 
 globalThis.crypto ??= webcrypto;
 
+test('randomness uses fresh bounded byte buffers and the WebCrypto provider exactly once', async () => {
+  const {randomBytes, MAX_RANDOM_BYTES} = await import('./identity.mjs');
+  assert.equal(MAX_RANDOM_BYTES, 65536);
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  let calls = 0;
+  const seen = [];
+  const provider = {getRandomValues(bytes) {
+    assert.equal(this, provider);
+    assert.equal(Object.getPrototypeOf(bytes), Uint8Array.prototype);
+    assert.ok(!seen.includes(bytes));
+    seen.push(bytes); calls++;
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (i + calls) % 256;
+    return bytes;
+  }};
+  try {
+    Object.defineProperty(globalThis, 'crypto', {configurable: true, value: provider});
+    for (const size of [1, 32, 65536]) {
+      const bytes = randomBytes(size);
+      assert.equal(bytes.length, size);
+      assert.deepEqual(bytes, Uint8Array.from({length: size}, (_, i) => (i + calls) % 256));
+    }
+    assert.equal(calls, 3);
+  } finally { Object.defineProperty(globalThis, 'crypto', original); }
+  const first = randomBytes(32), second = randomBytes(32);
+  assert.equal(first.length, 32);
+  assert.notEqual(first.buffer, second.buffer);
+  // This is a smoke check, not statistical entropy certification.
+  assert.notDeepEqual(first, second);
+});
+
+test('randomness rejects invalid sizes before touching the provider or coercing objects', async () => {
+  const {randomBytes} = await import('./identity.mjs');
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  let touched = 0;
+  try {
+    Object.defineProperty(globalThis, 'crypto', {configurable: true, get() { touched++; throw Error('provider accessed'); }});
+    for (const size of [undefined, null, false, true, 0, -0, -1, 1.5, NaN, Infinity,
+      65537, Number.MAX_SAFE_INTEGER, 32n, '32', Symbol('size'),
+      {valueOf() { touched++; throw Error('coercion'); }}]) {
+      assert.throws(() => randomBytes(size), {code: 'invalid-input'});
+    }
+    assert.equal(touched, 0);
+  } finally { Object.defineProperty(globalThis, 'crypto', original); }
+});
+
+test('randomness fails closed without exposing provider errors or using a fallback', async () => {
+  const {randomBytes} = await import('./identity.mjs');
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const mathRandom = Math.random;
+  let fallbackCalls = 0;
+  try {
+    Math.random = () => { fallbackCalls++; throw Error('insecure fallback'); };
+    for (const provider of [undefined, {}, {getRandomValues: 42},
+      {get getRandomValues() { throw Error('private provider detail'); }},
+      {getRandomValues() { throw new Proxy({}, {get() { throw Error('read thrown object'); }}); }}]) {
+      Object.defineProperty(globalThis, 'crypto', {configurable: true, value: provider});
+      assert.throws(() => randomBytes(32), error => {
+        assert.ok(error instanceof BrowserEffectError);
+        assert.equal(error.code, 'crypto-unavailable');
+        assert.equal(error.message, 'crypto-unavailable');
+        assert.deepEqual(Object.keys(error).sort(), ['code', 'name']);
+        assert.equal(Object.hasOwn(error, 'cause'), false);
+        return true;
+      });
+    }
+    assert.equal(fallbackCalls, 0);
+  } finally {
+    Math.random = mathRandom;
+    Object.defineProperty(globalThis, 'crypto', original);
+  }
+});
+
 test('nonextractable identity proves possession without assigning organization roles', async () => {
   assert.equal(await checkIntrinsicKeys(), 12);
   assert.equal(await checkPrototypeLifecycle(), 3);

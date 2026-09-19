@@ -229,6 +229,10 @@ pub(crate) fn validate(
     let model_bytes = file(build_files, "model.prism.json")?;
     let model = decode_canonical(model_bytes)
         .map_err(|error| invalid(format!("release model: {}", error.message)))?;
+    ensure(
+        model.library.is_none(),
+        "native-library evidence cannot authorize a product release",
+    )?;
     let inputs = &build["inputs"];
     let mut input_fields = vec![
         "application_generator_sha256",

@@ -270,10 +270,9 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
   } finally { rmSync(directory, {recursive: true, force: true}); }
 });
 
-test('the actual twice-VV shell must fail on either invocation, including first-run-only failure', () => {
-  const normative = load(readFileSync(new URL('../.github/workflows/vv.yml', import.meta.url), 'utf8'));
-  const bodies = [workflow().jobs.gate.steps.at(-1).with.runCmd,
-    normative.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd];
+test('the release twice-VV shell must fail on either invocation, including first-run-only failure', () => {
+  // The diagnostic-wrapped normative workflow is executed by ci-observe.test.mjs.
+  const bodies = [workflow().jobs.gate.steps.at(-1).with.runCmd];
   const verify = body => {
     for (const [first, second] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
       const script = `count=0; just() { count=$((count+1)); printf 'call:%s\\n' "$count"; if [ "$count" = 1 ]; then return ${first}; else return ${second}; fi; };\n${body}`;

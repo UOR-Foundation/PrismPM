@@ -12,7 +12,31 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 48] = [
+const CONTRACTS: [Contract; 52] = [
+    Contract {
+        id: "prismpm/library-build-binding/1",
+        maximum_bytes: 4_194_304,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/library-build-binding.schema.json"),
+    },
+    Contract {
+        id: "prismpm/library-acceptance/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/library-acceptance.schema.json"),
+    },
+    Contract {
+        id: "prismpm/library-verification-manifest/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/library-verification-manifest.schema.json"),
+    },
+    Contract {
+        id: "prismpm/model-document/3",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/model-document-v3.schema.json"),
+    },
     Contract {
         id: "prismpm/browser-export/1",
         maximum_bytes: 1_048_576,
@@ -320,6 +344,68 @@ fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> b
 }
 
 fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
+    if matches!(
+        id,
+        "prismpm/library-build-binding/1" | "prismpm/library-acceptance/1"
+    ) {
+        let invalid =
+            || PrismError::new("PP4004", "native-library evidence roots are inconsistent");
+        let roots = |rows: &Value| -> Result<Vec<String>, PrismError> {
+            let rows = rows.as_array().ok_or_else(invalid)?;
+            let names = rows
+                .iter()
+                .map(|row| row.as_str().map(str::to_owned).ok_or_else(invalid))
+                .collect::<Result<Vec<_>, _>>()?;
+            if names.is_empty()
+                || names.len() > 1024
+                || names
+                    .iter()
+                    .any(|name| !crate::holo::library::qualified(name))
+                || names.windows(2).any(|rows| rows[0] >= rows[1])
+            {
+                return Err(invalid());
+            }
+            Ok(names)
+        };
+        let exports = roots(&value["export_roots"])?;
+        let acceptance = if id == "prismpm/library-build-binding/1" {
+            roots(&value["acceptance_roots"])?
+        } else {
+            let first = roots(&value["executions"][0]["roots"])?;
+            if first != roots(&value["executions"][1]["roots"])? {
+                return Err(invalid());
+            }
+            first
+        };
+        if acceptance
+            .iter()
+            .any(|root| exports.binary_search(root).is_err())
+        {
+            return Err(invalid());
+        }
+        return Ok(());
+    }
+    if id == "prismpm/library-verification-manifest/1" {
+        let mut prior = None;
+        for row in value["artifacts"]
+            .as_array()
+            .expect("schema-validated artifact array")
+        {
+            let path = row["path"]
+                .as_str()
+                .expect("schema-validated artifact path");
+            if path.split('/').any(|part| matches!(part, "" | "." | ".."))
+                || prior.is_some_and(|previous| previous >= path)
+            {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "native-library artifact paths are not confined and strictly ordered",
+                ));
+            }
+            prior = Some(path);
+        }
+        return Ok(());
+    }
     if id == "prismpm/workspace-view-labels/1" {
         // JSON Schema maxLength counts Unicode scalars; the host contract
         // instead bounds the encoded UTF-8 bytes of every label value.
@@ -333,9 +419,16 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             }
         }
     }
-    if id == "prismpm/model-document/2" {
+    if matches!(id, "prismpm/model-document/2" | "prismpm/model-document/3") {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
-            PrismError::new("PP2009", format!("text application shape: {error}"))
+            PrismError::new(
+                if id == "prismpm/model-document/2" {
+                    "PP2009"
+                } else {
+                    "PP4004"
+                },
+                format!("model document shape: {error}"),
+            )
         })?;
         return crate::holo::validate::validate(&document);
     }

@@ -1,5 +1,11 @@
 Feature: sdk
 
+  @DK-17 @build
+  Scenario: Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance.
+    Given a closed native library with typed exports and modeled acceptance roots
+    When the SDK builds and verifies its exact generated source and package
+    Then every acceptance root passes in both feature modes and malformed or false claims fail
+
   @DK-15 @build
   Scenario: The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector.
     Given the complete modeled View corpus and freshly generated private browser dependencies
@@ -43,10 +49,10 @@ Feature: sdk
     Then valid transitions, every modeled rejection, and maximum-size boundaries agree
 
   @DK-07 @build
-  Scenario: The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority.
-    Given nonextractable Web Cryptography identities
-    When bounded domain-separated records are signed and independently verified
-    Then changed authors, contexts, payloads, and key bindings are rejected
+  Scenario: The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority.
+    Given nonextractable Web Cryptography identities and the browser random provider
+    When bounded random bytes are requested and domain-separated records are signed and independently verified
+    Then malformed randomness requests, unavailable providers, changed authors, contexts, payloads, and key bindings are rejected without insecure fallbacks
 
   @DK-08 @build
   Scenario: The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes.

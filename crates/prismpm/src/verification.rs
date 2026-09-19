@@ -1614,7 +1614,7 @@ fn validate_control_coverage_corpus(
     Ok(())
 }
 
-fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> {
+pub(crate) fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> {
     let object = value
         .as_object()
         .ok_or_else(|| PrismError::new("PP5004", "coverage is not an object"))?;
@@ -1654,7 +1654,7 @@ fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> 
     Ok(())
 }
 
-fn parse_kernel(text: &str) -> Result<prod_ir::Module, PrismError> {
+pub(crate) fn parse_kernel(text: &str) -> Result<prod_ir::Module, PrismError> {
     let (remaining, module) = prod_ir::parser::parse_module(text)
         .map_err(|_| PrismError::new("PP5004", "kernel.ir is malformed"))?;
     if !remaining.trim().is_empty() {
@@ -1760,7 +1760,7 @@ pub(crate) fn validate_release_native_evidence(
     validate_control_coverage_corpus(snapshot, &corpus)
 }
 
-fn publish(
+pub(crate) fn publish(
     output_root: &Path,
     attestation_id: &str,
     files: &[(String, Vec<u8>)],
@@ -1883,7 +1883,10 @@ fn publish(
     Ok(())
 }
 
-fn verify_application_build_closure(build_root: &Path, manifest: &Value) -> Result<(), PrismError> {
+pub(crate) fn verify_application_build_closure(
+    build_root: &Path,
+    manifest: &Value,
+) -> Result<(), PrismError> {
     let rows = manifest
         .get("files")
         .and_then(Value::as_array)
@@ -2389,7 +2392,7 @@ pub(crate) fn run(
         .into_iter()
         .collect::<Vec<_>>();
     let package_exports_sha256 = format!("{:x}", Sha256::digest(STDLIB_EXPORTS_SOURCE.as_bytes()));
-    if model.application.is_none() {
+    if model.application.is_none() && model.library.is_none() {
         validate_lexlean_declarations(&lex_value, &lex_snapshot, &corpus)?;
         validate_control_coverage_corpus(&lex_snapshot, &corpus)?;
     }
@@ -2463,6 +2466,23 @@ pub(crate) fn run(
             "PP4004",
             "LexLean manifest attests no generated Lean modules",
         ));
+    }
+    if model.library.is_some() {
+        return crate::library_verification::run(
+            crate::library_verification::LibraryVerification {
+                repository_root: &controller.root,
+                config: &config,
+                build,
+                model,
+                model_bytes,
+                build_manifest,
+                build_root: &build_root,
+                lex_attestation,
+                lex_attestation_id,
+                lex_snapshot,
+                processes: toolchain.records,
+            },
+        );
     }
     if model.application.is_some() {
         return run_application(

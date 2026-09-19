@@ -3,6 +3,7 @@
 pub mod application;
 pub mod archive;
 pub mod canonical;
+pub mod library;
 pub mod model_document;
 pub mod projector;
 pub mod validate;

@@ -9,6 +9,10 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 
 | Schema | JSON Schema | Media type | Limits | Compatibility |
 | --- | --- | --- | --- | --- |
+| `prismpm/library-build-binding/1` | `schemas/library-build-binding.schema.json` | `application/vnd.prismpm.library-build-binding.v1+json` | 4194304 bytes / 4096 items | `closed`; `exact-major` |
+| `prismpm/library-acceptance/1` | `schemas/library-acceptance.schema.json` | `application/vnd.prismpm.library-acceptance.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
+| `prismpm/library-verification-manifest/1` | `schemas/library-verification-manifest.schema.json` | `application/vnd.prismpm.library-verification.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
+| `prismpm/model-document/3` | `schemas/model-document-v3.schema.json` | `application/vnd.prismpm.model-document.v3+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
 | `prismpm/browser-export/1` | `schemas/browser-export.schema.json` | `application/vnd.prismpm.browser-export.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/workspace-view-labels/1` | `schemas/workspace-view-labels.schema.json` | `application/vnd.prismpm.workspace-view-labels.v1+json` | 8192 bytes / 78 items | `closed`; `exact-major` |
 | `prismpm/verification-closure/1` | `schemas/verification-closure.schema.json` | `application/vnd.prismpm.verification.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |

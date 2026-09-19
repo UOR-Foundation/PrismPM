@@ -494,6 +494,34 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+Reviewed stdlib goldens retain the original verification records, including
+the exact caller executable digest. `prismpm/golden-manifest/2` selects the
+`prismpm/golden-comparison/1` regression-only comparison profile. Before
+comparison, both trees must pass canonical identity, closed file-descriptor,
+source/generated-Lean binding, and verification-reference checks. Only the
+LexLean caller executable digest and its derived attestation IDs and hashes
+are omitted from an in-memory comparison projection; no stored attestation is
+rewritten. Every other byte, tool digest, declaration audit, execution result,
+and artifact descriptor remains significant. These projections are not
+verification or release evidence. Actual verification and same-executable
+two-root reproducibility continue to bind and compare complete raw evidence.
+
+CI resource diagnostics are separate from acceptance evidence. Host and
+devcontainer observers record only allowlisted numeric resource measurements,
+at most every 30 seconds for six hours, 721 samples and 8 MiB per observer.
+Gate logs redact inherited credential values and retain a 32 MiB prefix plus
+two rotating 1 MiB tails, explicitly recording truncation. Wrappers preserve
+command exit status and stop only their own observers; both consecutive V&V
+invocations remain mandatory. Diagnostics upload runs even after gate failure
+when the runner is reachable; runner loss can prevent upload and never implies
+acceptance or a diagnosed resource cause.
+
+Compiler-heavy owning conformance suites and shared verification initialization
+execute one at a time within a conformance process. Nested requests reuse the
+owning slot; a failed owner releases it without suppressing subsequent tests.
+Scheduling changes neither checks nor deadlines. Cached failures retain their
+structured diagnostics, and failed prerequisites stop dependent browser checks.
+
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
 LexLean 0.2.0, the exact lean4-prod fork revision, `prism-stdlib = 0.1.0`,
@@ -756,6 +784,13 @@ Text application profile or change Holo/1 capability negotiation.
   P1363 values. Principal IDs are SHA-256 of the exact public-key encoding;
   they neither assert a civil/organizational identity nor a Kappa address.
   Persisted identities are checked by real key possession, not key hashes alone.
+  `randomBytes` synchronously returns a fresh byte array for an integer length
+  from 1 through 65,536, using exactly one browser `getRandomValues` call.
+  Invalid lengths fail before provider access; missing or failing providers
+  return `crypto-unavailable`, without provider details or insecure fallback.
+  This binds [Web Cryptography's random API](https://www.w3.org/TR/2017/REC-WebCryptoAPI-20170126/#Crypto-method-getRandomValues),
+  not an entropy-source certification or recovery policy. The model must select
+  the required secret size, use, custody and lifetime; the host grants no authority.
 - `store.mjs` binds IndexedDB strict transactions to a fixed namespace policy:
   at most 1 MiB/object, 4096 objects, 64 named heads and 16 objects/transaction;
   a namespace can select smaller limits but cannot silently change them.
@@ -945,6 +980,46 @@ The byte contract is stdlib/src/Foundation/View/Workspace/V1/Interaction.md.
 These reusable SDK components do not appoint Foundation authority, establish
 mailbox ownership, add encryption or Kappa replication, certify OSCAL controls,
 or replace the independent application-profile and release acceptance gates.
+
+### 12.6 Native model libraries
+
+`Foundation.Library.V1.Model.NativeLibrary` defines the explicit
+`prismpm/native-library/1` profile. A unique closed value supplies package
+metadata, sorted nonempty `exportRoots` and `acceptanceRoots`. The canonical
+projection is `prismpm/model-document/3`, with `library` instead of `application`
+and empty facet sections. Existing /1 and /2 shapes remain closed; a library
+cannot coexist with an application or system declaration. This profile does
+not change Holo/1 or weaken the architecture facet closure.
+
+Names and descriptions are nonempty control-free text bounded to 128 and
+1024 UTF-8 bytes. Cargo names use 1..64 lowercase ASCII letters, digits,
+underscores or hyphens, beginning with a letter; versions are canonical stable
+SemVer. Repository and homepage are ASCII HTTPS URIs of at most 2048 bytes.
+Each root list has 1..1024 unique bytewise-ordered qualified identifiers,
+each at most 1024 bytes. Every export resolves to an executable typed definition
+in the selected snapshot. Acceptance roots are exported zero-argument Boolean
+definitions; their types come from the graph, not caller-supplied signatures.
+Malformed metadata fails with `PP4004`; unresolved or wrongly typed roots fail
+with `PP2001`.
+
+`check` remains read-only. `build` uses the pinned named exporter and code
+generator to produce the complete native package and `.crate`, typed LCNF,
+roots, coverage and model binding. `prismpm/build-inputs/3` binds the complete
+artifact rows and library generator. It makes no acceptance claim. `verify`
+requires the complete selected LexLean declaration audit, including imported
+namespaces, exact source axiom policies and empty theorem axioms, plus generated
+Lean elaboration and kernel replay. Independent regeneration must reproduce
+every library artifact byte. Registry-format consumers of the exact package
+execute every modeled acceptance root under both `std` and `no_std + alloc`;
+false results, computation errors, omissions and changed bytes fail closed.
+
+Only then are `prismpm/library-acceptance/1` and
+`prismpm/library-verification-manifest/1` atomically published. This is finite
+native-code evidence, not a universal semantic proof, standards certification,
+browser profile, `.holo`, or deployed service. Product-release construction and
+source-free product-release replay reject library evidence with `PP6101`.
+The library may supply modeled code to an application, whose own complete
+application and deployment acceptance remains mandatory.
 
 ## 13. OCI product-release graph
 
@@ -1185,6 +1260,15 @@ issuer, subject, repository, workflow, ref, environment, certificate and
 transparency policy are explicit. Unsigned local development remains visibly
 distinct. Vulnerability results identify scanner and immutable database
 snapshot plus freshness; a stale offline fact cannot satisfy a current policy.
+The five locked OSV databases (crates.io, Debian, Go, npm, Ubuntu) expire
+exactly seven days after the oldest source object's GCS `timeCreated`, rounded
+down to a whole second. Future source times fail closed. Reviewed acquisition
+metadata is embedded from `model/osv-databases.json`; every generation, URL
+and SHA-256 must agree with the complete standards lock. Explicit maintenance
+uses `node scripts/refresh-osv.mjs acquire` and, after review, `apply`, followed
+by `prismpm authority resolve`. Validation remains offline. Acquisition does
+not authorize redistribution, preserve deleted historical generations, or
+establish a successful vulnerability scan.
 
 OpenTelemetry logs, metrics and traces use modeled resource attributes,
 correlation and redaction and are accepted by an unmodified pinned Collector.
@@ -1368,7 +1452,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-04` | `sdk` | The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline. | §12 |
 | `DK-05` | `sdk` | SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle. | §12 |
 | `DK-06` | `sdk` | SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation. | §12 |
-| `DK-07` | `sdk` | The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority. | §12 |
+| `DK-07` | `sdk` | The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority. | §12 |
 | `DK-08` | `sdk` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. | §12 |
 | `DK-09` | `sdk` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. | §12 |
 | `DK-10` | `sdk` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. | §12 |
@@ -1378,6 +1462,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-14` | `sdk` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. | §12 |
 | `DK-15` | `sdk` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. | §12 |
 | `DK-16` | `sdk` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. | §12 |
+| `DK-17` | `sdk` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

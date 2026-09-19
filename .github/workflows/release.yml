@@ -432,6 +432,22 @@ jobs:
           path: ${{ matrix.name }}-browser-sdk.log
           if-no-files-found: error
           retention-days: 30
+      - name: Verify exact current SDK native-library closure offline and read-only
+        if: matrix.image == 'sdk'
+        shell: bash
+        env:
+          RESULT_NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/library-sdk-check.mjs tests
+          bash root-a/scripts/library-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-library-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && matrix.image == 'sdk'
+        with:
+          name: library-sdk-${{ matrix.name }}
+          path: ${{ matrix.name }}-library-sdk.log
+          if-no-files-found: error
+          retention-days: 30
 
   native:
     needs: [gate, images]
