@@ -1378,6 +1378,21 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## Configuration diagnostic boundaries
+
+PP1001–PP1003 now execute the actual project loader. Absent required fields
+return PP1002; negative, zero and excessive limits return PP1003. Closed-shape
+and type errors remain PP1001. Removing the loader's validation call makes the
+owning test fail on a zero limit. Restored source passes three loader tests,
+four diagnostic tests, both actual CLI contract tests, formatting and
+all-target/all-feature Clippy in the development container. This is targeted
+evidence, not full SDK acceptance; 77 other generic probes remain recorded.
+
+- Missing/negative-field regression: `target/configuration-loader-red.log`, SHA-256 `6a6502bae0e11b5c501d8395e4b72757073813f1b71353d165d686503ddc615f`.
+- Removed-validation mutant: `target/configuration-loader-mutant.log`, SHA-256 `0c59fb427d7daca3a2d1bb2511358b8c0de3a82a1473aaf00adea189da773bd3`.
+- Restored loader: `target/configuration-loader-restored.log`, SHA-256 `ebc296ac6a2cae9338096affd43a2e17358aae6708c44261e82fc87cdd7a9e9b`.
+- Actual CLI codes/bytes/exit classes: `target/configuration-cli-restored.log`, SHA-256 `ea17fc59fad45ba87da4d93c919b2ddc914625dc05b3d91906df7794816a2968`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
