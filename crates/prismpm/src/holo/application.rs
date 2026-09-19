@@ -8,9 +8,14 @@ use super::model_document::{
 use crate::error::PrismError;
 use lexlean::SemanticSnapshot;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+#[cfg(test)]
+mod tests;
 
 pub(super) type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
+
+const MAX_METADATA_ALIASES: usize = 65_536;
 
 pub(super) fn member_name(value: &Value) -> Option<&str> {
     value.get("result")?.get("member")?.get("name")?.as_str()
@@ -20,19 +25,21 @@ fn definition<'a>(
     definitions: &'a Definitions<'a>,
     module: &'a str,
     reference: &'a Value,
-) -> Result<(&'a str, &'a Value), PrismError> {
+) -> Result<(&'a str, &'a str, &'a Value), PrismError> {
     let name = reference
         .get("name")
         .and_then(Value::as_str)
         .ok_or_else(|| PrismError::new("PP2001", "application call has no function name"))?;
-    let owner = reference
-        .get("module")
-        .and_then(Value::as_str)
-        .unwrap_or(module);
+    let owner = match reference.get("module") {
+        None => module,
+        Some(value) => value.as_str().ok_or_else(|| {
+            PrismError::new("PP2001", "application call has a malformed module name")
+        })?,
+    };
     definitions
         .get(&(owner.to_owned(), name.to_owned()))
         .copied()
-        .map(|value| (owner, value))
+        .map(|value| (owner, name, value))
         .ok_or_else(|| {
             PrismError::new(
                 "PP2001",
@@ -43,10 +50,15 @@ fn definition<'a>(
 
 fn evaluated<'a>(
     definitions: &'a Definitions<'a>,
-    module: &'a str,
-    value: &'a Value,
+    mut module: &'a str,
+    mut value: &'a Value,
 ) -> Result<(&'a str, &'a Value), PrismError> {
-    if value.get("kind").and_then(Value::as_str) == Some("call") {
+    let mut remaining = MAX_METADATA_ALIASES;
+    let mut visited = BTreeSet::new();
+    while value.get("kind").and_then(Value::as_str) == Some("call") {
+        remaining = remaining.checked_sub(1).ok_or_else(|| {
+            PrismError::new("PP2001", "application metadata exceeds the alias budget")
+        })?;
         let arguments = value
             .get("arguments")
             .and_then(Value::as_array)
@@ -57,13 +69,19 @@ fn evaluated<'a>(
                 "application metadata calls must be closed",
             ));
         }
-        let (owner, declaration) = definition(
+        let (owner, name, declaration) = definition(
             definitions,
             module,
             value
                 .get("function")
                 .ok_or_else(|| PrismError::new("PP2001", "application call is malformed"))?,
         )?;
+        if !visited.insert((owner, name)) {
+            return Err(PrismError::new(
+                "PP2001",
+                "application metadata contains a cyclic alias",
+            ));
+        }
         if !declaration
             .get("parameters")
             .and_then(Value::as_array)
@@ -74,13 +92,10 @@ fn evaluated<'a>(
                 "application metadata definition is not closed",
             ));
         }
-        return evaluated(
-            definitions,
-            owner,
-            declaration
-                .get("body")
-                .ok_or_else(|| PrismError::new("PP2001", "application definition has no body"))?,
-        );
+        module = owner;
+        value = declaration
+            .get("body")
+            .ok_or_else(|| PrismError::new("PP2001", "application definition has no body"))?;
     }
     Ok((module, value))
 }
