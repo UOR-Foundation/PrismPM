@@ -75,3 +75,11 @@ Feature: stdlib
     Then generated std and no_std consumers enforce distinct-user quorums and complete post-change coverage
     And planted minimum-coverage and ungranted-membership approval defects fail at their exact generated runtime roots
     And restoring each defect reproduces the original accepted artifact identities
+
+  @ST-13 @build
+  Scenario: The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution.
+    Given a current authenticated account and authority snapshot with a separately admitted profile-specific mailbox proof
+    When LexLean and lean4-prod compile the mailbox-admission kernel and complete finite corpus
+    Then generated std and no_std consumers enforce exact intent binding and single-use state transitions
+    And historical-address and replacement-key defects fail at their exact generated runtime roots
+    And restoration reproduces the original accepted artifact identities
