@@ -1204,6 +1204,8 @@ version = "0.3.0"
 dependencies = [
  "camino",
  "clap",
+ "jsonschema",
+ "lexlean",
  "prismpm",
  "repo-model",
  "serde",

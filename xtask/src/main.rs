@@ -803,11 +803,12 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
     let manifest = serde_json::json!({
         "attestation_id": verify_res.attestation_id,
         "build_id": build_res.build_id,
+        "comparison_profile": repo_conformance::golden::PROFILE,
         "compiler_semantics_id": compiler_semantics_id,
         "files": rows,
         "generated_lean": generated_lean,
         "review_reason": review_reason,
-        "schema": "prismpm/golden-manifest/1",
+        "schema": "prismpm/golden-manifest/2",
         "sources": sources
     });
     files.push((
@@ -815,6 +816,7 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
         prismpm::holo::canonical::encode_value(&manifest)?,
     ));
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    repo_conformance::golden::current_caller(&files, &std::fs::read(std::env::current_exe()?)?)?;
     Ok(files)
 }
 
@@ -867,9 +869,7 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
         return Ok(());
     }
     let observed = tree_files(&destination)?;
-    if observed != expected {
-        return Err("golden artifact tree drifted; use just golden-write with a review reason and review the exact diff".into());
-    }
+    repo_conformance::golden::compare(&observed, &expected)?;
     println!(
         "check-golden: {} files match reviewed build {}",
         observed.len(),

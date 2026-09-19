@@ -494,6 +494,18 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+Reviewed stdlib goldens retain the original verification records, including
+the exact caller executable digest. `prismpm/golden-manifest/2` selects the
+`prismpm/golden-comparison/1` regression-only comparison profile. Before
+comparison, both trees must pass canonical identity, closed file-descriptor,
+source/generated-Lean binding, and verification-reference checks. Only the
+LexLean caller executable digest and its derived attestation IDs and hashes
+are omitted from an in-memory comparison projection; no stored attestation is
+rewritten. Every other byte, tool digest, declaration audit, execution result,
+and artifact descriptor remains significant. These projections are not
+verification or release evidence. Actual verification and same-executable
+two-root reproducibility continue to bind and compare complete raw evidence.
+
 CI resource diagnostics are separate from acceptance evidence. Host and
 devcontainer observers record only allowlisted numeric resource measurements,
 at most every 30 seconds for six hours, 721 samples and 8 MiB per observer.
