@@ -5,6 +5,7 @@ const signatureAlgorithm = Object.freeze({ name: 'ECDSA', hash: 'SHA-256' });
 const encoder = new TextEncoder();
 const domain = encoder.encode('prismpm/browser-signature/1\0');
 export const MAX_SIGNED_BYTES = 1048576;
+export const MAX_RANDOM_BYTES = 65536;
 
 // Capture native brands before examining caller-controlled objects. Ordinary
 // typed-array/key properties can be shadowed without changing their backing data.
@@ -84,6 +85,21 @@ export class BrowserEffectError extends Error {
     super(code);
     this.name = 'BrowserEffectError';
     this.code = code;
+  }
+}
+
+export function randomBytes(length) {
+  // No coercion or provider access precedes the bounded allocation contract.
+  if (!Number.isSafeInteger(length) || length < 1 || length > MAX_RANDOM_BYTES) {
+    throw new BrowserEffectError('invalid-input');
+  }
+  try {
+    const bytes = new ByteArray(length);
+    const provider = globalThis.crypto;
+    apply(provider.getRandomValues, provider, [bytes]);
+    return bytes;
+  } catch {
+    throw new BrowserEffectError('crypto-unavailable');
   }
 }
 
@@ -221,9 +237,7 @@ export async function validateIdentity(identity) {
     const privateKey = identity.privateKey;
     const captured = { publicKey, principal, privateKey };
     if (await identityPrincipal(publicKey) !== principal) throw new BrowserEffectError('identity-corrupt');
-    let challenge;
-    try { challenge = crypto.getRandomValues(new Uint8Array(32)); }
-    catch { throw new BrowserEffectError('crypto-unavailable'); }
+    const challenge = randomBytes(32);
     const signature = await signBytes(captured, 'key-possession/1', challenge);
     if (!await verifyBytes(publicKey, 'key-possession/1', challenge, signature)) {
       throw new BrowserEffectError('identity-corrupt');

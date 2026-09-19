@@ -16,7 +16,7 @@ export const sourceRoots=Object.freeze([
  'scripts/browser-api-sdk-check.mjs',
 ]);
 export const suites=Object.freeze([
- {id:'DK-07',minimum:10,files:['identity.test.mjs','identity.browser.test.mjs']},
+ {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
  {id:'DK-08',minimum:14,files:['store.test.mjs','boundary.test.mjs']},
  {id:'DK-09',minimum:24,files:['peer.test.mjs']},
  {id:'DK-10',minimum:6,files:['workspace-model-test.mjs']},

@@ -688,7 +688,7 @@ statement = "SDK execution rejects undeclared PATH tools, tampered executables, 
 id = "DK-07"
 suite = "sdk"
 level = "build"
-statement = "The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority."
+statement = "The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority."
 
 [[id]]
 id = "DK-08"

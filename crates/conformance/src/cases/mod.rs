@@ -416,7 +416,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "sdk/browser/identity.test.mjs",
                 "sdk/browser/identity.browser.test.mjs",
             ],
-            10,
+            15,
         ),
         "DK-08" => (
             &[

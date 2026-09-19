@@ -778,6 +778,13 @@ Text application profile or change Holo/1 capability negotiation.
   P1363 values. Principal IDs are SHA-256 of the exact public-key encoding;
   they neither assert a civil/organizational identity nor a Kappa address.
   Persisted identities are checked by real key possession, not key hashes alone.
+  `randomBytes` synchronously returns a fresh byte array for an integer length
+  from 1 through 65,536, using exactly one browser `getRandomValues` call.
+  Invalid lengths fail before provider access; missing or failing providers
+  return `crypto-unavailable`, without provider details or insecure fallback.
+  This binds [Web Cryptography's random API](https://www.w3.org/TR/2017/REC-WebCryptoAPI-20170126/#Crypto-method-getRandomValues),
+  not an entropy-source certification or recovery policy. The model must select
+  the required secret size, use, custody and lifetime; the host grants no authority.
 - `store.mjs` binds IndexedDB strict transactions to a fixed namespace policy:
   at most 1 MiB/object, 4096 objects, 64 named heads and 16 objects/transaction;
   a namespace can select smaller limits but cannot silently change them.
@@ -1439,7 +1446,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-04` | `sdk` | The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline. | §12 |
 | `DK-05` | `sdk` | SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle. | §12 |
 | `DK-06` | `sdk` | SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation. | §12 |
-| `DK-07` | `sdk` | The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority. | §12 |
+| `DK-07` | `sdk` | The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority. | §12 |
 | `DK-08` | `sdk` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. | §12 |
 | `DK-09` | `sdk` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. | §12 |
 | `DK-10` | `sdk` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. | §12 |

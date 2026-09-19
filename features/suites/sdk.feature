@@ -49,10 +49,10 @@ Feature: sdk
     Then valid transitions, every modeled rejection, and maximum-size boundaries agree
 
   @DK-07 @build
-  Scenario: The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority.
-    Given nonextractable Web Cryptography identities
-    When bounded domain-separated records are signed and independently verified
-    Then changed authors, contexts, payloads, and key bindings are rejected
+  Scenario: The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority.
+    Given nonextractable Web Cryptography identities and the browser random provider
+    When bounded random bytes are requested and domain-separated records are signed and independently verified
+    Then malformed randomness requests, unavailable providers, changed authors, contexts, payloads, and key bindings are rejected without insecure fallbacks
 
   @DK-08 @build
   Scenario: The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes.
