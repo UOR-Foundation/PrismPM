@@ -1575,6 +1575,20 @@ checks pass. This is finite internal candidate-protocol acceptance. It selects
 no public operator or production transport, proves no live network connection,
 and makes no Veilid privacy, availability, full SDK or Foundry release claim.
 
+## LexLean semantic-literal and identifier pin
+
+The SDK imports the exact Cargo package at LexLean `9c1456d`, including its
+clean VCS identity. Two independent package operations produce identical
+archive bytes. Every unpacked file and the archive are bound by the closed
+713-entry vendor manifest; no vendored compiler source is hand-modified.
+This fixes generated reserved identifiers and Lean string escapes, while
+retaining the typed diagnostic boundary from the upstream source.
+
+Authored formatting, all-target/all-feature Clippy, and the 168-row model/spec
+audits pass in the devcontainer. Full upstream V&V, regenerated consumers and
+complete SDK/release acceptance remain separate requirements; package identity
+and these targeted checks do not establish them.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
