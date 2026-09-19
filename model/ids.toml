@@ -361,6 +361,12 @@ level = "build"
 statement = "The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover."
 
 [[id]]
+id = "ST-16"
+suite = "stdlib"
+level = "build"
+statement = "The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"

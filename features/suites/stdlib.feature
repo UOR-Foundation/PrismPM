@@ -99,3 +99,12 @@ Feature: stdlib
     Then generated std and no_std consumers reject substituted bindings, expired reservations, exhausted attempts and message admission after loss
     And direct peer channels and relayed channels have distinct loss behavior without discarding retained durable operations
     And planted session, consent and lifecycle defects fail at their exact generated runtime roots
+
+  @ST-16 @build
+  Scenario: The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution.
+    Given the exact pinned RFC 8949, RFC 8610 and RFC 3629 sources and independently indexed applicable vectors
+    When LexLean and lean4-prod compile every typed codec probe and byte entry
+    Then native std and no_std and fresh bounded Wasm instances execute the complete primitive corpus
+    And actual maximum-size primitive inputs preserve their bytes and excess inputs fail before unbounded allocation
+    And nonminimal-header, payload-limit and UTF-8 admission defects fail their owning runtime assertions
+    And an array head is never evidence that its body or a complete application message has been decoded

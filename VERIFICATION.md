@@ -1643,6 +1643,28 @@ Owning log: `target/browser-effect-complete-owning-restored.log`, SHA-256
 This establishes internal protocol sequencing only, not browser dispatch,
 an executable application profile, complete SDK acceptance or deployment.
 
+## CBOR integration checkpoint (ST-16)
+
+Pre-integration execution uses LexLean `9c1456d` and lean4-prod `6272da0`.
+All 193 typed roots pass in generated std/no_std code. Actual Wasm executes
+193 typed cases, 71 direct wire vectors, five rejected dispatches and four
+maximum/over-limit inputs: 273 invocations, 964 observed pages, unchanged
+1,024-page cap. Noncanonical-head, payload-budget and UTF-8 guard mutants
+fail their expected generated runtime assertions. These are diagnostic runs;
+the owning SDK gate, restored acceptance identities and release remain pending.
+
+The receipt regression first fails on an omitted wire-vector count, then
+passes with closed fields, exact invocation counts, observed-memory bounds
+and hashes checked against both built Wasm files. All five helper tests,
+the two source/oracle tests and all-target/all-feature Clippy pass.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/cbor-model-mutant-complete-closure.log` | `f4f05852da0c6e3557b96f3e1600801b7b8380d43be342937e004ff722b19e5d` |
+| `target/cbor-wasm-receipt-red.log` | `d0944230634572542cd69dd58d49117f5e7cfc6488a8321246a6cdb7e4d1c498` |
+| `target/cbor-helper-complete-restored.log` | `28700c697ff636dd1735bd44fee08f64cceff6daa8498c435e4e43159f410904` |
+| `target/cbor-exact-wasm-accounting-replay.log` | `563783fbd980d008df2a73c49fa90750f54e83646bc87305bdca69903ae86395` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

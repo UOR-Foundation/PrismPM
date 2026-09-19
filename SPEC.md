@@ -403,6 +403,23 @@ audits and real uniqueness/approval-bypass mutants. This pure kernel does not
 authenticate identities or approvals, establish cross-partition uniqueness or
 durable CAS, implement a browser service, or establish release/deployment readiness.
 
+### 5.6 Internal bounded CBOR primitive prerequisite
+
+ST-16 owns `Foundation.Codec.Cbor.V1.Primitive` and its exact finite corpus.
+The internal profile implements RFC 8949 core-deterministic uint32, bounded
+byte/text strings, booleans, null and separate definite-array-head operations.
+Its cursor, error, CDDL value-domain and resource contract is
+`stdlib/src/Foundation/Codec/Cbor/V1/Primitive.md`; exact RFC 8949, RFC 8610
+and RFC 3629 source bytes remain hash-bound to the owning oracle.
+Array-head decoding is not complete-array or message validation. The generic
+typed APIs admit explicit per-call uint32 limits; finite native/Wasm execution
+at a declared maximum does not accept every uint32-sized browser invocation.
+The canonical-byte test entry's 4,202,612-byte payload maximum is a required
+existing codec test point, not a future Effects-envelope budget. Complete
+declaration audits, all typed and byte-vector executions, real maximum-size
+Wasm allocation checks and planted guard defects are mandatory. This is not
+a universal CBOR/CDDL implementation, application wire, or public browser profile.
+
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
@@ -1654,6 +1671,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-13` | `stdlib` | The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution. | §5 |
 | `ST-14` | `stdlib` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. | §5 |
 | `ST-15` | `stdlib` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. | §5 |
+| `ST-16` | `stdlib` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |

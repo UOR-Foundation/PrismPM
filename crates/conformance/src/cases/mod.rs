@@ -2,6 +2,7 @@
 
 mod browser_bootstrap;
 mod browser_effect;
+mod cbor_primitive;
 mod mailbox_admission;
 mod native_library;
 mod node_suite;
@@ -389,6 +390,7 @@ pub fn run_at(root: &Path, id: &str) {
         "ST-13" => mailbox_admission::verify(root),
         "ST-14" => browser_bootstrap::verify(root),
         "ST-15" => organization_lifecycle::verify(root),
+        "ST-16" => cbor_primitive::verify(root),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {
