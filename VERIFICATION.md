@@ -39,9 +39,32 @@ The canonical compiler-input owning run completed in 462.63 seconds;
 Provider integration, cryptographic proof admission, browser enrollment,
 atomic persistence, SDK release and deployment are not accepted by this gate.
 
+## Borrowed Copy-pattern compiler input
+
+The compiler input is `d290beebe9b06a6841769b8327308e01e896c1b0`.
+Borrowed Option/Result patterns now rebind positively typed Copy fields by
+value, matching the existing ownership analysis. Unknown and non-Copy fields
+remain borrowed; owned matches retain their behavior. The original regression
+and an omitted-rebind mutation failed with an actual generated Rust type error.
+
+Two unchanged compiler `just ci` runs passed, including 231 native cases in
+four configurations and seven allocation/Wasm checks. Log SHA-256:
+`ee2ce666d8e6ce7c39267a0e2f6a4bae892817ae903706ac159356b2fbb979be`
+and `24a859e3cee401366a37a4e257a0dd5ad6952ea9f2a5183ca248ce7b59bd8186`.
+An unchanged 307-case Effects corpus also passed private native replay; its
+canonical owning gate is separate. The two pre-existing ignored documentation
+examples remain unchanged.
+
+All three imported Rust files match exact Git blobs; the 50-file Lean archive
+is unchanged. Fresh packaging and an independent repeat produce identical
+compiler/IR/stdlib archives (repeat log SHA-256
+`758b7aa63cac69323ae30c69623a781b67e77d11c04ce065563980f244bc5f67`).
+Existing stdlib archive equality is not current compiler regeneration or SDK/
+Foundry acceptance.
+
 ## Exclusive-branch compiler input
 
-The compiler input is now `507b6c4ef44e951bb4bbe8b34e4767803fafa8b5`.
+This checkpoint pinned `507b6c4ef44e951bb4bbe8b34e4767803fafa8b5`.
 Owned-value reuse follows execution paths: exclusive branches can move, while
 conditions, scrutinees and sequential uses remain additive. Native allocation
 and pointer-retention regressions plus the unchanged 64-page Wasm accumulator
