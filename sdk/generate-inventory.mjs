@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { compilerRevision, encodeInventory, validateAuthorityMetadata } from './inventory-metadata.mjs';
+import { compilerRevision, encodeInventory, validateAuthorityMetadata, validateImageInputMetadata } from './inventory-metadata.mjs';
 
 const output = process.argv[2];
 if (!output) throw new Error('inventory output path is required');
@@ -121,6 +121,20 @@ const definitions = [
   ['opentelemetry-0.136.0-signal-corpus', 'test-corpus', '0.136.0', 'standards/corpora/opentelemetry-0.136.0', 'tree'],
   ['workflow-reusable-sdk', 'workflow', '0.3.0', '.github/workflows/sdk.yml'],
 ];
+const inputRoot = '/opt/prismpm/share/vv-inputs';
+const inputPolicyBytes = await readFile('/opt/prismpm/share/vv-input-policy.json');
+const inputManifestBytes = await readFile(`${inputRoot}/manifest.json`);
+const inputPolicy = JSON.parse(inputPolicyBytes), inputManifest = JSON.parse(inputManifestBytes);
+definitions.push(
+  ['sdk-vv-source', 'test-corpus', inputPolicy.source_revision, `${inputRoot}/source.pack`],
+  ['sdk-vv-advisory', 'test-corpus', inputPolicy.advisory_revision, `${inputRoot}/advisory.pack`],
+  ['sdk-vv-bootstrap', 'test-corpus', '0.2.0', `${inputRoot}/bootstrap.tar.gz`],
+  ['sdk-vv-manifest', 'test-corpus', '1', `${inputRoot}/manifest.json`],
+  ['sdk-vv-policy', 'test-corpus', '1', '/opt/prismpm/share/vv-input-policy.json'],
+  ['sdk-vv-verifier', 'test-corpus', '1', 'scripts/sdk-vv-inputs.mjs'],
+  ['sdk-image-input-verifier', 'test-corpus', '1', 'scripts/sdk-image-inputs.mjs'],
+  ['sdk-image-input-authorities', 'test-corpus', '1', 'sdk/vv-inputs.lock.json'],
+);
 let artifacts;
 const dependencies = process.env.PRISMPM_ARTIFACT_INVENTORY
   ? '/opt/prismpm/share/conformance-root/model/dependencies.toml' : 'model/dependencies.toml';
@@ -148,6 +162,7 @@ if (process.env.PRISMPM_ARTIFACT_INVENTORY) {
   artifacts.sort((left, right) => Buffer.from(left.id).compare(Buffer.from(right.id)));
 }
 validateAuthorityMetadata(artifacts, revision);
+validateImageInputMetadata(artifacts, inputPolicy, inputManifest, sha(inputManifestBytes), sha(inputPolicyBytes));
 const value = process.env.PRISMPM_ARTIFACTS_ONLY === '1'
   ? { artifacts, schema: 'prismpm/sdk-artifact-inventory/1' }
   : { artifacts, commands, schema: 'prismpm/sdk-inventory/1' };
