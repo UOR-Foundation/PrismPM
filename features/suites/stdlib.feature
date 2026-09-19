@@ -83,3 +83,11 @@ Feature: stdlib
     Then generated std and no_std consumers enforce exact intent binding and single-use state transitions
     And historical-address and replacement-key defects fail at their exact generated runtime roots
     And restoration reproduces the original accepted artifact identities
+
+  @ST-15 @build
+  Scenario: The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover.
+    Given a current admitted registry partition and authenticated stable account and approval records
+    When LexLean and lean4-prod compile the lifecycle and complete finite corpus
+    Then duplicate display names confer no authority and unrelated organizations remain unchanged
+    And generated std and no_std consumers reject stale or cross-organization requests and incomplete scoped ownership
+    And planted identity-uniqueness and administration-bypass defects fail at their exact runtime roots
