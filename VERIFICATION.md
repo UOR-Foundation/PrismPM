@@ -1,5 +1,23 @@
 # PrismPM falsifiability and verification record
 
+## Bounded browser RS256 effect (DK-19)
+
+All 14 Node/Chromium tests passed against the pinned, hash-checked WPT RSA
+vectors and independent native signatures. Tests cover exact byte capture,
+algorithm/padding substitution, malformed inputs, resource boundaries and
+closed provider failures. Three actual browser source mutations (unconditional
+acceptance, wrong hash and missing message capture) each failed their unchanged
+behavioral assertion; pristine restoration passed. The owning DK-19 case,
+model/spec checks and all-target Clippy passed before integration of the
+per-file test-completion guard. After that integration, all 26 signature and
+SDK-helper tests passed with no skips, including missing/empty-file regressions
+and both test-runner guard mutations. The final combined log SHA-256 is
+`aa650a0ee89e1f7266dfd9f861e4bfe70aa4c19cf25191678fd437a073048900`.
+
+This accepts a generic signature primitive, not JWT parsing, issuer trust,
+mailbox proof, account enrollment, complete WebCrypto conformance or an
+installed SDK release. No Foundry deployment is implied.
+
 ## Internal mailbox assertion admission (ST-13)
 
 The LexLean-owned kernel passed all 93 modeled cases in actual packaged native

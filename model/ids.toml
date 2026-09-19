@@ -781,6 +781,12 @@ level = "build"
 statement = "Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance."
 
 [[id]]
+id = "DK-19"
+suite = "sdk"
+level = "build"
+statement = "The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"
