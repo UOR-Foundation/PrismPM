@@ -13,6 +13,21 @@ const IR: &str = r#"(module BorrowedOperands
   (type "Fields" (ctor "Fields.mk" (bytes Bytes) (text String) (words (List String)) (offset Nat)))
   (type "Pair" (ctor "Pair.mk" (first Bytes) (second Bytes)))
   (type "CopyTag" (ctor "CopyTag.first") (ctor "CopyTag.second"))
+  (def decode_field ((input (named "Parcel"))) (Option String)
+    (utf8-decode (proj "Parcel" "bytes" input)))
+  (def decode_alias ((input (named "Parcel"))) (Option String)
+    (let bytes (proj "Parcel" "bytes" input) (utf8-decode bytes)))
+  (def decode_owned ((input Bytes)) (Option String) (utf8-decode input))
+  (def empty_byte_length () Nat (length (bytes)))
+  (def empty_byte_index () (Option UInt8) (index (bytes) 0))
+  (def empty_byte_slice () (Option Bytes) (slice (bytes) 0 0))
+  (def decode_field_entry ((input Bytes)) Bytes
+    (let owner (ctor "Parcel.mk" input 0)
+      (cases (call decode_alias owner)
+        (alt "Option.none" () (bytes 255))
+        (alt "Option.some" (text)
+          (if (eq (length (proj "Parcel" "bytes" owner)) (length text))
+            (utf8-encode text) (bytes 254))))))
   (def equal_tag ((left (named "CopyTag")) (right (named "CopyTag"))) Bool (eq left right))
   (def inspect_error ((input (Result Bytes (named "CopyTag"))) (expected (named "CopyTag"))) Bool
     (cases input
@@ -159,6 +174,31 @@ const IR: &str = r#"(module BorrowedOperands
     (let local (call own_bytes input)
       (if (eq (length local) 0) (bytes) (append (bytes) local))))
   (def self_append ((input Bytes)) Bytes (append input input))
+  (def length_then_move ((input Bytes)) (named "Parcel")
+    (let width (length input) (ctor "Parcel.mk" input width)))
+  (def scalar_length_then_move ((input String)) String
+    (let width (string-length input) (if (eq width 0) input input)))
+  (def move_then_length ((input Bytes)) (named "Pair")
+    (let moved (call own_bytes input)
+      (let width (length input) (ctor "Pair.mk" moved (if (eq width 0) input input)))))
+  (def move_then_last_length ((input Bytes)) (named "Parcel")
+    (let moved (call own_bytes input)
+      (let width (length input) (ctor "Parcel.mk" moved width))))
+  (def read_move_read ((input Bytes)) (named "Parcel")
+    (let before (length input)
+      (let moved (call own_bytes input)
+        (let after (length input) (ctor "Parcel.mk" moved after)))))
+  (def length_entry ((input Bytes)) Bytes
+    (let width (length input) (if (eq width 0) input input)))
+  (def self_append_retained ((input Bytes)) (named "Pair")
+    (let twice (append input input) (ctor "Pair.mk" twice input)))
+  (def self_append_borrowed ((input (named "Parcel"))) Bytes
+    (let bytes (proj "Parcel" "bytes" input) (append bytes bytes)))
+  (def self_append_hygiene ((__value Bytes)) Bytes (append __value __value))
+  (def self_append_words ((input (Option (List String)))) (Option (List String))
+    (cases input
+      (alt "Option.none" () (ctor "Option.none"))
+      (alt "Option.some" (words) (ctor "Option.some" (append words words)))))
   (def compare_read ((input Bytes) (other Bytes)) Ordering
     (let left (call own_bytes input)
       (let right (call own_bytes other)
@@ -260,6 +300,83 @@ fn measured<T>(action: impl FnOnce() -> T) -> (T, usize) {
 }
 
 fn main() {
+    for size in [0, 1, 32, 8192, 1_048_576] {
+        let input = vec![17; size];
+        let pointer = input.as_ptr();
+        let (output, count) = measured(|| length_then_move(input));
+        assert_eq!(count, 0, "a completed scalar read cannot retain ownership");
+        assert_eq!(output.bytes.as_ptr(), pointer);
+        assert_eq!(output.offset, size as u64);
+        assert_eq!(output.bytes, vec![17; size]);
+        let text = "é".repeat(size);
+        let pointer = text.as_ptr();
+        let (output, count) = measured(|| scalar_length_then_move(text));
+        assert_eq!(count, 0, "a completed scalar-count read cannot retain ownership");
+        assert_eq!(output.as_ptr(), pointer);
+        assert_eq!(output, "é".repeat(size));
+        for append in [self_append, self_append_hygiene] {
+            let mut input = Vec::with_capacity(size * 2);
+            input.resize(size, 17);
+            let pointer = input.as_ptr();
+            let (output, count) = measured(|| append(input));
+            assert_eq!(count, 0, "self append reuses sufficient owned capacity");
+            assert_eq!(output.as_ptr(), pointer);
+            assert_eq!(output, vec![17; size * 2]);
+        }
+        let output = move_then_length(vec![17; size]);
+        assert_eq!(output.first, vec![17; size]);
+        assert_eq!(output.second, vec![17; size]);
+        for action in [move_then_last_length, read_move_read] {
+            let output = action(vec![17; size]);
+            assert_eq!(output.bytes, vec![17; size]);
+            assert_eq!(output.offset, size as u64, "later length reads must retain their owner");
+        }
+        let mut output = self_append_retained(vec![17; size]);
+        assert_eq!(output.first, vec![17; size * 2]);
+        assert_eq!(output.second, vec![17; size]);
+        output.first.push(9);
+        assert_eq!(output.second.len(), size);
+        let original = Parcel { bytes: vec![17; size], offset: 0 };
+        assert_eq!(self_append_borrowed(&original), vec![17; size * 2]);
+        assert_eq!(original.bytes, vec![17; size]);
+    }
+    let mut output = self_append_words(Some(vec!["é".into(), "tail".into()])).unwrap();
+    assert_eq!(output, vec!["é", "tail", "é", "tail"]);
+    output[0].push('!');
+    assert_eq!(output[2], "é");
+    assert_eq!(self_append_words(None), None);
+    for text in ["", "ascii", "\0", "é", "e\u{301}", "🦀", "日本語"] {
+        for decode in [decode_field, decode_alias] {
+            let input = Parcel { bytes: text.as_bytes().to_vec(), offset: 7 };
+            let pointer = input.bytes.as_ptr();
+            let (output, count) = measured(|| decode(&input));
+            assert_eq!(output.as_deref(), Some(text));
+            assert_eq!(count, usize::from(!text.is_empty()), "borrowed valid UTF-8 allocates only its owned result");
+            assert_eq!(input.bytes.as_ptr(), pointer);
+            assert_eq!(input.bytes, text.as_bytes());
+        }
+        let input = text.as_bytes().to_vec();
+        let pointer = input.as_ptr();
+        let (output, count) = measured(|| decode_owned(input));
+        assert_eq!(count, 0, "owned UTF-8 decoding must reuse the input buffer");
+        let output = output.unwrap();
+        assert_eq!(output, text);
+        assert_eq!(output.as_ptr(), pointer);
+    }
+    for bytes in [vec![255], vec![0xc0, 0x80], vec![0xed, 0xa0, 0x80], vec![0xf4, 0x90, 0x80, 0x80], vec![0xe2, 0x82]] {
+        let input = Parcel { bytes, offset: 3 };
+        for decode in [decode_field, decode_alias] {
+            let (output, count) = measured(|| decode(&input));
+            assert_eq!(output, None);
+            assert_eq!(count, 0, "invalid borrowed UTF-8 must not allocate a copy");
+        }
+        let (output, count) = measured(|| decode_owned(input.bytes));
+        assert_eq!(output, None);
+        assert_eq!(count, 0);
+    }
+    let (output, count) = measured(|| (empty_byte_length(), empty_byte_index(), empty_byte_slice()));
+    assert_eq!(output, (0, None, Some(Vec::new())));
+    assert_eq!(count, 0, "typed empty byte literals allocate nothing");
     for expected in [CopyTag::first, CopyTag::second] {
         for actual in [CopyTag::first, CopyTag::second] {
             let (output, count) = measured(|| inspect_error(Err(actual), expected));
@@ -502,8 +619,8 @@ fn main() {
 
         let input = vec![0x5a; size];
         let (output, count) = measured(|| self_append(input));
-        // Preserve one owned left clone and one growth allocation, but no right clone.
-        assert_eq!(count, 2 * usize::from(size != 0), "self append, size={size}");
+        // Self append grows the original buffer without an intermediate clone.
+        assert_eq!(count, usize::from(size != 0), "self append, size={size}");
         assert_eq!(output, vec![0x5a; size * 2]);
 
         let input = vec![0x5a; size];
@@ -727,7 +844,60 @@ fn borrowed_copy_patterns_execute_in_actual_bounded_wasm() {
     );
 }
 
+#[test]
+fn borrowed_utf8_decoding_executes_in_actual_bounded_wasm() {
+    for release in [false, true] {
+        actual_wasm_profile(
+            "decode_field_entry",
+            4096,
+            4096,
+            16,
+            "borrowed_decode_wasm_test.mjs",
+            release,
+        );
+    }
+}
+
+#[test]
+fn leading_length_reads_move_within_actual_wasm_memory_bound() {
+    for release in [false, true] {
+        actual_wasm_profile(
+            "length_entry",
+            1_048_576,
+            1_048_576,
+            50,
+            "borrowed_operands_wasm_test.mjs",
+            release,
+        );
+    }
+}
+
+#[test]
+fn self_append_reuses_owned_storage_in_actual_bounded_wasm() {
+    for release in [false, true] {
+        actual_wasm_profile(
+            "self_append",
+            1_048_576,
+            2_097_152,
+            98,
+            "self_append_wasm_test.mjs",
+            release,
+        );
+    }
+}
+
 fn actual_wasm(entry: &str, input_cap: u32, output_cap: u32, pages: u32, script: &str) {
+    actual_wasm_profile(entry, input_cap, output_cap, pages, script, true);
+}
+
+fn actual_wasm_profile(
+    entry: &str,
+    input_cap: u32,
+    output_cap: u32,
+    pages: u32,
+    script: &str,
+    release: bool,
+) {
     let (remaining, module) = parse_module(IR).unwrap();
     assert!(remaining.is_empty());
     let package = generate_core_wasm_package(
@@ -749,10 +919,16 @@ fn actual_wasm(entry: &str, input_cap: u32, output_cap: u32, pages: u32, script:
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, file.bytes).unwrap();
     }
+    let mut build = Command::new("cargo");
+    if release {
+        build.arg("build").arg("--release");
+    } else {
+        build.arg("build");
+    }
     succeeds(
-        Command::new("cargo")
+        build
             .current_dir(&scratch.0)
-            .args(["build", "--release", "--locked", "--offline"])
+            .args(["--locked", "--offline"])
             .env_remove("RUSTC_WRAPPER")
             .env("CARGO_TARGET_DIR", scratch.0.join("target")),
     );
@@ -763,11 +939,10 @@ fn actual_wasm(entry: &str, input_cap: u32, output_cap: u32, pages: u32, script:
                     .join("tests/fixtures")
                     .join(script),
             )
-            .arg(
-                scratch
-                    .0
-                    .join("target/wasm32-unknown-unknown/release/borrowed_operands_guest.wasm"),
-            )
+            .arg(scratch.0.join(format!(
+                "target/wasm32-unknown-unknown/{}/borrowed_operands_guest.wasm",
+                if release { "release" } else { "debug" }
+            )))
             .arg(pages.to_string()),
     );
 }

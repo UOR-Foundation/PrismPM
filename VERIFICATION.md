@@ -11,6 +11,30 @@ all 155 Node checks and the source/model/spec/dependency audits. The normal
 stdlib writer's existing model already carries the new computed digest.
 This is source-integrity verification, not installed-SDK or Foundry acceptance.
 
+## Bounded-codec compiler input and stdlib regeneration
+
+The compiler input is `6272da01ea2045906f5f844988b6265d6c867f39`, including
+tail-call lowering, byte indexing/slicing, scalar string length, borrowed
+UTF-8 decoding and allocation-safe byte reads/appends. Its unchanged full
+`just ci` passed twice locally and upstream PR #69's hosted verification passed.
+The vendored source reproduces its exact Git blobs; public stdlib function
+signatures remain unchanged (624 checked, ignoring parameter mutability).
+
+The normal stdlib writer passed with build
+`85460cb147589358b903d01fb4c76d6cc6f64e8ff1b8d23adf54d02278a8ad00`
+and attestation
+`22af3417fcc7291dd021ff9bfe3a8e3ce4d624d8c135bd1b64f0a39190f95de0`.
+Two independent packaging runs produced identical compiler, IR and stdlib
+archives. The stdlib archive binds the generated manifest and all selected
+package bytes; no_std compilation, authored formatting, workspace Clippy and
+the complete source audit passed. Writer and complete audit log SHA-256:
+`7352ad0f9e6db1419834af0ccff769d33c0737d8e0f326591aed35464aaa40e9`
+and `c07f46bcca270f09787128667689228c5291342edaf4577633543ab702ffa8e8`.
+Resource-failed earlier attempts remain failures, not substituted receipts.
+
+Current goldens, complete repeated V&V, installed dual-architecture SDK and
+Foundry product acceptance remain required. This is not a release claim.
+
 ## Bounded browser RS256 effect (DK-19)
 
 All 14 Node/Chromium tests passed against the pinned, hash-checked WPT RSA

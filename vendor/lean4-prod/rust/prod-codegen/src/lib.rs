@@ -111,6 +111,7 @@ mod naming;
 mod ownership;
 mod package;
 mod sdk;
+mod tail_calls;
 mod text_view;
 mod view;
 
@@ -619,22 +620,49 @@ fn count_var_uses(expr: &Expr, name: &str) -> usize {
 
 /// Alternatives are exclusive: a binder used once in either branch can still
 /// transfer its owner without a clone. Sequential uses remain additive.
-fn count_path_uses(expr: &Expr, name: &str) -> usize {
+fn count_path_uses(mut expr: &Expr, name: &str) -> usize {
+    // Only leading reads are safe to ignore: a length read after a transfer
+    // still requires the original owner. Scalar results retain no reference.
+    // Do not apply this prefix rule recursively after a possible transfer.
+    while let Expr::Let(_, value, body) = expr {
+        let scalar_read = matches!(value.as_ref(), Expr::Length(input) | Expr::StringLength(input)
+            if matches!(input.as_ref(), Expr::Var(candidate) if candidate == name));
+        if scalar_read || count_var_uses(value, name) == 0 {
+            expr = body;
+        } else {
+            break;
+        }
+    }
+    count_sequential_path_uses(expr, name)
+}
+
+fn count_sequential_path_uses(expr: &Expr, name: &str) -> usize {
     match expr {
+        // Rendering self append consumes one owner and extends its own range.
+        Expr::Append(left, right)
+            if matches!((left.as_ref(), right.as_ref()),
+            (Expr::Var(a), Expr::Var(b)) if a == name && a == b) =>
+        {
+            1
+        }
         Expr::If(condition, yes, no) => {
-            count_path_uses(condition, name)
-                + count_path_uses(yes, name).max(count_path_uses(no, name))
+            count_sequential_path_uses(condition, name)
+                + count_sequential_path_uses(yes, name).max(count_sequential_path_uses(no, name))
         }
         Expr::Match {
             scrut,
             alts,
             default,
         } => {
-            count_path_uses(scrut, name)
+            count_sequential_path_uses(scrut, name)
                 + alts
                     .iter()
-                    .map(|alt| count_path_uses(&alt.body, name))
-                    .chain(default.iter().map(|value| count_path_uses(value, name)))
+                    .map(|alt| count_sequential_path_uses(&alt.body, name))
+                    .chain(
+                        default
+                            .iter()
+                            .map(|value| count_sequential_path_uses(value, name)),
+                    )
                     .max()
                     .unwrap_or(0)
         }
@@ -642,7 +670,7 @@ fn count_path_uses(expr: &Expr, name: &str) -> usize {
             usize::from(matches!(expr, Expr::Var(candidate) if candidate == name))
                 + expr
                     .children()
-                    .map(|child| count_path_uses(child, name))
+                    .map(|child| count_sequential_path_uses(child, name))
                     .sum::<usize>()
         }
     }
@@ -1270,6 +1298,12 @@ fn generate_def_in<'m>(
         def.name.clone()
     };
     let visibility = if helper { "" } else { "pub " };
+    let borrowed_return = returns_borrowed_projection(def, table);
+    let tail_plan = if matches!(shape, Shape::Value | Shape::Fallible) && !borrowed_return {
+        tail_calls::plan(def, table)
+    } else {
+        None
+    };
     let movable_projections = movable_projection_owners(def, table);
     let bindings = binding_ownership(def, definitions, table, &movable_projections);
     let renderer = Renderer {
@@ -1299,7 +1333,12 @@ fn generate_def_in<'m>(
             params.push_str(", ");
         }
         params.push_str(&format!(
-            "{}: {}",
+            "{}{}: {}",
+            if tail_plan.as_ref().is_some_and(|plan| plan.mutates(i)) {
+                "mut "
+            } else {
+                ""
+            },
             rust_local_ident(name),
             param_type_to_rust(
                 ty,
@@ -1309,7 +1348,6 @@ fn generate_def_in<'m>(
         ));
     }
     check_named_type(&def.ret, table)?;
-    let borrowed_return = returns_borrowed_projection(def, table);
     let return_type = if borrowed_return {
         format!("&{}", type_to_rust(&def.ret)?)
     } else {
@@ -1353,20 +1391,37 @@ fn generate_def_in<'m>(
                 generated_name, params, body
             ))
         }
-        Shape::Fallible => Ok(format!(
-            "{visibility}fn {}({}) -> Result<{}, crate::ComputeError> {{\n    Ok({})\n}}\n",
-            generated_name,
-            params,
-            return_type,
-            renderer.render_return(&def.body, borrowed_return)?
-        )),
-        Shape::Value => Ok(format!(
-            "{visibility}fn {}({}) -> {} {{\n    {}\n}}\n",
-            generated_name,
-            params,
-            return_type,
-            renderer.render_return(&def.body, borrowed_return)?
-        )),
+        Shape::Fallible => {
+            let body = if let Some(plan) = &tail_plan {
+                format!(
+                    "loop {{ return Ok({}); }}",
+                    renderer.render_tail(&def.body, plan)?
+                )
+            } else {
+                format!(
+                    "Ok({})",
+                    renderer.render_return(&def.body, borrowed_return)?
+                )
+            };
+            Ok(format!(
+                "{visibility}fn {}({}) -> Result<{}, crate::ComputeError> {{\n    {}\n}}\n",
+                generated_name, params, return_type, body
+            ))
+        }
+        Shape::Value => {
+            let body = if let Some(plan) = &tail_plan {
+                format!(
+                    "loop {{ return {}; }}",
+                    renderer.render_tail(&def.body, plan)?
+                )
+            } else {
+                renderer.render_return(&def.body, borrowed_return)?
+            };
+            Ok(format!(
+                "{visibility}fn {}({}) -> {} {{\n    {}\n}}\n",
+                generated_name, params, return_type, body
+            ))
+        }
     }?;
 
     if !helper {
@@ -2125,7 +2180,7 @@ impl<'m> Renderer<'_, 'm> {
                 scrut,
                 alts,
                 default,
-            } => self.render_match(scrut, alts, default.as_deref(), mode),
+            } => self.render_match(scrut, alts, default.as_deref(), mode, None),
 
             // ---- list-shaped leaves ----
             Expr::Ctor(name, args) if name == "List.nil" && args.is_empty() => match mode {
@@ -2260,6 +2315,7 @@ impl<'m> Renderer<'_, 'm> {
             // One owned allocation at the existing Bytes ABI boundary; the
             // compiler folds Array literal builders, so no push-chain or
             // intermediate runtime allocations are introduced.
+            Expr::Bytes(value) if value.is_empty() => Ok("alloc::vec::Vec::<u8>::new()".into()),
             Expr::Bytes(value) => Ok(format!("alloc::vec!{value:?}")),
             Expr::Bool(b) => Ok(format!("{}", b)),
             Expr::Param(index) => self
@@ -2308,12 +2364,21 @@ impl<'m> Renderer<'_, 'm> {
                 "core::convert::TryFrom::try_from({}).ok()",
                 self.value(value)?
             )),
+            Expr::Append(left, right) if matches!((left.as_ref(), right.as_ref()),
+                (Expr::Var(a), Expr::Var(b)) if a == b) => Ok(format!(
+                "{{ let mut __value = {}; __value.extend_from_within(..); __value }}",
+                self.owned_value(left)?
+            )),
             Expr::Append(left, right) => Ok(format!(
                 "{{ let mut __value = {}; __value.extend_from_slice(&{}); __value }}",
                 self.owned_value(left)?,
                 self.read_value(right)?
             )),
             Expr::Length(value) => Ok(format!("({}).len() as u64", self.read_value(value)?)),
+            Expr::StringLength(value) => Ok(format!(
+                "({}).chars().count() as u64",
+                self.read_value(value)?
+            )),
             Expr::Index(value, offset) => Ok(format!(
                 "usize::try_from({}).ok().and_then(|__index| ({}).get(__index).cloned())",
                 self.value(offset)?,
@@ -2329,9 +2394,15 @@ impl<'m> Renderer<'_, 'm> {
             // fields must cross the existing owned boundary first; already
             // owned Strings retain their allocation through `into_bytes`.
             Expr::Utf8Encode(value) => Ok(format!("({}).into_bytes()", self.owned_value(value)?)),
+            // Borrowed bytes are validated before allocating the owned result.
+            // An owned input instead transfers its allocation into the String.
+            Expr::Utf8Decode(value) if self.borrows(value) => Ok(format!(
+                "core::str::from_utf8(core::convert::AsRef::<[u8]>::as_ref(&({}))).ok().map(alloc::borrow::ToOwned::to_owned)",
+                self.read_value(value)?
+            )),
             Expr::Utf8Decode(value) => Ok(format!(
                 "alloc::string::String::from_utf8({}).ok()",
-                self.value(value)?
+                self.owned_value(value)?
             )),
             Expr::CompareBytes(left, right) => Ok(format!(
                 "core::convert::AsRef::<[u8]>::as_ref(&({})).cmp(core::convert::AsRef::<[u8]>::as_ref(&({})))",
@@ -2600,6 +2671,7 @@ impl<'m> Renderer<'_, 'm> {
         alts: &'m [Alt],
         default: Option<&'m Expr>,
         mode: &Mode<'_, 'm>,
+        tail: Option<&tail_calls::Plan>,
     ) -> Result<String, Error> {
         let head_rebound_by_value = self.list_head_rebound_by_value(scrut);
         let scrut_is_borrowed = self.borrows(scrut);
@@ -2615,7 +2687,9 @@ impl<'m> Renderer<'_, 'm> {
         let scrut = self.value(scrut)?;
         let mut out = format!("match {} {{\n", scrut);
         for alt in alts {
-            let body = if normalize_results {
+            let body = if let Some(plan) = tail {
+                self.render_tail(&alt.body, plan)?
+            } else if normalize_results {
                 self.owned_value(&alt.body)?
             } else {
                 self.render(&alt.body, mode)?
@@ -2751,7 +2825,9 @@ impl<'m> Renderer<'_, 'm> {
             out.push_str(&arm);
         }
         if let Some(d) = default {
-            let body = if normalize_results {
+            let body = if let Some(plan) = tail {
+                self.render_tail(d, plan)?
+            } else if normalize_results {
                 self.owned_value(d)?
             } else {
                 self.render(d, mode)?
