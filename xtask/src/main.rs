@@ -118,6 +118,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/oracle-source-closure.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
+            "scripts/library-sdk-check.test.mjs",
+            "scripts/library-sdk-check-shell.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/refresh-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
