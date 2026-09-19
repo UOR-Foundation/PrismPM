@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-19 @build
+  Scenario: The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority.
+    Given exact upstream RSA signature vectors and immutable copies of bounded public-key, message and signature bytes
+    When Node and a real browser execute the WebCrypto host binding
+    Then only matching RSASSA-PKCS1-v1_5 SHA-256 signatures pass and malformed or substituted inputs fail
+    And byte-capture, algorithm and signature-check mutations fail actual execution
+
   @DK-17 @build
   Scenario: Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance.
     Given a closed native library with typed exports and modeled acceptance roots

@@ -410,7 +410,7 @@ pub fn run_at(root: &Path, id: &str) {
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15"
-        | "DK-16" => verify_browser_host(root, id),
+        | "DK-16" | "DK-19" => verify_browser_host(root, id),
         "DK-17" => native_library::verify(root),
         "OC-07" => verify_browser_export(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
@@ -448,6 +448,13 @@ fn verify_browser_host(root: &Path, id: &str) {
         "DK-14" => (&["sdk/browser/query-model-test.mjs"], 11),
         "DK-15" => (&["sdk/browser/view-model-test.mjs"], 7),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
+        "DK-19" => (
+            &[
+                "sdk/browser/rs256.test.mjs",
+                "sdk/browser/rs256.browser.test.mjs",
+            ],
+            14,
+        ),
         _ => unreachable!("closed browser host capability"),
     };
     // Node also applies this limit to the file-level wrapper. Full model and

@@ -106,7 +106,8 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.equal(runSuites(root,launch,()=>{}).length,10);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19']);
+ assert.equal(runSuites(root,launch,()=>{}).length,11);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files.map(file=>'sdk/browser/'+file)));
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';
  put(root,path,testSource(1));put(root,second,testSource(1));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/);
@@ -114,6 +115,8 @@ test('release acceptance actually invokes every closed owning suite and rejects 
  put(root,path,testSource(10));
  const duplicate=(...args)=>{const result=spawnSync(...args);result.stdout+='# tests 20\n';return result;};
  assert.throws(()=>runSuites(root,duplicate,()=>{}),/duplicate tests/);
+ testFixtures(root);rmSync(join(root,'sdk/browser/rs256.browser.test.mjs'));
+ assert.throws(()=>runSuites(root,spawnSync,()=>{}),/ENOENT.*rs256\.browser\.test\.mjs/);
 });
 
 test('real TAP parsing rejects missing, duplicate, zero and unsuccessful summaries',t=>{

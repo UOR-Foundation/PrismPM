@@ -954,6 +954,25 @@ Text application profile or change Holo/1 capability negotiation.
   This binds [Web Cryptography's random API](https://www.w3.org/TR/2017/REC-WebCryptoAPI-20170126/#Crypto-method-getRandomValues),
   not an entropy-source certification or recovery policy. The model must select
   the required secret size, use, custody and lifetime; the host grants no authority.
+- `rs256.mjs` supplies only raw RSASSA-PKCS1-v1_5/SHA-256 verification through
+  WebCrypto, independently of the domain-separated identity signature format.
+  It captures SPKI public-key bytes (1–2048), message bytes (0–1 MiB) and
+  signature bytes (256–1024) before any asynchronous work. Imported keys must
+  be public, nonextractable, verify-only RSA/SHA-256 with 2048–8192 modulus bits;
+  the signature length must equal the rounded-up modulus byte length. Invalid
+  bytes, bounds, import or key metadata return `invalid-input`; unavailable or
+  failing verification returns `crypto-unavailable`. A cryptographic mismatch
+  returns `false`. Provider details and non-Boolean results never escape.
+  The algorithm follows [WebCrypto §20](https://www.w3.org/TR/2017/REC-WebCryptoAPI-20170126/#rsassa-pkcs1)
+  and [RS256](https://www.rfc-editor.org/rfc/rfc7518.html#section-3.3); the upper
+  limits are this host's finite resource policy, not requirements of those
+  standards. DK-19 checks all four pinned WPT PKCS1 vectors (SHA-256 positive;
+  other hashes rejected), native/browser boundaries and actual browser mutants.
+  The exact source closure and limited oracle scope are recorded in
+  `sdk/browser/oracles/wpt-rs256/source.json`. This is not full WPT, JOSE or
+  OpenID certification. The model must separately authenticate key provenance,
+  parse and validate the exact token and claims, bind current issuer policy,
+  and authorize effects. Signature verification alone confers no authority.
 - `store.mjs` binds IndexedDB strict transactions to a fixed namespace policy:
   at most 1 MiB/object, 4096 objects, 64 named heads and 16 objects/transaction;
   a namespace can select smaller limits but cannot silently change them.
@@ -1098,7 +1117,7 @@ Post-build SDK acceptance is separate from source V&V and its external-oracle
 image input. scripts/browser-api-sdk-check.sh takes an immutable current SDK
 image digest and exact clean source commit. It independently compares the
 installed source/compiler/test/helper closure and public modules, then runs all
-DK-07..16 browser suites in that image with read-only sources, no network, and
+DK-07..16 and DK-19 browser suites in that image with read-only sources, no network, and
 only temporary writable caches. Complete TAP summaries, no omissions/skips, and
 native architecture/revision labels are required. Both native SDK architectures
 run this check in release.yml's required reproducibility job. A prior oracle SDK
@@ -1643,6 +1662,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-15` | `sdk` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. | §12 |
 | `DK-16` | `sdk` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. | §12 |
 | `DK-17` | `sdk` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. | §12 |
+| `DK-19` | `sdk` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

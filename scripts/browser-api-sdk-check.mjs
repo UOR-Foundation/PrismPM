@@ -26,6 +26,7 @@ export const suites=Object.freeze([
  {id:'DK-14',minimum:11,files:['query-model-test.mjs']},
  {id:'DK-15',minimum:7,files:['view-model-test.mjs']},
  {id:'DK-16',minimum:10,files:['view-host-test.mjs']},
+ {id:'DK-19',minimum:14,files:['rs256.test.mjs','rs256.browser.test.mjs']},
 ].map(row=>Object.freeze({...row,files:Object.freeze(row.files)})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
