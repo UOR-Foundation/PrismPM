@@ -856,6 +856,30 @@ bytes. Unit-test executors are not installed-SDK acceptance. No host checkout,
 tool cache, alternate gate command or evidence normalization is accepted by
 the installed executor.
 
+`scripts/sdk-vv-check.mjs` orchestrates installed-SDK verification in an owned,
+ephemeral Docker daemon. `sdk/vv-runtime.lock.json` binds the daemon and oracle
+images. Acquisition precedes disconnection of its only external network;
+the SDK starts afterward, under that same daemon, sharing only its isolated
+network namespace, socket and fresh writable workspace. The immutable SDK
+root is read-only and executes as UID 1000. Network route/interface checks and
+positive/negative connection controls surround both full V&V runs. Missing
+images, wrong native platform, network access, incomplete original evidence,
+cancellation or failed owned-resource cleanup prohibit acceptance output.
+The outer record binds the actual OCI configuration, source, inventory and
+both original gate records. Its native-execution basis is the trusted hosted
+CI runner assignment plus matching image/executable architecture, not physical
+hardware attestation. Unit transports do not constitute SDK acceptance.
+After acquisition, only the owned daemon's resolver is replaced with the
+recorded loopback-only configuration; nested containers use that same DNS
+policy. Effective resolver bytes, a live external bootstrap control, blocked
+literal-address access and blocked default DNS resolution are checked before
+and after execution. Bounded command groups and owner-checked cleanup retain
+raw diagnostics without accepting interrupted runs. The release gate requires
+the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
+SDK jobs, independent of image rebuild jobs and mandatory before publication.
+The two-run execution remains bounded to four hours; operational fit must be
+measured on the actual selected image, not inferred from source or unit runs.
+
 `scripts/sdk-image-inputs.mjs` binds SDK image construction to this closure.
 The committed `sdk/vv-inputs.lock.json` selects the reviewed RustSec snapshot;
 the expected source revision is an independent build argument. The image's
