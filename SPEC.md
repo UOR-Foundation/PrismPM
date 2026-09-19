@@ -355,6 +355,21 @@ library acceptance replays Lean and executes all modeled positive/negative
 roots in generated `std` and `no_std` packages; no browser or release acceptance
 is inferred from this prerequisite.
 
+### 5.5 Internal organization-lifecycle prerequisite
+
+ST-15 owns `Foundation.Organization.V1.Lifecycle`: empty registry partitions,
+authenticated-account provisional creation and revision-bound routing to the
+embedded, actual scoped-administration reducer. Organization and creation
+references are unique within the admitted partition; non-unique display names
+and retained creator metadata confer no authority. Activation and founding-grant
+handover retain complete distinct-user scoped coverage, stronger minima and
+old-policy approvals from ST-12. The normative admission, finite bounds and
+result contract is `stdlib/src/Foundation/Organization/V1/Lifecycle.md`.
+Generated native acceptance checks every indexed root, complete declaration
+audits and real uniqueness/approval-bypass mutants. This pure kernel does not
+authenticate identities or approvals, establish cross-partition uniqueness or
+durable CAS, implement a browser service, or establish release/deployment readiness.
+
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
@@ -1512,6 +1527,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-10` | `stdlib` | Prism-stdlib models validate through the Holo projector and Lean kernel. | §5 |
 | `ST-11` | `stdlib` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. | §5 |
 | `ST-12` | `stdlib` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. | §5 |
+| `ST-15` | `stdlib` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |

@@ -217,6 +217,7 @@ The three honesty levels:
 | `ST-10` | `build` | Prism-stdlib models validate through the Holo projector and Lean kernel. |
 | `ST-11` | `build` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. |
 | `ST-12` | `build` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. |
+| `ST-15` | `build` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. |
 
 ## supply-chain
 

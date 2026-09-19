@@ -1433,6 +1433,24 @@ The unchanged DK-17 native gate passes its behavioral mutant and restored replay
 Log SHA-256: `61d5689431bb4b3223de9672063f73ac0d28ed3e7da61ca87d3df3def9d59a8d`.
 This is targeted SDK evidence, not full V&V or Foundry publication acceptance.
 
+## Organization lifecycle kernel (ST-15)
+
+The canonical compiler `8e97cf8bbae442b18a7c4fac76d8473b837f38de` passes
+the complete 97-case corpus in generated std and no_std packages, with 100
+declared exports and all 366 selected declaration audits. Duplicate-identity
+and scoped-quorum mutants fail their exact generated runtime assertions; both
+restorations reproduce the pristine build and attestation identities. The
+unchanged owning gate passes in 472.79 seconds; log SHA-256:
+`48d5bcc3c56a0a6093d3e2b9dee4e8197ccc60570e172b9d4f8ec907f01662ee`.
+
+The earlier corpus's Alice-only handover is retained as an insufficient-quorum
+negative; the positive supplies every existing affected-scope approver. No
+administration rule was weakened. Internal nominal list-return wrappers
+preserve the original public API, state, order and limits. Source/helper,
+registry/spec-link, formatting and all-target Clippy checks pass. This is pure
+kernel acceptance, not authentication, distributed atomicity, browser
+application, full SDK V&V, or Foundry publication acceptance.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

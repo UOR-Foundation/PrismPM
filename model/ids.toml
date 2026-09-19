@@ -343,6 +343,12 @@ level = "build"
 statement = "The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution."
 
 [[id]]
+id = "ST-15"
+suite = "stdlib"
+level = "build"
+statement = "The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"
