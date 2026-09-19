@@ -1185,6 +1185,15 @@ issuer, subject, repository, workflow, ref, environment, certificate and
 transparency policy are explicit. Unsigned local development remains visibly
 distinct. Vulnerability results identify scanner and immutable database
 snapshot plus freshness; a stale offline fact cannot satisfy a current policy.
+The five locked OSV databases (crates.io, Debian, Go, npm, Ubuntu) expire
+exactly seven days after the oldest source object's GCS `timeCreated`, rounded
+down to a whole second. Future source times fail closed. Reviewed acquisition
+metadata is embedded from `model/osv-databases.json`; every generation, URL
+and SHA-256 must agree with the complete standards lock. Explicit maintenance
+uses `node scripts/refresh-osv.mjs acquire` and, after review, `apply`, followed
+by `prismpm authority resolve`. Validation remains offline. Acquisition does
+not authorize redistribution, preserve deleted historical generations, or
+establish a successful vulnerability scan.
 
 OpenTelemetry logs, metrics and traces use modeled resource attributes,
 correlation and redaction and are accepted by an unmodified pinned Collector.
