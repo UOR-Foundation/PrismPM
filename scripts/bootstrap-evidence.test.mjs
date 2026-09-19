@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { canonical, captureProjection, compare, prepare, publish, sha, sha256Base32, sourceManifest, validateCapture } from './bootstrap-evidence.mjs';
+import { historicalInvocation, qemuArguments, RUNTIME, verifyRuntime } from '../sdk/bootstrap/runner.mjs';
 
 const OLD = '4'.repeat(64);
 const NEW = '5'.repeat(64);
@@ -183,7 +184,7 @@ test('coherently resealed alternate digest encodings and names cannot replace ca
   }
 });
 
-test('actual pinned 0.2 SDK accepts complete Base32 projection, rejects raw-08 hex and detects rebuilt manifest tampering', { timeout: 120000 }, () => {
+for (const route of ['platform-runner', 'explicit-QEMU-diagnostic']) test(`actual pinned 0.2 SDK accepts Base32, rejects raw-08 hex and detects rebuilt tampering (${route})`, { timeout: 120000 }, () => {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const work = mkdtempSync(join(tmpdir(), 'prismpm-bootstrap-legacy-test.'));
   const run = (command, args, options = {}) => execFileSync(command, args, { timeout: 30000, maxBuffer: 64 * 1024 * 1024, ...options });
@@ -193,6 +194,14 @@ test('actual pinned 0.2 SDK accepts complete Base32 projection, rejects raw-08 h
     run('tar', ['--extract', '--gzip', '--file', archive, '--directory', work, '--no-same-owner', '--no-same-permissions']);
     const prior = join(work, 'prismpm-0.2.0-x86_64-unknown-linux-gnu/prismpm');
     assert.equal(sha(readFileSync(prior)), 'fed990f31a1cdc5f819f5a99e79bc441c7db11f7c8ea45c748d9cec1097ee8e6');
+    const runPrior = args => {
+      const invocation = historicalInvocation(prior, args);
+      if (route === 'explicit-QEMU-diagnostic') {
+        verifyRuntime(RUNTIME, process.arch === 'arm64' ? 'arm64' : 'amd64');
+        return run(join(RUNTIME, 'qemu-x86_64-static'), qemuArguments(prior, args), { env: invocation.environment });
+      }
+      return run(invocation.command, invocation.args, { env: invocation.environment });
+    };
     const envelope = join(work, 'envelope');
     mkdirSync(envelope);
     run('git', ['-C', root, 'archive', '--output', join(work, 'source.tar'), 'f378fd3a8dc5711cb4b22cec9ee2f874353628c3']);
@@ -207,8 +216,8 @@ test('actual pinned 0.2 SDK accepts complete Base32 projection, rejects raw-08 h
     });
     const save = () => { lines[index] = `\\semanticdata{${canonical(payload)}}`; writeFileSync(core, lines.join('\n')); };
     const capture = () => {
-      writeFileSync(join(work, 'check.json'), run(prior, ['--project', envelope, 'check', '--json']));
-      writeFileSync(join(work, 'build.json'), run(prior, ['--project', envelope, 'build', '--json']));
+      writeFileSync(join(work, 'check.json'), runPrior(['--project', envelope, 'check', '--json']));
+      writeFileSync(join(work, 'build.json'), runPrior(['--project', envelope, 'build', '--json']));
       captureProjection(envelope, join(work, 'check.json'), join(work, 'build.json'), join(work, 'capture.json'));
       return JSON.parse(readFileSync(join(work, 'capture.json'), 'utf8'));
     };
@@ -235,7 +244,7 @@ test('actual pinned 0.2 SDK accepts complete Base32 projection, rejects raw-08 h
     modeledDigest.name = 'sourceManifestDigest';
     modeledDigest.body.value = `sha256:${base32Vectors[3][1]}`;
     save();
-    assert.throws(() => run(prior, ['--project', envelope, 'check', '--json']), error => {
+    assert.throws(() => runPrior(['--project', envelope, 'check', '--json']), error => {
       const result = JSON.parse(error.stdout.toString('utf8'));
       return error.status === 1 && result.diagnostic.code === 'PP2001'
         && result.diagnostic.causes.some(cause => cause.code === 'LLL1003' && cause.message.includes('`08`'));

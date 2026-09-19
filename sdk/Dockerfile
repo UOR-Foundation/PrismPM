@@ -74,6 +74,9 @@ RUN case "$TARGETARCH" in \
     && tar --extract --xz --file /tmp/node.tar.xz --strip-components=1 --directory /usr/local \
     && rm /tmp/node.tar.xz
 
+COPY sdk/bootstrap/ /opt/prismpm/bootstrap-tools/
+RUN node /opt/prismpm/bootstrap-tools/install.mjs
+
 RUN cargo install --locked wasm-bindgen-cli --version 0.2.122
 RUN cargo install --locked wasm-tools --version 1.258.0
 RUN cargo install --locked wasmtime-cli --version 48.0.1

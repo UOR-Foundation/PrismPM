@@ -549,6 +549,15 @@ invocations remain mandatory. Diagnostics upload runs even after gate failure
 when the runner is reachable; runner loss can prevent upload and never implies
 acceptance or a diagnosed resource cause.
 
+The accepted 0.2.0 bootstrap remains the exact published AMD64 archive and
+binary. A shared hash-verifying runner executes it directly on native Linux
+AMD64 and through the pinned native QEMU user emulator and complete AMD64
+ELF dependency closure on native Linux ARM64. Emulator and loader overrides
+are removed; no binfmt registration, replacement binary, or fallback is
+allowed. The runtime is an SDK-inventoried build input. Its execution-mode
+diagnostic is separate from unchanged `prismpm/bootstrap-evidence/2` acceptance.
+All current SDK commands and V&V gates remain native on both architectures.
+
 Compiler-heavy owning conformance suites and shared verification initialization
 execute one at a time within a conformance process. Nested requests reuse the
 owning slot; a failed owner releases it without suppressing subsequent tests.
