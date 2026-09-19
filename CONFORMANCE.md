@@ -217,6 +217,7 @@ The three honesty levels:
 | `ST-10` | `build` | Prism-stdlib models validate through the Holo projector and Lean kernel. |
 | `ST-11` | `build` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. |
 | `ST-12` | `build` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. |
+| `ST-14` | `build` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. |
 
 ## supply-chain
 

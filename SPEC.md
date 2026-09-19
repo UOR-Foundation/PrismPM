@@ -355,6 +355,20 @@ library acceptance replays Lean and executes all modeled positive/negative
 roots in generated `std` and `no_std` packages; no browser or release acceptance
 is inferred from this prerequisite.
 
+### 5.4 Internal candidate browser-bootstrap prerequisite
+
+ST-14 owns `Foundation.Network.V1.BrowserBootstrap`, an internal finite
+candidate lifecycle, not a selected production transport or raw-input adapter.
+Its contract is `stdlib/src/Foundation/Network/V1/BrowserBootstrap.md`.
+Separately admitted policy, user consent, peer authorization, channel facts
+and relay reservations bind exact current session state. Bounded attempts,
+lease/message budgets, retained replay history and typed rejection govern
+direct and relayed channels. Required-operator loss blocks message admission
+without deleting pending durable operations. Generated record constructors do
+not prove cryptographic admission. Native finite-oracle and declaration-audit
+acceptance does not establish W3C/RFC conformance, real-network interoperability,
+Veilid privacy equivalence, Kappa replication, availability or deployment.
+
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
@@ -1502,6 +1516,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-10` | `stdlib` | Prism-stdlib models validate through the Holo projector and Lean kernel. | §5 |
 | `ST-11` | `stdlib` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. | §5 |
 | `ST-12` | `stdlib` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. | §5 |
+| `ST-14` | `stdlib` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |

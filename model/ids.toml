@@ -343,6 +343,12 @@ level = "build"
 statement = "The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution."
 
 [[id]]
+id = "ST-14"
+suite = "stdlib"
+level = "build"
+statement = "The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"
