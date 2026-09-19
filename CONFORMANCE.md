@@ -218,6 +218,7 @@ The three honesty levels:
 | `ST-11` | `build` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. |
 | `ST-12` | `build` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. |
 | `ST-13` | `build` | The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution. |
+| `ST-14` | `build` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. |
 | `ST-15` | `build` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. |
 
 ## supply-chain

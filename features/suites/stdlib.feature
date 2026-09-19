@@ -91,3 +91,11 @@ Feature: stdlib
     Then duplicate display names confer no authority and unrelated organizations remain unchanged
     And generated std and no_std consumers reject stale or cross-organization requests and incomplete scoped ownership
     And planted identity-uniqueness and administration-bypass defects fail at their exact runtime roots
+
+  @ST-14 @build
+  Scenario: The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution.
+    Given an authenticated current snapshot and separately admitted policy, consent and session evidence
+    When LexLean and lean4-prod compile the candidate kernel and its complete finite corpus
+    Then generated std and no_std consumers reject substituted bindings, expired reservations, exhausted attempts and message admission after loss
+    And direct peer channels and relayed channels have distinct loss behavior without discarding retained durable operations
+    And planted session, consent and lifecycle defects fail at their exact generated runtime roots

@@ -1487,6 +1487,21 @@ registry/spec-link, formatting and all-target Clippy checks pass. This is pure
 kernel acceptance, not authentication, distributed atomicity, browser
 application, full SDK V&V, or Foundry publication acceptance.
 
+## Candidate browser bootstrap kernel (ST-14)
+
+With canonical compiler `8e97cf8bbae442b18a7c4fac76d8473b837f38de`, the owning
+gate passes all 136 modeled cases in generated std/no_std packages, all 138
+declared exports and all 333 selected declaration audits. Authorization,
+consent and operator-loss send mutants fail their exact runtime assertions;
+each restoration reproduces the pristine build and attestation identities.
+The unchanged gate passes in 708.38 seconds; log SHA-256:
+`a8cb99bc18819cca4f27e091565911fa2ac869a596972f9a5754aa5ff6ba5fb1`.
+
+Source/helper, scheduler, model/spec-link, formatting and all-target Clippy
+checks pass. This is finite internal candidate-protocol acceptance. It selects
+no public operator or production transport, proves no live network connection,
+and makes no Veilid privacy, availability, full SDK or Foundry release claim.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

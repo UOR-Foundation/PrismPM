@@ -349,6 +349,12 @@ level = "build"
 statement = "The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution."
 
 [[id]]
+id = "ST-14"
+suite = "stdlib"
+level = "build"
+statement = "The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution."
+
+[[id]]
 id = "ST-15"
 suite = "stdlib"
 level = "build"
