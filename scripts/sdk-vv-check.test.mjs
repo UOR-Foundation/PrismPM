@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createServer } from 'node:net';
 import test from 'node:test';
 import { selectPlatform, validateIsolation, validateLoadedImage, validateExecution,
-  sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, validateOwningTests } from './sdk-vv-check.mjs';
+  sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests } from './sdk-vv-check.mjs';
 import { inspectNativeExecutable, connect, connectivity, validateResolver, isolatedResolver } from './sdk-vv-probe.mjs';
 
 const digest = bytes => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
@@ -37,10 +37,48 @@ test('isolation refuses uplinks and all IPv4 or IPv6 egress routes', () => {
   ]) assert.throws(() => validateIsolation(mutated));
 });
 
-test('loaded-image checks bind distribution reference, native configuration and current source', () => {
+test('loaded-image checks bind distribution reference, native configuration and current source', async () => {
   const value = { Id: config, Os: 'linux', Architecture: 'amd64', RepoDigests: [image],
     Config: { Labels: { 'org.opencontainers.image.revision': revision }, Volumes: null } };
   validateLoadedImage(value, image, 'amd64', config, revision);
+  // Docker's containerd image store returns descriptor IDs, not config IDs.
+  // These are unit metadata fixtures; the independently captured Docker 29
+  // transcript is diagnostic evidence, not installed SDK acceptance.
+  const chain = {reference: image, architecture: 'amd64', config_digest: config,
+    index_descriptor: {mediaType: 'application/vnd.oci.image.index.v1+json', digest: image.split('@')[1], size: 493},
+    child_descriptor: {mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: 'sha256:' + 'e'.repeat(64), size: 4045}};
+  for (const descriptor of [chain.index_descriptor, chain.child_descriptor]) {
+    const modern = {...value, Id: descriptor.digest, Descriptor: descriptor};
+    validateLoadedImage(modern, image, 'amd64', config, revision, chain);
+    for (const changed of [
+      {...modern, Id: config}, {...modern, Descriptor: {...descriptor, mediaType: 'unknown'}},
+      {...modern, Descriptor: {...descriptor, digest: config}}, {...modern, Descriptor: {...descriptor, size: descriptor.size + 1}},
+      {...modern, Descriptor: {...descriptor, platform: {os: 'linux', architecture: 'arm64'}}},
+      {...modern, Architecture: 'arm64'}, {...modern, Descriptor: null},
+    ]) assert.throws(() => validateLoadedImage(changed, image, 'amd64', config, revision, chain));
+    assert.throws(() => validateLoadedImage(modern, image, 'amd64', config, revision));
+    assert.throws(() => validateLoadedImage(modern, image, 'amd64', config, revision, {...chain, config_digest: descriptor.digest}));
+  }
+  for (const store of ['classic', 'containerd']) {
+    const inspect = async fault => {
+      let requests = 0;
+      const result = await inspectLoadedImage(async args => {
+        const platform = requests++ === 1;
+        assert.deepEqual(args, ['image', 'inspect', ...(platform ? ['--platform', 'linux/amd64'] : []), image]);
+        const descriptor = platform ? chain.child_descriptor : chain.index_descriptor;
+        let response = store === 'classic' ? value : {...value, Id: descriptor.digest, Descriptor: descriptor};
+        if (fault === 'wrong-config') response = {...value, Id: 'sha256:' + 'f'.repeat(64)};
+        if (fault === 'mixed-store' && platform) response = store === 'classic' ? {...value, Id: descriptor.digest, Descriptor: descriptor} : value;
+        if (fault === 'wrong-selected-descriptor' && platform) response = {...value, Id: chain.index_descriptor.digest, Descriptor: chain.index_descriptor};
+        return {status: 0, signal: null, stderr: Buffer.alloc(0), stdout: Buffer.from(JSON.stringify(fault === 'multiple-results' ? [response, response] : [response]))};
+      }, chain, 'amd64', revision);
+      assert.equal(requests, 2);
+      assert.deepEqual(result, {id: store === 'classic' ? config : chain.index_descriptor.digest,
+        platform_id: store === 'classic' ? config : chain.child_descriptor.digest, store});
+    };
+    await inspect();
+    for (const fault of ['wrong-config', 'mixed-store', 'wrong-selected-descriptor', 'multiple-results']) await assert.rejects(inspect(fault));
+  }
   const hub = 'docker.io/library/registry@sha256:' + 'c'.repeat(64);
   validateLoadedImage({...value, RepoDigests: [hub.slice('docker.io/library/'.length)]}, hub, 'amd64', config);
   validateLoadedImage({...value, RepoDigests: [hub]}, hub, 'amd64', config);
@@ -95,7 +133,7 @@ test('runtime image authority has exact fixed members and no floating references
   assert.throws(() => readRuntimeLock(Buffer.from(canonical(changed) + '\n')));
 });
 
-function orchestrationFixture(t, fault) {
+function orchestrationFixture(t, fault, store = 'classic') {
   const root = mkdtempSync(join(tmpdir(), 'prismpm-vv-orchestration-unit-'));
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const source = join(root, 'source'); mkdirSync(source); mkdirSync(join(source, 'scripts')); mkdirSync(join(source, 'sdk'));
@@ -105,10 +143,13 @@ function orchestrationFixture(t, fault) {
     const configuration = digest(Buffer.from(`unit-only ${name} config`));
     const manifest = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config: {digest: configuration, size: 100}, layers: []}));
     const annotation = name === 'dind' ? {'org.opencontainers.image.revision': revision, 'org.opencontainers.image.version': '28.4.0-dind'} : {};
-    const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{digest: digest(manifest), size: manifest.length,
+    const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{digest: digest(manifest), size: manifest.length, mediaType: 'application/vnd.oci.image.manifest.v1+json',
       platform: {os: 'linux', architecture: arch}, annotations: annotation}]}));
     const reference = `fixture.invalid/${name}@${digest(index)}`;
-    images[name] = {reference, configuration}; metadata.set(reference, index); metadata.set(`fixture.invalid/${name}@${digest(manifest)}`, manifest);
+    images[name] = {reference, configuration,
+      index_descriptor: {mediaType: 'application/vnd.oci.image.index.v1+json', digest: digest(index), size: index.length},
+      child_descriptor: {mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: digest(manifest), size: manifest.length}};
+    metadata.set(reference, index); metadata.set(`fixture.invalid/${name}@${digest(manifest)}`, manifest);
   }
   const lock = {schema: 'prismpm/sdk-vv-runtime-inputs/1', images: Object.fromEntries(Object.entries(images).filter(([name]) => name !== 'sdk').map(([name, row]) =>
     [name, name === 'dind' ? {reference: row.reference, source: 'https://github.com/docker-library/docker', source_revision: revision, version: '28.4.0-dind'} : {reference: row.reference}]))};
@@ -124,16 +165,22 @@ function orchestrationFixture(t, fault) {
   const namespace = {identity: 'net:[123]', interfaces: ['docker0', 'lo'], ipv4: 'Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\ndocker0 000011AC 00000000 0001 0 0 0 0000FFFF 0 0 0\n', ipv6: ''};
   const ok = value => ({status: 0, signal: null, stdout: Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)), stderr: Buffer.alloc(0)});
   const bad = status => ({...ok(''), status, stderr: Buffer.from('unit-only controlled failure')});
-  const loadedImage = reference => {
+  const loadedImage = (reference, platform = false) => {
     const row = Object.values(images).find(row => row.reference === reference); assert(row);
-    return [{Id: row.configuration, Os: 'linux', Architecture: fault === 'wrong-platform' ? 'other' : arch, RepoDigests: [reference],
+    const descriptor = platform ? row.child_descriptor : row.index_descriptor;
+    return [{Id: store === 'classic' ? row.configuration : descriptor.digest,
+      ...(store === 'classic' ? {} : {Descriptor: descriptor}),
+      Os: 'linux', Architecture: fault === 'wrong-platform' ? 'other' : arch, RepoDigests: [reference],
       Config: {Labels: {'org.opencontainers.image.revision': revision}, Volumes: null}}];
   };
   let disconnected = false, executed = false, daemon, sdk;
   const inner = args => {
     if (args[0] === 'info') return ok({ServerVersion: '28.4.0', DefaultRuntime: 'runc', Containers: 0, Images: 0});
     if (args[0] === 'pull') { if (!args.at(-1).includes('distribution') || fault !== 'missing-image') loaded.add(args.at(-1)); return ok('pulled'); }
-    if (args[0] === 'image' && args[1] === 'inspect') return loaded.has(args[2]) ? ok(loadedImage(args[2])) : bad(1);
+    if (args[0] === 'image' && args[1] === 'inspect') {
+      assert.deepEqual(args.slice(2, -1), args.includes('--platform') ? ['--platform', `linux/${arch}`] : []);
+      return loaded.has(args.at(-1)) ? ok(loadedImage(args.at(-1), args.includes('--platform'))) : bad(1);
+    }
     if (args[0] === 'image' && args[1] === 'ls') return ok([...loaded].map(ref => loadedImage(ref)[0].Id).join('\n'));
     if (args[0] === 'create') {
       assert(disconnected, 'SDK must not start during online acquisition');
@@ -143,7 +190,7 @@ function orchestrationFixture(t, fault) {
     if (args[0] === 'start') { assert.equal(args[1], sdk); return ok('started'); }
     assert.deepEqual(args.slice(0, 2), ['exec', sdk]);
     const command = args.slice(2);
-    if (command[0] === 'docker') return ok(images.sdk.configuration + '\n');
+    if (command[0] === 'docker') return ok((fault === 'wrong-container-image' ? images.sdk.child_descriptor.digest : loadedImage(images.sdk.reference)[0].Id) + '\n');
     if (command[0] === 'node' && command[1].endsWith('/sdk-vv-probe.mjs')) {
       if (command[2] === 'native') return ok({architecture: arch, process_architecture: process.arch});
       if (command[2] === 'namespace') return ok(fault === 'wrong-namespace' ? {...namespace, identity: 'net:[456]'} : namespace);
@@ -173,7 +220,7 @@ function orchestrationFixture(t, fault) {
     const args = arguments_.slice(4); calls.push(args);
     if (args[0] === 'buildx') { const bytes = metadata.get(args.at(-1)); assert(bytes); return ok(bytes); }
     if (args[0] === 'pull') return ok('pulled');
-    if (args[0] === 'image') return ok(loadedImage(args[2]));
+    if (args[0] === 'image') return ok(loadedImage(args.at(-1), args.includes('--platform')));
     if (args[1] === 'inspect') {
       const entry = resources.get(args[2]); if (!entry) return bad(1);
       return ok([{Labels: entry.labels, Config: {Labels: entry.labels}}]);
@@ -222,10 +269,18 @@ function orchestrationFixture(t, fault) {
 }
 
 test('complete orchestration executes acquisition, disconnection, owning runner and cleanup in order', async t => {
-  const f = orchestrationFixture(t); const value = await f.run();
-  assert.deepEqual(value.phases, ['exact-native-images-acquired', 'external-network-disconnected', 'isolated-native-sdk-probed', 'both-full-vv-records-verified', 'owned-resources-removed']);
-  assert.equal(f.resources.size, 0); assert(existsSync(join(f.destination, 'acceptance.json')));
-  assert.equal(f.calls.filter(args => args.some((arg, index) => arg.endsWith('/sdk-vv-run.mjs') && args[index - 1] === 'node')).length, 1);
+  for (const store of ['classic', 'containerd']) {
+    const f = orchestrationFixture(t, undefined, store); const value = await f.run();
+    assert.deepEqual(value.phases, ['exact-native-images-acquired', 'external-network-disconnected', 'isolated-native-sdk-probed', 'both-full-vv-records-verified', 'owned-resources-removed']);
+    assert.equal(f.resources.size, 0); assert(existsSync(join(f.destination, 'acceptance.json')));
+    const loaded = JSON.parse(readFileSync(join(f.destination, 'loaded-identities.json')));
+    assert.equal(Object.keys(loaded).length, 4); assert(Object.values(loaded).every(row => row.store === store));
+    assert.equal(f.calls.filter(args => args.includes('inspect') && args.includes('--platform')).length, 5);
+    assert.equal(f.calls.filter(args => args.some((arg, index) => arg.endsWith('/sdk-vv-run.mjs') && args[index - 1] === 'node')).length, 1);
+    const wrong = orchestrationFixture(t, 'wrong-container-image', store);
+    await assert.rejects(wrong.run()); assert.equal(wrong.resources.size, 0);
+    assert(!existsSync(join(wrong.destination, 'acceptance.json')));
+  }
 });
 
 test('orchestration refuses each missing authority, isolation, execution, evidence and cleanup prerequisite', async t => {
@@ -272,7 +327,7 @@ test('image metadata binds the child bytes, media type, config and bounded layer
   const check = async (changed, corrupt = false) => {
     const bytes = Buffer.from(JSON.stringify(changed));
     const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [
-      {digest: digest(bytes), size: bytes.length, platform: {os: 'linux', architecture: 'amd64'}}]}));
+      {digest: digest(bytes), size: bytes.length, mediaType: 'application/vnd.oci.image.manifest.v1+json', platform: {os: 'linux', architecture: 'amd64'}}]}));
     let calls = 0;
     const result = await acquireImageMetadata(async () => ({status: 0, signal: null, stderr: Buffer.alloc(0),
       stdout: calls++ === 0 ? index : corrupt ? Buffer.from('{}') : bytes}), `fixture.invalid/sdk@${digest(index)}`, 'amd64');
