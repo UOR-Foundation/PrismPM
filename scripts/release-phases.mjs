@@ -12,7 +12,7 @@ import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, v
 const repository = 'UOR-Foundation/PrismPM';
 const imageNames = ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles'];
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-const ociNeeds = ['gate', 'images', 'native', 'reproducibility'];
+const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
 
 export function publicationPolicy(value) {
   assert.deepEqual(Object.keys(value).sort(), ['event', 'publishCrates', 'ref', 'repository', 'revision', 'version']);
