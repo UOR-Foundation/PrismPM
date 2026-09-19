@@ -830,6 +830,23 @@ content is limited to 4 GiB, including repeated blobs and the bootstrap archive;
 callers may only lower that bound. This is input reconstruction, not SDK V&V
 execution or acceptance.
 
+`scripts/sdk-vv-run.mjs` is an internal installed-SDK executor. It reconstructs
+the image-owned source/history/bootstrap/advisory closure and copies only the
+image-owned Cargo cache into a fresh writable directory. Fixed SDK tools run
+two consecutive, unchanged `just vv` commands with the independently supplied
+SDK digest and source commit. Each successful command must produce its own
+canonical, exact-commit, complete 15-gate evidence; both original records are
+retained separately and rechecked before publishing the internal execution
+record. A failure retains diagnostics but cannot produce completion evidence.
+Cancellation uses the existing diagnostic supervisor's cleanup boundary.
+
+The inner record does not establish physical native architecture, network
+isolation, the selected OCI image's identity, release acceptance or product
+readiness. An independent outer job must verify those facts and the retained
+bytes. Unit-test executors are not installed-SDK acceptance. No host checkout,
+tool cache, alternate gate command or evidence normalization is accepted by
+the installed executor.
+
 ### 12.1 Browser host prerequisites
 
 `sdk/browser` contains generic host bindings, not a stateful application
