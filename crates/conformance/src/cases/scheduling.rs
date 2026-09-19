@@ -45,6 +45,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-17"
             | "OC-07"
             | "ST-11"
+            | "ST-12"
     )
     .then(compiler_slot)
 }
@@ -70,7 +71,7 @@ mod tests {
     fn every_waiting_compiler_owner_runs_once_without_overlap_or_skip() {
         let owners = (10..=17)
             .map(|id| format!("DK-{id}"))
-            .chain(["OC-07".to_owned(), "ST-11".to_owned()])
+            .chain(["OC-07".to_owned(), "ST-11".to_owned(), "ST-12".to_owned()])
             .collect::<Vec<_>>();
         let barrier = Arc::new(Barrier::new(owners.len() + 1));
         let active = AtomicUsize::new(0);

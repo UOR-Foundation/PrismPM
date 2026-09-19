@@ -334,6 +334,27 @@ corpus in generated native `std` and `no_std` packages, complete declaration
 audits and behavioral mutation rejection. This is not full account-service,
 NIST assurance, browser, persistence, network or deployment acceptance.
 
+### 5.2 Internal scoped-administration prerequisite
+
+ST-12 owns `Foundation.Organization.V1.Administration`: a finite pure reducer
+for an already authenticated organization snapshot and exact content-bound
+approval records. This is not a public authentication API. Semantic user
+references, not keys or aliases, determine distinct administrators. The reducer
+does not authenticate callers, establish global CAS, implement a deployed
+organization, or confer civil identity. Its versioned contract is
+`stdlib/src/Foundation/Organization/V1/Administration.md`.
+
+The reducer computes affected scopes from both old and proposed inheritance
+graphs, uses old eligible-user quorums, and validates complete post-change
+coverage. Provisional creation is explicit; active operation requires at least
+two distinct active administrators per scope and any stronger policy minimum.
+Revision increments belong to the reducer. Scope deletion, organization/root
+replacement, active-to-provisional rollback, stale or substituted proposals,
+duplicate/out-of-scope approvals and resource exhaustion are rejected. Native
+library acceptance replays Lean and executes all modeled positive/negative
+roots in generated `std` and `no_std` packages; no browser or release acceptance
+is inferred from this prerequisite.
+
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
@@ -1412,6 +1433,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-09` | `stdlib` | Prism-stdlib includes golden test outputs for all published artifacts. | §5 |
 | `ST-10` | `stdlib` | Prism-stdlib models validate through the Holo projector and Lean kernel. | §5 |
 | `ST-11` | `stdlib` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. | §5 |
+| `ST-12` | `stdlib` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |

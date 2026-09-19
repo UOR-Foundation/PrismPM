@@ -2,6 +2,7 @@
 
 mod native_library;
 mod saved_recovery;
+mod scoped_administration;
 
 use repo_model::repo_root;
 use serde_json::Value;
@@ -378,6 +379,7 @@ pub fn run_at(root: &Path, id: &str) {
             verify_stdlib(root, id);
         }
         "ST-11" => saved_recovery::verify(root),
+        "ST-12" => scoped_administration::verify(root),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {

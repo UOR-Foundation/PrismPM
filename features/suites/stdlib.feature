@@ -67,3 +67,11 @@ Feature: stdlib
     Given stdlib models
     When projected to Holo and checked with Lean
     Then validation succeeds across all facets
+
+  @ST-12 @build
+  Scenario: The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution.
+    Given an authenticated internal organization snapshot and exact bound approval records
+    When LexLean and lean4-prod compile the scoped-administration model and complete finite corpus
+    Then generated std and no_std consumers enforce distinct-user quorums and complete post-change coverage
+    And planted minimum-coverage and ungranted-membership approval defects fail at their exact generated runtime roots
+    And restoring each defect reproduces the original accepted artifact identities

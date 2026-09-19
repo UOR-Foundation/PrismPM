@@ -337,6 +337,12 @@ level = "build"
 statement = "Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence."
 
 [[id]]
+id = "ST-12"
+suite = "stdlib"
+level = "build"
+statement = "The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"
