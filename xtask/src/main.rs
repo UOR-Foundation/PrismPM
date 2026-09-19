@@ -832,7 +832,9 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
 }
 
 fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
-    let destination = root.join("tests/golden/stdlib");
+    use repo_conformance::golden::{self, platform::Platform};
+    let platform = Platform::current()?;
+    let destination = root.join(platform.directory());
     let review_reason = if write {
         std::env::var("PRISMPM_GOLDEN_REASON")
             .map_err(|_| "golden rewrite requires nonempty PRISMPM_GOLDEN_REASON")?
@@ -854,6 +856,13 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
     }
     let expected = golden_files(root, &review_reason)?;
     if write {
+        let expected = if platform == Platform::DevelopmentAmd64 {
+            golden::native_records(&expected, &expected, platform)?;
+            expected
+        } else {
+            let base = golden::read(&root.join(Platform::DevelopmentAmd64.directory()))?;
+            golden::native_records(&base, &expected, platform)?
+        };
         let parent = destination
             .parent()
             .ok_or("golden destination has no parent")?;
@@ -879,10 +888,11 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
         );
         return Ok(());
     }
-    let observed = tree_files(&destination)?;
-    repo_conformance::golden::compare(&observed, &expected)?;
+    let observed = golden::read_platform(root, platform)?;
+    golden::native_records(&observed, &expected, platform)?;
+    golden::compare(&observed, &expected)?;
     println!(
-        "check-golden: {} files match reviewed build {}",
+        "check-golden: {} files match reviewed build {} ({platform:?})",
         observed.len(),
         build_once(root)?.build_id
     );

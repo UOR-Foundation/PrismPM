@@ -539,6 +539,16 @@ and artifact descriptor remains significant. These projections are not
 verification or release evidence. Actual verification and same-executable
 two-root reproducibility continue to bind and compare complete raw evidence.
 
+Golden execution profiles distinguish Debian 12 AMD64 development from Ubuntu
+24.04 AMD64 and ARM64 SDK processes. The actual OS release and compiled process
+architecture select the profile; unknown or missing profiles fail closed.
+SDK profiles retain three complete raw native records beside the shared tree:
+the golden manifest, LexLean attestation and verification manifest. Composition
+preserves all other bytes, source/declaration audits, portable artifact digests,
+execution results and process invocations. Each later run uses the unchanged
+strict comparison above against its own reviewed records. Profile selection
+does not establish native hardware execution or authorize a release.
+
 CI resource diagnostics are separate from acceptance evidence. Host and
 devcontainer observers record only allowlisted numeric resource measurements,
 at most every 30 seconds for six hours, 721 samples and 8 MiB per observer.
