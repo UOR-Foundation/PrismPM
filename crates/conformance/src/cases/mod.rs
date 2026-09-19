@@ -3155,6 +3155,19 @@ fn verify_holo(root: &Path, id: &str) {
             assert!(root
                 .join("tests/golden/stdlib/golden-manifest.json")
                 .exists());
+            let files = crate::golden::read(&root.join("tests/golden/stdlib")).unwrap();
+            crate::golden::compare(&files, &files).expect("complete source-bound golden integrity");
+            let mut changed = files.clone();
+            changed
+                .iter_mut()
+                .find(|(path, _)| path == "build/model.prism.json")
+                .unwrap()
+                .1
+                .push(b' ');
+            assert!(
+                crate::golden::compare(&files, &changed).is_err(),
+                "model drift cannot become golden caller variation"
+            );
         }
         "HO-10" => {
             let holo = sample_application_holo(root);
@@ -3357,6 +3370,20 @@ fn verify_stdlib(root: &Path, id: &str) {
             ] {
                 assert!(golden.join(path).exists(), "missing golden {path}");
             }
+            let files = crate::golden::read(&golden).unwrap();
+            crate::golden::compare(&files, &files)
+                .expect("complete retained verification integrity");
+            let mut changed = files.clone();
+            changed
+                .iter_mut()
+                .find(|(path, _)| path == "verified/lexlean-attestation.json")
+                .unwrap()
+                .1
+                .push(b' ');
+            assert!(
+                crate::golden::compare(&files, &changed).is_err(),
+                "raw attestation drift must be rejected before comparison"
+            );
         }
         "ST-10" => {
             assert_eq!(verified(root).schema, "prismpm/verify-result/1");

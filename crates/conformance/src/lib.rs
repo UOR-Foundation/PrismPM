@@ -8,6 +8,7 @@
 
 pub mod cases;
 pub mod fixtures;
+pub mod golden;
 pub mod meta;
 pub mod runner;
 
