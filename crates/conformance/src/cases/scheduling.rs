@@ -43,6 +43,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-15"
             | "DK-16"
             | "DK-17"
+            | "DK-18"
             | "OC-07"
             | "ST-11"
             | "ST-12"
@@ -69,7 +70,7 @@ mod tests {
 
     #[test]
     fn every_waiting_compiler_owner_runs_once_without_overlap_or_skip() {
-        let owners = (10..=17)
+        let owners = (10..=18)
             .map(|id| format!("DK-{id}"))
             .chain(["OC-07".to_owned(), "ST-11".to_owned(), "ST-12".to_owned()])
             .collect::<Vec<_>>();
@@ -95,7 +96,7 @@ mod tests {
         assert_eq!(actual, owners);
         assert_eq!(active.load(Ordering::SeqCst), 0);
         for id in [
-            "DK-07", "DK-08", "DK-09", "DK-18", "RP-01", "ST-10", "ST-13", "VR-01",
+            "DK-07", "DK-08", "DK-09", "DK-19", "RP-01", "ST-10", "ST-13", "VR-01",
         ] {
             assert!(
                 for_owner(id).is_none(),

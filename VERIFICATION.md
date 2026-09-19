@@ -1484,6 +1484,25 @@ evidence, not full SDK acceptance; 77 other generic probes remain recorded.
 - Restored loader: `target/configuration-loader-restored.log`, SHA-256 `ebc296ac6a2cae9338096affd43a2e17358aae6708c44261e82fc87cdd7a9e9b`.
 - Actual CLI codes/bytes/exit classes: `target/configuration-cli-restored.log`, SHA-256 `ea17fc59fad45ba87da4d93c919b2ddc914625dc05b3d91906df7794816a2968`.
 
+## Internal browser effect protocol
+
+DK-18 passes all 307 modeled roots through generated std/no_std execution and
+756 exact empty-axiom declaration audits. Actual request-binding, queue-limit
+and unknown-outcome mutants fail at their expected generated runtime roots;
+each restoration reproduces the original build and attestation. A failed
+mutant creates no accepted verification record. Authored formatting,
+all-target/all-feature Clippy and model/spec audits pass in the devcontainer.
+
+The initial byte-comparison helper failed its empty-axiom contract. Direct
+modeled byte equality preserves that contract without widening the policy.
+The unknown-outcome mutant witness names the first affected sorted corpus
+root, not a later equally affected case; the complete corpus is unchanged.
+
+Owning log: `target/browser-effect-complete-owning-restored.log`, SHA-256
+`1cd2bbe95b3acea993af387bf33b5e909bee66763c305f9e01ce78a28f2897e2`.
+This establishes internal protocol sequencing only, not browser dispatch,
+an executable application profile, complete SDK acceptance or deployment.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
