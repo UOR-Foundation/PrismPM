@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {constants,closeSync,fstatSync,lstatSync,openSync,readFileSync,readdirSync,readSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
-import {dirname,join,resolve} from 'node:path';
+import {dirname,join,parse,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 
@@ -13,7 +13,7 @@ export const sourceRoots=Object.freeze([
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'vendor/lexlean','vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust',
- 'scripts/browser-api-sdk-check.mjs',
+ 'scripts/browser-api-sdk-check.mjs','scripts/owning-node-reporter.mjs',
 ]);
 export const suites=Object.freeze([
  {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
@@ -104,16 +104,75 @@ export function verifyTap(tap,minimum){
  return tests;
 }
 
+function selectedFiles(root, files) {
+ assert.ok(Array.isArray(files) && files.length > 0 && files.length <= 64);
+ assert.equal(new Set(files).size, files.length, 'duplicate selected test file');
+ const absolute = files.map(file => {
+  assert.equal(typeof file, 'string');
+  assert.ok(file.split('/').every(part => /^[A-Za-z0-9_.-]+$/.test(part)
+   && part !== '.' && part !== '..'), 'closed relative test file');
+  return join(root, file);
+ });
+ for (const file of absolute) {
+  let current = parse(file).root;
+  const parts = file.slice(current.length).split('/');
+  for (let index = 0; index < parts.length; index++) {
+   current = join(current, parts[index]);
+   const metadata = lstatSync(current);
+   assert.ok(!metadata.isSymbolicLink(), 'selected test path alias ' + current);
+   assert.ok(index === parts.length - 1 ? metadata.isFile() : metadata.isDirectory(),
+    'selected regular test file and directory parents ' + current);
+  }
+ }
+ return absolute;
+}
+
+export function verifyFileCompletions(tap, files, total) {
+ const prefix = '# prismpm-owning-file ';
+ const rows = tap.split(/\r?\n/).filter(line => line.startsWith(prefix))
+  .map(line => {
+   const raw = line.slice(prefix.length), row = JSON.parse(raw);
+   assert.equal(JSON.stringify(row), raw, 'exact non-duplicate file completion JSON');
+   return row;
+  });
+ assert.equal(rows.length, files.length, 'complete selected test file summaries');
+ let count = 0;
+ for (const row of rows) {
+  keys(row, ['file', 'success', 'tests', 'passed', 'failed', 'cancelled', 'skipped',
+   'todo', 'topLevel', 'suites']);
+  assert.equal(typeof row.file, 'string');
+  assert.equal(row.success, true, 'successful selected test file');
+  for (const field of ['tests', 'passed', 'failed', 'cancelled', 'skipped', 'todo', 'topLevel', 'suites']) {
+   assert.ok(Number.isSafeInteger(row[field]) && row[field] >= 0, 'bounded file test count');
+  }
+  assert.ok(row.tests > 0 && row.topLevel > 0 && row.topLevel <= row.tests,
+   'nonempty registered tests in every selected file');
+  assert.equal(row.passed, row.tests, 'complete selected file pass set');
+  for (const outcome of ['failed', 'cancelled', 'skipped', 'todo']) assert.equal(row[outcome], 0);
+  count += row.tests;
+  assert.ok(Number.isSafeInteger(count));
+ }
+ assert.deepEqual(rows.map(row => row.file).sort(), files.slice().sort(), 'exact selected file completions');
+ assert.equal(count, total, 'file completions match complete TAP test count');
+}
+
 // Invoked only in the inspected current SDK. Source V&V remains independent.
 export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(text)){
+ root=resolve(root);
+ // Preflight the complete inventory before any test can execute. The installed
+ // SDK separately binds these immutable source bytes; this is not a race lock.
+ const selected=new Map(suites.map(suite=>[suite.id,selectedFiles(root,suite.files.map(file=>'sdk/browser/'+file))]));
+ const reporter='data:text/javascript;base64,'+readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)).toString('base64');
  const completed=[],env={...process.env};delete env.NODE_TEST_CONTEXT;
  for(const suite of suites){
   const deadline=['DK-15','DK-16'].includes(suite.id)?3600000:1500000;
-  const args=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout='+deadline,...suite.files.map(file=>'sdk/browser/'+file)];
+  const args=['--test','--test-concurrency=1','--test-reporter='+reporter,'--test-timeout='+deadline,...suite.files.map(file=>'sdk/browser/'+file)];
   const output=launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:deadline+100000,maxBuffer:64*1024*1024,env});
   emit('SDK browser suite '+suite.id+'\n'+(output.stdout??'')+(output.stderr??''));
   assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+suite.id);
-  const tests=verifyTap(output.stdout,suite.minimum);completed.push({id:suite.id,tests});
+  const tests=verifyTap(output.stdout,suite.minimum);
+  verifyFileCompletions(output.stdout,selected.get(suite.id),tests);
+  completed.push({id:suite.id,tests});
  }
  assert.deepEqual(completed.map(row=>row.id),suites.map(row=>row.id));return completed;
 }
