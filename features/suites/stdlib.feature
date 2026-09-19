@@ -1,5 +1,13 @@
 Feature: stdlib
 
+  @ST-11 @build
+  Scenario: Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence.
+    Given current admitted credential state and independently verified saved-code evidence
+    When the modeled lifecycle executes through generated std and no_std packages
+    Then successful recovery consumes the code and revises the credential with notification intent
+    And disabled identities, stale epochs, consumed codes, substituted keys and exhausted retention are rejected
+    And current authorization is preserved without restoring grants or bypassing quorums
+
   @ST-01 @build
   Scenario: Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch.
     Given stdlib/src/Foundation/Arch.lex.tex

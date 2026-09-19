@@ -322,6 +322,18 @@ retain their individually declared, audited axiom policies; an inherited
 library axiom is not an axiom-free theorem or a proof of runtime acceptance.
 Goldens are reviewed output, never a substitute for direct verification.
 
+### 5.1 Internal saved-recovery lifecycle
+
+`Foundation.Sec.V1.SavedRecovery` models admitted saved-code credential recovery
+and authenticated code-inventory replacement. Its normative finite state,
+admission, atomic-storage and notification boundary is
+`stdlib/src/Foundation/Sec/V1/SavedRecovery.md`. Generated constructors are not
+cryptographic evidence. No public input adapter, mailbox proof, grant recovery,
+or quorum bypass is supplied. ST-11 verifies the modeled success/rejection
+corpus in generated native `std` and `no_std` packages, complete declaration
+audits and behavioral mutation rejection. This is not full account-service,
+NIST assurance, browser, persistence, network or deployment acceptance.
+
 ## 6. Build artifacts and identities
 
 `check` loads LexLean, obtains `lexlean/semantic-snapshot/1`, projects and
@@ -1399,6 +1411,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-08` | `stdlib` | Prism-stdlib exports registered runtime validator roots. | §5 |
 | `ST-09` | `stdlib` | Prism-stdlib includes golden test outputs for all published artifacts. | §5 |
 | `ST-10` | `stdlib` | Prism-stdlib models validate through the Holo projector and Lean kernel. | §5 |
+| `ST-11` | `stdlib` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |

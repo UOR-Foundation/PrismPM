@@ -331,6 +331,12 @@ level = "build"
 statement = "Prism-stdlib models validate through the Holo projector and Lean kernel."
 
 [[id]]
+id = "ST-11"
+suite = "stdlib"
+level = "build"
+statement = "Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"

@@ -1,6 +1,7 @@
 //! Conformance test cases verifying every registered capability.
 
 mod native_library;
+mod saved_recovery;
 
 use repo_model::repo_root;
 use serde_json::Value;
@@ -376,6 +377,7 @@ pub fn run_at(root: &Path, id: &str) {
         | "ST-10" => {
             verify_stdlib(root, id);
         }
+        "ST-11" => saved_recovery::verify(root),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {

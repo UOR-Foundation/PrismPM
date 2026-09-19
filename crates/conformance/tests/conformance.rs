@@ -70,6 +70,7 @@ test_case!(conformance_st_07, "ST-07");
 test_case!(conformance_st_08, "ST-08");
 test_case!(conformance_st_09, "ST-09");
 test_case!(conformance_st_10, "ST-10");
+test_case!(conformance_st_11, "ST-11");
 
 test_case!(conformance_ar_01, "AR-01");
 test_case!(conformance_ar_02, "AR-02");

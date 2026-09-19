@@ -35,7 +35,16 @@ fn compiler_slot() -> CompilerSlot {
 pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
     matches!(
         id,
-        "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15" | "DK-16" | "DK-17" | "OC-07"
+        "DK-10"
+            | "DK-11"
+            | "DK-12"
+            | "DK-13"
+            | "DK-14"
+            | "DK-15"
+            | "DK-16"
+            | "DK-17"
+            | "OC-07"
+            | "ST-11"
     )
     .then(compiler_slot)
 }
@@ -61,7 +70,7 @@ mod tests {
     fn every_waiting_compiler_owner_runs_once_without_overlap_or_skip() {
         let owners = (10..=17)
             .map(|id| format!("DK-{id}"))
-            .chain(["OC-07".to_owned()])
+            .chain(["OC-07".to_owned(), "ST-11".to_owned()])
             .collect::<Vec<_>>();
         let barrier = Arc::new(Barrier::new(owners.len() + 1));
         let active = AtomicUsize::new(0);
@@ -84,7 +93,9 @@ mod tests {
         actual.sort();
         assert_eq!(actual, owners);
         assert_eq!(active.load(Ordering::SeqCst), 0);
-        for id in ["DK-07", "DK-08", "DK-09", "DK-18", "RP-01", "VR-01"] {
+        for id in [
+            "DK-07", "DK-08", "DK-09", "DK-18", "RP-01", "ST-10", "ST-13", "VR-01",
+        ] {
             assert!(
                 for_owner(id).is_none(),
                 "lightweight dispatch is unchanged: {id}"
