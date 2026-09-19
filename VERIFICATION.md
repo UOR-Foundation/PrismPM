@@ -1,5 +1,16 @@
 # PrismPM falsifiability and verification record
 
+## Integrated emitter source binding
+
+The complete audit rejected the stale emitter digest after metadata-alias
+hardening in `c6d10cdfd59b23b3982eb2d042f55492f455c375`. Independent hashing
+reproduced the old digest at its registered revision and the new digest from
+all 13 current inputs. Only that bound source file changed in the closure.
+The registration now matches; the unchanged complete `xtask validate` passes
+all 155 Node checks and the source/model/spec/dependency audits. The normal
+stdlib writer's existing model already carries the new computed digest.
+This is source-integrity verification, not installed-SDK or Foundry acceptance.
+
 ## Bounded browser RS256 effect (DK-19)
 
 All 14 Node/Chromium tests passed against the pinned, hash-checked WPT RSA
