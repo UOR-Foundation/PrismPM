@@ -1133,6 +1133,14 @@ native architecture/revision labels are required. Both native SDK architectures
 run this check in release.yml's required reproducibility job. A prior oracle SDK
 may support source bootstrap; it cannot satisfy this shipped-SDK acceptance.
 
+Both source and installed-SDK Node gates preflight every selected test file as
+a regular, non-symlink path with non-symlink directory parents. The source-bound
+`scripts/owning-node-reporter.mjs` retains Node's TAP output and records its
+actual per-file test summaries. Every selected file must complete nonempty
+registered tests; automatic empty-module wrappers do not qualify. Exact file
+sets, closed completion rows and reconciled totals supplement, not replace,
+the existing minimum counts, deadlines and failure/skip/TODO rejection.
+
 ### 12.5 Modeled workspace interaction and private View host
 
 DK-15 owns Foundation.View.Workspace.V1.Interaction and its complete 206-vector

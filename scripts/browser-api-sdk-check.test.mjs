@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symli
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {test} from 'node:test';
-import {capture,verifySource,verifyImage,verifyTap,runSuites,sourceRoots,suites} from './browser-api-sdk-check.mjs';
+import {capture,verifySource,verifyImage,verifyTap,verifyFileCompletions,runSuites,sourceRoots,suites} from './browser-api-sdk-check.mjs';
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-sdk-binding-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
@@ -60,6 +60,49 @@ test('SDK identity is immutable, exact-source and native-platform bound',()=>{
 const testSource=(count,skip=false)=>"import {test} from 'node:test';\n"+Array.from({length:count},(_,index)=>`test('case ${index}',${skip&&index===0?'{skip:true},':''}()=>{});\n`).join('');
 function testFixtures(root){for(const suite of suites)for(const file of suite.files)put(root,'sdk/browser/'+file,testSource(suite.minimum));}
 
+test('every selected file must exist even when its sibling supplies the total minimum',t=>{
+ const root=temporary(t);testFixtures(root);
+ const path=join(root,'sdk/browser/identity.browser.test.mjs');
+ rmSync(path);
+ assert.throws(()=>runSuites(root,spawnSync,()=>{}));
+ put(root,'sdk/browser/identity.browser.test.mjs',testSource(1));
+ assert.equal(runSuites(root,spawnSync,()=>{}).length,suites.length);
+});
+
+test('every selected file must register tests instead of borrowing its sibling counts',t=>{
+ const root=temporary(t);testFixtures(root);
+ put(root,'sdk/browser/identity.browser.test.mjs','');
+ assert.throws(()=>runSuites(root,spawnSync,()=>{}));
+ put(root,'sdk/browser/identity.browser.test.mjs',testSource(1));
+ assert.equal(runSuites(root,spawnSync,()=>{}).length,suites.length);
+});
+
+test('preflight rejects missing late files, aliases and nonregular paths before any execution',t=>{
+ for(const kind of ['late missing','file alias','parent alias','root alias','directory','fifo']){
+  const top=temporary(t),root=join(top,'root');testFixtures(root);let calls=0,selectedRoot=root;
+  const path=join(root,'sdk/browser/identity.browser.test.mjs');
+  if(kind==='late missing')rmSync(join(root,'sdk/browser/view-host-test.mjs'));
+  if(kind==='file alias'){rmSync(path);symlinkSync('identity.test.mjs',path);}
+  if(kind==='parent alias'){
+   renameSync(join(root,'sdk/browser'),join(root,'sdk/browser-real'));
+   symlinkSync('browser-real',join(root,'sdk/browser'));
+  }
+  if(kind==='root alias'){selectedRoot=join(top,'alias');symlinkSync('root',selectedRoot);}
+  if(kind==='directory'){rmSync(path);mkdirSync(path);}
+  if(kind==='fifo'){rmSync(path);execFileSync('mkfifo',[path]);}
+  assert.throws(()=>runSuites(selectedRoot,()=>{calls++;throw Error('must not execute');},()=>{}),
+   /ENOENT|selected test path alias|selected regular test file/);
+  assert.equal(calls,0,kind);
+ }
+});
+
+test('a module printing invented completion text does not count as registered tests',t=>{
+ const root=temporary(t);testFixtures(root);
+ put(root,'sdk/browser/identity.browser.test.mjs',
+  "console.log('# prismpm-owning-file '+JSON.stringify({file:import.meta.filename,tests:1,passed:1}));");
+ assert.throws(()=>runSuites(root,spawnSync,()=>{}),/complete selected test file summaries/);
+});
+
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
@@ -87,12 +130,49 @@ test('real TAP parsing rejects missing, duplicate, zero and unsuccessful summari
  ])assert.throws(()=>verifyTap(changed,3));
 });
 
+test('per-file completion evidence is exact, closed, successful and reconciled to real TAP',t=>{
+ const root=temporary(t),file=join(root,'complete.mjs');put(root,'complete.mjs',testSource(3));
+ const reporter='data:text/javascript;base64,'+readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)).toString('base64');
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const output=spawnSync(process.execPath,['--test','--test-reporter='+reporter,file],{encoding:'utf8',env});
+ assert.equal(output.status,0);verifyTap(output.stdout,3);verifyFileCompletions(output.stdout,[file],3);
+ const prefix='# prismpm-owning-file ',line=output.stdout.split('\n').find(line=>line.startsWith(prefix));
+ const original=JSON.parse(line.slice(prefix.length));
+ for(const mutate of[
+  row=>row.file+='-wrong',row=>row.extra=true,row=>row.success=false,
+  row=>row.tests=0,row=>row.tests='3',row=>row.tests=Number.MAX_SAFE_INTEGER+1,
+  row=>row.passed--,row=>row.failed=1,row=>row.cancelled=1,row=>row.skipped=1,
+  row=>row.todo=1,row=>row.topLevel=0,row=>row.topLevel=4,row=>delete row.suites,
+ ]){
+  const changed=structuredClone(original);mutate(changed);
+  assert.throws(()=>verifyFileCompletions(output.stdout.replace(line,prefix+JSON.stringify(changed)),[file],3));
+ }
+ for(const changed of[output.stdout.replace(line,''),output.stdout+line+'\n',
+  output.stdout.replace('"tests":3','"tests":3,"tests":3')])
+  assert.throws(()=>verifyFileCompletions(changed,[file],3));
+ assert.throws(()=>verifyFileCompletions(output.stdout,[file],4));
+});
+
 test('owning release test kills a removed complete-TAP acceptance guard',t=>{
  const root=temporary(t),source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
- const before='const tests=verifyTap(output.stdout,suite.minimum)',after='const tests=suite.minimum';
+ const before='const tests=verifyTap(output.stdout,suite.minimum)',after="const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])";
  assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,after));
  put(root,'browser-api-sdk-check.test.mjs',readFileSync(new URL('./browser-api-sdk-check.test.mjs',import.meta.url)));
+ put(root,'owning-node-reporter.mjs',readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)));
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
  const result=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=release acceptance actually',join(root,'browser-api-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
+ assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,/Missing expected exception/);
+});
+
+test('owning omission regression kills removal of actual per-file completion checks',t=>{
+ const root=temporary(t),source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
+ const before='verifyFileCompletions(output.stdout,selected.get(suite.id),tests);';
+ assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,''));
+ for(const file of ['browser-api-sdk-check.test.mjs','owning-node-reporter.mjs'])
+  put(root,file,readFileSync(new URL('./'+file,import.meta.url)));
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const result=spawnSync(process.execPath,['--test','--test-reporter=tap',
+  '--test-name-pattern=every selected file must register',join(root,'browser-api-sdk-check.test.mjs')],
+  {encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,/Missing expected exception/);
 });

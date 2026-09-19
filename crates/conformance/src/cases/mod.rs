@@ -3,10 +3,12 @@
 mod browser_bootstrap;
 mod mailbox_admission;
 mod native_library;
+mod node_suite;
 mod organization_lifecycle;
 mod saved_recovery;
 mod scoped_administration;
 
+use node_suite::verify as verify_node_suite;
 use repo_model::repo_root;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -463,47 +465,6 @@ fn verify_browser_host(root: &Path, id: &str) {
         "120000"
     };
     verify_node_suite(root, id, files, minimum_tests, timeout);
-}
-
-fn verify_node_suite(root: &Path, id: &str, files: &[&str], minimum_tests: usize, timeout: &str) {
-    let output = Command::new("node")
-        // Cargo injects its Rust dynamic-library search path into test binaries.
-        // Browser/compiler subprocesses use the SDK's own loader paths.
-        .env_remove("LD_LIBRARY_PATH")
-        .env_remove("NODE_TEST_CONTEXT")
-        .args(["--test", "--test-reporter=tap", "--test-timeout", timeout])
-        .args(files)
-        .current_dir(root)
-        .output()
-        .expect("execute complete owning Node suite in the devcontainer");
-    let stdout = String::from_utf8(output.stdout).expect("UTF-8 TAP output");
-    assert!(
-        output.status.success(),
-        "{id}: {stdout}\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let count = |name: &str| {
-        let prefix = format!("# {name} ");
-        let values = stdout
-            .lines()
-            .filter_map(|line| line.strip_prefix(&prefix))
-            .map(|value| value.parse::<usize>().expect("numeric TAP summary"))
-            .collect::<Vec<_>>();
-        assert_eq!(values.len(), 1, "{id}: missing or duplicate {name} summary");
-        values[0]
-    };
-    assert!(
-        count("tests") >= minimum_tests,
-        "{id}: incomplete test suite"
-    );
-    assert_eq!(count("tests"), count("pass"), "{id}: incomplete pass set");
-    for outcome in ["fail", "cancelled", "skipped", "todo"] {
-        assert_eq!(
-            count(outcome),
-            0,
-            "{id}: {outcome} tests cannot satisfy acceptance"
-        );
-    }
 }
 
 fn canonical_file(value: &Value) -> tempfile::NamedTempFile {
@@ -3663,6 +3624,71 @@ fn verify_security(root: &Path, id: &str) {
 #[cfg(test)]
 mod node_suite_tests {
     use super::{required, verify_node_suite};
+
+    #[test]
+    fn owning_node_gate_rejects_a_partially_missing_selected_file() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("present.mjs"),
+            "import {test} from 'node:test'; for(let i=0;i<11;i++)test('case '+i,()=>{});",
+        )
+        .unwrap();
+        assert!(std::panic::catch_unwind(|| {
+            verify_node_suite(
+                root.path(),
+                "TM-03",
+                &["present.mjs", "missing.mjs"],
+                11,
+                "5000",
+            );
+        })
+        .is_err());
+        std::fs::write(
+            root.path().join("missing.mjs"),
+            "import {test} from 'node:test'; test('restored',()=>{});",
+        )
+        .unwrap();
+        verify_node_suite(
+            root.path(),
+            "TM-03",
+            &["present.mjs", "missing.mjs"],
+            11,
+            "5000",
+        );
+    }
+
+    #[test]
+    fn owning_node_gate_rejects_an_empty_selected_file_beside_a_complete_sibling() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("present.mjs"),
+            "import {test} from 'node:test'; for(let i=0;i<11;i++)test('case '+i,()=>{});",
+        )
+        .unwrap();
+        std::fs::write(root.path().join("empty.mjs"), "").unwrap();
+        assert!(std::panic::catch_unwind(|| {
+            verify_node_suite(
+                root.path(),
+                "TM-03",
+                &["present.mjs", "empty.mjs"],
+                11,
+                "5000",
+            );
+        })
+        .is_err());
+        std::fs::write(
+            root.path().join("empty.mjs"),
+            "import {test} from 'node:test'; test('restored',()=>{});",
+        )
+        .unwrap();
+        verify_node_suite(
+            root.path(),
+            "TM-03",
+            &["present.mjs", "empty.mjs"],
+            11,
+            "5000",
+        );
+    }
 
     #[test]
     fn cached_prism_diagnostic_preserves_the_original_structured_cause() {
