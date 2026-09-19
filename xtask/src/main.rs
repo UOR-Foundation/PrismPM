@@ -18,33 +18,37 @@ mod stdlib;
 /// General error type for xtask commands.
 pub type Fail = Box<dyn std::error::Error>;
 
-static BUILD: OnceLock<Result<prismpm::controller::BuildResult, String>> = OnceLock::new();
-static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, String>> = OnceLock::new();
+static BUILD: OnceLock<Result<prismpm::controller::BuildResult, prismpm::PrismError>> =
+    OnceLock::new();
+static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, prismpm::PrismError>> =
+    OnceLock::new();
+
+fn diagnostic_failure(error: &prismpm::PrismError) -> Fail {
+    serde_json::to_string(error)
+        .expect("structured Prism diagnostic serializes")
+        .into()
+}
 
 fn build_once(root: &Path) -> Result<&'static prismpm::controller::BuildResult, Fail> {
     BUILD
         .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.build(prismpm::controller::BuildRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.build(prismpm::controller::BuildRequest { config_path: None })
+            })
         })
         .as_ref()
-        .map_err(|error| error.clone().into())
+        .map_err(diagnostic_failure)
 }
 
 fn verify_once(root: &Path) -> Result<&'static prismpm::controller::VerifyResult, Fail> {
     VERIFY
         .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.verify(prismpm::controller::VerifyRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.verify(prismpm::controller::VerifyRequest { config_path: None })
+            })
         })
         .as_ref()
-        .map_err(|error| error.clone().into())
+        .map_err(diagnostic_failure)
 }
 
 fn main() -> ExitCode {
@@ -120,6 +124,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/browser-api-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
+            "scripts/browser-prerequisites.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/refresh-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
@@ -1508,6 +1513,27 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
 
 #[cfg(test)]
 mod golden_tests {
+    #[test]
+    fn cached_gate_failure_keeps_structured_diagnostics_after_boxing() {
+        let error = prismpm::PrismError::new("PP5001", "LexLean verification failed")
+            .with_note("original child diagnostic must survive the gate boundary");
+        let cache = std::sync::OnceLock::<Result<(), prismpm::PrismError>>::new();
+        for attempt in 0..2 {
+            let failure = cache
+                .get_or_init(|| {
+                    assert_eq!(attempt, 0, "cached failure is not recomputed");
+                    Err(error.clone())
+                })
+                .as_ref()
+                .map_err(super::diagnostic_failure)
+                .unwrap_err();
+            assert_eq!(
+                serde_json::from_str::<prismpm::PrismError>(&failure.to_string()).unwrap(),
+                error
+            );
+        }
+    }
+
     #[test]
     fn native_payload_exclusions_preserve_exact_evidence_and_executable_descriptor() {
         let executable = b"native payload";
