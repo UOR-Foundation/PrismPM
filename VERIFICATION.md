@@ -1589,6 +1589,25 @@ audits pass in the devcontainer. Full upstream V&V, regenerated consumers and
 complete SDK/release acceptance remain separate requirements; package identity
 and these targeted checks do not establish them.
 
+## Internal browser effect protocol
+
+DK-18 passes all 307 modeled roots through generated std/no_std execution and
+756 exact empty-axiom declaration audits. Actual request-binding, queue-limit
+and unknown-outcome mutants fail at their expected generated runtime roots;
+each restoration reproduces the original build and attestation. A failed
+mutant creates no accepted verification record. Authored formatting,
+all-target/all-feature Clippy and model/spec audits pass in the devcontainer.
+
+The initial byte-comparison helper failed its empty-axiom contract. Direct
+modeled byte equality preserves that contract without widening the policy.
+The unknown-outcome mutant witness names the first affected sorted corpus
+root, not a later equally affected case; the complete corpus is unchanged.
+
+Owning log: `target/browser-effect-complete-owning-restored.log`, SHA-256
+`1cd2bbe95b3acea993af387bf33b5e909bee66763c305f9e01ce78a28f2897e2`.
+This establishes internal protocol sequencing only, not browser dispatch,
+an executable application profile, complete SDK acceptance or deployment.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

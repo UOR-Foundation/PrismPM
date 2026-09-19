@@ -7,6 +7,13 @@ Feature: sdk
     Then only matching RSASSA-PKCS1-v1_5 SHA-256 signatures pass and malformed or substituted inputs fail
     And byte-capture, algorithm and signature-check mutations fail actual execution
 
+  @DK-18 @build
+  Scenario: The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile.
+    Given an independently admitted manifest and private session
+    When generated native models admit and complete every finite protocol vector
+    Then exact resources, payloads and operation-specific results are bound
+    And replay, excess waiters and uncertain outcome promotion are rejected
+
   @DK-17 @build
   Scenario: Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance.
     Given a closed native library with typed exports and modeled acceptance roots

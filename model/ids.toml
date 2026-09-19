@@ -781,6 +781,12 @@ level = "build"
 statement = "Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance."
 
 [[id]]
+id = "DK-18"
+suite = "sdk"
+level = "build"
+statement = "The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile."
+
+[[id]]
 id = "DK-19"
 suite = "sdk"
 level = "build"

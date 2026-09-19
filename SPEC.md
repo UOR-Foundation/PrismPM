@@ -1253,6 +1253,30 @@ source-free product-release replay reject library evidence with `PP6101`.
 The library may supply modeled code to an application, whose own complete
 application and deployment acceptance remains mandatory.
 
+### 12.7 Internal browser effect protocol
+
+DK-18 owns `Foundation.Browser.Application.V1.Effects` and its closed contract
+`stdlib/src/Foundation/Browser/Application/V1/Effects.md`. Independently admitted
+manifest/session facts bind generic typed `Bytes → Bytes` guest artifacts,
+entry/protocol references and finite budgets, plus only the existing random,
+digest, P-256 sign/verify and object/head storage primitives. No fixed guest
+topology, application role, public profile, or external service is inferred.
+
+The pure protocol retains the immutable manifest and resource policy, admits
+one active request and one waiter, and checks the exact application, manifest,
+session, counter, resource, operation and payload on completion. Results are
+typed per operation. Unknown outcomes and close retain outstanding records;
+neither authorizes automatic retry, rollback, late promotion or reconciliation.
+Guest budgets are bounded by admitted host limits and Wasm32 representability;
+they do not prove a guest can execute within those budgets.
+
+Every finite corpus root runs through the actual native-library source/kernel
+and generated std/no_std acceptance path, including exact runtime mutations of
+completion binding, queue admission and unknown-outcome retention. This is an
+internal sequencing prerequisite, not real browser dispatch, cryptographic or
+storage proof, an application model/schema, `.holo` assembly, or publication.
+Existing profiles and their complete browser/runtime gates remain unchanged.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1700,6 +1724,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-15` | `sdk` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. | §12 |
 | `DK-16` | `sdk` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. | §12 |
 | `DK-17` | `sdk` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. | §12 |
+| `DK-18` | `sdk` | The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile. | §12 |
 | `DK-19` | `sdk` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
