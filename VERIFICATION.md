@@ -1915,6 +1915,13 @@ and executable-tampering checks against SDK child `c2e0e50437e1`.
 These are diagnostic/component results, not native ARM64 golden or current SDK
 acceptance. Both original native golden commands must still pass on CI.
 
+[Native ARM64 source review 35505682580](https://github.com/UOR-Foundation/PrismPM/actions/runs/35505682580)
+passed both unchanged golden commands at `844a7c8`. The retained three raw records
+match their declared hashes and the shared model, all 53 generated modules,
+execution results and process invocations. They retain original ARM64 identities;
+no evidence was normalized. This is source-baseline review for that revision,
+not current installed-SDK acceptance or Foundry publication.
+
 ## Original SDK release evidence — 20 September 2026
 
 The OCI-only publication now retains both native installed-SDK command closures,
@@ -1927,11 +1934,15 @@ actual 256 MiB stdout archiving, exact 1 GiB capture and excess rejection,
 16 workflow mutations, transcript-check mutation, distinct attempts and invalid
 CI contexts. The original SHA-only publisher failed the new attempt regression.
 These checks use publication fixtures, not live releases or Foundry deployment.
+At `8bcd56d`, the independent clean clone also passed all 171 model/spec/audit
+tests. An earlier run correctly refused insufficient disk reserve; rebuilding
+space was recovered by cleaning an inactive Cargo cache, with no gate changes.
 
 | Local log | SHA-256 |
 | --- | --- |
 | `target/sdk-evidence-attempt-red.log` | `e5ecdf195c3d2e1edf8d7463676c4a303a476fc808de602b304e5141fcb051dd` |
 | `target/sdk-evidence-final.log` | `66b61e9145860b95709537f837f74a1e0926755794d856f401338a607ef769aa` |
+| independent clone: `target/sdk-evidence-integrated-audit.log` | `a5f890369652afe30c86a17be3c06db7358c1aea474ac8edd2456d912dfe5274` |
 
 ## Private presentation progress — DK-23
 
