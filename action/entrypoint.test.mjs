@@ -15,7 +15,7 @@ const reference = `registry.example.test:5000/team/product@sha256:${'b'.repeat(6
 const revision = 'c'.repeat(40);
 const receipt = {schema: 'prismpm/browser-export/1', reference, release_digest: `sha256:${'b'.repeat(64)}`,
   model_digest: `sha256:${'d'.repeat(64)}`, build_digest: `sha256:${'e'.repeat(64)}`,
-  output: 'published-site', files: ['app.css', 'app.js', 'index.html', 'product.d.ts', 'product.js', 'product_bg.wasm']
+  output: 'published-site', files: ['app.css', 'app.js', 'index.html', 'product.js', 'product_bg.wasm', 'provenance.json']
     .map(path => ({path, size: 1, digest: `sha256:${'f'.repeat(64)}`})),
   tree_digest: `sha256:${'f'.repeat(64)}`};
 const publicationUrl = 'https://uor.foundation/foundry-web/';
