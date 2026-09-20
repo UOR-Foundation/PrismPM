@@ -76,7 +76,30 @@ order; revision is a stale-event guard, not principal/session authority. The
 private dispatcher must independently authenticate and authorize commands.
 The existence or enabled state of a control grants no effect or role.
 
-Secret-input tag 10 rejects. DK-23 supplies no masked credential control and
-does not establish secret custody. Recovery integration must separately provide
-a private dispatcher sink with no model-supplied secret default, echo, or
-transcript; ordinary text fields are not credential UX.
+Secret-input tag 10 is exactly `[10,label,enabled,required,maximum,draftEpoch]`.
+It has no value/default field. Its strict UTF-8 bound shares the existing
+1–67108864-byte domain; whole-intent framing and the primary request maximum
+also apply. Required/enabled, form bindings and source-owned draft epochs obey
+the ordinary field rules. It renders only a labeled native password input,
+without a value attribute, spellchecking or a generated default.
+
+`presentationRequiresSecret` and `intentRequiresSecret` classify actual modeled
+action/field bindings, not caller flags. An action binding any secret field
+requires the private `secretDispatch` option at frame admission, including
+disabled actions; absent sinks reject rather than hiding/disabling controls.
+Only that transient sink receives the captured intent, including its bound
+ordinary fields. The ordinary `dispatch` never receives a secret-route intent.
+The adapter retains no submission log or secret default. It clears live secret
+controls before invoking the sink, also on changed field context/draft epoch,
+non-Ready lifecycle, replacement/removal and close. Equal Ready context may
+retain an unsubmitted live draft. Session changes must advance the modeled
+draft epoch or close/replace the adapter; revisions alone are not sessions.
+
+The sink must be source-bound ephemeral authentication logic returning only
+nonsecret presentation/evidence before durable admission. The ordinary durable
+session must reject raw secret-route commands/context. This component does not
+authenticate that sink or establish enrollment, recovery or secret custody;
+it cannot prevent a trusted callback from persisting/echoing its input. It makes
+no JavaScript-memory-erasure, password-manager, malicious same-origin-code or
+device-compromise guarantee. Oracle transcripts use synthetic test secrets,
+never a production submission recorder. `PP2011` remains unchanged.

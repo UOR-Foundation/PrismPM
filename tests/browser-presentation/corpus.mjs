@@ -32,6 +32,25 @@ export function corpus() {
   const epochs = basic();
   for (const row of epochs[6]) if ([5, 6, 7].includes(row[1][0])) row[1][6] = 4294967295;
   accepted('DraftEpochMaximum', epochs);
+  const secret = view([node([2, 0]), node([10, 0, true, true, 67108864, 4294967295], 1),
+    node([8, 0, 1, true, true, [2]], 1)]);
+  accepted('SecretInputMaximum', secret);
+  const optional = structuredClone(secret); optional[6][1][1][3] = false;
+  accepted('SecretInputOptional', optional);
+  for (const [id, mutate] of [
+    ['SecretZeroMaximum', x => { x[6][1][1][4] = 0; }],
+    ['SecretOverMaximum', x => { x[6][1][1][4] = 67108865; }],
+    ['SecretOutsideForm', x => { x[6][1][0] = 0; }],
+    ['SecretDisabledBinding', x => { x[6][1][1][2] = false; }],
+    ['SecretEnabledPending', x => { x[2] = 1; }],
+  ]) { const value = structuredClone(secret); mutate(value); semantic(id, value); }
+  for (let phase = 1; phase <= 3; phase++) {
+    const value = structuredClone(secret); value[2] = phase;
+    value[6][1][1][2] = false; value[6][2][1][3] = false;
+    accepted('SecretDisabledPhase' + phase, value);
+  }
+  const suppliedDefault = structuredClone(secret); suppliedDefault[6][1][1].splice(5, 0, 'forbidden');
+  add('SecretSuppliedDefault', encodeWire(suppliedDefault), failure(3));
   for (const [id, update] of [
     ['BadPhase', x => { x[2] = 4; }], ['BadStatus', x => { x[3] = 257; }],
     ['BadLive', x => { x[4] = 3; }], ['MissingFocus', x => { x[5] = 256; }],
@@ -51,7 +70,7 @@ export function corpus() {
   semantic('IntentZeroAction', [1, 0, 0, []]);
   semantic('IntentDuplicateField', [1, 0, 1, [[1, 'a'], [1, 'b']]]);
   semantic('IntentZeroField', [1, 0, 1, [[0, 'a']]]);
-  add('SecretReserved', encodeWire(view([node([10, 0])])), failure(3));
+  add('SecretMissingFields', encodeWire(view([node([10, 0])])), failure(3));
   const missingEpoch = basic(); missingEpoch[6][4][1].pop();
   add('MissingDraftEpoch', encodeWire(missingEpoch), failure(3));
   const wrongEpoch = basic(); wrongEpoch[6][4][1][6] = true;
@@ -84,6 +103,8 @@ export function boundaries() {
   const fields = [node([2, 0]), ...Array.from({length: 16}, () => node([5, 0, true, false, 1, ''], 1))];
   add('BindingsMaximum', view([...fields, node([8, 0, 1, true, false, fields.slice(1).map((_, i) => i + 2)], 1)]));
   add('BindingsOver', view([...fields, node([8, 0, 1, true, false, Array.from({length: 17}, (_, i) => i + 2)], 1)]), 6);
+  const secretFields = [node([2, 0]), ...Array.from({length: 16}, () => node([10, 0, true, false, 67108864, 4294967295], 1))];
+  add('SecretBindingsMaximum', view([...secretFields, node([8, 0, 1, true, true, Array.from({length: 16}, (_, i) => i + 2)], 1)]));
   add('ChoicesMaximum', view([node([2, 0]), node([7, 0, true, false, 256, Array.from({length: 256}, (_, i) => [i + 1, 255])], 1)]));
   add('ChoicesOver', view([node([2, 0]), node([7, 0, true, false, 0, Array.from({length: 256}, (_, i) => [i + 1, 0])], 1), node([7, 0, true, false, 0, [[1, 0]]], 1)]), 9);
   add('CellsMaximum', view([node([9, 0, Array(16).fill(0), Array.from({length: 256}, () => Array(16).fill(''))])]));
@@ -126,4 +147,30 @@ export function* combinedMaximumCorpus() {
     decodePresentation(request);
     yield {id, request, response: request};
   }
+}
+
+// Independent expected synthetic fixture. Never an application secret or a
+// runtime fallback: the owning gate compares this to the generated source.
+export function secretMaximumResponse() {
+  return encodeWire([1, 2, 0, 13, 1, 0, [
+    [0, [0, 0]], [1, [1, 8]], [1, [3, 2, 5]],
+    [1, [4, '\uFEFFdynamic <script>globalThis.presentationInjected=2</script> 😀']],
+    [1, [2, 4]], [5, [10, 6, true, true, 67108864, 1]],
+    [5, [6, 7, true, false, 128, '\uFEFFfirst\r\nsecond', 0]],
+    [5, [7, 2, true, true, 10, [[10, 9], [20, 10]], 0]],
+    [5, [8, 3, 101, true, false, []]], [5, [8, 11, 202, true, true, [6, 7, 8]]],
+    [1, [9, 1, [13], [['<svg onload="globalThis.presentationInjected=3">'], ['\uFEFFtable 😀']]]],
+  ]]);
+}
+
+export function* secretMaximumCorpus() {
+  for (const length of [67108864, 67108865]) yield {id: 'SecretRaw' + length,
+    mode: 'maxfield', request: new Uint8Array(length).fill(120), response: Uint8Array.of(length === 67108864 ? 245 : 244)};
+  const fields = text => [1, 1, 202, [[6, text], [7, ''], [8, 10]]];
+  const textLength = 67108864 - encodeWire(fields('')).length - 4;
+  const request = encodeWire(fields('x'.repeat(textLength)));
+  assert.equal(request.length, 67108864); decodeIntent(request);
+  yield {id: 'SecretFramedWireMaximum', mode: 'wasm', request, response: request};
+  yield {id: 'SecretFramedRouteMaximum', mode: 'maxroute', request, response: Uint8Array.of(245)};
+  yield {id: 'SecretFramedSinkMaximum', mode: 'maxsink', request, response: secretMaximumResponse()};
 }

@@ -1,5 +1,7 @@
 use browser_presentation_core_probe::{
-    fixtureIntentFitsBytes, fixtureLabelsBytes, fixturePresentationBytes, viewWireBytes,
+    fixtureIntentFitsBytes, fixtureLabelsBytes, fixturePresentationBytes,
+    fixtureSecretMaximumFieldBytes, fixtureSecretMaximumRouteBytes, fixtureSecretMaximumSinkBytes,
+    fixtureSecretPresentationBytes, fixtureSecretRouteBytes, fixtureSecretSinkBytes, viewWireBytes,
 };
 use std::{error::Error, fs};
 
@@ -14,11 +16,19 @@ fn unhex(text: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if args.len() == 3 && args[0] == "--binary" {
+    if args.len() == 3
+        && ["--binary", "--maxroute", "--maxsink", "--maxfield"].contains(&args[0].as_str())
+    {
         let input = fs::read(&args[1])?;
         let expected = fs::read(&args[2])?;
         for _ in 0..2 {
-            let actual = viewWireBytes(input.clone()).map_err(|error| format!("{error:?}"))?;
+            let actual = match args[0].as_str() {
+                "--maxroute" => fixtureSecretMaximumRouteBytes(input.clone()),
+                "--maxsink" => fixtureSecretMaximumSinkBytes(input.clone()),
+                "--maxfield" => Ok(fixtureSecretMaximumFieldBytes(input.clone())),
+                _ => viewWireBytes(input.clone()),
+            }
+            .map_err(|error| format!("{error:?}"))?;
             assert!(actual == expected, "binary native output mismatch");
         }
         println!("PASS binary complete presentation vector twice");
@@ -42,6 +52,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 fixturePresentationBytes(input.clone())
             } else if fields[0].starts_with("BrowserLabels") {
                 Ok(fixtureLabelsBytes(input.clone()))
+            } else if fields[0].starts_with("BrowserSecret") {
+                fixtureSecretPresentationBytes(input.clone())
+            } else if fields[0].starts_with("BrowserRoute") {
+                fixtureSecretRouteBytes(input.clone())
+            } else if fields[0].starts_with("BrowserSink") {
+                fixtureSecretSinkBytes(input.clone())
             } else {
                 viewWireBytes(input.clone())
             })

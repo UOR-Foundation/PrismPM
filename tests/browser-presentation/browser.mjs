@@ -27,7 +27,12 @@ export const expectedCases = [
   'native-byte-brands-detached-shared-and-closed-arity',
   'closed-options-and-immutable-catalogue-capture',
   'combined-structural-maxima-and-overruns',
+  'secret-sink-admission-and-closed-options',
+  'secret-source-classification-capture-clearing-and-nonsecret-output',
+  'secret-epoch-lifecycle-policy-removal-and-close-clearing',
+  'secret-sink-failure-and-late-completion-no-echo',
   'actual-native-keyboard-default-and-button-submission',
+  'actual-native-password-keyboard-secret-submission',
 ];
 
 export async function journey(build, replacements = {}) {
@@ -44,7 +49,8 @@ export async function journey(build, replacements = {}) {
     let timer;
     try {
       return await Promise.race([(async () => {
-        const input = build ? {wire: [...build.wasmBytes], fixture: [...build.fixtureBytes], labels: [...build.labelsBytes]} : {adapterOnly: true};
+        const input = build ? {wire: [...build.wasmBytes], fixture: [...build.fixtureBytes], labels: [...build.labelsBytes],
+          secret: [...build.secretBytes], route: [...build.routeBytes], sink: [...build.sinkBytes]} : {adapterOnly: true};
         const initial = await page.evaluate(async input =>
           (await import('./browser-fixture.mjs')).runFixture(input), input);
         assert.equal(initial.modelChecked, Boolean(build), 'evidence level is explicit');
@@ -55,6 +61,10 @@ export async function journey(build, replacements = {}) {
         await view.getByRole('button', {name: 'First', exact: true}).focus();
         await view.getByRole('button', {name: 'First', exact: true}).press('Enter');
         await page.waitForFunction(() => globalThis.__presentationJourney.count() === 2);
+        const secret = page.locator('[data-keyboard-secret]');
+        await secret.getByLabel('Input', {exact: true}).fill('synthetic keyboard secret');
+        await secret.getByLabel('Input', {exact: true}).press('Enter');
+        await page.waitForFunction(() => globalThis.__presentationJourney.secretCount() === 1);
         const result = await page.evaluate(() => globalThis.__presentationJourney.finish());
         assert.deepEqual(result.cases, expectedCases, 'every named DOM journey actually ran');
         assert.deepEqual(errors, [], 'no detached browser exceptions');
@@ -107,6 +117,27 @@ export async function verifyMaximum(t, build) {
     assert.equal(result.modelChecked, true);
     t?.diagnostic(JSON.stringify(result));
   }
+  const secret = await withBrowser(async ({browser, baseURL}) => {
+    const page = await browser.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    for (const name of names) await page.route('**/' + name, route => route.fulfill({status: 200,
+      contentType: 'text/javascript', body: readFileSync(path(name), 'utf8')}));
+    await page.goto(baseURL); let timer;
+    try {
+      const result = await Promise.race([
+        page.evaluate(async input => (await import('./browser-fixture.mjs')).runSecretMaximumFixture(input),
+          {wire: [...build.wasmBytes], maxsecret: [...build.maxsecretBytes], maxroute: [...build.maxrouteBytes], maxsink: [...build.maxsinkBytes]}),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(Error('secret maximum browser deadline')), 180000); }),
+      ]);
+      assert.deepEqual(errors, []); return result;
+    } finally { clearTimeout(timer); await page.close(); }
+  });
+  for (const [role, id] of [['wire', 'SecretFramedWireMaximum'], ['route', 'SecretFramedRouteMaximum'], ['sink', 'SecretFramedSinkMaximum']]) {
+    const expected = build.secretMaxima.find(row => row.id === id); assert.ok(expected);
+    assert.equal(secret.request, expected.request); assert.equal(secret[role], expected.response);
+  }
+  assert.equal(secret.modelChecked, true); assert.equal(secret.frame_length, 67108864);
+  assert.ok(secret.maximum_memory > 0 && secret.maximum_memory <= 16384 * 65536);
+  t?.diagnostic(JSON.stringify(secret));
   assert.deepEqual(closure(), before);
   return results;
 }
@@ -123,6 +154,11 @@ export async function verifyMutants(t, build) {
     ['normalized generated defaults', 'value = record.defaultValue;', 'value = control.value;', /untouched defaults retain/],
     ['forgotten listener cleanup', "root.removeEventListener('submit', onSubmit);", '', /terminal close removes/],
     ['old owner removes new DOM', 'if (roots.get(root) === ownership)', 'if (true)', /closed view and late result/],
+    ['missing private secret sink admission', "if (!secretDispatch && presentationRequiresSecret(next)) fail('binding');", '', /expected presentation refusal binding/],
+    ['secret routed through ordinary dispatch', '(secret ? secretDispatch : dispatch)(bytes)', 'dispatch(bytes)', /source-owned secret route is serialized/],
+    ['secret not cleared before sink', 'if (secret) clearSecrets();', '', /source-owned secret route is serialized/],
+    ['secret not cleared on close', "clearSecrets();\n    root.removeEventListener", "\n    root.removeEventListener", /explicit close clears held detached password/],
+    ['secret exposed as text input', "control.type = 'password';", "control.type = 'text';", /labeled native password/],
   ];
   for (const [name, from, to, diagnostic] of mutants) {
     assert.equal(original.split(from).length, 2, 'one exact actual adapter mutation: ' + name);
