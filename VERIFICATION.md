@@ -1868,6 +1868,30 @@ or Foundry-service acceptance; the genuine installed product gate remains requir
 | `target/browser-system-clippy.log` | `bf65c44b930a392d2298aa4f303afa4fa622d0f6c5b4031c6cbe1f4d1a61c958` |
 | `target/browser-system-sdk-inventory-measured.log` | `e4186dd2b6f051e8cb5cdf75a34271eb7051df8bbe40688a187567f2b8733005` |
 
+## Native source hashing profile — 20 September 2026
+
+[ARM64 review 35498947334](https://github.com/UOR-Foundation/PrismPM/actions/runs/35498947334)
+timed out during its first golden write after Cargo compiled in 72 seconds.
+Its 226 resource samples show sustained in-process CPU, not memory/disk pressure.
+The exact ARM inventory contains 1,905,484,549 executable bytes; each tool lookup
+rehashes it, including 53 separate generated-module replay invocations.
+Pinned `sha2` uses its portable backend on ARM without the optional ASM feature.
+
+Only manifest-owned dev/test `sha2` optimization changes. The source-review
+regression first failed on the missing profile; all 11 tests now pass, including
+profile mutations, hostile ambient compiler settings and unchanged deadlines.
+Actual bounded Cargo build/test probes select dependency optimization 3 while
+the driver remains unoptimized with debug assertions and overflow checks enabled.
+
+A native AMD64 diagnostic selected the same portable hash backend and checked
+all 667 real inventory digests across 1,992,663,703 bytes. Hashing took 84,874 ms
+before and 8,492 ms after optimizing only `sha2`; no reads or checks were omitted.
+The unchanged runtime-boundary helper, compiled separately from its exact source,
+passed 17 installed-image tests plus baseline, inventory-override, undeclared-PATH
+and executable-tampering checks against SDK child `c2e0e50437e1`.
+These are diagnostic/component results, not native ARM64 golden or current SDK
+acceptance. Both original native golden commands must still pass on CI.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

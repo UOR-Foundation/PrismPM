@@ -648,6 +648,11 @@ including failure diagnostics. It does not commit a baseline, publish an image,
 accept the current SDK, or bypass candidate/release policy. Native runner
 selection is a trusted CI property, not physical hardware attestation.
 
+Source development and test profiles optimize only the `sha2` dependency at
+level 3. Complete per-invocation SDK inventory and executable byte checks,
+native golden write/repeat commands and deadlines remain unchanged; caller
+compiler/profile environment overrides do not enter the native review container.
+
 The review container explicitly selects a private Cargo home, seeded only from
 the selected image's immutable cache before generation. Copying is bounded to
 250,000 regular files/directories, depth 32, 256 MiB per file, 2 GiB total and
