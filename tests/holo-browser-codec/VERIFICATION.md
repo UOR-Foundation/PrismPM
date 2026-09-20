@@ -19,3 +19,21 @@ browser selector before View attachment, including with a 64 MiB `/tmp`.
 This establishes the distinct archive profile, not browser application
 acceptance, an SDK release or a Foundry deployment. Historical identities do
 not replace fresh verification of the integrated source.
+
+## Integrated development baseline
+
+20 September 2026: normal `cargo xtask check-golden --write` passed on
+integration `262f591`, producing 348 reviewed files after fresh source/kernel,
+export and execution checks. It retains the same semantic identity and IR
+above, with all 54 package exports. The generated Runtime adds only the
+BrowserWire import; source copies and provenance maps are regenerated.
+
+- Build: `97643781c8ef8bbe46c50f903343e700c69f4a9200e20d006b53c3d69453e29c`
+- Verification: `97b8412a718b309f29ff4fe63806810c97a4ae32762ea1606fcab123987d16e5`
+- Execution: 597 cases and 54 control-coverage cases passed.
+
+An earlier invocation completed verification but could not replace a
+root-owned baseline directory. Correcting ownership and rerunning the normal
+writer resolved that filesystem error; no proof or acceptance check changed.
+This is the AMD64 development baseline, not native ARM, complete SDK or
+deployed Foundry acceptance.
