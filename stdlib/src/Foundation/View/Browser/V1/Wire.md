@@ -76,6 +76,30 @@ order; revision is a stale-event guard, not principal/session authority. The
 private dispatcher must independently authenticate and authorize commands.
 The existence or enabled state of a control grants no effect or role.
 
+Each private dispatch callback receives `(intentBytes, token)` and returns one
+final frame or Promise. `progressPresentation(view, token, bytes)` admits
+intermediate frames only for that adapter's live opaque token. Both objects
+are branded before bytes are read. Source `progressFits` requires valid frames,
+current Ready/Pending, next Pending and a strictly greater uint32 revision.
+The final result correlates to the last accepted progress frame, not the initial
+frame. Tokens carry no permission, effect outcome, account or session authority.
+
+Invalid live progress revokes only its invocation; forged, foreign and previous
+tokens cannot revoke another invocation. Successful external render, including
+an identical refresh, invalidates old progress and its final result. Rejected
+external preflight preserves it. Pending single-flight ends only when the
+original callback settles or the adapter closes. Settlement, failure and close
+delete the token binding before further callbacks/focus reactions. ReplayRequired
+and Closed cannot be reset by progress or a late final result. Complete byte,
+model and catalogue preflight precedes mutation; an internal DOM failure clears
+and closes the adapter, rather than promising rollback of reused controls.
+Retained progress/Promise handlers contain no captured intent or secret value.
+Diagnostics bind an opaque accepted render context: a revoked old result,
+rejection or reentrant throw cannot write an alert into its replacement context.
+Owning maxima include two full 64 MiB presentations in the compiled progress
+predicate and browser transition, with unchanged 1 GiB guest memory and
+one-over/revocation checks; this is not a whole-browser heap or availability SLA.
+
 Secret-input tag 10 is exactly `[10,label,enabled,required,maximum,draftEpoch]`.
 It has no value/default field. Its strict UTF-8 bound shares the existing
 1–67108864-byte domain; whole-intent framing and the primary request maximum

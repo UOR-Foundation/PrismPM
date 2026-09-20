@@ -168,6 +168,12 @@ export function intentRequiresSecret(frame, intent) {
   return action[5].some(id => frame[6][id - 1][1][0] === 10);
 }
 
+// Both inputs are validated frames, not caller-provided permission claims.
+export function progressFits(current, next) {
+  validatePresentation(current); validatePresentation(next);
+  return (current[2] === 0 || current[2] === 1) && next[2] === 1 && next[1] > current[1];
+}
+
 // Private deterministic writer. Precompute complete byte length before allocation.
 export function encodeWire(value, maximum = PRESENTATION_MAXIMUM) {
   need(integer(maximum, 1, PRESENTATION_MAXIMUM), 'limit'); let fuel = 20000;

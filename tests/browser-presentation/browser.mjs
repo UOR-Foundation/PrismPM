@@ -27,10 +27,19 @@ export const expectedCases = [
   'native-byte-brands-detached-shared-and-closed-arity',
   'closed-options-and-immutable-catalogue-capture',
   'combined-structural-maxima-and-overruns',
+  'private-dispatch-pending-progress-and-final-correlation',
+  'source-progress-phase-revision-and-uint32-boundaries',
+  'opaque-token-brands-foreign-pairs-and-terminal-revocation',
+  'invalid-live-progress-atomic-preflight-and-own-result-revocation',
+  'external-context-identical-refresh-and-terminal-phase-correlation',
+  'diagnostics-belong-only-to-the-correlated-render-context',
+  'progress-final-throw-reject-close-and-native-focus-retirement',
+  'progress-reentrance-and-terminal-internal-dom-failure',
   'secret-sink-admission-and-closed-options',
   'secret-source-classification-capture-clearing-and-nonsecret-output',
   'secret-epoch-lifecycle-policy-removal-and-close-clearing',
   'secret-sink-failure-and-late-completion-no-echo',
+  'ephemeral-secret-progress-with-nonsecret-final-result',
   'actual-native-keyboard-default-and-button-submission',
   'actual-native-password-keyboard-secret-submission',
 ];
@@ -50,7 +59,7 @@ export async function journey(build, replacements = {}) {
     try {
       return await Promise.race([(async () => {
         const input = build ? {wire: [...build.wasmBytes], fixture: [...build.fixtureBytes], labels: [...build.labelsBytes],
-          secret: [...build.secretBytes], route: [...build.routeBytes], sink: [...build.sinkBytes]} : {adapterOnly: true};
+          secret: [...build.secretBytes], route: [...build.routeBytes], sink: [...build.sinkBytes], progress: [...build.progressBytes]} : {adapterOnly: true};
         const initial = await page.evaluate(async input =>
           (await import('./browser-fixture.mjs')).runFixture(input), input);
         assert.equal(initial.modelChecked, Boolean(build), 'evidence level is explicit');
@@ -138,8 +147,40 @@ export async function verifyMaximum(t, build) {
   assert.equal(secret.modelChecked, true); assert.equal(secret.frame_length, 67108864);
   assert.ok(secret.maximum_memory > 0 && secret.maximum_memory <= 16384 * 65536);
   t?.diagnostic(JSON.stringify(secret));
+  build.progressMaximumBrowser = await verifyProgressMaximum(t, build);
   assert.deepEqual(closure(), before);
   return results;
+}
+
+export async function verifyProgressMaximum(t, build) {
+  const before = closure();
+  const progress = await withBrowser(async ({browser, baseURL}) => {
+    const page = await browser.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    for (const name of names) await page.route('**/' + name, route => route.fulfill({status: 200,
+      contentType: 'text/javascript', body: readFileSync(path(name), 'utf8')}));
+    await page.goto(baseURL); let timer;
+    try {
+      const result = await Promise.race([
+        page.evaluate(async input => (await import('./browser-fixture.mjs')).runProgressMaximumFixture(input),
+          {wire: [...build.wasmBytes], fixture: [...build.fixtureBytes], labels: [...build.labelsBytes], maxprogress: [...build.maxprogressBytes]}),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(Error('progress maximum browser deadline')), 180000); }),
+      ]);
+      assert.deepEqual(errors, []); return result;
+    } finally { clearTimeout(timer); await page.close(); }
+  });
+  assert.deepEqual(progress.cases, ['dual-maximum-progress-and-final', 'maximum-plus-one-revokes-final']);
+  assert.deepEqual([...progress.frames, ...progress.predicates].map(row => row.id), ['ProgressFrame2', 'ProgressFrame3', 'ProgressPair2', 'ProgressPair3']);
+  for (const row of [...progress.frames, ...progress.predicates]) {
+    const expected = build.progressMaxima.find(value => value.id === row.id); assert.ok(expected);
+    assert.equal(row.request, expected.request); assert.equal(row.response, expected.response);
+  }
+  assert.equal(progress.over, build.progressMaxima.find(row => row.id === 'ProgressFrameOver').request);
+  assert.equal(progress.modelChecked, true); assert.equal(progress.frame_length, 67108864);
+  assert.ok(progress.maximum_memory > 0 && progress.maximum_memory <= 16384 * 65536);
+  assert.equal(progress.calls.length, 5);
+  t?.diagnostic(JSON.stringify({...progress, calls: progress.calls.length}));
+  assert.deepEqual(closure(), before);
+  return progress;
 }
 
 export async function verifyMutants(t, build) {
@@ -155,10 +196,21 @@ export async function verifyMutants(t, build) {
     ['forgotten listener cleanup', "root.removeEventListener('submit', onSubmit);", '', /terminal close removes/],
     ['old owner removes new DOM', 'if (roots.get(root) === ownership)', 'if (true)', /closed view and late result/],
     ['missing private secret sink admission', "if (!secretDispatch && presentationRequiresSecret(next)) fail('binding');", '', /expected presentation refusal binding/],
-    ['secret routed through ordinary dispatch', '(secret ? secretDispatch : dispatch)(bytes)', 'dispatch(bytes)', /source-owned secret route is serialized/],
+    ['secret routed through ordinary dispatch', '(secret ? secretDispatch : dispatch)(bytes, record.token)', 'dispatch(bytes, record.token)', /source-owned secret route is serialized/],
     ['secret not cleared before sink', 'if (secret) clearSecrets();', '', /source-owned secret route is serialized/],
     ['secret not cleared on close', "clearSecrets();\n    root.removeEventListener", "\n    root.removeEventListener", /explicit close clears held detached password/],
     ['secret exposed as text input', "control.type = 'password';", "control.type = 'text';", /labeled native password/],
+    ['foreign progress token accepted', ' || entry.owner !== owner', '', /expected presentation refusal binding/],
+    ['progress loses current correlation', 'record.frame = next; record.context = context;', '', /legitimate Pending progress must preserve/],
+    ['failed progress remains live', 'catch (error) { revoke(record); throw error; }', 'catch (error) { throw error; }', /expected presentation refusal binding/],
+    ['nonpending progress accepted', ' || !progressFits(frame, next)', '', /expected presentation refusal binding/],
+    ['identical external refresh retains invocation', 'if (!record) { context = {}; revoke(active); } return;', 'return;', /expected presentation refusal binding/],
+    ['new external context retains invocation', '\n    if (!record) revoke(active);\n', '\n', /expected presentation refusal binding/],
+    ['final result leaves progress live during focus', 'revoke(record);\n        paint(value, record, false);', 'paint(value, record, false);', /sole final result retires progress/],
+    ['reentrant progress accepted', "if (record.painting) { revoke(record); fail('binding'); }", '', /actual native focus exercises same-token progress reentrance/],
+    ['pending invocation allows duplicate submission', ' || active !== null', '', /synchronous reentrant and pending duplicate submissions are serialized/],
+    ['stale outcome writes new-context diagnostic', 'if (record.context === context) report();', 'report();', /stale async result cannot write a diagnostic/],
+    ['rejection leaves progress live for another reaction', "}, () => { revoke(record); throw new PresentationError('binding'); })", "}, () => { throw new PresentationError('binding'); })", /first rejection observation retires progress/],
   ];
   for (const [name, from, to, diagnostic] of mutants) {
     assert.equal(original.split(from).length, 2, 'one exact actual adapter mutation: ' + name);
