@@ -247,6 +247,7 @@ The three honesty levels:
 | `SY-05` | `build` | Late-bound configuration is typed and secret values remain external references excluded from artifacts and evidence. |
 | `SY-06` | `build` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. |
 | `SY-07` | `build` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. |
+| `SY-08` | `build` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. |
 
 ## template-ci
 

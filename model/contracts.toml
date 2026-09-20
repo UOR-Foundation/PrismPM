@@ -116,6 +116,26 @@ extension_policy = "closed"
 compatibility = "exact-major-additive-minor"
 
 [[contract]]
+schema = "prismpm/system-model/2"
+path = "schemas/system-model-v2.schema.json"
+media_type = "application/vnd.prismpm.system-model.v2+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 16777216
+maximum_items = 65536
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
+schema = "prismpm/browser-system-release/1"
+path = "schemas/browser-system-release.schema.json"
+media_type = "application/vnd.prismpm.browser-system-release.v1+json"
+identity = "sha256-canonical-json"
+maximum_bytes = 16777216
+maximum_items = 65536
+extension_policy = "closed"
+compatibility = "exact-major"
+
+[[contract]]
 schema = "prismpm/authority-binding/1"
 path = "schemas/authority-binding.schema.json"
 media_type = "application/vnd.prismpm.authority-binding.v1+json"

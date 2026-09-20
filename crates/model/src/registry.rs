@@ -465,7 +465,7 @@ pub struct ContractRow {
 impl Contracts {
     /// Validate public contract registry invariants.
     pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
-        if self.spec != "prismpm/contracts/1" || self.contract.len() != 53 {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 55 {
             return Err(ModelError::Inconsistent(
                 "public contract registry is incomplete".to_owned(),
             ));
@@ -480,6 +480,7 @@ impl Contracts {
                 || !(row.schema.starts_with("prismpm/") || row.schema.starts_with("uor/"))
                 || !(row.schema.ends_with("/1")
                     || row.schema == "prismpm/bootstrap-evidence/2"
+                    || row.schema == "prismpm/system-model/2"
                     || row.schema == "prismpm/ecosystem-release/2"
                     || row.schema == "prismpm/model-document/2"
                     || row.schema == "prismpm/model-document/3"

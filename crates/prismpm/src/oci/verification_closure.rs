@@ -470,24 +470,21 @@ fn validate_oracles(
     sdk: &Value,
 ) -> Result<(), PrismError> {
     let mut expected = BTreeMap::new();
-    if files.contains_key("system.prism.json") {
-        for (id, path) in [
-            ("openapi-3.2-schema", "openapi.json"),
-            ("asyncapi-3.1-schema", "asyncapi.json"),
-            ("spdx-3.0.1-model", "spdx.json"),
-            ("otel-collector-0.136.0", "opentelemetry-collector.json"),
-            ("compose-fee041b3", "compose.json"),
-            ("kubernetes-1.36.4", "kubernetes.json"),
-        ] {
+    if let Some(bytes) = files.get("system.prism.json") {
+        let system = crate::system::parse(bytes)?;
+        for (_, path, id) in crate::deployment::required_oracles(system.value())? {
+            if path.is_empty() {
+                expected.insert(
+                    *id,
+                    sha(&crate::deployment::cloud_event_validation_fixture()?),
+                );
+                continue;
+            }
             let bytes = files
                 .get(&format!("projections/{path}"))
                 .ok_or_else(|| error("oracle projection absent"))?;
-            expected.insert(id, sha(bytes));
+            expected.insert(*id, sha(bytes));
         }
-        expected.insert(
-            "cloudevents-1.0-json",
-            sha(&crate::deployment::cloud_event_validation_fixture()?),
-        );
     }
     let results = results
         .as_array()
@@ -560,6 +557,50 @@ fn validate_oracles(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn assert_oracle_mutations_rejected(
+    results: &Value,
+    evidence: &BTreeMap<String, Vec<u8>>,
+    files: &BTreeMap<String, Vec<u8>>,
+    standards: &Value,
+    sdk: &Value,
+) {
+    validate_oracles(results, evidence, files, standards, sdk).unwrap();
+    assert!(!results.as_array().unwrap().is_empty());
+    for mode in [
+        "missing-result",
+        "extra-result",
+        "missing-attestation",
+        "extra-attestation",
+        "wrong-subject",
+    ] {
+        let mut changed_results = results.clone();
+        let mut changed_evidence = evidence.clone();
+        match mode {
+            "missing-result" => {
+                changed_results.as_array_mut().unwrap().pop();
+            }
+            "extra-result" => {
+                let row = changed_results[0].clone();
+                changed_results.as_array_mut().unwrap().push(row);
+            }
+            "missing-attestation" => {
+                changed_evidence.pop_first();
+            }
+            "extra-attestation" => {
+                changed_evidence.insert("unmodeled.intoto.json".to_owned(), Vec::new());
+            }
+            "wrong-subject" => {
+                changed_results[0]["subject"] = json!(format!("sha256:{}", "f".repeat(64)));
+            }
+            _ => unreachable!(),
+        }
+        let error = validate_oracles(&changed_results, &changed_evidence, files, standards, sdk)
+            .unwrap_err();
+        assert_eq!(error.code, "PP6101", "{mode}");
+    }
 }
 
 #[cfg(test)]

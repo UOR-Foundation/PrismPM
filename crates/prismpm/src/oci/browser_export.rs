@@ -172,13 +172,14 @@ fn publication_parent(directory: &File) -> Result<(), PrismError> {
     Ok(())
 }
 
-pub(super) fn browser_files(
-    build_files: &BTreeMap<String, Vec<u8>>,
+pub(crate) fn browser_files<T: AsRef<[u8]>>(
+    build_files: &BTreeMap<String, T>,
 ) -> Result<BTreeMap<String, &[u8]>, PrismError> {
     let model: crate::holo::model_document::ModelDocument = serde_json::from_slice(
         build_files
             .get("model.prism.json")
-            .ok_or_else(|| failure("verified model is absent"))?,
+            .ok_or_else(|| failure("verified model is absent"))?
+            .as_ref(),
     )
     .map_err(|error| failure(format!("verified model: {error}")))?;
     let application = model
@@ -197,7 +198,7 @@ pub(super) fn browser_files(
         .iter()
         .filter_map(|(path, bytes)| {
             path.strip_prefix("view/browser/")
-                .map(|name| (name.to_owned(), bytes.as_slice()))
+                .map(|name| (name.to_owned(), bytes.as_ref()))
         })
         .collect::<BTreeMap<_, _>>();
     if expected.len() != 6 || files.keys().cloned().collect::<BTreeSet<_>>() != expected {

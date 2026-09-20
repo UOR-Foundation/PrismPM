@@ -41,3 +41,9 @@ Feature: system
     Given the locked PrismPM production fixture
     When the SY-07 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @SY-08 @build
+  Scenario: Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay.
+    Given the locked PrismPM production fixture
+    When the SY-08 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

@@ -1839,6 +1839,35 @@ the measured cache uses a 256 MiB per-file bound and a separate 2 GiB total boun
 | `target/native-golden-cargo-home-green.log` | `fa91fc4ccac71bf121a4bddde55993bd5aecfaa646759749df231763b18f4300` |
 | `target/native-golden-cargo-home-actual.log` | `1d5df18c074571c350ee474bb1fe06eea6e3fa59386409cd7d4b37e756cc1ae6` |
 
+## Browser-resident containing systems — SY-08
+
+The owning contract failed first with unregistered `system-model/2`. On frozen
+source, SY-08 passed its exact three-test source/proof/oracle/replay suite in
+485.51 seconds. Actual named A/B releases retain identical Calculator browser
+bytes, distinct containing-system identities and genuine application/kernel
+evidence. Replay succeeds after source deletion. Malformed roots, unsupported
+resources/artifact roles, stale bindings, altered artifact closure and
+missing/extra oracle evidence fail.
+The original `/1` profile separately passed all seven locked projection oracles.
+
+Model tests (12 unit, two integration), 15 contract tests, the adapter test,
+three scheduling tests, all 158 audit tests, formatting and workspace
+all-target/all-feature Clippy pass. The SDK-candidate suite passes all 16 tests
+using inventory-measured Node/ORAS/cosign in the locked `c2e0e50437e1` SDK child,
+read-only and network-disabled as UID 1000; no host binaries were installed.
+
+The source fixture's SDK/SBOM wrapper is explicitly synthetic transport evidence.
+These results do not establish current installed-SDK, supply-chain, publication
+or Foundry-service acceptance; the genuine installed product gate remains required.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/browser-system-sy08-frozen.log` | `0b23585924cf545d6fa5f77c48af66c3d2ee9708ca2f1d9d7edf6a496865c6fb` |
+| `target/browser-system-server-compatibility.log` | `f99d1e93c683a376d58168c7dec975028d15db4262936f24249d30207b2c34e9` |
+| `target/browser-system-static-validation.log` | `e6c9089c0744c1cbeff86c7d721ebb082ee8dde4bee5620c0af872ef86bbd91a` |
+| `target/browser-system-clippy.log` | `bf65c44b930a392d2298aa4f303afa4fa622d0f6c5b4031c6cbe1f4d1a61c958` |
+| `target/browser-system-sdk-inventory-measured.log` | `e4186dd2b6f051e8cb5cdf75a34271eb7051df8bbe40688a187567f2b8733005` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

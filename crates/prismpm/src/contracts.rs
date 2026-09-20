@@ -12,7 +12,7 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 53] = [
+const CONTRACTS: [Contract; 55] = [
     Contract {
         id: "prismpm/browser-publication-integrity/1",
         maximum_bytes: 1_048_576,
@@ -303,6 +303,18 @@ const CONTRACTS: [Contract; 53] = [
         schema: include_bytes!("../schemas/system-model.schema.json"),
     },
     Contract {
+        id: "prismpm/system-model/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/system-model-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-system-release/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/browser-system-release.schema.json"),
+    },
+    Contract {
         id: "prismpm/template-result/1",
         maximum_bytes: 4_194_304,
         maximum_items: 8_192,
@@ -350,6 +362,26 @@ fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> b
 }
 
 fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
+    if id == "prismpm/browser-system-release/1" {
+        let rows = value["files"]
+            .as_array()
+            .expect("schema-validated browser system rows");
+        if !strictly_ordered(rows, |row| row["path"].as_str().map(str::to_owned))
+            || rows.iter().any(|row| {
+                row["path"]
+                    .as_str()
+                    .unwrap()
+                    .split('/')
+                    .any(|part| part.is_empty() || part == "." || part == "..")
+            })
+        {
+            return Err(PrismError::new(
+                "PP1101",
+                "browser system artifact paths must be confined, unique, and ordered",
+            ));
+        }
+        return Ok(());
+    }
     if matches!(
         id,
         "prismpm/library-build-binding/1" | "prismpm/library-acceptance/1"

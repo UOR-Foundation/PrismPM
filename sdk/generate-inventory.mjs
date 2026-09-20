@@ -62,6 +62,7 @@ const definitions = [
   ['action', 'workflow', '0.3.0', 'action', 'tree'],
   ['adapter-compose', 'adapter', 'compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d', 'adapters/compose.json'],
   ['adapter-github-pages', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages.json'],
+  ['adapter-github-pages-browser', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages-browser.json'],
   ['adapter-kubernetes', 'adapter', '1.36.4', 'adapters/kubernetes.json'],
   ['asyncapi-oracle', 'oracle', '3.1.0', 'sdk/oracles', 'tree'],
   ['asyncapi-embedded-runtime-lock', 'dependency-lock', '@asyncapi/parser/3.6.0', '/opt/prismpm/asyncapi-official/scripts/package-lock.json'],

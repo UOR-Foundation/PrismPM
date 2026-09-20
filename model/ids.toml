@@ -685,6 +685,12 @@ level = "build"
 statement = "Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches."
 
 [[id]]
+id = "SY-08"
+suite = "system"
+level = "build"
+statement = "Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay."
+
+[[id]]
 id = "DK-01"
 suite = "sdk"
 level = "build"
