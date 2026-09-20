@@ -131,6 +131,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-vv-check.test.mjs",
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
+            "scripts/compiler-driver-cache.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/refresh-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
