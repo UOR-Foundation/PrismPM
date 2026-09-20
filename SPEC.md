@@ -1707,6 +1707,35 @@ only observed byte equality, not producer identity, readiness, target authority,
 GitHub deployment identity, future availability, extra unreferenced server files,
 or successful application journeys. Those remain independent release gates.
 
+### Conditional publication admission
+
+OC-09's private `Production.PublicationAdmission.V1` source reducer separates
+producer readiness, deployment authorization and final acceptance. The proved
+declaration fixes the complete stage obligation partition, authorities, policy,
+clock and target. Source-free replay independently supplies concrete immutable
+source/release/model/build/dependency/tool/artifact identities; a source model
+does not predict its own future artifact digest. The authenticated host must
+bind both full values and publisher revision/ref/attempt before invoking the
+reducer. Source-owned projection operations emit exact declaration/context
+preimages under separate NUL-terminated `prismpm/publication-declaration/1`
+and `prismpm/publication-context/1` domains. The context excludes only its own
+digest. Host SHA-256 and authenticated source linkage remain mandatory;
+projection does not authenticate the supplied values.
+
+Every pre-publication obligation is required before authorization. The exact
+deployment-only remainder stays explicit; it cannot be used to defer an
+unfinished stage capability. Conditional trust, decision/ref authority,
+deployment identity, byte observation and applicable assessment facts remain
+distinct. The reducer validates scope, identity, complete coverage, causal
+revision and bounded observed-clock validity, not cryptographic/provider truth.
+Final acceptance requires actual deployment identity, its independently bound
+byte observation and every deployment-specific assessment. Stale, unknown,
+failed, replayed and substituted facts do not advance state. The complete
+private wire and bounds are in `Production/PublicationAdmission/V1.md` and its
+CDDL; real generated std/no_std/Wasm tests own the conditional semantics.
+This prerequisite does not enable public Pages deployment, authorize a target,
+certify a producer, or convert OC-08's integrity receipt into product acceptance.
+
 `verify-signature NAME@sha256:DIGEST --bundle PATH --trusted-root PATH
 --policy PATH` verifies a standard Sigstore v0.3 bundle over the canonical local
 root-manifest bytes. The SDK accepts only its pinned Cosign 3.1.3 executable and
@@ -2103,6 +2132,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `OC-06` | `oci` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. | §13 |
 | `OC-07` | `oci` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. | §13 |
 | `OC-08` | `oci` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. | §13 |
+| `OC-09` | `oci` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. | §13 |
 | `LC-01` | `lifecycle` | The Controller owns fetch, build, push, pull, inspect, run, plan, deploy, status, rollback, and explicit destroy operations. | §14 |
 | `LC-02` | `lifecycle` | Build, push, run, and deploy accept Docker-simple command forms and return stable pipe-safe canonical result values. | §14 |
 | `LC-03` | `lifecycle` | Local run uses unmodified OCI, container, Compose, and Hologram runtimes with modeled isolation, readiness, acceptance, signals, and shutdown. | §14 |
