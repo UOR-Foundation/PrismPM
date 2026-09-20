@@ -9,7 +9,7 @@ import * as browserGate from './browser-api-sdk-check.mjs';
 
 const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'queries',
  'view-host', 'view-dom', 'view-error', 'rs256', 'effects', 'effects-wire',
- 'effects-module', 'presentation-wire', 'presentation-dom', 'credential-custody'];
+ 'effects-module', 'presentation-wire', 'presentation-dom', 'credential-custody', 'operation-journal'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
 test('installed module inventory includes every accepted private browser prerequisite without opening the runtime', () => {
@@ -23,11 +23,11 @@ test('installed module inventory includes every accepted private browser prerequ
  assert.match(shell, /node "\$helper" modules "\$root" "\$sdk_work\/browser"/);
  for (const module of hostModules) assert.ok(sdkSource('sdk/browser/' + module + '.mjs').length);
  assert.ok(sdkSource('sdk/generate-inventory.mjs').includes("['browser-host-primitives', 'adapter', '1', '/opt/prismpm/browser', 'tree']"));
- assert.ok(!hostModules.includes('operation-journal'), 'unaccepted drafts are not installed');
+ assert.equal(hostModules.filter(name => name === 'operation-journal').length, 1);
 });
 
 test('installed browser closure includes complete new owning fixtures and actual Rust refusal owners', () => {
- for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody',
+ for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody', 'tests/browser-operation-journal',
   'tests/fixtures/library/native-library/project', 'tests/support/browser_application.rs',
   'crates/prismpm/src/browser_build.rs', 'crates/prismpm/src/browser_build',
   'crates/prismpm/src/holo/browser_application.rs', 'crates/prismpm/src/holo/browser_application',
@@ -36,7 +36,7 @@ test('installed browser closure includes complete new owning fixtures and actual
   assert.ok(sourceRoots.includes(path), 'required installed source: ' + path);
  }
  const source = sdkSource('crates/conformance/tests/conformance.rs');
- for (const id of [21, 22, 25]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
+ for (const id of [21, 22, 24, 25]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
  assert.match(sdkSource('crates/prismpm/src/holo/browser_application.rs'), /Err\(PrismError::new\("PP2011"/);
  assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
  const workflow = sdkSource('.github/workflows/release.yml');
@@ -54,6 +54,9 @@ test('new installed Node suites retain exact complete owning files and deadlines
  const custody = suites.find(row => row.id === 'DK-25');
  assert.deepEqual(custody?.files, ['sdk/browser/credential-custody-test.mjs']);
  assert.equal(custody?.minimum, 11); assert.equal(custody?.deadline, 3600000);
+ const journal = suites.find(row => row.id === 'DK-24');
+ assert.deepEqual(journal?.files, ['sdk/browser/operation-journal.test.mjs']);
+ assert.equal(journal?.minimum, 28); assert.equal(journal?.deadline, 3600000);
 });
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
@@ -97,7 +100,8 @@ function inspected(){return[{Os:'linux',Architecture:'amd64',RepoDigests:[image]
 test('current SDK source closure binds helper, compiler, suite and every selected byte',t=>{
  const root=temporary(t);source(root);const expected=capture(root,revision);verifySource(root,expected);
  for(const path of['scripts/browser-api-sdk-check.mjs','sdk/browser/source.txt','vendor/lexlean/source.txt','tests/browser-api/source.txt',
-  'tests/browser-effects/source.txt','tests/browser-presentation/source.txt','tests/browser-custody/source.txt','tests/support/browser_application.rs',
+  'tests/browser-effects/source.txt','tests/browser-presentation/source.txt','tests/browser-custody/source.txt',
+  'tests/browser-operation-journal/source.txt','tests/support/browser_application.rs',
   'crates/prismpm/src/browser_build.rs','scripts/fetch-oracle-cargo.sh']){
   const bytes=readFileSync(join(root,path));put(root,path,Buffer.concat([bytes,Buffer.from('x')]));assert.throws(()=>verifySource(root,expected));put(root,path,bytes);
  }
@@ -181,8 +185,8 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-25']);
- assert.equal(runSuites(root,launch,()=>{}).length,14);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25']);
+ assert.equal(runSuites(root,launch,()=>{}).length,15);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';

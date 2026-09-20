@@ -12,7 +12,8 @@ export const sourceRoots=Object.freeze([
  'stdlib/src','sdk/browser','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
- 'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/fixtures/library/native-library/project',
+ 'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
+ 'tests/fixtures/library/native-library/project',
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
  'crates/prismpm/src/browser_build.rs','crates/prismpm/src/browser_build',
@@ -26,7 +27,7 @@ export const sourceRoots=Object.freeze([
 // browser application runtime. DK-21/22 retain their full installed-V&V owners.
 export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
- 'presentation-wire','presentation-dom','credential-custody']);
+ 'presentation-wire','presentation-dom','credential-custody','operation-journal']);
 export const suites=Object.freeze([
  {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
  {id:'DK-08',minimum:14,files:['store.test.mjs','boundary.test.mjs']},
@@ -41,9 +42,10 @@ export const suites=Object.freeze([
  {id:'DK-19',minimum:14,files:['rs256.test.mjs','rs256.browser.test.mjs']},
  {id:'DK-20',minimum:18,files:['effects-wire.test.mjs','effects-module.test.mjs','effects-test.mjs']},
  {id:'DK-23',minimum:8,files:['tests/browser-presentation/wire.test.mjs','tests/browser-presentation/dom.test.mjs','presentation.test.mjs']},
+ {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
  {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-25'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
