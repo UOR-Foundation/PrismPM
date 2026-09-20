@@ -829,6 +829,12 @@ level = "build"
 statement = "The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds."
 
 [[id]]
+id = "DK-25"
+suite = "sdk"
+level = "build"
+statement = "Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"
