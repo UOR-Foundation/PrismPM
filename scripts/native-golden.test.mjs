@@ -176,20 +176,26 @@ test('image cache seeding preserves bytes in a new private writable tree', t => 
   mkdirSync(source); mkdirSync(join(source, 'registry'));
   const sourceFile = join(source, 'registry', 'package.crate');
   writeFileSync(sourceFile, Buffer.from([0, 1, 2, 255])); chmodSync(sourceFile, 0o444);
+  const executable = join(source, 'registry', 'helper');
+  writeFileSync(executable, Buffer.from([7, 8, 9])); chmodSync(executable, 0o555);
   chmodSync(join(source, 'registry'), 0o555); chmodSync(source, 0o555);
   try {
-    assert.deepEqual(seedCargoCache(source, destination), {bytes: 4, entries: 3});
+    assert.deepEqual(seedCargoCache(source, destination), {bytes: 7, entries: 4});
     assert.deepEqual(readFileSync(join(destination, 'registry', 'package.crate')), readFileSync(sourceFile));
     assert.equal(lstatSync(destination).mode & 0o777, 0o700);
     assert.equal(lstatSync(join(destination, 'registry', 'package.crate')).mode & 0o777, 0o600);
     assert.equal(lstatSync(sourceFile).mode & 0o777, 0o444);
+    assert.deepEqual(readFileSync(join(destination, 'registry', 'helper')), readFileSync(executable));
+    assert.equal(lstatSync(join(destination, 'registry', 'helper')).mode & 0o777, 0o700);
+    assert.equal(lstatSync(executable).mode & 0o777, 0o555);
     assert.throws(() => seedCargoCache(source, destination), /must be new/);
   } finally { chmodSync(source, 0o700); chmodSync(join(source, 'registry'), 0o700); }
 });
 
-test('image cache seeding rejects aliases, writable inputs and oversized files before copying', t => {
+test('image cache seeding rejects aliases, writable inputs, empty caches and exceeded bounds before copying', t => {
   const {root} = workspace(t), source = join(root, 'cache'), destination = join(root, 'private');
   mkdirSync(source); const input = join(source, 'input'); writeFileSync(input, 'input');
+  const directories = [source];
   chmodSync(source, 0o555);
   try {
     assert.throws(() => seedCargoCache(source, destination), /immutable regular files/);
@@ -200,7 +206,26 @@ test('image cache seeding rejects aliases, writable inputs and oversized files b
     writeFileSync(input, ''); truncateSync(input, 256 * 1024 ** 2 + 1); chmodSync(input, 0o444); chmodSync(source, 0o555);
     assert.throws(() => seedCargoCache(source, destination), /file bound exceeded/);
     assert(!existsSync(destination));
-  } finally { chmodSync(source, 0o700); }
+    chmodSync(source, 0o700); rmSync(input); chmodSync(source, 0o555);
+    assert.throws(() => seedCargoCache(source, destination), /nonempty image cache required/);
+    assert(!existsSync(destination));
+    chmodSync(source, 0o700);
+    for (let depth = 1; depth <= 33; depth++) {
+      const path = join(directories.at(-1), 'nested'); mkdirSync(path); directories.push(path);
+    }
+    for (const path of directories) chmodSync(path, 0o555);
+    assert.throws(() => seedCargoCache(source, destination), /cache tree bound exceeded/);
+    assert(!existsSync(destination));
+    for (const path of directories) chmodSync(path, 0o700);
+    rmSync(directories[1], {recursive: true}); directories.splice(1);
+    for (let index = 0; index < 9; index++) {
+      const path = join(source, `sparse-${index}`); writeFileSync(path, '');
+      truncateSync(path, index < 8 ? 256 * 1024 ** 2 : 1); chmodSync(path, 0o444);
+    }
+    chmodSync(source, 0o555);
+    assert.throws(() => seedCargoCache(source, destination), /cache byte bound exceeded/);
+    assert(!existsSync(destination));
+  } finally { for (const path of directories) chmodSync(path, 0o700); }
 });
 
 test('PR workflow has no publication policy bypass and keeps exact native generation and failure uploads', () => {
