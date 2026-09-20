@@ -29,6 +29,11 @@ request = [1, 0, binding, genesis-digest: reference]
 response = [1, 0, (state / record / binding / payload / bool)]
          / [1, 1, journal-error: 0..11]
          / [1, 2, cbor-error: 0..8]
+; Separate journalPartitionBytes entry: raw1..67108864 bytes, not CBOR-wrapped.
+; Empty/oversized input rejects. Successful offsets are contiguous and cover
+; the exact input; each length is min(1048576, remaining input bytes).
+partition-response = [1, 0, [1*64 [offset: uint32, length: 1..1048576]]]
+                   / [1, 2, cbor-error: 0..8]
 signed-body = [1, 0, binding] / [1, 1, record]
 signed-envelope = [1, body: bstr, signature: bstr .size 64]
 ; Body and complete envelope each≤65536 bytes. Signature domain is

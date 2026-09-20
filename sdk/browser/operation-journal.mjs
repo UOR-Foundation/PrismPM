@@ -47,21 +47,23 @@ function exact(value, names) {
   const descriptors = Object.getOwnPropertyDescriptors(value), keys = Reflect.ownKeys(descriptors);
   if (keys.length !== names.length || keys.some(key => typeof key !== 'string')
     || keys.sort().join(',') !== names.toSorted().join(',') || keys.some(key => !('value' in descriptors[key]))) throw fail('invalid-input');
-  return value;
+  return Object.fromEntries(names.map(name => [name, descriptors[name].value]));
 }
 function captureArray(value, capture) {
-  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || value.length > 64) throw fail('invalid-input');
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) throw fail('invalid-input');
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  if (Reflect.ownKeys(descriptors).length !== value.length + 1) throw fail('invalid-input');
-  return Array.from({length: value.length}, (_, index) => {
+  const length = descriptors.length?.value;
+  if (!Number.isInteger(length) || length < 0 || length > 64
+    || Reflect.ownKeys(descriptors).length !== length + 1) throw fail('invalid-input');
+  return Array.from({length}, (_, index) => {
     if (!descriptors[index] || !('value' in descriptors[index])) throw fail('invalid-input');
     return capture(descriptors[index].value);
   });
 }
 function captureEffects(value, journalWire, partition) {
-  exact(value, ['wire', 'wireDigest', 'manifest', 'guests', 'signers']);
+  value = exact(value, ['wire', 'wireDigest', 'manifest', 'guests', 'signers']);
   const guests = captureArray(value.guests, row => {
-    exact(row, ['resource', 'bytes']);
+    row = exact(row, ['resource', 'bytes']);
     if (typeof row.resource !== 'string') throw fail('invalid-input');
     return {resource: row.resource, bytes: row.bytes};
   });
@@ -72,7 +74,7 @@ function captureEffects(value, journalWire, partition) {
     wire: bytesCopy(value.wire, FRAME), wireDigest: bytesCopy(value.wireDigest, 32), manifest: bytesCopy(value.manifest, FRAME),
     guests: guests.map(row => ({resource: row.resource, bytes: bytesCopy(row.bytes, FRAME)})),
     signers: captureArray(value.signers, row => {
-      exact(row, ['resource', 'custody']);
+      row = exact(row, ['resource', 'custody']);
       if (typeof row.resource !== 'string') throw fail('invalid-input');
       return {resource: row.resource, custody: row.custody};
     }),
@@ -349,7 +351,7 @@ export async function openOperationJournal(options) {
   let store, effects;
   try {
     if (arguments.length !== 1) throw fail('invalid-input');
-    exact(options, ['wire', 'wireDigest', 'partition', 'partitionDigest', 'binding', 'custody', 'signingResource', 'effects', 'mode']);
+    options = exact(options, ['wire', 'wireDigest', 'partition', 'partitionDigest', 'binding', 'custody', 'signingResource', 'effects', 'mode']);
     const selectedEffects = captureEffects(options.effects, options.wire, options.partition);
     const wireBytes = bytesCopy(options.wire, FRAME), wireDigest = bytesCopy(options.wireDigest, 32);
     const partitionBytes = bytesCopy(options.partition, FRAME), partitionDigest = bytesCopy(options.partitionDigest, 32);
@@ -399,7 +401,7 @@ export async function openOperationPayloadStore(options) {
   let store;
   try {
     if (arguments.length !== 1) throw fail('invalid-input');
-    exact(options, ['wire', 'wireDigest', 'partition', 'partitionDigest', 'binding', 'artifacts']);
+    options = exact(options, ['wire', 'wireDigest', 'partition', 'partitionDigest', 'binding', 'artifacts']);
     inspectEffectArtifactBudget(options.wire, [options.partition]);
     const wireBytes = bytesCopy(options.wire, FRAME), wireDigest = bytesCopy(options.wireDigest, 32);
     const partitionBytes = bytesCopy(options.partition, FRAME), partitionDigest = bytesCopy(options.partitionDigest, 32);

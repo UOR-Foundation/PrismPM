@@ -21,6 +21,8 @@ The artifact closure is canonical CBOR `[1, journal-wire, partition,
 effects-wire, guests]`, with three SHA-256 byte references and guest pairs
 `[resource, SHA-256]` ordered by UTF-8 bytes. The host hashes the complete actual
 captured artifact set. Combined artifacts are at most 256 MiB before copying.
+Bootstrap objects and arrays are captured once through own data descriptors;
+caller property getters cannot substitute values between validation and copying.
 The effective-policy digest covers `[1, actual-effect-manifest,
 credential-public-snapshot]`; the snapshot contains application, requested
 policy and every source-owned resource/slot/context/maximum/public-key/principal
@@ -38,7 +40,10 @@ recreates or resumes its private execution queue.
 
 Payloads retain the 64 MiB bound. Generated partitioning uses at most 64 chunks,
 each at most 1 MiB; concatenation length and complete digest must match. The
-existing store's 16-object transaction and 4096-object limits remain unchanged.
+separate `journalPartitionBytes` entry accepts raw nonempty payload bytes, not
+the CBOR journal request frame, and returns the canonical offset/length plan.
+The journal entry accepts only its closed canonical CBOR request variants.
+The existing store's 16-object transaction and 4096-object limits remain unchanged.
 Chunks are staged through the private staging head. A staging CAS conflict or
 partial closure cannot publish an operation or authorize execution. All records,
 chunks and actual public-key signatures are checked before generated replay.
