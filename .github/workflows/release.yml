@@ -55,8 +55,16 @@ jobs:
           push: never
           runCmd: |
             set -euo pipefail
-            just vv
-            just vv
+            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 1
+            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: source-vv
+          path: target/source-vv-evidence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
 
   images:
     needs: gate
@@ -551,8 +559,10 @@ jobs:
         include:
           - platform: linux/amd64
             target: x86_64-unknown-linux-gnu
+            arch: amd64
           - platform: linux/arm64
             target: aarch64-unknown-linux-gnu
+            arch: arm64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -597,38 +607,17 @@ jobs:
           esac
           mkdir .native-cli
           tar --extract --gzip --file "$archive" --directory .native-cli
-          native_runtime=docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD/.native-cli,target=/native,readonly" \
-            --mount "type=bind,source=$PWD,target=/workspace" --workdir /workspace \
-            --entrypoint /native/prismpm "$native_runtime" \
-            --project /workspace --json check > native-check.json
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD,target=/workspace" \
-            "$sdk_image" prismpm --project /workspace --json check > container-check.json
-          cmp native-check.json container-check.json
-          set +e
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD/.native-cli,target=/native,readonly" \
-            --mount "type=bind,source=$PWD,target=/workspace" --workdir /workspace \
-            --entrypoint /native/prismpm "$native_runtime" \
-            --project /workspace --json inspect \
-            ghcr.io/uor-foundation/calculator:mutable > native-error.json 2>&1
-          native_status=$?
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD,target=/workspace" \
-            "$sdk_image" prismpm --project /workspace --json inspect \
-            ghcr.io/uor-foundation/calculator:mutable > container-error.json 2>&1
-          container_status=$?
-          set -e
-          test "$native_status" -eq 6
-          test "$container_status" -eq "$native_status"
-          cmp native-error.json container-error.json
+          node scripts/release-gate-evidence.mjs native . .native-equivalence "$GITHUB_SHA" \
+            "${PLATFORM#linux/}" "$sdk_image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$archive"
           mv "$archive" "$archive.sha256" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: sdk-equivalence-${{ matrix.arch }}
+          path: .native-equivalence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ matrix.target }}
@@ -712,17 +701,34 @@ jobs:
         with:
           name: library-sdk-sdk-arm64
           path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: source-vv
+          path: .sdk-gate-evidence/source-vv
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-equivalence-amd64
+          path: .sdk-gate-evidence/native-equivalence-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-equivalence-arm64
+          path: .sdk-gate-evidence/native-equivalence-sdk-arm64
       - name: Preserve complete native SDK gate evidence without changing acceptance scope
         shell: bash
         run: |
           set -euo pipefail
           image=$(cat release/sdk-image.txt)
+          node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \
+            release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           for architecture in amd64 arm64; do
             for kind in full-sdk-vv product-cli; do
               node scripts/sdk-release-evidence.mjs "$kind" \
                 ".sdk-gate-evidence/$kind-sdk-$architecture" "release/sdk-$architecture-$kind.tar" \
                 "$image" "$GITHUB_SHA" "$architecture"
             done
+            node scripts/sdk-release-evidence.mjs native-equivalence \
+              ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \
+              "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           done
       - shell: bash
         run: |

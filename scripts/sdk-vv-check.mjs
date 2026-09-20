@@ -7,6 +7,7 @@ import { constants, closeSync, fstatSync, lstatSync, mkdirSync, openSync, readSy
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateVvEvidence } from './sdk-vv-run.mjs';
+import {bootstrapNames, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
 import { validateResolver, isolatedResolver } from './sdk-vv-probe.mjs';
 import { verifyTap } from './browser-api-sdk-check.mjs';
 
@@ -383,7 +384,8 @@ export async function runOuter({image, revision, arch, destination, source}, tra
     await inner(sdkContainerArguments(names.sdk, image, group, '/workspace')); await inner(['start', names.sdk]);
     const ownImage = (await sdk(['docker', '--host', SOCKET, 'inspect', names.sdk, '--format', '{{.Image}}'])).toString().trim();
     assert.equal(ownImage, loadedIdentities.sdk.id);
-    const boundPaths = ['scripts/sdk-vv-run.mjs', 'scripts/sdk-vv-probe.mjs', 'scripts/sdk-vv-check.mjs', 'sdk/vv-runtime.lock.json'];
+    const boundPaths = ['scripts/sdk-vv-run.mjs', 'scripts/sdk-vv-probe.mjs', 'scripts/sdk-vv-check.mjs',
+      'scripts/sdk-bootstrap-retention.mjs', 'scripts/bootstrap-evidence.mjs', 'sdk/vv-runtime.lock.json'];
     for (const path of boundPaths) assert.deepEqual(await sdk(['cat', `${SHARED}/conformance-root/${path}`]), regular(join(source, path)), 'installed outer/inner source differs');
     const elf = JSON.parse(await sdk(['node', probePath, 'native']));
     assert.deepEqual(elf, {architecture: arch, process_architecture: arch === 'amd64' ? 'x64' : 'arm64'});
@@ -413,6 +415,16 @@ export async function runOuter({image, revision, arch, destination, source}, tra
     const originals = [];
     for (const run of [1, 2]) originals.push(await sdk(['cat', `/workspace/run/evidence/run-${run}/vv-evidence.json`]));
     const execution = validateExecution(bytes, originals, image, revision, arch);
+    const bootstrap = await sdk(['cat', '/workspace/run/evidence/bootstrap.json']);
+    const bootstrapFiles = new Map();
+    for (const run of [1, 2]) for (const name of bootstrapNames) {
+      const path = `run-${run}-${name}`;
+      bootstrapFiles.set(path, await sdk(['cat', `/workspace/run/evidence/${path}`], {limit: 64 * 1024 * 1024}));
+    }
+    validateBootstrapRetention(bootstrap, bootstrapFiles, revision);
+    for (const [path, original] of [...bootstrapFiles, ['bootstrap.json', bootstrap]]) {
+      writeFileSync(join(destination, path), original, {flag: 'wx', mode: 0o444});
+    }
     for (const [key, path] of [['inventory_sha256', 'inventory.json'], ['input_policy_sha256', 'vv-input-policy.json'], ['input_manifest_sha256', 'vv-inputs/manifest.json']]) {
       assert.equal(hash(await sdk(['cat', `${SHARED}/${path}`], {limit: 64 * 1024 * 1024})), execution[key]);
     }

@@ -4,6 +4,7 @@
 .lexlean
 .prism
 release
+.native-equivalence
 target
 **/.lake
 **/.lexlean

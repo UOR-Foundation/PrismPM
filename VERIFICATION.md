@@ -2013,6 +2013,25 @@ audit then passed all 172 Node tests (179 registered IDs, 86 diagnostics).
 These logs are retained in the independent source-audit clone. Neither this
 baseline nor the source audit establishes a current installed SDK or deployment.
 
+## Original release-gate retention
+
+Source VV now retains both original runs, separate stdout/stderr and status,
+VV receipts and fresh bootstrap outputs. Installed SDK execution retains each
+run's four original bootstrap files. Native/SDK comparisons retain all four
+commands and streams, expected failure statuses, source/run/platform bindings
+and the native archive digest. All remain unaccepted verification evidence.
+
+The actual RED accepted a VV marker without bootstrap outputs. The final
+devcontainer owner passed all 55 tests, including genuine child-process output,
+interruption and capture-file substitution, bootstrap staleness/tampering and
+UTF-8 canonical ordering, workflow mutants, deterministic USTAR, exact 64 MiB
+stderr and plus-one rejection, and the existing 256 MiB/1 GiB capture maxima.
+Original final log: `target/original-evidence-frozen-jQLEwZ/owning.stdout`,
+SHA-256 `112101a6534e3ac520b51ac425db09e03b217a2ecac31e6500c6b851c8e8bf55`.
+Scoped Rust formatting and diff checks pass. Integration-wide model generation
+and audit, actual source/full installed-SDK VV, and release publication remain
+separate required gates; this check did not dispatch or accept a release.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
