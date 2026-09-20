@@ -1457,6 +1457,31 @@ compiler output or publication until the complete generated runtime, safe View,
 credential custody and durable uncertain-operation recovery are implemented.
 It does not establish an integrated Foundry application or deployment.
 
+### 12.10 Private browser compiler prerequisite
+
+DK-22 verifies the complete selected LexLean source and axiom closure before
+exporting its exact named LCNF roots. Toolchain preflight rejects incompatible
+ambient selectors, binds authenticated Cargo launchers and actual compiler
+versions/digests, and uses private offline Cargo homes. Each resource binds to its
+declared root, input/output limits and memory pages. Primary and replay roots use
+the primary allocation/response/memory bounds; presentation uses the same input
+and memory bounds with its declared output maximum. Identical tuples share one
+artifact; different roots or bounds never alias or undergo coercion.
+
+The internal compiler retains original sources, checked projection, kernel
+attestation, generated source, export coverage, native package, distinct guest
+packages and actual Wasm bytes. The requested policy is immutable and is not an
+effective grant. Retained consistency alone is insufficient: every artifact must
+equal an independent full source/kernel/compiler replay, including coherently
+rehashed substitutions. Owning tests execute both builds in native `std`,
+`no_std` and Wasm, fixture-declared maxima, valid-input output-limit rejection,
+and exact closure mutations.
+
+This private compiler does not emit a View, session, accepted release or `.holo`
+application. Source-function execution is not evidence of presentation safety,
+authorization, account custody, durable recovery or complete Foundry services.
+The public `PP2011` refusal remains mandatory until complete runtime acceptance.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1939,6 +1964,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-19` | `sdk` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. | §12 |
 | `DK-20` | `sdk` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. | §12 |
 | `DK-21` | `sdk` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. | §12 |
+| `DK-22` | `sdk` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

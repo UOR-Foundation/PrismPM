@@ -1,5 +1,11 @@
 Feature: sdk
 
+  @DK-22 @build
+  Scenario: The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds.
+    Given independent checked application sources with distinct roots and resource budgets
+    When actual kernel, native, no_std and Core-Wasm outputs execute their declared maxima
+    Then every artifact and policy substitution fails complete source replay and public builds remain refused
+
   @DK-21 @build
   Scenario: The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance.
     Given independently checked declarations in the exact standard-library namespace

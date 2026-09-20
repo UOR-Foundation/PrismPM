@@ -313,14 +313,14 @@ pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
     ))
 }
 
-struct Toolchain {
+pub(crate) struct Toolchain {
     lake: PathBuf,
     rustfmt: PathBuf,
     rustc: PathBuf,
-    records: Vec<ProcessRecord>,
+    pub(crate) records: Vec<ProcessRecord>,
 }
 
-fn preflight_toolchain(
+pub(crate) fn preflight_toolchain(
     cwd: &Path,
     replacements: &[(&Path, &str)],
 ) -> Result<Toolchain, PrismError> {

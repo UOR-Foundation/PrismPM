@@ -57,7 +57,7 @@ fn relative(path: &str) -> Result<(), PrismError> {
     Ok(())
 }
 
-fn regular_bytes(root: &Path, path: &str) -> Result<Vec<u8>, PrismError> {
+pub(crate) fn regular_bytes(root: &Path, path: &str) -> Result<Vec<u8>, PrismError> {
     relative(path)?;
     if root.canonicalize().ok().as_deref() != Some(root) {
         return Err(PrismError::new(
@@ -86,7 +86,7 @@ fn regular_bytes(root: &Path, path: &str) -> Result<Vec<u8>, PrismError> {
     std::fs::read(selected).map_err(|error| PrismError::new("PP4002", error.to_string()))
 }
 
-fn validate_export_identity(
+pub(crate) fn validate_export_identity(
     coverage: &Value,
     roots: &Value,
     module: &prod_ir::Module,

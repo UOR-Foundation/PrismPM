@@ -3,6 +3,7 @@
 #[path = "../../../../tests/support/browser_application.rs"]
 mod browser_application;
 mod browser_bootstrap;
+mod browser_compiler;
 mod browser_effect;
 mod browser_publication;
 mod browser_system;
@@ -427,6 +428,7 @@ pub fn run_at(root: &Path, id: &str) {
         | "DK-16" | "DK-19" | "DK-20" => verify_browser_host(root, id),
         "DK-17" => native_library::verify(root),
         "DK-21" => browser_application::verify(root),
+        "DK-22" => browser_compiler::verify(root),
         "DK-18" => browser_effect::verify(root),
         "OC-07" => verify_browser_export(root),
         "OC-08" => browser_publication::verify(root),
