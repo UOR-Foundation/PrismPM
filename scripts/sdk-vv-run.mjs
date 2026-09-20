@@ -11,6 +11,7 @@ import {
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { materializeClosure, verifyClosure } from './sdk-vv-inputs.mjs';
+import {bootstrapNames, captureBootstrap, readOriginal, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
 
 const SHARED = '/opt/prismpm/share';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -84,7 +85,7 @@ export function verifyRetainedRuns(output, revision, records) {
   for (const [index, row] of records.entries()) {
     const path = `run-${index + 1}/vv-evidence.json`;
     assert(lstatSync(join(output, `run-${index + 1}`)).isDirectory(), 'retained run directory cannot be aliased');
-    const bytes = regular(join(output, path), 4096);
+    const bytes = readOriginal(join(output, path), 4096);
     validateVvEvidence(bytes, revision);
     assert.deepEqual(row, { run: index + 1, path, byte_length: bytes.length, sha256: hash(bytes) }, 'retained VV bytes changed');
   }
@@ -94,23 +95,30 @@ export function verifyRetainedRuns(output, revision, records) {
 // unit-test seam; it is not accepted through arguments, configuration or env.
 export async function retainTwoRuns(source, output, revision, execute) {
   const evidencePath = join(source, 'target/vv-evidence.json');
-  const records = [];
+  const records = [], bootstrap = [];
   for (const run of [1, 2]) {
     const directory = join(output, `run-${run}`);
     mkdirSync(directory, { mode: 0o700 });
-    const stale = lstatSync(evidencePath, { throwIfNoEntry: false });
-    if (stale) {
-      assert(stale.isFile(), 'refusing aliased or non-file stale evidence');
-      unlinkSync(evidencePath);
+    for (const path of [evidencePath, ...bootstrapNames.map(name => join(source, 'target', name))]) {
+      const stale = lstatSync(path, { throwIfNoEntry: false });
+      if (stale) {
+        assert(stale.isFile() && stale.nlink === 1, 'refusing aliased or non-file stale evidence');
+        unlinkSync(path);
+      }
     }
     assert.equal(await execute(run, directory), 0, `VV execution ${run} failed`);
-    const bytes = regular(evidencePath, 4096);
+    const bytes = readOriginal(evidencePath, 4096);
     validateVvEvidence(bytes, revision);
     const path = `run-${run}/vv-evidence.json`;
     writeFileSync(join(output, path), bytes, { flag: 'wx', mode: 0o444 });
     records.push({ run, path, byte_length: bytes.length, sha256: hash(bytes) });
+    bootstrap.push(captureBootstrap(source, output, run));
   }
   verifyRetainedRuns(output, revision, records);
+  const bootstrapBytes = Buffer.from(canonical({schema: 'prismpm/bootstrap-retention/1', source_revision: revision, runs: bootstrap}));
+  validateBootstrapRetention(bootstrapBytes, new Map(bootstrap.flatMap(row => row.files.map(file =>
+    [file.path, readOriginal(join(output, file.path))]))), revision);
+  writeFileSync(join(output, 'bootstrap.json'), bootstrapBytes, {flag: 'wx', mode: 0o444});
   return records;
 }
 

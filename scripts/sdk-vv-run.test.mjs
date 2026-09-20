@@ -9,11 +9,16 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { canonical, executionEnvironment, gateInvocation, retainTwoRuns, validateVvEvidence } from './sdk-vv-run.mjs';
 import { stop } from './ci-observe.mjs';
+import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 
 const revision = '1'.repeat(40);
 const image = `localhost:5000/prismpm@sha256:${'2'.repeat(64)}`;
 const evidence = () => ({ commit: revision, gates: Array.from({ length: 15 }, (_, i) => i + 1), schema: 'prismpm/vv-evidence/1', status: 'passed' });
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+function writeResult(f, bytes) {
+  writeFileSync(f.input, bytes);
+  for (const [name, raw] of bootstrapFixture(revision).files) writeFileSync(join(f.source, 'target', name), raw);
+}
 
 function fixture(t) {
   const work = mkdtempSync(join(tmpdir(), 'sdk-vv-run-tests.'));
@@ -51,7 +56,7 @@ test('two consecutive executions retain separate unchanged raw evidence after re
   const retained = await retainTwoRuns(f.source, f.output, revision, async index => {
     assert(!existsSync(f.input), 'previous success must be invalidated before each execution');
     calls.push(index);
-    writeFileSync(f.input, bytes);
+    writeResult(f, bytes);
     return 0;
   });
   assert.deepEqual(calls, [1, 2]);
@@ -65,7 +70,7 @@ test('failed, missing, wrong-commit or aliased results cannot promote a first su
     let calls = 0;
     await assert.rejects(retainTwoRuns(f.source, f.output, revision, async index => {
       calls++;
-      if (index === 1) { writeFileSync(f.input, bytes); return 0; }
+      if (index === 1) { writeResult(f, bytes); return 0; }
       if (mode === 'nonzero') { writeFileSync(f.input, bytes); return 7; }
       if (mode === 'missing') return 0;
       if (mode === 'directory') mkdirSync(f.input);
@@ -96,7 +101,7 @@ test('second execution cannot alter, delete or alias the first retained receipt'
           if (mode === 'symlink') symlinkSync(f.input, retained);
         }
       }
-      writeFileSync(f.input, bytes);
+      writeResult(f, bytes);
       return 0;
     }));
     assert.equal(calls, 2);
@@ -177,6 +182,14 @@ test('exact full gate invocation has no alternate binary, source command or logi
     args: ['/fresh/source/scripts/ci-observe.mjs', 'run', '/fresh/evidence/run-1/diagnostics', '--', '/usr/local/bin/just', 'vv'],
     cwd: '/fresh/source',
   });
+});
+
+test('a successful VV marker cannot replace the four original bootstrap outputs', async t => {
+  const f = fixture(t);
+  await assert.rejects(retainTwoRuns(f.source, f.output, revision, async () => {
+    writeFileSync(f.input, canonical(evidence()));
+    return 0;
+  }));
 });
 
 test('execution environment uses fresh writable caches and fixed SDK tools, not caller overrides', () => {

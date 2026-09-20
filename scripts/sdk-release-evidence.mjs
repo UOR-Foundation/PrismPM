@@ -8,6 +8,8 @@ import {dirname, join, resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {validateExecution} from './sdk-vv-check.mjs';
 import {verifyResult as verifyProduct} from './product-sdk-check.mjs';
+import {bootstrapNames, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
+import {releaseContext, validateSourceRun, validateNative} from './release-gate-evidence.mjs';
 
 const MAX_FILE = 64 * 1024 * 1024, MAX_STDOUT = 256 * 1024 * 1024, MAX_TOTAL = 1024 * 1024 * 1024;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -18,7 +20,8 @@ const productFiles = ['source.json', 'image.json', 'inventory.json', 'standards.
   'acquire.stdout.json', 'acquire.stderr.txt', 'acquisition.json', 'build.stdout.json',
   'build.stderr.txt', 'build.json', 'result.json', 'receiver.stderr.txt'].sort();
 const vvFiles = ['acceptance.json', 'execution.json', 'run-1.json', 'run-2.json',
-  'image-plan.json', 'loaded-identities.json'];
+  'image-plan.json', 'loaded-identities.json', 'bootstrap.json',
+  ...[1, 2].flatMap(run => bootstrapNames.map(name => `run-${run}-${name}`))];
 
 function regular(path, maximum) {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -40,16 +43,19 @@ function regular(path, maximum) {
 }
 
 export function captureEvidence(directory, kind, context) {
-  keys(context, ['source_revision', 'image_reference', 'architecture']);
+  const originalGate = ['source-vv', 'native-equivalence'].includes(kind);
+  keys(context, ['source_revision', 'image_reference', 'architecture', ...(originalGate ? ['run_id', 'run_attempt'] : [])]);
   assert.match(context.source_revision, /^[0-9a-f]{40}$/);
-  assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
+  if (kind === 'source-vv') assert.equal(context.image_reference, null);
+  else assert.match(context.image_reference, /^ghcr\.io\/uor-foundation\/prismpm-sdk@sha256:[0-9a-f]{64}$/);
   assert(['amd64', 'arm64'].includes(context.architecture));
-  assert(['full-sdk-vv', 'product-cli'].includes(kind));
+  assert(['full-sdk-vv', 'product-cli', 'source-vv', 'native-equivalence'].includes(kind));
+  if (originalGate) releaseContext(context.source_revision, context.architecture, context.image_reference, context.run_id, context.run_attempt);
   directory = resolve(directory);
   assert.equal(realpathSync(directory), directory, 'evidence directory cannot be aliased');
   const directoryIdentity = lstatSync(directory, {bigint: true}); assert(directoryIdentity.isDirectory());
   const names = readdirSync(directory).sort();
-  assert(names.length <= (kind === 'product-cli' ? productFiles.length : 30004), 'evidence file-count limit');
+  assert(names.length <= (kind === 'product-cli' ? productFiles.length : 30012), 'evidence file-count limit');
   const files = new Map(); let total = 0;
   for (const name of names) {
     if (kind === 'full-sdk-vv' && name === 'docker') {
@@ -62,14 +68,24 @@ export function captureEvidence(directory, kind, context) {
     assert(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(name), 'closed flat evidence paths');
     // sdk-vv-check retains the genuine CLI binary in one raw stdout, whose
     // producer limit is 256 MiB. Do not truncate it to the metadata bound.
-    const maximum = kind === 'full-sdk-vv' && /^\d{4}\.stdout$/.test(name) ? MAX_STDOUT : MAX_FILE;
+    const maximum = (kind === 'full-sdk-vv' && /^\d{4}\.stdout$/.test(name)) || (originalGate && name.endsWith('.stdout')) ? MAX_STDOUT : MAX_FILE;
     const bytes = regular(join(directory, name), Math.min(maximum, MAX_TOTAL - total));
     total += bytes.length; assert(total <= MAX_TOTAL, 'complete evidence exceeds one GiB');
     files.set(name, bytes);
   }
   for (const key of ['dev', 'ino', 'mtimeNs', 'ctimeNs']) assert.equal(lstatSync(directory, {bigint: true})[key], directoryIdentity[key], 'evidence directory changed');
   const json = name => JSON.parse(files.get(name));
-  if (kind === 'product-cli') {
+  if (kind === 'source-vv') {
+    assert.deepEqual([...files.keys()], [1, 2].flatMap(run => [
+      ...['json', 'stdout', 'stderr'].map(suffix => `source-${run}.${suffix}`),
+      `source-${run}-vv.json`, `source-${run}-result.json`, ...bootstrapNames.map(name => `run-${run}-${name}`),
+    ]).sort());
+    for (const run of [1, 2]) validateSourceRun(files, run, context);
+  } else if (kind === 'native-equivalence') {
+    assert.deepEqual([...files.keys()], ['native-result.json', ...['native-check', 'container-check', 'native-error', 'container-error']
+      .flatMap(prefix => ['json', 'stdout', 'stderr'].map(suffix => `${prefix}.${suffix}`))].sort());
+    validateNative(files, context);
+  } else if (kind === 'product-cli') {
     assert.deepEqual([...files.keys()], productFiles, 'complete product CLI evidence required');
     verifyProduct(json('result.json'), context.image_reference);
     assert.equal(json('source.json').revision, context.source_revision);
@@ -96,6 +112,9 @@ export function captureEvidence(directory, kind, context) {
     const execution = files.get('execution.json');
     validateExecution(execution, [files.get('run-1.json'), files.get('run-2.json')],
       context.image_reference, context.source_revision, context.architecture);
+    validateBootstrapRetention(files.get('bootstrap.json'), new Map([1, 2].flatMap(run => bootstrapNames.map(name => {
+      const path = `run-${run}-${name}`; return [path, files.get(path)];
+    }))), context.source_revision);
     const result = json('acceptance.json');
     assert.equal(result.schema, 'prismpm/sdk-installed-vv-check/1'); assert.equal(result.status, 'passed');
     assert.equal(result.scope, 'isolated-installed-two-run-vv');
@@ -131,7 +150,9 @@ export function packEvidence(directory, kind, output, context) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [kind, directory, output, image_reference, source_revision, architecture, ...extra] = process.argv.slice(2);
-  assert.equal(extra.length, 0);
-  packEvidence(directory, kind, output, {image_reference, source_revision, architecture});
+  const [kind, directory, output, image, source_revision, architecture, ...extra] = process.argv.slice(2);
+  const original = ['source-vv', 'native-equivalence'].includes(kind);
+  assert.equal(extra.length, original ? 2 : 0);
+  packEvidence(directory, kind, output, {image_reference: image === '-' ? null : image, source_revision, architecture,
+    ...(original ? {run_id: extra[0], run_attempt: extra[1]} : {})});
 }

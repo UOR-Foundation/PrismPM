@@ -10,6 +10,7 @@ import {pathToFileURL} from 'node:url';
 import test from 'node:test';
 import {captureEvidence, packEvidence} from './sdk-release-evidence.mjs';
 import {assetNames} from './release-phases.mjs';
+import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 const require = createRequire('/opt/prismpm/oracles/package.json');
 const {load} = require('js-yaml');
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item)
@@ -20,6 +21,8 @@ const context = {source_revision: 'a'.repeat(40), architecture: 'amd64',
 const temporary = t => {const root = mkdtempSync(join(tmpdir(), 'prismpm-evidence-test-')); t.after(() => rmSync(root, {recursive: true, force: true})); return root;};
 const put = (root, name, value) => writeFileSync(join(root, name), typeof value === 'string' ? value : canonical(value));
 function vv(root) {
+  const bootstrap = bootstrapFixture(context.source_revision);
+  for (const [name, bytes] of [...bootstrap.retained, ['bootstrap.json', bootstrap.manifest]]) writeFileSync(join(root, name), bytes);
   mkdirSync(join(root, 'docker'));
   put(join(root, 'docker'), 'config.json', 'private transport data that must never ship');
   const raw = canonical({schema: 'prismpm/vv-evidence/1', commit: context.source_revision,
@@ -86,11 +89,19 @@ function validateWorkflow(workflow) {
   assert.equal(pack.shell, 'bash');
   assert.equal(pack.run, [
     'set -euo pipefail', 'image=$(cat release/sdk-image.txt)',
+    'node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \\',
+    '  release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
     'for architecture in amd64 arm64; do', '  for kind in full-sdk-vv product-cli; do',
     '    node scripts/sdk-release-evidence.mjs "$kind" \\',
     '      ".sdk-gate-evidence/$kind-sdk-$architecture" "release/sdk-$architecture-$kind.tar" \\',
-    '      "$image" "$GITHUB_SHA" "$architecture"', '  done', 'done', '',
+    '      "$image" "$GITHUB_SHA" "$architecture"', '  done',
+    '  node scripts/sdk-release-evidence.mjs native-equivalence \\',
+    '    ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \\',
+    '    "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
+    'done', '',
   ].join('\n'));
+  download('source-vv', '.sdk-gate-evidence/source-vv');
+  for (const arch of ['amd64', 'arm64']) download(`sdk-equivalence-${arch}`, `.sdk-gate-evidence/native-equivalence-sdk-${arch}`);
   assert(steps.indexOf(pack) < steps.findIndex(step => step.run?.includes('checksums=$(mktemp)')));
   assert.deepEqual(workflow.jobs['oci-native'].needs, ['gate', 'images', 'native', 'reproducibility', 'installed-sdk']);
   assert(workflow.jobs.release.needs.includes('crates'));
@@ -146,6 +157,8 @@ test('real deterministic USTAR archives retain every original byte and explicitl
 test('missing, extra, stale and changed original evidence fails before archive creation', t => {
   for (const change of [
     root => rmSync(join(root, 'run-2.json')),
+    root => rmSync(join(root, 'run-2-bootstrap-evidence.json')),
+    root => put(root, 'run-1-bootstrap-current-capture.json', '{}'),
     root => put(root, 'extra.json', {}),
     root => put(root, '0001.stdout', 'changed'),
     root => put(root, 'run-1.json', {status: 'passed'}),
@@ -220,7 +233,9 @@ test('removing the real transcript digest guard is detected by the behavioral ow
   assert.equal(original.split(guard).length, 2);
   const changed = original.replace(guard, '/* planted transcript check omission */')
     .replaceAll("from './sdk-vv-check.mjs'", `from '${new URL('./sdk-vv-check.mjs', import.meta.url)}'`)
-    .replaceAll("from './product-sdk-check.mjs'", `from '${new URL('./product-sdk-check.mjs', import.meta.url)}'`);
+    .replaceAll("from './product-sdk-check.mjs'", `from '${new URL('./product-sdk-check.mjs', import.meta.url)}'`)
+    .replaceAll("from './sdk-bootstrap-retention.mjs'", `from '${new URL('./sdk-bootstrap-retention.mjs', import.meta.url)}'`)
+    .replaceAll("from './release-gate-evidence.mjs'", `from '${new URL('./release-gate-evidence.mjs', import.meta.url)}'`);
   const path = join(temporary(t), 'mutant.mjs'); writeFileSync(path, changed);
   const mutant = await import(pathToFileURL(path));
   assert.throws(() => check(mutant.captureEvidence), /Missing expected exception/);

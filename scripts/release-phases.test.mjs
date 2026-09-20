@@ -54,7 +54,12 @@ function validateWorkflow(value) {
   ], 'Cargo must retain complete verification for both selected-target operations');
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
-  assert.match(value.jobs.gate.steps.at(-1).with.runCmd, /^set -euo pipefail\njust vv\njust vv\n?$/);
+  const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
+  assert.equal(sourceGate, 'set -euo pipefail\n' + [1, 2].map(run =>
+    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join(''));
+  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
+  assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
   const installed = value.jobs['installed-sdk'];
   assert.deepEqual(installed.needs, ['gate', 'images']);
@@ -165,7 +170,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
       const step = value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()'));
       step.run = mutate(step.run);
     }),
-    value => { value.jobs.gate.steps.at(-1).with.runCmd = 'just vv'; },
+    value => { value.jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
     value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
     ...[
@@ -303,11 +308,12 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
 });
 
 test('the release twice-VV shell must fail on either invocation, including first-run-only failure', () => {
-  // The diagnostic-wrapped normative workflow is executed by ci-observe.test.mjs.
-  const bodies = [workflow().jobs.gate.steps.at(-1).with.runCmd];
+  // This checks the actual shell sequence's failure propagation. The helper's
+  // fixed just-vv command and real process capture have separate owning tests.
+  const bodies = [workflow().jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd];
   const verify = body => {
     for (const [first, second] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const script = `count=0; just() { count=$((count+1)); printf 'call:%s\\n' "$count"; if [ "$count" = 1 ]; then return ${first}; else return ${second}; fi; };\n${body}`;
+      const script = `count=0; node() { count=$((count+1)); test "$1" = scripts/release-gate-evidence.mjs && test "$2" = source-run && test "\${10}" = "$count" || return 99; printf 'call:%s\\n' "$count"; if [ "$count" = 1 ]; then return ${first}; else return ${second}; fi; };\n${body}`;
       if (first === 0 && second === 0) {
         assert.equal(execFileSync('bash', ['-c', script], {encoding: 'utf8'}), 'call:1\ncall:2\n');
       } else {

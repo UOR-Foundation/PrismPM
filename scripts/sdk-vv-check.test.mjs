@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import test from 'node:test';
+import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 import { selectPlatform, validateIsolation, validateLoadedImage, validateExecution,
   sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests } from './sdk-vv-check.mjs';
 import { inspectNativeExecutable, connect, connectivity, validateResolver, isolatedResolver } from './sdk-vv-probe.mjs';
@@ -164,7 +165,7 @@ function orchestrationFixture(t, fault, store = 'classic') {
   const lock = {schema: 'prismpm/sdk-vv-runtime-inputs/1', images: Object.fromEntries(Object.entries(images).filter(([name]) => name !== 'sdk').map(([name, row]) =>
     [name, name === 'dind' ? {reference: row.reference, source: 'https://github.com/docker-library/docker', source_revision: revision, version: '28.4.0-dind'} : {reference: row.reference}]))};
   writeFileSync(join(source, 'sdk/vv-runtime.lock.json'), canonical(lock) + '\n');
-  for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
+  for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
   const policy = Buffer.from(canonical({source_revision: revision, advisory_revision: '2'.repeat(40)})), inventory = Buffer.from('unit inventory'), inputManifest = Buffer.from('unit input manifest'), cli = Buffer.from('unit CLI bytes');
   const raw = Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, gates: Array.from({length: 15}, (_, i) => i + 1), status: 'passed'}));
   const record = {schema: 'prismpm/sdk-vv-execution/1', scope: 'two-full-vv-executions-only', source_revision: revision, image_reference: images.sdk.reference,
@@ -221,6 +222,10 @@ function orchestrationFixture(t, fault, store = 'classic') {
     if (path.startsWith('/opt/prismpm/share/conformance-root/')) return ok(fault === 'source-mutation' ? 'changed' : readFileSync(join(source, path.slice('/opt/prismpm/share/conformance-root/'.length))));
     if (path.startsWith('/workspace/run/evidence/')) {
       if (!executed) return bad(1);
+      const bootstrap = bootstrapFixture(revision), name = path.split('/').at(-1);
+      if (name === 'bootstrap.json') return ok(bootstrap.manifest);
+      if (bootstrap.retained.has(name)) return fault === 'bootstrap-missing' ? bad(1)
+        : ok(fault === 'bootstrap-changed' ? '{}' : bootstrap.retained.get(name));
       if (path.endsWith('execution.json')) return ok(Buffer.from(canonical(fault === 'stale-evidence' ? {...record, source_revision: '9'.repeat(40)} : record)));
       return ok(fault === 'partial-evidence' && path.includes('run-2') ? '{}' : raw);
     }
@@ -298,7 +303,7 @@ test('complete orchestration executes acquisition, disconnection, owning runner 
 });
 
 test('orchestration refuses each missing authority, isolation, execution, evidence and cleanup prerequisite', async t => {
-  for (const fault of ['wrong-platform', 'missing-image', 'connected', 'egress', 'run-one', 'run-two', 'omitted-execution', 'stale-evidence', 'partial-evidence', 'cleanup', 'create-timeout', 'probe-timeout', 'dns', 'dead-control', 'source-mutation', 'inventory-mutation', 'interrupted', 'wrong-namespace']) {
+  for (const fault of ['wrong-platform', 'missing-image', 'connected', 'egress', 'run-one', 'run-two', 'omitted-execution', 'stale-evidence', 'partial-evidence', 'bootstrap-missing', 'bootstrap-changed', 'cleanup', 'create-timeout', 'probe-timeout', 'dns', 'dead-control', 'source-mutation', 'inventory-mutation', 'interrupted', 'wrong-namespace']) {
     const f = orchestrationFixture(t, fault); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'acceptance.json')), fault);
     if (fault !== 'cleanup') assert.equal(f.resources.size, 0, fault);

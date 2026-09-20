@@ -20,6 +20,14 @@ Both native installed-SDK two-run records and their original command transcripts
 genuine product-CLI evidence, and complete browser/library logs are retained in
 that same immutable publication. Deterministic USTAR archives bind each original
 file; missing, substituted, aliased or over-bound inputs stop publication.
+Both source `just vv` runs retain separate stdout, stderr, exit status, original
+VV receipt and four bootstrap outputs. Installed SDK runs likewise retain all
+four fresh bootstrap outputs per run before the next run can replace them.
+Native/SDK comparisons retain all four commands and separate output streams,
+including expected exit code 6; negative stdout and stderr must both agree.
+Source and native records bind source, architecture, GitHub run and attempt;
+native records additionally bind the immutable SDK and native archive bytes.
+Failed command originals are uploaded for diagnosis, never packed as success.
 Private Docker/Buildx configuration is excluded, never published as evidence.
 Capture bounds are 64 MiB per metadata/stderr file, 256 MiB per original command
 stdout (including the installed CLI binary), and 1 GiB per complete gate closure;

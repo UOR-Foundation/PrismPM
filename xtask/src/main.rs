@@ -133,6 +133,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/browser-prerequisites.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",
+            "scripts/release-gate-evidence.test.mjs",
             "scripts/refresh-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
             "sdk/bootstrap/runner.test.mjs",
