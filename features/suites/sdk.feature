@@ -1,5 +1,11 @@
 Feature: sdk
 
+  @DK-27 @build
+  Scenario: Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds.
+    Given a complete independently bound manifest and source-derived per-resource budgets
+    When generated native and Wasm execution check exact requests and real resource maxima
+    Then missing, substituted, reordered and excessive requests fail without host-provided admission decisions
+
   @DK-24 @build
   Scenario: The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance.
     Given a bound generated journal and effect host with real private signing custody and local transactional storage

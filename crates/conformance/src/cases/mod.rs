@@ -431,6 +431,13 @@ pub fn run_at(root: &Path, id: &str) {
         "DK-17" => native_library::verify(root),
         "DK-21" => browser_application::verify(root),
         "DK-22" => browser_compiler::verify(root),
+        "DK-27" => verify_node_suite(
+            root,
+            id,
+            &["sdk/browser/budget-model-test.mjs"],
+            13,
+            "3600000",
+        ),
         "DK-18" => browser_effect::verify(root),
         "OC-07" => verify_browser_export(root),
         "OC-08" => browser_publication::verify(root),
