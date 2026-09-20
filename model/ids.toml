@@ -835,6 +835,12 @@ level = "build"
 statement = "A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application."
 
 [[id]]
+id = "DK-25"
+suite = "sdk"
+level = "build"
+statement = "Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

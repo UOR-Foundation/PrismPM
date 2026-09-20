@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-25 @build
+  Scenario: Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority.
+    Given a closed custody policy and freshly generated model and wire artifacts
+    When native, no_std, Wasm and actual browser journeys execute all declared bounds and faults
+    Then only complete durable key inventories and exactly bound signing resources are admitted
+    And source and host mutations fail without exporting keys or resetting damaged custody
+
   @DK-22 @build
   Scenario: The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds.
     Given independent checked application sources with distinct roots and resource budgets
