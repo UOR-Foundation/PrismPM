@@ -1516,7 +1516,12 @@ operational View rules are `stdlib/src/Foundation/View/Browser/V1/Wire.md` and
 `Wire.cddl`. A private closed DOM adapter consumes only source-owned labels,
 actions and semantic nodes, with plain dynamic text, native keyboard behavior,
 explicit lifecycle/focus/live regions and a private dispatcher boundary.
-HTML, scripts, URLs, styles, arbitrary attributes and secret-input nodes reject.
+HTML, scripts, URLs, styles and arbitrary attributes reject. Secret-input nodes
+have no supplied value/default and require a distinct private transient sink
+for every bound action; raw secret intents never enter the ordinary dispatcher.
+Password controls clear before the captured secret submission is dispatched,
+on draft-context/lifecycle changes and close. This does not promise JavaScript
+memory erasure or protection from malicious same-origin code or a trusted sink.
 Control presence is not authorization. The 64 MiB frame bound is executed, not
 replaced by a smaller example; node/action/field/choice/table limits are View
 budgets and do not reduce application-domain limits.

@@ -1,6 +1,7 @@
 // Private typed DOM adapter. Display and dispatch never grant effects or roles.
 import {bytesCopy} from './identity.mjs';
-import {decodePresentation, encodeIntent, validateIntent, PresentationError,
+import {decodePresentation, encodeIntent, validateIntent, presentationRequiresSecret,
+  intentRequiresSecret, PresentationError,
   PRESENTATION_MAXIMUM} from './presentation-wire.mjs';
 
 const roots = new WeakMap(), encoder = new TextEncoder();
@@ -34,15 +35,18 @@ const same = (a, b) => a.length === b.length && a.every((byte, index) => byte ==
 
 export function openPresentation(options) {
   if (arguments.length !== 1) fail('options');
-  let root, labels, dispatch, maximum, requestMaximum;
+  let root, labels, dispatch, secretDispatch, maximum, requestMaximum;
   try {
-    ({root, labels, dispatch, maximum, requestMaximum} = exact(options,
-      ['root', 'labels', 'dispatch', 'maximum', 'requestMaximum']));
+    const keys = ['root', 'labels', 'dispatch', 'maximum', 'requestMaximum'];
+    const hasSecretSink = Object.hasOwn(options, 'secretDispatch');
+    if (hasSecretSink) keys.push('secretDispatch');
+    ({root, labels, dispatch, secretDispatch, maximum, requestMaximum} = exact(options, keys));
     labels = catalogue(labels);
     for (const bound of [maximum, requestMaximum]) {
       if (!Number.isInteger(bound) || bound < 1 || bound > PRESENTATION_MAXIMUM) fail('limit');
     }
     if (typeof dispatch !== 'function') fail('options');
+    if (hasSecretSink && typeof secretDispatch !== 'function') fail('options');
     if (typeof HTMLElement === 'undefined' || !(root instanceof HTMLElement)
       || !root.isConnected || root.closest('form') || roots.has(root)) fail('root');
   } catch (error) {
@@ -60,8 +64,12 @@ export function openPresentation(options) {
     return node;
   };
   const report = () => { if (!closed && diagnostic) diagnostic.textContent = errorText; };
+  const clearSecrets = () => {
+    for (const record of nodes.values()) if (record.tag === 10) record.control.value = '';
+  };
   const stop = clear => {
     closed = true; active = null;
+    clearSecrets();
     root.removeEventListener('submit', onSubmit);
     root.removeEventListener('keydown', onKey);
     root.removeEventListener('input', onEdit);
@@ -75,27 +83,35 @@ export function openPresentation(options) {
       if (record.control === event.target && [5, 6, 7].includes(record.tag)) record.edited = true;
     }
   }
+  // This synchronous scope owns only the transient capture. Promise handlers
+  // receive no intent, field value or encoded request from the adapter.
+  function invoke(selected, action) {
+    const fields = action[5].map(id => {
+      const record = nodes.get(id), control = record.control;
+      let value = control.value;
+      if (record.tag === 7) value = value === '' ? 0 : Number(value);
+      else if (record.tag !== 10 && !record.edited && value === record.nativeDefault) value = record.defaultValue;
+      return [id, value];
+    });
+    const intent = [1, selected[1], action[2], fields];
+    validateIntent(selected, intent);
+    const secret = intentRequiresSecret(selected, intent);
+    if (secret && !secretDispatch) fail('binding');
+    const bytes = encodeIntent(intent, requestMaximum), token = {};
+    active = token;
+    diagnostic.textContent = '';
+    if (secret) clearSecrets();
+    try { return {token, returned: (secret ? secretDispatch : dispatch)(bytes)}; }
+    catch { if (active === token) active = null; throw new PresentationError('binding'); }
+  }
   function send(actionNode) {
     if (closed || !frame || active !== null) return;
     try {
       const selected = frame, action = selected[6][actionNode - 1]?.[1];
       if (!action || action[0] !== 8) fail('binding');
-      const fields = action[5].map(id => {
-        const record = nodes.get(id), control = record.control;
-        let value = control.value;
-        if (record.tag === 7) value = value === '' ? 0 : Number(value);
-        else if (!record.edited && value === record.nativeDefault) value = record.defaultValue;
-        return [id, value];
-      });
-      const intent = [1, selected[1], action[2], fields];
-      validateIntent(selected, intent);
-      const bytes = encodeIntent(intent, requestMaximum), token = {};
       // Capture and serialize before entering the private dispatcher, including
       // a synchronous reentrant call. This is not authorization or a phase.
-      active = token;
-      diagnostic.textContent = '';
-      let returned;
-      try { returned = dispatch(bytes); } catch { active = null; report(); return; }
+      const {token, returned} = invoke(selected, action);
       Promise.resolve(returned).then(value => {
         if (closed || active !== token) return;
         if (frame !== selected) fail('stale');
@@ -118,7 +134,7 @@ export function openPresentation(options) {
   function onKey(event) {
     if (closed || !frame || event.key !== 'Enter' || event.isComposing
       || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    const record = [...nodes.values()].find(value => value.tag === 5 && value.control === event.target);
+    const record = [...nodes.values()].find(value => [5, 10].includes(value.tag) && value.control === event.target);
     if (!record) return;
     // Native implicit submission picks the first button, not the modeled
     // default. Keep native form submission while selecting the declared one.
@@ -135,6 +151,7 @@ export function openPresentation(options) {
     if (captured && same(bytes, captured)) return;
     const next = decodePresentation(bytes, maximum);
     if (frame && next[1] <= frame[1]) fail('stale');
+    if (!secretDispatch && presentationRequiresSecret(next)) fail('binding');
     const label = index => {
       if (index >= labels.length) fail('labels');
       return labels[index];
@@ -150,12 +167,19 @@ export function openPresentation(options) {
     const focused = [...nodes.values()].find(record => record.control === document.activeElement
       || record.element === document.activeElement);
     let selection;
-    if (focused && [5, 6].includes(focused.tag)) {
+    if (focused && [5, 6, 10].includes(focused.tag)) {
       selection = [focused.control.selectionStart, focused.control.selectionEnd, focused.control.selectionDirection];
     }
     const fragment = document.createDocumentFragment(), nextNodes = new Map(), nextForms = new Map();
     const nextActions = new Map();
     try {
+      // Clear even detached/replaced controls retained by other DOM references.
+      // A ready same-context revision may retain only its live password value.
+      for (const record of nodes.values()) if (record.tag === 10) {
+        const replacement = next[6][record.id - 1];
+        if (frame[2] !== 0 || next[2] !== 0 || !replacement || replacement[0] !== record.parent
+          || replacement[1][0] !== 10 || !same(replacement[1], record.secretShape)) record.control.value = '';
+      }
       const status = element('p', next[3] ? label(next[3] - 1) : '');
       status.setAttribute('role', 'status'); status.setAttribute('aria-live', ['off', 'polite', 'assertive'][next[4]]);
       status.dataset.presentationStatus = ''; fragment.append(status);
@@ -163,7 +187,17 @@ export function openPresentation(options) {
         const id = index + 1, [parent, content] = next[6][index], tag = content[0];
         const previous = nodes.get(id), retained = previous?.tag === tag ? previous : undefined;
         let record;
-        if ([5, 6, 7].includes(tag)) {
+        if (tag === 10) {
+          record = retained ?? {element: element('label'), control: element('input')};
+          const control = record.control;
+          record.preservedDraft = Boolean(retained && frame[2] === 0 && next[2] === 0
+            && record.parent === parent && same(content, record.secretShape));
+          if (!record.preservedDraft) control.value = '';
+          control.type = 'password'; control.autocomplete = 'off'; control.spellcheck = false;
+          control.disabled = !content[2]; control.required = content[3]; control.maxLength = content[4];
+          record.secretShape = content; record.draftEpoch = content[5];
+          record.element.replaceChildren(element('span', label(content[1])), control);
+        } else if ([5, 6, 7].includes(tag)) {
           record = retained ?? {element: element('label'), control: element(tag === 5 ? 'input' : tag === 6 ? 'textarea' : 'select')};
           const control = record.control, defaultValue = tag === 7 ? content[4] : content[5];
           const preserve = retained && record.defaultValue === defaultValue && record.draftEpoch === content[6];
