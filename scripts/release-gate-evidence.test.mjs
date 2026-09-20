@@ -22,7 +22,7 @@ const rawVv = () => Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', comm
 function commandFixture(root, prefix, command, args, status, stdout = 'unit-only output\n', stderr = '') {
   const out = Buffer.from(stdout), err = Buffer.from(stderr);
   put(root, `${prefix}.stdout`, out); put(root, `${prefix}.stderr`, err);
-  put(root, `${prefix}.json`, {command, arguments: args, status, signal: null, overflow: false, interrupted: null,
+  put(root, `${prefix}.json`, {command, arguments: args, status, signal: null, orphaned: false, overflow: false, interrupted: null,
     stdout: descriptor(`${prefix}.stdout`, out), stderr: descriptor(`${prefix}.stderr`, err)});
 }
 function sourceFixture(root) {
@@ -93,6 +93,64 @@ test('actual interruption retains the failed command and terminates its resistan
   assert.equal(row.interrupted, 'SIGTERM'); assert.equal(row.signal, 'SIGKILL'); assert.equal(row.status, null);
   const pid = Number(readFileSync(ready, 'utf8'));
   assert.throws(() => process.kill(pid, 0), error => error.code === 'ESRCH');
+});
+
+function backgroundCommand(root, resistant) {
+  const grandchild = resistant
+    ? `process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(join(root, 'grandchild'))},String(process.pid));process.stdout.write('grandchild-ready\\n');setInterval(()=>{},1000)`
+    : `setTimeout(()=>{process.stdout.write('late stdout\\n');process.stderr.write('late stderr\\n');},250)`;
+  return `const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{stdio:['ignore',1,2]});child.unref();require('node:fs').writeFileSync(${JSON.stringify(join(root, 'leader'))},String(process.pid));process.stdout.write('leader-exit\\n');process.exit(0)`;
+}
+function killOwnedLeader(root) {
+  if (!existsSync(join(root, 'leader'))) return;
+  const pid = Number(readFileSync(join(root, 'leader'), 'utf8'));
+  assert(Number.isSafeInteger(pid) && pid > 1);
+  try {process.kill(-pid, 'SIGKILL');} catch (error) {if (error.code !== 'ESRCH') throw error;}
+}
+function noExecutingProcess(path) {
+  const pid = Number(readFileSync(path, 'utf8'));
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    assert.equal(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[0], 'Z');
+  } catch (error) {if (error.code !== 'ENOENT') throw error;}
+}
+test('ordinary exit drains short-lived descendants but rejects orphaned pipe holders', {timeout: 17000}, async t => {
+  const normal = temporary(t);
+  const result = await captureCommand(normal, 'normal', process.execPath, ['-e', backgroundCommand(normal, false)], normal);
+  assert.equal(result.status, 0);
+  assert.equal(result.orphaned, false);
+  assert.equal(readFileSync(join(normal, 'normal.stdout'), 'utf8'), 'leader-exit\nlate stdout\n');
+  assert.equal(readFileSync(join(normal, 'normal.stderr'), 'utf8'), 'late stderr\n');
+  const root = temporary(t); let forced = false;
+  const watchdog = setTimeout(() => {forced = true; killOwnedLeader(root);}, 14000);
+  try {
+    await assert.rejects(captureCommand(root, 'orphan', process.execPath, ['-e', backgroundCommand(root, true)], root), /orphaned output pipes/);
+    assert.equal(forced, false, 'owner, not test watchdog, must terminate the orphaned group');
+    const record = JSON.parse(readFileSync(join(root, 'orphan.json')));
+    assert.equal(record.status, 0, 'preserve original leader status'); assert.equal(record.signal, null);
+    assert.equal(record.orphaned, true); assert.equal(record.interrupted, null);
+    const files = new Map(['json', 'stdout', 'stderr'].map(suffix => [`orphan.${suffix}`, readFileSync(join(root, `orphan.${suffix}`))]));
+    assert.throws(() => validateCommand(files, 'orphan', process.execPath, ['-e', backgroundCommand(root, true)], 0));
+    noExecutingProcess(join(root, 'grandchild'));
+  } finally {clearTimeout(watchdog); killOwnedLeader(root);}
+});
+
+test('cancellation after the leader exits terminates its resistant pipe-holding grandchild', {timeout: 12000}, t => {
+  const root = temporary(t), ready = join(root, 'grandchild');
+  const wrapper = `
+    import {existsSync} from 'node:fs';
+    import {captureCommand} from ${JSON.stringify(new URL('./release-gate-evidence.mjs', import.meta.url).href)};
+    const timer=setInterval(()=>{if(existsSync(${JSON.stringify(ready)})){clearInterval(timer);process.kill(process.pid,'SIGHUP');}},10);
+    try{await captureCommand(${JSON.stringify(root)},'cancel-orphan',process.execPath,['-e',${JSON.stringify(backgroundCommand(root, true))}],${JSON.stringify(root)});process.exitCode=1;}
+    catch(error){if(error.message!=='gate interrupted')throw error;}finally{clearInterval(timer);}
+  `;
+  try {
+    execFileSync(process.execPath, ['--input-type=module', '-e', wrapper], {timeout: 10000});
+    const record = JSON.parse(readFileSync(join(root, 'cancel-orphan.json')));
+    assert.equal(record.status, 0); assert.equal(record.interrupted, 'SIGHUP');
+    assert.equal(record.orphaned, false, 'cancellation must not be relabeled as an ordinary exit failure');
+    noExecutingProcess(ready);
+  } finally {killOwnedLeader(root);}
 });
 
 test('source and native archives preserve complete originals without promoting their scope', t => {

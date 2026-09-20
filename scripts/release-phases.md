@@ -28,6 +28,9 @@ including expected exit code 6; negative stdout and stderr must both agree.
 Source and native records bind source, architecture, GitHub run and attempt;
 native records additionally bind the immutable SDK and native archive bytes.
 Failed command originals are uploaded for diagnosis, never packed as success.
+After a command exits, output pipes have five seconds to drain; an orphaned
+pipe holder fails capture and its owned process group receives TERM, then KILL
+after five further seconds. No deadline is imposed on a running foreground gate.
 Private Docker/Buildx configuration is excluded, never published as evidence.
 Capture bounds are 64 MiB per metadata/stderr file, 256 MiB per original command
 stdout (including the installed CLI binary), and 1 GiB per complete gate closure;
