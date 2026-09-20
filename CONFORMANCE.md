@@ -194,6 +194,7 @@ The three honesty levels:
 | `DK-20` | `build` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. |
 | `DK-21` | `build` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. |
 | `DK-22` | `build` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. |
+| `DK-25` | `build` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. |
 
 ## security
 
