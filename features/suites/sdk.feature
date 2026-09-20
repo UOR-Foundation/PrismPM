@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-24 @build
+  Scenario: The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance.
+    Given a bound generated journal and effect host with real private signing custody and local transactional storage
+    When complete source, kernel, native, no_std, Wasm and browser gates exercise persistence before execution and authenticated replay
+    Then competing writes, lost acknowledgements, changed bindings and incomplete chunks never authorize an unpersisted effect or fabricated completion
+    And runtime mutations fail while missing terminal receipts remain uncertain and public application builds remain refused
+
   @DK-25 @build
   Scenario: Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority.
     Given a closed custody policy and freshly generated model and wire artifacts
