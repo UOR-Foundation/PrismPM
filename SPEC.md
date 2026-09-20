@@ -614,6 +614,9 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+Formatting checks a closed inventory of authored test manifests and Rust inputs.
+Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
+
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
 `prismpm/golden-comparison/1` regression-only comparison profile. Before

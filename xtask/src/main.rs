@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 
 mod audit;
 mod codegen;
+mod formatting;
 mod gate_driver;
 mod spec_links;
 mod stdlib;
@@ -429,55 +430,9 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     let driver = gate_driver::GateDriver::capture(root)?;
 
     println!("VV gate 1/15: formatting");
-    // The generated stdlib is a local runtime dependency, but its exact bytes
-    // are checked by the regeneration gate, not rewritten by rustfmt. Check
-    // every authored workspace and pinned compiler source separately.
-    command(root, "cargo", &["fmt", "--", "--check"])?;
-    for manifest in [
-        "vendor/lean4-prod/rust/Cargo.toml",
-        "vendor/lexlean/Cargo.toml",
-    ] {
-        command(
-            root,
-            "cargo",
-            &["fmt", "--manifest-path", manifest, "--all", "--", "--check"],
-        )?;
+    for invocation in formatting::commands(root)? {
+        command(root, invocation.program, &invocation.arguments)?;
     }
-    for manifest in [
-        "tests/browser-workspace/Cargo.toml",
-        "tests/browser-envelope/driver/Cargo.toml",
-        "tests/browser-journal/driver/Cargo.toml",
-        "tests/browser-command/driver/Cargo.toml",
-        "tests/browser-query/driver/Cargo.toml",
-        "tests/browser-view/driver/Cargo.toml",
-        "tests/browser-effects/driver/Cargo.toml",
-        "tests/browser-presentation/driver/Cargo.toml",
-        "tests/holo-codec-oracle/Cargo.toml",
-    ] {
-        command(
-            root,
-            "cargo",
-            &["fmt", "--manifest-path", manifest, "--", "--check"],
-        )?;
-    }
-    command(
-        root,
-        "rustfmt",
-        &[
-            "--edition",
-            "2021",
-            "--check",
-            "tests/browser-workspace/runner.rs",
-            "tests/support/browser_application.rs",
-            "tests/browser-envelope/runner.rs",
-            "tests/browser-journal/runner.rs",
-            "tests/browser-command/runner.rs",
-            "tests/browser-query/runner.rs",
-            "tests/browser-view/runner.rs",
-            "tests/browser-effects/runner.rs",
-            "tests/browser-presentation/runner.rs",
-        ],
-    )?;
 
     println!("VV gate 2/15: model, diagnostics, standards, and generated documentation");
     codegen::check_model(root, false)?;
