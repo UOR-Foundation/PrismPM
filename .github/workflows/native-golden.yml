@@ -1,4 +1,4 @@
-name: Review native ARM64 golden source records
+name: Review native golden source records
 
 on:
   pull_request:
@@ -10,8 +10,16 @@ concurrency:
 
 jobs:
   native-source-review:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
     permissions:
       contents: read
     steps:
@@ -41,7 +49,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: native-golden-review-arm64-${{ github.event.pull_request.head.sha }}
+          name: native-golden-review-${{ matrix.arch }}-${{ github.event.pull_request.head.sha }}
           path: ${{ runner.temp }}/native-golden/
           if-no-files-found: error
           compression-level: 0
@@ -49,7 +57,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: native-golden-diagnostics-${{ github.event.pull_request.head.sha }}
+          name: native-golden-diagnostics-${{ matrix.arch }}-${{ github.event.pull_request.head.sha }}
           path: ${{ runner.temp }}/native-observer/
           if-no-files-found: error
           retention-days: 7

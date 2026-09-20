@@ -1978,6 +1978,24 @@ account, durable-session, installed-SDK or Foundry deployment acceptance.
 | Normal browser transcript | `ab134b450e8aa6284627250dede29a1e677e8e12bf4e0c67b5387eb2cb56fbf6` |
 | Maximum-progress transcript | `392f7e069633a2ace72a837bb6bc28771e3c4359bc61173c5f01d0991ed60796` |
 
+## Native source-review platform coverage
+
+The PR source-review workflow now collects original Ubuntu 24.04 AMD64 and
+ARM64 records with separate immutable environment locks. Host executable,
+hosted runner, OCI child/configuration and in-container executable architecture
+must agree. Both unchanged golden commands, byte-preserving records, network
+isolation, resource limits and failure cleanup remain required; neither lane
+grants baseline review or installed-SDK acceptance.
+
+The old ARM64-only implementation failed the actual AMD64 orchestration test.
+All 12 owning tests now pass, including both Docker stores, both architectures,
+runner/image mismatches, workflow omissions and an executed runner-binding
+mutant. The AMD64 lock independently matches the original index and child bytes.
+RED/GREEN log SHA-256:
+`6a55925fdc048a10d1c1c0bfb982002cd9e83c4c53df65e4b505cffd05ac1f81` /
+`ab6a033eab849f6daeefc4d645723be4b12affa569e3145ccbdbc91e630a1394`.
+These orchestration tests do not replace either actual native run.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

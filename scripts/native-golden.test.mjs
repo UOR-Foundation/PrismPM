@@ -11,7 +11,6 @@ import { canonical, readEnvironmentLock, validateSourceBaseline, collectProfile,
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const revision = 'a'.repeat(40), environmentRevision = 'b'.repeat(40);
 const recordPaths = ['golden-manifest.json', 'verified/lexlean-attestation.json', 'verified/manifest.json'];
-const profile = 'tests/golden/native/linux-arm64-ubuntu-24.04';
 function workspace(t) {
   const root = mkdtempSync(join(tmpdir(), 'prism-native-golden-unit-'));
   t.after(() => rmSync(root, {recursive: true, force: true}));
@@ -22,7 +21,7 @@ function workspace(t) {
   return {root, source, put};
 }
 
-test('environment lock is a closed immutable ARM64 development-only authority', () => {
+test('environment locks are closed immutable native development-only authorities', () => {
   const manifest = readFileSync(new URL('../Cargo.toml', import.meta.url), 'utf8');
   const hashProfiles = value => {
     const sections = [...value.matchAll(/^\[([^\]]+)\]\n([^[]*)/gm)];
@@ -44,14 +43,17 @@ test('environment lock is a closed immutable ARM64 development-only authority', 
       assert.notEqual(changed, manifest); assert.throws(() => hashProfiles(changed));
     }
   }
-  const raw = readFileSync(new URL('../sdk/golden-development.lock.json', import.meta.url));
-  const lock = readEnvironmentLock(raw);
-  assert.equal(lock.scope, 'source-golden-review-only'); assert.equal(lock.architecture, 'arm64');
-  for (const changed of [{...lock, reference: 'example.invalid/sdk:latest'}, {...lock, architecture: 'amd64'},
-    {...lock, source_revision: 'current'}, {...lock, extra: true}, {...lock, scope: 'sdk-acceptance'}]) {
-    assert.throws(() => readEnvironmentLock(Buffer.from(canonical(changed) + '\n')));
+  for (const architecture of ['amd64', 'arm64']) {
+    const raw = readFileSync(new URL(architecture === 'arm64' ? '../sdk/golden-development.lock.json' : '../sdk/golden-development-amd64.lock.json', import.meta.url));
+    const lock = readEnvironmentLock(raw, architecture);
+    assert.equal(lock.scope, 'source-golden-review-only'); assert.equal(lock.architecture, architecture);
+    for (const changed of [{...lock, reference: 'example.invalid/sdk:latest'}, {...lock, architecture: architecture === 'amd64' ? 'arm64' : 'amd64'},
+      {...lock, source_revision: 'current'}, {...lock, extra: true}, {...lock, scope: 'sdk-acceptance'}]) {
+      assert.throws(() => readEnvironmentLock(Buffer.from(canonical(changed) + '\n'), architecture));
+    }
+    assert.throws(() => readEnvironmentLock(Buffer.from(JSON.stringify(lock)), architecture));
+    assert.throws(() => readEnvironmentLock(raw, 'riscv64'));
   }
-  assert.throws(() => readEnvironmentLock(Buffer.from(JSON.stringify(lock))));
   const measured = 4107752353, reserve = 12 * 1024 ** 3;
   validateImageSpace(reserve + measured, measured);
   assert.throws(() => validateImageSpace(reserve + measured - 1, measured));
@@ -71,32 +73,36 @@ test('current shared source baseline is byte-exact before expensive generation',
 });
 
 test('native profile collection retains exactly three original raw files', t => {
-  const {source, put} = workspace(t);
+  for (const architecture of ['amd64', 'arm64']) {
+  const {source, put} = workspace(t), profile = `tests/golden/native/linux-${architecture}-ubuntu-24.04`;
   for (const path of recordPaths) put(`${profile}/${path}`, Buffer.from(`raw ${path}\n`));
-  const actual = collectProfile(source);
+  const actual = collectProfile(source, architecture);
   assert.deepEqual(actual.map(row => row.path), recordPaths);
   for (const row of actual) assert.deepEqual(row.bytes, readFileSync(join(source, profile, row.path)));
   for (const directory of ['extra', 'verified/empty']) {
-    mkdirSync(join(source, profile, directory)); assert.throws(() => collectProfile(source));
+    mkdirSync(join(source, profile, directory)); assert.throws(() => collectProfile(source, architecture));
     rmSync(join(source, profile, directory), {recursive: true});
   }
-  put(`${profile}/extra.json`, '{}'); assert.throws(() => collectProfile(source));
+  put(`${profile}/extra.json`, '{}'); assert.throws(() => collectProfile(source, architecture));
   rmSync(join(source, profile, 'extra.json')); rmSync(join(source, profile, recordPaths[0]));
-  assert.throws(() => collectProfile(source));
+  assert.throws(() => collectProfile(source, architecture));
+  }
 });
 
-function fixture(t, fault, store = 'containerd') {
+function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
   const work = workspace(t), calls = [];
+  const profile = `tests/golden/native/linux-${architecture}-ubuntu-24.04`;
+  const nodeArchitecture = architecture === 'amd64' ? 'x64' : 'arm64';
   if (fault === 'stale-base') work.put('stdlib/src/Probe.lex.tex', 'changed current model\n');
   if (fault === 'stale-artifact') work.put('.prism/build/prior/result.json', '{}');
   const config = 'sha256:' + 'c'.repeat(64);
   const manifest = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config: {digest: config, size: 100}, layers: []}));
-  const child = {mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: 'sha256:' + hash(manifest), size: manifest.length, platform: {os: 'linux', architecture: 'arm64'}};
+  const child = {mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: 'sha256:' + hash(manifest), size: manifest.length, platform: {os: 'linux', architecture}};
   const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [child]}));
   const image = `fixture.invalid/sdk@sha256:${hash(index)}`;
-  const lock = {schema: 'prismpm/golden-development-environment/1', scope: 'source-golden-review-only', architecture: 'arm64',
+  const lock = {schema: 'prismpm/golden-development-environment/1', scope: 'source-golden-review-only', architecture,
     reference: image, child_digest: child.digest, config_digest: config, source_revision: environmentRevision};
-  work.put('sdk/golden-development.lock.json', canonical(lock) + '\n');
+  work.put(architecture === 'arm64' ? 'sdk/golden-development.lock.json' : 'sdk/golden-development-amd64.lock.json', canonical(lock) + '\n');
   const ok = value => ({status: 0, signal: null, stdout: Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)), stderr: Buffer.alloc(0)});
   const bad = () => ({...ok(''), status: 1, stderr: Buffer.from('unit-only genuine command failure')});
   let created, label, generations = 0, seeded = false;
@@ -116,18 +122,19 @@ function fixture(t, fault, store = 'containerd') {
     }
     assert.equal(command, 'docker');
     if (args[0] === 'buildx') return ok(args.at(-1) === image ? index : manifest);
-    if (args[0] === 'pull') { assert.deepEqual(args, ['pull', '--platform', 'linux/arm64', image]); return ok('pulled'); }
+    if (args[0] === 'pull') { assert.deepEqual(args, ['pull', '--platform', `linux/${architecture}`, image]); return ok('pulled'); }
     if (args[0] === 'image') {
       const selected = args.includes('--platform');
       if (store === 'classic' && selected) return {...bad(), status: 125, stderr: Buffer.from('unknown flag: --platform')};
       const descriptor = selected ? child : {digest: 'sha256:' + hash(index), size: index.length, mediaType: 'application/vnd.oci.image.index.v1+json'};
       return ok([{Id: store === 'classic' ? config : descriptor.digest, ...(store === 'classic' ? {} : {Descriptor: descriptor}),
-        RepoDigests: [image], Os: 'linux', Architecture: fault === 'wrong-platform' ? 'amd64' : 'arm64',
+        RepoDigests: [image], Os: 'linux', Architecture: fault === 'wrong-platform' ? (architecture === 'amd64' ? 'arm64' : 'amd64') : architecture,
         Config: {Labels: {'org.opencontainers.image.revision': environmentRevision}, Volumes: null}}]);
     }
     if (args[0] === 'create') {
       created = args[args.indexOf('--name') + 1]; label = args[args.indexOf('--label') + 1];
       assert.equal(args[args.indexOf('--network') + 1], 'none'); assert(args.includes('--pull=never'));
+      assert.equal(args[args.indexOf('--platform') + 1], `linux/${architecture}`);
       assert(args.includes('CARGO_HOME=/tmp/prismpm-golden-cargo'), 'UID 1001 requires an explicit private Cargo home');
       assert.equal(args[args.indexOf('--user') + 1], '1001:1001');
       assert.equal(args.filter(arg => arg.startsWith('CARGO_HOME=')).length, 1);
@@ -138,7 +145,7 @@ function fixture(t, fault, store = 'containerd') {
     if (args[0] === 'inspect') return ok([{Image: fault === 'wrong-container-image' ? 'sha256:' + 'f'.repeat(64) : store === 'classic' ? config : 'sha256:' + hash(index), Config: {Labels: Object.fromEntries([label.split('=')])}}]);
     if (args[0] === 'rm') { if (fault === 'cleanup') return bad(); created = undefined; return ok('removed'); }
     assert.deepEqual(args.slice(0, 2), ['exec', created]);
-    if (args[2] === 'node' && args[3] === '-e') return ok({architecture: 'arm64', os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
+    if (args[2] === 'node' && args[3] === '-e') return ok({architecture: fault === 'wrong-executable' ? 'riscv64' : nodeArchitecture, os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
     if (args[2] === 'node') {
       assert.deepEqual(args.slice(2), ['node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
       assert.equal(options.timeout, 120000); assert.equal(options.limit, 16 * 1024 ** 2);
@@ -158,21 +165,23 @@ function fixture(t, fault, store = 'containerd') {
     if (fault === 'repeat-mutation' && generations === 2) work.put(`${profile}/golden-manifest.json`, 'changed');
     return ok('unit-only generation transcript');
   };
-  const context = {architecture: 'arm64', uid: 1001, gid: 1001, environment: {PATH: process.env.PATH, CARGO_HOME: '/caller/cache',
+  const context = {architecture: nodeArchitecture, uid: 1001, gid: 1001, environment: {PATH: process.env.PATH, CARGO_HOME: '/caller/cache',
     CARGO_PROFILE_DEV_OPT_LEVEL: '0', CARGO_PROFILE_TEST_OPT_LEVEL: '0', RUSTFLAGS: '--cfg caller_override',
     CARGO_ENCODED_RUSTFLAGS: '--cfg\u001fcaller_override', RUSTC_WRAPPER: '/caller/wrapper', GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
-    RUNNER_OS: 'Linux', RUNNER_ARCH: 'ARM64', GITHUB_EVENT_NAME: 'pull_request', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1'}};
+    RUNNER_OS: 'Linux', RUNNER_ARCH: architecture === 'amd64' ? 'X64' : 'ARM64', GITHUB_EVENT_NAME: 'pull_request', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1'}};
   const destination = join(work.root, 'output');
-  return {...work, calls, destination, run: (implementation = runReview) => implementation({source: work.source, revision, destination}, transport, context),
+  return {...work, calls, destination, context, run: (implementation = runReview) => implementation({source: work.source, revision, destination}, transport, context),
     generations: () => generations, remaining: () => created};
 }
 
 test('source review executes exact image, both unchanged golden commands and byte-preserving export', async t => {
-  for (const store of ['classic', 'containerd']) {
-    const f = fixture(t, undefined, store); const result = await f.run();
+  for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) {
+    const f = fixture(t, undefined, store, architecture); const result = await f.run();
     assert.equal(result.scope, 'source-golden-review-only'); assert.equal(result.status, 'review-required');
     assert.equal(f.generations(), 2); assert.equal(f.remaining(), undefined);
     assert.equal(result.source_revision, revision); assert.equal(result.identity.store, store);
+    assert.equal(result.platform, `linux-${architecture}-ubuntu-24.04`);
+    assert.equal(result.native_basis, `github-hosted-${architecture === 'amd64' ? 'X64' : 'ARM64'}-runner-selection`);
     assert.equal(f.calls.filter(([command, args]) => command === 'docker' && args[0] === 'image' && args.includes('--platform')).length, store === 'classic' ? 0 : 1);
     for (const row of result.records) assert.equal(hash(readFileSync(join(f.destination, 'records', row.path))), row.sha256);
     assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
@@ -180,14 +189,28 @@ test('source review executes exact image, both unchanged golden commands and byt
 });
 
 test('failure and missing evidence never become a reviewed or accepted SDK baseline', async t => {
-  for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-container-image', 'write-failure', 'repeat-failure',
+  for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-executable', 'wrong-container-image', 'write-failure', 'repeat-failure',
     'missing-profile', 'repeat-mutation', 'source-changed', 'cleanup']) {
-    const f = fixture(t, fault, store); await assert.rejects(f.run(), undefined, fault);
+    const f = fixture(t, fault, store, architecture); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'review.json')), fault);
     if (fault !== 'cleanup') assert.equal(f.remaining(), undefined, fault);
     if (fault === 'write-failure') {
       assert.equal(f.generations(), 1); assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
     }
+  }
+});
+
+test('native source review rejects unsupported, mismatched and untrusted runner architecture before transport', async t => {
+  for (const architecture of ['amd64', 'arm64']) for (const change of [
+    context => {context.architecture = 'riscv64';},
+    context => {context.environment.RUNNER_ARCH = architecture === 'amd64' ? 'ARM64' : 'X64';},
+    context => {context.environment.RUNNER_ENVIRONMENT = 'self-hosted';},
+    context => {context.environment.RUNNER_OS = 'Windows';},
+    context => {context.environment.GITHUB_ACTIONS = 'false';},
+  ]) {
+    const f = fixture(t, undefined, 'classic', architecture); change(f.context);
+    await assert.rejects(f.run()); assert.equal(f.calls.length, 0); assert.equal(f.generations(), 0);
+    assert(!existsSync(f.destination));
   }
 });
 
@@ -262,8 +285,15 @@ test('PR workflow has no publication policy bypass and keeps exact native genera
   validateWorkflow(raw);
   for (const changed of [raw.replace('ubuntu-24.04-arm', 'ubuntu-24.04'), raw.replace('pull_request:', 'workflow_dispatch:'),
     raw.replace('contents: read', 'contents: write'), raw.replace('22.23.2', 'latest'), raw.replace('if: always()', 'if: success()'),
-    raw.replace('node scripts/native-golden.mjs run', 'true # node scripts/native-golden.mjs run')]) assert.throws(() => validateWorkflow(changed));
-  for (const name of ['native-golden-review-arm64', 'native-golden-diagnostics']) {
+    raw.replace('node scripts/native-golden.mjs run', 'true # node scripts/native-golden.mjs run'),
+    raw.replace('          - os: ubuntu-24.04\n            arch: amd64\n', ''),
+    raw.replace('          - os: ubuntu-24.04-arm\n            arch: arm64\n', ''),
+    raw.replace('arch: amd64', 'arch: arm64'),
+    raw.replace('fail-fast: false', 'fail-fast: true'),
+    raw.replace('runs-on: ${{ matrix.os }}', 'runs-on: ubuntu-24.04-arm'),
+    raw.replace('native-golden-review-${{ matrix.arch }}', 'native-golden-review-arm64'),
+  ]) { assert.notEqual(changed, raw); assert.throws(() => validateWorkflow(changed)); }
+  for (const name of ['native-golden-review', 'native-golden-diagnostics']) {
     const changed = raw.replace(`if: always()\n        with:\n          name: ${name}`, `if: success()\n        with:\n          name: ${name}`);
     assert.notEqual(changed, raw); assert.throws(() => validateWorkflow(changed));
   }
@@ -300,4 +330,12 @@ test('executed source-baseline and second-run omission mutants fail owning behav
   await assert.rejects(async () => { const f = fixture(t, 'stale-base'); await assert.rejects(f.run(noBaseline.runReview), /golden source bytes are stale/); }, /Missing expected rejection/);
   const noSeed = await load(source.replace("await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);", ''));
   await assert.rejects(fixture(t).run(noSeed.runReview), /unseeded cache/);
+  const noRunnerBinding = await load(source.replace('assert.equal(environment.RUNNER_ARCH, platformPolicy.runner);', ''));
+  for (const architecture of ['amd64', 'arm64']) {
+    await assert.rejects(async () => {
+      const f = fixture(t, undefined, 'classic', architecture);
+      f.context.environment.RUNNER_ARCH = architecture === 'amd64' ? 'ARM64' : 'X64';
+      await assert.rejects(f.run(noRunnerBinding.runReview));
+    }, /Missing expected rejection/);
+  }
 });
