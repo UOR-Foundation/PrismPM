@@ -211,6 +211,6 @@ export async function adapterFixture({commandBytes,journalBytes,vectors}){
       check(released,'close queue release');await rejects(first,'adapter-closed');const reopened=await f.open();check(same(before,(await observe(reopened))),'closed queue reached storage');
       cases.push('close immediately rejects queued work while owned active effect settles');
     }
-    check(maximum===58*65536,'complete corpus measured peak');return{cases,calls,maximum,diagnostics:[...diagnostics].sort()};
+    check(maximum===50*65536,'complete corpus measured peak: '+maximum+' bytes ('+maximum/65536+' pages)');return{cases,calls,maximum,diagnostics:[...diagnostics].sort()};
   }finally{restoreEffect();for(const adapter of adapters)adapter.close();for(const store of stores)store.close();WebAssembly.Instance=Instance;}
 }
