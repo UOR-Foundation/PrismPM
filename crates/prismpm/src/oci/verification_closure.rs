@@ -345,10 +345,10 @@ pub(super) fn validate(
 ) -> Result<(), PrismError> {
     let descriptor = single(referrers, PRISM_VERIFICATION)?;
     let retained = read(store, descriptor)?;
-    let binding = release_verification::validate(build_manifest, build_files, &retained.runtime)?;
-    if binding_value(&binding)? != retained.config
-        || release["model_digest"] != binding.model_digest
-    {
+    // Reject inconsistent metadata before replaying the retained proof. The
+    // schema-validated config is only a claim here: successful replay below
+    // must independently reproduce it before this function can accept.
+    if release["model_digest"] != retained.config["model_digest"] {
         return Err(error(
             "verification configuration does not match the retained build and proof",
         ));
@@ -357,7 +357,7 @@ pub(super) fn validate(
     CanonicalDocument::from_value("prismpm/release-validation/1", validation.clone())
         .map_err(|reason| error(reason.to_string()))?;
     if validation["subject"] != root.digest
-        || validation["build_digest"] != binding.build_digest
+        || validation["build_digest"] != retained.config["build_digest"]
         || validation["verification_digest"] != descriptor.digest
     {
         return Err(error(
@@ -386,14 +386,15 @@ pub(super) fn validate(
         || subjects[0]["name"] != release["product"]
         || provenance["_type"] != "https://in-toto.io/Statement/v1"
         || provenance["predicateType"] != "https://slsa.dev/provenance/v1"
-        || provenance["predicate"]["runDetails"]["metadata"]["invocationId"] != binding.build_id
+        || provenance["predicate"]["runDetails"]["metadata"]["invocationId"]
+            != retained.config["build_id"]
         || provenance["predicate"]["runDetails"]["builder"]["id"] != sdk_lock["sdk_image"]
         || provenance["predicate"]["buildDefinition"]["buildType"]
             != crate::supply_chain::PRISM_BUILD_TYPE
         || provenance["predicate"]["buildDefinition"]["internalParameters"] != json!({})
         || provenance["predicate"]["buildDefinition"]["externalParameters"]
             != json!({
-                "model_digest":binding.model_digest,
+                "model_digest":retained.config["model_digest"],
                 "product_release":release["release"],
                 "semantic_source_id":model["provenance"]["source_id"],
                 "standards_lock":release["standards_lock"]
@@ -408,7 +409,12 @@ pub(super) fn validate(
         .and_then(Value::as_array)
         .ok_or_else(|| error("provenance dependencies absent"))?;
     let required = [
-        ("urn:prismpm:build-manifest", binding.build_digest.as_str()),
+        (
+            "urn:prismpm:build-manifest",
+            retained.config["build_digest"]
+                .as_str()
+                .ok_or_else(|| error("verification build digest absent"))?,
+        ),
         (
             "urn:prismpm:verification-closure",
             descriptor.digest.as_str(),
@@ -444,6 +450,14 @@ pub(super) fn validate(
                 "provenance omits or confuses an immutable verification dependency",
             ));
         }
+    }
+    let binding = release_verification::validate(build_manifest, build_files, &retained.runtime)?;
+    if binding_value(&binding)? != retained.config
+        || release["model_digest"] != binding.model_digest
+    {
+        return Err(error(
+            "verification configuration does not match the retained build and proof",
+        ));
     }
     Ok(())
 }
@@ -551,6 +565,268 @@ fn validate_oracles(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Deliberately unreplayable proof with coherently bound metadata. No native
+    // build, trusted producer, or successful execution is fabricated here.
+    struct Unreplayable {
+        _directory: tempfile::TempDir,
+        store: Store,
+        root: Descriptor,
+        release: Value,
+        files: BTreeMap<String, Vec<u8>>,
+        referrers: Vec<Descriptor>,
+        sdk: Value,
+    }
+
+    impl Unreplayable {
+        const MANIFEST: &'static [u8] = b"deliberately invalid proof JSON";
+
+        fn new() -> Self {
+            let directory = tempfile::tempdir().unwrap();
+            let store = Store::open(directory.path()).unwrap();
+            let files = BTreeMap::from([(
+                "model.prism.json".into(),
+                encode_value(&json!({"provenance":{"source_id":"unverified-test-source"}}))
+                    .unwrap(),
+            )]);
+            let binding = Binding {
+                build_id: content_id(Self::MANIFEST),
+                build_digest: sha(Self::MANIFEST),
+                model_digest: sha(&files["model.prism.json"]),
+                attestation_id: content_id(b"unverified-test-attestation"),
+                family: "native".into(),
+            };
+            let sdk_digest = sha(b"unverified-test-sdk");
+            let sdk = json!({"sdk_image":format!("example.invalid/sdk@{sdk_digest}")});
+            let release = json!({
+                "model_digest":binding.model_digest,
+                "product":"unreplayable-test",
+                "release":"1.0.0",
+                "sdk_digest":sdk_digest,
+                "sdk_lock":sha(&encode_value(&sdk).unwrap()),
+                "standards_lock":sha(b"unverified-test-standards")
+            });
+            let root = oci_manifest(
+                &store,
+                PRISM_RELEASE,
+                store
+                    .put(PRISM_RELEASE, &encode_value(&release).unwrap())
+                    .unwrap(),
+                vec![],
+                None,
+            )
+            .unwrap();
+            let header = CanonicalDocument::from_value(
+                "prismpm/verification-closure/1",
+                binding_value(&binding).unwrap(),
+            )
+            .unwrap();
+            let verification = oci_manifest(
+                &store,
+                PRISM_VERIFICATION,
+                store.put(PRISM_VERIFICATION, header.bytes()).unwrap(),
+                vec![],
+                Some(root.clone()),
+            )
+            .unwrap();
+            let dependencies = [
+                ("urn:prismpm:build-manifest", binding.build_digest.as_str()),
+                (
+                    "urn:prismpm:verification-closure",
+                    verification.digest.as_str(),
+                ),
+                (
+                    "urn:prismpm:sdk-lock",
+                    release["sdk_lock"].as_str().unwrap(),
+                ),
+                (
+                    "urn:prismpm:standards-lock",
+                    release["standards_lock"].as_str().unwrap(),
+                ),
+                (sdk["sdk_image"].as_str().unwrap(), sdk_digest.as_str()),
+            ]
+            .into_iter()
+            .map(|(uri, digest)| json!({"uri":uri,"digest":{"sha256":digest_hex(digest).unwrap()}}))
+            .collect::<Vec<_>>();
+            let provenance = json!({
+                "_type":"https://in-toto.io/Statement/v1",
+                "predicateType":"https://slsa.dev/provenance/v1",
+                "subject":[{"name":release["product"],"digest":{"sha256":digest_hex(&root.digest).unwrap()}}],
+                "predicate":{
+                    "runDetails":{"metadata":{"invocationId":binding.build_id},"builder":{"id":sdk["sdk_image"]}},
+                    "buildDefinition":{
+                        "buildType":crate::supply_chain::PRISM_BUILD_TYPE,
+                        "internalParameters":{},
+                        "externalParameters":{
+                            "model_digest":binding.model_digest,
+                            "product_release":release["release"],
+                            "semantic_source_id":"unverified-test-source",
+                            "standards_lock":release["standards_lock"]
+                        },
+                        "resolvedDependencies":dependencies
+                    }
+                }
+            });
+            let validation = json!({
+                "schema":"prismpm/release-validation/1",
+                "subject":root.digest,
+                "build_digest":binding.build_digest,
+                "verification_digest":verification.digest,
+                "oracle_results":[],
+                "result":"passed"
+            });
+            let mut fixture = Self {
+                _directory: directory,
+                store,
+                root,
+                release,
+                files,
+                referrers: vec![verification],
+                sdk,
+            };
+            fixture.set_referrer(INTOTO, provenance);
+            fixture.set_referrer(PRISM_VALIDATION, validation);
+            fixture
+        }
+
+        fn set_referrer(&mut self, role: &str, evidence: Value) {
+            let descriptor = oci_manifest(
+                &self.store,
+                role,
+                self.store.put(OCI_EMPTY, b"{}").unwrap(),
+                vec![self
+                    .store
+                    .put(role, &encode_value(&evidence).unwrap())
+                    .unwrap()],
+                Some(self.root.clone()),
+            )
+            .unwrap();
+            self.referrers
+                .retain(|row| row.artifact_type.as_deref() != Some(role));
+            self.referrers.push(descriptor);
+        }
+
+        fn reject(&self) -> PrismError {
+            for descriptor in &self.referrers {
+                verify_graph(&self.store, &descriptor.digest).unwrap();
+            }
+            validate(
+                &self.store,
+                &self.root,
+                &self.release,
+                Self::MANIFEST,
+                &self.files,
+                &self.referrers,
+                &json!({}),
+                &self.sdk,
+            )
+            .unwrap_err()
+        }
+    }
+
+    #[test]
+    fn inconsistent_provenance_is_rejected_before_real_proof_replay() {
+        for (pointer, changed, message) in [
+            (
+                "/subject/0/name",
+                json!("substituted"),
+                "provenance subject or invocation",
+            ),
+            (
+                "/subject/0/digest/sha256",
+                json!("0".repeat(64)),
+                "provenance subject or invocation",
+            ),
+            (
+                "/predicate/runDetails/metadata/invocationId",
+                json!("0".repeat(64)),
+                "provenance subject or invocation",
+            ),
+            (
+                "/predicate/runDetails/builder/id",
+                json!("substituted"),
+                "provenance subject or invocation",
+            ),
+            (
+                "/predicate/buildDefinition/buildType",
+                json!("substituted"),
+                "provenance subject or invocation",
+            ),
+            (
+                "/predicate/buildDefinition/externalParameters/model_digest",
+                json!(sha(b"substituted")),
+                "provenance subject or invocation",
+            ),
+            (
+                "/predicate/buildDefinition/resolvedDependencies/0/digest/sha256",
+                json!("0".repeat(64)),
+                "provenance omits or confuses",
+            ),
+            (
+                "/predicate/buildDefinition/resolvedDependencies/1/digest/sha256",
+                json!("0".repeat(64)),
+                "provenance omits or confuses",
+            ),
+        ] {
+            let mut fixture = Unreplayable::new();
+            let mut provenance =
+                referrer_evidence(&fixture.store, single(&fixture.referrers, INTOTO).unwrap())
+                    .unwrap();
+            let slot = provenance.pointer_mut(pointer).unwrap();
+            assert_ne!(*slot, changed);
+            *slot = changed;
+            fixture.set_referrer(INTOTO, provenance);
+            let rejected = fixture.reject();
+            assert_eq!(rejected.code, "PP6101");
+            // Actual replay must fail on the sentinel manifest first. Getting
+            // this different failure proves that replay has not been entered.
+            assert!(
+                rejected.message.starts_with(message),
+                "{pointer}: {rejected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn inconsistent_validation_is_rejected_before_real_proof_replay() {
+        for field in ["subject", "build_digest", "verification_digest"] {
+            let mut fixture = Unreplayable::new();
+            let mut validation = referrer_evidence(
+                &fixture.store,
+                single(&fixture.referrers, PRISM_VALIDATION).unwrap(),
+            )
+            .unwrap();
+            validation[field] = json!(sha(b"substituted"));
+            fixture.set_referrer(PRISM_VALIDATION, validation);
+            let rejected = fixture.reject();
+            assert_eq!(rejected.code, "PP6101");
+            assert_eq!(
+                rejected.message,
+                "release validation does not bind its build and verification closure"
+            );
+        }
+        let mut fixture = Unreplayable::new();
+        fixture.release["model_digest"] = json!(sha(b"substituted"));
+        assert_eq!(
+            fixture.reject().message,
+            "verification configuration does not match the retained build and proof"
+        );
+    }
+
+    #[test]
+    fn coherent_unverified_metadata_still_requires_real_proof_replay() {
+        let fixture = Unreplayable::new();
+        let expected = release_verification::validate(
+            Unreplayable::MANIFEST,
+            &fixture.files,
+            &BTreeMap::new(),
+        )
+        .unwrap_err();
+        assert!(expected.message.starts_with("evidence JSON:"));
+        let rejected = fixture.reject();
+        assert_eq!(rejected.code, expected.code);
+        assert_eq!(rejected.message, expected.message);
+    }
 
     #[test]
     fn confined_readers_accept_nested_files_and_reject_path_aliases() {
