@@ -1643,7 +1643,23 @@ Owning log: `target/browser-effect-complete-owning-restored.log`, SHA-256
 This establishes internal protocol sequencing only, not browser dispatch,
 an executable application profile, complete SDK acceptance or deployment.
 
-## CBOR integration checkpoint (ST-16)
+## CBOR primitive verification (ST-16)
+
+The integrated owning gate passed in 898.55 seconds using the registered
+compiler inputs. All 193 roots passed packaged std/no_std execution and all
+324 selected declarations passed their exact axiom audits. Both generated
+Wasm modules passed all 273 invocations within the unchanged 1,024-page cap.
+Each of the three actual parser-guard mutants failed its expected runtime
+assertion without publishing accepted evidence. Every restoration reproduced
+build `462440026c1f9068f166764fe20ea8960bd91dbf55b572733b328493c95e37d1`
+and attestation
+`623872994592c7344f167f26a365eefa00f7dc8be12de8c9a4478e2b97dfb805`.
+Owning log: `target/cbor-integrated-complete-owning.log`, SHA-256
+`aff16105e8ab5bd81eab5e3be20fc42cab9159840163702884a72099e8f96832`.
+This verifies the finite primitive profile, not a browser application,
+installed SDK release, complete CBOR/CDDL implementation or deployment.
+
+### Earlier diagnostic checkpoint
 
 Pre-integration execution uses LexLean `9c1456d` and lean4-prod `6272da0`.
 All 193 typed roots pass in generated std/no_std code. Actual Wasm executes
@@ -1651,7 +1667,7 @@ All 193 typed roots pass in generated std/no_std code. Actual Wasm executes
 maximum/over-limit inputs: 273 invocations, 964 observed pages, unchanged
 1,024-page cap. Noncanonical-head, payload-budget and UTF-8 guard mutants
 fail their expected generated runtime assertions. These are diagnostic runs;
-the owning SDK gate, restored acceptance identities and release remain pending.
+the owning gate and restored identities were not established at that checkpoint.
 
 The receipt regression first fails on an omitted wire-vector count, then
 passes with closed fields, exact invocation counts, observed-memory bounds
