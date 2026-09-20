@@ -249,7 +249,11 @@ fn fixture(profile: Profile) -> Value {
             priority_weight: 0,
         })
         .canonicalize();
-        assert_eq!(CapabilitySet::new(CapabilitySet::to_capabilities(&substituted).unwrap()).canonicalize(), substituted);
+        assert_eq!(
+            CapabilitySet::new(CapabilitySet::to_capabilities(&substituted).unwrap())
+                .canonicalize(),
+            substituted
+        );
         let mut changed_manifest = AppManifest::decode(&manifest).unwrap();
         changed_manifest.requires = address_bytes(&substituted);
         changed_manifest.validate().unwrap();
@@ -264,7 +268,12 @@ fn fixture(profile: Profile) -> Value {
             })
             .collect::<Vec<_>>();
         changed_blobs.sort_by(|left, right| left[..71].cmp(&right[..71]));
-        changed.extend(changed_blobs.iter().cloned().map(|payload| (SectionKind::ContentBlob, payload)));
+        changed.extend(
+            changed_blobs
+                .iter()
+                .cloned()
+                .map(|payload| (SectionKind::ContentBlob, payload)),
+        );
         let archive = HoloWriter::assemble(changed);
         let outcome = loader_outcome(&archive);
         assert_eq!(outcome["stage"], "accepted-physical-archive");
