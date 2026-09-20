@@ -50,4 +50,9 @@ acceptance remains with their registered owners, not these source copies.
 - Runtime semantic identity and IR above are unchanged; all 597 execution
   cases and 54 control-coverage cases passed.
 
+A separate fresh `cargo xtask stdlib-package` check reproduced `prism-stdlib`
+0.2.0 from this same verification identity and IR. The generated package,
+crate archive and release metadata were unchanged. Integrated `prismpm` and
+`repo-conformance` all-target Clippy passed with warnings denied.
+
 Public browser runtime, complete SDK and Foundry deployment remain unaccepted.
