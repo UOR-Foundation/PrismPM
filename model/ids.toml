@@ -829,6 +829,12 @@ level = "build"
 statement = "The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds."
 
 [[id]]
+id = "DK-24"
+suite = "sdk"
+level = "build"
+statement = "The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance."
+
+[[id]]
 id = "DK-25"
 suite = "sdk"
 level = "build"

@@ -1,0 +1,62 @@
+; DK-24 private protocol. Definite canonical CBOR only; all input consumed.
+; The imported DK-20 wire owns effect-request/result/manifest semantics.
+uint32 = 0..4294967295
+reference = bstr .size 32
+binding = [application: reference, manifest: reference, artifacts: reference,
+  requested-policy: reference, effective-policy: reference, signing-key: bstr .size 65,
+  namespace: tstr, journal-head: tstr, staging-head: tstr, maximum-records: 2..1024]
+; Names use the existing store's ASCII name grammar, at most128 bytes.
+; Journal and staging heads differ. Bindings are immutable.
+payload = [digest: reference, length: 1..67108864, chunks: [1*64 reference]]
+; Ordered chunks exactly cover length: all but last1MiB; last1..1MiB.
+record = [binding, revision: 1..1024, previous: reference,
+  journal-session: reference, operation: 0..4294967294,
+  runtime-session: reference, runtime-operation: 0..4294967294,
+  resource: tstr, request-kind: 0..7, phase: 0..2,
+  request: payload, result-kind: 0..9, response: ([0] / [1, payload])]
+; Phase0: result-kind9 and response[0]. Phase1: result-kind=request-kind.
+; Phase2: result-kind8. Terminal phases require response[1,payload].
+; Terminal binds exactly the preceding Prepared's request/session/operation.
+state = [binding, retained-records: 0..1024, next-operation: uint32,
+  head: reference, pending: ([0] / [1, record])]
+request = [1, 0, binding, genesis-digest: reference]
+        / [1, 1, state, record, signed-envelope-digest: reference]
+        / [1, 2, record]
+        / [1, 3, binding]
+        / [1, 4, record, effect-request, effect-manifest]
+        / [1, 5, record, effect-request, effect-result, effect-manifest]
+        / [1, 6, payload]
+response = [1, 0, (state / record / binding / payload / bool)]
+         / [1, 1, journal-error: 0..11]
+         / [1, 2, cbor-error: 0..8]
+signed-body = [1, 0, binding] / [1, 1, record]
+signed-envelope = [1, body: bstr, signature: bstr .size 64]
+; Body and complete envelope each≤65536 bytes. Signature domain is
+; prismpm/browser-operation-journal/1 through the existing identity framing.
+; The exact complete signed-envelope SHA-256 is the next predecessor.
+artifact-closure = [1, journal-wire: reference, partition: reference,
+  effects-wire: reference, guests: [*64 [resource: tstr, artifact: reference]]]
+; Guest resources unique and sorted by their UTF-8 bytes; combined actual
+; module bytes≤256MiB before allocation. Transport authenticates its two
+; selected artifacts, not execution/acceptance of the remaining descriptors.
+
+; The following DK-20 syntax is repeated with disjoint names. EffectsWire and
+; Effects own its additional resource, input, result and name constraints.
+effect-limits = [uint32, uint32, uint32]
+effect-guest = [reference, tstr, tstr, uint32, uint32, uint32]
+effect-signing = [bstr .size 65, tstr]
+effect-storage = [tstr, uint32, uint32, uint32]
+effect-adapter = [0, effect-guest] / [1] / [2] / [3, effect-signing]
+               / [4, effect-signing] / [5, effect-storage]
+effect-manifest = [reference, reference, effect-limits, [1*64 [tstr, effect-adapter]]]
+effect-primitive-bytes = bstr .size (0..1048576)
+effect-guest-bytes = bstr .size (0..2097152)
+effect-optional-ref = [0] / [1, tstr]
+effect-operation = [0, [reference, tstr, tstr, effect-guest-bytes]]
+                 / [1, uint32] / [2, effect-primitive-bytes] / [3, effect-primitive-bytes]
+                 / [4, [effect-primitive-bytes, bstr .size 64]] / [5, tstr] / [6, tstr]
+                 / [7, [tstr, effect-optional-ref, tstr, [*16 effect-primitive-bytes]]]
+effect-request = [reference, reference, reference, uint32, tstr, effect-operation]
+effect-result = [0, effect-guest-bytes] / [1, bstr .size (0..65536)] / [2, tstr]
+              / [3, bstr .size 64] / [4, bool] / [5, ([0] / [1, effect-primitive-bytes])]
+              / [6, ([0] / [1, [tstr, effect-primitive-bytes]])] / [7, tstr] / [8, [0..12]] / [9]
