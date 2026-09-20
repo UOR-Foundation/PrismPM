@@ -4542,6 +4542,183 @@ pub fn riskEdition(__prod_self: crate::StandardsProfile) -> u64 {
     { let _x_1 = (__prod_self).riskEdition; _x_1 }
 }
 
+pub fn browserAppManifest(requires: alloc::vec::Vec<u8>, guest: alloc::vec::Vec<u8>, view: alloc::vec::Vec<u8>) -> Option<alloc::vec::Vec<u8>> {
+    { let _x_25 = wireKappaLabelValid((requires).as_ref()); match _x_25 {
+        false => { let _y_30 = _x_25; match _y_30 {
+        false => None,
+        true => { let _x_112 = wireManifestPrefix(); { let _x_113 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&_x_112); __value }; { let _x_114 = { let mut __value = _x_113; __value.extend_from_slice(&requires); __value }; { let _x_115 = { let mut __value = _x_114; __value.extend_from_slice(&guest); __value }; { let _x_116 = { let mut __value = _x_115; __value.extend_from_slice(&view); __value }; { let _x_117 = browserWireManifestSuffix(); { let _x_118 = { let mut __value = _x_116; __value.extend_from_slice(&_x_117); __value }; { let _x_119 = Some(_x_118); _x_119 } } } } } } } },
+    } },
+        true => { let _x_100 = wireKappaLabelValid((guest).as_ref()); match _x_100 {
+        false => { let prod_local_0 = _x_100; match prod_local_0 {
+        false => None,
+        true => { let prod_local_5 = wireManifestPrefix(); { let prod_local_6 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&prod_local_5); __value }; { let prod_local_7 = { let mut __value = prod_local_6; __value.extend_from_slice(&requires); __value }; { let prod_local_8 = { let mut __value = prod_local_7; __value.extend_from_slice(&guest); __value }; { let prod_local_9 = { let mut __value = prod_local_8; __value.extend_from_slice(&view); __value }; { let prod_local_10 = browserWireManifestSuffix(); { let prod_local_11 = { let mut __value = prod_local_9; __value.extend_from_slice(&prod_local_10); __value }; { let prod_local_12 = Some(prod_local_11); prod_local_12 } } } } } } } },
+    } },
+        true => { let _x_104 = wireKappaLabelValid((view).as_ref()); { let prod_local_13 = _x_104; match prod_local_13 {
+        false => None,
+        true => { let prod_local_18 = wireManifestPrefix(); { let prod_local_19 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&prod_local_18); __value }; { let prod_local_20 = { let mut __value = prod_local_19; __value.extend_from_slice(&requires); __value }; { let prod_local_21 = { let mut __value = prod_local_20; __value.extend_from_slice(&guest); __value }; { let prod_local_22 = { let mut __value = prod_local_21; __value.extend_from_slice(&view); __value }; { let prod_local_23 = browserWireManifestSuffix(); { let prod_local_24 = { let mut __value = prod_local_22; __value.extend_from_slice(&prod_local_23); __value }; { let prod_local_25 = Some(prod_local_24); prod_local_25 } } } } } } } },
+    } } },
+    } },
+    } }
+}
+
+pub fn browserArchiveBody(manifest: alloc::vec::Vec<u8>, metadata: alloc::vec::Vec<u8>, directory: alloc::vec::Vec<u8>, provenance: alloc::vec::Vec<u8>, blob0: alloc::vec::Vec<u8>, blob1: alloc::vec::Vec<u8>, blob2: alloc::vec::Vec<u8>, blob3: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = browserWirePayloadsValid((manifest).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_1 {
+        false => None,
+        true => { let _x_53 = wireDirectoryPrefix(); { let _x_54 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&_x_53); __value }; { let _x_55 = { let mut __value = _x_54; __value.extend_from_slice(&directory); __value }; { let _x_56 = browserWireProvenancePrefix(); { let _x_57 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&_x_56); __value }; { let _x_58 = { let mut __value = _x_57; __value.extend_from_slice(&provenance); __value }; { let _x_59 = wireComposeBodyUnchecked(manifest.clone(), metadata, _x_55, _x_58, blob0.clone(), blob1.clone(), blob2.clone(), blob3.clone())?; { let _x_60 = Some(_x_59); _x_60 } } } } } } } },
+    } })
+}
+
+pub fn browserArchiveBodyBytes(value: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = browserValidArchiveFrame((value).as_ref())?; match _x_1 {
+        false => None,
+        true => { let _x_44 = 0; { let _x_47 = (value).len() as u64; { let _x_48 = 32; { let _x_49 = core::convert::identity::<u64>(_x_47).saturating_sub(_x_48); { let _x_50 = wireSlice(value.clone(), _x_44, _x_49); { let _x_51 = Some(_x_50); _x_51 } } } } } },
+    } })
+}
+
+pub fn browserArchiveExtension(value: alloc::vec::Vec<u8>, index: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_19 = browserValidArchiveFrame((value).as_ref())?; match _x_19 {
+        false => { let _y_24 = _x_19; match _y_24 {
+        false => None,
+        true => { let _x_190 = 0; { let _x_191 = (index == _x_190); match _x_191 {
+        false => { let _x_216 = 2; { let _x_217 = core::convert::identity::<u64>(index).checked_add(_x_216).ok_or(crate::ComputeError::AddOverflow)?; { let _x_218 = wireSectionBytesUnchecked(value.clone(), _x_217)?; { let _x_220 = browserWireProvenancePrefix(); { let _x_221 = (_x_220).len() as u64; { let _x_223 = (_x_218).len() as u64; { let _x_224 = core::convert::identity::<u64>(_x_223).saturating_sub(_x_221); { let _x_225 = wireSlice(_x_218, _x_221, _x_224); { let _x_226 = Some(_x_225); _x_226 } } } } } } } } },
+        true => { let _x_227 = 2; { let _x_228 = core::convert::identity::<u64>(index).checked_add(_x_227).ok_or(crate::ComputeError::AddOverflow)?; { let _x_229 = wireSectionBytesUnchecked(value.clone(), _x_228)?; { let _x_231 = wireDirectoryPrefix(); { let _x_232 = (_x_231).len() as u64; { let _x_234 = (_x_229).len() as u64; { let _x_235 = core::convert::identity::<u64>(_x_234).saturating_sub(_x_232); { let _x_236 = wireSlice(_x_229, _x_232, _x_235); { let _x_237 = Some(_x_236); _x_237 } } } } } } } } },
+    } } },
+    } },
+        true => { let _x_187 = 2; { let _x_188 = (index < _x_187); { let prod_local_0 = _x_188; match prod_local_0 {
+        false => None,
+        true => { let prod_local_2 = 0; { let prod_local_3 = (index == prod_local_2); match prod_local_3 {
+        false => { let prod_local_4 = 2; { let prod_local_5 = core::convert::identity::<u64>(index).checked_add(prod_local_4).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_6 = wireSectionBytesUnchecked(value.clone(), prod_local_5)?; { let prod_local_8 = browserWireProvenancePrefix(); { let prod_local_9 = (prod_local_8).len() as u64; { let prod_local_10 = (prod_local_6).len() as u64; { let prod_local_11 = core::convert::identity::<u64>(prod_local_10).saturating_sub(prod_local_9); { let prod_local_12 = wireSlice(prod_local_6, prod_local_9, prod_local_11); { let prod_local_13 = Some(prod_local_12); prod_local_13 } } } } } } } } },
+        true => { let prod_local_14 = 2; { let prod_local_15 = core::convert::identity::<u64>(index).checked_add(prod_local_14).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_16 = wireSectionBytesUnchecked(value.clone(), prod_local_15)?; { let prod_local_18 = wireDirectoryPrefix(); { let prod_local_19 = (prod_local_18).len() as u64; { let prod_local_20 = (prod_local_16).len() as u64; { let prod_local_21 = core::convert::identity::<u64>(prod_local_20).saturating_sub(prod_local_19); { let prod_local_22 = wireSlice(prod_local_16, prod_local_19, prod_local_21); { let prod_local_23 = Some(prod_local_22); prod_local_23 } } } } } } } } },
+    } } },
+    } } } },
+    } })
+}
+
+pub fn browserArchiveFooter(value: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_1 = browserValidArchiveFrame((value).as_ref())?; match _x_1 {
+        false => None,
+        true => { let _x_41 = (value).len() as u64; { let _x_42 = 32; { let _x_43 = core::convert::identity::<u64>(_x_41).saturating_sub(_x_42); { let _x_44 = wireSlice(value.clone(), _x_43, _x_42); { let _x_45 = Some(_x_44); _x_45 } } } } },
+    } })
+}
+
+pub fn browserArchiveSection(value: alloc::vec::Vec<u8>, index: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_19 = browserValidArchiveFrame((value).as_ref())?; match _x_19 {
+        false => { let _y_24 = _x_19; match _y_24 {
+        false => None,
+        true => { let _x_69 = wireSectionBytesUnchecked(value.clone(), index)?; { let _x_70 = Some(_x_69); _x_70 } },
+    } },
+        true => { let _x_66 = 8; { let _x_67 = (index < _x_66); { let prod_local_0 = _x_67; match prod_local_0 {
+        false => None,
+        true => { let prod_local_2 = wireSectionBytesUnchecked(value.clone(), index)?; { let prod_local_3 = Some(prod_local_2); prod_local_3 } },
+    } } } },
+    } })
+}
+
+pub fn browserFrameArchive(body: alloc::vec::Vec<u8>, footer: alloc::vec::Vec<u8>) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_21 = browserValidArchiveBody((body).as_ref())?; match _x_21 {
+        false => { let _y_26 = _x_21; match _y_26 {
+        false => None,
+        true => { let _x_90 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&body); __value }; { let _x_91 = { let mut __value = _x_90; __value.extend_from_slice(&footer); __value }; { let _x_92 = Some(_x_91); _x_92 } } },
+    } },
+        true => { let _x_82 = (footer).len() as u64; { let _x_83 = 32; { let _x_84 = (_x_82 == _x_83); { let prod_local_0 = _x_84; match prod_local_0 {
+        false => None,
+        true => { let prod_local_5 = { let mut __value = alloc::vec::Vec::<u8>::new(); __value.extend_from_slice(&body); __value }; { let prod_local_6 = { let mut __value = prod_local_5; __value.extend_from_slice(&footer); __value }; { let prod_local_7 = Some(prod_local_6); prod_local_7 } } },
+    } } } } },
+    } })
+}
+
+pub fn browserManifestReference(value: alloc::vec::Vec<u8>, index: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+    Ok({ let _x_19 = browserValidAppManifest((value).as_ref()); match _x_19 {
+        false => { let _y_24 = _x_19; match _y_24 {
+        false => None,
+        true => { let _x_96 = 57; { let _x_98 = 71; { let _x_99 = core::convert::identity::<u64>(index).checked_mul(_x_98).ok_or(crate::ComputeError::MulOverflow)?; { let _x_100 = core::convert::identity::<u64>(_x_96).checked_add(_x_99).ok_or(crate::ComputeError::AddOverflow)?; { let _x_101 = wireSlice(value.clone(), _x_100, _x_98); { let _x_102 = Some(_x_101); _x_102 } } } } } },
+    } },
+        true => { let _x_93 = 3; { let _x_94 = (index < _x_93); { let prod_local_0 = _x_94; match prod_local_0 {
+        false => None,
+        true => { let prod_local_2 = 57; { let prod_local_3 = 71; { let prod_local_4 = core::convert::identity::<u64>(index).checked_mul(prod_local_3).ok_or(crate::ComputeError::MulOverflow)?; { let prod_local_5 = core::convert::identity::<u64>(prod_local_2).checked_add(prod_local_4).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_6 = wireSlice(value.clone(), prod_local_5, prod_local_3); { let prod_local_7 = Some(prod_local_6); prod_local_7 } } } } } },
+    } } } },
+    } })
+}
+
+pub fn browserValidAppManifest(value: &[u8]) -> bool {
+    { let _x_88 = (value).len() as u64; { let _x_89 = 365; { let _x_92 = (_x_88 == _x_89); match _x_92 {
+        false => _x_92,
+        true => { let _x_159 = 0; { let _x_160 = 57; { let _x_161 = wireManifestPrefix(); { let _x_162 = wireWindowEquals((value).as_ref(), _x_159, _x_160, (_x_161).as_ref()); match _x_162 {
+        false => _x_162,
+        true => { let _x_188 = 270; { let _x_189 = 95; { let _x_190 = browserWireManifestSuffix(); { let _x_191 = wireWindowEquals((value).as_ref(), _x_188, _x_189, (_x_190).as_ref()); match _x_191 {
+        false => _x_191,
+        true => { let _x_209 = 57; { let _x_210 = 71; { let _x_211 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_209, _x_210); { let _x_212 = wireKappaLabelValid((_x_211).as_ref()); match _x_212 {
+        false => _x_212,
+        true => { let _x_222 = 128; { let _x_223 = 71; { let _x_224 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_222, _x_223); { let _x_225 = wireKappaLabelValid((_x_224).as_ref()); match _x_225 {
+        false => _x_225,
+        true => { let _x_229 = 199; { let _x_230 = 71; { let _x_231 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_229, _x_230); { let _x_232 = wireKappaLabelValid((_x_231).as_ref()); _x_232 } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } }
+}
+
+pub fn browserValidArchiveBody(body: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_52 = 202; { let _x_56 = (body).len() as u64; { let _x_57 = (_x_52 <= _x_56); match _x_57 {
+        false => { let _y_62 = _x_57; match _y_62 {
+        false => _y_62,
+        true => { let _x_201 = 0; { let _x_202 = 8; { let _x_203 = wireRowsValid((body).as_ref(), _x_201, _x_52, _x_202)?; match _x_203 {
+        false => _x_203,
+        true => { let _x_204 = browserWireBodyPayloadsValid((body).as_ref())?; _x_204 },
+    } } } },
+    } },
+        true => { let _x_172 = 0; { let _x_173 = 10; { let _x_199 = wireWindowEquals((body).as_ref(), _x_172, _x_173, &[72, 79, 76, 79, 4, 0, 0, 0, 8, 0]); { let prod_local_0 = _x_199; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = 0; { let prod_local_2 = 8; { let prod_local_3 = wireRowsValid((body).as_ref(), prod_local_1, _x_52, prod_local_2)?; match prod_local_3 {
+        false => prod_local_3,
+        true => { let prod_local_4 = browserWireBodyPayloadsValid((body).as_ref())?; prod_local_4 },
+    } } } },
+    } } } } },
+    } } } })
+}
+
+pub fn browserValidArchiveFrame(value: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_1 = 234; { let _x_5 = (value).len() as u64; { let _x_6 = (_x_1 <= _x_5); match _x_6 {
+        false => _x_6,
+        true => { let _x_46 = 0; { let _x_48 = 32; { let _x_49 = core::convert::identity::<u64>(_x_5).saturating_sub(_x_48); { let _x_50 = wireSlice(alloc::borrow::ToOwned::to_owned(value), _x_46, _x_49); { let _x_51 = browserValidArchiveBody((_x_50).as_ref())?; _x_51 } } } } },
+    } } } })
+}
+
+pub fn browserWireBodyPayloadsValid(body: &[u8]) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_55 = 2; { let _x_58 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_55)?; { let _x_59 = 0; { let _x_63 = wireDirectoryPrefix(); { let _x_64 = (_x_63).len() as u64; { let _x_65 = wireWindowEquals((_x_58).as_ref(), _x_59, _x_64, (_x_63).as_ref()); match _x_65 {
+        false => _x_65,
+        true => { let _x_104 = 3; { let _x_105 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_104)?; { let _x_106 = 0; { let _x_108 = browserWireProvenancePrefix(); { let _x_109 = (_x_108).len() as u64; { let _x_110 = wireWindowEquals((_x_105).as_ref(), _x_106, _x_109, (_x_108).as_ref()); match _x_110 {
+        false => _x_110,
+        true => { let _x_114 = 0; { let _x_115 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_114)?; { let _x_116 = 4; { let _x_117 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_116)?; { let _x_118 = 5; { let _x_119 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_118)?; { let _x_120 = 6; { let _x_121 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_120)?; { let _x_122 = 7; { let _x_123 = wireSectionBytesUnchecked(alloc::borrow::ToOwned::to_owned(body), _x_122)?; { let _x_124 = browserWirePayloadsValid((_x_115).as_ref(), (_x_117).as_ref(), (_x_119).as_ref(), (_x_121).as_ref(), (_x_123).as_ref()); _x_124 } } } } } } } } } } },
+    } } } } } } },
+    } } } } } } })
+}
+
+pub fn browserWireManifestSuffix() -> alloc::vec::Vec<u8> {
+    alloc::vec![91, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 8, 0, 0, 0, 104, 111, 108, 111, 95, 114, 117, 110, 26, 0, 0, 0, 104, 111, 108, 111, 103, 114, 97, 109, 58, 103, 117, 101, 115, 116, 47, 99, 111, 114, 101, 45, 119, 97, 115, 109, 64, 49, 3, 10, 0, 0, 0, 105, 110, 100, 101, 120, 46, 104, 116, 109, 108, 17, 0, 0, 0, 112, 114, 105, 115, 109, 112, 109, 45, 98, 114, 111, 119, 115, 101, 114, 47, 49, 0, 0, 0, 0]
+}
+
+pub fn browserWirePayloadsValid(manifest: &[u8], blob0: &[u8], blob1: &[u8], blob2: &[u8], blob3: &[u8]) -> bool {
+    { let _x_64 = browserValidAppManifest((manifest).as_ref()); match _x_64 {
+        false => _x_64,
+        true => { let _x_115 = wireBlobsValid((blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_115 {
+        false => _x_115,
+        true => { let _x_133 = 57; { let _x_134 = 71; { let _x_135 = wireSlice(alloc::borrow::ToOwned::to_owned(manifest), _x_133, _x_134); { let _x_136 = wireCapabilitiesPresent((_x_135).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_136 {
+        false => _x_136,
+        true => { let _x_146 = 128; { let _x_147 = 71; { let _x_148 = wireSlice(alloc::borrow::ToOwned::to_owned(manifest), _x_146, _x_147); { let _x_149 = wireReferencePresent((_x_148).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); match _x_149 {
+        false => _x_149,
+        true => { let _x_153 = 199; { let _x_154 = 71; { let _x_155 = wireSlice(alloc::borrow::ToOwned::to_owned(manifest), _x_153, _x_154); { let _x_156 = wireReferencePresent((_x_155).as_ref(), (blob0).as_ref(), (blob1).as_ref(), (blob2).as_ref(), (blob3).as_ref()); _x_156 } } } },
+    } } } } },
+    } } } } },
+    } },
+    } }
+}
+
+pub fn browserWireProvenancePrefix() -> alloc::vec::Vec<u8> {
+    { let _x_2 = 51; { let _x_5 = wireEncodeLe16(_x_2); { let _x_136 = { let mut __value = _x_5; __value.extend_from_slice(&alloc::vec![104, 116, 116, 112, 115, 58, 47, 47, 117, 111, 114, 46, 102, 111, 117, 110, 100, 97, 116, 105, 111, 110, 47, 101, 120, 116, 101, 110, 115, 105, 111, 110, 47, 112, 114, 105, 115, 109, 112, 109, 45, 98, 114, 111, 119, 115, 101, 114, 47, 118, 49]); __value }; _x_136 } } }
+}
+
 pub fn contractName() -> alloc::string::String {
     alloc::string::String::from("hologram:guest/core-wasm@1")
 }

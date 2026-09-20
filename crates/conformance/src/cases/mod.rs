@@ -4,6 +4,7 @@ mod browser_bootstrap;
 mod browser_effect;
 mod browser_publication;
 mod cbor_primitive;
+mod holo_browser;
 mod mailbox_admission;
 mod native_library;
 mod node_suite;
@@ -376,6 +377,7 @@ pub fn run_at(root: &Path, id: &str) {
         | "HO-10" | "HO-11" | "HO-12" => {
             verify_holo(root, id);
         }
+        "HO-13" => holo_browser::verify(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {

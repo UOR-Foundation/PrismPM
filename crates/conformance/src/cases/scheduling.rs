@@ -45,6 +45,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-17"
             | "DK-18"
             | "DK-20"
+            | "HO-13"
             | "OC-07"
             | "OC-08"
             | "ST-11"
@@ -79,6 +80,7 @@ mod tests {
         let owners = (10..=18)
             .map(|id| format!("DK-{id}"))
             .chain([
+                "HO-13".to_owned(),
                 "OC-07".to_owned(),
                 "OC-08".to_owned(),
                 "ST-11".to_owned(),

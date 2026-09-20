@@ -205,6 +205,12 @@ level = "build"
 statement = "Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence."
 
 [[id]]
+id = "HO-13"
+suite = "holo"
+level = "build"
+statement = "The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

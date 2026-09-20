@@ -228,6 +228,28 @@ are pinned adapter primitives. The stdlib validates algorithm, digest width,
 role, phase, ordering, and dependencies; it does not claim collision
 resistance or a proof of the external compression implementation.
 
+### 3.1 Closed browser surface wire prerequisite
+
+`Foundation.Holo.V1.BrowserWire` defines a separate modeled codec for the
+required View selector `prismpm-browser/1` and extension key
+`https://uor.foundation/extension/prismpm-browser/v1`. The 365-byte manifest
+retains primary Core-Wasm v1, two layers, empty native capabilities and four
+content blobs. Existing portable codec functions and bytes are unchanged.
+Both codecs reject the other's manifest/archive profile; neither infers
+browser permissions from native capability requests or zero native budgets.
+
+HO-13 verifies current source through Lean/kernel replay, regenerates the
+exact complete stdlib package, and executes all browser codec exports in
+generated std/no_std code against fresh pinned upstream format vectors.
+Malformed section/frame/reference and coherent capability substitutions reject.
+The pinned Live provider and executor reject this selector with their specific
+unsupported-surface diagnostics and no View attachment; the same genuine
+upstream guest/View executes successfully with its original portable selector.
+Footer and content hashes remain independently checked cryptographic facts,
+not claims of the pure framing model. This prerequisite does not implement a
+public browser runtime, trusted effect policy, accepted application, or release.
+The normative boundary is `stdlib/src/Foundation/Holo/V1/BrowserWire.md`.
+
 ## 4. Controller API, CLI, and diagnostics
 
 The public API consists of `Controller::load`, `check`, `build`, `verify`, and `clean`
@@ -1724,6 +1746,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-10` | `holo` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. | §3 |
 | `HO-11` | `holo` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. | §3 |
 | `HO-12` | `holo` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. | §3 |
+| `HO-13` | `holo` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
