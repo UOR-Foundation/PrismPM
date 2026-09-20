@@ -53,31 +53,68 @@ test('captured evidence rejects symlinks, directories and over-bound bytes',t=>{
 });
 
 test('owning test runner rejects skipped, missing or failed successful-shell TAP',()=>{
- const tap=['TAP version 13',...Array.from({length:15},(_,index)=>`ok ${index+1} - case ${index+1}`),
-  '1..15','# tests 15','# suites 0','# pass 15','# fail 0','# cancelled 0','# skipped 0','# todo 0'].join('\n');
+ const tap=['TAP version 13',...Array.from({length:18},(_,index)=>`ok ${index+1} - case ${index+1}`),
+  '1..18','# tests 18','# suites 0','# pass 18','# fail 0','# cancelled 0','# skipped 0','# todo 0'].join('\n');
  testOutput({...raw({}),stdout:tap});
- for(const output of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 15','# tests 14'),tap.replace('ok 1 - case 1','ok 1 - case 1 # SKIP')])assert.throws(()=>testOutput({...raw({}),stdout:output}));
+ for(const output of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 18','# tests 17'),tap.replace('ok 1 - case 1','ok 1 - case 1 # SKIP')])assert.throws(()=>testOutput({...raw({}),stdout:output}));
  assert.throws(()=>testOutput({...raw({}),stdout:tap,status:1}));
 });
 
-test('product invocation uses installed executable and exact locked release arguments',()=>{
+test('product invocation uses installed executable and exact locked release arguments',async()=>{
  let call;const launch=(...args)=>{call=args;return raw(result('A'));};
  const args=['build','--locked','--release','A','-t','ghcr.io/uor-foundation/prismpm-product-probe:a'];
- productResult(cli('/tmp/owned-fixture',args,{schema:'prismpm/product-release-result/1'},launch),'A');
+ productResult(await cli('/tmp/owned-fixture',args,{schema:'prismpm/product-release-result/1'},launch),'A');
  assert.equal(call[0],'/usr/local/bin/prismpm');assert.deepEqual(call[1],['--project','/tmp/owned-fixture','--json',...args]);
  assert.equal(call[2].env.CARGO_NET_OFFLINE,'true');assert.equal(call[2].env.CARGO_TARGET_DIR,undefined);
  assert(call[2].timeout>0&&call[2].timeout<=1800000);assert(call[2].maxBuffer<=16*1024*1024);
+ await cli('/tmp/owned-fixture',['fetch','--locked'],{},launch);assert.equal(call[2].env.CARGO_NET_OFFLINE,'false');
 });
 
-test('CLI boundaries require actual success or exact modeled failure and exit class',()=>{
+test('CLI boundaries require actual success or exact modeled failure and exit class',async()=>{
  const expected={schema:'prismpm/product-release-result/1'};
- for(const invalid of [{...raw(result('A')),status:1},{...raw(result('A')),signal:'SIGTERM'},{...raw(result('A')),error:new Error('deadline')},raw({schema:'different'}),{...raw(result('A')),stdout:'noise\n{}'}])assert.throws(()=>cli('/tmp/project',['build','--locked'],expected,()=>invalid));
+ for(const invalid of [{...raw(result('A')),status:1},{...raw(result('A')),signal:'SIGTERM'},{...raw(result('A')),error:new Error('deadline')},raw({schema:'different'}),{...raw(result('A')),stdout:'noise\n{}'}])await assert.rejects(()=>cli('/tmp/project',['build','--locked'],expected,()=>invalid));
  for(const [code,exit] of [['PP5401',4],['PP6101',5]]){
   const error={schema:'prismpm/error-result/1',diagnostic:{code}};
-  cli('/tmp/project',['lock','check'],{code,exit},()=>({...raw(error),status:exit}));
-  for(const invalid of [raw(error),{...raw(error),status:101},{...raw({...error,diagnostic:{code:'PP1001'}}),status:exit}])assert.throws(()=>cli('/tmp/project',['lock','check'],{code,exit},()=>invalid));
+  await cli('/tmp/project',['lock','check'],{code,exit},()=>({...raw(error),status:exit}));
+  for(const invalid of [raw(error),{...raw(error),status:101},{...raw({...error,diagnostic:{code:'PP1001'}}),status:exit}])await assert.rejects(()=>cli('/tmp/project',['lock','check'],{code,exit},()=>invalid));
  }
- assert.throws(()=>command('prismpm',[],{},()=>raw({})),/absolute/);
+ await assert.rejects(()=>command('prismpm',[],{},()=>raw({})),/absolute/);
+});
+
+test('actual subprocess transport preserves argv, cwd, failure and bounded output',async t=>{
+ const root=temporary(t),actual=await command(process.execPath,['-e','process.stdout.write(JSON.stringify({cwd:process.cwd(),args:process.argv.slice(1)}))','a b',';literal'],{cwd:root,timeout:5000});
+ assert.deepEqual(JSON.parse(actual.stdout),{cwd:root,args:['a b',';literal']});
+ await assert.rejects(()=>command(process.execPath,['-e','process.exit(7)'],{timeout:5000}),/exit status/);
+ await assert.rejects(()=>command(process.execPath,['-e','process.kill(process.pid,"SIGTERM")'],{timeout:5000}),/command terminated/);
+ await assert.rejects(()=>command(process.execPath,['-e','process.stdout.write("x".repeat(65536));setInterval(()=>{},1000)'],{timeout:5000,maximum:64}),/output exceeds/);
+ await assert.rejects(()=>command('/missing-installed-tool',[],{timeout:5000}),/ENOENT/);
+});
+
+test('actual deadline kills descendant process group and cannot hang on retained pipes',async t=>{
+ const root=temporary(t),pidFile=join(root,'descendant');
+ const source='const {spawn}=require("node:child_process");const fs=require("node:fs");const child=spawn(process.execPath,["-e","setTimeout(()=>{},6000)"],{stdio:["ignore",1,2]});fs.writeFileSync(process.argv[1],String(child.pid));setInterval(()=>{},1000)';
+ const before=Date.now();await assert.rejects(()=>command(process.execPath,['-e',source,pidFile],{timeout:1000}),/timed out/);
+ assert(Date.now()-before<5000,'deadline must not wait for descendant pipe closure');
+ const pid=Number(readFileSync(pidFile,'utf8'));assert(Number.isSafeInteger(pid)&&pid>1);
+ const state=()=>{try{return readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1][0];}catch(error){if(error.code==='ENOENT')return null;throw error;}};
+ t.after(()=>{if(!['Z',null].includes(state()))try{process.kill(pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}});
+ for(let attempt=0;attempt<30&&!['Z',null].includes(state());attempt++)await new Promise(resolve=>setTimeout(resolve,10));
+ assert(['Z',null].includes(state()),'timed-out descendant must not remain executing');
+});
+
+test('owning deadline test rejects direct-child-only termination mutant',t=>{
+ const root=temporary(t),source=readFileSync(new URL('./product-sdk-check.mjs',import.meta.url),'utf8');
+ const before="process.kill(-child.pid,'SIGKILL')";assert.equal(source.split(before).length,2);
+ const module=source.replace(before,"child.kill('SIGKILL')")
+  .replace("'./library-sdk-check.mjs'",JSON.stringify(new URL('./library-sdk-check.mjs',import.meta.url).href))
+  .replace("'./browser-api-sdk-check.mjs'",JSON.stringify(new URL('./browser-api-sdk-check.mjs',import.meta.url).href))
+  .replace("'../sdk/platform-lock.mjs'",JSON.stringify(new URL('../sdk/platform-lock.mjs',import.meta.url).href));
+ put(root,'product-sdk-check.mjs',module);
+ put(root,'product-sdk-check.test.mjs',readFileSync(new URL('./product-sdk-check.test.mjs',import.meta.url),'utf8')
+  .replace("'./library-sdk-check.mjs'",JSON.stringify(new URL('./library-sdk-check.mjs',import.meta.url).href)));
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const child=spawnSync(process.execPath,['--test','--test-name-pattern=actual deadline kills descendant',join(root,'product-sdk-check.test.mjs')],{env,encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
+ assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,1);assert.match(child.stdout,/timed-out descendant must not remain executing/);
 });
 
 test('product results close release, immutable digest and confined evidence bindings',()=>{
@@ -174,7 +211,7 @@ test('actual owning CLI boundary test rejects a removed exit-status guard',t=>{
  put(root,'product-sdk-check.test.mjs',testSource);
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
  const child=spawnSync(process.execPath,['--test','--test-name-pattern=CLI boundaries require actual success',join(root,'product-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:10000,maxBuffer:1024*1024});
- assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,1);assert.match(child.stdout,/Missing expected exception/);
+ assert.equal(child.error,undefined);assert.equal(child.signal,null);assert.equal(child.status,1);assert.match(child.stdout,/Missing expected rejection/);
 });
 
 // Recording transport only: Docker and acquisition data are intentionally

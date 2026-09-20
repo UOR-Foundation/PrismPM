@@ -2,7 +2,7 @@
 // crates.io qualification; every positive OCI byte must come from the real CLI.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {spawnSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import {chmodSync,closeSync,constants,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,openSync,readFileSync,readSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -58,16 +58,43 @@ function copy(source,destination){
 export function capture(root,revision){assert.match(revision,/^[0-9a-f]{40}$/);return{revision,files:tree(root,sourceRoots,sourceAliases)};}
 export function verifySource(root,expected){equal(capture(root,expected.revision),expected);}
 
-export function command(program,args,{cwd,env=process.env,timeout=1800000,maximum=16*1024*1024,status=0}={},launch=spawnSync){
+function launchProcess(program,args,{cwd,env,timeout,maxBuffer}){
+ return new Promise((resolve,reject)=>{
+  const child=spawn(program,args,{cwd,env,detached:true,stdio:['ignore','pipe','pipe']});
+  const streams=[[],[]],lengths=[0,0];let failure;
+  function killGroup(){if(child.pid)try{process.kill(-child.pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')failure??=error;}}
+  // A trusted tool can create its own subgroup (GNU timeout does). Close local
+  // readers on failure as well; inherited pipes cannot prevent rejection. The
+  // outer wrapper then removes the owned container, including its namespace.
+  const stop=error=>{failure??=error;killGroup();child.stdout.destroy();child.stderr.destroy();};
+  const timer=setTimeout(()=>stop(new Error('command process group timed out')),timeout);
+  const handlers=['SIGHUP','SIGINT','SIGTERM'].map(signal=>[signal,()=>stop(new Error('command interrupted by '+signal))]);
+  for(const [signal,handler] of handlers)process.on(signal,handler);
+  const clean=()=>{clearTimeout(timer);for(const [signal,handler] of handlers)process.removeListener(signal,handler);};
+  for(const [index,stream] of [child.stdout,child.stderr].entries())stream.on('data',value=>{
+   const remaining=Math.max(0,maxBuffer-lengths[index]);if(remaining)streams[index].push(value.subarray(0,remaining));
+   lengths[index]+=value.length;if(lengths[index]>maxBuffer)stop(new Error('command output exceeds bound'));
+  });
+  child.once('error',error=>{clean();killGroup();reject(error);});
+  child.once('close',(status,signal)=>{
+   clean();killGroup();const result={status,signal,stdout:Buffer.concat(streams[0]).toString(),stderr:Buffer.concat(streams[1]).toString()};
+   if(failure){failure.result=result;reject(failure);}else resolve(result);
+  });
+ });
+}
+export async function command(program,args,{cwd,env=process.env,timeout=1800000,maximum=16*1024*1024,status=0}={},launch=launchProcess){
  assert(program.startsWith('/'),'absolute installed executable required');
- const child=launch(program,args,{cwd,env,encoding:'utf8',timeout,maxBuffer:maximum,killSignal:'SIGKILL'});
+ assert(Number.isSafeInteger(timeout)&&timeout>0&&timeout<=1800000);assert(Number.isSafeInteger(maximum)&&maximum>0&&maximum<=64*1024*1024);
+ const child=await launch(program,args,{cwd,env,encoding:'utf8',timeout,maxBuffer:maximum,killSignal:'SIGKILL'});
  assert.equal(child.error,undefined,'command execution failed');assert.equal(child.signal,null,'command terminated');
  assert.equal(child.status,status,'command exit status: '+program+' '+args.join(' ')+'\n'+(child.stderr??'').slice(-4000));
  return child;
 }
-export function cli(project,args,expected,launch=spawnSync){
- const env={...process.env,CARGO_NET_OFFLINE:'true'};delete env.CARGO_TARGET_DIR;
- const output=command('/usr/local/bin/prismpm',['--project',project,'--json',...args],
+export async function cli(project,args,expected,launch=launchProcess){
+ // Acquisition is deliberately online. The SDK-owned fixture registry stays
+ // local; all later construction/replay also has an OS-level network boundary.
+ const env={...process.env,CARGO_NET_OFFLINE:args[0]==='fetch'?'false':'true'};delete env.CARGO_TARGET_DIR;
+ const output=await command('/usr/local/bin/prismpm',['--project',project,'--json',...args],
   {env,status:expected.code?expected.exit:0,maximum:args[0]==='fetch'?64*1024*1024:16*1024*1024},launch);
  const value=JSON.parse(output.stdout);
  if(expected.code){assert.equal(value.schema,'prismpm/error-result/1');assert.equal(value.diagnostic?.code,expected.code);}
@@ -121,7 +148,7 @@ function imageEnvironment(lock){
  assert.equal(tool[0].executable,'/usr/local/bin/prismpm');assert.equal('sha256:'+tool[0].sha256,sha(bytes('/usr/local/bin/prismpm')));
  return inventory;
 }
-function projectSource(project){
+async function projectSource(project){
  mkdirSync(join(project,'src/Production'),{recursive:true});
  for(const name of ['prismpm.toml','lakefile.toml','lake-manifest.json','lean-toolchain'])put(join(project,name),bytes(join(installed,'examples/Calculator',name)));
  put(join(project,'lexlean.toml'),bytes(join(installed,'tests/browser-system/lexlean.toml')));
@@ -129,12 +156,12 @@ function projectSource(project){
  put(join(project,'src/Calculator.lex.tex'),bytes(join(installed,'examples/Calculator/src/Calculator.lex.tex')));
  for(const name of ['Core','BrowserSystem'])put(join(project,'src/Production',name+'.lex.tex'),bytes(join(installed,'stdlib/src/Production',name+'.lex.tex')));
  put(join(project,'prismpm.lock'),bytes(join(inputs,'prismpm.lock')));put(join(project,'standards.lock'),bytes(shared+'/standards.lock'));
- command('/usr/local/bin/lexlean',['lock'],{cwd:project,timeout:300000});
- cli(project,['lock','check'],{});
+ await command('/usr/local/bin/lexlean',['lock'],{cwd:project,timeout:300000});
+ await cli(project,['lock','check'],{});
 }
-function registry(project){
+async function registry(project){
  const path=join(project,'.prism/product-registry');mkdirSync(path,{recursive:true});
- command('/usr/bin/tar',['-xf',join(installed,'vendor/registry.tar'),'-C',path],{timeout:60000});
+ await command('/usr/bin/tar',['-xf',join(installed,'vendor/registry.tar'),'-C',path],{timeout:60000});
  const release=json(shared+'/stdlib/release.json'),crate=bytes(shared+'/stdlib/generated/prism-stdlib-0.2.0.crate');
  assert.equal(sha(crate),'sha256:'+release.crate_sha256);
  const inventory=validateInventory(bytes(shared+'/inventory.json'));
@@ -145,26 +172,28 @@ function registry(project){
  // dependency homes; neither a host package nor a public-registry claim enters.
  put(join(project,'.cargo/config.toml'),'[net]\noffline = true\n[source.crates-io]\nreplace-with = "installed-sdk-probe"\n[source.installed-sdk-probe]\nlocal-registry = ".prism/product-registry"\n');
 }
-function generatedPackage(project,build){
+async function generatedPackage(project,build){
  hex(build.build_id);const root=join(project,'.prism/build',build.build_id,'cargo/package');
  assert(existsSync(root),'real generated application package is required');
  const files=tree(root).filter(row=>row.kind==='file');assert(files.some(row=>row.path==='Cargo.toml'));assert(files.some(row=>row.path==='Cargo.lock'));assert(files.some(row=>row.path==='src/lib.rs'));
  for(const row of files)put(join(project,row.path),bytes(join(root,row.path)));
- registry(project);command('/usr/local/cargo/bin/cargo',['metadata','--locked','--offline','--format-version','1'],{cwd:project,timeout:120000});
+ await registry(project);await command('/usr/local/cargo/bin/cargo',['metadata','--locked','--offline','--format-version','1'],{cwd:project,timeout:120000});
  return files;
 }
 function scans(project,lock){return ['amd64','arm64'].map(arch=>json(join(project,'.prism/cache/advisory-scans/sha256',lock.sdk_image.split('@sha256:')[1],'linux-'+arch+'.json')));}
 
-export function acquire(){
+export async function acquire(){
  const lock=json(join(inputs,'prismpm.lock')),inventory=imageEnvironment(lock);assert(!existsSync(work));mkdirSync(work);
- const first=join(work,'first');projectSource(first);
- const checked=cli(first,['check'],{schema:'prismpm/check-result/1'});
- const built=cli(first,['build','--release','A'],{schema:'prismpm/build-result/1'});
- const packageFiles=generatedPackage(first,built);
- const fetched=cli(first,['fetch','--locked'],{});const actualScans=scans(first,lock);validateScans(actualScans,lock,inventory);
- const second=join(work,'second');projectSource(second);
+ const first=join(work,'first');await projectSource(first);
+ // The public check command has no release operand; system_root(None) selects
+ // B. Both A and B must independently bind this same checked application.
+ const checked=await cli(first,['check'],{schema:'prismpm/check-result/1'});
+ const built=await cli(first,['build','--release','A'],{schema:'prismpm/build-result/1'});
+ const packageFiles=await generatedPackage(first,built);
+ const fetched=await cli(first,['fetch','--locked'],{});const actualScans=scans(first,lock);validateScans(actualScans,lock,inventory);
+ const second=join(work,'second');await projectSource(second);
  for(const row of packageFiles)put(join(second,row.path),bytes(join(first,row.path)));
- registry(second);copy(join(first,'.prism/cache'),join(second,'.prism/cache'));copy(join(first,'.prism/sdk'),join(second,'.prism/sdk'));
+ await registry(second);copy(join(first,'.prism/cache'),join(second,'.prism/cache'));copy(join(first,'.prism/sdk'),join(second,'.prism/sdk'));
  record(join(work,'acquisition.json'),{sdk_image:lock.sdk_image,sdk_lock_sha256:sha(bytes(join(inputs,'prismpm.lock'))),inventory_sha256:sha(bytes(shared+'/inventory.json')),checked,fetched,package_files:packageFiles,scans:actualScans});
  return {phase:'acquired',sdk_image:lock.sdk_image,scan_count:actualScans.length};
 }
@@ -189,14 +218,14 @@ function boundRelease(project,result,lock){
  assert(Array.isArray(sbom.value['@graph'])&&sbom.value['@graph'].length>0);
  return{result,build_id:buildId,build_files:tree(join(project,'.prism/build',buildId)),proof,spdx_sha256:sbom.descriptor.digest,policy_sha256:policy.descriptor.digest};
 }
-export function buildProducts(){
+export async function buildProducts(){
  const lock=json(join(inputs,'prismpm.lock'));imageEnvironment(lock);const rows=[];
  const acquired=json(join(work,'acquisition.json'));hex(acquired.checked.model_id);
  for(const name of ['first','second']){
   const project=join(work,name),before=bytes(join(project,'prismpm.lock'));
-  const checked=cli(project,['check'],{schema:'prismpm/check-result/1'});equal(checked,acquired.checked);
+  const checked=await cli(project,['check'],{schema:'prismpm/check-result/1'});equal(checked,acquired.checked);
   for(const release of ['A','B']){
-   const result=productResult(cli(project,['build','--locked','--release',release,'-t',reference+':'+release.toLowerCase()],{schema:'prismpm/product-release-result/1'}),release);
+   const result=productResult(await cli(project,['build','--locked','--release',release,'-t',reference+':'+release.toLowerCase()],{schema:'prismpm/product-release-result/1'}),release);
    assert.equal(result.model_digest,'sha256:'+checked.model_id,'actual checked model must bind product');
    equal(bytes(join(project,'prismpm.lock')).toString(),before.toString());
    rows.push({source:name,release,...boundRelease(project,result,lock)});
@@ -206,13 +235,13 @@ export function buildProducts(){
  assert.notEqual(rows[0].result.release_digest,rows[1].result.release_digest,'A/B must be distinct genuine releases');
  const mutation=join(work,'first/prismpm.lock'),original=bytes(mutation),changed=JSON.parse(original);
  const native=changed.platforms.find(row=>row.platform==='linux/'+({x64:'amd64',arm64:'arm64'}[process.arch]));native.inventory_digest='sha256:'+'0'.repeat(64);
- writeFileSync(mutation,canonical(changed));try{cli(join(work,'first'),['lock','check'],{code:'PP5401',exit:4});}finally{writeFileSync(mutation,original);}
- cli(join(work,'first'),['lock','check'],{});
+ writeFileSync(mutation,canonical(changed));try{await cli(join(work,'first'),['lock','check'],{code:'PP5401',exit:4});}finally{writeFileSync(mutation,original);}
+ await cli(join(work,'first'),['lock','check'],{});
  const result={schema:'prismpm/installed-product-build-check/1',sdk_image:lock.sdk_image,releases:rows,checks:['two-roots','release-A','release-B','genuine-product-cli','genuine-sdk-inventory','genuine-advisory-scans','genuine-spdx','wrong-native-lock-refused'],unclaimed};
  record(join(work,'build.json'),result);return result;
 }
 
-export function receive(){
+export async function receive(){
  // Outer orchestration copies only these two data inputs into this fresh
  // container. No source, acquired cache or producer build directory is mounted.
  equal(readdirSync(work).sort(),['build.json','receiver']);
@@ -220,9 +249,9 @@ export function receive(){
  const outputs=[];
  for(const row of build.releases.filter(row=>row.source==='first')){
   const pinned=reference+'@'+row.result.release_digest;
-  cli(receiver,['inspect',pinned],{});
+  await cli(receiver,['inspect',pinned],{});
   const output='browser-'+row.release.toLowerCase();
-  const result=cli(receiver,['export-browser',pinned,'--output',output],{schema:'prismpm/browser-export/1'});
+  const result=await cli(receiver,['export-browser',pinned,'--output',output],{schema:'prismpm/browser-export/1'});
   assert.equal(result.release_digest,row.result.release_digest);assert.equal(result.model_digest,row.result.model_digest);assert.equal(result.build_digest,row.result.build_digest);
   const files=tree(join(receiver,output)).filter(item=>item.kind==='file');assert.equal(files.length,6,'exact six-file browser closure');
   equal(files.map(item=>item.path),result.files.map(item=>item.path));assert.equal(sha(canonical(result.files)),result.tree_digest);
@@ -230,9 +259,9 @@ export function receive(){
   const proof=referrer(receiver,row.result.release_digest,proofType);const victim=proof.layers.find(item=>item.annotations?.['org.opencontainers.image.title']?.startsWith('runtime/'));assert(victim);
   const path=join(receiver,'.prism/oci/blobs/sha256',victim.digest.slice(7)),original=bytes(path);
   for(const [name,change] of [['missing-proof',()=>rmSync(path)],['changed-proof',()=>writeFileSync(path,Buffer.concat([original,Buffer.from([0])]))]]){
-   change();try{cli(receiver,['export-browser',pinned,'--output',output+'-'+name],{code:'PP6101',exit:5});assert(!existsSync(join(receiver,output+'-'+name)));}finally{writeFileSync(path,original);}
+   change();try{await cli(receiver,['export-browser',pinned,'--output',output+'-'+name],{code:'PP6101',exit:5});assert(!existsSync(join(receiver,output+'-'+name)));}finally{writeFileSync(path,original);}
   }
-  const restored=cli(receiver,['export-browser',pinned,'--output',output+'-restored'],{schema:'prismpm/browser-export/1'});assert.equal(restored.tree_digest,result.tree_digest);
+  const restored=await cli(receiver,['export-browser',pinned,'--output',output+'-restored'],{schema:'prismpm/browser-export/1'});assert.equal(restored.tree_digest,result.tree_digest);
   outputs.push({release:row.release,release_digest:row.result.release_digest,model_digest:result.model_digest,build_digest:result.build_digest,tree_digest:result.tree_digest,files:result.files,checks:['source-free-proof-replay','exact-browser-export','missing-proof-refused','changed-proof-refused','restored-export']});
  }
  return{schema:'prismpm/installed-product-cli-check/1',scope:'installed-cli-product-build-and-source-free-integrity',status:'passed',sdk_image:build.sdk_image,releases:outputs,unclaimed};
@@ -256,7 +285,7 @@ export function verifyResult(value,image){
 
 export function testOutput(output){
  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);
- assert.equal(verifyTap(output.stdout,15),15,'complete owning product gate test count');
+ assert.equal(verifyTap(output.stdout,18),18,'complete owning product gate test count');
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -265,14 +294,14 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  else if(mode==='capture'&&args.length===2)console.log(canonical(capture(...args)));
  else if(mode==='verify'&&args.length===2)verifySource(args[0],json(args[1]));
  else if(mode==='image'&&args.length===3)verifyImage(JSON.parse(readFileSync(0)),...args);
- else if(mode==='lock'&&args.length===3){assert.match(args[0],imagePattern);const lock=await capturePlatformLock(args[0],sha(bytes(args[1])),argv=>Buffer.from(command(args[2],argv,{timeout:120000,maximum:8*1024*1024}).stdout));process.stdout.write(canonical(lock));}
- else if(mode==='acquire'&&args.length===0)console.log(canonical(acquire()));
- else if(mode==='build'&&args.length===0)console.log(canonical(buildProducts()));
- else if(mode==='receive'&&args.length===0)console.log(canonical(receive()));
+ else if(mode==='lock'&&args.length===3){assert.match(args[0],imagePattern);const lock=await capturePlatformLock(args[0],sha(bytes(args[1])),async argv=>Buffer.from((await command(args[2],argv,{timeout:120000,maximum:8*1024*1024})).stdout));process.stdout.write(canonical(lock));}
+ else if(mode==='acquire'&&args.length===0)console.log(canonical(await acquire()));
+ else if(mode==='build'&&args.length===0)console.log(canonical(await buildProducts()));
+ else if(mode==='receive'&&args.length===0)console.log(canonical(await receive()));
  else if(mode==='result'&&args.length===2)verifyResult(json(args[0]),args[1]);
  else if(mode==='tests'&&args.length===0){
   const env={...process.env};delete env.NODE_TEST_CONTEXT;
-  const result=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/product-sdk-check.test.mjs'],{cwd:dirname(dirname(fileURLToPath(import.meta.url))),env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});
+  const result=await launchProcess(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/product-sdk-check.test.mjs'],{cwd:dirname(dirname(fileURLToPath(import.meta.url))),env,timeout:150000,maxBuffer:16*1024*1024});
   process.stdout.write(result.stdout??'');process.stderr.write(result.stderr??'');testOutput(result);
  }
  else throw new Error('closed installed product CLI gate command');

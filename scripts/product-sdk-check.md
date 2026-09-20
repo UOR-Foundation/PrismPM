@@ -16,3 +16,8 @@ replay/export, missing/changed proof rejection and restored export. Inventory,
 locks, advisory results, generated SPDX and exact identities remain evidence.
 This gate grants neither SDK release acceptance nor deployment authorization.
 Unit boundary fixtures do not count as installed-image execution.
+
+The public `check` command selects the fixture's default B system; A and B must
+both bind that checked application. Acquisition is online. Construction/replay
+is network-isolated. Timed-out or oversized commands terminate their private
+process group and close inherited readers; the failing container is removed.
