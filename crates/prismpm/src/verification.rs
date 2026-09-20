@@ -507,6 +507,24 @@ fn stable_success_output(tool: &str, value: String) -> String {
     }
 }
 
+fn hologram_oracle_environment(root: &Path) -> BTreeMap<String, String> {
+    // run_process clears the ambient Cargo policy. Bound this independent
+    // cold compiler explicitly; debug symbols and incremental state do not
+    // participate in the unchanged upstream oracle's execution or assertions.
+    BTreeMap::from([
+        ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
+        ("CARGO_BUILD_JOBS".to_owned(), "2".to_owned()),
+        ("CARGO_PROFILE_DEV_DEBUG".to_owned(), "0".to_owned()),
+        ("CARGO_INCREMENTAL".to_owned(), "0".to_owned()),
+        (
+            "CARGO_TARGET_DIR".to_owned(),
+            root.join("target/hologram-oracle")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+    ])
+}
+
 fn run_hologram_oracle(
     controller: &Controller,
     build_root: &Path,
@@ -559,16 +577,7 @@ fn run_hologram_oracle(
         (build_root, "$BUILD"),
         (work.path(), "$ORACLE_WORK"),
     ];
-    let mut env = BTreeMap::new();
-    env.insert("CARGO_NET_OFFLINE".to_owned(), "true".to_owned());
-    env.insert(
-        "CARGO_TARGET_DIR".to_owned(),
-        controller
-            .root
-            .join("target/hologram-oracle")
-            .to_string_lossy()
-            .into_owned(),
-    );
+    let env = hologram_oracle_environment(&controller.root);
     let node_version = run_process(
         "hologram-browser-node-version",
         &node,
@@ -789,6 +798,67 @@ pub(crate) fn validate_hologram_oracle_report(
 #[cfg(test)]
 mod portable_oracle_tests {
     use super::*;
+
+    #[test]
+    fn oracle_compile_policy_survives_environment_isolation() {
+        const CHILD: &str = "PRISMPM_ORACLE_BUILD_POLICY_TEST";
+        let hostile = BTreeMap::from([
+            ("CARGO_BUILD_JOBS", "999"),
+            ("CARGO_PROFILE_DEV_DEBUG", "2"),
+            ("CARGO_INCREMENTAL", "1"),
+            ("CARGO_NET_OFFLINE", "false"),
+            ("CARGO_TARGET_DIR", "/nonexistent/ambient-oracle-target"),
+        ]);
+        if std::env::var_os(CHILD).is_some() {
+            for (key, value) in &hostile {
+                assert_eq!(std::env::var(key).unwrap(), *value);
+            }
+            assert_eq!(CHILD_TIMEOUT_SECONDS, "300");
+            let root = tempfile::tempdir().unwrap();
+            let policy = hologram_oracle_environment(root.path());
+            let expected = json!({
+                "CARGO_BUILD_JOBS": "2",
+                "CARGO_PROFILE_DEV_DEBUG": "0",
+                "CARGO_INCREMENTAL": "0",
+                "CARGO_NET_OFFLINE": "true",
+                "CARGO_TARGET_DIR": root.path().join("target/hologram-oracle"),
+            });
+            assert_eq!(serde_json::to_value(&policy).unwrap(), expected);
+            let script = "const keys=['CARGO_BUILD_JOBS','CARGO_PROFILE_DEV_DEBUG','CARGO_INCREMENTAL','CARGO_NET_OFFLINE','CARGO_TARGET_DIR'];process.stdout.write(JSON.stringify(Object.fromEntries(keys.map(key=>[key,process.env[key]]))));";
+            let observed = run_process(
+                "oracle-compile-policy-observer",
+                &executable("node").unwrap(),
+                &["-e".to_owned(), script.to_owned()],
+                root.path(),
+                &policy,
+                &[],
+                "PP5301",
+            )
+            .unwrap();
+            assert_eq!(
+                serde_json::from_str::<Value>(&observed.stdout).unwrap(),
+                expected
+            );
+            assert!(observed.stderr.is_empty());
+            return;
+        }
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "verification::portable_oracle_tests::oracle_compile_policy_survives_environment_isolation",
+                "--nocapture",
+            ])
+            .envs(hostile)
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     #[cfg(unix)]
     #[test]
