@@ -680,6 +680,50 @@ jobs:
           pattern: reproducibility-*
           path: release
           merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: full-sdk-vv-sdk-amd64
+          path: .sdk-gate-evidence/full-sdk-vv-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: full-sdk-vv-sdk-arm64
+          path: .sdk-gate-evidence/full-sdk-vv-sdk-arm64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: product-cli-sdk-amd64
+          path: .sdk-gate-evidence/product-cli-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: product-cli-sdk-arm64
+          path: .sdk-gate-evidence/product-cli-sdk-arm64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: browser-sdk-sdk-amd64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: browser-sdk-sdk-arm64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: library-sdk-sdk-amd64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: library-sdk-sdk-arm64
+          path: release
+      - name: Preserve complete native SDK gate evidence without changing acceptance scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=$(cat release/sdk-image.txt)
+          for architecture in amd64 arm64; do
+            for kind in full-sdk-vv product-cli; do
+              node scripts/sdk-release-evidence.mjs "$kind" \
+                ".sdk-gate-evidence/$kind-sdk-$architecture" "release/sdk-$architecture-$kind.tar" \
+                "$image" "$GITHUB_SHA" "$architecture"
+            done
+          done
       - shell: bash
         run: |
           set -euo pipefail

@@ -5,14 +5,27 @@ verification runs `just vv` twice without cleanup. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
 
 With `publish-crates=false`, OCI images are pushed by digest without discovery aliases.
-The `sdk-oci-<source SHA>` GitHub prerelease publishes their immutable references,
+The `sdk-oci-<source SHA>-<run ID>-<attempt>` GitHub prerelease publishes their immutable references,
 native archives, supply-chain files, checksums and reproducibility results.
-It does not grant SDK acceptance or claim Cargo/ecosystem completion. A rerun
-may reuse only an identical public prerelease: metadata, source tag and every
+It does not grant SDK acceptance or claim Cargo/ecosystem completion. Distinct
+executions retain distinct evidence; validated GitHub run IDs and attempts name
+their publications. The same attempt may reuse only an identical public prerelease:
+metadata, source tag and every
 downloaded asset must match. Complete, identical drafts may resume publication;
 different bytes and incomplete drafts fail closed. The workflow never deletes,
 overwrites or silently repairs them. Each credentialed writer independently
 checks the allowed repository, source revision, event, ref and Cargo choice.
+
+Both native installed-SDK two-run records and their original command transcripts,
+genuine product-CLI evidence, and complete browser/library logs are retained in
+that same immutable publication. Deterministic USTAR archives bind each original
+file; missing, substituted, aliased or over-bound inputs stop publication.
+Private Docker/Buildx configuration is excluded, never published as evidence.
+Capture bounds are 64 MiB per metadata/stderr file, 256 MiB per original command
+stdout (including the installed CLI binary), and 1 GiB per complete gate closure;
+excess evidence fails, never truncates. Source revision and immutable SDK image
+remain bound independently of the run-specific discovery tag.
+Retaining these records does not authenticate their claims or issue SDK acceptance.
 
 New publications upload into a draft, download and compare every asset, then
 publish. Both clean OCI rebuilds must equal the shipped platform digest with
