@@ -522,6 +522,22 @@ jobs:
           path: sdk-${{ matrix.arch }}-full-sdk-vv/
           if-no-files-found: error
           retention-days: 30
+      - name: Verify genuine installed product CLI and source-free browser release
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/product-sdk-check.mjs tests
+          bash root-a/scripts/product-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" \
+            "$GITHUB_SHA" "$RESULT_NAME-product-cli"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: product-cli-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-product-cli/
+          if-no-files-found: error
+          retention-days: 30
 
   native:
     needs: [gate, images]
