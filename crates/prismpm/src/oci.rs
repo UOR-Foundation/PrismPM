@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 mod browser_export;
+mod browser_publication;
 mod verification_closure;
 
 /// OCI image-manifest media type adopted by Prism release graphs.
@@ -1798,6 +1799,20 @@ fn require_verified_capture(
 /// This copies verified bytes only; it grants no publication or deployment authority.
 pub fn export_browser(root: &Path, reference: &str, output: &Path) -> Result<Value, PrismError> {
     browser_export::export(root, reference, output)
+}
+
+/// Compare a reverified local release's browser bytes at an explicit HTTPS base.
+/// This verifies byte integrity, not target authorization or product acceptance.
+pub fn verify_browser_publication(
+    root: &Path,
+    reference: &str,
+    url: &str,
+) -> Result<Value, PrismError> {
+    browser_publication::verify(root, reference, url)
+}
+
+pub(crate) fn validate_browser_publication_receipt(value: &Value) -> Result<(), PrismError> {
+    browser_publication::validate_receipt(value)
 }
 
 #[cfg(test)]

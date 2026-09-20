@@ -2,7 +2,7 @@
 
 use crate::controller::{
     BuildRequest, CheckRequest, CleanRequest, Controller, ExportBrowserRequest,
-    ProductBuildRequest, VerifyRequest,
+    ProductBuildRequest, VerifyBrowserPublicationRequest, VerifyRequest,
 };
 use crate::error::PrismError;
 use crate::holo::canonical::encode_value;
@@ -89,6 +89,14 @@ pub enum Commands {
         /// New project-child directory name; no existing file or directory is replaced.
         #[arg(long)]
         output: PathBuf,
+    },
+    /// Compare immutable browser bytes at an explicit HTTPS base; integrity only.
+    VerifyBrowserPublication {
+        /// Registry-qualified immutable reference of a locally acquired release.
+        reference: String,
+        /// Canonical HTTPS base including a trailing slash; redirects are rejected.
+        #[arg(long)]
+        url: String,
     },
     /// Replay the complete release signature closure from stored OCI evidence.
     VerifyRelease {
@@ -618,6 +626,17 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
                 ),
             ))
         }
+        Commands::VerifyBrowserPublication { reference, url } => {
+            let result =
+                controller.verify_browser_publication(VerifyBrowserPublicationRequest {
+                    reference: reference.clone(),
+                    url: url.clone(),
+                })?;
+            Ok((
+                result,
+                format!("browser publication bytes match: {url} (integrity only)"),
+            ))
+        }
         Commands::VerifyRelease { reference } => {
             let digest = crate::oci::validate_reference(reference, true)?;
             let result = crate::supply_chain::verify_release_trust(&controller.root, digest)?;
@@ -971,6 +990,40 @@ pub fn run() -> ExitCode {
 mod tests {
     use super::{Cli, Commands};
     use clap::Parser;
+
+    #[test]
+    fn browser_publication_requires_explicit_target_without_trust_bypass_flags() {
+        let reference = format!("example.test/product@sha256:{}", "a".repeat(64));
+        assert!(Cli::try_parse_from([
+            "prismpm",
+            "verify-browser-publication",
+            &reference,
+            "--url",
+            "https://example.test/foundry-web/",
+        ])
+        .is_ok());
+        assert!(
+            Cli::try_parse_from(["prismpm", "verify-browser-publication", &reference,]).is_err()
+        );
+        for flag in [
+            "--insecure",
+            "--cacert",
+            "--receipt",
+            "--follow",
+            "--accept",
+            "--skip-verify",
+        ] {
+            assert!(Cli::try_parse_from([
+                "prismpm",
+                "verify-browser-publication",
+                &reference,
+                "--url",
+                "https://example.test/foundry-web/",
+                flag,
+            ])
+            .is_err());
+        }
+    }
 
     #[test]
     fn browser_export_has_no_build_or_publication_bypass_flags() {

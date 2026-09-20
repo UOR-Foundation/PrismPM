@@ -12,7 +12,13 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 52] = [
+const CONTRACTS: [Contract; 53] = [
+    Contract {
+        id: "prismpm/browser-publication-integrity/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-publication-integrity.schema.json"),
+    },
     Contract {
         id: "prismpm/library-build-binding/1",
         maximum_bytes: 4_194_304,
@@ -433,7 +439,9 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         return crate::holo::validate::validate(&document);
     }
     let arrays: Vec<(&str, &str)> = match id {
-        "prismpm/browser-export/1" => vec![("files", "path")],
+        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1" => {
+            vec![("files", "path")]
+        }
         "prismpm/capability-coverage/1" => {
             vec![("diagnostics", "code"), ("features", "feature_id")]
         }
@@ -789,7 +797,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             }
         }
     }
-    if id == "prismpm/browser-export/1" {
+    if matches!(
+        id,
+        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1"
+    ) {
         let reference = value["reference"]
             .as_str()
             .expect("schema-validated reference");
@@ -801,6 +812,9 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
                 "browser export receipt identities disagree",
             ));
         }
+    }
+    if id == "prismpm/browser-publication-integrity/1" {
+        crate::oci::validate_browser_publication_receipt(value)?;
     }
     Ok(())
 }

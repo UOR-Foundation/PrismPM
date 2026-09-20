@@ -1370,6 +1370,28 @@ or other unmodeled file is added to the exported tree. This operation verifies
 integrity only. Independent producer authorization, target policy, readiness,
 publication and deployed-product acceptance remain mandatory and separate.
 
+`verify-browser-publication NAME@sha256:DIGEST --url HTTPS_BASE` compares the
+source-free, reverified six-file browser closure and the base URL's index bytes
+against HTTPS responses. It accepts no caller receipt or local exported tree as
+authority. The base is an explicitly selected target, not proof of target
+authorization: lowercase DNS labels, HTTPS default port, and a slash-terminated
+path of nonempty ASCII alphanumeric/underscore/hyphen segments. Credentials,
+queries, fragments, percent encoding, dot segments, IP literals, noncanonical
+hosts and redirects are rejected. Every request requires status 200; no redirect
+destination is contacted. Transport uses system TLS trust, an empty environment,
+no curl configuration, proxy, authentication or caller CA override. At most seven
+requests run serially, each bounded to 35 seconds and its exact expected length
+plus four HTTP-status framing bytes and one overflow-probe byte. Each expected
+file is at most 64 MiB; oversized or unbounded response streams are terminated.
+OCI capture completes before any request. `PP8001` identifies an unsafe target;
+`PP6101` identifies invalid release evidence; `PP7201` identifies transport,
+status or byte failure.
+The closed `prismpm/browser-publication-integrity/1` result binds the release,
+model, build, tree, exact target and complete sorted file list. It establishes
+only observed byte equality, not producer identity, readiness, target authority,
+GitHub deployment identity, future availability, extra unreferenced server files,
+or successful application journeys. Those remain independent release gates.
+
 `verify-signature NAME@sha256:DIGEST --bundle PATH --trusted-root PATH
 --policy PATH` verifies a standard Sigstore v0.3 bundle over the canonical local
 root-manifest bytes. The SDK accepts only its pinned Cosign 3.1.3 executable and
@@ -1570,6 +1592,12 @@ passed unchanged to the SDK's existing command. The SDK owns immutable-reference
 release-evidence and new direct-child destination validation. Export executes
 without network, Docker socket or signing/registry credentials; it returns the
 complete browser-export receipt through `result`, not deployment authorization.
+
+The shared Action forwards the required nonempty `reference` and `url` inputs
+to `verify-browser-publication`. The SDK owns immutable-reference and canonical
+HTTPS target validation. Observation enables network access, but mounts no
+Docker socket or signing/registry credentials. `result` contains only the
+integrity-observation receipt, not deployment authority or readiness evidence.
 It never builds from source or falls back to archive extraction.
 
 Untrusted pull requests check and build without write credentials. Protected
@@ -1751,6 +1779,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `OC-05` | `oci` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. | §13 |
 | `OC-06` | `oci` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. | §13 |
 | `OC-07` | `oci` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. | §13 |
+| `OC-08` | `oci` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. | §13 |
 | `LC-01` | `lifecycle` | The Controller owns fetch, build, push, pull, inspect, run, plan, deploy, status, rollback, and explicit destroy operations. | §14 |
 | `LC-02` | `lifecycle` | Build, push, run, and deploy accept Docker-simple command forms and return stable pipe-safe canonical result values. | §14 |
 | `LC-03` | `lifecycle` | Local run uses unmodified OCI, container, Compose, and Hologram runtimes with modeled isolation, readiness, acceptance, signals, and shutdown. | §14 |

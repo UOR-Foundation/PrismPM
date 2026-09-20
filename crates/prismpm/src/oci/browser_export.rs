@@ -172,7 +172,7 @@ fn publication_parent(directory: &File) -> Result<(), PrismError> {
     Ok(())
 }
 
-fn browser_files(
+pub(super) fn browser_files(
     build_files: &BTreeMap<String, Vec<u8>>,
 ) -> Result<BTreeMap<String, &[u8]>, PrismError> {
     let model: crate::holo::model_document::ModelDocument = serde_json::from_slice(
@@ -388,17 +388,7 @@ pub(super) fn export(root: &Path, reference: &str, output: &Path) -> Result<Valu
         let directory = open_directory(root)?;
         publication_parent(&directory)?;
         absent(&directory, output)?;
-        let prism = child_directory(&directory, std::ffi::OsStr::new(".prism"))?;
-        let layout = child_directory(&prism, std::ffi::OsStr::new("oci"))?;
-        let store = Store {
-            root: root.join(".prism/oci"),
-            read_root: Some(std::sync::Arc::new(layout)),
-        };
-        if store.layout_file(Path::new("oci-layout"), 128)? != b"{\"imageLayoutVersion\":\"1.0.0\"}"
-        {
-            return Err(failure("OCI layout version changed"));
-        }
-        let captured = require_verified_capture(&store, digest, true)?;
+        let captured = capture_directory(root, &directory, digest)?;
         let browser = browser_files(&captured.build_files)?;
         let files = browser
             .iter()
@@ -415,6 +405,39 @@ pub(super) fn export(root: &Path, reference: &str, output: &Path) -> Result<Valu
         CanonicalDocument::from_value("prismpm/browser-export/1", result.clone())?;
         publish(&directory, output, &browser)?;
         Ok(result)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn capture_directory(
+    root: &Path,
+    directory: &File,
+    digest: &str,
+) -> Result<VerifiedReleaseCapture, PrismError> {
+    let prism = child_directory(directory, std::ffi::OsStr::new(".prism"))?;
+    let layout = child_directory(&prism, std::ffi::OsStr::new("oci"))?;
+    let store = Store {
+        root: root.join(".prism/oci"),
+        read_root: Some(std::sync::Arc::new(layout)),
+    };
+    if store.layout_file(Path::new("oci-layout"), 128)? != b"{\"imageLayoutVersion\":\"1.0.0\"}" {
+        return Err(failure("OCI layout version changed"));
+    }
+    require_verified_capture(&store, digest, true)
+}
+
+pub(super) fn capture(root: &Path, reference: &str) -> Result<VerifiedReleaseCapture, PrismError> {
+    let digest = validate_reference(reference, true)?;
+    #[cfg(target_os = "linux")]
+    {
+        capture_directory(root, &open_directory(root)?, digest)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (root, digest);
+        Err(failure(
+            "browser publication requires the Linux SDK filesystem boundary",
+        ))
     }
 }
 

@@ -160,6 +160,7 @@ test_case!(conformance_oc_04, "OC-04");
 test_case!(conformance_oc_05, "OC-05");
 test_case!(conformance_oc_06, "OC-06");
 test_case!(conformance_oc_07, "OC-07");
+test_case!(conformance_oc_08, "OC-08");
 test_case!(conformance_lc_01, "LC-01");
 test_case!(conformance_lc_02, "LC-02");
 test_case!(conformance_lc_03, "LC-03");

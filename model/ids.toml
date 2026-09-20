@@ -841,6 +841,12 @@ level = "build"
 statement = "Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority."
 
 [[id]]
+id = "OC-08"
+suite = "oci"
+level = "build"
+statement = "Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance."
+
+[[id]]
 id = "LC-01"
 suite = "lifecycle"
 level = "build"

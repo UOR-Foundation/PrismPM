@@ -125,6 +125,15 @@ pub struct ExportBrowserRequest {
     pub output: PathBuf,
 }
 
+/// Request for source-free HTTPS byte-integrity verification, not authorization.
+#[derive(Debug, Clone)]
+pub struct VerifyBrowserPublicationRequest {
+    /// Registry-qualified immutable local release reference.
+    pub reference: String,
+    /// Explicit canonical HTTPS base URL, including its trailing slash.
+    pub url: String,
+}
+
 /// Successful build publication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -567,6 +576,14 @@ impl Controller {
         request: ExportBrowserRequest,
     ) -> Result<serde_json::Value, PrismError> {
         crate::oci::export_browser(&self.root, &request.reference, &request.output)
+    }
+
+    /// Compare the complete reverified browser closure at one explicit HTTPS target.
+    pub fn verify_browser_publication(
+        &self,
+        request: VerifyBrowserPublicationRequest,
+    ) -> Result<serde_json::Value, PrismError> {
+        crate::oci::verify_browser_publication(&self.root, &request.reference, &request.url)
     }
 
     /// Build LexLean artifacts and atomically publish the fixed Prism artifact set.

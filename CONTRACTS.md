@@ -9,6 +9,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 
 | Schema | JSON Schema | Media type | Limits | Compatibility |
 | --- | --- | --- | --- | --- |
+| `prismpm/browser-publication-integrity/1` | `schemas/browser-publication-integrity.schema.json` | `application/vnd.prismpm.browser-publication-integrity.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/library-build-binding/1` | `schemas/library-build-binding.schema.json` | `application/vnd.prismpm.library-build-binding.v1+json` | 4194304 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/library-acceptance/1` | `schemas/library-acceptance.schema.json` | `application/vnd.prismpm.library-acceptance.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
 | `prismpm/library-verification-manifest/1` | `schemas/library-verification-manifest.schema.json` | `application/vnd.prismpm.library-verification.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
@@ -93,5 +94,6 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `status` | `never` | `true` | `prismpm/deployment-state/1` |
 | `template` | `explicit-update-only` | `false` | `prismpm/template-result/1` |
 | `verify` | `local-evidence` | `false` | `prismpm/verify-result/1` |
+| `verify-browser-publication` | `never` | `true` | `prismpm/browser-publication-integrity/1` |
 | `verify-release` | `never` | `true` | `prismpm/signature-closure-result/1` |
 | `verify-signature` | `verified-local-evidence` | `true` | `prismpm/signature-result/1` |

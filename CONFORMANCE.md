@@ -137,6 +137,7 @@ The three honesty levels:
 | `OC-05` | `build` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. |
 | `OC-06` | `build` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. |
 | `OC-07` | `build` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. |
+| `OC-08` | `build` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. |
 
 ## operations
 

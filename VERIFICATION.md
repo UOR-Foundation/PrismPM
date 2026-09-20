@@ -1734,6 +1734,38 @@ the two source/oracle tests and all-target/all-feature Clippy pass.
 | `target/cbor-helper-complete-restored.log` | `28700c697ff636dd1735bd44fee08f64cceff6daa8498c435e4e43159f410904` |
 | `target/cbor-exact-wasm-accounting-replay.log` | `563783fbd980d008df2a73c49fa90750f54e83646bc87305bdca69903ae86395` |
 
+## Browser publication integrity (OC-08)
+
+The registered owning gate passes in 359.45 seconds and requires all 12 exact
+tests, with none ignored. A genuine generated Calculator release is verified,
+replayed without source, and compared through actual loopback HTTPS. The gate
+also rejects changed release graphs, base-index and artifact mismatches,
+missing/oversized/chunked responses, every redirect class, unsafe targets,
+untrusted TLS and ambient transport overrides. Deadline tests include a
+descendant retaining the response pipe. Closed receipt mutations check release,
+tree, profile, target, order and scope consistency.
+
+Actual deletion of the status guard and then the byte-comparison guard makes
+the corresponding owning tests fail. Both guards are restored. Fresh model
+generation/readback, 12 model unit tests, two model integration tests, 15 contract
+tests, formatting and workspace all-target/all-feature Clippy pass.
+
+Earlier runs exposed stale same-version path-crate cache entries: one rejected
+a supported compiler opcode; another selected a different worktree's model.
+Scoped local/path-package cache removal and rebuilding corrected both; no
+compiler/vendor source changed. The other worktree remained byte-identical.
+Only the fresh, correctly rooted owning run is accepted here.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/browser-publication-fresh-oc08.log` | `db8282fff9938d40f5055fba9f74592fec47cc05b3879fbf36582442b4e480f9` |
+| `target/browser-publication-final-static.log` | `c24b930052038566895f3600fc99f680157692d2c7c0a85c4c9efb252d47de80` |
+| `target/browser-publication-status-mutation.log` | `d13195da8a1ad8b208dc1ab409ff07ffe927cd9b64b607284d2eb041ceb6ccaa` |
+| `target/browser-publication-bytes-mutation.log` | `cc8be8b4f11ee5041f08e6ec68a179604f6992c7da9be6e8f1066ab619fa75c4` |
+
+This establishes bounded byte observation, not publisher authority, application
+readiness, complete SDK acceptance or deployment. No public endpoint was contacted.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

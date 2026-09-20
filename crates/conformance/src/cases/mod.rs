@@ -2,6 +2,7 @@
 
 mod browser_bootstrap;
 mod browser_effect;
+mod browser_publication;
 mod cbor_primitive;
 mod mailbox_admission;
 mod native_library;
@@ -421,6 +422,7 @@ pub fn run_at(root: &Path, id: &str) {
         "DK-17" => native_library::verify(root),
         "DK-18" => browser_effect::verify(root),
         "OC-07" => verify_browser_export(root),
+        "OC-08" => browser_publication::verify(root),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
         "DP-01" | "DP-02" | "DP-03" | "DP-04" | "DP-05" | "DP-06" => verify_deployment(id),
