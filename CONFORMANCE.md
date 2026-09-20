@@ -190,6 +190,8 @@ The three honesty levels:
 | `DK-17` | `build` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. |
 | `DK-18` | `build` | The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile. |
 | `DK-19` | `build` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. |
+| `DK-20` | `build` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. |
+| `DK-21` | `build` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. |
 
 ## security
 

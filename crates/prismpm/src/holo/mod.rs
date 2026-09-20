@@ -2,6 +2,7 @@
 
 pub mod application;
 pub mod archive;
+pub mod browser_application;
 pub mod canonical;
 pub mod library;
 pub mod model_document;

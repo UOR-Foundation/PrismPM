@@ -539,6 +539,11 @@ pub fn project_application(
         ));
     }
     let ((module, _), declaration) = candidates[0];
+    if member_name(declaration) == Some("BrowserApplication") {
+        let browser = super::browser_application::project(&definitions, module, declaration)?;
+        super::browser_application::validate_roots(&browser, snapshot)?;
+        return projected_document(snapshot, Application::Browser(Box::new(browser)));
+    }
     let fields = record(
         &definitions,
         module,
@@ -546,6 +551,15 @@ pub fn project_application(
             .get("body")
             .ok_or_else(|| PrismError::new("PP2001", "application has no body"))?,
     )?;
+    if fields
+        .get("profile")
+        .is_some_and(|(_, value)| value["value"] == super::browser_application::PROFILE)
+    {
+        return Err(PrismError::new(
+            "PP2010",
+            "browser application profile requires its exact source-owned type",
+        ));
+    }
     let request_maximum = u32::try_from(unsigned(&fields, "requestMaximum", "uint32")?)
         .map_err(|_| PrismError::new("PP2001", "requestMaximum exceeds UInt32"))?;
     let response_maximum = u32::try_from(unsigned(&fields, "responseMaximum", "uint32")?)
@@ -635,10 +649,18 @@ pub fn project_application(
             targets: constructor_list(&fields, "targets")?,
         }))
     };
+    projected_document(snapshot, application)
+}
+
+fn projected_document(
+    snapshot: &SemanticSnapshot,
+    application: Application,
+) -> Result<Option<ModelDocument>, PrismError> {
     let document = ModelDocument {
         schema: match &application {
             Application::Legacy(_) => "prismpm/model-document/1",
             Application::Text(_) => "prismpm/model-document/2",
+            Application::Browser(_) => "prismpm/model-document/4",
         }
         .to_owned(),
         provenance: ProjectionProvenance {

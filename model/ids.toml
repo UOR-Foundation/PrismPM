@@ -811,6 +811,12 @@ level = "build"
 statement = "The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance."
 
 [[id]]
+id = "DK-21"
+suite = "sdk"
+level = "build"
+statement = "The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

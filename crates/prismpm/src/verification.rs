@@ -726,6 +726,9 @@ pub(crate) fn validate_hologram_oracle_report(
             continue;
         };
         let applicable = match application {
+            Application::Browser(_) => {
+                return crate::holo::browser_application::require_runtime(application)
+            }
             Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
             Application::Legacy(value) => {
                 let fields = request.split('\t').collect::<Vec<_>>();
@@ -760,6 +763,9 @@ pub(crate) fn validate_hologram_oracle_report(
         "intent-boundaries",
     ];
     let profile = match application {
+        Application::Browser(_) => {
+            return crate::holo::browser_application::require_runtime(application)
+        }
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
             "utf8-text"

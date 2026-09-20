@@ -521,10 +521,22 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 13] = [
+    const INPUTS: [(&str, &[u8]); 17] = [
         (
             "crates/prismpm/src/holo/application.rs",
             include_bytes!("application.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/browser_application.rs",
+            include_bytes!("browser_application.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/browser_application/model.rs",
+            include_bytes!("browser_application/model.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/browser_application/source.rs",
+            include_bytes!("browser_application/source.rs"),
         ),
         (
             "crates/prismpm/src/holo/canonical.rs",
@@ -566,6 +578,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "schemas/model-document-v3.schema.json",
             include_bytes!("../../schemas/model-document-v3.schema.json"),
+        ),
+        (
+            "schemas/model-document-v4.schema.json",
+            include_bytes!("../../schemas/model-document-v4.schema.json"),
         ),
         (
             "schemas/model-document.schema.json",

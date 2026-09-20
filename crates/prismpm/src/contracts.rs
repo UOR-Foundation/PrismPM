@@ -12,7 +12,13 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 55] = [
+const CONTRACTS: [Contract; 56] = [
+    Contract {
+        id: "prismpm/model-document/4",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/model-document-v4.schema.json"),
+    },
     Contract {
         id: "prismpm/browser-publication-integrity/1",
         maximum_bytes: 1_048_576,
@@ -457,10 +463,15 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             }
         }
     }
-    if matches!(id, "prismpm/model-document/2" | "prismpm/model-document/3") {
+    if matches!(
+        id,
+        "prismpm/model-document/2" | "prismpm/model-document/3" | "prismpm/model-document/4"
+    ) {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
             PrismError::new(
-                if id == "prismpm/model-document/2" {
+                if id == "prismpm/model-document/4" {
+                    "PP2010"
+                } else if id == "prismpm/model-document/2" {
                     "PP2009"
                 } else {
                     "PP4004"

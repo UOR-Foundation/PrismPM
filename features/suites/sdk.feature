@@ -1,5 +1,11 @@
 Feature: sdk
 
+  @DK-21 @build
+  Scenario: The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance.
+    Given independently checked declarations in the exact standard-library namespace
+    When source projections and schema mutations exercise every closed boundary
+    Then declarations remain distinct from portable profiles and build refuses the unavailable runtime
+
   @DK-20 @build
   Scenario: The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance.
     Given the complete finite effect corpus, bounded wire closure and independently admitted private bootstrap artifacts

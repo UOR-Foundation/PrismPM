@@ -467,6 +467,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "2021",
             "--check",
             "tests/browser-workspace/runner.rs",
+            "tests/support/browser_application.rs",
             "tests/browser-envelope/runner.rs",
             "tests/browser-journal/runner.rs",
             "tests/browser-command/runner.rs",

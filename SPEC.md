@@ -1393,6 +1393,46 @@ profile, claim bootstrap provenance authenticates its producer, implement
 networking or mailbox enrollment, or establish Foundry/product/deployment
 acceptance. Existing complete acceptance obligations remain mandatory.
 
+### 12.9 Browser application declaration prerequisite
+
+DK-21 owns the closed source declaration
+`Foundation.Browser.Application.V1.Model.BrowserApplication`, profile
+`prismpm/browser-application/1`, projected as `prismpm/model-document/4`.
+Old model-document profiles and portable application bytes are unchanged.
+Every declared executable root resolves to an actual monomorphic `Bytes → Bytes`
+definition. Resource requests, labels and metadata are bounded and closed;
+foreign same-shaped types, unknown fields, unordered resources, unresolved roots
+and substituted profiles reject. Profile validation uses `PP2010`; malformed
+language or canonical envelopes retain their owning diagnostics.
+
+Requested effects are not effective grants. Guest requests identify source roots,
+not caller artifact bytes. Signing slots are private-custody requests, not keys or
+account authority. Native Holo capabilities remain empty for the import-free
+primary; the required `prismpm-browser/1` View has its own explicit host boundary.
+The declaration grants no script, HTML, URL, callback, network or mailbox access.
+Runtime must independently bind actual artifact bytes, possessed credentials and
+effective permissions to the generated dispatcher and immutable requested policy.
+
+Durability declares one serialized operation and a generated authenticated replay
+root bound to a requested store. Before an irreversible effect, generated state
+must durably retain its complete bindings. Unknown outcomes require authenticated
+reconciliation, never a caller receipt or automatic retry. This is not persistence
+of DK-20's private queue, cross-device consensus, credential rotation or recovery
+implementation. Existing Organization and Workspace bounds are not reduced.
+
+The primary declares at most 64 MiB input/output and 16384 memory pages; imported
+guest requests retain DK-20's 2 MiB and primitive bounds. Literal declaration vectors
+have at most 256 entries and 24576 aggregate request/response bytes. They need not
+embed a maximum-sized allocation. Complete runtime acceptance must separately
+execute actual declared input/output/memory maxima, generated dispatch and safe
+presentation, effective-grant denial and durable recovery. Finite declaration
+examples do not accept unexecuted runtime sizes or services.
+
+This slice accepts declarations only. `PP2011` refuses generation before any
+compiler output or publication until the complete generated runtime, safe View,
+credential custody and durable uncertain-operation recovery are implemented.
+It does not establish an integrated Foundry application or deployment.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1873,6 +1913,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-18` | `sdk` | The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile. | §12 |
 | `DK-19` | `sdk` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. | §12 |
 | `DK-20` | `sdk` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. | §12 |
+| `DK-21` | `sdk` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

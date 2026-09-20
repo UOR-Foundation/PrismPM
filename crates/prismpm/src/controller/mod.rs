@@ -601,6 +601,9 @@ impl Controller {
         release: Option<&str>,
     ) -> Result<BuildResult, PrismError> {
         let prepared = self.prepare_release(request.config_path.as_deref(), release)?;
+        if let Some(application) = &prepared.model.application {
+            crate::holo::browser_application::require_runtime(application)?;
+        }
         let lex = prepared
             .engine
             .build(LexBuildRequest {
