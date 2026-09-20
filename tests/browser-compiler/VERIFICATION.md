@@ -22,3 +22,10 @@ Devcontainer, 2026-09-20:
 
 Independent review identified toolchain binding, scheduler and output-overrun
 coverage gaps; all three were corrected before the registered gate above.
+
+Private-journal policy integration (2026-09-20): the complete registered DK-22
+owner passed again in 232.63 s with the expanded source declaration. The exact
+policy artifact and its binding digest now include private journal storage,
+signing, history and replay requests as well as application effects. Each private
+field substitution changes the policy identity; complete independent replay and
+all three compiler owners remain required. Public `PP2011` remains enforced.

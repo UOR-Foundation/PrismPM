@@ -56,13 +56,23 @@ pub(super) fn relative(value: &str) -> Result<(), PrismError> {
 }
 
 impl Plan {
+    pub(super) fn requested_policy(
+        application: &BrowserApplication,
+    ) -> Result<Vec<u8>, PrismError> {
+        json_bytes(&json!({
+            "schema": "prismpm/internal-browser-requested-policy/1",
+            "effects": application.requested_effects,
+            "durability": application.durability
+        }))
+    }
+
     pub(super) fn new(application: &BrowserApplication, model: &[u8]) -> Result<Self, PrismError> {
         crate::holo::browser_application::validate(application)?;
         let mut result = Self {
             targets: BTreeMap::new(),
             roles: BTreeMap::new(),
             model_sha256: sha256(model),
-            policy: json_bytes(&application.requested_effects)?,
+            policy: Self::requested_policy(application)?,
         };
         for (role, root, output) in [
             (

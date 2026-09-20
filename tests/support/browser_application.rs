@@ -131,6 +131,14 @@ pub fn verify(root: &Path) {
         &std::fs::read(root.join("tests/data/browser-application-declaration.json")).unwrap(),
     )
     .unwrap();
+    let mut aliased = expected.clone();
+    aliased["durability"]["resource"] = json!("store");
+    assert_eq!(
+        prismpm::holo::browser_application::validate(&typed(aliased))
+            .expect_err("private operation journal cannot reuse an application grant")
+            .code,
+        "PP2010"
+    );
     assert_eq!(
         serde_json::to_value(document.application.as_ref().unwrap()).unwrap(),
         expected
@@ -211,6 +219,36 @@ pub fn verify(root: &Path) {
     guest_protocol["requested_effects"][1]["adapter"]["protocol"] = json!("urn:fixture/1");
     prismpm::holo::browser_application::validate(&typed(guest_protocol)).unwrap();
 
+    for maximum in [2, 3, 1024] {
+        let mut changed = expected.clone();
+        changed["durability"]["maximum_records"] = json!(maximum);
+        prismpm::holo::browser_application::validate(&typed(changed)).unwrap();
+    }
+    // Slot sharing is safe only when the exact signing context differs.
+    let mut alias = expected.clone();
+    alias["requested_effects"][3]["adapter"]["context"] =
+        json!("prismpm/browser-operation-journal/1");
+    assert_eq!(
+        prismpm::holo::browser_application::validate(&typed(alias.clone()))
+            .unwrap_err()
+            .code,
+        "PP2010"
+    );
+    alias["requested_effects"][3]["adapter"]["credential_slot"] = json!("separate-key");
+    prismpm::holo::browser_application::validate(&typed(alias)).unwrap();
+    for count in [63, 64] {
+        let mut changed = expected.clone();
+        changed["requested_effects"] = json!((0..count).map(|i| json!({
+            "resource": format!("sign{i:02}"),
+            "adapter": {"kind":"sign", "credential_slot":format!("slot{i:02}"), "context":"app/1", "maximum":1}
+        })).collect::<Vec<_>>());
+        assert_eq!(
+            prismpm::holo::browser_application::validate(&typed(changed)).is_ok(),
+            count == 63,
+            "total custody includes private journal"
+        );
+    }
+
     for (pointer, bad) in [
         ("/profile", json!("prismpm/browser-application/2")),
         ("/protocol", json!("prismpm/browser-application-session/2")),
@@ -221,6 +259,16 @@ pub fn verify(root: &Path) {
         ("/view/labels/0/text", json!("control\u{0000}")),
         ("/durability/max_pending", json!(2)),
         ("/durability/resource", json!("sign")),
+        ("/durability/resource", json!("journal-sign")),
+        ("/durability/namespace", json!("browser-contract")),
+        ("/durability/namespace", json!("../private")),
+        ("/durability/staging_head", json!("operations")),
+        ("/durability/staging_head", json!("")),
+        ("/durability/signing_resource", json!("sign")),
+        ("/durability/signing_resource", json!("journal")),
+        ("/durability/credential_slot", json!("../key")),
+        ("/durability/maximum_records", json!(1)),
+        ("/durability/maximum_records", json!(1025)),
         ("/durability/replay_root", json!("Missing.replay")),
         ("/memory_pages", json!(0)),
         ("/memory_pages", json!(16385)),

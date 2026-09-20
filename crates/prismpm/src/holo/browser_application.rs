@@ -188,16 +188,35 @@ pub fn validate(value: &BrowserApplication) -> Result<(), PrismError> {
     let durable = &value.durability;
     if durable.protocol != "prismpm/browser-operation-journal/1"
         || durable.max_pending != 1
+        || !slug(&durable.resource)
+        || !slug(&durable.namespace)
         || !slug(&durable.head)
+        || !slug(&durable.staging_head)
+        || durable.head == durable.staging_head
+        || !slug(&durable.signing_resource)
+        || durable.resource == durable.signing_resource
+        || !slug(&durable.credential_slot)
+        || !(2..=1024).contains(&durable.maximum_records)
+        || namespaces.contains(&durable.namespace)
         || value
             .library_roots
             .binary_search(&durable.replay_root)
             .is_err()
-        || !value.requested_effects.iter().any(|r| {
-            r.resource == durable.resource && matches!(r.adapter, RequestedAdapter::Store { .. })
+        || value.requested_effects.iter().any(|r| {
+            r.resource == durable.resource
+                || r.resource == durable.signing_resource
+                || matches!(&r.adapter, RequestedAdapter::Sign { credential_slot, context, .. }
+                    if credential_slot == &durable.credential_slot
+                        && context == "prismpm/browser-operation-journal/1")
         })
+        || value
+            .requested_effects
+            .iter()
+            .filter(|r| matches!(r.adapter, RequestedAdapter::Sign { .. }))
+            .count()
+            >= 64
     {
-        return Err(invalid("browser application requires a declared durable store and generated single-operation replay root"));
+        return Err(invalid("browser application requires isolated private journal storage and signing requests, bounded history, and a generated single-operation replay root"));
     }
     let view = &value.view;
     if view.surface != "prismpm-browser/1"

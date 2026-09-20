@@ -1441,8 +1441,20 @@ The declaration grants no script, HTML, URL, callback, network or mailbox access
 Runtime must independently bind actual artifact bytes, possessed credentials and
 effective permissions to the generated dispatcher and immutable requested policy.
 
-Durability declares one serialized operation and a generated authenticated replay
-root bound to a requested store. Before an irreversible effect, generated state
+Durability declares one serialized operation, a generated authenticated replay
+root and explicit private journal requests. Its resource and signing-resource
+identifiers differ from each other and every application resource; its namespace
+differs from every application Store namespace. Journal and staging heads differ.
+Retained history is 2–1024 operation records with a terminal slot reserved before
+Prepared. The protocol fixes private storage at 1 MiB per object, 4096 objects
+and two heads, and signing at context `prismpm/browser-operation-journal/1` with
+a 65536-byte limit. These are declared requests, not manufactured runtime grants.
+The custody slot may be shared with an application Sign only under a different
+context. There are at most 64 total signing resources including the journal;
+effective admission must also reject actual key/context aliasing. Names alone
+cannot establish separation. The compiler's requested-policy identity binds both
+application effects and this complete private durability declaration.
+Before an irreversible effect, generated state
 must durably retain its complete bindings. Unknown outcomes require authenticated
 reconciliation, never a caller receipt or automatic retry. This is not persistence
 of DK-20's private queue, cross-device consensus, credential rotation or recovery

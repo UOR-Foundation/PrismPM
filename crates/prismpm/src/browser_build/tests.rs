@@ -305,6 +305,43 @@ fn browser_compiler_plan_preserves_roles_roots_and_exact_budgets() {
     let plan = Plan::new(&application, &bytes).unwrap();
     assert_eq!(plan.targets.len(), 6);
     let value = decode(&plan.binding(&BTreeMap::new()).unwrap()).unwrap();
+    let policy = decode(&Plan::requested_policy(&application).unwrap()).unwrap();
+    assert_eq!(
+        policy["durability"],
+        serde_json::to_value(&application.durability).unwrap()
+    );
+    assert_eq!(
+        policy["effects"],
+        serde_json::to_value(&application.requested_effects).unwrap()
+    );
+    for field in [
+        "namespace",
+        "head",
+        "staging_head",
+        "resource",
+        "signing_resource",
+        "credential_slot",
+        "maximum_records",
+    ] {
+        let mut changed = serde_json::to_value(&application).unwrap();
+        changed["durability"][field] = if field == "maximum_records" {
+            json!(2)
+        } else {
+            json!("other-private-binding")
+        };
+        let changed = serde_json::from_value(changed).unwrap();
+        let binding = decode(
+            &Plan::new(&changed, &bytes)
+                .unwrap()
+                .binding(&BTreeMap::new())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_ne!(
+            binding["policy_sha256"], value["policy_sha256"],
+            "private binding {field}"
+        );
+    }
     assert_eq!(value["roles"].as_object().unwrap().len(), 7);
     assert_eq!(
         value["roles"]["resource:guest-large"],

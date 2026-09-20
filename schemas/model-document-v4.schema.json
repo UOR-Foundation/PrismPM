@@ -333,7 +333,9 @@
                         "minLength": 1,
                         "maxLength": 128,
                         "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$",
-                        "not": { "pattern": "\\.\\.|[^A-Za-z0-9._/-]" }
+                        "not": {
+                          "pattern": "\\.\\.|[^A-Za-z0-9._/-]"
+                        }
                       },
                       "maximum": {
                         "type": "integer",
@@ -360,7 +362,9 @@
                         "minLength": 1,
                         "maxLength": 128,
                         "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$",
-                        "not": { "pattern": "\\.\\.|[^A-Za-z0-9._/-]" }
+                        "not": {
+                          "pattern": "\\.\\.|[^A-Za-z0-9._/-]"
+                        }
                       },
                       "maximum": {
                         "type": "integer",
@@ -440,6 +444,27 @@
             },
             "max_pending": {
               "const": 1
+            },
+            "namespace": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "staging_head": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "signing_resource": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "credential_slot": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "maximum_records": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 1024
             }
           },
           "required": [
@@ -447,7 +472,12 @@
             "resource",
             "head",
             "replay_root",
-            "max_pending"
+            "max_pending",
+            "namespace",
+            "staging_head",
+            "signing_resource",
+            "credential_slot",
+            "maximum_records"
           ]
         }
       },
