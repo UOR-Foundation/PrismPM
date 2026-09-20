@@ -54,6 +54,28 @@ Corrected owning log SHA-256:
 `8993aced253b24321b25127f28dea13a54ad03aa624264e7e825f9f05f4d168b`.
 That isolated result does not replace a clean complete library or V&V run.
 
+The complete library rerun at `7fa9f768c34273faadd7edb5c880810d6129443e`
+with the corrected image passed all 198 tests in 2,042.43 seconds: no failures,
+skips or filters. Log `target/foundry-publication-library-corrected-image.log`,
+SHA-256 `9d19a06dc18188126b0d93d98a6e59e50e64891c82d743d15d9fa2075d35d840`.
+This supersedes the failed library checkpoint, not the remaining full V&V,
+installed-SDK or Foundry release gates.
+
+## Publication-boundary integration
+
+Inconsistent provenance now fails before expensive proof replay. Coherent
+metadata still requires the unchanged complete replay and independently
+computed binding. All seven closure tests passed after integration; restoring
+the earlier check order failed both ordering regressions without bypassing
+the real proof reader. The Action's 19 adapter tests also passed; those tests
+establish argument/isolation behavior, not a live deployment.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/publication-integrated-preflight-tests.log` | `a982b1030a55cf233ce127f23e3d04542febfc4ddc51ab610925276c09aebefb` |
+| `target/verification-provenance-preflight-red.log` | `93ea11a4b5ee1b408da7535c095811eed9078a5afeaeaaf3d6c3bcea4999c30b` |
+| `target/publication-integrated-action-tests.log` | `f772089c04e4778d93157db5301b3aba0ab8384a3bd4131989601cd69d6c85b8` |
+
 ## Bounded browser RS256 effect (DK-19)
 
 All 14 Node/Chromium tests passed against the pinned, hash-checked WPT RSA
