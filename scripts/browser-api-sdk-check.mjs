@@ -41,7 +41,7 @@ export const suites=Object.freeze([
  {id:'DK-16',minimum:10,files:['view-host-test.mjs']},
  {id:'DK-19',minimum:14,files:['rs256.test.mjs','rs256.browser.test.mjs']},
  {id:'DK-20',minimum:18,files:['effects-wire.test.mjs','effects-module.test.mjs','effects-test.mjs']},
- {id:'DK-23',minimum:8,files:['tests/browser-presentation/wire.test.mjs','tests/browser-presentation/dom.test.mjs','presentation.test.mjs']},
+ {id:'DK-23',minimum:9,files:['tests/browser-presentation/wire.test.mjs','tests/browser-presentation/dom.test.mjs','presentation.test.mjs']},
  {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
  {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
 ].map(row=>Object.freeze({...row,

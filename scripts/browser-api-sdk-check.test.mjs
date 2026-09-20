@@ -49,7 +49,11 @@ test('new installed Node suites retain exact complete owning files and deadlines
  assert.deepEqual(effects?.files, ['sdk/browser/effects-wire.test.mjs', 'sdk/browser/effects-module.test.mjs', 'sdk/browser/effects-test.mjs']);
  assert.equal(effects?.minimum, 18);
  assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'sdk/browser/presentation.test.mjs']);
- assert.equal(view?.minimum, 8);
+ assert.equal(view?.minimum, 9);
+ const owning = /"DK-23"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(sdkSource('crates/conformance/src/cases/mod.rs'));
+ assert.ok(owning, 'actual registered Rust owning suite exists');
+ assert.equal(Number(owning[2]), view.minimum, 'installed and source-owning minimum agree');
+ assert.deepEqual([...owning[1].matchAll(/"([^"]+)"/g)].map(row => row[1]), view.files);
  assert.equal(effects?.deadline, 3600000); assert.equal(view?.deadline, 3600000);
  const custody = suites.find(row => row.id === 'DK-25');
  assert.deepEqual(custody?.files, ['sdk/browser/credential-custody-test.mjs']);
@@ -138,6 +142,19 @@ test('SDK identity is immutable, exact-source and native-platform bound',()=>{
 
 const testSource=(count,skip=false)=>"import {test} from 'node:test';\n"+Array.from({length:count},(_,index)=>`test('case ${index}',${skip&&index===0?'{skip:true},':''}()=>{});\n`).join('');
 function testFixtures(root){for(const suite of suites)for(const file of suite.files)put(root,file,testSource(suite.minimum));}
+
+test('installed DK23 gate rejects omission of the ninth secret-input test', t => {
+ const root = temporary(t); testFixtures(root);
+ const view = suites.find(row => row.id === 'DK-23');
+ assert.equal(view.files.length, 3);
+ // Real Node test executions, all selected files still nonempty. Omitting
+ // the fifth wire case must not be accepted as the old eight-test suite.
+ for (const [index, count] of [4, 3, 1].entries()) put(root, view.files[index], testSource(count));
+ assert.throws(() => runSuites(root, spawnSync, () => {}), /incomplete test suite/);
+ put(root, view.files[0], testSource(5));
+ const accepted = runSuites(root, spawnSync, () => {}).find(row => row.id === 'DK-23');
+ assert.deepEqual(accepted, {id: 'DK-23', tests: 9});
+});
 
 test('every selected file must exist even when its sibling supplies the total minimum',t=>{
  const root=temporary(t);testFixtures(root);
