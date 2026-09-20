@@ -1792,6 +1792,28 @@ the hosted review has not been retried here.
 | `target/docker-classic-inspect-owning-green.log` | `e3d15fa3b3cf0ea3279347c629c859777635aea50bbf35e62558b6008fe0212e` |
 | `target/docker-classic-inspect-actual-containerd.log` | `9f894fbbd03924bf9456fb2f77a09e44442bea52df91c36dc1b394dd6288622b` |
 
+## Integrated publication checkpoint — 20 September 2026
+
+At `57a1c83`, the non-writing golden gate independently matched all 339 files
+and build `85460cb147589358b903d01fb4c76d6cc6f64e8ff1b8d23adf54d02278a8ad00`.
+TM-03 passed its complete 19-test Action adapter boundary. At `0a8a733`, OC-08
+passed its complete 12-test source-free HTTPS boundary in 325.53 seconds,
+including real proof replay after the provenance preflight changes. All 15
+contract tests, 24 Docker/source-review tests, 155 audit tests, model/spec
+validation (171 IDs, 84 codes), authored-package formatting and workspace
+all-target/all-feature Clippy passed. These are component checks, not a full
+VV result, accepted SDK image or Foundry deployment.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/publication-integrated-golden-readback.log` | `859978e5beda15d7a32a054b283ffde362ea7d7ad702182c63432274bc4ecbbf` |
+| `target/publication-integrated-tm03.log` | `aae0368ff5ffe2df2a6916fb9df3ccb44b51bbf7909451b4d6fc3ee9f6080c74` |
+| `target/publication-integrated-oc08.log` | `38be45f7189fcc009d5473cceee4d1c488fdc0e9936f4e7c283f10358b05bb68` |
+| `target/publication-integrated-contracts.log` | `db22771c83254bf9f1c1f9a531fe054970459190652cdc4fe4a9ec9535fef323` |
+| `target/publication-integrated-docker-store-tests.log` | `3e0c0d19bb96553b2571bdfac951af7ae7f8a6a2c763b436629fb1ca5848c233` |
+| `target/publication-classic-integrated-audits.log` | `785e9214d4e06fefa0db227449fcd1031485cf8ed83e2ab3346bcab86114adb7` |
+| `target/publication-integrated-clippy.log` | `a524b29b658309b608eaa0509a054a31116aacbf974500af95b1ec32a75d6fb8` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
