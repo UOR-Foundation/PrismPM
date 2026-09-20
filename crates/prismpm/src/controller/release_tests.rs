@@ -92,6 +92,36 @@ fn browser_system_source_selection_and_requirements_fail_closed() {
         a.system.as_ref().unwrap().bytes(),
         b.system.as_ref().unwrap().bytes()
     );
+    // Empty Holo-native capabilities do not mean an effectful browser model
+    // satisfies this deliberately static core-Wasm/DOM containing system.
+    let mut effectful: crate::holo::model_document::ModelDocument =
+        serde_json::from_slice(&a.model_bytes).unwrap();
+    let browser: crate::holo::browser_application::BrowserApplication = serde_json::from_slice(
+        &std::fs::read(repository().join("tests/data/browser-application-declaration.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    crate::holo::browser_application::validate(&browser).unwrap();
+    effectful.schema = "prismpm/model-document/4".into();
+    effectful.application = Some(crate::holo::model_document::Application::Browser(Box::new(
+        browser,
+    )));
+    let mut selected = a.system.as_ref().unwrap().value().clone();
+    selected["components"][0]["version"] =
+        json!(effectful.application.as_ref().unwrap().cargo_version());
+    selected["application_profile"]["application_model_digest"] = json!(format!(
+        "sha256:{}",
+        crate::holo::canonical::content_id(
+            &crate::holo::canonical::encode_value(&serde_json::to_value(&effectful).unwrap())
+                .unwrap()
+        )
+    ));
+    assert_eq!(
+        crate::system::browser::validate_application(&selected, &effectful)
+            .unwrap_err()
+            .code,
+        "PP2101"
+    );
     assert_eq!(
         controller.prepare(None).unwrap().system.unwrap().bytes(),
         b.system.unwrap().bytes()
