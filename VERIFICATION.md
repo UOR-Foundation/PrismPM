@@ -2013,6 +2013,22 @@ audit then passed all 172 Node tests (179 registered IDs, 86 diagnostics).
 These logs are retained in the independent source-audit clone. Neither this
 baseline nor the source audit establishes a current installed SDK or deployment.
 
+## Frozen publication-admission owner
+
+OC-09 now binds all six LexLean modules, staged vendor/driver bytes and complete
+harness inputs to one immutable 810-file baseline. A regression exposed omitted
+vendor inputs; changed-baseline negatives now reject before compilation.
+Completed private driver/exporter caches retire
+only after their last use; source, IR, attestations and generated outputs remain.
+The unfiltered devcontainer owner passed all 12 tests in 826.61 seconds:
+373 vectors, 24 maxima, generated std/no_std/Wasm and all six source mutants.
+Observed Wasm peak was 367,984,640 bytes under the unchanged 1 GiB cap.
+Original log `target/oc09-frozen-owner-UMWgsp/owning.stdout`, SHA-256
+`e4c2c49b51013c1cc42c8f317c9db322cf3770a001b633e8b638d6d1cb6f2a78`.
+Receipt `/tmp/prismpm-publication-RI5Ngo/publication-acceptance.json`, SHA-256
+`0514ce3653fb7b0993e36bf3f0c8215ecca9cd2dd45d362434c119e90a144f07`.
+This verifies conditional source admission only, not SDK or deployment acceptance.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
