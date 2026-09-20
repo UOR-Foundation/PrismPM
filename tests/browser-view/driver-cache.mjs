@@ -56,7 +56,7 @@ export function retireCompletedCompilerCaches(work, owner) {
   for (const path of [target, exporter, build]) directory(path);
   assert.equal(capture(join(target, 'CACHEDIR.TAG'), 4096).toString().split('\n')[0],
     'Signature: 8a477f597d28d172789f06886806bc55', 'actual Cargo cache tag required');
-  const inputs = [manifest, driver, join(exporter, 'lakefile.toml'), join(build, 'bin/prod-export')];
+  const inputs = [manifest, driver, join(exporter, 'lakefile.lean'), join(build, 'bin/prod-export')];
   const records = inputs.map(path => {
     const bytes = capture(path, 256 * 1024 ** 2);
     return {path:path.slice(work.length + 1), byte_length:bytes.length, sha256:sha(bytes)};
