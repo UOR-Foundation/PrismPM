@@ -4,7 +4,7 @@ presentation = [1, revision: u32, phase: 0..3, status: label-or-none,
                 live: 0..2, focus: node-or-none, nodes: [*256 node]]
 node = [parent: node-or-none, content]
 content = section / navigation / form / heading / text / input / multiline /
-          choice / action / table
+          choice / action / table / secret-input
 section = [0, label]
 navigation = [1, label]
 form = [2, label]
@@ -17,7 +17,9 @@ choice = [7, label, enabled: bool, required: bool, selected: u32,
 action = [8, label, id: 1..4294967295, enabled: bool, default: bool,
           fields: [*16 node-id]]
 table = [9, caption: label, columns: [1*16 label], rows: [*4096 [1*16 tstr]]]
-; Tag 10 is reserved for private secret input, and MUST reject in DK-23.
+; Secret input has no model-provided value/default and uses a private transient sink.
+secret-input = [10, label, enabled: bool, required: bool, maximum: 1..67108864,
+                draft-epoch: u32]
 intent = [1, revision: u32, action: 1..4294967295,
           fields: [*16 [node-id, value: tstr / u32]]]
 label = 0..255

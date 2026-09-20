@@ -68,7 +68,7 @@ function stageCompiler(work) {
 export const checkSource = () => prepareStage(null, true);
 export const prepare = (mutation = null) => prepareStage(mutation, false);
 function prepareStage(mutation, sourceOnly) {
-  assert.ok([null, 'binding', 'trailing'].includes(mutation));
+  assert.ok([null, 'binding', 'trailing', 'secretbound', 'secretroute'].includes(mutation));
   for (const key of Object.keys(process.env)) assert.ok(!key.startsWith('PRISMPM_PRESENTATION_'), 'presentation acceptance refuses bypass ' + key);
   pins();
   const work = mkdtempSync(join(tmpdir(), 'prismpm-presentation-'));
@@ -78,7 +78,7 @@ function prepareStage(mutation, sourceOnly) {
   let completed = false;
   try {
     if (mutation) {
-      const name = mutation === 'binding' ? 'Foundation.View.Browser.V1.Model' : 'Foundation.View.Browser.V1.Wire';
+      const name = mutation === 'trailing' ? 'Foundation.View.Browser.V1.Wire' : 'Foundation.View.Browser.V1.Model';
       const text = sources.get(name).toString('utf8'), matched = /\\semanticdata\{(.*)\}/.exec(text);
       const model = JSON.parse(matched[1]);
       if (mutation === 'binding') {
@@ -88,6 +88,15 @@ function prepareStage(mutation, sourceOnly) {
         // Bypass the actual per-field check while preserving the recursive
         // declaration and used bindings required by the source/kernel policy.
         step.left = {kind: 'or', left: step.left, right: {kind: 'bool', value: true}};
+      } else if (mutation === 'secretbound') {
+        const target = model.declarations.find(row => row.name === 'fieldValueFits');
+        const branch = target.body.branches.find(row => row.constructor.name === 'Content.SecretInput');
+        assert.equal(branch.body.kind, 'match');
+        branch.body = {kind: 'or', left: branch.body, right: {kind: 'bool', value: true}};
+      } else if (mutation === 'secretroute') {
+        const target = model.declarations.find(row => row.name === 'intentRequiresSecret');
+        assert.equal(target.body.kind, 'and');
+        target.body = {kind: 'and', left: target.body, right: {kind: 'bool', value: false}};
       } else {
         const target = model.declarations.find(row => row.name === 'viewWireParse');
         let changed = 0;
@@ -162,7 +171,12 @@ function prepareStage(mutation, sourceOnly) {
     run('tar', ['-xf', join(repository, 'vendor/lean4-prod/lean.tar'), '-C', exporter], repository);
     run('lake', ['build', 'prod-export'], exporter);
     const exported = join(work, 'export');
-    const roots = ['PrismPM.Foundation.View.Browser.V1.Wire.viewWireBytes', 'PrismPM.Fixture.fixturePresentationBytes', 'PrismPM.Fixture.fixtureLabelsBytes', 'PrismPM.Fixture.fixtureIntentFitsBytes'].sort();
+    const roots = ['PrismPM.Foundation.View.Browser.V1.Wire.viewWireBytes', ...[
+      'fixturePresentationBytes', 'fixtureLabelsBytes', 'fixtureIntentFitsBytes',
+      'fixtureSecretPresentationBytes', 'fixtureSecretRouteBytes', 'fixtureSecretSinkBytes',
+      'fixtureSecretMaximumRouteBytes', 'fixtureSecretMaximumSinkBytes', 'fixtureSecretMaximumFieldBytes',
+      'fixtureSecretMaximumPresentationBytes',
+    ].map(name => 'PrismPM.Fixture.' + name)].sort();
     run(join(exporter, '.lake/build/bin/prod-export'), ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
       '--ir-module', 'BrowserPresentation', '--out', exported], exporter, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});
     const generated = join(work, 'generated'), ir = join(exported, 'kernel.ir');
@@ -176,7 +190,9 @@ function prepareStage(mutation, sourceOnly) {
       return join(work, 'native-target/release/browser-presentation-runner');
     }
     const guests = [];
-    for (const [label, mode] of [['a', 'wasm'], ['b', 'wasm'], ['fixture', 'fixture'], ['labels', 'labels'], ['intent', 'intent']]) {
+    for (const [label, mode] of [['a', 'wasm'], ['b', 'wasm'], ['fixture', 'fixture'], ['labels', 'labels'], ['intent', 'intent'],
+      ['secret', 'secret'], ['route', 'route'], ['sink', 'sink'],
+      ['maxroute', 'maxroute'], ['maxsink', 'maxsink'], ['maxfield', 'maxfield'], ['maxsecret', 'maxsecret']]) {
       const guest = join(work, 'guest-' + label);
       assert.deepEqual(JSON.parse(run(driver, [mode, ir, guest, repository], repository)), generation);
       run('cargo', ['build', '--locked', '--offline', '--release'], guest, {CARGO_TARGET_DIR: join(guest, 'target')});
@@ -186,6 +202,8 @@ function prepareStage(mutation, sourceOnly) {
     pins(); compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
     for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'frozen source ' + module);
     completed = true;
-    return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0], fixtureBytes: guests[2], labelsBytes: guests[3], intentBytes: guests[4]};
+    return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0], fixtureBytes: guests[2], labelsBytes: guests[3], intentBytes: guests[4],
+      secretBytes: guests[5], routeBytes: guests[6], sinkBytes: guests[7],
+      maxrouteBytes: guests[8], maxsinkBytes: guests[9], maxfieldBytes: guests[10], maxsecretBytes: guests[11]};
   } finally { if (!completed) process.stderr.write('Retained incomplete presentation diagnostic build ' + work + '\n'); }
 }

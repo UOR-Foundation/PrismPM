@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepare, run, sha, repository} from './compile.mjs';
-import {corpus, boundaries, maximumCorpus, combinedMaximumCorpus} from './corpus.mjs';
+import {corpus, boundaries, maximumCorpus, combinedMaximumCorpus, secretMaximumCorpus} from './corpus.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
 import {inspectEffectModule} from '../../sdk/browser/effects-module.mjs';
+import {encodeWire} from '../../sdk/browser/presentation-wire.mjs';
 export {prerequisite};
 export const tsv = rows => rows.map(row => row.id + '\t' + Buffer.from(row.request).toString('hex') + '\t' + Buffer.from(row.response).toString('hex') + '\n').join('');
 
-export function executeWasm(bytes, rows) {
+export function executeWasm(bytes, rows, inputMaximum = 67108864) {
   const memory = inspectEffectModule(bytes, 16384), module = new WebAssembly.Module(bytes);
   assert.deepEqual(WebAssembly.Module.imports(module), []);
   let maximum = 0;
@@ -27,7 +28,7 @@ export function executeWasm(bytes, rows) {
     assert.ok(maximum <= memory.maximumPages * 65536);
   }
   const over = new WebAssembly.Instance(module, {});
-  assert.throws(() => over.exports.holo_alloc(67108865), WebAssembly.RuntimeError);
+  assert.throws(() => over.exports.holo_alloc(inputMaximum + 1), WebAssembly.RuntimeError);
   assert.throws(() => over.exports.memory.grow(memory.maximumPages), RangeError);
   return {maximumBytes: maximum, declaredPages: memory.maximumPages};
 }
@@ -39,12 +40,22 @@ export async function verifyWire(t) {
     sha(readFileSync(join(repository, 'tests/browser-presentation', path)))]));
   const frozen = capture(), build = prepare();
   t.after(() => rmSync(build.work, {recursive: true, force: true}));
-  const intentRows = Array.from({length: 10}, (_, code) => ({id: 'IntentCase' + code,
-    request: Uint8Array.of(code), response: Uint8Array.of(code === 0 ? 245 : 244)}));
+  const intentRows = Array.from({length: 17}, (_, code) => ({id: 'IntentCase' + code,
+    request: Uint8Array.of(code), response: Uint8Array.of([0, 10, 14, 16].includes(code) ? 245 : 244)}));
   const rows = [...corpus(), ...boundaries()], maximum = maximumCorpus();
   assert.ok(build.verified?.attestation_id && build.wasmBytes && build.fixtureBytes && build.labelsBytes,
     'source check alone is never owning acceptance');
-  const allRows = [...rows, ...intentRows];
+  const secretRows = [
+    ['Exact', [1, 1, 202, [[6, '😀'.repeat(16)], [7, ''], [8, 10]]], true],
+    ['Empty', [1, 1, 202, [[6, ''], [7, ''], [8, 10]]], false],
+    ['Over', [1, 1, 202, [[6, '😀'.repeat(16) + 'x'], [7, ''], [8, 10]]], false],
+    ['WrongType', [1, 1, 202, [[6, 7], [7, ''], [8, 10]]], false],
+    ['Stale', [1, 2, 202, [[6, 'synthetic'], [7, ''], [8, 10]]], false],
+    ['Missing', [1, 1, 202, [[6, 'synthetic'], [8, 10]]], false],
+    ['OtherAction', [1, 1, 101, []], false],
+    ['UnknownAction', [1, 1, 303, []], false],
+  ].map(([id, intent, accepted]) => ({id: 'BrowserRoute' + id, request: encodeWire(intent), response: Uint8Array.of(accepted ? 245 : 244)}));
+  const allRows = [...rows, ...intentRows, ...secretRows];
   const path = join(build.work, 'vectors.tsv'); writeFileSync(path, tsv(allRows), {flag: 'wx'});
   const binaries = [];
   build.maximumFrames = [];
@@ -56,15 +67,25 @@ export async function verifyWire(t) {
     if (row.request === row.response) build.maximumFrames.push({id: row.id,
       request: sha(row.request), response: sha(row.response), length: row.request.length});
   }
+  const secretBinaries = [];
+  build.secretMaxima = [];
+  for (const row of secretMaximumCorpus()) {
+    const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
+    writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
+    secretBinaries.push({input, output, mode: row.mode});
+    build.secretMaxima.push({id: row.id, request: sha(row.request), response: sha(row.response), length: row.request.length});
+  }
   for (const standard of [true, false]) await prerequisite(t, 'complete generated ' + (standard ? 'std' : 'no_std') + ' corpus, all structural maxima and exact 64 MiB frame', () => {
     const binary = build.compileNative(standard), output = run(binary, [path], build.runner);
     assert.deepEqual([...output.matchAll(/^PASS ([A-Za-z0-9]+)$/gm)].map(row => row[1]), allRows.map(row => row.id));
     assert.match(output, new RegExp('PASS ' + allRows.length + ' complete presentation vectors twice'));
     for (const row of binaries) assert.equal(run(binary, ['--binary', row.input, row.output], build.runner), 'PASS binary complete presentation vector twice\n');
+    for (const row of secretBinaries) assert.equal(run(binary, [row.mode === 'wasm' ? '--binary' : '--' + row.mode, row.input, row.output], build.runner), 'PASS binary complete presentation vector twice\n');
   });
   await prerequisite(t, 'fresh bounded Core-Wasm executes every actual structural maximum and exact 64 MiB frame', () => {
     build.maximum = executeWasm(build.wasmBytes, [...rows, maximum[0]]);
-    executeWasm(build.intentBytes, intentRows);
+    executeWasm(build.intentBytes, intentRows, 32);
+    executeWasm(build.routeBytes, secretRows, 4096);
   });
   await prerequisite(t, 'exact 64 MiB payloads execute at every combined node and table boundary position', () => {
     for (const row of combinedMaximumCorpus()) {
@@ -72,16 +93,24 @@ export async function verifyWire(t) {
       build.maximum.maximumBytes = Math.max(build.maximum.maximumBytes, observed.maximumBytes);
     }
   });
+  await prerequisite(t, 'secret raw field exact/over bounds and actual maximum framed route/sink execute within unchanged 1 GiB memory', () => {
+    for (const row of secretMaximumCorpus()) {
+      const observed = executeWasm(build[row.mode + 'Bytes'], [row], row.mode === 'maxfield' ? 67108865 : 67108864);
+      build.maximum.maximumBytes = Math.max(build.maximum.maximumBytes, observed.maximumBytes);
+    }
+  });
   assert.deepEqual(capture(), frozen, 'owning oracle source remained frozen');
   build.maximumFrame = {request: sha(maximum[0].request), response: sha(maximum[0].response), length: maximum[0].request.length};
   t.diagnostic(JSON.stringify({source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), fixture: sha(build.fixtureBytes), labels: sha(build.labelsBytes),
-    vectors: rows.length, maximum: build.maximum, frame: build.maximumFrame, sources: frozen}));
+    vectors: rows.length, maximum: build.maximum, frame: build.maximumFrame, secretMaxima: build.secretMaxima, sources: frozen}));
   return build;
 }
 
 export function replayBrowser(build, result) {
-  const rows = result.calls.map((row, index) => ({id: (row.role === 'fixture' ? 'BrowserFixture' : row.role === 'labels' ? 'BrowserLabels' : 'BrowserWire') + index,
+  const roles = {fixture: 'BrowserFixture', labels: 'BrowserLabels', wire: 'BrowserWire',
+    secret: 'BrowserSecret', route: 'BrowserRoute', sink: 'BrowserSink'};
+  const rows = result.calls.map((row, index) => ({id: (assert.ok(roles[row.role]), roles[row.role]) + index,
     request: Buffer.from(row.request, 'hex'), response: Buffer.from(row.response, 'hex')}));
   const path = join(build.work, 'observed-browser.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
   for (const standard of [true, false]) {
@@ -95,12 +124,16 @@ export function replayBrowser(build, result) {
 }
 
 export function verifyModelMutation(kind) {
-  const row = corpus().find(row => row.id === ({binding: 'WrongBindingKind', trailing: 'Trailing'}[kind]));
+  const secret = ['secretbound', 'secretroute'].includes(kind);
+  const row = secret ? {id: 'BrowserRouteMutation',
+    request: encodeWire([1, 1, 202, [[6, 'x'.repeat(kind === 'secretbound' ? 65 : 64)], [7, ''], [8, 10]]]),
+    response: Uint8Array.of(kind === 'secretbound' ? 244 : 245)}
+    : corpus().find(row => row.id === ({binding: 'WrongBindingKind', trailing: 'Trailing'}[kind]));
   assert.ok(row); const build = prepare(kind);
   try {
     const path = join(build.work, 'mutation.tsv'); writeFileSync(path, tsv([row]), {flag: 'wx'});
     for (const standard of [true, false]) assert.throws(() => run(build.compileNative(standard), [path], build.runner), /native output mismatch/);
-    assert.throws(() => executeWasm(build.wasmBytes, [row]), /generated Wasm output mismatch/);
+    assert.throws(() => executeWasm(secret ? build.routeBytes : build.wasmBytes, [row], secret ? 4096 : 67108864), /generated Wasm output mismatch/);
   } finally { rmSync(build.work, {recursive: true, force: true}); }
 }
 

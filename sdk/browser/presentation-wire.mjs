@@ -75,11 +75,11 @@ export function validatePresentation(frame) {
   const fields = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]; need(array(node, 2) && integer(node[0], 0, i) && Array.isArray(node[1]));
-    const [parent, value] = node, tag = value[0]; need(integer(tag, 0, 9), 'unsupported');
+    const [parent, value] = node, tag = value[0]; need(integer(tag, 0, 10), 'unsupported');
     need(parent === 0 || [0, 1, 2].includes(nodes[parent - 1][1][0]), 'parent');
     depths.push(depths[parent] + 1); need(depths[i + 1] <= 16, 'limit');
     need(tag !== 2 || !forms[parent], 'parent'); forms.push(forms[parent] || tag === 2);
-    if ([5, 6, 7, 8].includes(tag)) need(parent > 0 && nodes[parent - 1][1][0] === 2, 'parent');
+    if ([5, 6, 7, 8, 10].includes(tag)) need(parent > 0 && nodes[parent - 1][1][0] === 2, 'parent');
     if ([0, 1, 2].includes(tag)) need(array(value, 2) && label(value[1]));
     else if (tag === 3) need(array(value, 3) && integer(value[1], 1, 6) && label(value[2]));
     else if (tag === 4) { need(array(value, 2)); textBytes(value[1]); }
@@ -104,13 +104,17 @@ export function validatePresentation(frame) {
       need(array(value, 4) && label(value[1]) && Array.isArray(value[2]) && integer(value[2].length, 1, 16)
         && value[2].every(label) && Array.isArray(value[3]));
       for (const row of value[3]) { need(array(row, value[2].length)); cells += row.length; need(cells <= 4096, 'limit'); row.forEach(textBytes); }
+    } else if (tag === 10) {
+      need(array(value, 6) && label(value[1]) && typeof value[2] === 'boolean' && typeof value[3] === 'boolean'
+        && integer(value[4], 1, PRESENTATION_MAXIMUM) && integer(value[5]));
+      need(!value[2] || frame[2] === 0, 'lifecycle');
     }
   }
   for (const [parent, value] of fields) {
     let previous = 0;
     for (const id of value[5]) {
       need(integer(id, previous + 1, nodes.length), 'binding'); previous = id;
-      const field = nodes[id - 1]; need(field[0] === parent && [5, 6, 7].includes(field[1][0]), 'binding');
+      const field = nodes[id - 1]; need(field[0] === parent && [5, 6, 7, 10].includes(field[1][0]), 'binding');
       need(!value[3] || field[1][2], 'binding');
     }
   }
@@ -149,6 +153,19 @@ export function validateIntent(frame, intent) {
     } else { need(typeof value === 'string' && textBytes(value) <= field[4], 'limit'); need(!field[3] || value.length !== 0, 'required'); }
   }
   return true;
+}
+
+// Independent host checks mirror the source-owned binding classification.
+// Secret data never turns an unrelated ordinary action into a secret action.
+export function presentationRequiresSecret(frame) {
+  validatePresentation(frame);
+  return frame[6].some(([, value]) => value[0] === 8
+    && value[5].some(id => frame[6][id - 1][1][0] === 10));
+}
+export function intentRequiresSecret(frame, intent) {
+  validateIntent(frame, intent);
+  const action = frame[6].find(([, value]) => value[0] === 8 && value[2] === intent[2])[1];
+  return action[5].some(id => frame[6][id - 1][1][0] === 10);
 }
 
 // Private deterministic writer. Precompute complete byte length before allocation.

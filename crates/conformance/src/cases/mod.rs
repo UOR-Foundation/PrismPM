@@ -425,7 +425,9 @@ pub fn run_at(root: &Path, id: &str) {
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15"
-        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" => verify_browser_host(root, id),
+        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" => {
+            verify_browser_host(root, id)
+        }
         "DK-17" => native_library::verify(root),
         "DK-21" => browser_application::verify(root),
         "DK-22" => browser_compiler::verify(root),
@@ -488,7 +490,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-presentation/dom.test.mjs",
                 "sdk/browser/presentation.test.mjs",
             ],
-            8,
+            9,
         ),
         "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 26),
         "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
@@ -497,7 +499,10 @@ fn verify_browser_host(root: &Path, id: &str) {
     // Node also applies this limit to the file-level wrapper. Full model and
     // multi-guest View builds carry explicit bounded deadlines; host-only
     // suites retain their short deadline.
-    let timeout = if matches!(id, "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25") {
+    let timeout = if matches!(
+        id,
+        "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25"
+    ) {
         "3600000"
     } else if matches!(id, "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14") {
         "1500000"

@@ -1,6 +1,6 @@
 // Acceptance-only browser journeys. Never shipped as a presentation service.
 import {openPresentation} from './presentation-dom.mjs';
-import {encodeWire, decodePresentation, decodeIntent, PresentationError, PRESENTATION_MAXIMUM} from './presentation-wire.mjs';
+import {encodeWire, decodePresentation, decodeIntent, intentRequiresSecret, PresentationError, PRESENTATION_MAXIMUM} from './presentation-wire.mjs';
 import {maximumShape} from './maximum-fixtures.mjs';
 
 const check = (condition, message) => { if (!condition) throw Error(message); };
@@ -32,7 +32,7 @@ export async function runFixture(input) {
   check(input && ((Array.isArray(input.wire) && Array.isArray(input.fixture) && Array.isArray(input.labels))
     || input.adapterOnly === true), 'actual source fixture/catalogue and codec or explicit component-only mode');
   const cases = [], calls = [], views = [], roots = [], intents = [];
-  let module, fixtureModule, labelsModule, sourceLabels = labels, maxMemory = 0;
+  let module, fixtureModule, labelsModule, secretModule, routeModule, sinkModule, sourceLabels = labels, maxMemory = 0;
   if (input.wire) {
     module = await WebAssembly.compile(new Uint8Array(input.wire));
     check(WebAssembly.Module.imports(module).length === 0, 'actual codec is import-free');
@@ -40,6 +40,11 @@ export async function runFixture(input) {
     check(WebAssembly.Module.imports(fixtureModule).length === 0, 'actual source fixture is import-free');
     labelsModule = await WebAssembly.compile(new Uint8Array(input.labels));
     check(WebAssembly.Module.imports(labelsModule).length === 0, 'actual source catalogue is import-free');
+    for (const role of ['secret', 'route', 'sink']) check(Array.isArray(input[role]), 'actual generated secret root ' + role);
+    [secretModule, routeModule, sinkModule] = await Promise.all(['secret', 'route', 'sink'].map(async role => {
+      const value = await WebAssembly.compile(new Uint8Array(input[role]));
+      check(WebAssembly.Module.imports(value).length === 0, 'actual secret root is import-free'); return value;
+    }));
   }
   function execute(module, bytes, role) {
     const {exports: {memory, holo_alloc, holo_run}} = new WebAssembly.Instance(module, {});
@@ -73,6 +78,32 @@ export async function runFixture(input) {
   }
   const bytes = value => checked(encodeWire(value));
   const paint = (view, value) => view.render(bytes(value));
+  function secretFrame(revision = 1, state = 0, epoch = 0) {
+    const expected = expectedFrame(revision); expected[2] = state; expected[5] = 0;
+    expected[6][5][1] = [10, 6, state === 0, true, 64, epoch];
+    expected[6][8][1][5] = [];
+    if (state !== 0) for (const [, content] of expected[6]) {
+      if ([5, 6, 7, 10].includes(content[0])) content[2] = false;
+      if (content[0] === 8) content[3] = false;
+    }
+    if (!secretModule) return expected;
+    const actual = execute(secretModule, encodeWire([1, revision, state, epoch]), 'secret');
+    check(equal(actual, encodeWire(expected)), 'complete secret presentation equals actual modeled fixture');
+    return clone(decodePresentation(actual));
+  }
+  function secretRoute(raw, expected = true) {
+    const intent = decodeIntent(checked(raw));
+    check(intentRequiresSecret(secretFrame(), intent) === expected, 'exact private modeled secret route');
+    if (routeModule) check(equal(execute(routeModule, raw, 'route'), Uint8Array.of(expected ? 245 : 244)), 'actual modeled secret classification');
+    return intent;
+  }
+  function secretSink(raw) {
+    secretRoute(raw);
+    const expected = encodeWire(secretFrame(2, 0, 1));
+    if (!sinkModule) return expected;
+    const actual = execute(sinkModule, raw, 'sink');
+    check(equal(actual, expected), 'actual modeled ephemeral sink returns only nonsecret presentation'); return checked(actual);
+  }
   function failure(operation, code) {
     let error;
     try { operation(); } catch (value) { error = value; }
@@ -98,7 +129,7 @@ export async function runFixture(input) {
   const phase = (value, state) => {
     value[2] = state; value[5] = 0;
     for (const [, content] of value[6]) {
-      if ([5, 6, 7].includes(content[0])) content[2] = false;
+      if ([5, 6, 7, 10].includes(content[0])) content[2] = false;
       if (content[0] === 8) content[3] = false;
     }
     return value;
@@ -311,17 +342,110 @@ export async function runFixture(input) {
     }
     cases.push('combined-structural-maxima-and-overruns');
 
+    const withoutSink = open(); paint(withoutSink.view, frame());
+    const prior = withoutSink.root.innerHTML;
+    for (const state of [0, 1, 2, 3]) {
+      failure(() => paint(withoutSink.view, secretFrame(2, state)), 'binding');
+      check(withoutSink.root.innerHTML === prior, 'missing secret sink refuses complete frame before DOM mutation');
+    }
+    let accessedSecretSink = 0;
+    const accessorSink = {root: document.createElement('main'), labels, dispatch() {}, maximum: 1000, requestMaximum: 1000};
+    Object.defineProperty(accessorSink, 'secretDispatch', {get() { accessedSecretSink++; return () => {}; }});
+    failure(() => openPresentation(accessorSink), 'options');
+    check(accessedSecretSink === 0, 'secret sink accessors never execute');
+    for (const secretDispatch of [undefined, null, {}, true]) failure(() => open(undefined, {secretDispatch}), 'options');
+    cases.push('secret-sink-admission-and-closed-options');
+
+    let ordinaryCalls = 0, secretCalls = 0, secrets;
+    secrets = open(() => { ordinaryCalls++; throw Error('secret escaped ordinary dispatch'); }, {secretDispatch(raw) {
+      secretCalls++;
+      check(secrets.input().value === '', 'secret controls clear synchronously before the private sink');
+      const intent = secretRoute(raw); check(intent[3][0][1] === '😀'.repeat(16), 'exact maximum UTF8 secret capture');
+      secrets.buttons()[1].click();
+      return secretSink(raw);
+    }});
+    paint(secrets.view, secretFrame()); const password = secrets.input();
+    check(password.type === 'password' && password.labels[0].textContent === 'Input'
+      && password.required && password.autocomplete === 'off' && password.spellcheck === false
+      && !password.hasAttribute('value') && password.value === '', 'labeled native password has no modeled default');
+    for (const invalid of ['', '😀'.repeat(16) + 'x', '\ud800']) {
+      edit(password, invalid); secrets.buttons()[1].click(); await tick();
+      check(secretCalls === 0 && ordinaryCalls === 0, 'invalid secret never reaches any sink');
+    }
+    edit(password, '😀'.repeat(16));
+    check(!secrets.root.innerHTML.includes('😀'.repeat(16)) && !secrets.root.textContent.includes('😀'.repeat(16)), 'secret input is never rendered as content or a value attribute');
+    secrets.buttons()[1].click(); await tick();
+    check(secretCalls === 1 && ordinaryCalls === 0 && secrets.input().value === '', 'source-owned secret route is serialized and sink response never restores secret');
+    const ordinary = open(raw => {
+      ordinaryCalls++; secretRoute(raw, false); return bytes(secretFrame(2));
+    }, {secretDispatch() { throw Error('ordinary action was sent to secret sink'); }});
+    paint(ordinary.view, secretFrame()); edit(ordinary.input(), 'unused secret'); ordinary.buttons()[0].click(); await tick();
+    check(ordinaryCalls === 1, 'only source-bound secret-bearing actions use the private sink');
+    cases.push('secret-source-classification-capture-clearing-and-nonsecret-output');
+
+    const lifecycle = open(undefined, {secretDispatch: secretSink}); paint(lifecycle.view, secretFrame());
+    const heldPassword = lifecycle.input(); edit(heldPassword, 'unsubmitted draft');
+    paint(lifecycle.view, secretFrame(2)); check(heldPassword.value === 'unsubmitted draft', 'same ready epoch retains only live unsubmitted draft');
+    paint(lifecycle.view, secretFrame(3, 0, 1)); check(heldPassword.value === '', 'new secret draft epoch clears old context');
+    for (const state of [1, 2]) {
+      edit(heldPassword, 'phase secret'); paint(lifecycle.view, secretFrame(4 + state * 2, state, 1));
+      check(heldPassword.value === '', 'modeled non-ready lifecycle clears held secret');
+      paint(lifecycle.view, secretFrame(5 + state * 2, 0, 1)); check(lifecycle.input().value === '', 'ready return never resurrects prior secret');
+    }
+    edit(heldPassword, 'closed secret'); lifecycle.view.close();
+    check(heldPassword.value === '' && lifecycle.listeners.size === 0, 'explicit close clears held detached password and listeners');
+    for (const change of ['remove', 'kind', 'maximum', 'label', 'closed']) {
+      const item = open(undefined, {secretDispatch: secretSink}); paint(item.view, secretFrame());
+      const held = item.input(); edit(held, 'discarded context');
+      const next = change === 'closed' ? secretFrame(2, 3) : secretFrame(2);
+      if (change === 'remove') { next[6][5][1] = [4, 'removed']; next[6][9][1][5] = [7, 8]; }
+      if (change === 'kind') next[6][5][1] = [5, 6, true, true, 64, '', 0];
+      if (change === 'maximum') next[6][5][1][4] = 63;
+      if (change === 'label') next[6][5][1][1] = 5;
+      paint(item.view, next); check(held.value === '', 'secret replacement or policy change clears previous control');
+    }
+    cases.push('secret-epoch-lifecycle-policy-removal-and-close-clearing');
+
+    for (const rejected of [false, true]) {
+      let item;
+      item = open(() => { throw Error('ordinary dispatch forbidden'); }, {secretDispatch(raw) {
+        secretRoute(raw); check(item.input().value === '', 'secret cleared before failing sink');
+        if (rejected) return Promise.reject(Error('synthetic secret error payload'));
+        throw Error('synthetic secret error payload');
+      }});
+      paint(item.view, secretFrame()); edit(item.input(), 'synthetic'); item.buttons()[1].click(); await tick();
+      check(item.input().value === '' && item.alert() === 'Unable to submit this request.'
+        && !item.root.textContent.includes('synthetic secret error'), 'sink failure neither restores nor echoes secret');
+    }
+    const delayedSecret = deferred(); let lateSecretCalls = 0;
+    const secretClosing = open(() => { throw Error('ordinary dispatch forbidden'); }, {secretDispatch(raw) {
+      secretRoute(raw); lateSecretCalls++; return delayedSecret.promise;
+    }});
+    paint(secretClosing.view, secretFrame()); const latePassword = secretClosing.input();
+    edit(latePassword, 'synthetic'); secretClosing.buttons()[1].click(); secretClosing.view.close();
+    delayedSecret.resolve(bytes(secretFrame(2, 0, 1))); await tick();
+    check(lateSecretCalls === 1 && latePassword.value === '' && secretClosing.root.childElementCount === 0, 'closed secret sink completion cannot restore content or authority');
+    cases.push('secret-sink-failure-and-late-completion-no-echo');
+
     const keyboardCalls = [], keyboard = open(raw => {
       const intent = decodeIntent(checked(raw)); keyboardCalls.push(intent);
       const next = frame(intent[1] + 1); next[5] = 0; return bytes(next);
     }); paint(keyboard.view, frame());
     keyboard.root.dataset.keyboardPresentation = '';
+    const secretKeyboardCalls = [], secretKeyboard = open(() => { throw Error('keyboard secret escaped ordinary dispatch'); },
+      {secretDispatch(raw) { secretKeyboardCalls.push(secretRoute(raw)); return secretSink(raw); }});
+    paint(secretKeyboard.view, secretFrame()); secretKeyboard.root.dataset.keyboardSecret = '';
     globalThis.__presentationJourney = {
       count: () => keyboardCalls.length,
+      secretCount: () => secretKeyboardCalls.length,
       finish() {
         check(keyboardCalls.length === 2 && keyboardCalls[0][2] === 202 && keyboardCalls[1][2] === 101,
           'actual keyboard uses declared default and explicitly selected button');
         cases.push('actual-native-keyboard-default-and-button-submission');
+        check(secretKeyboardCalls.length === 1 && secretKeyboardCalls[0][2] === 202
+          && secretKeyboardCalls[0][3][0][1] === 'synthetic keyboard secret'
+          && secretKeyboard.input().value === '', 'actual password Enter uses source-bound private sink and clears');
+        cases.push('actual-native-password-keyboard-secret-submission');
         for (const view of views) view.close(); for (const root of roots) root.remove();
         return {cases, calls, maxMemory, modelChecked: Boolean(module && fixtureModule && labelsModule), keyboard: keyboardCalls};
       },
@@ -367,5 +491,61 @@ export async function runMaximumFixture(input) {
     return {schema: 'prismpm/private-presentation-maximum/1', id: input.id, frame_length: request.length,
       text_length: textLength, request_sha256: requestDigest, response_sha256: responseDigest,
       maximum_memory: memory.buffer.byteLength, modelChecked: true};
+  } finally { view.close(); root.remove(); }
+}
+
+export async function runSecretMaximumFixture(input) {
+  const modules = {};
+  for (const role of ['wire', 'maxsecret', 'maxroute', 'maxsink']) {
+    check(Array.isArray(input[role]), 'actual maximum secret artifact ' + role);
+    modules[role] = await WebAssembly.compile(new Uint8Array(input[role]));
+    check(WebAssembly.Module.imports(modules[role]).length === 0, 'secret maximum artifacts are import-free');
+  }
+  const observations = []; let maximum = 0;
+  function execute(role, request) {
+    const {exports: {memory, holo_alloc, holo_run}} = new WebAssembly.Instance(modules[role], {});
+    const at = holo_alloc(request.length) >>> 0; new Uint8Array(memory.buffer, at, request.length).set(request);
+    const result = BigInt.asUintN(64, holo_run(at, request.length));
+    const pointer = Number(result >> 32n), length = Number(result & 0xffffffffn);
+    check(length <= PRESENTATION_MAXIMUM && pointer + length <= memory.buffer.byteLength, 'secret maximum generated output bounds');
+    const output = new Uint8Array(memory.buffer, pointer, length).slice();
+    maximum = Math.max(maximum, memory.buffer.byteLength); return output;
+  }
+  const frame = execute('maxsecret', encodeWire([1, 1, 0, 0]));
+  const decoded = decodePresentation(frame);
+  check(decoded[6][5][1][0] === 10 && decoded[6][5][1][4] === PRESENTATION_MAXIMUM, 'actual source supplies full secret limit');
+  const empty = [1, 1, 202, [[6, ''], [7, ''], [8, 10]]];
+  const textLength = PRESENTATION_MAXIMUM - encodeWire(empty).length - 4;
+  const text = 'x'.repeat(textLength), root = document.createElement('main'); document.body.append(root);
+  let calls = 0, view;
+  const digest = async bytes => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+  view = openPresentation({root, labels, maximum: PRESENTATION_MAXIMUM, requestMaximum: PRESENTATION_MAXIMUM,
+    dispatch() { throw Error('maximum secret escaped ordinary dispatch'); }, secretDispatch(raw) {
+      calls++; check(raw.length === PRESENTATION_MAXIMUM && root.querySelector('input').value === '', 'maximum framed secret is captured and cleared before sink');
+      const echoed = execute('wire', raw); check(equal(echoed, raw), 'actual maximum framed secret codec preserves all bytes');
+      const route = execute('maxroute', raw); check(equal(route, Uint8Array.of(245)), 'actual maximum secret route accepts exact binding');
+      const result = execute('maxsink', raw);
+      observations.push(Promise.all([digest(raw), digest(echoed), digest(route), digest(result)]));
+      return result;
+    }});
+  try {
+    view.render(frame); root.querySelector('input').value = text; root.querySelector('textarea').value = '';
+    root.querySelectorAll('button')[1].click(); await tick();
+    check(calls === 1 && root.querySelector('input').value === '', 'actual maximum private sink returns nonsecret view');
+    check(!root.textContent.includes('x'.repeat(1000)) && !root.querySelector('input').hasAttribute('value'), 'maximum secret has no DOM echo');
+    const [request, wire, route, sink] = await observations[0];
+    // A fresh view keeps the same source-owned revision and policy. Overruns
+    // must fail before either private or ordinary dispatch, not be truncated.
+    view.close(); let overCalls = 0;
+    view = openPresentation({root, labels, maximum: PRESENTATION_MAXIMUM, requestMaximum: PRESENTATION_MAXIMUM,
+      dispatch() { overCalls++; }, secretDispatch() { overCalls++; }});
+    view.render(frame); const held = root.querySelector('input'); root.querySelector('textarea').value = '';
+    for (const value of [text + 'x', 'x'.repeat(PRESENTATION_MAXIMUM + 1)]) {
+      held.value = value; root.querySelectorAll('button')[1].click(); await tick();
+      check(overCalls === 0 && root.querySelector('[role=alert]').textContent === 'Unable to submit this request.', 'secret frame/field overrun never reaches a sink');
+    }
+    view.close(); check(held.value === '', 'oversize rejected draft clears on close');
+    return {schema: 'prismpm/private-secret-maximum/1', request, wire, route, sink,
+      frame_length: PRESENTATION_MAXIMUM, text_length: textLength, maximum_memory: maximum, modelChecked: true};
   } finally { view.close(); root.remove(); }
 }
