@@ -8,7 +8,7 @@ import {prerequisite} from '../browser-view/prerequisites.mjs';
 const names = ['operation-journal.mjs', 'effects.mjs', 'effects-wire.mjs', 'effects-module.mjs',
   'credential-custody.mjs', 'identity.mjs', 'store.mjs', 'browser-fixture.mjs'];
 const source = name => join(name === 'browser-fixture.mjs' ? draft : join(repository, 'sdk/browser'), name);
-const cases = ['explicit-genesis-open-capture', 'actual-execution-terminal-reopen',
+const cases = ['explicit-genesis-open-capture', 'bootstrap-descriptor-snapshots', 'actual-execution-terminal-reopen',
   'opaque-custody-source-bounds-before-prepare', 'journal-namespace-isolation', 'journal-signing-domain-isolation',
   'lost-prepared-and-terminal-acknowledgments', 'close-during-staging-and-prepared',
   'unknown-real-application-commit-retained', 'actual-rejected-effect-durable-terminal', 'missing-chunk-fails-authenticated-replay',
@@ -74,9 +74,11 @@ export async function verifyBrowser(t, build, custody) {
     }
   }
   assert.deepEqual(closure(), before, 'frozen production/browser oracle closure');
-  t.diagnostic(JSON.stringify({cases: result.cases, calls: {journal: journalRows.length, custody: custodyRows.length},
+  const evidence = {cases: result.cases, calls: {journal: journalRows.length, custody: custodyRows.length},
     maximum: result.maximum, payload: {length: maximum.length, sha256: sha(maximum)},
-    transcript: sha(readFileSync(transcript)), custodyTranscript: sha(readFileSync(credentialTranscript)), sources: before}));
+    transcript: sha(readFileSync(transcript)), custodyTranscript: sha(readFileSync(credentialTranscript)), sources: before};
+  writeFileSync(join(build.work, 'operation-journal-browser-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
+  t.diagnostic(JSON.stringify(evidence));
 }
 
 export async function verifyHostMutations(t, build, custody) {
@@ -85,6 +87,12 @@ export async function verifyHostMutations(t, build, custody) {
     assert.equal(text.split(before).length, 2, 'one exact owning guard'); return text.replace(before, after);
   };
   const mutations = [
+    ['descriptor-value-snapshot', 'operation-journal.mjs',
+      replace(journal, 'return Object.fromEntries(names.map(name => [name, descriptors[name].value]));', 'return value;'),
+      /descriptor snapshot invoked caller property getter: options/],
+    ['array-length-snapshot', 'operation-journal.mjs',
+      replace(journal, 'const length = descriptors.length?.value;', 'const length = value.length;'),
+      /descriptor snapshot invoked caller property getter: guests/],
     ['primitive-before-prepared', 'operation-journal.mjs',
       replace(replace(journal, 'const payload = await this.#stage(request); this.#check();',
         'const early = staged.release(); const payload = await this.#stage(request); this.#check();'),

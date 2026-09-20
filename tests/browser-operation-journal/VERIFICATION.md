@@ -13,8 +13,10 @@ cargo test --locked --offline --jobs 1 \
   conformance_dk_24 -- --exact --nocapture
 ```
 
-Completed predecessor gate: one registered owner, 25 underlying tests, no skips;
-603.49 seconds. Production/model bytes are unchanged in this candidate.
+Completed predecessor gates: one registered owner, 25 underlying tests in
+603.49 seconds; then 26 tests in 647.22 seconds, no skips. The latter includes
+the direct partition-boundary source mutant and one-free-record reservation.
+This follow-up changes host descriptor capture; final acceptance remains pending.
 
 - Fresh LexLean source/kernel/axiom verification and independent complete native,
   journal Wasm and partition Wasm artifact equality.
@@ -38,7 +40,12 @@ Retained predecessor evidence `/tmp/prismpm-operation-journal-pWcOqZ/`:
 acceptance JSON `449eb28e1476a399d6f3c6627ea3b236b5192294ef7f1a4ae6c5509f0d2ace9d`.
 These local diagnostics are never acceptance inputs or caches.
 
-Pending: fresh complete 26-test owner adds the direct partition-boundary source
-mutant and real one-free-record terminal reservation; unchanged full DK-20
-regression; final ancillary checks. Combined package proofs, installed-SDK and
-product release acceptance remain independent integration gates.
+Additional executed RED: valid own descriptors with hostile Proxy getters caused
+`descriptor snapshot invoked caller property getter`. The corrected host captures
+object values and array length once; actual browser tests cover nested objects,
+arrays, payload transport and rejected accessors. Two corresponding host mutants
+are registered. Full browser evidence is now retained and hashed by the owner.
+
+Pending: fresh complete 28-test owner, unchanged full DK-20 regression and final
+ancillary checks. Combined package proofs, installed-SDK and product release
+acceptance remain independent integration gates.

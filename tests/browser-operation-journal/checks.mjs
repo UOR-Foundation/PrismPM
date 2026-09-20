@@ -121,8 +121,9 @@ export async function verifyOperationJournal(t) {
     await verifyHostMutations(t, build, custody);
     for (const kind of ['binding', 'trailing', 'reservation', 'payload', 'partition']) await prerequisite(t, 'actual source/kernel journal mutation ' + kind, () => verifyModelMutation(kind));
     const evidence = {wire: sha(readFileSync(join(build.work, 'operation-journal-wire-evidence.json'))),
+      browser: sha(readFileSync(join(build.work, 'operation-journal-browser-evidence.json'))),
       custody: sha(readFileSync(join(custody.work, 'custody-wire-evidence.json'))), source: sourceClosure(),
-      hostMutations: 10, modelMutations: 5, publicApplicationAccepted: false};
+      hostMutations: 12, modelMutations: 5, publicApplicationAccepted: false};
     writeFileSync(join(build.work, 'operation-journal-acceptance.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
     t.diagnostic('retained exact acceptance evidence ' + build.work + ' and custody ' + custody.work);
     passed = true;

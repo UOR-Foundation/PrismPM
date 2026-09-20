@@ -490,7 +490,7 @@ fn verify_browser_host(root: &Path, id: &str) {
             ],
             8,
         ),
-        "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 26),
+        "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 28),
         "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
         _ => unreachable!("closed browser host capability"),
     };
