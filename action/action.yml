@@ -16,6 +16,9 @@ inputs:
   output:
     description: New project-root directory name for export-browser; validated by the SDK
     default: ""
+  url:
+    description: Canonical HTTPS base URL for verify-browser-publication; byte integrity only, not deployment acceptance
+    default: ""
   release:
     description: Named modeled release selected for build (for example A or B)
     default: ""
@@ -95,6 +98,7 @@ runs:
         PRISMPM_ACTION_PLAN: ${{ inputs.plan }}
         PRISMPM_ACTION_REFERENCE: ${{ inputs.reference }}
         PRISMPM_ACTION_OUTPUT: ${{ inputs.output }}
+        PRISMPM_ACTION_URL: ${{ inputs.url }}
         PRISMPM_ACTION_RELEASE: ${{ inputs.release }}
         PRISMPM_ACTION_POLICY: ${{ inputs.policy }}
         PRISMPM_ACTION_PROMOTION_TO: ${{ inputs.promotion-to }}
