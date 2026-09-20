@@ -269,7 +269,14 @@ export function validateWorkflow(text) {
   assert.match(text, /^          persist-credentials: false$/m);
   const run = text.match(/      - name: Generate review-only native records\n        env:\n          SOURCE_REVISION: \$\{\{ github\.event\.pull_request\.head\.sha \}\}\n        run: \|\n((?:          .*\n)+)/)?.[1];
   assert.equal(run, '          node scripts/native-golden.mjs tests\n          node scripts/native-golden.mjs run "$SOURCE_REVISION" "$RUNNER_TEMP/native-golden"\n');
-  assert.match(text, /^        if: always\(\)$/m); assert.match(text, /^          path: \$\{\{ runner\.temp \}\}\/native-golden\/$/m);
+  assert.match(text, /      - name: Start bounded native review diagnostics\n        run: node scripts\/ci-observe\.mjs start "\$RUNNER_TEMP\/native-observer"\n/);
+  assert.match(text, /      - name: Stop native review diagnostics\n        if: always\(\)\n        run: node scripts\/ci-observe\.mjs stop "\$RUNNER_TEMP\/native-observer"\n/);
+  for (const [name, path] of [['native-golden-review-arm64', 'native-golden'], ['native-golden-diagnostics', 'native-observer']]) {
+    assert(text.includes('      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n'
+      + '        if: always()\n        with:\n'
+      + `          name: ${name}-\${{ github.event.pull_request.head.sha }}\n`
+      + `          path: \${{ runner.temp }}/${path}/\n`), 'each native review artifact must upload on failure');
+  }
   assert(!/setup-qemu|docker\/login-action|sdk-candidate.mjs|sdk-image-inputs.mjs/.test(text));
 }
 

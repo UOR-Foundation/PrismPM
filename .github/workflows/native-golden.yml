@@ -27,12 +27,17 @@ jobs:
         with:
           version: v0.28.0
           driver-opts: image=docker.io/moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Start bounded native review diagnostics
+        run: node scripts/ci-observe.mjs start "$RUNNER_TEMP/native-observer"
       - name: Generate review-only native records
         env:
           SOURCE_REVISION: ${{ github.event.pull_request.head.sha }}
         run: |
           node scripts/native-golden.mjs tests
           node scripts/native-golden.mjs run "$SOURCE_REVISION" "$RUNNER_TEMP/native-golden"
+      - name: Stop native review diagnostics
+        if: always()
+        run: node scripts/ci-observe.mjs stop "$RUNNER_TEMP/native-observer"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -41,3 +46,10 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-golden-diagnostics-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/native-observer/
+          if-no-files-found: error
+          retention-days: 7

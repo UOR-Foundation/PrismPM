@@ -234,6 +234,10 @@ test('PR workflow has no publication policy bypass and keeps exact native genera
   for (const changed of [raw.replace('ubuntu-24.04-arm', 'ubuntu-24.04'), raw.replace('pull_request:', 'workflow_dispatch:'),
     raw.replace('contents: read', 'contents: write'), raw.replace('22.23.2', 'latest'), raw.replace('if: always()', 'if: success()'),
     raw.replace('node scripts/native-golden.mjs run', 'true # node scripts/native-golden.mjs run')]) assert.throws(() => validateWorkflow(changed));
+  for (const name of ['native-golden-review-arm64', 'native-golden-diagnostics']) {
+    const changed = raw.replace(`if: always()\n        with:\n          name: ${name}`, `if: success()\n        with:\n          name: ${name}`);
+    assert.notEqual(changed, raw); assert.throws(() => validateWorkflow(changed));
+  }
   const runtime = JSON.parse(readFileSync(new URL('../sdk/vv-runtime.lock.json', import.meta.url)));
   assert(raw.includes(`driver-opts: image=${runtime.images.buildkit.reference}`));
 });

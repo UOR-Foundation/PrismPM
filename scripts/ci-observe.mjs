@@ -1,6 +1,6 @@
 // CI diagnostics only: never acceptance evidence or a replacement for a gate.
 import { execFile, spawn } from 'node:child_process';
-import { chmodSync, existsSync, fchmodSync, mkdirSync, openSync, closeSync, readFileSync, writeSync, statfsSync } from 'node:fs';
+import { chmodSync, existsSync, fchmodSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, writeSync, statfsSync } from 'node:fs';
 import { constants } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,6 +75,36 @@ export function dockerUsage(text) {
   return records.sort((a, b) => a.id.localeCompare(b.id)).slice(0, limits.containers);
 }
 
+// Closed names and numeric kernel fields only: never command lines, paths or
+// environment. Process activity is diagnostic, not evidence of a passing gate.
+export function compilerProcess(text) {
+  if (typeof text !== 'string' || text.length > 4096) return null;
+  const match = /^(\d+) \((cargo|rustc|lean|lake|xtask|timeout)\) (.*)$/.exec(text.trim());
+  if (!match) return null;
+  const fields = match[3].split(' ');
+  if (fields.length < 22 || !/^[RSDZTWtXIP]$/.test(fields[0])) return null;
+  const values = [match[1], fields[1], fields[11], fields[12], fields[21]].map(value =>
+    /^(?:0|[1-9][0-9]*)$/.test(value) ? number(value) : null);
+  if (values.some(value => value === null) || values[0] === 0) return null;
+  const [pid, parentPid, userTicks, systemTicks, residentPages] = values;
+  return {tool: match[2], pid, parentPid, state: fields[0], userTicks, systemTicks, residentPages};
+}
+
+function compilerActivity() {
+  try {
+    const candidates = readdirSync('/proc').filter(name => /^[1-9][0-9]*$/.test(name)).sort((a, b) => Number(a) - Number(b));
+    const processes = []; let truncated = candidates.length > 8192;
+    for (const pid of candidates.slice(0, 8192)) {
+      const value = compilerProcess(read(`/proc/${pid}/stat`));
+      if (value) {
+        if (processes.length === 32) { truncated = true; break; }
+        processes.push(value);
+      }
+    }
+    return {available: true, truncated, processes};
+  } catch { return {available: false, truncated: false, processes: []}; }
+}
+
 function filesystem(path) {
   try {
     const value = statfsSync(path);
@@ -100,7 +130,7 @@ export async function sample() {
       pids: number(read('/sys/fs/cgroup/pids.current').trim()),
       memoryEvents: keyNumbers(read('/sys/fs/cgroup/memory.events'), ['low', 'high', 'max', 'oom', 'oom_kill', 'oom_group_kill']),
       cpu: keyNumbers(read('/sys/fs/cgroup/cpu.stat'), ['usage_usec', 'user_usec', 'system_usec', 'nr_periods', 'nr_throttled', 'throttled_usec'])},
-    docker};
+    compilerActivity: compilerActivity(), docker};
 }
 
 export async function monitor(directory, {intervalMs = limits.intervalMs, durationMs = limits.durationMs, samples = limits.samples,

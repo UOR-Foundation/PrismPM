@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { boundedLog, dockerUsage, keyNumbers, limits, monitor, pressure, redactor } from './ci-observe.mjs';
+import { boundedLog, compilerProcess, dockerUsage, keyNumbers, limits, monitor, pressure, redactor } from './ci-observe.mjs';
 
 const script = fileURLToPath(new URL('./ci-observe.mjs', import.meta.url));
 const repository = dirname(dirname(script));
@@ -51,6 +51,18 @@ test('numeric allowlists reject names, command lines, environment and malformed 
   assert.equal(rows[1].cpuPercent, null);
   assert.ok(!JSON.stringify(rows).includes(secret));
   assert.equal(dockerUsage(Array(300).fill(valid).join('\n')).length, limits.containers);
+  const fields = Array(22).fill('0');
+  fields[0] = 'S'; fields[1] = '11'; fields[11] = '23'; fields[12] = '5'; fields[21] = '400';
+  const stat = (name = 'lean', data = fields) => `12 (${name}) ${data.join(' ')}\n`;
+  assert.deepEqual(compilerProcess(stat()), {tool: 'lean', pid: 12, parentPid: 11, state: 'S', userTicks: 23, systemTicks: 5, residentPages: 400});
+  for (const name of ['cargo', 'rustc', 'lake', 'xtask', 'timeout']) assert.equal(compilerProcess(stat(name)).tool, name);
+  for (const name of [secret, 'lean --password', 'lean) extra']) assert.equal(compilerProcess(stat(name)), null);
+  for (const index of [0, 1, 11, 12, 21]) {
+    const bad = [...fields]; bad[index] = secret; assert.equal(compilerProcess(stat('lean', bad)), null);
+  }
+  assert.equal(compilerProcess(stat().replace('12 (', '0 (')), null);
+  assert.equal(compilerProcess(stat('lean', fields.slice(0, 21))), null);
+  assert.equal(compilerProcess('x'.repeat(4097)), null);
 });
 
 test('credential redaction spans every chunk boundary and never echoes environment names', () => {
@@ -360,7 +372,7 @@ test('actual normative twice-VV workflow propagates first/second failures and re
   assert.throws(() => check(body.replace('set -euo pipefail\n', '')));
 });
 
-test('both actual workflows retain their full gates, always stop/upload, and keep pinned actions', () => {
+test('all observed workflows retain their full gates, always stop/upload, and keep pinned actions', () => {
   for (const [name, job, runs] of [['bootstrap.yml', 'native-gate', 1], ['vv.yml', 'vv', 2]]) {
     const steps = workflow(name).jobs[job].steps;
     const start = steps.findIndex(step => step.run?.includes('ci-observe.mjs start'));
@@ -375,5 +387,15 @@ test('both actual workflows retain their full gates, always stop/upload, and kee
     assert.equal(steps[gate]['continue-on-error'], undefined);
     for (const step of steps.filter(value => value.uses)) assert.match(step.uses, /@[0-9a-f]{40}$/);
   }
+  const native = workflow('native-golden.yml').jobs['native-source-review'].steps;
+  const start = native.findIndex(step => step.run === 'node scripts/ci-observe.mjs start "$RUNNER_TEMP/native-observer"');
+  const gate = native.findIndex(step => step.name === 'Generate review-only native records');
+  const stop = native.findIndex(step => step.run === 'node scripts/ci-observe.mjs stop "$RUNNER_TEMP/native-observer"');
+  const upload = native.findIndex(step => step.with?.path === '${{ runner.temp }}/native-observer/');
+  assert.ok(start >= 0 && start < gate && gate < stop && stop < upload);
+  assert.equal(native[stop].if, 'always()'); assert.equal(native[upload].if, 'always()');
+  assert.equal(native[upload].with['retention-days'], 7);
+  assert.equal(native[gate]['continue-on-error'], undefined);
+  for (const step of native.filter(value => value.uses)) assert.match(step.uses, /@[0-9a-f]{40}$/);
   assert.match(readFileSync(join(repository, 'xtask/src/main.rs'), 'utf8'), /"scripts\/ci-observe\.test\.mjs"/);
 });
