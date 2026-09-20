@@ -154,11 +154,17 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
 }
 
 fn command(root: &Path, program: &str, args: &[&str]) -> Result<(), Fail> {
-    let status = Command::new(program)
+    let mut child = Command::new(program);
+    child
         .args(args)
         .current_dir(root)
-        .env("CARGO_NET_OFFLINE", "true")
-        .status()?;
+        .env("CARGO_NET_OFFLINE", "true");
+    // Cargo injects its Rust loader search path into xtask. It is not a Node
+    // compiler input; use the same boundary as the owning conformance runner.
+    if program == "node" {
+        child.env_remove("LD_LIBRARY_PATH");
+    }
+    let status = child.status()?;
     if !status.success() {
         return Err(format!("{program} {} exited {status}", args.join(" ")).into());
     }
@@ -1547,6 +1553,19 @@ mod golden_tests {
             files.push((path.to_owned(), executable.to_vec()));
         }
         assert_eq!(super::golden_verification_files(files), evidence);
+    }
+}
+
+#[cfg(test)]
+mod command_tests {
+    #[test]
+    fn node_gate_does_not_inherit_cargo_loader_state() {
+        super::command(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+            "node",
+            &["--input-type=module", "-e", "import assert from 'node:assert/strict'; import {run} from '../tests/browser-view/compile.mjs'; assert.equal(process.env.LD_LIBRARY_PATH, undefined); assert.equal(process.env.CARGO_NET_OFFLINE, 'true'); process.env.RUSTFLAGS='-C opt-level=0'; assert.throws(()=>run('cargo',['--version'],process.cwd()),/inherited compiler override refused: RUSTFLAGS/);"],
+        )
+        .unwrap();
     }
 }
 
