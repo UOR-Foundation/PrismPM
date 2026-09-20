@@ -47,3 +47,9 @@ Feature: oci
     Given the locked PrismPM production fixture
     When the OC-08 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @OC-09 @build
+  Scenario: A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment.
+    Given the locked PrismPM production fixture
+    When the OC-09 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

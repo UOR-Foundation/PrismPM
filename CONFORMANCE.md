@@ -139,6 +139,7 @@ The three honesty levels:
 | `OC-06` | `build` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. |
 | `OC-07` | `build` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. |
 | `OC-08` | `build` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. |
+| `OC-09` | `build` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. |
 
 ## operations
 
