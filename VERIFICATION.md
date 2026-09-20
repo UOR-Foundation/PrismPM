@@ -2032,6 +2032,14 @@ Scoped Rust formatting and diff checks pass. Integration-wide model generation
 and audit, actual source/full installed-SDK VV, and release publication remain
 separate required gates; this check did not dispatch or accept a release.
 
+The process-lifecycle regression reproduced an exited command whose resistant
+grandchild kept capture pending until the test watchdog intervened. Capture
+now preserves short-lived descendant output, rejects orphaned output pipes,
+and bounds owned process-group cleanup after exit or cancellation. The full
+57-test devcontainer owner passed with no failures or skips; original log
+`target/lifecycle-evidence-owner-qWKIDa/owning.stdout`, SHA-256
+`989fb320ecb2f0298c0c42bd15b88b97329aa2169904d580791253f2440bd91c`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
