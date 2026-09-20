@@ -287,7 +287,10 @@ fn composition_rejects_duplicate_unsorted_missing_and_escalated_blobs() {
         .iter()
         .map(bytes)
         .collect::<Vec<_>>();
-    assert_eq!(substituted["upstream"]["stage"], "accepted-physical-archive");
+    assert_eq!(
+        substituted["upstream"]["stage"],
+        "accepted-physical-archive"
+    );
     let substituted_manifest = bytes(&substituted["manifest_hex"]);
     assert!(wire::browserValidAppManifest(&substituted_manifest));
     assert_eq!(body(&data, substituted_manifest, &substituted_blobs), None);
