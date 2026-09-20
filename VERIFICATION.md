@@ -2048,6 +2048,31 @@ unchanged byte maxima and lifecycle checks. Original log
 `target/file-count-evidence-owner-uk4hYk/owning.stdout`, SHA-256
 `99f06d605005b555e472cb2bbe284030e01fb080ac54c6d72df6419395240292`.
 
+## Integrated publication prerequisites
+
+Normal golden generation and independent readback match all 356 files at build
+`bd667cc528214fed489769cd5c69625c54ea5e70189b0c678630afb4928ac3f5`.
+The two conditional-publication source files are byte-exact; existing generated
+modules, portable artifacts and proof observations remain unchanged. The actual
+new compiler-executable/attestation identities are retained, not normalized.
+
+Normal Cargo-entry model/spec/source validation passes all 188 Node tests.
+Its initial failure exposed Cargo's inherited loader path in the new compiler
+cache tests. The corrected Node boundary matches the existing conformance
+runner; an actual Cargo-launched regression fails before the change and passes
+afterward, while the compiler's override refusal remains enforced.
+
+| Original independent-devcontainer log | SHA-256 |
+| --- | --- |
+| `target/publication-golden-write.log` | `e72900f36f47d459241b11cab5ebcacdbb27d909b1c94466fc21ece9b526e57a` |
+| `target/publication-golden-readback.log` | `759d549b3f94c06987a7b9dd68d357889438021f49fcd78853d38e6c9f9495fb` |
+| `target/node-gate-environment-red.log` | `5d6731836c3fdcea0917d9a83a933209cafcf61e0f097a003d5f39a526fb03cb` |
+| `target/node-gate-environment-green-final.log` | `2d27303b6e0770f149ce6af77fb6dd1dc6a11a9f4bf8abea878002d88f7b169b` |
+| `target/original-retention-integrated-audit-final.log` | `7a29d8f0b6d42278cc23f4d26fd9882973970a755602228258e4848bb403ceb8` |
+
+These source checks do not establish complete V&V, installed-SDK acceptance,
+a functional Foundry release or Pages deployment.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
