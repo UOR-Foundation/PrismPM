@@ -44,6 +44,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-16"
             | "DK-17"
             | "DK-18"
+            | "DK-20"
             | "OC-07"
             | "OC-08"
             | "ST-11"

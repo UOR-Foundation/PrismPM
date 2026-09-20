@@ -17,6 +17,7 @@ const byteLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLen
 const byteBuffer = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'buffer')?.get;
 const arrayBufferLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')?.get;
 const byteSet = typedArrayPrototype.set;
+const byteValues = typedArrayPrototype.values;
 const hasOwn = Object.prototype.hasOwnProperty;
 const prototypeOf = Object.getPrototypeOf;
 const descriptorsOf = Object.getOwnPropertyDescriptors;
@@ -103,7 +104,7 @@ export function randomBytes(length) {
   }
 }
 
-export function bytesCopy(value, maximum = MAX_SIGNED_BYTES) {
+export function bytesLength(value, maximum = MAX_SIGNED_BYTES) {
   try {
     if (!Number.isSafeInteger(maximum) || maximum < 0
         || apply(byteTag, value, []) !== 'Uint8Array') throw new BrowserEffectError('invalid-input');
@@ -111,6 +112,18 @@ export function bytesCopy(value, maximum = MAX_SIGNED_BYTES) {
     apply(arrayBufferLength, apply(byteBuffer, value, []), []);
     const length = apply(byteLength, value, []);
     if (length > maximum) throw new BrowserEffectError('invalid-input');
+    // The native iterator constructor validates detached/out-of-bounds views
+    // without reading caller methods, allocating payload bytes or iterating.
+    apply(byteValues, value, []);
+    return length;
+  } catch {
+    throw new BrowserEffectError('invalid-input');
+  }
+}
+
+export function bytesCopy(value, maximum = MAX_SIGNED_BYTES) {
+  try {
+    const length = bytesLength(value, maximum);
     const copy = new ByteArray(length);
     // Typed-array set uses internal slots, not source iterator/species/getters;
     // it also rejects detached and out-of-bounds resizable views.

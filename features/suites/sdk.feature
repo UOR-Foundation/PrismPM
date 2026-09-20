@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-20 @build
+  Scenario: The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance.
+    Given the complete finite effect corpus, bounded wire closure and independently admitted private bootstrap artifacts
+    When fresh source, kernel, native, no_std, Core-Wasm and actual browser journeys execute
+    Then all eight effect families and exact browser transcripts agree without public completion authority
+    And actual model and host guard mutations fail owning execution assertions
+
   @DK-19 @build
   Scenario: The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority.
     Given exact upstream RSA signature vectors and immutable copies of bounded public-key, message and signature bytes
