@@ -1868,6 +1868,29 @@ or Foundry-service acceptance; the genuine installed product gate remains requir
 | `target/browser-system-clippy.log` | `bf65c44b930a392d2298aa4f303afa4fa622d0f6c5b4031c6cbe1f4d1a61c958` |
 | `target/browser-system-sdk-inventory-measured.log` | `e4186dd2b6f051e8cb5cdf75a34271eb7051df8bbe40688a187567f2b8733005` |
 
+## Private presentation integration — 20 September 2026
+
+At `7a27fb6`, normal `check-golden --write` reproduced all 354 baseline files.
+Only the two accepted SecretInput source copies and their verification bindings
+changed; all 53 generated Lean modules, build identity, compiler semantics,
+package bytes and public exports stayed unchanged. Normal `stdlib-package`
+also passed. These checks do not enable the public BrowserApplication runtime.
+
+An independent clean clone passed all 163 model/spec/audit checks. At `1974d49`,
+the same clone passed all five authored-formatting tests, 22 SDK closure tests
+and all-target Clippy with warnings denied for PrismPM, conformance and xtask.
+The presentation compiler scheduling regression passed all three original
+concurrency/reentrancy/failure tests. Full VV, current installed-SDK acceptance
+and Foundry publication remain unestablished.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/secret-input-golden-write.log` | `d69ff38046ea6deb79c1cb65c0485872b9cad325caae25b2dc2fa9c8d605f842` |
+| `target/secret-input-stdlib-package.log` | `c4af89a08c762469503ff4c2300753dac9e92631a9edbbf9741bd6ceabfabd9d` |
+| independent clone: `target/integrated-model-audit.log` | `dd167249bcf2ccf872369230781ba86e0a72257fe2937475d8d673ff4b7e5dc0` |
+| independent clone: `target/integrated-formatting-gate.log` | `2b9a0ee3a39ed3ded0263de2944778fe926bd0459a87079e20ae86e6d6e39b2d` |
+| independent clone: `target/secret-input-sdk-closure.log` | `76b62cde91c194004d8ffe0a33fdb87d55b6c24facb130ed9a08664f92afd4db` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
