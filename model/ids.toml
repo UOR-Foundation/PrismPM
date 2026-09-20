@@ -829,6 +829,12 @@ level = "build"
 statement = "The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds."
 
 [[id]]
+id = "DK-23"
+suite = "sdk"
+level = "build"
+statement = "A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

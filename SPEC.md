@@ -1486,6 +1486,26 @@ application. Source-function execution is not evidence of presentation safety,
 authorization, account custody, durable recovery or complete Foundry services.
 The public `PP2011` refusal remains mandatory until complete runtime acceptance.
 
+### 12.11 Closed browser presentation prerequisite
+
+DK-23 owns `Foundation.View.Browser.V1.Model` and its deterministic bounded
+`Wire` codec for `prismpm/browser-presentation/1`. The exact typed/wire and
+operational View rules are `stdlib/src/Foundation/View/Browser/V1/Wire.md` and
+`Wire.cddl`. A private closed DOM adapter consumes only source-owned labels,
+actions and semantic nodes, with plain dynamic text, native keyboard behavior,
+explicit lifecycle/focus/live regions and a private dispatcher boundary.
+HTML, scripts, URLs, styles, arbitrary attributes and secret-input nodes reject.
+Control presence is not authorization. The 64 MiB frame bound is executed, not
+replaced by a smaller example; node/action/field/choice/table limits are View
+budgets and do not reduce application-domain limits.
+
+Acceptance requires fresh generated native/no_std/Wasm parity, declared actual
+maxima and one-over negatives, real browser keyboard/focus/live/close journeys,
+native replay of observed generated transcripts and owning guard mutations.
+This private presentation prerequisite leaves `PP2011`, credential custody,
+generated authorized dispatch, durable recovery and complete public application,
+Foundry and deployment gates unchanged.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -1969,6 +1989,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-20` | `sdk` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. | §12 |
 | `DK-21` | `sdk` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. | §12 |
 | `DK-22` | `sdk` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. | §12 |
+| `DK-23` | `sdk` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
