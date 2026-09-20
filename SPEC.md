@@ -1516,6 +1516,40 @@ This private presentation prerequisite leaves `PP2011`, credential custody,
 generated authorized dispatch, durable recovery and complete public application,
 Foundry and deployment gates unchanged.
 
+### 12.13 Private modeled credential custody
+
+`DK-25` binds browser-generated nonextractable P-256 keys to one immutable
+application/policy and 1–64 sorted logical slots. Separate sorted signing
+resources (1–64) select exact slots, contexts and 1–1,048,576-byte maxima;
+multiple resources may share a slot. Generated `Custody`/`CustodyWire` code
+validates complete policy, snapshot and signing requests. The private host
+performs only actual cryptography and IndexedDB effects; it exports no keys,
+caller-completion authority, reset, replacement or generic signing context.
+
+Initialization atomically creates the complete versioned header/key inventory.
+Open never generates missing keys. Both operations require an identical-data
+`durability: "strict"` readwrite barrier and transaction completion before
+returning a module-branded handle. A browser upgrade transaction itself is not
+strict durability. Missing/corrupt rows, unknown schema/indexes, policy drift,
+wrong key possession and unsupported durability reject. Lost acknowledgments
+are unknown outcomes, not rollback; explicit reopening revalidates the exact
+retained inventory and repeats the strict barrier without replacing keys.
+
+The source-owned codec bounds frames to 2 MiB, responses to the complete
+64-KiB typed closure, names/contexts to 128 bytes, lists to 64, and signing
+payloads to 1 MiB. Generated Wasm has a 128-MiB memory maximum. A synchronous
+private signing check runs the same reducer without producing a signature or
+permit; the signer rechecks captured bytes before real cryptography. Close
+precedes input inspection and suppresses late signing results.
+
+Acceptance requires real source/kernel/axiom verification, generated native
+std/no_std and Wasm maxima, actual browser key/storage faults, genuine browser
+transcript replay, and planted model/host mutations. This is not account or
+organization authority, mailbox proof, key rotation, backup restoration,
+origin-eviction protection, or public application acceptance. Explicit creation
+after total origin loss creates new custody, never restores an earlier identity.
+DK-08, DK-20 and the public `PP2011` build refusal remain unchanged.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -2000,6 +2034,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-21` | `sdk` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. | §12 |
 | `DK-22` | `sdk` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. | §12 |
 | `DK-23` | `sdk` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. | §12 |
+| `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
