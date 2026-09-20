@@ -112,8 +112,15 @@ test('signatures cannot cross contexts, authors, or bytes', async () => {
 test('cryptographic boundary rejects malformed and excessive input before dispatch', async () => {
   assert.equal(await checkIntrinsicBytes(runInNewContext('({Uint8Array, SharedArrayBuffer})')), 23);
   const identity = await createIdentity();
-  for (const context of ['', 'bad\0domain', 'x'.repeat(129), '../scope', 12]) {
+  for (const context of ['', 'bad\0domain', 'x'.repeat(129), '../scope', 12,
+    'scope:record', 'a..b', '.scope', '/scope', '_scope', '-scope', 'é',
+    'scope\n', 'scope\r', 'scope\r\n', 'scope\u2028', 'scope\u2029']) {
     await assert.rejects(signBytes(identity, context, new Uint8Array()), { code: 'invalid-input' });
+    await assert.rejects(verifyBytes(identity.publicKey, context, new Uint8Array(), new Uint8Array(64)), { code: 'invalid-input' });
+  }
+  for (const context of ['a', 'A9._-/context', 'a'.repeat(128)]) {
+    const signature = await signBytes(identity, context, new Uint8Array());
+    assert.equal(await verifyBytes(identity.publicKey, context, new Uint8Array(), signature), true);
   }
   for (const bytes of [[], new Uint8Array(1048577), new Uint16Array(1)]) {
     await assert.rejects(signBytes(identity, 'test/1', bytes), { code: 'invalid-input' });

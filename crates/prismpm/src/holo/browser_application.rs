@@ -52,6 +52,16 @@ fn context(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/' | b':'))
 }
 
+fn signature_context(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.as_bytes()[0].is_ascii_alphanumeric()
+        && !value.contains("..")
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))
+}
+
 fn memory(input: u32, output: u32, pages: u32) -> bool {
     input > 0
         && output > 0
@@ -149,11 +159,15 @@ pub fn validate(value: &BrowserApplication) -> Result<(), PrismError> {
                 credential_slot,
                 context: domain,
                 maximum,
-            } => slug(credential_slot) && context(domain) && (1..=1_048_576).contains(maximum),
+            } => {
+                slug(credential_slot)
+                    && signature_context(domain)
+                    && (1..=1_048_576).contains(maximum)
+            }
             RequestedAdapter::Verify {
                 context: domain,
                 maximum,
-            } => context(domain) && (1..=1_048_576).contains(maximum),
+            } => signature_context(domain) && (1..=1_048_576).contains(maximum),
             RequestedAdapter::Store {
                 namespace,
                 max_object_bytes,

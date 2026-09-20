@@ -21,3 +21,12 @@ Devcontainer checks (2026-09-20):
 No kernel, generated application runtime, credential custody, durable recovery,
 effective grants or deployment is accepted by these declaration checks. Combined
 SDK stdlib/golden/runtime acceptance remains an integration gate.
+
+Signature-context regression (2026-09-20): the owning source/projection test
+failed because `scope:record` was accepted by declaration validation although
+the existing modeled effects and browser identity primitive reject it. The
+corrected declaration and schema use the same signing grammar, independently of
+guest protocol identifiers. Both sign/verify declarations, actual source
+projection, 128-byte acceptance and malformed-context rejection pass. All nine
+browser identity tests also pass, including real signatures under accepted
+contexts and rejection of those malformed contexts by both primitives.

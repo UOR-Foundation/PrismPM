@@ -1431,7 +1431,11 @@ language or canonical envelopes retain their owning diagnostics.
 
 Requested effects are not effective grants. Guest requests identify source roots,
 not caller artifact bytes. Signing slots are private-custody requests, not keys or
-account authority. Native Holo capabilities remain empty for the import-free
+account authority. Signature contexts use the existing identity primitive's
+1–128-byte ASCII grammar: an alphanumeric first byte, followed by alphanumeric,
+dot, underscore, hyphen or slash bytes, with no adjacent dots. Guest protocol
+identifiers retain their separate grammar; they are not signing contexts.
+Native Holo capabilities remain empty for the import-free
 primary; the required `prismpm-browser/1` View has its own explicit host boundary.
 The declaration grants no script, HTML, URL, callback, network or mailbox access.
 Runtime must independently bind actual artifact bytes, possessed credentials and

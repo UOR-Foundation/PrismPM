@@ -176,6 +176,41 @@ pub fn verify(root: &Path) {
     large["memory_pages"] = json!(16384);
     prismpm::holo::browser_application::validate(&typed(large)).unwrap();
 
+    for (context, accepted) in [
+        ("a".to_owned(), true),
+        ("A9._-/context".to_owned(), true),
+        ("a".repeat(128), true),
+        ("a".repeat(129), false),
+        ("scope:record".to_owned(), false),
+        ("a..b".to_owned(), false),
+        (".scope".to_owned(), false),
+        ("/scope".to_owned(), false),
+        ("_scope".to_owned(), false),
+        ("-scope".to_owned(), false),
+        ("é".to_owned(), false),
+        ("scope\n".to_owned(), false),
+    ] {
+        for index in [3, 5] {
+            let mut changed = expected.clone();
+            changed["requested_effects"][index]["adapter"]["context"] = json!(context);
+            let actual = prismpm::holo::browser_application::validate(&typed(changed.clone()));
+            assert_eq!(actual.is_ok(), accepted, "signature context {context:?}");
+            if let Err(error) = actual {
+                assert_eq!(error.code, "PP2010");
+            }
+            let mut changed_document = value.clone();
+            changed_document["application"] = changed;
+            assert_eq!(
+                schema.is_valid(&changed_document),
+                accepted,
+                "schema signature context {context:?}"
+            );
+        }
+    }
+    let mut guest_protocol = expected.clone();
+    guest_protocol["requested_effects"][1]["adapter"]["protocol"] = json!("urn:fixture/1");
+    prismpm::holo::browser_application::validate(&typed(guest_protocol)).unwrap();
+
     for (pointer, bad) in [
         ("/profile", json!("prismpm/browser-application/2")),
         ("/protocol", json!("prismpm/browser-application-session/2")),
@@ -384,6 +419,8 @@ pub fn verify(root: &Path) {
             "prismpm/browser-application/1",
             "prismpm/browser-application/2",
         ),
+        source.replace("prismpm/fixture/1", "scope:record"),
+        source.replace("prismpm/fixture/1", "scope..record"),
         mutate(&source, |m| {
             field(m, "entryRoot")["value"] = json!("BrowserContract.Probe.missing")
         }),
