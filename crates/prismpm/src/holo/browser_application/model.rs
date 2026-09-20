@@ -127,10 +127,20 @@ pub enum RequestedAdapter {
 pub struct Durability {
     /// Exact versioned protocol discriminator.
     pub protocol: String,
-    /// Unique logical resource identifier.
+    /// Private journal resource, distinct from every application resource.
     pub resource: String,
+    /// Private namespace, distinct from every application storage grant.
+    pub namespace: String,
     /// Immutable operation-journal head name.
     pub head: String,
+    /// Private payload staging head, distinct from the operation head.
+    pub staging_head: String,
+    /// Private journal signing resource, never an application signing grant.
+    pub signing_resource: String,
+    /// Requested custody slot, not a key or account authorization.
+    pub credential_slot: String,
+    /// Retained operation records; includes reserved terminal successors.
+    pub maximum_records: u32,
     /// Generated authenticated replay entry point.
     pub replay_root: String,
     /// One serialized durable operation; not distributed consensus.

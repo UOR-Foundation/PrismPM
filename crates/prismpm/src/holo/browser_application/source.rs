@@ -58,7 +58,12 @@ fn fields(kind: &str) -> Option<&'static [(&'static str, &'static str, &'static 
         "Durability" => &[
             ("protocol", "protocol", "String"),
             ("resource", "resource", "String"),
+            ("namespace", "namespace", "String"),
             ("head", "head", "String"),
+            ("stagingHead", "staging_head", "String"),
+            ("signingResource", "signing_resource", "String"),
+            ("credentialSlot", "credential_slot", "String"),
+            ("maximumRecords", "maximum_records", "UInt32"),
             ("replayRoot", "replay_root", "String"),
             ("maxPending", "max_pending", "UInt32"),
         ],

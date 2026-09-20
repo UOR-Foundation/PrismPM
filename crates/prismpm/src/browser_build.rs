@@ -432,7 +432,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
     add(
         &mut files,
         "compiler/policy.json".into(),
-        json_bytes(&application.requested_effects)?,
+        Plan::requested_policy(application)?,
     )?;
     add(&mut files, "compiler/toolchain.json".into(), tools.binding)?;
     let binding = plan.binding(&files)?;
