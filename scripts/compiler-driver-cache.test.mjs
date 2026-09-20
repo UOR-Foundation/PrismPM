@@ -2,9 +2,15 @@ import assert from 'node:assert/strict';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import {retireCompletedCompilerCaches} from '../tests/browser-view/driver-cache.mjs';
 import {run, sha} from '../tests/browser-view/compile.mjs';
+
+// Reuse the actual pinned exporter configuration; do not substitute a Lake
+// manifest format which none of these compiler fixtures executes.
+const archive = fileURLToPath(new URL('../vendor/lean4-prod/lean.tar', import.meta.url));
+const exporterManifest = Buffer.from(run('tar', ['-xOf', archive, 'lakefile.lean'], dirname(archive)));
 
 function fixture(t, prefix = 'prismpm-publication-') {
   const work = mkdtempSync(join(tmpdir(), prefix));
@@ -18,7 +24,7 @@ function fixture(t, prefix = 'prismpm-publication-') {
   run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',manifest], work, {CARGO_TARGET_DIR:target});
   const exporter = join(work, 'exporter');
   mkdirSync(join(exporter, '.lake/build/bin'), {recursive:true});
-  writeFileSync(join(exporter, 'lakefile.toml'), 'name="private_cache_probe"\nversion="0.1.0"\n');
+  writeFileSync(join(exporter, 'lakefile.lean'), exporterManifest);
   // This is cache fixture data, never executed or passed off as a compiler.
   writeFileSync(join(exporter, '.lake/build/bin/prod-export'), 'reconstructible test cache\n');
   const preserved = new Map(['source.lex.tex','proof.json','kernel.ir','guest.wasm'].map(name => [name, Buffer.from(name)]));
@@ -34,7 +40,9 @@ test('actual Cargo and Lake retirement preserves all non-cache evidence and exac
   assert.deepEqual(result.records[1], {path:'driver-target/debug/publication-admission-driver', byte_length:binary.length, sha256:sha(binary)});
   assert.deepEqual(JSON.parse(readFileSync(join(f.work,'compiler-cache-retirement.json'))), result);
   for (const [name, bytes] of f.preserved) assert.deepEqual(readFileSync(join(f.work,name)),bytes);
-  assert(existsSync(f.manifest) && existsSync(join(f.exporter,'lakefile.toml')));
+  assert(existsSync(f.manifest));
+  assert.deepEqual(readFileSync(join(f.exporter,'lakefile.lean')), exporterManifest);
+  assert.deepEqual(result.records[2], {path:'exporter/lakefile.lean', byte_length:exporterManifest.length, sha256:sha(exporterManifest)});
   assert(!existsSync(join(f.target,'debug/publication-admission-driver')));
   assert(!existsSync(join(f.exporter,'.lake/build')));
   assert.throws(() => retireCompletedCompilerCaches(f.work, 'publication'));
