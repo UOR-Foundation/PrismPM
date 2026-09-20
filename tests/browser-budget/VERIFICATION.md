@@ -27,3 +27,12 @@ Owning log: `/tmp/prismpm-budget-checks-BYJhAt/target/dk27-owner-final.log`.
 An earlier 23-maximum diagnostic was deliberately stopped and is not acceptance.
 Normal model generation, Cargo-entry audit (175 tests), authored formatting
 (5 tests), scheduling (3 tests) and cache-lifecycle checks (3 tests) passed.
+
+Combined with OC-09, the normal Cargo-entry audit passed all 189 tests.
+Independent golden generation and readback matched 357 files: the new Budget
+source and actual compiler-attestation bindings were the only baseline changes.
+The 53 generated modules were unchanged. Full authored formatting (5 tests),
+scheduling (3 tests) and expanded cache-lifecycle checks (4 tests) passed.
+Golden readback log SHA-256:
+`92949353c03a152b1c0f82dff3cb223d9ed3c0cc0b276cbef3cac55034e02fb6`.
+These source checks do not establish native SDK or Foundry release acceptance.
