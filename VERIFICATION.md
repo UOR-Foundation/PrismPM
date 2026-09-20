@@ -1996,6 +1996,23 @@ RED/GREEN log SHA-256:
 `ab6a033eab849f6daeefc4d645723be4b12affa569e3145ccbdbc91e630a1394`.
 These orchestration tests do not replace either actual native run.
 
+The integrated development baseline was refreshed through the normal writer
+and unchanged non-writing replay: all 354 files match build
+`bd667cc528214fed489769cd5c69625c54ea5e70189b0c678630afb4928ac3f5`.
+Only `progressFits` was added to the retained model source; existing declarations
+and all 53 generated modules are unchanged. Original executable/attestation
+bindings were retained without normalization. The complete source/model/spec
+audit then passed all 172 Node tests (179 registered IDs, 86 diagnostics).
+
+| Original devcontainer log | SHA-256 |
+| --- | --- |
+| `target/progress-golden-write.log` | `2ad6a5ff13f93fdeb37cac2dbf607ff91623c339724ba8ca331573b72ce1d227` |
+| `target/progress-golden-readback.log` | `3fdf0934d98c282b38639d5842fc057cf4c8e4dc680b6d16b7fde6e85209471f` |
+| `target/dual-native-integrated-audit.log` | `17f2c9ac3222a741c791956fb93ba59a6755b5131305cb5415ae8c65c3bee650` |
+
+These logs are retained in the independent source-audit clone. Neither this
+baseline nor the source audit establishes a current installed SDK or deployment.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
