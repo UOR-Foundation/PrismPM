@@ -639,10 +639,10 @@ execution results and process invocations. Each later run uses the unchanged
 strict comparison above against its own reviewed records. Profile selection
 does not establish native hardware execution or authorize a release.
 
-The PR-only ARM64 source-review workflow uses a pinned, existing development
-SDK solely as a native build environment for the exact PR source. The committed
+The PR-only native source-review workflow uses separately pinned AMD64 and ARM64
+development SDK environments solely to build the exact PR source natively. The committed
 shared source baseline must match before generation; unchanged golden write
-and repeat checks must both pass. It retains the three original native records,
+and repeat checks must both pass on each architecture. Each lane retains its three original native records,
 command logs and generated build/verification artifacts for human review,
 including failure diagnostics. It does not commit a baseline, publish an image,
 accept the current SDK, or bypass candidate/release policy. Native runner
