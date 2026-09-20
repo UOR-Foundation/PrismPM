@@ -218,6 +218,7 @@ impl PrismError {
         error: lexlean::LexLeanError,
         limit: u64,
     ) -> Self {
+        eprintln!("LEXLEAN ERROR: {context}: {error:?}");
         let total = error.diagnostics.len();
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
         let causes = error

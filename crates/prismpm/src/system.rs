@@ -1274,6 +1274,20 @@ pub fn validate(value: &Value, manifest: &Value) -> Result<(), PrismError> {
         .expect("generated validation certificate is an object")
         .remove("schema");
     if *manifest != formal_certificate {
+        for (k, v) in manifest.as_object().unwrap() {
+            if let Some(other) = formal_certificate.get(k) {
+                if v != other {
+                    eprintln!("FIELD MISMATCH {k}:\nMANIFEST: {v}\nFORMAL:   {other}");
+                }
+            } else {
+                eprintln!("FIELD MISSING IN FORMAL: {k}");
+            }
+        }
+        for (k, _) in formal_certificate.as_object().unwrap() {
+            if !manifest.as_object().unwrap().contains_key(k) {
+                eprintln!("FIELD EXTRA IN FORMAL: {k}");
+            }
+        }
         return Err(PrismError::new(
             "PP2101",
             "authored formal validation certificate does not equal the closed model graph",
