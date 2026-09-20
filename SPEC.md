@@ -1616,6 +1616,26 @@ origin-eviction protection, or public application acceptance. Explicit creation
 after total origin loss creates new custody, never restores an earlier identity.
 DK-08, DK-20 and the public `PP2011` build refusal remain unchanged.
 
+### Private per-resource admission
+
+DK-27's `Foundation.Browser.Application.V1.Budget` supplements the existing
+effect manifest with concrete byte limits for every resource. Its exact typed
+contract is `stdlib/src/Foundation/Browser/Application/V1/Budget.md`.
+Strictly ordered, bijective rows bind the application, manifest and immutable
+requested/effective-policy context. Generated admission checks the complete
+DK-18 request before applying the selected primitive's actual resource limit.
+Guest and Store rows equal their manifest limits; Random, Digest, Sign and
+Verify requests must additionally fit their narrower declared payload maxima.
+
+These conditional inputs are not grants or proof of source provenance. The
+application wrapper must derive the budget from the verified declaration and
+actual effective policy, compose exact custody checks, and repeat admission
+before durable prepare/release and authenticated replay. A caller boolean or
+matching hash labels cannot replace those checks. No public runtime or wire
+ABI is enabled by this typed prerequisite. The owning generated native,
+no_std and Wasm tests cover all resource families, actual maxima, malformed
+binding/coverage and planted source guards; public `PP2011` remains unchanged.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -2131,6 +2151,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-23` | `sdk` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. | §12 |
 | `DK-24` | `sdk` | The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance. | §12 |
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
+| `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

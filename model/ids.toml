@@ -847,6 +847,12 @@ level = "build"
 statement = "Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority."
 
 [[id]]
+id = "DK-27"
+suite = "sdk"
+level = "build"
+statement = "Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

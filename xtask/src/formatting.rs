@@ -56,6 +56,10 @@ const HARNESSES: &[(&str, &str)] = &[
         "tests/publication-admission/driver/src/main.rs",
     ),
     (
+        "tests/browser-budget/driver/Cargo.toml",
+        "tests/browser-budget/driver/src/main.rs",
+    ),
+    (
         "tests/holo-codec-oracle/Cargo.toml",
         "tests/holo-codec-oracle/src/main.rs",
     ),
@@ -77,6 +81,7 @@ const SOURCES: &[&str] = &[
     "tests/browser-custody/runner.rs",
     "tests/browser-operation-journal/runner.rs",
     "tests/publication-admission/runner.rs",
+    "tests/browser-budget/runner.rs",
     "tests/hologram-oracle/src/main.rs",
     "tests/hologram-oracle/tests/browser_surface.rs",
 ];
