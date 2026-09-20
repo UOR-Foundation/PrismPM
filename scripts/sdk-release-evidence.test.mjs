@@ -154,6 +154,27 @@ test('real deterministic USTAR archives retain every original byte and explicitl
   }
 });
 
+test('the exact 9999-command file closure includes its excluded private directory and rejects one extra entry', {timeout: 60000}, t => {
+  const source = temporary(t); vv(source);
+  const empty = sha('');
+  for (let index = 2; index <= 9999; index++) {
+    const number = String(index).padStart(4, '0');
+    put(source, number + '.stdout', ''); put(source, number + '.stderr', '');
+    put(source, number + '.json', {arguments: ['info'], status: 0, signal: null,
+      stdout_sha256: empty, stderr_sha256: empty});
+  }
+  assert.equal(readdirSync(source).length, 30013);
+  const captured = captureEvidence(source, 'full-sdk-vv', context);
+  assert.equal(captured.files.size, 30012);
+  assert.equal(captured.manifest.files.length, 30012);
+  assert.deepEqual(captured.manifest.excluded, ['docker/']);
+  assert(!captured.files.has('docker'));
+  assert.equal(readFileSync(join(source, 'docker', 'config.json'), 'utf8'), 'private transport data that must never ship');
+  put(source, '10000.json', '{}');
+  assert.equal(readdirSync(source).length, 30014);
+  assert.throws(() => captureEvidence(source, 'full-sdk-vv', context), /evidence file-count limit/);
+});
+
 test('missing, extra, stale and changed original evidence fails before archive creation', t => {
   for (const change of [
     root => rmSync(join(root, 'run-2.json')),
