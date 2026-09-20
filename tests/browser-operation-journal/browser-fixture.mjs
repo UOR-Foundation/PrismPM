@@ -195,6 +195,45 @@ export async function runFixture(input) {
     check(host.status().records === 0 && host.receipt() === null, 'explicit genesis has no invented operation');
     cases.push('explicit-genesis-open-capture');
 
+    // Valid own data descriptors are the capture authority, never Proxy get
+    // traps that can swap artifacts between budget inspection and copying.
+    for (const location of ['options', 'effects', 'guest-row', 'signer-row', 'guests', 'signers']) {
+      const f = await setup(), options = f.options(); let reads = 0;
+      const trap = value => new Proxy(value, {get() { reads++; throw Error('unexpected property reread'); }});
+      let supplied = options;
+      if (location === 'options') supplied = trap(options);
+      else if (location === 'effects') options.effects = trap(options.effects);
+      else if (location === 'guest-row') options.effects.guests[0] = trap(options.effects.guests[0]);
+      else if (location === 'signer-row') options.effects.signers[0] = trap(options.effects.signers[0]);
+      else options.effects[location] = trap(options.effects[location]);
+      const attempt = await observed(open(supplied));
+      if (attempt.value) hosts.push(attempt.value);
+      check(reads === 0 && attempt.value, 'descriptor snapshot invoked caller property getter: ' + location);
+      check(attempt.value.status().records === 0, 'captured descriptors initialize the actual bound journal');
+    }
+    const capturedPayload = await setup(); let payloadReads = 0;
+    const capturedTransport = await observed(openPayloads(new Proxy({wire: artifacts.Journal, wireDigest: digests.Journal,
+      partition: artifacts.Partition, partitionDigest: digests.Partition,
+      binding: encode(capturedPayload.binding), artifacts: capturedPayload.closure},
+    {get() { payloadReads++; throw Error('unexpected payload property reread'); }})));
+    if (capturedTransport.value) hosts.push(capturedTransport.value);
+    check(payloadReads === 0 && capturedTransport.value, 'descriptor snapshot invoked caller payload getter');
+    const capturedDescriptor = await capturedTransport.value.stage(Uint8Array.of(7), new Uint8Array(32));
+    check(same(await capturedTransport.value.load(capturedDescriptor), Uint8Array.of(7)), 'captured transport executes actual bound partition');
+    let accessorReads = 0;
+    const accessor = first.options('open');
+    Object.defineProperty(accessor, 'wire', {get() { accessorReads++; return artifacts.Journal; }});
+    await rejects(open(accessor), 'invalid-input');
+    const indexedAccessor = first.options('open');
+    Object.defineProperty(indexedAccessor.effects.guests, '0', {get() { accessorReads++; return {resource: 'guest', bytes: artifacts.Guest}; }});
+    await rejects(open(indexedAccessor), 'invalid-input');
+    check(accessorReads === 0, 'accessor rejection invokes no caller getter');
+    for (const malformed of [new Array(1), Object.assign([], {extra: 0}), new Array(65).fill(null)]) {
+      const supplied = first.options('open'); supplied.effects.guests = malformed;
+      await rejects(open(supplied), 'invalid-input');
+    }
+    cases.push('bootstrap-descriptor-snapshots');
+
     const result = decode(await host.submit(encode(invoke(Uint8Array.of(1, 2, 3)))));
     check(same(result, [0, Uint8Array.of(0x7b, 1, 2, 3)]), 'actual guest executes once after Prepared');
     check(host.status().records === 2 && host.status().nextOperation === 1, 'actual terminal increments retained history');
