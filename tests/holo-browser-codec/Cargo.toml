@@ -1,0 +1,23 @@
+[package]
+name = "prismpm-browser-codec-probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[features]
+default = ["std"]
+std = ["prism-stdlib/std"]
+
+[dependencies]
+prism-stdlib = { path = "../../stdlib/generated/package", version = "=0.2.0", default-features = false }
+blake3 = "=1.5.5"
+serde_json = "=1.0.151"
+
+[[test]]
+name = "modeled-codec"
+path = "../holo-browser-wire-generated.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
