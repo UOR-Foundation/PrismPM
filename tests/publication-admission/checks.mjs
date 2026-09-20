@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {prepare,run,sha,repository,draft} from './compile.mjs';
+import {prepare,run,sha,repository,frozenInputs} from './compile.mjs';
 import {corpus,maximumCorpus,overFrame,records} from './corpus.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
 import {inspectEffectModule} from '../../sdk/browser/effects-module.mjs';
@@ -37,10 +37,8 @@ export function inventory(){
  assert.ok(maxima.find(row=>row.id==='CombinedStructuralMaximum').response.length>1000000);
  return {vectors:vectors.length,maxima:maxima.map(row=>({id:row.id,input:row.request.length,output:row.response.length}))};
 }
-export async function verifyWire(t){
- const files=['checks.mjs','corpus.mjs','compile.mjs','runner.rs','driver/Cargo.toml','driver/Cargo.lock','driver/src/main.rs','src/Fixture.lex.tex','owner.test.mjs'];
- const closure=()=>Object.fromEntries(files.map(path=>[path,sha(readFileSync(join(draft,path)))]));
- const sources=closure(),vectors=corpus(),maxima=maximumCorpus(),bounds=inventory(),build=prepare();
+export async function verifyWire(t,inputs=frozenInputs()){
+ const sources=inputs,vectors=corpus(),maxima=maximumCorpus(),bounds=inventory(),build=prepare(null,inputs);
  const file=join(build.work,'vectors.tsv');writeFileSync(file,tsv(vectors),{flag:'wx'});
  const binaries=[...maxima,overFrame()].map(row=>{const input=join(build.work,row.id+'.request'),output=join(build.work,row.id+'.response');writeFileSync(input,row.request,{flag:'wx'});writeFileSync(output,row.response,{flag:'wx'});return {...row,input,output};});
  for(const standard of[true,false])await prerequisite(t,'complete publication corpus and combined maxima in generated '+(standard?'std':'no_std'),()=>{
@@ -49,15 +47,15 @@ export async function verifyWire(t){
   for(const row of binaries)assert.equal(run(binary,['--binary',row.input,row.output],build.runner),'PASS binary complete publication vector twice\n');
  });
  await prerequisite(t,'actual generated Wasm repeats every transition and combined maximum',()=>{build.maximum=executeWasm(build.wasmBytes,[...vectors,...maxima]);});
- assert.deepEqual(closure(),sources);
- const evidence={source:build.verified.source_id,attestation:build.verified.attestation_id,ir:build.generation.ir_sha256,wasm:sha(build.wasmBytes),bounds,maximum:build.maximum,sources};
+ assert.deepEqual(frozenInputs(),sources);
+ const evidence={source:build.verified.source_id,attestation:build.verified.attestation_id,ir:build.generation.ir_sha256,wasm:sha(build.wasmBytes),bounds,maximum:build.maximum,sources,cacheRetirement:build.cacheRetirement};
  writeFileSync(join(build.work,'publication-wire-evidence.json'),JSON.stringify(evidence,null,2)+'\n',{flag:'wx'});t.diagnostic(JSON.stringify(evidence));return build;
 }
-export function verifyModelMutation(kind){
+export function verifyModelMutation(kind,inputs=frozenInputs()){
  const selected={binding:'ContextChangedSubjectsource',coverage:'CoveragePreMissing',timeline:'DeploymentBeforeAuthorization',trailing:'Trailing',preimage:'ContextPreimageFieldinstance',partition:'FlatBoundary65Prepare'}[kind];
  const vector=corpus().find(row=>row.id===selected);assert.ok(vector);
- const build=prepare(kind),file=join(build.work,'mutation.tsv');writeFileSync(file,tsv([vector]),{flag:'wx'});
+ const build=prepare(kind,inputs),file=join(build.work,'mutation.tsv');writeFileSync(file,tsv([vector]),{flag:'wx'});
  for(const standard of[true,false])assert.throws(()=>run(build.compileNative(standard),[file],build.runner),/native output mismatch/);
  assert.throws(()=>executeWasm(build.wasmBytes,[vector]),/generated Wasm output mismatch/);
- return {kind,source:build.verified.source_id,attestation:build.verified.attestation_id,ir:build.generation.ir_sha256,wasm:sha(build.wasmBytes),vector:vector.id,request:sha(vector.request),response:sha(vector.response)};
+ return {kind,source:build.verified.source_id,attestation:build.verified.attestation_id,ir:build.generation.ir_sha256,wasm:sha(build.wasmBytes),vector:vector.id,request:sha(vector.request),response:sha(vector.response),cacheRetirement:build.cacheRetirement};
 }
