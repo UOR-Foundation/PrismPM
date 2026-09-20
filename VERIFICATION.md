@@ -35,6 +35,25 @@ Resource-failed earlier attempts remain failures, not substituted receipts.
 Current goldens, complete repeated V&V, installed dual-architecture SDK and
 Foundry product acceptance remain required. This is not a release claim.
 
+## Integrated codec source checks
+
+After the compiler, effect protocol and CBOR integration, all-target/all-feature
+Clippy, the complete source audit (155 Node checks), 45 conformance-library
+helper tests and 14 model tests passed. The helper/model log has SHA-256
+`5ff100e9a594a60d44d2bc5b664454893bdc8a2dc1175d2c20e95c3ef96fd8aa`.
+All 23 xtask unit tests and the original 31-function application API's actual
+std/no_std consumer execution also passed without skipped or filtered tests.
+
+The complete 198-test library run finished with 197 passed and one failed:
+the obsolete `prismpm-oracle-test` image lacked AsyncAPI's separately locked
+runtime. This is a failed run, not SDK acceptance. The unchanged test passed
+all 24 documents, 89 examples, five runtime groups and negative probes against
+the current development-only OpenID/AsyncAPI image
+`127.0.0.1:5000/prismpm-openid-oracle-test@sha256:db5ad1aaac7b1d847a5ec6fc2ed33688fc46dc31b449f7f5f2e7b83e70e7228d`.
+Corrected owning log SHA-256:
+`8993aced253b24321b25127f28dea13a54ad03aa624264e7e825f9f05f4d168b`.
+That isolated result does not replace a clean complete library or V&V run.
+
 ## Bounded browser RS256 effect (DK-19)
 
 All 14 Node/Chromium tests passed against the pinned, hash-checked WPT RSA
