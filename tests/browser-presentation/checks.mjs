@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepare, run, sha, repository} from './compile.mjs';
-import {corpus, boundaries, maximumCorpus, combinedMaximumCorpus, secretMaximumCorpus} from './corpus.mjs';
+import {corpus, boundaries, maximumCorpus, combinedMaximumCorpus, secretMaximumCorpus, progressMaximumCorpus} from './corpus.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
 import {inspectEffectModule} from '../../sdk/browser/effects-module.mjs';
 import {encodeWire} from '../../sdk/browser/presentation-wire.mjs';
@@ -42,6 +42,8 @@ export async function verifyWire(t) {
   t.after(() => rmSync(build.work, {recursive: true, force: true}));
   const intentRows = Array.from({length: 17}, (_, code) => ({id: 'IntentCase' + code,
     request: Uint8Array.of(code), response: Uint8Array.of([0, 10, 14, 16].includes(code) ? 245 : 244)}));
+  const progressRows = Array.from({length: 16}, (_, code) => ({id: 'ProgressCase' + code,
+    request: Uint8Array.of(code), response: Uint8Array.of([0, 1, 9, 15].includes(code) ? 245 : 244)}));
   const rows = [...corpus(), ...boundaries()], maximum = maximumCorpus();
   assert.ok(build.verified?.attestation_id && build.wasmBytes && build.fixtureBytes && build.labelsBytes,
     'source check alone is never owning acceptance');
@@ -55,7 +57,7 @@ export async function verifyWire(t) {
     ['OtherAction', [1, 1, 101, []], false],
     ['UnknownAction', [1, 1, 303, []], false],
   ].map(([id, intent, accepted]) => ({id: 'BrowserRoute' + id, request: encodeWire(intent), response: Uint8Array.of(accepted ? 245 : 244)}));
-  const allRows = [...rows, ...intentRows, ...secretRows];
+  const allRows = [...rows, ...intentRows, ...secretRows, ...progressRows];
   const path = join(build.work, 'vectors.tsv'); writeFileSync(path, tsv(allRows), {flag: 'wx'});
   const binaries = [];
   build.maximumFrames = [];
@@ -75,17 +77,26 @@ export async function verifyWire(t) {
     secretBinaries.push({input, output, mode: row.mode});
     build.secretMaxima.push({id: row.id, request: sha(row.request), response: sha(row.response), length: row.request.length});
   }
+  const progressBinaries = []; build.progressMaxima = [];
+  for (const row of progressMaximumCorpus()) {
+    const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
+    writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
+    progressBinaries.push({input, output, mode: row.mode});
+    build.progressMaxima.push({id: row.id, request: sha(row.request), response: sha(row.response), length: row.request.length});
+  }
   for (const standard of [true, false]) await prerequisite(t, 'complete generated ' + (standard ? 'std' : 'no_std') + ' corpus, all structural maxima and exact 64 MiB frame', () => {
     const binary = build.compileNative(standard), output = run(binary, [path], build.runner);
     assert.deepEqual([...output.matchAll(/^PASS ([A-Za-z0-9]+)$/gm)].map(row => row[1]), allRows.map(row => row.id));
     assert.match(output, new RegExp('PASS ' + allRows.length + ' complete presentation vectors twice'));
     for (const row of binaries) assert.equal(run(binary, ['--binary', row.input, row.output], build.runner), 'PASS binary complete presentation vector twice\n');
     for (const row of secretBinaries) assert.equal(run(binary, [row.mode === 'wasm' ? '--binary' : '--' + row.mode, row.input, row.output], build.runner), 'PASS binary complete presentation vector twice\n');
+    for (const row of progressBinaries) assert.equal(run(binary, [row.mode === 'wasm' ? '--binary' : '--' + row.mode, row.input, row.output], build.runner), 'PASS binary complete presentation vector twice\n');
   });
   await prerequisite(t, 'fresh bounded Core-Wasm executes every actual structural maximum and exact 64 MiB frame', () => {
     build.maximum = executeWasm(build.wasmBytes, [...rows, maximum[0]]);
     executeWasm(build.intentBytes, intentRows, 32);
     executeWasm(build.routeBytes, secretRows, 4096);
+    executeWasm(build.progressBytes, progressRows, 32);
   });
   await prerequisite(t, 'exact 64 MiB payloads execute at every combined node and table boundary position', () => {
     for (const row of combinedMaximumCorpus()) {
@@ -99,33 +110,48 @@ export async function verifyWire(t) {
       build.maximum.maximumBytes = Math.max(build.maximum.maximumBytes, observed.maximumBytes);
     }
   });
+  await prerequisite(t, 'actual progress predicate holds two 64 MiB presentations within 1 GiB and refuses equal revision and input one-over', () => {
+    for (const row of progressMaximumCorpus()) {
+      if (row.allocationReject) {
+        const instance = new WebAssembly.Instance(new WebAssembly.Module(build.maxprogressBytes), {});
+        assert.throws(() => instance.exports.holo_alloc(row.request.length), WebAssembly.RuntimeError);
+      } else {
+        const observed = executeWasm(build[row.mode + 'Bytes'], [row]);
+        build.maximum.maximumBytes = Math.max(build.maximum.maximumBytes, observed.maximumBytes);
+        if (row.mode === 'maxprogress') build.progressMaximum = Math.max(build.progressMaximum ?? 0, observed.maximumBytes);
+      }
+    }
+  });
   assert.deepEqual(capture(), frozen, 'owning oracle source remained frozen');
   build.maximumFrame = {request: sha(maximum[0].request), response: sha(maximum[0].response), length: maximum[0].request.length};
   t.diagnostic(JSON.stringify({source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), fixture: sha(build.fixtureBytes), labels: sha(build.labelsBytes),
-    vectors: rows.length, maximum: build.maximum, frame: build.maximumFrame, secretMaxima: build.secretMaxima, sources: frozen}));
+    vectors: rows.length, maximum: build.maximum, frame: build.maximumFrame, secretMaxima: build.secretMaxima,
+    progressMaximum: build.progressMaximum, progressMaxima: build.progressMaxima, sources: frozen}));
   return build;
 }
 
-export function replayBrowser(build, result) {
+export function replayBrowser(build, result, stem = 'observed-browser') {
+  assert.ok(['observed-browser', 'maximum-progress-browser'].includes(stem));
   const roles = {fixture: 'BrowserFixture', labels: 'BrowserLabels', wire: 'BrowserWire',
-    secret: 'BrowserSecret', route: 'BrowserRoute', sink: 'BrowserSink'};
+    secret: 'BrowserSecret', route: 'BrowserRoute', sink: 'BrowserSink', progress: 'BrowserProgress'};
   const rows = result.calls.map((row, index) => ({id: (assert.ok(roles[row.role]), roles[row.role]) + index,
     request: Buffer.from(row.request, 'hex'), response: Buffer.from(row.response, 'hex')}));
-  const path = join(build.work, 'observed-browser.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
+  const path = join(build.work, stem + '.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
   for (const standard of [true, false]) {
     const binary = build.compileNative(standard), output = run(binary, [path], build.runner);
     assert.match(output, new RegExp('PASS ' + rows.length + ' complete presentation vectors twice'));
     const changed = rows.map(row => ({...row, response: Buffer.from(row.response)}));
     assert.ok(changed.length && changed[0].response.length); changed[0].response[0] ^= 1;
-    const mutation = join(build.work, 'changed-browser-' + standard + '.tsv'); writeFileSync(mutation, tsv(changed), {flag: 'wx'});
+    const mutation = join(build.work, 'changed-' + stem + '-' + standard + '.tsv'); writeFileSync(mutation, tsv(changed), {flag: 'wx'});
     assert.throws(() => run(binary, [mutation], build.runner), /native output mismatch/, 'observed browser substitution rejects');
   }
 }
 
 export function verifyModelMutation(kind) {
   const secret = ['secretbound', 'secretroute'].includes(kind);
-  const row = secret ? {id: 'BrowserRouteMutation',
+  const progress = kind === 'progress';
+  const row = progress ? {id: 'ProgressCaseMutation', request: Uint8Array.of(5), response: Uint8Array.of(244)} : secret ? {id: 'BrowserRouteMutation',
     request: encodeWire([1, 1, 202, [[6, 'x'.repeat(kind === 'secretbound' ? 65 : 64)], [7, ''], [8, 10]]]),
     response: Uint8Array.of(kind === 'secretbound' ? 244 : 245)}
     : corpus().find(row => row.id === ({binding: 'WrongBindingKind', trailing: 'Trailing'}[kind]));
@@ -133,7 +159,7 @@ export function verifyModelMutation(kind) {
   try {
     const path = join(build.work, 'mutation.tsv'); writeFileSync(path, tsv([row]), {flag: 'wx'});
     for (const standard of [true, false]) assert.throws(() => run(build.compileNative(standard), [path], build.runner), /native output mismatch/);
-    assert.throws(() => executeWasm(secret ? build.routeBytes : build.wasmBytes, [row], secret ? 4096 : 67108864), /generated Wasm output mismatch/);
+    assert.throws(() => executeWasm(progress ? build.progressBytes : secret ? build.routeBytes : build.wasmBytes, [row], progress ? 32 : secret ? 4096 : 67108864), /generated Wasm output mismatch/);
   } finally { rmSync(build.work, {recursive: true, force: true}); }
 }
 

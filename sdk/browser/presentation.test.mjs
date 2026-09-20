@@ -16,8 +16,10 @@ test('DK-23 actual generated closed presentation and private browser execution',
       assert.equal(observed[index].response_sha256, build.maximumFrames[index].response);
       assert.equal(observed[index].frame_length, build.maximumFrames[index].length);
     }
+    assert.ok(build.progressMaximumBrowser?.modelChecked);
+    replayBrowser(build, build.progressMaximumBrowser, 'maximum-progress-browser');
   });
   await prerequisite(t, 'actual unsafe DOM, stale/draft and closed-lifecycle guard mutations fail', child => verifyMutants(child, build));
   await prerequisite(t, 'closed diagnostic registry', verifyInventory);
-  for (const kind of ['binding', 'trailing', 'secretbound', 'secretroute']) await prerequisite(t, 'actual LexLean ' + kind + ' mutant fails native/no_std/Wasm', () => verifyModelMutation(kind));
+  for (const kind of ['binding', 'trailing', 'secretbound', 'secretroute', 'progress']) await prerequisite(t, 'actual LexLean ' + kind + ' mutant fails native/no_std/Wasm', () => verifyModelMutation(kind));
 });

@@ -1526,6 +1526,13 @@ Control presence is not authorization. The 64 MiB frame bound is executed, not
 replaced by a smaller example; node/action/field/choice/table limits are View
 budgets and do not reduce application-domain limits.
 
+Private per-dispatch progress uses an opaque adapter-matched token, not effect
+authority. Source `progressFits` admits only valid Ready/Pending to strictly
+newer Pending frames. The single final result binds the last accepted progress;
+external context changes, failed live progress, settlement and close revoke it.
+Foreign tokens cannot affect a current invocation. Retained correlation never
+contains raw secret input; internal DOM failure terminates instead of rollback.
+
 Acceptance requires fresh generated native/no_std/Wasm parity, declared actual
 maxima and one-over negatives, real browser keyboard/focus/live/close journeys,
 native replay of observed generated transcripts and owning guard mutations.

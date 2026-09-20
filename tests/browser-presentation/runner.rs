@@ -1,7 +1,8 @@
 use browser_presentation_core_probe::{
-    fixtureIntentFitsBytes, fixtureLabelsBytes, fixturePresentationBytes,
-    fixtureSecretMaximumFieldBytes, fixtureSecretMaximumRouteBytes, fixtureSecretMaximumSinkBytes,
-    fixtureSecretPresentationBytes, fixtureSecretRouteBytes, fixtureSecretSinkBytes, viewWireBytes,
+    fixtureIntentFitsBytes, fixtureLabelsBytes, fixturePresentationBytes, fixtureProgressFitsBytes,
+    fixtureProgressMaximumBytes, fixtureSecretMaximumFieldBytes, fixtureSecretMaximumRouteBytes,
+    fixtureSecretMaximumSinkBytes, fixtureSecretPresentationBytes, fixtureSecretRouteBytes,
+    fixtureSecretSinkBytes, viewWireBytes,
 };
 use std::{error::Error, fs};
 
@@ -17,7 +18,14 @@ fn unhex(text: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if args.len() == 3
-        && ["--binary", "--maxroute", "--maxsink", "--maxfield"].contains(&args[0].as_str())
+        && [
+            "--binary",
+            "--maxroute",
+            "--maxsink",
+            "--maxfield",
+            "--maxprogress",
+        ]
+        .contains(&args[0].as_str())
     {
         let input = fs::read(&args[1])?;
         let expected = fs::read(&args[2])?;
@@ -26,6 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "--maxroute" => fixtureSecretMaximumRouteBytes(input.clone()),
                 "--maxsink" => fixtureSecretMaximumSinkBytes(input.clone()),
                 "--maxfield" => Ok(fixtureSecretMaximumFieldBytes(input.clone())),
+                "--maxprogress" => fixtureProgressMaximumBytes(input.clone()),
                 _ => viewWireBytes(input.clone()),
             }
             .map_err(|error| format!("{error:?}"))?;
@@ -48,6 +57,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         for _ in 0..2 {
             let actual = (if fields[0].starts_with("IntentCase") {
                 fixtureIntentFitsBytes(input.clone())
+            } else if fields[0].starts_with("ProgressCase")
+                || fields[0].starts_with("BrowserProgress")
+            {
+                fixtureProgressFitsBytes(input.clone())
             } else if fields[0].starts_with("BrowserFixture") {
                 fixturePresentationBytes(input.clone())
             } else if fields[0].starts_with("BrowserLabels") {

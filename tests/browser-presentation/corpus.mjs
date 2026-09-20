@@ -174,3 +174,20 @@ export function* secretMaximumCorpus() {
   yield {id: 'SecretFramedRouteMaximum', mode: 'maxroute', request, response: Uint8Array.of(245)};
   yield {id: 'SecretFramedSinkMaximum', mode: 'maxsink', request, response: secretMaximumResponse()};
 }
+
+export function* progressMaximumCorpus() {
+  const shape = maximumShape('FrameNodesMaximumLast'); shape.frame[2] = 1;
+  const textLength = 67108864 - encodeWire(shape.frame).length - 4;
+  shape.setText('x'.repeat(textLength));
+  let request;
+  for (const revision of [2, 3]) {
+    shape.frame[1] = revision; request = encodeWire(shape.frame);
+    assert.equal(request.length, 67108864); decodePresentation(request);
+    yield {id: 'ProgressFrame' + revision, mode: 'wasm', request, response: request};
+    yield {id: 'ProgressPair' + revision, mode: 'maxprogress', request, response: Uint8Array.of(revision === 3 ? 245 : 244)};
+  }
+  const over = new Uint8Array(67108865); over.set(request);
+  // Native checks the source guard; the unchanged Wasm ABI rejects allocation.
+  yield {id: 'ProgressFrameOver', mode: 'maxprogress', allocationReject: true,
+    request: over, response: Uint8Array.of(244)};
+}

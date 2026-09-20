@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 })
             );
         }
-        [mode, input, output, licenses] if ["native", "wasm", "fixture", "labels", "intent", "secret", "route", "sink", "maxroute", "maxsink", "maxfield", "maxsecret"].contains(&mode.as_str()) => {
+        [mode, input, output, licenses] if ["native", "wasm", "fixture", "labels", "intent", "secret", "route", "sink", "maxroute", "maxsink", "maxfield", "maxsecret", "progress", "maxprogress"].contains(&mode.as_str()) => {
             let root = Path::new(output);
             fs::create_dir(root)?;
             let source = fs::read_to_string(input)?;
@@ -86,11 +86,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                             "maxsink" => "fixtureSecretMaximumSinkBytes",
                             "maxfield" => "fixtureSecretMaximumFieldBytes",
                             "maxsecret" => "fixtureSecretMaximumPresentationBytes",
+                            "progress" => "fixtureProgressFitsBytes",
+                            "maxprogress" => "fixtureProgressMaximumBytes",
                             _ => return Err("unsupported guest role".into()),
                         }.into(),
                         export_name: "holo_run".into(),
                         input_allocation_cap: match mode.as_str() {
-                            "wasm" | "maxroute" | "maxsink" => 67_108_864,
+                            "wasm" | "maxroute" | "maxsink" | "maxprogress" => 67_108_864,
                             // Only this raw field-predicate oracle admits one over the
                             // field limit. It is not a public framed request ABI.
                             "maxfield" => 67_108_865,
@@ -98,7 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             _ => 32,
                         },
                         output_allocation_cap: 67_108_864,
-                        maximum_pages: if ["wasm", "maxroute", "maxsink", "maxfield"].contains(&mode.as_str()) {16_384} else {256},
+                        maximum_pages: if ["wasm", "maxroute", "maxsink", "maxfield", "maxprogress"].contains(&mode.as_str()) {16_384} else {256},
                         input_ir_sha256: input_sha256.clone(),
                     },
                 )

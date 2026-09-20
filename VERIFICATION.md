@@ -1868,6 +1868,40 @@ or Foundry-service acceptance; the genuine installed product gate remains requir
 | `target/browser-system-clippy.log` | `bf65c44b930a392d2298aa4f303afa4fa622d0f6c5b4031c6cbe1f4d1a61c958` |
 | `target/browser-system-sdk-inventory-measured.log` | `e4186dd2b6f051e8cb5cdf75a34271eb7051df8bbe40688a187567f2b8733005` |
 
+## Private presentation progress — DK-23
+
+The original Pending-to-final journey failed before the correlation change.
+Actual browser regressions also exposed stale diagnostic writes and a rejection
+reaction that retained a live progress token. Their stronger checks remain in
+the owning suite, alongside every previous journey and bound.
+
+The frozen registered owner passed in 917.99 seconds: one Rust owner, nine
+required Node tests, 26 browser journeys, 25 host mutants and five independently
+compiled source mutants. Generated std/no_std/Wasm agree on 162 corpus vectors;
+452 normal and five maximum-progress browser calls replay in both native modes.
+All prior maxima remain. Two full 64 MiB presentations execute the actual
+progress predicate and browser transition; one-over allocation/progress and
+late-result rejection are checked under the unchanged 1 GiB guest cap.
+
+Source/kernel verification audits all 261 declarations. Production `progressFits`
+and the typed maximum-pair fixture use no axioms; byte-decoder fixtures retain
+the exact observed `Classical.choice`, `Quot.sound`, `propext` policy. Normal
+source/archive validation, targeted formatting, adapter syntax, scoped
+all-target/all-feature Clippy and all 18 SDK acquisition regressions pass.
+The first 868.31-second owner preceded the maximum extension and is not counted
+as final acceptance. Public browser builds remain closed by PP2011; this is not
+account, durable-session, installed-SDK or Foundry deployment acceptance.
+
+| Final owning artifact | SHA-256 / identifier |
+| --- | --- |
+| Source | `3f9ae7da95e383c5a13a1344c157d7951422bf171bb9b0b81472302148ffb814` |
+| Attestation | `98d9194f388e6c71ecf03e3a8996cf7e92d5e4c7d53da07441ee52a086addc7f` |
+| Exported IR | `4d339ed7750df855f0942f0aea4a58a26d62ed7f427f20102b00f793533a656b` |
+| Unchanged wire Wasm | `d05824fac2f4feb24f3037d557f1efc2a04079a0ecaab6e62a9364d3fd8193a5` |
+| Maximum-pair Wasm | `25f3ebf103e4e455953ffe92f55ee2d9ebd4f006728304bf8c6318e2ddbd4b76` |
+| Normal browser transcript | `ab134b450e8aa6284627250dede29a1e677e8e12bf4e0c67b5387eb2cb56fbf6` |
+| Maximum-progress transcript | `392f7e069633a2ace72a837bb6bc28771e3c4359bc61173c5f01d0991ed60796` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

@@ -1,10 +1,10 @@
 // Private typed DOM adapter. Display and dispatch never grant effects or roles.
 import {bytesCopy} from './identity.mjs';
 import {decodePresentation, encodeIntent, validateIntent, presentationRequiresSecret,
-  intentRequiresSecret, PresentationError,
+  intentRequiresSecret, progressFits, PresentationError,
   PRESENTATION_MAXIMUM} from './presentation-wire.mjs';
 
-const roots = new WeakMap(), encoder = new TextEncoder();
+const roots = new WeakMap(), presentations = new WeakMap(), progressTokens = new WeakMap(), encoder = new TextEncoder();
 const fail = code => { throw new PresentationError(code); };
 const errorText = 'Unable to submit this request.';
 const exact = (value, keys) => {
@@ -33,6 +33,14 @@ function catalogue(value) {
 }
 const same = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
 
+// SDK-private correlation only. Neither object authorizes an application action.
+export function progressPresentation(view, token, bytes) {
+  if (arguments.length !== 3) fail('options');
+  const owner = presentations.get(view), entry = progressTokens.get(token);
+  if (!owner || !entry || entry.owner !== owner) fail('binding');
+  entry.receive(bytes);
+}
+
 export function openPresentation(options) {
   if (arguments.length !== 1) fail('options');
   let root, labels, dispatch, secretDispatch, maximum, requestMaximum;
@@ -55,7 +63,7 @@ export function openPresentation(options) {
   }
   const document = root.ownerDocument;
   let closed = false, frame, captured, nodes = new Map(), forms = new Map();
-  let actionNodes = new Map(), active = null, diagnostic;
+  let actionNodes = new Map(), active = null, diagnostic, context = {};
   const ownership = {};
   roots.set(root, ownership);
   const element = (tag, text) => {
@@ -64,11 +72,16 @@ export function openPresentation(options) {
     return node;
   };
   const report = () => { if (!closed && diagnostic) diagnostic.textContent = errorText; };
+  const reportOwned = record => { if (record.context === context) report(); };
   const clearSecrets = () => {
     for (const record of nodes.values()) if (record.tag === 10) record.control.value = '';
   };
+  const revoke = record => {
+    if (!record) return;
+    progressTokens.delete(record.token); record.live = false; record.frame = undefined;
+  };
   const stop = clear => {
-    closed = true; active = null;
+    closed = true; revoke(active); active = null;
     clearSecrets();
     root.removeEventListener('submit', onSubmit);
     root.removeEventListener('keydown', onKey);
@@ -82,6 +95,20 @@ export function openPresentation(options) {
     for (const record of nodes.values()) {
       if (record.control === event.target && [5, 6, 7].includes(record.tag)) record.edited = true;
     }
+  }
+  // Deliberately outside the raw request capture scope. Retained handlers own
+  // only one correlation record and the nonsecret accepted presentation.
+  function beginDispatch(selected) {
+    const record = {token: Object.freeze({}), live: true, frame: selected, context, painting: false};
+    active = record;
+    progressTokens.set(record.token, {owner: ownership, receive(value) {
+      if (closed || active !== record || !record.live) fail('binding');
+      if (record.painting) { revoke(record); fail('binding'); }
+      try { record.painting = true; paint(value, record, true); }
+      catch (error) { revoke(record); throw error; }
+      finally { record.painting = false; }
+    }});
+    return record;
   }
   // This synchronous scope owns only the transient capture. Promise handlers
   // receive no intent, field value or encoded request from the adapter.
@@ -97,27 +124,34 @@ export function openPresentation(options) {
     validateIntent(selected, intent);
     const secret = intentRequiresSecret(selected, intent);
     if (secret && !secretDispatch) fail('binding');
-    const bytes = encodeIntent(intent, requestMaximum), token = {};
-    active = token;
+    const bytes = encodeIntent(intent, requestMaximum), record = beginDispatch(selected);
     diagnostic.textContent = '';
     if (secret) clearSecrets();
-    try { return {token, returned: (secret ? secretDispatch : dispatch)(bytes)}; }
-    catch { if (active === token) active = null; throw new PresentationError('binding'); }
+    try { return {record, returned: (secret ? secretDispatch : dispatch)(bytes, record.token)}; }
+    catch { revoke(record); reportOwned(record); if (active === record) active = null; return null; }
   }
   function send(actionNode) {
     if (closed || !frame || active !== null) return;
+    const attemptedContext = context;
     try {
       const selected = frame, action = selected[6][actionNode - 1]?.[1];
       if (!action || action[0] !== 8) fail('binding');
       // Capture and serialize before entering the private dispatcher, including
       // a synchronous reentrant call. This is not authorization or a phase.
-      const {token, returned} = invoke(selected, action);
+      const invocation = invoke(selected, action);
+      if (!invocation) return;
+      const {record, returned} = invocation;
       Promise.resolve(returned).then(value => {
-        if (closed || active !== token) return;
-        if (frame !== selected) fail('stale');
-        render(value);
-      }).catch(report).finally(() => { if (active === token) active = null; });
-    } catch { report(); }
+        if (closed || active !== record) return;
+        if (!record.live || frame !== record.frame) fail('stale');
+        // Retire the channel as soon as its sole result is observed, before
+        // rendering can trigger native focus listeners or queued reactions.
+        revoke(record);
+        paint(value, record, false);
+      }, () => { revoke(record); throw new PresentationError('binding'); })
+        .catch(() => { revoke(record); reportOwned(record); })
+        .finally(() => { revoke(record); record.context = undefined; if (active === record) active = null; });
+    } catch { if (context === attemptedContext) report(); }
   }
   function onSubmit(event) {
     event.preventDefault();
@@ -145,10 +179,13 @@ export function openPresentation(options) {
   }
   function render(value) {
     if (arguments.length !== 1) fail('options');
+    return paint(value, null, false);
+  }
+  function paint(value, record, progress) {
     if (closed) fail('closed');
     let bytes;
     try { bytes = bytesCopy(value, maximum); } catch { fail('bytes'); }
-    if (captured && same(bytes, captured)) return;
+    if (!progress && captured && same(bytes, captured)) { if (!record) { context = {}; revoke(active); } return; }
     const next = decodePresentation(bytes, maximum);
     if (frame && next[1] <= frame[1]) fail('stale');
     if (!secretDispatch && presentationRequiresSecret(next)) fail('binding');
@@ -164,6 +201,10 @@ export function openPresentation(options) {
       if (content[0] === 7) for (const option of content[5]) label(option[1]);
       if (content[0] === 9) for (const column of content[2]) label(column);
     }
+    if (progress && (!record.live || active !== record || frame !== record.frame || !progressFits(frame, next))) fail('binding');
+    // Rejected external renders leave the original invocation intact. A valid
+    // external context revokes its outcome, but cannot claim it has settled.
+    if (!record) revoke(active);
     const focused = [...nodes.values()].find(record => record.control === document.activeElement
       || record.element === document.activeElement);
     let selection;
@@ -247,7 +288,8 @@ export function openPresentation(options) {
       diagnostic = element('p'); diagnostic.setAttribute('role', 'alert');
       diagnostic.dataset.presentationDiagnostic = ''; fragment.append(diagnostic);
       root.replaceChildren(fragment); root.setAttribute('aria-busy', String(next[2] === 1));
-      frame = next; captured = bytes; nodes = nextNodes; forms = nextForms; actionNodes = nextActions;
+      frame = next; captured = bytes; nodes = nextNodes; forms = nextForms; actionNodes = nextActions; context = {};
+      if (record && record.live) { record.frame = next; record.context = context; }
       const surviving = focused && nodes.get(focused.id);
       const chosen = next[5] ? nodes.get(next[5]) : surviving?.tag === focused?.tag ? surviving : undefined;
       if (chosen) {
@@ -262,5 +304,6 @@ export function openPresentation(options) {
   root.addEventListener('keydown', onKey);
   root.addEventListener('input', onEdit);
   root.addEventListener('change', onEdit);
-  return Object.freeze({render, close() { if (arguments.length) fail('options'); stop(true); }});
+  const view = Object.freeze({render, close() { if (arguments.length) fail('options'); stop(true); }});
+  presentations.set(view, ownership); return view;
 }
