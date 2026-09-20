@@ -64,7 +64,7 @@ test('native profile collection retains exactly three original raw files', t => 
   assert.throws(() => collectProfile(source));
 });
 
-function fixture(t, fault) {
+function fixture(t, fault, store = 'containerd') {
   const work = workspace(t), calls = [];
   if (fault === 'stale-base') work.put('stdlib/src/Probe.lex.tex', 'changed current model\n');
   if (fault === 'stale-artifact') work.put('.prism/build/prior/result.json', '{}');
@@ -90,11 +90,13 @@ function fixture(t, fault) {
     }
     assert.equal(command, 'docker');
     if (args[0] === 'buildx') return ok(args.at(-1) === image ? index : manifest);
-    if (args[0] === 'pull') return ok('pulled');
+    if (args[0] === 'pull') { assert.deepEqual(args, ['pull', '--platform', 'linux/arm64', image]); return ok('pulled'); }
     if (args[0] === 'image') {
       const selected = args.includes('--platform');
+      if (store === 'classic' && selected) return {...bad(), status: 125, stderr: Buffer.from('unknown flag: --platform')};
       const descriptor = selected ? child : {digest: 'sha256:' + hash(index), size: index.length, mediaType: 'application/vnd.oci.image.index.v1+json'};
-      return ok([{Id: descriptor.digest, Descriptor: descriptor, RepoDigests: [image], Os: 'linux', Architecture: fault === 'wrong-platform' ? 'amd64' : 'arm64',
+      return ok([{Id: store === 'classic' ? config : descriptor.digest, ...(store === 'classic' ? {} : {Descriptor: descriptor}),
+        RepoDigests: [image], Os: 'linux', Architecture: fault === 'wrong-platform' ? 'amd64' : 'arm64',
         Config: {Labels: {'org.opencontainers.image.revision': environmentRevision}, Volumes: null}}]);
     }
     if (args[0] === 'create') {
@@ -104,7 +106,7 @@ function fixture(t, fault) {
       return ok('created');
     }
     if (args[0] === 'start') return ok('started');
-    if (args[0] === 'inspect') return ok([{Image: fault === 'wrong-container-image' ? config : 'sha256:' + hash(index), Config: {Labels: Object.fromEntries([label.split('=')])}}]);
+    if (args[0] === 'inspect') return ok([{Image: fault === 'wrong-container-image' ? 'sha256:' + 'f'.repeat(64) : store === 'classic' ? config : 'sha256:' + hash(index), Config: {Labels: Object.fromEntries([label.split('=')])}}]);
     if (args[0] === 'rm') { if (fault === 'cleanup') return bad(); created = undefined; return ok('removed'); }
     assert.deepEqual(args.slice(0, 2), ['exec', created]);
     if (args[2] === 'node') return ok({architecture: 'arm64', os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
@@ -124,18 +126,21 @@ function fixture(t, fault) {
 }
 
 test('source review executes exact image, both unchanged golden commands and byte-preserving export', async t => {
-  const f = fixture(t); const result = await f.run();
-  assert.equal(result.scope, 'source-golden-review-only'); assert.equal(result.status, 'review-required');
-  assert.equal(f.generations(), 2); assert.equal(f.remaining(), undefined);
-  assert.equal(result.source_revision, revision);
-  for (const row of result.records) assert.equal(hash(readFileSync(join(f.destination, 'records', row.path))), row.sha256);
-  assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
+  for (const store of ['classic', 'containerd']) {
+    const f = fixture(t, undefined, store); const result = await f.run();
+    assert.equal(result.scope, 'source-golden-review-only'); assert.equal(result.status, 'review-required');
+    assert.equal(f.generations(), 2); assert.equal(f.remaining(), undefined);
+    assert.equal(result.source_revision, revision); assert.equal(result.identity.store, store);
+    assert.equal(f.calls.filter(([command, args]) => command === 'docker' && args[0] === 'image' && args.includes('--platform')).length, store === 'classic' ? 0 : 1);
+    for (const row of result.records) assert.equal(hash(readFileSync(join(f.destination, 'records', row.path))), row.sha256);
+    assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
+  }
 });
 
 test('failure and missing evidence never become a reviewed or accepted SDK baseline', async t => {
-  for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-container-image', 'write-failure', 'repeat-failure',
+  for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-container-image', 'write-failure', 'repeat-failure',
     'missing-profile', 'repeat-mutation', 'source-changed', 'cleanup']) {
-    const f = fixture(t, fault); await assert.rejects(f.run(), undefined, fault);
+    const f = fixture(t, fault, store); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'review.json')), fault);
     if (fault !== 'cleanup') assert.equal(f.remaining(), undefined, fault);
     if (fault === 'write-failure') {

@@ -115,7 +115,8 @@ export function validateLoadedImage(value, image, arch, configuration, revision,
 
 // Moby 28.4 returns the index ID for default containerd inspection and
 // container.Image, but the selected child ID for explicit platform inspection.
-// The classic store returns the configuration ID for both operations.
+// A classic store has one configuration, already bound to the selected child
+// and native architecture. Reinspect it without the API 1.49-only platform flag.
 export async function inspectLoadedImage(call, chain, arch, revision) {
   const inspect = async platform => {
     const args = ['image', 'inspect', ...(platform ? ['--platform', `linux/${arch}`] : []), chain.reference];
@@ -125,7 +126,7 @@ export async function inspectLoadedImage(call, chain, arch, revision) {
     if (result.store === 'containerd') assert.equal(result.id, platform ? chain.child_descriptor.digest : chain.index_descriptor.digest);
     return result;
   };
-  const stored = await inspect(false), selected = await inspect(true);
+  const stored = await inspect(false), selected = await inspect(stored.store === 'containerd');
   assert.equal(stored.store, selected.store, 'image store changed during inspection');
   return {id: stored.id, platform_id: selected.id, store: stored.store};
 }

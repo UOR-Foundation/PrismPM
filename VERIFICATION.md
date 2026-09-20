@@ -1766,6 +1766,32 @@ Only the fresh, correctly rooted owning run is accepted here.
 This establishes bounded byte observation, not publisher authority, application
 readiness, complete SDK acceptance or deployment. No public endpoint was contacted.
 
+## Classic Docker image inspection compatibility
+
+[ARM64 review job 106016647013](https://github.com/UOR-Foundation/PrismPM/actions/runs/35487568363/job/106016647013)
+failed before generation: Docker 28.0.4/API 1.48 rejected image inspection's
+`--platform` flag. That flag requires [API 1.49+](https://docs.docker.com/reference/cli/docker/image/inspect/).
+Classic-store reinspection now omits it only after validating the selected
+child's configuration, architecture and immutable reference. Containerd still
+requires both index and explicit child inspections; errors never trigger a
+downgrade. Source-label, configuration, architecture and store-switch mutations
+remain rejected. Platform-pinned acquisition is unchanged.
+
+Both caller regressions fail before the fix with the observed exit 125.
+Afterward, all 16 SDK orchestration and eight source-review tests pass in the
+devcontainer. Actual read-only inspection also passes for the existing
+`60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21`
+image through Docker 28.4's client and Docker 29.1.3's containerd store.
+This is compatibility evidence, not native ARM64 generation or SDK acceptance;
+the hosted review has not been retried here.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/docker-classic-inspect-sdk-red.log` | `b352509aec9dea4436d238f9517948c2d08569a9c42a0640bb7cc40595613a64` |
+| `target/docker-classic-inspect-review-red.log` | `87c6c6436f01d128edfd534ab3be63e296b1c7cab9a2830588e047f7650046e3` |
+| `target/docker-classic-inspect-owning-green.log` | `e3d15fa3b3cf0ea3279347c629c859777635aea50bbf35e62558b6008fe0212e` |
+| `target/docker-classic-inspect-actual-containerd.log` | `9f894fbbd03924bf9456fb2f77a09e44442bea52df91c36dc1b394dd6288622b` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

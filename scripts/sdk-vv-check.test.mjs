@@ -63,13 +63,22 @@ test('loaded-image checks bind distribution reference, native configuration and 
     const inspect = async fault => {
       let requests = 0;
       const result = await inspectLoadedImage(async args => {
-        const platform = requests++ === 1;
+        const repeated = requests++ === 1, platform = repeated && store === 'containerd';
+        // Docker 28.0/API 1.48 rejects this flag before talking to the daemon.
+        if (store === 'classic' && args.includes('--platform')) return {status: 125, signal: null,
+          stdout: Buffer.alloc(0), stderr: Buffer.from('unknown flag: --platform')};
         assert.deepEqual(args, ['image', 'inspect', ...(platform ? ['--platform', 'linux/amd64'] : []), image]);
         const descriptor = platform ? chain.child_descriptor : chain.index_descriptor;
         let response = store === 'classic' ? value : {...value, Id: descriptor.digest, Descriptor: descriptor};
         if (fault === 'wrong-config') response = {...value, Id: 'sha256:' + 'f'.repeat(64)};
-        if (fault === 'mixed-store' && platform) response = store === 'classic' ? {...value, Id: descriptor.digest, Descriptor: descriptor} : value;
-        if (fault === 'wrong-selected-descriptor' && platform) response = {...value, Id: chain.index_descriptor.digest, Descriptor: chain.index_descriptor};
+        if (fault === 'mixed-store' && repeated) response = store === 'classic' ? {...value, Id: descriptor.digest, Descriptor: descriptor} : value;
+        if (fault === 'wrong-selected-descriptor' && repeated) response = {...value, Id: chain.index_descriptor.digest, Descriptor: chain.index_descriptor};
+        if (fault === 'second-config' && repeated) response = {...response, Id: 'sha256:' + 'f'.repeat(64)};
+        if (fault === 'second-platform' && repeated) response = {...response, Architecture: 'arm64'};
+        if (fault === 'second-reference' && repeated) response = {...response, RepoDigests: []};
+        if (fault === 'second-revision' && repeated) response = {...response, Config: {...response.Config, Labels: {'org.opencontainers.image.revision': 'd'.repeat(40)}}};
+        if (fault === 'unsupported-inspection' && repeated) return {status: 125, signal: null,
+          stdout: Buffer.alloc(0), stderr: Buffer.from('unknown flag: --platform')};
         return {status: 0, signal: null, stderr: Buffer.alloc(0), stdout: Buffer.from(JSON.stringify(fault === 'multiple-results' ? [response, response] : [response]))};
       }, chain, 'amd64', revision);
       assert.equal(requests, 2);
@@ -77,7 +86,8 @@ test('loaded-image checks bind distribution reference, native configuration and 
         platform_id: store === 'classic' ? config : chain.child_descriptor.digest, store});
     };
     await inspect();
-    for (const fault of ['wrong-config', 'mixed-store', 'wrong-selected-descriptor', 'multiple-results']) await assert.rejects(inspect(fault));
+    for (const fault of ['wrong-config', 'mixed-store', 'wrong-selected-descriptor', 'multiple-results',
+      'second-config', 'second-platform', 'second-reference', 'second-revision', 'unsupported-inspection']) await assert.rejects(inspect(fault));
   }
   const hub = 'docker.io/library/registry@sha256:' + 'c'.repeat(64);
   validateLoadedImage({...value, RepoDigests: [hub.slice('docker.io/library/'.length)]}, hub, 'amd64', config);
@@ -176,8 +186,12 @@ function orchestrationFixture(t, fault, store = 'classic') {
   let disconnected = false, executed = false, daemon, sdk;
   const inner = args => {
     if (args[0] === 'info') return ok({ServerVersion: '28.4.0', DefaultRuntime: 'runc', Containers: 0, Images: 0});
-    if (args[0] === 'pull') { if (!args.at(-1).includes('distribution') || fault !== 'missing-image') loaded.add(args.at(-1)); return ok('pulled'); }
+    if (args[0] === 'pull') {
+      assert.deepEqual(args, ['pull', '--platform', `linux/${arch}`, args.at(-1)]);
+      if (!args.at(-1).includes('distribution') || fault !== 'missing-image') loaded.add(args.at(-1)); return ok('pulled');
+    }
     if (args[0] === 'image' && args[1] === 'inspect') {
+      if (store === 'classic' && args.includes('--platform')) return bad(125);
       assert.deepEqual(args.slice(2, -1), args.includes('--platform') ? ['--platform', `linux/${arch}`] : []);
       return loaded.has(args.at(-1)) ? ok(loadedImage(args.at(-1), args.includes('--platform'))) : bad(1);
     }
@@ -219,8 +233,8 @@ function orchestrationFixture(t, fault, store = 'classic') {
     assert.deepEqual(Object.keys(options.environment).sort(), ['DOCKER_CONFIG', 'HOME', 'LANG', 'LC_ALL', 'PATH']);
     const args = arguments_.slice(4); calls.push(args);
     if (args[0] === 'buildx') { const bytes = metadata.get(args.at(-1)); assert(bytes); return ok(bytes); }
-    if (args[0] === 'pull') return ok('pulled');
-    if (args[0] === 'image') return ok(loadedImage(args.at(-1), args.includes('--platform')));
+    if (args[0] === 'pull') { assert.deepEqual(args, ['pull', '--platform', `linux/${arch}`, images.dind.reference]); return ok('pulled'); }
+    if (args[0] === 'image') return store === 'classic' && args.includes('--platform') ? bad(125) : ok(loadedImage(args.at(-1), args.includes('--platform')));
     if (args[1] === 'inspect') {
       const entry = resources.get(args[2]); if (!entry) return bad(1);
       return ok([{Labels: entry.labels, Config: {Labels: entry.labels}}]);
@@ -275,7 +289,7 @@ test('complete orchestration executes acquisition, disconnection, owning runner 
     assert.equal(f.resources.size, 0); assert(existsSync(join(f.destination, 'acceptance.json')));
     const loaded = JSON.parse(readFileSync(join(f.destination, 'loaded-identities.json')));
     assert.equal(Object.keys(loaded).length, 4); assert(Object.values(loaded).every(row => row.store === store));
-    assert.equal(f.calls.filter(args => args.includes('inspect') && args.includes('--platform')).length, 5);
+    assert.equal(f.calls.filter(args => args.includes('inspect') && args.includes('--platform')).length, store === 'classic' ? 0 : 5);
     assert.equal(f.calls.filter(args => args.some((arg, index) => arg.endsWith('/sdk-vv-run.mjs') && args[index - 1] === 'node')).length, 1);
     const wrong = orchestrationFixture(t, 'wrong-container-image', store);
     await assert.rejects(wrong.run()); assert.equal(wrong.resources.size, 0);
