@@ -23,6 +23,27 @@ function workspace(t) {
 }
 
 test('environment lock is a closed immutable ARM64 development-only authority', () => {
+  const manifest = readFileSync(new URL('../Cargo.toml', import.meta.url), 'utf8');
+  const hashProfiles = value => {
+    const sections = [...value.matchAll(/^\[([^\]]+)\]\n([^[]*)/gm)];
+    assert.deepEqual(sections.filter(row => /^profile\.(?:dev|test)(?:\.|$)/.test(row[1]))
+      .map(row => row[1]).sort(), ['profile.dev.package.sha2', 'profile.test.package.sha2']);
+    for (const profile of ['dev', 'test']) {
+      const section = `[profile.${profile}.package.sha2]`;
+      const matches = sections.filter(row => `[${row[1]}]` === section);
+      assert.equal(matches.length, 1, `exact source-owned ${section}`);
+      assert.equal(matches[0][2].trim(), 'opt-level = 3', `closed ${section} settings`);
+    }
+  };
+  hashProfiles(manifest);
+  for (const profile of ['dev', 'test']) {
+    const selected = `[profile.${profile}.package.sha2]\nopt-level = 3`;
+    for (const replacement of ['', selected.replace('3', '0'), `${selected}\n${selected}`,
+      `${selected}\ndebug-assertions = false`, `${selected}\n[profile.${profile}]\nopt-level = 3`]) {
+      const changed = manifest.replace(selected, replacement);
+      assert.notEqual(changed, manifest); assert.throws(() => hashProfiles(changed));
+    }
+  }
   const raw = readFileSync(new URL('../sdk/golden-development.lock.json', import.meta.url));
   const lock = readEnvironmentLock(raw);
   assert.equal(lock.scope, 'source-golden-review-only'); assert.equal(lock.architecture, 'arm64');
@@ -81,6 +102,11 @@ function fixture(t, fault, store = 'containerd') {
   let created, label, generations = 0, seeded = false;
   const transport = async (command, args, options) => {
     calls.push([command, args]);
+    for (const name of ['CARGO_PROFILE_DEV_OPT_LEVEL', 'CARGO_PROFILE_TEST_OPT_LEVEL',
+      'RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTC_WRAPPER']) {
+      assert.equal(options.environment[name], undefined, `caller ${name} must not enter the source gate`);
+      assert(!args.some(arg => arg.startsWith(name + '=')), `caller ${name} must not enter the container`);
+    }
     if (command === 'git') {
       if (args.includes('rev-parse')) return ok((fault === 'source-revision' ? environmentRevision : revision) + '\n');
       if (args.includes('status')) return ok(fault === 'dirty-source' ? ' M source.lex.tex\n' : '');
@@ -123,6 +149,7 @@ function fixture(t, fault, store = 'containerd') {
       seeded = true; return ok({bytes: 128, entries: 2});
     }
     assert(seeded, 'golden generation cannot use an unseeded cache');
+    assert.equal(options.timeout, 7200000, 'native generation keeps its two-hour bound');
     assert.deepEqual(args.slice(2), ['cargo', 'run', '--locked', '--offline', '-p', 'xtask', '--', 'check-golden', ...(generations === 0 ? ['--write'] : [])]);
     generations++;
     work.put('.prism/build/unit/build-artifact.json', '{"diagnostic":"unit-only"}');
@@ -131,7 +158,9 @@ function fixture(t, fault, store = 'containerd') {
     if (fault === 'repeat-mutation' && generations === 2) work.put(`${profile}/golden-manifest.json`, 'changed');
     return ok('unit-only generation transcript');
   };
-  const context = {architecture: 'arm64', uid: 1001, gid: 1001, environment: {PATH: process.env.PATH, CARGO_HOME: '/caller/cache', GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
+  const context = {architecture: 'arm64', uid: 1001, gid: 1001, environment: {PATH: process.env.PATH, CARGO_HOME: '/caller/cache',
+    CARGO_PROFILE_DEV_OPT_LEVEL: '0', CARGO_PROFILE_TEST_OPT_LEVEL: '0', RUSTFLAGS: '--cfg caller_override',
+    CARGO_ENCODED_RUSTFLAGS: '--cfg\u001fcaller_override', RUSTC_WRAPPER: '/caller/wrapper', GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
     RUNNER_OS: 'Linux', RUNNER_ARCH: 'ARM64', GITHUB_EVENT_NAME: 'pull_request', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1'}};
   const destination = join(work.root, 'output');
   return {...work, calls, destination, run: (implementation = runReview) => implementation({source: work.source, revision, destination}, transport, context),
