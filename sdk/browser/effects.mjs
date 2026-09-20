@@ -4,6 +4,7 @@ import {bytesCopy, digestBytes, randomBytes, signBytes, verifyBytes, validateIde
 import {openStore} from './store.mjs';
 import {decodeEffectWire, encodeEffectWire, EFFECT_FRAME_MAXIMUM} from './effects-wire.mjs';
 import {inspectEffectModule, inspectEffectArtifactBudget} from './effects-module.mjs';
+import {checkCredentialSigning, credentialPublicBindings, signCredential} from './credential-custody.mjs';
 
 const WIRE_PAGES = 16384;
 const failures = ['invalid-input', 'identity-corrupt', 'crypto-unavailable', 'head-conflict',
@@ -125,7 +126,9 @@ class Effects {
       if (operation === 0) return [0, adapter.call(input[3])];
       if (operation === 1) return [1, randomBytes(input)];
       if (operation === 2) return [2, await digestBytes(input)];
-      if (operation === 3) return [3, await signBytes(adapter.identity, adapter.context, input)];
+      if (operation === 3) return [3, adapter.custody === undefined
+        ? await signBytes(adapter.identity, adapter.context, input)
+        : await signCredential(adapter.custody, resource, input)];
       if (operation === 4) return [4, await verifyBytes(adapter.publicKey, adapter.context, input[0], input[1])];
       if (operation === 5) {
         const object = await adapter.store.readObject(input);
@@ -146,7 +149,7 @@ class Effects {
     }
   }
   async #execute(item) {
-    if (item.started || this.#closed || this.#state[4]) return;
+    if (item.started || !item.released || this.#closed || this.#state[4]) return;
     item.started = true;
     const result = await this.#perform(item.request);
     if (this.#closed || this.#pending[0] !== item) return;
@@ -166,23 +169,25 @@ class Effects {
         return;
       }
       this.#pending.shift();
-      this.#settle(item, result[0] === 8 ? fail('effect-rejected', result[1][0]) : null,
+      this.#settle(item, result[0] === 8 && !item.staged ? fail('effect-rejected', result[1][0]) : null,
         encodeEffectWire(result));
-      if (this.#pending.length) void this.#execute(this.#pending[0]);
+      if (this.#pending.length && this.#pending[0].released) void this.#execute(this.#pending[0]);
     } catch {
       this.#settle(item, fail('effect-outcome-unknown'));
       this.#terminate('host-unavailable');
     }
   }
-  submit(value) {
-    try {
-      if (arguments.length !== 1) throw fail('invalid-input');
+  #admit(value, staged) {
       if (this.#closed) throw fail('host-closed');
       if (this.#state[4]) throw fail('effect-outcome-unknown');
       let intent;
       try { intent = decodeEffectWire(value); } catch { throw fail('invalid-input'); }
       if (!Array.isArray(intent) || intent.length !== 2 || typeof intent[0] !== 'string') throw fail('invalid-input');
       const request = [this.#manifest[0], this.#manifest[1], this.#session, this.#state[2], intent[0], intent[1]];
+      if (staged && Array.isArray(intent[1]) && intent[1][0] === 3) {
+        const adapter = this.#resources.get(intent[0]);
+        if (adapter?.custody !== undefined) checkCredentialSigning(adapter.custody, intent[0], intent[1][1]);
+      }
       this.#step([1, 1, this.#state, request], next => {
         const active = this.#pending.length === 0 ? [1, request] : this.#state[5];
         const waiter = this.#pending.length === 0 ? [0] : [1, request];
@@ -191,15 +196,45 @@ class Effects {
       });
       let resolve, reject;
       const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-      const item = {request, resolve, reject, started: false, settled: false};
+      const item = {request, promise, resolve, reject, staged, released: !staged, started: false, settled: false};
       this.#pending.push(item);
-      if (this.#pending.length === 1) void this.#execute(item);
-      return promise;
+      // A staged request has already passed the generated admission exactly
+      // once. Its private composition owner must first persist that exact
+      // request; admission is not permission to perform the primitive yet.
+      if (staged) void promise.catch(() => {});
+      if (!staged && this.#pending.length === 1) void this.#execute(item);
+      return item;
+  }
+  #admissionError(error) {
+    if (!(error instanceof EffectHostError)) { this.#terminate('host-unavailable'); return fail('host-unavailable'); }
+    if (['invalid-generated-module', 'invalid-generated-output', 'generated-execution-failed'].includes(error.code)) this.#terminate('host-unavailable');
+    return error;
+  }
+  submit(value) {
+    try {
+      if (arguments.length !== 1) throw fail('invalid-input');
+      return this.#admit(value, false).promise;
     } catch (error) {
-      if (!(error instanceof EffectHostError)) { this.#terminate('host-unavailable'); return Promise.reject(fail('host-unavailable')); }
-      if (['invalid-generated-module', 'invalid-generated-output', 'generated-execution-failed'].includes(error.code)) this.#terminate('host-unavailable');
-      return Promise.reject(error);
+      return Promise.reject(this.#admissionError(error));
     }
+  }
+  prepare(value) {
+    try {
+      if (arguments.length !== 1) throw fail('invalid-input');
+      const item = this.#admit(value, true);
+      const request = encodeEffectWire(item.request);
+      let released = false;
+      return Object.freeze({request, release: (...arguments_) => {
+        if (arguments_.length !== 0) return Promise.reject(fail('invalid-input'));
+        if (released) return Promise.reject(fail('invalid-input'));
+        released = true;
+        if (this.#closed || item.settled) return Promise.reject(fail('host-closed'));
+        if (this.#state[4]) return Promise.reject(fail('effect-outcome-unknown'));
+        item.released = true;
+        if (this.#pending[0] === item) void this.#execute(item);
+        return item.promise;
+      }});
+    } catch (error) { throw this.#admissionError(error); }
   }
   close() {
     if (arguments.length !== 0) throw fail('invalid-input');
@@ -213,10 +248,10 @@ class Effects {
   }
 }
 
-export async function openEffects(options) {
+async function openEffectsInternal(options, staged) {
   const stores = [];
   try {
-    if (arguments.length !== 1 || !record(options, ['wire', 'wireDigest', 'manifest', 'guests', 'signers'])
+    if (!record(options, ['wire', 'wireDigest', 'manifest', 'guests', 'signers'])
       || !Array.isArray(options.guests) || !Array.isArray(options.signers)
       || options.guests.length > 64 || options.signers.length > 64) throw fail('invalid-input');
     // Capture all bootstrap-owned values before the first asynchronous boundary.
@@ -226,6 +261,10 @@ export async function openEffects(options) {
       return {resource: value.resource, bytes: value.bytes};
     });
     const signers = captureArray(options.signers, value => {
+      if (staged) {
+        if (!record(value, ['resource', 'custody']) || typeof value.resource !== 'string') throw fail('invalid-input');
+        return {resource: value.resource, custody: value.custody};
+      }
       if (!record(value, ['resource', 'identity']) || typeof value.resource !== 'string'
         || !record(value.identity, ['principal', 'privateKey', 'publicKey'])) throw fail('invalid-input');
       return {resource: value.resource, identity: {
@@ -255,9 +294,18 @@ export async function openEffects(options) {
       } else if (kind === 3) {
         const matches = signers.filter(item => item.resource === resource);
         if (matches.length !== 1) throw fail('resource-mismatch');
-        const identity = await validateIdentity(matches[0].identity);
-        if (!same(identity.publicKey, value[0])) throw fail('resource-mismatch');
-        usedSigners.add(matches[0]); resources.set(resource, {identity, context: value[1]});
+        if (staged) {
+          const bindings = credentialPublicBindings(matches[0].custody);
+          const selected = bindings.resources.filter(row => row.resource === resource);
+          if (!same(bindings.application, manifest[0]) || selected.length !== 1
+            || !same(selected[0].publicKey, value[0]) || selected[0].context !== value[1]) throw fail('resource-mismatch');
+          resources.set(resource, {custody: matches[0].custody});
+        } else {
+          const identity = await validateIdentity(matches[0].identity);
+          if (!same(identity.publicKey, value[0])) throw fail('resource-mismatch');
+          resources.set(resource, {identity, context: value[1]});
+        }
+        usedSigners.add(matches[0]);
       } else if (kind === 4) resources.set(resource, {publicKey: value[0], context: value[1]});
       else if (kind === 5) resources.set(resource, {storage: value});
       else resources.set(resource, {});
@@ -270,10 +318,23 @@ export async function openEffects(options) {
       stores.push(store); resources.set(resource, {store});
     }
     const host = new Effects(call, state, resources, stores);
-    return Object.freeze({submit: host.submit.bind(host), close: host.close.bind(host), status: host.status.bind(host)});
+    return Object.freeze({[staged ? 'prepare' : 'submit']: staged ? host.prepare.bind(host) : host.submit.bind(host),
+      close: host.close.bind(host), status: host.status.bind(host)});
   } catch (error) {
     for (const store of stores) { try { store.close(); } catch { /* No effects have been dispatched. */ } }
     if (error instanceof EffectHostError) throw error;
     throw fail('host-unavailable');
   }
+}
+
+export async function openEffects(options) {
+  if (arguments.length !== 1) throw fail('invalid-input');
+  return openEffectsInternal(options, false);
+}
+
+// SDK-private journal composition only. Never export this interface or its
+// one-shot release capability to a product. No caller completion is accepted.
+export async function openStagedEffects(options) {
+  if (arguments.length !== 1) throw fail('invalid-input');
+  return openEffectsInternal(options, true);
 }

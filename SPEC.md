@@ -1516,6 +1516,40 @@ This private presentation prerequisite leaves `PP2011`, credential custody,
 generated authorized dispatch, durable recovery and complete public application,
 Foundry and deployment gates unchanged.
 
+### 12.12 Private durable operation journal
+
+DK-24 owns source-generated local operation admission, canonical records and
+terminal-receipt replay. The closed contract is
+`stdlib/src/Foundation/Browser/Application/V1/OperationJournal.md` and its CDDL;
+the authoritative reducer and codec are the adjacent LexLean sources. Signed
+genesis requires explicit Initialize; Open never replaces missing state. Exact
+application, artifact, requested/effective policy, custody key and storage
+bindings remain immutable. A retained Prepared binds the actual admitted DK-20
+request, not a caller's intent alias. Only an unambiguously acknowledged complete
+Prepared compare-and-swap releases the private invocation. A competing winner,
+close, missing chunk or ambiguous acknowledgment never releases it.
+
+Actual terminal results are persisted before durable completion is reported.
+Reopen authenticates every retained signature and payload chunk before generated
+replay. Missing terminal receipts remain uncertain without retry. Recovered
+request/result bytes do not resume an old runtime session. This is neither
+distributed consensus nor account recovery, rollback protection or application
+acceptance; `PP2011` remains closed. Private custody validation owns each Sign
+resource's captured-payload bound before admission and rechecks before signing.
+Application storage grants cannot alias the journal namespace, and application
+signing grants cannot combine the journal public key and signing context.
+
+Payload transport retains64MiB through1MiB chunks,16-object transactions and
+4096 stored objects; private metadata is bounded to64KiB and retained operation
+records to1024. Prepared reserves a terminal slot. The same production transport
+is tested at64MiB independently of DK-20's smaller admitted request shapes.
+Acceptance includes exact source/kernel/native `std`/`no_std`/Wasm closure,
+1024-record replay, hostile counter/binding cases, actual browser persistence,
+competing tabs, staging races, quota/count exhaustion, missing chunks, close,
+lost acknowledgments before and after terminal publication, complete observed
+native replay, and named source/host mutations. Existing DK-20 acceptance remains
+mandatory after its private staging composition changes.
+
 ### 12.13 Private modeled credential custody
 
 `DK-25` binds browser-generated nonextractable P-256 keys to one immutable
@@ -2034,6 +2068,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-21` | `sdk` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. | §12 |
 | `DK-22` | `sdk` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. | §12 |
 | `DK-23` | `sdk` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. | §12 |
+| `DK-24` | `sdk` | The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance. | §12 |
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
