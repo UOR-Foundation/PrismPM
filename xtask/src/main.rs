@@ -451,6 +451,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         "tests/browser-query/driver/Cargo.toml",
         "tests/browser-view/driver/Cargo.toml",
         "tests/browser-effects/driver/Cargo.toml",
+        "tests/browser-presentation/driver/Cargo.toml",
         "tests/holo-codec-oracle/Cargo.toml",
     ] {
         command(
@@ -474,6 +475,7 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "tests/browser-query/runner.rs",
             "tests/browser-view/runner.rs",
             "tests/browser-effects/runner.rs",
+            "tests/browser-presentation/runner.rs",
         ],
     )?;
 
@@ -1029,6 +1031,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "model/browser-adapter-diagnostics.toml",
         "model/browser-view-diagnostics.toml",
         "model/browser-effect-diagnostics.json",
+        "model/browser-presentation-diagnostics.json",
         "sdk/browser/identity.mjs",
         "sdk/browser/store.mjs",
         "sdk/browser/peer.mjs",
@@ -1041,6 +1044,8 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "sdk/browser/effects.mjs",
         "sdk/browser/effects-wire.mjs",
         "sdk/browser/effects-module.mjs",
+        "sdk/browser/presentation-wire.mjs",
+        "sdk/browser/presentation-dom.mjs",
         "tests/browser_stdlib_api.rs",
         "model/stdlib-package.toml",
         "schemas/model-document.schema.json",

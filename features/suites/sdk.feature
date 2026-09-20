@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-23 @build
+  Scenario: A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application.
+    Given source-owned semantic presentation fixtures and the exact bounded wire grammar
+    When fresh kernel, native, no_std, Core-Wasm and real browser journeys execute every declared maximum
+    Then actual generated frames and browser transcripts agree without HTML injection or control authority
+    And actual model and adapter mutations fail their owning assertions
+
   @DK-21 @build
   Scenario: The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance.
     Given independently checked declarations in the exact standard-library namespace
