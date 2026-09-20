@@ -22,6 +22,8 @@ const productFiles = ['source.json', 'image.json', 'inventory.json', 'standards.
 const vvFiles = ['acceptance.json', 'execution.json', 'run-1.json', 'run-2.json',
   'image-plan.json', 'loaded-identities.json', 'bootstrap.json',
   ...[1, 2].flatMap(run => bootstrapNames.map(name => `run-${run}-${name}`))];
+const MAX_COMMANDS = 9999;
+const MAX_VV_ENTRIES = vvFiles.length + MAX_COMMANDS * 3 + 1; // Include excluded docker/.
 
 function regular(path, maximum) {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -55,7 +57,7 @@ export function captureEvidence(directory, kind, context) {
   assert.equal(realpathSync(directory), directory, 'evidence directory cannot be aliased');
   const directoryIdentity = lstatSync(directory, {bigint: true}); assert(directoryIdentity.isDirectory());
   const names = readdirSync(directory).sort();
-  assert(names.length <= (kind === 'product-cli' ? productFiles.length : 30012), 'evidence file-count limit');
+  assert(names.length <= (kind === 'product-cli' ? productFiles.length : MAX_VV_ENTRIES), 'evidence file-count limit');
   const files = new Map(); let total = 0;
   for (const name of names) {
     if (kind === 'full-sdk-vv' && name === 'docker') {
@@ -97,7 +99,7 @@ export function captureEvidence(directory, kind, context) {
   } else {
     for (const name of vvFiles) assert(files.has(name), 'missing original ' + name);
     const records = [...files.keys()].filter(name => /^\d{4}\.json$/.test(name));
-    assert(records.length > 0 && records.length <= 9999);
+    assert(records.length > 0 && records.length <= MAX_COMMANDS);
     const expected = [...vvFiles];
     for (let index = 0; index < records.length; index++) {
       const number = String(index + 1).padStart(4, '0');

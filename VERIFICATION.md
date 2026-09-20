@@ -2040,6 +2040,14 @@ and bounds owned process-group cleanup after exit or cancellation. The full
 `target/lifecycle-evidence-owner-qWKIDa/owning.stdout`, SHA-256
 `989fb320ecb2f0298c0c42bd15b88b97329aa2169904d580791253f2440bd91c`.
 
+The actual 9,999-command boundary reproduced a one-entry-short capture limit.
+The limit now derives from the retained metadata, transcript triples and
+excluded private directory. All 30,013 entries capture without omission;
+30,014 reject. The complete 58-test devcontainer owner passed, including the
+unchanged byte maxima and lifecycle checks. Original log
+`target/file-count-evidence-owner-uk4hYk/owning.stdout`, SHA-256
+`99f06d605005b555e472cb2bbe284030e01fb080ac54c6d72df6419395240292`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
