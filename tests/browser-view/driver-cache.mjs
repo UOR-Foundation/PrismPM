@@ -10,6 +10,8 @@ const owners = Object.freeze({
   publication: {directory:'publication-admission', executable:'publication-admission-driver'},
   budget: {directory:'browser-budget', executable:'browser-budget-driver'},
   session: {directory:'browser-session', executable:'browser-session-driver'},
+  effects: {directory:'browser-effects', executable:'browser-effects-driver'},
+  custody: {directory:'browser-custody', executable:'browser-custody-driver'},
 });
 
 function directory(path) {

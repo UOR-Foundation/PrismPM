@@ -12,14 +12,17 @@ import {run, sha} from '../tests/browser-view/compile.mjs';
 const archive = fileURLToPath(new URL('../vendor/lean4-prod/lean.tar', import.meta.url));
 const exporterManifest = Buffer.from(run('tar', ['-xOf', archive, 'lakefile.lean'], dirname(archive)));
 
-function fixture(t, prefix = 'prismpm-publication-') {
+function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   const work = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(work, {recursive:true, force:true}));
-  const manifest = join(work, 'tests/publication-admission/driver/Cargo.toml');
+  const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody'}[owner];
+  assert.ok(directory);
+  const executable = directory + '-driver';
+  const manifest = join(work, 'tests', directory, 'driver/Cargo.toml');
   mkdirSync(join(dirname(manifest), 'src'), {recursive:true});
-  writeFileSync(manifest, '[package]\nname="publication-admission-driver"\nversion="0.1.0"\nedition="2021"\npublish=false\n[workspace]\n');
+  writeFileSync(manifest, '[package]\nname="' + executable + '"\nversion="0.1.0"\nedition="2021"\npublish=false\n[workspace]\n');
   writeFileSync(join(dirname(manifest), 'src/main.rs'), 'fn main() {}\n');
-  writeFileSync(join(dirname(manifest), 'Cargo.lock'), 'version = 4\n[[package]]\nname="publication-admission-driver"\nversion="0.1.0"\n');
+  writeFileSync(join(dirname(manifest), 'Cargo.lock'), 'version = 4\n[[package]]\nname="' + executable + '"\nversion="0.1.0"\n');
   const target = join(work, 'driver-target');
   run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',manifest], work, {CARGO_TARGET_DIR:target});
   const exporter = join(work, 'exporter');
@@ -29,8 +32,23 @@ function fixture(t, prefix = 'prismpm-publication-') {
   writeFileSync(join(exporter, '.lake/build/bin/prod-export'), 'reconstructible test cache\n');
   const preserved = new Map(['source.lex.tex','proof.json','kernel.ir','guest.wasm'].map(name => [name, Buffer.from(name)]));
   for (const [name, bytes] of preserved) writeFileSync(join(work,name), bytes);
-  return {work, target, manifest, exporter, preserved};
+  return {work, target, manifest, exporter, preserved, executable};
 }
+
+test('completed effects and custody tool caches retire under their exact owning paths', t => {
+  for (const owner of ['effects', 'custody']) {
+    const f = fixture(t, 'prismpm-' + owner + '-', owner);
+    const path = join(f.target, 'debug', f.executable), bytes = readFileSync(path);
+    const receipt = retireCompletedCompilerCaches(f.work, owner);
+    assert.equal(receipt.owner, owner);
+    assert.deepEqual(receipt.records[1], {path:'driver-target/debug/' + f.executable,
+      byte_length:bytes.length, sha256:sha(bytes)});
+    assert(!existsSync(path) && !existsSync(join(f.exporter, '.lake/build')));
+    assert(existsSync(f.manifest));
+    for (const [name, preserved] of f.preserved) assert.deepEqual(readFileSync(join(f.work, name)), preserved);
+    assert.throws(() => retireCompletedCompilerCaches(f.work, owner));
+  }
+});
 
 test('actual Cargo and Lake retirement preserves all non-cache evidence and exact original tool identities', t => {
   const f = fixture(t);
