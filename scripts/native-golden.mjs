@@ -1,7 +1,7 @@
 // PR source-development baseline collection. Never SDK or release acceptance.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
-import { constants, closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
+import { chmodSync, constants, closeSync, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
   readdirSync, readSync, realpathSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -15,6 +15,44 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const PROFILE = 'tests/golden/native/linux-arm64-ubuntu-24.04';
 const RECORDS = ['golden-manifest.json', 'verified/lexlean-attestation.json', 'verified/manifest.json'];
 const REASON = 'Review original Ubuntu 24.04 ARM64 source-development records against the committed shared baseline.';
+const CARGO_HOME = '/tmp/prismpm-golden-cargo';
+
+// Explicit paths are a unit-test seam only. The CLI admits no operands or
+// environment-selected source/destination for this image-owned cache copy.
+export function seedCargoCache(source = '/opt/prismpm/cargo-home', destination = CARGO_HOME) {
+  assert.equal(realpathSync(source), source, 'image cache cannot be aliased');
+  assert.equal(realpathSync(dirname(destination)), dirname(destination), 'cache parent cannot be aliased');
+  assert.equal(lstatSync(destination, {throwIfNoEntry: false}), undefined, 'private Cargo cache must be new');
+  const rows = []; let bytes = 0;
+  const walk = (path, relative, depth) => {
+    assert(depth <= 32 && rows.length < 250000, 'cache tree bound exceeded');
+    const stat = lstatSync(path);
+    assert((stat.isFile() || stat.isDirectory()) && (stat.mode & 0o222) === 0,
+      'image cache must contain only immutable regular files and directories');
+    if (stat.isFile()) {
+      assert(stat.size <= 256 * 1024 ** 2, 'cache file bound exceeded');
+      bytes += stat.size; assert(bytes <= 2 * 1024 ** 3, 'cache byte bound exceeded');
+    }
+    rows.push({relative, directory: stat.isDirectory(), bytes: stat.size, executable: (stat.mode & 0o100) !== 0});
+    if (stat.isDirectory()) for (const name of readdirSync(path).sort()) walk(join(path, name), relative ? `${relative}/${name}` : name, depth + 1);
+  };
+  walk(source, '', 0);
+  assert(rows[0].directory && bytes > 0, 'nonempty image cache required');
+  const space = statfsSync(dirname(destination));
+  // Include conservative per-entry allocation/metadata overhead in addition
+  // to the same 12 GiB reserve required by the outer source-review runner.
+  validateImageSpace(space.bavail * space.bsize, bytes + rows.length * 8192);
+  for (const row of rows) {
+    const target = join(destination, row.relative);
+    if (row.directory) mkdirSync(target, {mode: 0o700});
+    else {
+      copyFileSync(join(source, row.relative), target, constants.COPYFILE_EXCL);
+      assert.equal(lstatSync(target).size, row.bytes, 'cache copy size differs');
+      chmodSync(target, row.executable ? 0o700 : 0o600);
+    }
+  }
+  return {bytes, entries: rows.length};
+}
 
 function regular(path, limit = 128 * 1024 ** 2) {
   assert.equal(realpathSync(dirname(path)), dirname(path), 'input ancestor is aliased');
@@ -155,6 +193,7 @@ export async function runReview({source, revision, destination}, transport = exe
       '--user', `${uid}:${gid}`, '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '4096', '--init',
       '--mount', `type=bind,source=${source},target=/workspace`, '--workdir', '/workspace',
       '--env', 'HOME=/tmp/prismpm-golden-home', '--env', 'CARGO_NET_OFFLINE=true', '--env', 'CARGO_TARGET_DIR=/workspace/target/native-golden',
+      '--env', `CARGO_HOME=${CARGO_HOME}`,
       '--env', 'CARGO_BUILD_JOBS=2', '--env', 'CARGO_PROFILE_DEV_DEBUG=0', '--env', 'CARGO_PROFILE_TEST_DEBUG=0',
       '--env', `PRISMPM_GOLDEN_REASON=${REASON}`, '--entrypoint', '/bin/bash', lock.reference,
       '-ec', 'mkdir -p /tmp/prismpm-golden-home; exec sleep infinity']);
@@ -166,6 +205,9 @@ export async function runReview({source, revision, destination}, transport = exe
       'console.log(JSON.stringify({architecture:process.arch,os:process.platform,release:require("node:fs").readFileSync("/etc/os-release","utf8")}))']));
     assert.equal(platform.architecture, 'arm64'); assert.equal(platform.os, 'linux');
     assert.match(platform.release, /^ID=ubuntu$/m); assert.match(platform.release, /^VERSION_ID="24\.04"$/m);
+    if (interrupted) throw interrupted;
+    await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
+    requireSpace();
     let records;
     for (const write of [true, false]) {
       if (interrupted) throw interrupted;
@@ -233,11 +275,15 @@ export function validateWorkflow(text) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [operation, revision, destination, ...extra] = process.argv.slice(2);
-  if (operation === 'tests' && process.argv.length === 3) {
+  if (operation === 'seed-cache') {
+    assert.equal(process.argv.length, 3, 'seed-cache admits no path operands');
+    assert.equal(process.env.CARGO_HOME, CARGO_HOME, 'fixed private Cargo home required');
+    process.stdout.write(canonical(seedCargoCache()) + '\n');
+  } else if (operation === 'tests' && process.argv.length === 3) {
     const environment = {...process.env}; delete environment.NODE_TEST_CONTEXT;
     const result = await execute(process.execPath, ['--test', '--test-reporter=tap', '--test-timeout=120000', join(dirname(process.argv[1]), 'native-golden.test.mjs')], {environment});
     process.stdout.write(result.stdout); process.stderr.write(result.stderr); success(result, 'owning source-review tests');
-    assert.equal(verifyTap(result.stdout.toString(), 8), 8);
+    assert.equal(verifyTap(result.stdout.toString(), 11), 11);
   } else {
     assert.equal(operation, 'run'); assert(revision && destination && extra.length === 0, 'usage: native-golden.mjs tests | run SOURCE_COMMIT FRESH_OUTPUT');
     await runReview({source: process.cwd(), revision, destination});

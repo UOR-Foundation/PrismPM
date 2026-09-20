@@ -1,12 +1,12 @@
 // Source-development orchestration tests, not generated baseline acceptance.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync, existsSync, chmodSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync, existsSync, chmodSync, lstatSync, truncateSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execute } from './sdk-vv-check.mjs';
 import test from 'node:test';
-import { canonical, readEnvironmentLock, validateSourceBaseline, collectProfile, validateImageSpace, runReview, validateWorkflow } from './native-golden.mjs';
+import { canonical, readEnvironmentLock, validateSourceBaseline, collectProfile, validateImageSpace, seedCargoCache, runReview, validateWorkflow } from './native-golden.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const revision = 'a'.repeat(40), environmentRevision = 'b'.repeat(40);
@@ -78,8 +78,8 @@ function fixture(t, fault, store = 'containerd') {
   work.put('sdk/golden-development.lock.json', canonical(lock) + '\n');
   const ok = value => ({status: 0, signal: null, stdout: Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)), stderr: Buffer.alloc(0)});
   const bad = () => ({...ok(''), status: 1, stderr: Buffer.from('unit-only genuine command failure')});
-  let created, label, generations = 0;
-  const transport = async (command, args) => {
+  let created, label, generations = 0, seeded = false;
+  const transport = async (command, args, options) => {
     calls.push([command, args]);
     if (command === 'git') {
       if (args.includes('rev-parse')) return ok((fault === 'source-revision' ? environmentRevision : revision) + '\n');
@@ -102,6 +102,9 @@ function fixture(t, fault, store = 'containerd') {
     if (args[0] === 'create') {
       created = args[args.indexOf('--name') + 1]; label = args[args.indexOf('--label') + 1];
       assert.equal(args[args.indexOf('--network') + 1], 'none'); assert(args.includes('--pull=never'));
+      assert(args.includes('CARGO_HOME=/tmp/prismpm-golden-cargo'), 'UID 1001 requires an explicit private Cargo home');
+      assert.equal(args[args.indexOf('--user') + 1], '1001:1001');
+      assert.equal(args.filter(arg => arg.startsWith('CARGO_HOME=')).length, 1);
       assert(!args.includes('--privileged')); assert(!args.some(arg => arg.includes('docker.sock')));
       return ok('created');
     }
@@ -109,7 +112,17 @@ function fixture(t, fault, store = 'containerd') {
     if (args[0] === 'inspect') return ok([{Image: fault === 'wrong-container-image' ? 'sha256:' + 'f'.repeat(64) : store === 'classic' ? config : 'sha256:' + hash(index), Config: {Labels: Object.fromEntries([label.split('=')])}}]);
     if (args[0] === 'rm') { if (fault === 'cleanup') return bad(); created = undefined; return ok('removed'); }
     assert.deepEqual(args.slice(0, 2), ['exec', created]);
-    if (args[2] === 'node') return ok({architecture: 'arm64', os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
+    if (args[2] === 'node' && args[3] === '-e') return ok({architecture: 'arm64', os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
+    if (args[2] === 'node') {
+      assert.deepEqual(args.slice(2), ['node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
+      assert.equal(options.timeout, 120000); assert.equal(options.limit, 16 * 1024 ** 2);
+      assert.equal(generations, 0, 'cache preparation precedes every golden command');
+      if (fault === 'cache-failure') return bad();
+      if (fault === 'cache-signal') return {...ok(''), status: null, signal: 'SIGTERM'};
+      if (fault === 'cache-cancel') process.emit('SIGTERM');
+      seeded = true; return ok({bytes: 128, entries: 2});
+    }
+    assert(seeded, 'golden generation cannot use an unseeded cache');
     assert.deepEqual(args.slice(2), ['cargo', 'run', '--locked', '--offline', '-p', 'xtask', '--', 'check-golden', ...(generations === 0 ? ['--write'] : [])]);
     generations++;
     work.put('.prism/build/unit/build-artifact.json', '{"diagnostic":"unit-only"}');
@@ -118,7 +131,7 @@ function fixture(t, fault, store = 'containerd') {
     if (fault === 'repeat-mutation' && generations === 2) work.put(`${profile}/golden-manifest.json`, 'changed');
     return ok('unit-only generation transcript');
   };
-  const context = {architecture: 'arm64', uid: 1000, gid: 1000, environment: {PATH: process.env.PATH, GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
+  const context = {architecture: 'arm64', uid: 1001, gid: 1001, environment: {PATH: process.env.PATH, CARGO_HOME: '/caller/cache', GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
     RUNNER_OS: 'Linux', RUNNER_ARCH: 'ARM64', GITHUB_EVENT_NAME: 'pull_request', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1'}};
   const destination = join(work.root, 'output');
   return {...work, calls, destination, run: (implementation = runReview) => implementation({source: work.source, revision, destination}, transport, context),
@@ -147,6 +160,47 @@ test('failure and missing evidence never become a reviewed or accepted SDK basel
       assert.equal(f.generations(), 1); assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
     }
   }
+});
+
+test('private cache initialization failure, signal and cancellation stop generation and clean owned resources', async t => {
+  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel']) {
+    const f = fixture(t, fault); await assert.rejects(f.run());
+    assert.equal(f.generations(), 0); assert.equal(f.remaining(), undefined);
+    assert(!existsSync(join(f.destination, 'review.json')));
+    assert(existsSync(join(f.destination, 'failure.json')));
+  }
+});
+
+test('image cache seeding preserves bytes in a new private writable tree', t => {
+  const {root} = workspace(t), source = join(root, 'cache'), destination = join(root, 'private');
+  mkdirSync(source); mkdirSync(join(source, 'registry'));
+  const sourceFile = join(source, 'registry', 'package.crate');
+  writeFileSync(sourceFile, Buffer.from([0, 1, 2, 255])); chmodSync(sourceFile, 0o444);
+  chmodSync(join(source, 'registry'), 0o555); chmodSync(source, 0o555);
+  try {
+    assert.deepEqual(seedCargoCache(source, destination), {bytes: 4, entries: 3});
+    assert.deepEqual(readFileSync(join(destination, 'registry', 'package.crate')), readFileSync(sourceFile));
+    assert.equal(lstatSync(destination).mode & 0o777, 0o700);
+    assert.equal(lstatSync(join(destination, 'registry', 'package.crate')).mode & 0o777, 0o600);
+    assert.equal(lstatSync(sourceFile).mode & 0o777, 0o444);
+    assert.throws(() => seedCargoCache(source, destination), /must be new/);
+  } finally { chmodSync(source, 0o700); chmodSync(join(source, 'registry'), 0o700); }
+});
+
+test('image cache seeding rejects aliases, writable inputs and oversized files before copying', t => {
+  const {root} = workspace(t), source = join(root, 'cache'), destination = join(root, 'private');
+  mkdirSync(source); const input = join(source, 'input'); writeFileSync(input, 'input');
+  chmodSync(source, 0o555);
+  try {
+    assert.throws(() => seedCargoCache(source, destination), /immutable regular files/);
+    assert(!existsSync(destination)); chmodSync(source, 0o700); rmSync(input);
+    symlinkSync('/etc/passwd', input); chmodSync(source, 0o555);
+    assert.throws(() => seedCargoCache(source, destination), /immutable regular files/);
+    assert(!existsSync(destination)); chmodSync(source, 0o700); rmSync(input);
+    writeFileSync(input, ''); truncateSync(input, 256 * 1024 ** 2 + 1); chmodSync(input, 0o444); chmodSync(source, 0o555);
+    assert.throws(() => seedCargoCache(source, destination), /file bound exceeded/);
+    assert(!existsSync(destination));
+  } finally { chmodSync(source, 0o700); }
 });
 
 test('PR workflow has no publication policy bypass and keeps exact native generation and failure uploads', () => {
@@ -186,4 +240,6 @@ test('executed source-baseline and second-run omission mutants fail owning behav
   await assert.rejects(async () => { const f = fixture(t); await f.run(noRepeat.runReview); assert.equal(f.generations(), 2); }, /1 !== 2/);
   const noBaseline = await load(source.replaceAll('validateSourceBaseline(source);', ''));
   await assert.rejects(async () => { const f = fixture(t, 'stale-base'); await assert.rejects(f.run(noBaseline.runReview), /golden source bytes are stale/); }, /Missing expected rejection/);
+  const noSeed = await load(source.replace("await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);", ''));
+  await assert.rejects(fixture(t).run(noSeed.runReview), /unseeded cache/);
 });

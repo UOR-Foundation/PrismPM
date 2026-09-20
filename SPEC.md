@@ -623,6 +623,14 @@ including failure diagnostics. It does not commit a baseline, publish an image,
 accept the current SDK, or bypass candidate/release policy. Native runner
 selection is a trusted CI property, not physical hardware attestation.
 
+The review container explicitly selects a private Cargo home, seeded only from
+the selected image's immutable cache before generation. Copying is bounded to
+250,000 regular files/directories, depth 32, 256 MiB per file, 2 GiB total and
+120 seconds; aliases and writable image inputs fail. A 12 GiB disk reserve plus
+copy bytes and metadata allowance is required. Initialization failure or
+interruption prohibits generation. Both golden commands remain network-disabled,
+locked and offline; no caller cache, dependency refresh or host compiler is used.
+
 CI resource diagnostics are separate from acceptance evidence. Host and
 devcontainer observers record only allowlisted numeric resource measurements,
 at most every 30 seconds for six hours, 721 samples and 8 MiB per observer.

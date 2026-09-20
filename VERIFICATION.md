@@ -1814,6 +1814,31 @@ VV result, accepted SDK image or Foundry deployment.
 | `target/publication-classic-integrated-audits.log` | `785e9214d4e06fefa0db227449fcd1031485cf8ed83e2ab3346bcab86114adb7` |
 | `target/publication-integrated-clippy.log` | `a524b29b658309b608eaa0509a054a31116aacbf974500af95b1ec32a75d6fb8` |
 
+## Native review private Cargo cache
+
+[ARM64 review 35488532480](https://github.com/UOR-Foundation/PrismPM/actions/runs/35488532480)
+passed image/platform checks, then failed offline resolution of `camino` before
+generation. UID 1001 inherited `/home/vscode/.cargo` while bypassing SDK startup;
+the same image cohort's `/home/vscode` is mode 0750 and inaccessible to that UID.
+The review now explicitly configures a private Cargo home and synchronously
+copies only the image-owned immutable cache before either unchanged golden command.
+
+The owning UID regression fails before the fix. All 11 source-review tests pass
+afterward, including seed omission, initialization failure, signal, cancellation,
+cleanup, immutable-input and copy-bound checks. An actual network-disabled
+AMD64 container from the pinned image ran as UID 1001, copied 833,640,231 bytes
+across 14,437 entries and resolved the current locked workspace offline:
+215 packages, four workspace members, `camino` 1.2.5. No compiler ran. This
+verifies cache access/resolution, not native ARM64 generation or SDK acceptance.
+The initial 128 MiB copy limit rejected an existing 171,317,890-byte Git pack;
+the measured cache uses a 256 MiB per-file bound and a separate 2 GiB total bound.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/native-golden-cargo-home-red.log` | `d2cb66a664cd798fbe8ec0a102c20215e44557ba2fd7b095c72734b694db5585` |
+| `target/native-golden-cargo-home-green.log` | `fa91fc4ccac71bf121a4bddde55993bd5aecfaa646759749df231763b18f4300` |
+| `target/native-golden-cargo-home-actual.log` | `1d5df18c074571c350ee474bb1fe06eea6e3fa59386409cd7d4b37e756cc1ae6` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
