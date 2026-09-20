@@ -5,10 +5,80 @@ import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {test} from 'node:test';
 import {capture,verifySource,verifyImage,verifyTap,verifyFileCompletions,runSuites,sourceRoots,suites} from './browser-api-sdk-check.mjs';
+import * as browserGate from './browser-api-sdk-check.mjs';
+
+const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'queries',
+ 'view-host', 'view-dom', 'view-error', 'rs256', 'effects', 'effects-wire',
+ 'effects-module', 'presentation-wire', 'presentation-dom'];
+const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+
+test('installed module inventory includes every accepted private browser prerequisite without opening the runtime', () => {
+ assert.deepEqual(browserGate.hostModules, hostModules);
+ const recipe = sdkSource('sdk/Dockerfile');
+ const instruction = recipe.split('\n').find(line => line.startsWith('COPY ') && line.endsWith(' /opt/prismpm/browser/'));
+ assert.ok(instruction);
+ assert.deepEqual([...instruction.matchAll(/\/prepared\/source\/sdk\/browser\/([a-z0-9-]+)\.mjs/g)].map(row => row[1]), hostModules);
+ assert.match(instruction, /--from=source_inputs --chmod=0444/);
+ const shell = sdkSource('scripts/browser-api-sdk-check.sh');
+ assert.match(shell, /node "\$helper" modules "\$root" "\$sdk_work\/browser"/);
+ for (const module of hostModules) assert.ok(sdkSource('sdk/browser/' + module + '.mjs').length);
+ assert.ok(sdkSource('sdk/generate-inventory.mjs').includes("['browser-host-primitives', 'adapter', '1', '/opt/prismpm/browser', 'tree']"));
+ assert.ok(!hostModules.some(name => /custody|operation-journal/.test(name)), 'unaccepted drafts are not installed');
+});
+
+test('installed browser closure includes complete new owning fixtures and actual Rust refusal owners', () => {
+ for (const path of ['tests/browser-effects', 'tests/browser-presentation',
+  'tests/fixtures/library/native-library/project', 'tests/support/browser_application.rs',
+  'crates/prismpm/src/browser_build.rs', 'crates/prismpm/src/browser_build',
+  'crates/prismpm/src/holo/browser_application.rs', 'crates/prismpm/src/holo/browser_application',
+  'crates/conformance/tests/conformance.rs', 'crates/conformance/src/cases/browser_compiler.rs',
+  'scripts/browser-api-sdk-check.sh', 'scripts/fetch-oracle-cargo.sh', 'sdk/generate-inventory.mjs']) {
+  assert.ok(sourceRoots.includes(path), 'required installed source: ' + path);
+ }
+ const source = sdkSource('crates/conformance/tests/conformance.rs');
+ for (const id of [21, 22]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
+ assert.match(sdkSource('crates/prismpm/src/holo/browser_application.rs'), /Err\(PrismError::new\("PP2011"/);
+ assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
+ const workflow = sdkSource('.github/workflows/release.yml');
+ assert.match(workflow, /browser-api-sdk-check\.sh/);
+ assert.match(workflow, /sdk-vv-check\.mjs/);
+});
+
+test('new installed Node suites retain exact complete owning files and deadlines', () => {
+ const effects = suites.find(row => row.id === 'DK-20'), view = suites.find(row => row.id === 'DK-23');
+ assert.deepEqual(effects?.files, ['sdk/browser/effects-wire.test.mjs', 'sdk/browser/effects-module.test.mjs', 'sdk/browser/effects-test.mjs']);
+ assert.equal(effects?.minimum, 18);
+ assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'sdk/browser/presentation.test.mjs']);
+ assert.equal(view?.minimum, 8);
+ assert.equal(effects?.deadline, 3600000); assert.equal(view?.deadline, 3600000);
+});
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-sdk-binding-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const put=(root,path,bytes)=>{mkdirSync(dirname(join(root,path)),{recursive:true});writeFileSync(join(root,path),bytes);};
+test('actual installed module trees reject missing extra changed and aliased module bytes', t => {
+ assert.equal(typeof browserGate.verifyModules, 'function');
+ const source = temporary(t), installed = temporary(t);
+ for (const module of hostModules) {
+  put(source, 'sdk/browser/' + module + '.mjs', module);
+  put(installed, module + '.mjs', module);
+ }
+ browserGate.verifyModules(source, installed);
+ const path = join(installed, 'effects.mjs');
+ for (const kind of ['missing', 'changed', 'extra', 'alias', 'fifo', 'directory']) {
+  rmSync(path);
+  if (kind === 'changed') put(installed, 'effects.mjs', 'changed');
+  if (kind === 'extra') { put(installed, 'effects.mjs', 'effects'); put(installed, 'extra.mjs', 'extra'); }
+  if (kind === 'alias') symlinkSync('identity.mjs', path);
+  if (kind === 'fifo') execFileSync('mkfifo', [path]);
+  if (kind === 'directory') mkdirSync(path);
+  assert.throws(() => browserGate.verifyModules(source, installed), undefined, kind);
+  rmSync(path, {force: true, recursive: kind === 'directory'}); rmSync(join(installed, 'extra.mjs'), {force: true});
+  put(installed, 'effects.mjs', 'effects'); browserGate.verifyModules(source, installed);
+ }
+ const alias = join(temporary(t), 'alias'); symlinkSync(installed, alias);
+ assert.throws(() => browserGate.verifyModules(source, alias));
+});
 function source(root){
  for(const path of sourceRoots){
   if(path!=='.cargo'&&path.includes('.')&&!path.endsWith('/rust')||path==='lean-toolchain'||path==='sdk/Dockerfile')put(root,path,path+'\n');
@@ -23,7 +93,9 @@ function inspected(){return[{Os:'linux',Architecture:'amd64',RepoDigests:[image]
 
 test('current SDK source closure binds helper, compiler, suite and every selected byte',t=>{
  const root=temporary(t);source(root);const expected=capture(root,revision);verifySource(root,expected);
- for(const path of['scripts/browser-api-sdk-check.mjs','sdk/browser/source.txt','vendor/lexlean/source.txt','tests/browser-api/source.txt']){
+ for(const path of['scripts/browser-api-sdk-check.mjs','sdk/browser/source.txt','vendor/lexlean/source.txt','tests/browser-api/source.txt',
+  'tests/browser-effects/source.txt','tests/browser-presentation/source.txt','tests/support/browser_application.rs',
+  'crates/prismpm/src/browser_build.rs','scripts/fetch-oracle-cargo.sh']){
   const bytes=readFileSync(join(root,path));put(root,path,Buffer.concat([bytes,Buffer.from('x')]));assert.throws(()=>verifySource(root,expected));put(root,path,bytes);
  }
  for(const mutate of[
@@ -58,7 +130,7 @@ test('SDK identity is immutable, exact-source and native-platform bound',()=>{
 });
 
 const testSource=(count,skip=false)=>"import {test} from 'node:test';\n"+Array.from({length:count},(_,index)=>`test('case ${index}',${skip&&index===0?'{skip:true},':''}()=>{});\n`).join('');
-function testFixtures(root){for(const suite of suites)for(const file of suite.files)put(root,'sdk/browser/'+file,testSource(suite.minimum));}
+function testFixtures(root){for(const suite of suites)for(const file of suite.files)put(root,file,testSource(suite.minimum));}
 
 test('every selected file must exist even when its sibling supplies the total minimum',t=>{
  const root=temporary(t);testFixtures(root);
@@ -106,9 +178,10 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19']);
- assert.equal(runSuites(root,launch,()=>{}).length,11);
- assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files.map(file=>'sdk/browser/'+file)));
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23']);
+ assert.equal(runSuites(root,launch,()=>{}).length,13);
+ assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
+ assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';
  put(root,path,testSource(1));put(root,second,testSource(1));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/);
  put(root,path,testSource(10,true));put(root,second,testSource(10));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete pass set|skipped/);
@@ -178,4 +251,22 @@ test('owning omission regression kills removal of actual per-file completion che
   '--test-name-pattern=every selected file must register',join(root,'browser-api-sdk-check.test.mjs')],
   {encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,/Missing expected exception/);
+});
+
+test('owning installed-module tests kill removed exact-tree and byte-equality guards', t => {
+ const original = sdkSource('scripts/browser-api-sdk-check.mjs');
+ for (const omitted of [
+  "assert.deepEqual(readdirSync(installed).sort(),names.slice().sort(),'exact installed host module closure');",
+  "assert.deepEqual(boundedBytes(actual[index],lstatSync(actual[index])),\n   boundedBytes(sources[index],lstatSync(sources[index])),'installed host module bytes: '+names[index]);",
+ ]) {
+  assert.equal(original.split(omitted).length, 2);
+  const root = temporary(t);
+  put(root, 'browser-api-sdk-check.mjs', original.replace(omitted, ''));
+  put(root, 'browser-api-sdk-check.test.mjs', sdkSource('scripts/browser-api-sdk-check.test.mjs'));
+  const env = {...process.env}; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ['--test', '--test-name-pattern=actual installed module trees',
+   join(root, 'browser-api-sdk-check.test.mjs')], {env, encoding: 'utf8', timeout: 15000, maxBuffer: 1024*1024});
+  assert.equal(result.error, undefined); assert.equal(result.status, 1);
+  assert.match(result.stdout, /Missing expected exception/);
+ }
 });

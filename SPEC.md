@@ -1242,12 +1242,22 @@ OSCAL control coverage, network read admission, availability or a deployed porta
 Post-build SDK acceptance is separate from source V&V and its external-oracle
 image input. scripts/browser-api-sdk-check.sh takes an immutable current SDK
 image digest and exact clean source commit. It independently compares the
-installed source/compiler/test/helper closure and public modules, then runs all
-DK-07..16 and DK-19 browser suites in that image with read-only sources, no network, and
+installed source/compiler/test/helper closure and host modules, then runs all
+DK-07..16, DK-19, DK-20 and DK-23 browser suites in that image with read-only sources, no network, and
 only temporary writable caches. Complete TAP summaries, no omissions/skips, and
 native architecture/revision labels are required. Both native SDK architectures
 run this check in release.yml's required reproducibility job. A prior oracle SDK
 may support source bootstrap; it cannot satisfy this shipped-SDK acceptance.
+
+The closed installed module inventory includes the private effect and safe
+presentation adapters. Missing, extra, changed or aliased installed modules
+reject. DK-20/DK-23 compiler fixtures and locked acquisition inputs belong to
+the measured source closure; their complete owning suites retain all generated
+execution, maximum-size, browser and mutation checks. DK-21/DK-22 retain their
+actual Rust owners in the separate mandatory complete installed native V&V
+executions, with declaration/compiler source and refusal tests also byte-bound
+here. Packaging these prerequisites does not open `PP2011`, grant effects or
+accept a public application. DK-24/DK-25 drafts are not included by this change.
 
 Both source and installed-SDK Node gates preflight every selected test file as
 a regular, non-symlink path with non-symlink directory parents. The source-bound
