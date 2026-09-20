@@ -1915,6 +1915,24 @@ and executable-tampering checks against SDK child `c2e0e50437e1`.
 These are diagnostic/component results, not native ARM64 golden or current SDK
 acceptance. Both original native golden commands must still pass on CI.
 
+## Original SDK release evidence — 20 September 2026
+
+The OCI-only publication now retains both native installed-SDK command closures,
+product-CLI evidence and browser/library logs without granting SDK acceptance.
+Private Docker configuration is excluded. Run/attempt-qualified prerelease tags
+preserve nondeterministic original evidence; same-attempt overwrites still fail.
+
+All 21 release/evidence tests passed in the development container, including
+actual 256 MiB stdout archiving, exact 1 GiB capture and excess rejection,
+16 workflow mutations, transcript-check mutation, distinct attempts and invalid
+CI contexts. The original SHA-only publisher failed the new attempt regression.
+These checks use publication fixtures, not live releases or Foundry deployment.
+
+| Local log | SHA-256 |
+| --- | --- |
+| `target/sdk-evidence-attempt-red.log` | `e5ecdf195c3d2e1edf8d7463676c4a303a476fc808de602b304e5141fcb051dd` |
+| `target/sdk-evidence-final.log` | `66b61e9145860b95709537f837f74a1e0926755794d856f401338a607ef769aa` |
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
