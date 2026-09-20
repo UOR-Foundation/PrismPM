@@ -37,3 +37,17 @@ root-owned baseline directory. Correcting ownership and rerunning the normal
 writer resolved that filesystem error; no proof or acceptance check changed.
 This is the AMD64 development baseline, not native ARM, complete SDK or
 deployed Foundry acceptance.
+
+## Integrated private browser baseline
+
+20 September 2026: the normal AMD64 writer passed on `b24cb00`, producing
+354 files. The six added source copies bind presentation, custody and journal;
+the declaration copy binds isolated durability policy. Their behavioral
+acceptance remains with their registered owners, not these source copies.
+
+- Build: `bd667cc528214fed489769cd5c69625c54ea5e70189b0c678630afb4928ac3f5`
+- Verification: `5ccbb3ea8c039466ee144f318eacc9db801e587aecc22960fe59c8ff0cdaa53c`
+- Runtime semantic identity and IR above are unchanged; all 597 execution
+  cases and 54 control-coverage cases passed.
+
+Public browser runtime, complete SDK and Foundry deployment remain unaccepted.
