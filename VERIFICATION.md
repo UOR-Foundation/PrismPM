@@ -76,6 +76,18 @@ establish argument/isolation behavior, not a live deployment.
 | `target/verification-provenance-preflight-red.log` | `93ea11a4b5ee1b408da7535c095811eed9078a5afeaeaaf3d6c3bcea4999c30b` |
 | `target/publication-integrated-action-tests.log` | `f772089c04e4778d93157db5301b3aba0ab8384a3bd4131989601cd69d6c85b8` |
 
+## Integrated golden source review
+
+The normal writer passed at `60a1afd`, producing 339 files for build
+`85460cb147589358b903d01fb4c76d6cc6f64e8ff1b8d23adf54d02278a8ad00`.
+Review found exactly 14 added authored-source copies, no removed or changed
+older sources, and five updated manifests/model records. Selected stdlib
+semantics remain unchanged; the emitter binding and actual verifier identities
+are updated. No generated Lean or expected execution output was hand-edited.
+Writer log SHA-256:
+`2190bd5cc9d2e31604415f9794ad406638cbdc3a5601c713d8dee7e0c939146f`.
+Non-writing readback and native platform records remain separate gates.
+
 ## Bounded browser RS256 effect (DK-19)
 
 All 14 Node/Chromium tests passed against the pinned, hash-checked WPT RSA
