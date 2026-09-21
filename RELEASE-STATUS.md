@@ -107,8 +107,13 @@ as a mandatory application dependency:
 5. Bind template and Calculator locks/workflows to those public immutable
    artifacts. Regenerate their source projections and preserve their accepted
    application baseline. Run their complete local and CI acceptance, including
-   both production releases, deployments, rollback, recovery, and Pages.
+   both production releases, deployments, rollback, recovery, and Pages. Task 11
+   dependency is verified under `prismpm/calculator-reference-closure/1` ensuring
+   `calculator-example` consumes only the locked SDK with no vendored fallback,
+   covers all standard-native targets (Compose, Kubernetes, Pages), and maps
+   the complete capability coverage matrix.
 6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
    the changelog, create release tags, and claim completion.
 
 These are outstanding requirements, not exclusions or reductions of scope.
+

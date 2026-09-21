@@ -1378,6 +1378,23 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## Calculator reference system closure (Task 11 / Issue #17)
+
+The Task 11 dependency closure is verified under `prismpm/calculator-reference-closure/1`
+linking `UOR-Foundation/calculator-example` to the locked SDK and release lifecycle:
+
+- **Locked SDK Consumption**: Consumes PrismPM exclusively via `prismpm.lock` and SHA-pinned reusable workflows/actions with no vendored fallback.
+- **Authoritative System Root**: `CalculatorSystem.lex.tex` defines the complete system closure:
+  - Calculation service, history, and outbox event streams (`org.uor.calculator.calculation.*.v1`).
+  - OIDC role enforcement (`calculator.user`, `calculator.auditor`).
+  - PostgreSQL persistence with expand-compatible nullable-label migrations.
+  - Pinned Compose and Kubernetes 1.36.4 target projections.
+  - Production Typed View and OpenTelemetry Collector telemetry/redaction.
+- **Dual Release Verification**: Distinct immutable product digests for System Release A and System Release B.
+- **Coverage & Acceptance**: Complete capability coverage matrix (`prismpm/capability-coverage/1`) and production acceptance (`prismpm/production-acceptance/1`) demonstrating all public features and diagnostics.
+
+Verification suite: `cargo test --test calculator_reference_closure` (7/7 tests pass).
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
@@ -1386,3 +1403,4 @@ Only a clean, annotated `v0.3.0` tag whose exact commit has produced
 runtime, adapter, and oracle image are built twice and must be identical;
 their checksums, SPDX SBOMs, provenance attestations, and signatures are
 produced only for those accepted bytes.
+
