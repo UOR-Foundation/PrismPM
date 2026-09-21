@@ -111,4 +111,13 @@ as a mandatory application dependency:
 6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
    the changelog, create release tags, and claim completion.
 
+## Calculator baseline record
+
+The canonical `prismpm/calculator-baseline/1` record is committed at
+`tests/data/calculator-baseline.json` and validated by integration tests
+(`tests/calculator_baseline.rs`). It binds exact commits, artifact identities,
+contract validation, and reproduction evidence across source, crate, holo, View,
+browser, and Pages assets.
+
 These are outstanding requirements, not exclusions or reductions of scope.
+
