@@ -1378,6 +1378,20 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## Standard-native target adapters (Task 8 / Issue #10)
+
+The standard-native target adapters verification suite (`tests/standard_native_target_adapters.rs`)
+asserts full coverage of Compose and Kubernetes adapters:
+- Canonical versioned adapter boundaries (`adapters/compose.json`, `adapters/kubernetes.json`) conforming to `prismpm/target-adapter/1`.
+- Projection policies validated:
+  - Compose: `cap_drop: ["ALL"]`, `read_only: true`, `security_opt: ["no-new-privileges:true"]`, `healthcheck`, tmpfs.
+  - Kubernetes: `read_only_root_filesystem: true`, `seccomp_profile: "RuntimeDefault"`, `ingress_controller_profile: "ingress-nginx-kind-v1.15.1"`, storage profile `kind-static-local`, and pinned ingress controller manifest SHA-256 (`INGRESS_NGINX_KIND`).
+- Fail-closed target validation across Compose and Kubernetes (`PP7101` on tampered adapter digest, API version mismatch, undeclared capabilities, absent platform requirements, or missing persistent storage/ingress bindings).
+- Compose projection generation enforcing typed params (`${VAR:?required}` for required parameters without default), secret references via directory mount, and container security options.
+- Kubernetes projection generation producing standard-native resources (Namespace, ServiceAccount, Role, RoleBinding, ConfigMap, Deployment, Service, Ingress, NetworkPolicy) with read-only root filesystems and disabled service account token automount.
+- Two-stage Kubernetes deployment partitioning strictly separating official ingress infrastructure (`app.kubernetes.io/name=ingress-nginx`) from product application resources.
+- State-bound planning, drift detection, rollback refusing non-preceding releases (`PP7601`), and destroy authorization requiring `--authorized` (`PP7701`).
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

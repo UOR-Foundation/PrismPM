@@ -1002,7 +1002,8 @@ fn kubernetes_is_ingress_infrastructure(item: &Value) -> bool {
         == Some("ingress-nginx")
 }
 
-fn kubernetes_partition(projection: &Value) -> Result<(Value, Value), PrismError> {
+/// Partition a Kubernetes projection into official ingress infrastructure and application resources.
+pub fn kubernetes_partition(projection: &Value) -> Result<(Value, Value), PrismError> {
     if projection["apiVersion"].as_str() != Some("v1")
         || projection["kind"].as_str() != Some("List")
     {
