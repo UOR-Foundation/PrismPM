@@ -82,10 +82,11 @@ excluded by the current text-profile work.
 
 The signed-envelope and authenticated browser-journal prerequisite gates pass,
 including offline browser crypto/storage checks and complete bounded replay.
-They do not yet implement the generated workspace application profile, its View,
-Kappa replication/read admission or the Foundry portal. These remain required
-for the authorized functional-core release; component tests do not replace
-live faculty/participant journey acceptance.
+The generated workspace application profile, its View, and the Kappa
+replication/read-admission path are implemented, independently verified, and
+bound to release gates (DK-07 through DK-16). The Foundry portal integration
+remains required for the authorized functional-core release; component tests do not
+replace live faculty/participant journey acceptance.
 
 Complete the existing release plan without treating a prototype implementation
 as a mandatory application dependency:

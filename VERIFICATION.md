@@ -1378,6 +1378,35 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## Workspace functional-core profile, View, and Kappa admission path (DK-07..DK-16)
+
+The functional-core prerequisite set implements and independently verifies the
+generated workspace application profile, its View, and the Kappa replication/read
+admission path:
+
+1. Workspace profile: Schema `schemas/workspace-view-labels.schema.json` defines
+   and enforces the closed 39-field workspace View label contract. Diagnostics
+   in `model/browser-view-diagnostics.toml` (11 host errors, 14 registered model
+   rejections), `model/browser-adapter-diagnostics.toml` (DK-13, DK-14), and
+   `model/browser-diagnostics.toml` (DK-12) define closed typed errors.
+2. Generated View behaviors: The binary presentation (`0x50, 0x56, 0x4e, 0x01`)
+   and interaction (`0x50, 0x56, 0x49, 0x01`) contracts enforce single-flight
+   interaction, exact session correlation, focus/live mode semantics, control bits,
+   and deterministic projection across fresh Wasm and native guest instances.
+3. Kappa replication and read admission: WebRTC data-channel peer transport
+   (`sdk/browser/peer.mjs`) restricts traffic to bounded host-only candidates
+   without third-party STUN/TURN discovery. The authenticated journal
+   (`sdk/browser/journal.mjs`) bounds local admission to at most two outstanding
+   operations, re-authenticates complete replay, and commits atomic head transitions.
+   Commands (`sdk/browser/commands.mjs`) verify possession of signing keys under
+   context `prismpm/workspace-event/1`, and queries (`sdk/browser/queries.mjs`)
+   enforce bounded 16-row cursor pagination over admitted state.
+4. Acceptance evidence: Integration test `crates/prismpm/tests/workspace_functional_core.rs`
+   directly verifies schema conformance, diagnostic registries, stdlib export
+   boundaries, presentation projection, and falsification probes (rejecting zero
+   sessions, malformed framing, and out-of-bounds inputs). All 10 DK suites
+   (DK-07 through DK-16) are bound to release gates in `scripts/browser-api-sdk-check.mjs`.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
