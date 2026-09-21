@@ -5,12 +5,12 @@ accepted public SDK release. Clean commits and passing component checks do not
 replace the cross-repository acceptance contract in `current/tasks.md` of the
 development workspace.
 
-Complete source-devcontainer `just vv` at `d1b8506` passed gates 1–14,
-including actual portable browser execution and cross-root reproducibility,
-then failed gate 15 on the former public Hologram dependency. No full-pass receipt was
-produced. [Verification evidence](VERIFICATION.md#portable-view-execution-and-tool-integrity-ho-12)
-records the exact source, tools, scope, and log digest; the development SDK
-binding is not a newly accepted production release.
+Gate 15 (`cargo xtask package-api`) passes completely in the clean devcontainer,
+verifying generated `prism-stdlib` and generic compiler packages (`prod-ir`, `prod-codegen`)
+without public Hologram dependencies. The full-pass receipt `target/vv-evidence.json`
+records passing gates 1–15 bound to the accepted source commit. [Verification evidence](VERIFICATION.md#gate-15-ho-12-closure-and-full-pass-receipt)
+records the exact remediation, package digests, and receipt bindings.
+
 
 ## Modeled codec and independent oracles
 

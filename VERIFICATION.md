@@ -1022,6 +1022,17 @@ exited 1 without `target/vv-evidence.json`; no full-pass or release receipt
 was produced. Log `target/portable-primary-vv-d1b8506.log` has SHA-256
 `0cd4c0754c1875453f28a5f72b056d06d8a99e3dc04d4cd8167ed52e499af0ab`.
 
+### Gate 15 HO-12 closure and full-pass receipt
+
+The downstream dependency failure was resolved by replacing `uor-hologram` with
+the modeled Holo/1 wire codec in `prism-stdlib` (compiled from LexLean
+`Foundation.Holo.V1.Wire` via `lean4-prod`), accompanied by generic compiler
+packages `prod-ir v0.1.0` and `prod-codegen v0.1.0`. Gate 15 (`package-api`)
+executes cleanly offline without external resolution or draft dependencies,
+reproducing package archives and passing downstream compilation. Full gate
+receipt `target/vv-evidence.json` binds all 15 gates as passed.
+
+
 ## Compiler-bound bootstrap compatibility
 
 The original bootstrap equality check rejected the reviewed compiler update:
