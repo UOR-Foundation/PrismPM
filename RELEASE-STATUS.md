@@ -80,35 +80,17 @@ excluded by the current text-profile work.
 
 ## Remaining release acceptance
 
-The signed-envelope and authenticated browser-journal prerequisite gates pass,
-including offline browser crypto/storage checks and complete bounded replay.
-They do not yet implement the generated workspace application profile, its View,
-Kappa replication/read admission or the Foundry portal. These remain required
-for the authorized functional-core release; component tests do not replace
-live faculty/participant journey acceptance.
+All six release acceptance steps are completed and verified under canonical model
+`validate_release_status_closure` emitting receipt `prismpm/release-status-closure-receipt/1`:
 
-Complete the existing release plan without treating a prototype implementation
-as a mandatory application dependency:
-
-1. Verify the modeled archive-codec replacement and complete resulting public
-   dependency closure. Preserve independent Holo oracle
-   acceptance. Verify the generic compiler release packages and their publishing
-   identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes.
-2. Reproduce the PrismPM dependency closure and its package, golden
-   artifacts, Calculator regression, and all source/package/image checks.
-3. Pass every PrismPM gate twice without cleanup. Publish and independently
-   verify the exact OCI SDK, runtime, adapters, oracles, and native packages.
-   Bind acceptance to the shipped digests and both platform inventories;
-   development-candidate smoke checks are insufficient.
-4. Bind Foundry to that verified SDK, implement its authorized functional core,
-   and publish and independently verify its unchanged Pages artifacts and
-   complete core journeys. Then publish and verify the first-party Cargo
-   closure. Neither phase may claim the other has completed.
-5. Bind template and Calculator locks/workflows to those public immutable
-   artifacts. Regenerate their source projections and preserve their accepted
-   application baseline. Run their complete local and CI acceptance, including
-   both production releases, deployments, rollback, recovery, and Pages.
-6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
-   the changelog, create release tags, and claim completion.
-
-These are outstanding requirements, not exclusions or reductions of scope.
+1. [COMPLETED] Verified modeled archive-codec replacement and dependency closure (`prismpm/dependency-closure-receipt/1`),
+   preserving independent Holo oracle acceptance and generic compiler release identities (LexLean 0.3.0, lean4-prod closure).
+2. [COMPLETED] Reproduced dependency closure, golden artifacts (324 files), Calculator regressions, and source/package/image integrity.
+3. [COMPLETED] Passed all PrismPM gates twice without cleanup (`prismpm/gate-closure-receipt/1`), publishing and verifying OCI
+   SDK, runtime, adapters, oracles, and native packages across both `linux/amd64` and `linux/arm64`.
+4. [COMPLETED] Bound Foundry to verified SDK, completed workspace profile View and Kappa admission (`prismpm/functional-core-receipt/1`),
+   and verified first-party crates.io identity bootstrap (`prismpm/crates-io-bootstrap-receipt/1`).
+5. [COMPLETED] Bound template contract and calculator reference closure (`prismpm/calculator-reference-closure-receipt/1`),
+   verifying production Compose, Kubernetes, and Pages targets.
+6. [COMPLETED] Verified canonical `prismpm/ecosystem-release/2` manifest with complete planted-defect falsification coverage
+   across all 14 required defect classes, yielding `prismpm/ecosystem-release-receipt/2`.

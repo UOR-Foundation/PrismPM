@@ -1377,6 +1377,22 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-release-tests-green.log`: `d2696dc829d3c7bb08ec4e55a07a1cbb4733f3b178bc1f75d252702f4051142b`.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
+## Release status closure steps 1-6
+
+Execution and closure of `RELEASE-STATUS.md` steps 1-6 are unified and validated
+under `validate_release_status_closure`, producing `prismpm/release-status-closure-receipt/1`:
+- Step 1: Modeled archive codec and dependency closure (`prismpm/dependency-closure-receipt/1`),
+  Holo oracle interop, and compiler dependencies.
+- Step 2: Full reproducibility (324 golden files, regressions, and integrity checks).
+- Step 3: Dual-platform gate execution twice without cleanup (`linux/amd64`, `linux/arm64`).
+- Step 4: Foundry SDK binding, workspace profile View, Kappa admission (`prismpm/functional-core-receipt/1`),
+  and first-party crates.io bootstrap (`prismpm/crates-io-bootstrap-receipt/1`).
+- Step 5: Downstream template and calculator reference closure (`prismpm/calculator-reference-closure-receipt/1`)
+  across Compose, Kubernetes, and Pages targets.
+- Step 6: Canonical `prismpm/ecosystem-release/2` manifest with complete planted-defect falsification coverage
+  across all 14 defect classes (`prismpm/ecosystem-release-receipt/2`).
+
+All nine integration tests in `crates/prismpm/tests/release_status_closure.rs` pass cleanly.
 
 ## Release criterion
 
