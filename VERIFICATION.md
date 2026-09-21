@@ -746,7 +746,7 @@ does not substitute a fixture-only implementation.
 
 The immutable integrations used by the release are LexLean
 `0b53334e5846a1f5e5d9bb3bf6959c085daa4d08` and `lean4-prod`
-`c4078cf96537cd71c0818bbed0aa82300ef66786`.
+`ac84a4de575e2e531ddb6453c86b84a6794fe48b`.
 
 ## Gate 10 — Holo schema and reviewed golden bytes
 
@@ -1377,6 +1377,46 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-release-tests-green.log`: `d2696dc829d3c7bb08ec4e55a07a1cbb4733f3b178bc1f75d252702f4051142b`.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
+
+## Upstream generic compiler dependency closure (lean4-prod)
+
+Cross-repository release acceptance binds PrismPM 0.3.0 to exact lean4-prod compiler
+provenance and locked artifacts without unmerged or unlinked dependencies:
+- Pinned source revision: `ac84a4de575e2e531ddb6453c86b84a6794fe48b`
+- Vendored Lean toolchain payload (`vendor/lean4-prod/lean.tar`):
+  `74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5`
+- Vendored Rust generator tree manifest (`vendor/lean4-prod/rust/MANIFEST.sha256`):
+  `3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc`
+- First-party compiler crates:
+  - `prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
+  - `prod-codegen-0.1.0.crate`: `5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6`
+  - `prod-ir-0.1.0.crate`: `9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5`
+
+All upstream dependency obligations are tracked through:
+- [Issue 70](https://github.com/auser/lean4-prod/issues/70): Release Dependency Closure
+- [PR 38](https://github.com/auser/lean4-prod/pull/38) ([Issue 37](https://github.com/auser/lean4-prod/issues/37)): CoreWasm Bytes fallible entry lowering
+- [PR 40](https://github.com/auser/lean4-prod/pull/40) ([Issue 39](https://github.com/auser/lean4-prod/issues/39)): UTF-8 borrowed slice validity
+- [PR 42](https://github.com/auser/lean4-prod/pull/42) ([Issue 41](https://github.com/auser/lean4-prod/issues/41)): Collection ownership preservation
+- [PR 44](https://github.com/auser/lean4-prod/pull/44) ([Issue 43](https://github.com/auser/lean4-prod/issues/43)): SplitExact UInt32 bounds
+- [PR 46](https://github.com/auser/lean4-prod/pull/46) ([Issue 45](https://github.com/auser/lean4-prod/issues/45)): Scalar SDK parameter hygiene
+- [PR 48](https://github.com/auser/lean4-prod/pull/48) ([Issue 47](https://github.com/auser/lean4-prod/issues/47)): Raw local IR identifier hygiene
+- [PR 50](https://github.com/auser/lean4-prod/pull/50) ([Issue 49](https://github.com/auser/lean4-prod/issues/49)): Workspace browser component generation
+- [PR 52](https://github.com/auser/lean4-prod/pull/52) ([Issue 51](https://github.com/auser/lean4-prod/issues/51)): Nat literal width constraints
+- [PR 54](https://github.com/auser/lean4-prod/pull/54) ([Issue 53](https://github.com/auser/lean4-prod/issues/53)): Owned record branch projections
+- [PR 59](https://github.com/auser/lean4-prod/pull/59) ([Issue 58](https://github.com/auser/lean4-prod/issues/58)): Loop lowering for self-tail recursion
+- [PR 61](https://github.com/auser/lean4-prod/pull/61) ([Issue 60](https://github.com/auser/lean4-prod/issues/60)): Byte-index specializations
+- [PR 64](https://github.com/auser/lean4-prod/pull/64) ([Issue 62](https://github.com/auser/lean4-prod/issues/62)): String scalar length preservation
+- [PR 65](https://github.com/auser/lean4-prod/pull/65) ([Issue 63](https://github.com/auser/lean4-prod/issues/63)): Byte-slice lowering
+- [PR 67](https://github.com/auser/lean4-prod/pull/67) ([Issue 66](https://github.com/auser/lean4-prod/issues/66)): Zero-allocation borrowed UTF-8 decoding
+- [PR 69](https://github.com/auser/lean4-prod/pull/69) ([Issue 68](https://github.com/auser/lean4-prod/issues/68)): Tail reuse during functional list updates
+
+Focused regression `crates/prismpm/tests/lean4_prod_dependency.rs` executes:
+1. `lean4_prod_dependency_record_and_checksums_are_valid`: Full dependency model parse and byte-level SHA-256 validation for all 5 locked artifacts.
+2. `lean4_prod_rust_manifest_is_exhaustive_and_valid`: Complete tree manifest parsing, byte-level checking of all 34 source/test files, and rejection of unmanifested files.
+3. `lean4_prod_crates_preserve_strict_generic_compiler_isolation`: Source scan verifying that no application-domain or target semantics contaminate generic compiler crates.
+4. `lean4_prod_dependency_falsification_probes`: Negative test verifying detection of missing sections and tampered SHA-256 digests.
+
+All 4 test cases pass deterministically.
 
 ## Release criterion
 
