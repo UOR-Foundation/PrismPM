@@ -1378,6 +1378,16 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## Universal SDK entrypoint and template contract (Task 10 / Issue #12)
+
+The universal template entrypoint verification suite (`tests/universal_template_entrypoint.rs`)
+asserts full coverage of Task 10 requirements:
+- Template contract R1-R6 rules verified: all 8 required paths (`.devcontainer/devcontainer.json`, `.github/workflows/bootstrap.yml`, `AGENTS.md`, `CONFORMANCE.md`, `VERIFICATION.md`, `prismpm.lock`, `template-contract.json`, `template.lock`) must exist and match canonical schemas.
+- Anti-vacuity enforcement: tasks attempting to rewrite policy or conformance files during code generation fail closed with `PP1101`.
+- Complete elimination of floating bootstrap tooling: `.devcontainer/devcontainer.json` rejects `"features"`, and `.github/workflows/bootstrap.yml` strictly rejects floating tags (`@v`, `@main`, `@master`) in favor of full 40-character commit hashes.
+- Reviewable non-mutating update patch flow (`template::update`): generates unified diff patches targeting `template.lock` without altering project files; rejects unpinned or floating SDK images or revisions with `PP1101`.
+- Strict policy tree SHA-256 validation ensuring policy documents cannot drift silently.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
