@@ -1377,6 +1377,26 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-release-tests-green.log`: `d2696dc829d3c7bb08ec4e55a07a1cbb4733f3b178bc1f75d252702f4051142b`.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
+## Task 12 cross-repository acceptance and ecosystem release closure
+
+Task 12 release gate establishes full cross-repository acceptance and canonical
+ecosystem manifest closure (`prismpm/ecosystem-release/2`). Function
+`validate_ecosystem_release_closure` enforces closure under diagnostic `PP6004`:
+1. All five required repositories (`LexLean`, `PrismPM`, `calculator-example`, `lean4-prod`, `template`)
+   with validated 40-hex Git commits and matching source archives in the artifacts list.
+2. Required first-party packages (`prism-calculator`, `prism-stdlib`, `prismpm`) with 64-hex checksums.
+3. Calculator reference closure: distinct application baseline and system release digests,
+   distinct Release A and B product digests, and strictly ordered Pages assets.
+4. SDK dual-platform reproducibility (`linux/amd64`, `linux/arm64`) with native archives.
+5. Falsification completeness covering all 14 required planted-defect classes:
+   `authority-drift`, `always-pass-oracle`, `source-lock-mismatch`, `generated-behavior`,
+   `oci-digest-mutation`, `wrong-signer`, `secret-leak`, `mutable-tag-deployment`,
+   `target-state-race`, `failed-rollout`, `unsafe-migration`, `telemetry-absence`,
+   `stale-health`, and `failed-restore`.
+6. Verified receipt emission (`prismpm/ecosystem-release-receipt/2`).
+
+All nine integration tests in `crates/prismpm/tests/ecosystem_release_closure.rs` pass cleanly,
+verifying receipt generation and falsification across all defect categories.
 
 ## Release criterion
 

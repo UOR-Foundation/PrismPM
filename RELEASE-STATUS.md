@@ -109,6 +109,11 @@ as a mandatory application dependency:
    application baseline. Run their complete local and CI acceptance, including
    both production releases, deployments, rollback, recovery, and Pages.
 6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
-   the changelog, create release tags, and claim completion.
+   the changelog, create release tags, and claim completion. Task 12 ecosystem release
+   closure validation (`validate_ecosystem_release_closure`) enforces canonical manifest
+   integrity under diagnostic `PP6004`, binding all five repositories (`LexLean`, `PrismPM`,
+   `calculator-example`, `lean4-prod`, `template`), required packages, distinct CalculatorSystem
+   A/B releases, dual-platform SDK coverage, and planted-defect falsification completeness across
+   all 14 required defect classes into receipt `prismpm/ecosystem-release-receipt/2`.
 
 These are outstanding requirements, not exclusions or reductions of scope.

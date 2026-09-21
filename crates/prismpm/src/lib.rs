@@ -7,7 +7,7 @@
 // stable Controller API solely to satisfy a size heuristic.
 #![allow(clippy::result_large_err)]
 
-mod acceptance;
+pub mod acceptance;
 mod application_build;
 pub mod authority;
 mod browser_oracle;
