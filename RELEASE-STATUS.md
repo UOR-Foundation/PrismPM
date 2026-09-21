@@ -78,6 +78,21 @@ and malformed-input subsystem coverage, including emitted-code and execution
 evidence checks, remains required for production SDK acceptance; it is not
 excluded by the current text-profile work.
 
+## Reproducible multi-platform SDK (Task 5, DK-01..DK-06)
+
+Task 5 SDK packaging and reproducible multi-platform inventory are complete:
+- Canonical SDK inventories (`prismpm/sdk-inventory/1`) define every command and
+  executable digest in sorted, deterministic order for `linux/amd64` and `linux/arm64`.
+- Multi-platform OCI SDK images are built from immutable inputs and digest-pinned
+  base images using BuildKit with `SOURCE_DATE_EPOCH=0`.
+- Consumer `prismpm.lock` (`prismpm/sdk-lock/2`) binds multi-platform OCI index
+  digests and platform-specific inventories, with an explicit proposal workflow
+  (`prismpm/sdk-lock-update/2`) requiring compatibility, output diff, and security reviews.
+- Explicit `fetch --locked` enforces offline operation for all core commands after fetch;
+  omitting `--locked` fails with PP1101, and installed input tampering fails with PP5401.
+- Bootstrap verification (`prismpm/bootstrap-evidence/2`) validates prior SDK
+  projection compatibility, clean-root rebuild, and separate compiler semantics.
+
 ## Remaining release acceptance
 
 The signed-envelope and authenticated browser-journal prerequisite gates pass,
