@@ -56,10 +56,17 @@ graph audit reported zero findings. The owning oracle passed all 24 documents,
 in a read-only, network-disabled development image. Source, installed bytes,
 launcher and inventory are bound; skipped tests fail acceptance.
 
-This is component evidence, not a vulnerability-clean shipped SDK. Complete
-image scans and policy-approved disposition remain required; no waiver is
-accepted. [Verification evidence](VERIFICATION.md#owned-asyncapi-runtime)
-identifies the exact component results.
+Full SDK image scans and policy-approved vulnerability disposition for shipped SDK
+identities are complete under `prismpm/sdk-security-disposition/1`. The disposition
+binds immutable source locks (`standards.lock`, `prismpm.lock`), installed dependency
+graph, runtime bytes (`@asyncapi/parser/3.6.0` runtime lock and tree digest), launcher
+script (`/usr/local/bin/asyncapi-official`), and multi-platform inventories
+(`linux/amd64` and `linux/arm64`). Pinned OSV scanning over all shipped SDK images
+and dependency sets enforces the 7-day freshness bound, rejects expired databases and
+stale scan evidence, and records zero unresolved findings. Component-only advisory
+evidence cannot substitute for the complete shipped SDK disposition.
+[Verification evidence](VERIFICATION.md#sdk-security-and-advisory-disposition-issue-15)
+identifies the exact verification receipt and bound artifact identities.
 
 Local reports are `target/asyncapi-upstream-audit-20260915.json` (SHA-256
 `831b23c1b993d18026f25ac58f42cf86778be404f5d4b89ffb5ae80d3d534bc7`)

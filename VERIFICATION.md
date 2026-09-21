@@ -1378,6 +1378,21 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
 
+## SDK security and advisory disposition (Issue #15)
+
+Full SDK security and advisory disposition (`prismpm/sdk-security-disposition/1`) is verified
+against shipped SDK release identities and locked advisory databases under production release policy:
+
+- **Source Locks**: Immutable source locks `standards.lock` and `prismpm.lock` are bound by exact `sha256:` digest.
+- **Installed Dependency Graph**: Installed dependency lockfile (`package-lock.json`) and canonical installed tree digest are bound.
+- **Runtime Bytes**: Compatible runtime parser `@asyncapi/parser/3.6.0`, owned runtime lock (`5bd20ce206d3b3b76a7034951c9e19e15291c54eec0a1424139b465c980f1205`), and runtime tree digest are bound.
+- **Launcher**: Fixed launcher script `/usr/local/bin/asyncapi-official` identity and digest are bound.
+- **Platform Inventories**: Both shipped architectures (`linux/amd64` and `linux/arm64`) are bound to their respective SDK image digests and inventory receipts.
+- **Freshness Policy**: Enforces 7-day maximum age (604,800s), verifies database expiration time, rejects future-dated or stale scans, and verifies zero rejected findings (`PP7801`).
+- **Anti-Substitution**: Component-only advisory scan evidence is strictly rejected when full shipped SDK disposition is required.
+
+Verification suite: `cargo test --test sdk_security_advisory_disposition` (6/6 tests pass).
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
@@ -1386,3 +1401,4 @@ Only a clean, annotated `v0.3.0` tag whose exact commit has produced
 runtime, adapter, and oracle image are built twice and must be identical;
 their checksums, SPDX SBOMs, provenance attestations, and signatures are
 produced only for those accepted bytes.
+
