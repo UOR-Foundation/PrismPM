@@ -78,6 +78,17 @@ and malformed-input subsystem coverage, including emitted-code and execution
 evidence checks, remains required for production SDK acceptance; it is not
 excluded by the current text-profile work.
 
+## OCI product-release graph and registry lifecycle
+The OCI product-release graph and registry lifecycle (Task 6, OC-01..OC-07) is
+fully integrated and verified. Registered Prism vendor media types are strictly
+minimal and standard OCI types are preserved. `build --locked` enforces required
+gates before verified local root publication. Complete release graphs are bound
+by digest across required artifacts and dependencies. Referrers for SBOM,
+provenance, validation, signatures, vulnerability, license, and deployment
+evidence are attached as subject-correct referrers with graph closure.
+Promotion by attestation over unchanged subject digest is enforced and
+unauthorized or unverified transitions fail closed with PP6101 / PP7401.
+
 ## Remaining release acceptance
 
 The signed-envelope and authenticated browser-journal prerequisite gates pass,

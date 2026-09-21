@@ -1,5 +1,33 @@
 # PrismPM falsifiability and verification record
 
+## OCI product-release graph and registry lifecycle (OC-01..OC-07)
+
+The OCI product-release graph and registry lifecycle implementation was verified against
+all seven conformance requirements (OC-01 through OC-07) and registered unit/integration suites:
+
+1. **Registered vendor media types**: Minimal Prism-owned document media types and standard OCI
+   descriptors are strictly closed (`PRISM_RELEASE`, `PRISM_VALIDATION`, `PRISM_VERIFICATION`,
+   `INTOTO`, `SPDX`, `PRISM_SUPPLY_CHAIN`, `PRISM_PRODUCTION_ACCEPTANCE`, `PRISM_EVIDENCE_SIGNATURE`,
+   `PRISM_DEPLOYMENT_EVIDENCE`, `PRISM_PROMOTION_POLICY`, `PRISM_PROMOTION`, `COSIGN_SIGNATURE`,
+   `COSIGN_SIMPLE_SIGNING`, `OCI_MANIFEST`, `OCI_INDEX`, `OCI_EMPTY`). Any unregistered vendor
+   media type is rejected with `PP6101`.
+2. **Graph closure and verified root boundaries**: Graph verification verifies descriptor count,
+   manifest count, content digests, and edge acyclicity (`visit_graph` rejects cycles and missing
+   blobs with `PP6101`). Referrers can only be attached to verified local release roots with
+   exclusive lock synchronization; unverified subjects fail closed with `PP6101`.
+3. **Reference validation**: Pinned and tag references enforce OCI distribution naming specs,
+   rejecting uppercase characters, path traversals, bare repositories, and tag-only references
+   when digest-pinned references are required (`PP6101`).
+4. **Schema conformance and falsification**: Conformance and falsification testing verified
+   `schemas/product-release.schema.json` and `schemas/product-release-result.schema.json`, asserting
+   that payloads lacking required properties, with invalid SHA-256 digests, non-zero negative
+   artifact lengths, absolute or traversing evidence paths, or injected undeclared properties fail
+   validation (`additionalProperties: false`).
+5. **Full lifecycle conformance**: The conformance suite verified the full OCI release lifecycle
+   (OC-01 through OC-07), including graph verification, descriptor tampering detection,
+   deployment evidence referrers, artifact inspection replay, reference syntax boundaries,
+   promotion attestation requirements, and source-free browser export.
+
 ## Generated workspace View (DK-15, DK-16)
 
 Registered owning tests first rejected the absent implementation. The complete
