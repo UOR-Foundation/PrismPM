@@ -1377,6 +1377,20 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-release-tests-green.log`: `d2696dc829d3c7bb08ec4e55a07a1cbb4733f3b178bc1f75d252702f4051142b`.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
+## First-party crates.io identity bootstrap and trusted publishing readiness
+
+First-party packages `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`
+require owner-controlled initial registration on crates.io before trusted publishing
+can be activated. Model `validate_crates_io_bootstrap` strictly rejects schema deviations,
+unapproved registries, incomplete/duplicate/unrecognized crate sets, dependency-order
+inversions (`prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`),
+malformed 64-hex checksums or 40-hex source commits, unaided OIDC shortcuts, and premature
+trusted-publishing activation under `PP4103`. Downstream lock consumption bindings are verified
+against published package identities to guarantee immutable provenance.
+
+All nine integration tests in `crates/prismpm/tests/crates_io_bootstrap.rs` pass cleanly,
+verifying receipt generation (`prismpm/crates-io-bootstrap-receipt/1`) and falsification across
+all defect classes.
 
 ## Release criterion
 

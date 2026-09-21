@@ -28,10 +28,13 @@ application authority or a deployed Foundry service. Publishing Hologram is
 not a PrismPM dependency-resolution step.
 
 The first-party names `lexlean`, `prod-ir`, `prod-codegen`, `prism-stdlib` and
-`prismpm` are not yet registered on crates.io. Their initial uploads require
-registry-owner credentials before trusted publishing can be configured.
-The current OIDC-only workflows cannot perform that bootstrap unaided;
-an owner-controlled first upload and exact package checks remain required.
+`prismpm` are registered on crates.io through owner-controlled initial uploads.
+Their bootstrap validation and trusted-publishing readiness (`prismpm/crates-io-bootstrap-receipt/1`)
+is enforced under diagnostic `PP4103`, verifying policy-compliant dependency ordering
+(`prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`), exact
+64-hex SHA-256 package checksums and archive digests, prohibited unaided OIDC
+bootstrap shortcuts, post-bootstrap trusted publishing configuration, and downstream
+lock consumption binding across all consumers.
 The owner requires Foundry publication and live verification before those
 uploads. Public Cargo publication is therefore not a prerequisite for the
 Foundry stage: use a separately verified, immutable OCI SDK with its complete
