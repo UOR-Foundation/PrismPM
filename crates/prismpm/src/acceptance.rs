@@ -540,6 +540,137 @@ pub struct ReleaseStatusClosure {
     pub step6_ecosystem_manifest: Step6EcosystemReleaseReceipt,
 }
 
+/// Canonical model of the Calculator reference system closure (Task 11 / Issue #17).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CalculatorReferenceClosure {
+    /// Closed schema identifier (`prismpm/calculator-reference-closure/1`).
+    pub schema: String,
+    /// Authoritative repository identifier (`UOR-Foundation/calculator-example`).
+    pub repository: String,
+    /// Locked SDK image digest consumed by the reference repository.
+    pub sdk_digest: String,
+    /// Immutable release digest for System Release A.
+    pub release_a_digest: String,
+    /// Immutable release digest for System Release B (with nullable label expansion).
+    pub release_b_digest: String,
+    /// Exact digest of the capability coverage matrix projection.
+    pub coverage_digest: String,
+    /// Exact digest of the verified production acceptance transcript.
+    pub acceptance_digest: String,
+    /// Target runtime adapter projections verified by the reference system.
+    pub targets: Vec<String>,
+    /// Count of public features demonstrated with positive and negative evidence.
+    pub features_covered: u64,
+    /// Count of public diagnostics demonstrated with reproducible trigger evidence.
+    pub diagnostics_covered: u64,
+    /// Unix timestamp when the closure was verified.
+    pub verified_at_unix: u64,
+}
+
+fn valid_sha256_digest(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
+}
+
+/// Validate the complete Calculator reference system closure against production policy.
+///
+/// Enforces:
+/// - Exact schema `prismpm/calculator-reference-closure/1`.
+/// - Repository must match `UOR-Foundation/calculator-example`.
+/// - Locked SDK digest must match `expected_sdk_digest`.
+/// - Valid SHA-256 digests for all referenced artifacts.
+/// - Distinct immutable digests for Release A and Release B.
+/// - Target coverage must include `compose`, `kubernetes`, and `pages`.
+/// - Non-zero feature and diagnostic coverage counts.
+pub fn validate_calculator_reference_closure(
+    closure: &CalculatorReferenceClosure,
+    expected_sdk_digest: &str,
+) -> Result<Value, PrismError> {
+    if closure.schema != "prismpm/calculator-reference-closure/1" {
+        return Err(PrismError::new(
+            "PP6002",
+            "calculator reference closure schema is unsupported or differs",
+        ));
+    }
+
+    if closure.repository != "UOR-Foundation/calculator-example" {
+        return Err(PrismError::new(
+            "PP6002",
+            "calculator reference closure repository differs from expected UOR-Foundation/calculator-example",
+        ));
+    }
+
+    if closure.sdk_digest != expected_sdk_digest {
+        return Err(PrismError::new(
+            "PP6002",
+            "calculator reference closure SDK digest does not match the expected locked SDK",
+        ));
+    }
+
+    for (name, digest) in [
+        ("sdk_digest", &closure.sdk_digest),
+        ("release_a_digest", &closure.release_a_digest),
+        ("release_b_digest", &closure.release_b_digest),
+        ("coverage_digest", &closure.coverage_digest),
+        ("acceptance_digest", &closure.acceptance_digest),
+    ] {
+        if !valid_sha256_digest(digest) {
+            return Err(PrismError::new(
+                "PP6002",
+                format!("calculator reference closure {name} is malformed"),
+            ));
+        }
+    }
+
+    if closure.release_a_digest == closure.release_b_digest {
+        return Err(PrismError::new(
+            "PP6002",
+            "Release A and Release B must have distinct immutable product digests",
+        ));
+    }
+
+    let targets = closure
+        .targets
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for required in ["compose", "kubernetes", "pages"] {
+        if !targets.contains(required) {
+            return Err(PrismError::new(
+                "PP6002",
+                format!("calculator reference targets must cover required target {required}"),
+            ));
+        }
+    }
+
+    if closure.features_covered == 0 || closure.diagnostics_covered == 0 {
+        return Err(PrismError::new(
+            "PP6002",
+            "calculator reference closure must cover public features and diagnostics",
+        ));
+    }
+
+    Ok(json!({
+        "acceptance_digest": closure.acceptance_digest,
+        "coverage_digest": closure.coverage_digest,
+        "diagnostics_covered": closure.diagnostics_covered,
+        "features_covered": closure.features_covered,
+        "release_a_digest": closure.release_a_digest,
+        "release_b_digest": closure.release_b_digest,
+        "repository": closure.repository,
+        "schema": "prismpm/calculator-reference-receipt/1",
+        "sdk_digest": closure.sdk_digest,
+        "status": "verified",
+        "targets": closure.targets,
+        "verified_at_unix": closure.verified_at_unix
+    }))
+}
+
 /// Validate the complete PrismPM v0.3.0 Release Status Closure against steps 1-6.
 ///
 /// Enforces:
