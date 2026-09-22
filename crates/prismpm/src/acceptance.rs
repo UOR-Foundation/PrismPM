@@ -12,7 +12,7 @@ use std::path::Path;
 
 fn sha(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
-}
+
 
 fn release_digest(reference: &str) -> Result<&str, PrismError> {
     let (_, digest) = reference.rsplit_once('@').ok_or_else(|| {
@@ -32,7 +32,7 @@ fn release_digest(reference: &str) -> Result<&str, PrismError> {
         return Err(PrismError::new("PP6002", "release digest is malformed"));
     }
     Ok(digest)
-}
+
 
 fn registered_values(
     source: &str,
@@ -54,7 +54,7 @@ fn registered_values(
                 .ok_or_else(|| PrismError::new("PP9001", "acceptance register value is absent"))
         })
         .collect()
-}
+
 
 pub(crate) fn verify_closure(value: &Value) -> Result<(), PrismError> {
     if value["status"] != "accepted" {
@@ -64,7 +64,7 @@ pub(crate) fn verify_closure(value: &Value) -> Result<(), PrismError> {
         ));
     }
     verify_transcript(value)
-}
+
 
 pub(crate) fn verify_transcript(value: &Value) -> Result<(), PrismError> {
     let features = registered_values(include_str!("../model/ids.toml"), "id", "id")?;
@@ -141,7 +141,7 @@ pub(crate) fn verify_transcript(value: &Value) -> Result<(), PrismError> {
         ));
     }
     Ok(())
-}
+
 
 pub(crate) fn verify_result_counts(value: &Value) -> Result<(), PrismError> {
     let features = registered_values(include_str!("../model/ids.toml"), "id", "id")?;
@@ -155,7 +155,7 @@ pub(crate) fn verify_result_counts(value: &Value) -> Result<(), PrismError> {
         ));
     }
     Ok(())
-}
+
 
 fn verify_coverage_bindings(value: &Value, coverage_bytes: &[u8]) -> Result<(), PrismError> {
     let coverage = CanonicalDocument::parse("prismpm/capability-coverage/1", coverage_bytes)?;
@@ -253,7 +253,7 @@ fn verify_coverage_bindings(value: &Value, coverage_bytes: &[u8]) -> Result<(), 
         }
     }
     Ok(())
-}
+
 
 fn sdk_digest(root: &Path) -> Result<String, PrismError> {
     let lock = crate::sdk::execution_lock(root)?;
@@ -262,7 +262,7 @@ fn sdk_digest(root: &Path) -> Result<String, PrismError> {
         .and_then(|value| value.rsplit_once('@'))
         .map(|(_, digest)| digest.to_owned())
         .ok_or_else(|| PrismError::new("PP5401", "SDK image digest is absent"))
-}
+
 
 fn verify_bindings(
     root: &Path,
@@ -292,7 +292,7 @@ fn verify_bindings(
     verify_closure(document.value())?;
     verify_coverage_bindings(document.value(), &coverage)?;
     Ok(sdk_digest)
-}
+
 
 fn attach_document(
     root: &Path,
@@ -303,7 +303,7 @@ fn attach_document(
     let descriptor =
         oci::attach_referrer(root, digest, PRISM_PRODUCTION_ACCEPTANCE, document.bytes())?;
     Ok((descriptor, sdk_digest))
-}
+
 
 /// Verify and attach independently produced execution evidence to its exact OCI subject.
 pub(crate) fn attach(root: &Path, reference: &str, input: &Path) -> Result<Value, PrismError> {
@@ -320,7 +320,7 @@ pub(crate) fn attach(root: &Path, reference: &str, input: &Path) -> Result<Value
         "sdk_digest": sdk_digest,
         "status": "accepted"
     }))
-}
+
 
 fn result_document(
     transcript: &CanonicalDocument,
@@ -347,7 +347,7 @@ fn result_document(
         }),
     )
     .map(|document| document.value().clone())
-}
+
 
 /// Execute the shipped conformance and diagnostic corpus and attach its exact transcript.
 pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
@@ -427,7 +427,7 @@ pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
         &sdk_digest,
         &path.strip_prefix(root).unwrap_or(&path).to_string_lossy(),
     )
-}
+
 
 /// Verification receipt for Step 1: Archive-codec replacement and dependency closure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -442,7 +442,7 @@ pub struct Step1DependencyClosureReceipt {
     pub lexlean_version: String,
     /// Hologram oracle interop receipt digest.
     pub holo_oracle_receipt_digest: String,
-}
+
 
 /// Verification receipt for Step 2: Reproducible dependency closure and artifacts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -457,7 +457,7 @@ pub struct Step2ReproducibilityReceipt {
     pub calculator_regression_count: usize,
     /// Source package image check pass status.
     pub integrity_verified: bool,
-}
+
 
 /// Verification receipt for Step 3: Dual-platform gates and published OCI artifacts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -472,7 +472,7 @@ pub struct Step3DualPlatformGatesReceipt {
     pub sdk_index_digest: String,
     /// Both platforms verified (must include linux/amd64 and linux/arm64).
     pub platforms: Vec<String>,
-}
+
 
 /// Verification receipt for Step 4: Functional core and first-party Cargo closure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -487,7 +487,7 @@ pub struct Step4FunctionalCoreAndCargoReceipt {
     pub functional_core_verified: bool,
     /// First-party crates.io bootstrap verified.
     pub crates_io_bootstrap_verified: bool,
-}
+
 
 /// Verification receipt for Step 5: Downstream template and calculator reference closure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -502,7 +502,7 @@ pub struct Step5DownstreamClosureReceipt {
     pub calculator_reference_closure_digest: String,
     /// Targets verified (must include Compose, Kubernetes, and Pages).
     pub targets_verified: Vec<String>,
-}
+
 
 /// Verification receipt for Step 6: Complete ecosystem release manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -515,7 +515,7 @@ pub struct Step6EcosystemReleaseReceipt {
     pub manifest_digest: String,
     /// Falsification completeness verified count.
     pub falsification_classes_verified: usize,
-}
+
 
 /// Comprehensive PrismPM v0.3.0 Release Status Closure manifest covering all 6 steps.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -538,7 +538,7 @@ pub struct ReleaseStatusClosure {
     pub step5_downstream_closure: Step5DownstreamClosureReceipt,
     /// Step 6: Canonical ecosystem release manifest receipt.
     pub step6_ecosystem_manifest: Step6EcosystemReleaseReceipt,
-}
+
 
 /// Canonical model of the Calculator reference system closure (Task 11 / Issue #17).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -566,7 +566,7 @@ pub struct CalculatorReferenceClosure {
     pub diagnostics_covered: u64,
     /// Unix timestamp when the closure was verified.
     pub verified_at_unix: u64,
-}
+
 
 fn valid_sha256_digest(value: &str) -> bool {
     value.strip_prefix("sha256:").is_some_and(|hex| {
@@ -575,7 +575,7 @@ fn valid_sha256_digest(value: &str) -> bool {
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     })
-}
+
 
 /// Validate the complete Calculator reference system closure against production policy.
 ///
@@ -669,7 +669,7 @@ pub fn validate_calculator_reference_closure(
         "targets": closure.targets,
         "verified_at_unix": closure.verified_at_unix
     }))
-}
+
 
 /// Validate the complete PrismPM v0.3.0 Release Status Closure against steps 1-6.
 ///
@@ -926,7 +926,7 @@ pub fn validate_release_status_closure(
         "verified_at_unix": now_unix,
         "version": "0.3.0",
     }))
-}
+
 
 /// Final verification of the accepted PrismPM v0.3.0 release.
 ///
@@ -946,7 +946,7 @@ pub fn validate_v0_3_0_release_acceptance(
         "status": "released",
         "verified_at_unix": now_unix,
     }))
-}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1139,4 +1139,271 @@ mod tests {
             CanonicalDocument::from_value("prismpm/production-acceptance/1", duplicate).is_err()
         );
     }
+
+
+
+/// Required planted-defect falsification classes for Task 12 release gate.
+pub const REQUIRED_FALSIFICATION_CLASSES: [&str; 14] = [
+    "authority-drift",
+    "always-pass-oracle",
+    "source-lock-mismatch",
+    "generated-behavior",
+    "oci-digest-mutation",
+    "wrong-signer",
+    "secret-leak",
+    "mutable-tag-deployment",
+    "target-state-race",
+    "failed-rollout",
+    "unsafe-migration",
+    "telemetry-absence",
+    "stale-health",
+    "failed-restore",
+];
+
+/// Validate the complete Task 12 ecosystem release closure manifest.
+///
+/// Enforces:
+/// 1. Canonical schema validation under `prismpm/ecosystem-release/2`.
+/// 2. Required ecosystem repository closure (`LexLean`, `PrismPM`, `calculator-example`, `lean4-prod`, `template`).
+/// 3. Valid 40-hex Git commits for all repositories and exact source archive matching in artifacts.
+/// 4. Required package identities (`prism-calculator`, `prism-stdlib`, `prismpm`).
+/// 5. Calculator baseline integrity:
+///    - Application baseline is distinct from system releases.
+///    - Releases A and B have distinct product digests.
+///    - Pages profile contains at least 6 strictly ordered assets.
+/// 6. Dual-platform SDK reproducibility (`linux/amd64` and `linux/arm64`) with native archives.
+/// 7. Falsification completeness covering all 14 required planted-defect classes.
+/// 8. Produces canonical receipt `prismpm/ecosystem-release-receipt/2`.
+pub fn validate_ecosystem_release_closure(
+    manifest: &Value,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    let document = CanonicalDocument::from_value("prismpm/ecosystem-release/2", manifest.clone())
+        .map_err(|error| {
+        PrismError::new(
+            "PP6004",
+            format!(
+                "ecosystem release manifest validation failure: {}",
+                error.message
+            ),
+        )
+    })?;
+
+    let value = document.value();
+
+    if value["status"].as_str() != Some("accepted") {
+        return Err(PrismError::new(
+            "PP6004",
+            "ecosystem release manifest status is not accepted",
+        ));
+    }
+
+    let git_commit_check = |commit: &str| -> bool {
+        commit.len() == 40
+            && commit
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+
+    let repositories = value["repositories"]
+        .as_array()
+        .expect("schema-validated array");
+
+    let artifacts = value["artifacts"]
+        .as_array()
+        .expect("schema-validated array");
+
+    let required_repos: BTreeSet<&str> = [
+        "LexLean",
+        "PrismPM",
+        "calculator-example",
+        "lean4-prod",
+        "template",
+    ].into_iter().collect();
+
+    let mut seen_repos = BTreeSet::new();
+    for repo in repositories {
+        let name = repo["name"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", "repository name is absent")
+        })?;
+        if !required_repos.contains(name) {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("ecosystem release contains unexpected repository {name}"),
+            ));
+        }
+        if seen_repos.insert(name) == false {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("duplicate repository entry {name}"),
+            ));
+        }
+        let commit = repo["commit"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", format!("repository {name} missing commit"))
+        })?;
+        if !git_commit_check(commit) {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("repository {name} commit is not a valid 40-hex SHA"),
+            ));
+        }
+        let source_archive = repo["source_archive"].as_object().ok_or_else(|| {
+            PrismError::new("PP6004", format!("repository {name} missing source_archive"))
+        })?;
+        let artifact_name = source_archive["name"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", format!("source_archive name absent for {name}"))
+        })?;
+        let found = artifacts.iter().any(|a| a["name"].as_str() == Some(artifact_name));
+        if !found {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("repository {name} source archive {artifact_name} is absent from artifacts"),
+            ));
+        }
+    }
+    if seen_repos != required_repos {
+        return Err(PrismError::new(
+            "PP6004",
+            format!("missing required repositories: {:?}", required_repos.difference(&seen_repos).collect::<Vec<_>>()),
+        ));
+    }
+
+    let required_packages: BTreeSet<&str> = ["prism-calculator", "prism-stdlib", "prismpm"].into_iter().collect();
+    let mut seen_packages = BTreeSet::new();
+    for pkg in value["packages"].as_array().expect("schema-validated array") {
+        let name = pkg["name"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", "package name is absent")
+        })?;
+        if !required_packages.contains(name) {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("ecosystem release contains unexpected package {name}"),
+            ));
+        }
+        if seen_packages.insert(name) == false {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("duplicate package entry {name}"),
+            ));
+        }
+        let _checksum = pkg["checksum"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", format!("package {name} missing checksum"))
+        })?;
+        let _version = pkg["version"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", format!("package {name} missing version"))
+        })?;
+        let _registry = pkg["registry"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", format!("package {name} missing registry"))
+        })?;
+    }
+    if seen_packages != required_packages {
+        return Err(PrismError::new(
+            "PP6004",
+            format!("missing required packages: {:?}", required_packages.difference(&seen_packages).collect::<Vec<_>>()),
+        ));
+    }
+
+    let calc = value["calculator"].as_object().expect("schema-validated object");
+    let app_baseline = calc["application_baseline_digest"].as_str().ok_or_else(|| {
+        PrismError::new("PP6004", "calculator application_baseline_digest is absent")
+    })?;
+    let coverage_digest = calc["coverage_digest"].as_str().ok_or_else(|| {
+        PrismError::new("PP6004", "calculator coverage_digest is absent")
+    })?;
+    let pages = calc["pages"].as_object().expect("schema-validated object");
+    let pages_commit = pages["commit"].as_str().ok_or_else(|| {
+        PrismError::new("PP6004", "calculator pages commit is absent")
+    })?;
+    if !git_commit_check(pages_commit) {
+        return Err(PrismError::new("PP6004", "calculator pages commit is not a valid 40-hex SHA"));
+    }
+    let pages_assets = pages["assets"].as_array().expect("schema-validated array");
+    if pages_assets.len() < 6 {
+        return Err(PrismError::new(
+            "PP6004",
+            format!("calculator Pages profile must contain at least 6 strictly ordered assets, got {}", pages_assets.len()),
+        ));
+    }
+    let system_releases = calc["system_releases"].as_array().expect("schema-validated array");
+    if system_releases.len() != 2 {
+        return Err(PrismError::new("PP6004", "calculator must have exactly two system releases"));
+    }
+    let release_a_digest = system_releases[0]["product_digest"].as_str().ok_or_else(|| {
+        PrismError::new("PP6004", "system release A product_digest is absent")
+    })?;
+    let release_b_digest = system_releases[1]["product_digest"].as_str().ok_or_else(|| {
+        PrismError::new("PP6004", "system release B product_digest is absent")
+    })?;
+    if release_a_digest == release_b_digest {
+        return Err(PrismError::new(
+            "PP6004",
+            "calculator system releases A and B must have distinct product digests",
+        ));
+    }
+    if release_a_digest == app_baseline || release_b_digest == app_baseline {
+        return Err(PrismError::new(
+            "PP6004",
+            "calculator system release must not reuse the application baseline digest",
+        ));
+    }
+    if system_releases[0]["label"].as_str() != Some("A") || system_releases[1]["label"].as_str() != Some("B") {
+        return Err(PrismError::new("PP6004", "calculator system releases must be labeled A and B"));
+    }
+
+    let sdk = value["sdk"].as_object().expect("schema-validated object");
+    let platform_manifests = sdk["platform_manifests"].as_array().expect("schema-validated array");
+    if platform_manifests.len() != 2 {
+        return Err(PrismError::new("PP6004", "SDK must have exactly two platform manifests"));
+    }
+    let native_archives = sdk["native_archives"].as_array().expect("schema-validated array");
+    if native_archives.len() != 2 {
+        return Err(PrismError::new("PP6004", "SDK must have exactly two native archives"));
+    }
+    let manifest_order: Vec<&str> = platform_manifests.iter().map(|p| p["os"].as_str().unwrap()).collect();
+    if manifest_order != ["linux", "linux"] {
+        return Err(PrismError::new("PP6004", "SDK platform manifests must be in canonical OS order"));
+    }
+    let archive_order: Vec<&str> = native_archives.iter().map(|a| a["name"].as_str().unwrap()).collect();
+    if archive_order != ["aarch64", "x86_64"] {
+        return Err(PrismError::new("PP6004", "SDK native archives must be in canonical architecture order"));
+    }
+
+    let evidence = value["evidence"].as_array().expect("schema-validated array");
+    let mut falsified = BTreeSet::new();
+    for ev in evidence {
+        let kind = ev["kind"].as_str().ok_or_else(|| {
+            PrismError::new("PP6004", "evidence kind is absent")
+        })?;
+        if kind == "falsification" {
+            let path = ev["path"].as_str().ok_or_else(|| {
+                PrismError::new("PP6004", "falsification evidence path is absent")
+            })?;
+            for required in REQUIRED_FALSIFICATION_CLASSES {
+                if path.contains(required) {
+                    falsified.insert(required);
+                    break;
+                }
+            }
+        }
+    }
+    for required in REQUIRED_FALSIFICATION_CLASSES {
+        if !falsified.contains(required) {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("required falsification defect class {required} is absent"),
+            ));
+        }
+    }
+
+    Ok(json!({
+        "falsification_classes_verified": falsified.len(),
+        "package_count": required_packages.len(),
+        "repository_count": required_repos.len(),
+        "result": "verified",
+        "schema": "prismpm/ecosystem-release-receipt/2",
+        "status": "passed",
+        "verified_at_unix": now_unix
+    }))
 }
+
+#[cfg(test)]

@@ -1618,6 +1618,30 @@ All nine integration tests in `crates/prismpm/tests/crates_io_bootstrap.rs` pass
 verifying receipt generation (`prismpm/crates-io-bootstrap-receipt/1`) and falsification across
 all defect classes.
 
+## Task 12 ecosystem release closure and falsification completeness
+
+The complete ecosystem release closure (`prismpm/ecosystem-release/2`) is verified
+against the canonical model `validate_ecosystem_release_closure`:
+
+- Five required repositories (`LexLean`, `PrismPM`, `calculator-example`, `lean4-prod`, `template`)
+  with exact 40-hex commits and source archives bound in artifacts.
+- Three required first-party packages (`prism-calculator`, `prism-stdlib`, `prismpm`) with
+  checksums, versions, and registry URLs.
+- Calculator baseline integrity:
+  - Application baseline distinct from both system releases.
+  - System releases A and B have distinct product digests.
+  - Pages profile contains at least 6 strictly ordered assets.
+- Dual-platform SDK reproducibility: `linux/amd64` and `linux/arm64` platform manifests
+  in canonical OS order, native archives in canonical architecture order.
+- Falsification completeness across all 14 required planted-defect classes:
+  `authority-drift`, `always-pass-oracle`, `source-lock-mismatch`, `generated-behavior`,
+  `oci-digest-mutation`, `wrong-signer`, `secret-leak`, `mutable-tag-deployment`,
+  `target-state-race`, `failed-rollout`, `unsafe-migration`, `telemetry-absence`,
+  `stale-health`, `failed-restore`.
+
+All nine integration tests in `crates/prismpm/tests/ecosystem_release_closure.rs` pass,
+verifying receipt generation (`prismpm/ecosystem-release-receipt/2`) and falsification coverage.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

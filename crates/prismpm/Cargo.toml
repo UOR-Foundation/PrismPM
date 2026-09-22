@@ -62,6 +62,7 @@ include = [
     "tests/calculator_reference_closure.rs",
     "tests/lean4_prod_dependency.rs",
     "tests/crates_io_bootstrap.rs",
+    "tests/ecosystem_release_closure.rs",
     "tests/data/holo-codec-v1.json",
     "vendor/hologram-live.tar",
     "vendor/lean4-prod/lean.tar",
