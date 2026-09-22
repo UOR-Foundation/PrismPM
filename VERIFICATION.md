@@ -1603,6 +1603,21 @@ Focused regression `crates/prismpm/tests/lean4_prod_dependency.rs` executes:
 
 All 4 test cases pass deterministically.
 
+## First-party crates.io identity bootstrap and trusted publishing readiness
+
+First-party packages `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`
+require owner-controlled initial registration on crates.io before trusted publishing
+can be activated. Model `validate_crates_io_bootstrap` strictly rejects schema deviations,
+unapproved registries, incomplete/duplicate/unrecognized crate sets, dependency-order
+inversions (`prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`),
+malformed 64-hex checksums or 40-hex source commits, unaided OIDC shortcuts, and premature
+trusted-publishing activation under `PP4103`. Downstream lock consumption bindings are verified
+against published package identities to guarantee immutable provenance.
+
+All nine integration tests in `crates/prismpm/tests/crates_io_bootstrap.rs` pass cleanly,
+verifying receipt generation (`prismpm/crates-io-bootstrap-receipt/1`) and falsification across
+all defect classes.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

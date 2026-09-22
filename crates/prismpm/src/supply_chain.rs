@@ -3450,6 +3450,229 @@ pub fn validate_sdk_security_disposition(
     }))
 }
 
+/// Required first-party crate names in policy-compliant dependency order.
+pub const REQUIRED_FIRST_PARTY_CRATES: [&str; 5] = [
+    "prod-ir",
+    "prod-codegen",
+    "lexlean",
+    "prism-stdlib",
+    "prismpm",
+];
+
+/// Record of one first-party package initial upload to crates.io.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CratesIoPackageUpload {
+    /// The crate name.
+    pub name: String,
+    /// Semantic version string.
+    pub version: String,
+    /// 64-hex SHA-256 package checksum.
+    pub checksum: String,
+    /// SHA-256 digest of the crate archive bytes.
+    pub crate_bytes_digest: String,
+    /// Git commit SHA of the accepted source release.
+    pub source_commit: String,
+    /// Method used for the upload (must be owner-controlled, not unaided OIDC).
+    pub upload_method: String,
+    /// Registry owner credential identity performing the upload.
+    pub uploader: String,
+    /// Unix timestamp when the package was published.
+    pub published_at_unix: u64,
+}
+
+/// Trusted publishing readiness configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustedPublishingConfig {
+    /// Whether trusted publishing is enabled.
+    pub enabled: bool,
+    /// Identity provider (e.g., "github-actions").
+    pub provider: String,
+    /// Repository allowed to publish (e.g., "UOR-Foundation/PrismPM").
+    pub repository: String,
+    /// Pinned workflow file allowed to publish (e.g., "release.yml").
+    pub workflow: String,
+    /// Whether trusted publishing was configured strictly after owner bootstrap verification.
+    pub configured_after_bootstrap: bool,
+}
+
+/// Binding of downstream lock consumption to published package identities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DownstreamLockBinding {
+    /// Relative or absolute path to the consumer's lockfile.
+    pub lock_path: String,
+    /// Published package name expected in the lockfile.
+    pub package_name: String,
+    /// Published package version expected in the lockfile.
+    pub version: String,
+    /// 64-hex package checksum expected in the lockfile.
+    pub checksum: String,
+}
+
+/// Complete first-party crates.io bootstrap identity and trusted publishing readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CratesIoBootstrap {
+    /// Closed schema identifier (`prismpm/crates-io-bootstrap/1`).
+    pub schema: String,
+    /// Registry base URL (must be crates.io).
+    pub registry: String,
+    /// First-party package uploads in dependency order.
+    pub packages: Vec<CratesIoPackageUpload>,
+    /// Trusted publishing readiness configuration.
+    pub trusted_publishing: TrustedPublishingConfig,
+    /// Downstream lock consumption bindings.
+    pub downstream_locks: Vec<DownstreamLockBinding>,
+}
+
+/// Validate the complete first-party crates.io bootstrap identity and trusted publishing readiness.
+///
+/// Enforces:
+/// - Exact schema `prismpm/crates-io-bootstrap/1`.
+/// - Registry must be `https://crates.io`.
+/// - Exactly the five required first-party crates in dependency order:
+///   `prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`.
+/// - Each package has valid 64-hex checksum, 64-hex crate bytes digest,
+///   and 40-hex source commit.
+/// - Owner-controlled upload method (no unaided OIDC shortcuts).
+/// - Trusted publishing configured strictly after owner bootstrap verification.
+/// - Downstream lock bindings match published package identities.
+/// - No future publication timestamps relative to `now_unix`.
+pub fn validate_crates_io_bootstrap(
+    bootstrap: &CratesIoBootstrap,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    if bootstrap.schema != "prismpm/crates-io-bootstrap/1" {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap schema differs or is unsupported",
+        ));
+    }
+    if bootstrap.registry != "https://crates.io" {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap registry must be https://crates.io",
+        ));
+    }
+    if bootstrap.packages.len() != REQUIRED_FIRST_PARTY_CRATES.len() {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap must contain exactly five required first-party packages",
+        ));
+    }
+    let mut seen = BTreeSet::new();
+    for (idx, package) in bootstrap.packages.iter().enumerate() {
+        if package.name != REQUIRED_FIRST_PARTY_CRATES[idx] {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "crates.io bootstrap package {} must be {} (dependency order: prod-ir -> prod-codegen -> lexlean -> prism-stdlib -> prismpm)",
+                    idx, REQUIRED_FIRST_PARTY_CRATES[idx]
+                ),
+            ));
+        }
+        if seen.insert(package.name.as_str()) == false {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap contains duplicate package names",
+            ));
+        }
+        if bare_digest_hex(&package.checksum).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap package checksum is not a valid 64-hex SHA-256 digest",
+            ));
+        }
+        if bare_digest_hex(&package.crate_bytes_digest).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap crate bytes digest is not a valid 64-hex SHA-256 digest",
+            ));
+        }
+        if git_commit_hex(&package.source_commit).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap source commit is not a valid 40-hex git commit SHA",
+            ));
+        }
+        if package.upload_method == "unaided-oidc" {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap unaided OIDC bootstrap shortcut prohibited",
+            ));
+        }
+        if package.uploader.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap uploader identity is required",
+            ));
+        }
+        if package.published_at_unix > now_unix {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap publication timestamp is in the future",
+            ));
+        }
+    }
+    if bootstrap.trusted_publishing.enabled {
+        if !bootstrap.trusted_publishing.configured_after_bootstrap {
+            return Err(PrismError::new(
+                "PP4103",
+                "trusted publishing configured before owner bootstrap validation",
+            ));
+        }
+        if bootstrap.trusted_publishing.repository.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP4103",
+                "trusted publishing repository is required",
+            ));
+        }
+    }
+    if bootstrap.downstream_locks.is_empty() {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap must verify at least one downstream lock binding",
+        ));
+    }
+    let mut known_packages = BTreeMap::new();
+    for package in &bootstrap.packages {
+        known_packages.insert(package.name.clone(), (package.version.clone(), package.checksum.clone()));
+    }
+    for lock in &bootstrap.downstream_locks {
+        let Some((expected_version, expected_checksum)) = known_packages.get(&lock.package_name) else {
+            return Err(PrismError::new(
+                "PP4103",
+                format!("downstream lock references unknown package {}", lock.package_name),
+            ));
+        };
+        if lock.version != *expected_version {
+            return Err(PrismError::new(
+                "PP4103",
+                format!("downstream lock version mismatch for {}: expected {}, got {}", lock.package_name, expected_version, lock.version),
+            ));
+        }
+        if lock.checksum != *expected_checksum {
+            return Err(PrismError::new(
+                "PP4103",
+                format!("downstream lock checksum mismatch for {}: expected {}, got {}", lock.package_name, expected_checksum, lock.checksum),
+            ));
+        }
+    }
+
+    Ok(json!({
+        "downstream_locks_verified": bootstrap.downstream_locks.len(),
+        "package_count": bootstrap.packages.len(),
+        "registry": bootstrap.registry,
+        "result": "verified",
+        "schema": "prismpm/crates-io-bootstrap-receipt/1",
+        "status": "passed",
+        "trusted_publishing_ready": bootstrap.trusted_publishing.enabled,
+        "verified_at_unix": now_unix
+    }))
+}
+
 fn component_element(component: &InventoryComponent) -> Value {
     json!({
         "creationInfo":creation_info(),
