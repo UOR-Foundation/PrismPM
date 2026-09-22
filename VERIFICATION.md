@@ -1426,6 +1426,29 @@ evidence, not full SDK acceptance; 77 other generic probes remain recorded.
 - Restored loader: `target/configuration-loader-restored.log`, SHA-256 `ebc296ac6a2cae9338096affd43a2e17358aae6708c44261e82fc87cdd7a9e9b`.
 - Actual CLI codes/bytes/exit classes: `target/configuration-cli-restored.log`, SHA-256 `ea17fc59fad45ba87da4d93c919b2ddc914625dc05b3d91906df7794816a2968`.
 
+## Reproducible multi-platform SDK packaging (Task 5, DK-01..DK-06)
+
+Task 5 reproducible SDK packaging has been verified across native and container
+environments:
+
+1. Canonical inventory: `schemas/sdk-lock-v2.schema.json` and `schemas/sdk-lock-update-v2.schema.json`
+   enforce strict multi-platform OCI index and inventory document bounds. `validate_running_inventory`
+   verifies command executable digests and rejects PATH injection, unlisted commands,
+   and architecture mismatches.
+2. Multi-platform index: `linux/amd64` and `linux/arm64` platform descriptors are
+   independently validated, rejecting swapped manifest digests, missing architectures,
+   or non-canonical index formatting.
+3. Lock-update proposal workflow: `prismpm/sdk-lock-update/2` requires explicit
+   `compatibility_review`, `generated_output_diff`, and `security_review` markers,
+   rejecting unilateral premature approval.
+4. Explicit fetch and offline isolation: `fetch` requires `--locked`, rejecting
+   unlocked invocations with PP1101. Installed standard library inputs are verified
+   on access, detecting and rejecting tampering with PP5401.
+5. Bootstrap verification: `scripts/bootstrap-verify.sh` executes the two-generation
+   bootstrap protocol using prior binary `prismpm-0.2.0-x86_64-unknown-linux-gnu.tar.gz`
+   (SHA-256 `f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c`)
+   and verifies `prismpm/bootstrap-evidence/2` attestation.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
