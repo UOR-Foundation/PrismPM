@@ -3,6 +3,10 @@
 use crate::contracts::CanonicalDocument;
 use crate::error::PrismError;
 use crate::holo::canonical::encode_value;
+pub use crate::supply_chain::{
+    validate_sdk_security_disposition, GraphBinding, LauncherBinding, LockBinding,
+    PlatformInventoryBinding, RuntimeBinding, SdkAdvisoryPolicy, SdkSecurityDisposition,
+};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};

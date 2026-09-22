@@ -1548,6 +1548,21 @@ asserts full coverage of Task 10 requirements:
 - Reviewable non-mutating update patch flow (`template::update`): generates unified diff patches targeting `template.lock` without altering project files; rejects unpinned or floating SDK images or revisions with `PP1101`.
 - Strict policy tree SHA-256 validation ensuring policy documents cannot drift silently.
 
+## SDK security and advisory disposition (Issue #15)
+
+Full SDK security and advisory disposition (`prismpm/sdk-security-disposition/1`) is verified
+against shipped SDK release identities and locked advisory databases under production release policy:
+
+- **Source Locks**: Immutable source locks `standards.lock` and `prismpm.lock` are bound by exact `sha256:` digest.
+- **Installed Dependency Graph**: Installed dependency lockfile (`package-lock.json`) and canonical installed tree digest are bound.
+- **Runtime Bytes**: Compatible runtime parser `@asyncapi/parser/3.6.0`, owned runtime lock (`5bd20ce206d3b3b76a7034951c9e19e15291c54eec0a1424139b465c980f1205`), and runtime tree digest are bound.
+- **Launcher**: Fixed launcher script `/usr/local/bin/asyncapi-official` identity and digest are bound.
+- **Platform Inventories**: Both shipped architectures (`linux/amd64` and `linux/arm64`) are bound to their respective SDK image digests and inventory receipts.
+- **Freshness Policy**: Enforces 7-day maximum age (604,800s), verifies database expiration time, rejects future-dated or stale scans, and verifies zero rejected findings (`PP7801`).
+- **Anti-Substitution**: Component-only advisory scan evidence is strictly rejected when full shipped SDK disposition is required.
+
+Verification suite: `cargo test --test sdk_security_advisory_disposition` (6/6 tests pass).
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
@@ -1566,4 +1581,3 @@ The complete v0.3.0 acceptance closure verifies all six release acceptance steps
 4. **Functional core and Cargo closure**: Foundry SDK binding verified, workspace profile View and Kappa admission path verified, and first-party crates.io bootstrap receipt (`prismpm/crates-io-bootstrap-receipt/1`) established for `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`.
 5. **Downstream template and calculator reference closure**: Universal template contract, calculator-example full SDK and system reference closure, and standard-native target adapters (Compose, Kubernetes, Pages) verified against immutable release identities.
 6. **Ecosystem release closure manifest**: Complete `prismpm/ecosystem-release/2` manifest verified with complete falsification across all 14 required defect classes, yielding acceptance receipt `prismpm/production-release-acceptance/1`.
-
