@@ -64,6 +64,7 @@ pub(crate) fn verify_closure(value: &Value) -> Result<(), PrismError> {
         ));
     }
     verify_transcript(value)
+}
 
 
 pub(crate) fn verify_transcript(value: &Value) -> Result<(), PrismError> {
@@ -155,6 +156,7 @@ pub(crate) fn verify_result_counts(value: &Value) -> Result<(), PrismError> {
         ));
     }
     Ok(())
+}
 
 
 fn verify_coverage_bindings(value: &Value, coverage_bytes: &[u8]) -> Result<(), PrismError> {
@@ -253,6 +255,7 @@ fn verify_coverage_bindings(value: &Value, coverage_bytes: &[u8]) -> Result<(), 
         }
     }
     Ok(())
+}
 
 
 fn sdk_digest(root: &Path) -> Result<String, PrismError> {
@@ -262,6 +265,7 @@ fn sdk_digest(root: &Path) -> Result<String, PrismError> {
         .and_then(|value| value.rsplit_once('@'))
         .map(|(_, digest)| digest.to_owned())
         .ok_or_else(|| PrismError::new("PP5401", "SDK image digest is absent"))
+}
 
 
 fn verify_bindings(
@@ -292,6 +296,7 @@ fn verify_bindings(
     verify_closure(document.value())?;
     verify_coverage_bindings(document.value(), &coverage)?;
     Ok(sdk_digest)
+}
 
 
 fn attach_document(
@@ -303,6 +308,7 @@ fn attach_document(
     let descriptor =
         oci::attach_referrer(root, digest, PRISM_PRODUCTION_ACCEPTANCE, document.bytes())?;
     Ok((descriptor, sdk_digest))
+}
 
 
 /// Verify and attach independently produced execution evidence to its exact OCI subject.
@@ -320,6 +326,7 @@ pub(crate) fn attach(root: &Path, reference: &str, input: &Path) -> Result<Value
         "sdk_digest": sdk_digest,
         "status": "accepted"
     }))
+}
 
 
 fn result_document(
@@ -347,6 +354,7 @@ fn result_document(
         }),
     )
     .map(|document| document.value().clone())
+}
 
 
 /// Execute the shipped conformance and diagnostic corpus and attach its exact transcript.
@@ -427,6 +435,7 @@ pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
         &sdk_digest,
         &path.strip_prefix(root).unwrap_or(&path).to_string_lossy(),
     )
+}
 
 
 /// Verification receipt for Step 1: Archive-codec replacement and dependency closure.
@@ -443,6 +452,8 @@ pub struct Step1DependencyClosureReceipt {
     /// Hologram oracle interop receipt digest.
     pub holo_oracle_receipt_digest: String,
 
+}
+}
 
 /// Verification receipt for Step 2: Reproducible dependency closure and artifacts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -456,6 +467,7 @@ pub struct Step2ReproducibilityReceipt {
     /// Calculator regression pass count.
     pub calculator_regression_count: usize,
     /// Source package image check pass status.
+}
     pub integrity_verified: bool,
 
 
@@ -470,6 +482,7 @@ pub struct Step3DualPlatformGatesReceipt {
     pub twice_without_cleanup: bool,
     /// Shipped SDK index digest.
     pub sdk_index_digest: String,
+}
     /// Both platforms verified (must include linux/amd64 and linux/arm64).
     pub platforms: Vec<String>,
 
@@ -484,6 +497,7 @@ pub struct Step4FunctionalCoreAndCargoReceipt {
     /// Foundry SDK binding verified.
     pub foundry_bound: bool,
     /// Workspace View and Kappa admission verified.
+}
     pub functional_core_verified: bool,
     /// First-party crates.io bootstrap verified.
     pub crates_io_bootstrap_verified: bool,
@@ -498,6 +512,7 @@ pub struct Step5DownstreamClosureReceipt {
     pub status: String,
     /// Template contract digest.
     pub template_contract_digest: String,
+}
     /// Calculator reference closure digest.
     pub calculator_reference_closure_digest: String,
     /// Targets verified (must include Compose, Kubernetes, and Pages).
@@ -512,6 +527,7 @@ pub struct Step6EcosystemReleaseReceipt {
     /// Status.
     pub status: String,
     /// Ecosystem release manifest digest.
+}
     pub manifest_digest: String,
     /// Falsification completeness verified count.
     pub falsification_classes_verified: usize,
@@ -526,6 +542,7 @@ pub struct ReleaseStatusClosure {
     pub version: String,
     /// Release status (must be "accepted").
     pub status: String,
+}
     /// Step 1: Archive-codec and dependency closure receipt.
     pub step1_dependency_closure: Step1DependencyClosureReceipt,
     /// Step 2: Reproducibility and artifact integrity receipt.
@@ -926,6 +943,7 @@ pub fn validate_release_status_closure(
         "verified_at_unix": now_unix,
         "version": "0.3.0",
     }))
+}
 
 
 /// Final verification of the accepted PrismPM v0.3.0 release.
@@ -946,6 +964,7 @@ pub fn validate_v0_3_0_release_acceptance(
         "status": "released",
         "verified_at_unix": now_unix,
     }))
+}
 
 #[cfg(test)]
 mod tests {
@@ -1405,5 +1424,3 @@ pub fn validate_ecosystem_release_closure(
         "verified_at_unix": now_unix
     }))
 }
-
-#[cfg(test)]
