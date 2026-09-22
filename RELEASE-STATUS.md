@@ -126,6 +126,16 @@ All 15 generic compiler contributions follow established fork-PR flows to `auser
 Strict isolation is preserved: no Prism application or target semantics are proposed as generic compiler functionality. All contributions are strictly generic compiler/intermediate-representation/codegen invariants.
 Any unmerged, unlinked, or unsupported upstream dependency changes block the final `prismpm/ecosystem-release/2` release claim.
 
+## Workspace functional core and browser prerequisites (Task 13 / Issue #22)
+
+The signed-envelope and authenticated browser-journal prerequisite gates pass,
+including offline browser crypto/storage checks and complete bounded replay.
+The generated workspace application profile, its View, and the Kappa
+replication/read-admission path are implemented, independently verified, and
+bound to release gates (DK-07 through DK-16). The Foundry portal integration
+remains required for the authorized functional-core release; component tests do not
+replace live faculty/participant journey acceptance.
+
 ## OCI product-release graph and registry lifecycle
 
 The OCI product-release graph and registry lifecycle (Task 6, OC-01..OC-07) is
