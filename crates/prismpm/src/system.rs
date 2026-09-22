@@ -2842,6 +2842,19 @@ pub fn projections(
     Ok(projections)
 }
 
+/// Generate the canonical Compose target projection from the system model.
+pub fn compose_projection(system: &Value) -> Result<Value, PrismError> {
+    compose(system)
+}
+
+/// Generate the canonical Kubernetes target projection from the system model.
+pub fn kubernetes_projection(
+    system: &Value,
+    build_artifacts: &[(String, Vec<u8>)],
+) -> Result<Value, PrismError> {
+    kubernetes(system, build_artifacts)
+}
+
 #[cfg(test)]
 mod certificate_tests;
 

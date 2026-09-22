@@ -1495,6 +1495,20 @@ Lifecycle rules verified:
 - Exit code mapping strictly reflects error classes (PP100x/PP1101 -> 2, PP210x -> 3, PP540x -> 4, PP6101/PP6301 -> 5, PP6201 -> 6, PP6401/PP7801 -> 7, PP7001 -> 8, PP7101/PP7901 -> 9, PP7201 -> 10, PP7301 -> 11, PP7401 -> 12, PP7501/PP7701 -> 13, PP7601 -> 14, PP9001 -> 101).
 - The four-command sequence (`prismpm run`, `prismpm plan`, `prismpm status`, `prismpm clean`) completes cleanly against standard test targets.
 
+## Standard-native target adapters (Task 8 / Issue #10)
+
+The standard-native target adapters verification suite (`tests/standard_native_target_adapters.rs`)
+asserts full coverage of Compose and Kubernetes adapters:
+- Canonical versioned adapter boundaries (`adapters/compose.json`, `adapters/kubernetes.json`) conforming to `prismpm/target-adapter/1`.
+- Projection policies validated:
+  - Compose: `cap_drop: ["ALL"]`, `read_only: true`, `security_opt: ["no-new-privileges:true"]`, `healthcheck`, tmpfs.
+  - Kubernetes: `read_only_root_filesystem: true`, `seccomp_profile: "RuntimeDefault"`, `ingress_controller_profile: "ingress-nginx-kind-v1.15.1"`, storage profile `kind-static-local`, and pinned ingress controller manifest SHA-256 (`INGRESS_NGINX_KIND`).
+- Fail-closed target validation across Compose and Kubernetes (`PP7101` on tampered adapter digest, API version mismatch, undeclared capabilities, absent platform requirements, or missing persistent storage/ingress bindings).
+- Compose projection generation enforcing typed params (`${VAR:?required}` for required parameters without default), secret references via directory mount, and container security options.
+- Kubernetes projection generation producing standard-native resources (Namespace, ServiceAccount, Role, RoleBinding, ConfigMap, Deployment, Service, Ingress, NetworkPolicy) with read-only root filesystems and disabled service account token automount.
+- Two-stage Kubernetes deployment partitioning strictly separating official ingress infrastructure (`app.kubernetes.io/name=ingress-nginx`) from product application resources.
+- State-bound planning, drift detection, rollback refusing non-preceding releases (`PP7601`), and destroy authorization requiring `--authorized` (`PP7701`).
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
