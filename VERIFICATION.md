@@ -1509,6 +1509,18 @@ asserts full coverage of Compose and Kubernetes adapters:
 - Two-stage Kubernetes deployment partitioning strictly separating official ingress infrastructure (`app.kubernetes.io/name=ingress-nginx`) from product application resources.
 - State-bound planning, drift detection, rollback refusing non-preceding releases (`PP7601`), and destroy authorization requiring `--authorized` (`PP7701`).
 
+## Supply chain, operations, and recovery evidence pipeline (Task 9 / Issue #11)
+
+The supply chain, operations, and recovery verification suite (`tests/supply_chain_operations_recovery.rs`)
+asserts full coverage of Task 9 evidence mechanisms:
+- SPDX 3.0.1 graph closure over all OCI release layers, software packages, verified SHA-256 hashes, and describes/contains relationships (`validate_sbom_closure`). Gaps, duplicate IDs, and dangling relationships fail closed with `PP7801`.
+- In-toto v1.0 Statement and SLSA Provenance v1 generation (`provenance_statement`) and strict promotion policy verification (`validate_provenance_policy`). Unsigned development evidence, subject mismatches, or builder/commit discrepancies fail closed with `PP7401`.
+- Sigstore short-lived CI identity bundle verification with strict Fulcio certificate claims (issuer, repository, workflow, ref, environment) and transparency log verification.
+- OSV advisory scan coverage and freshness policy (`validate_advisory_coverage`). Enforces complete scan facts across all required subjects, database digest pinning, age bounds, and zero rejected findings; violations fail closed with `PP7801`.
+- OpenTelemetry signal and runtime observation redaction (`operations::redact`) replacing sensitive fields (`authorization`, `token`, `password`, `secret`) with `"[REDACTED]"`.
+- Production SLO model evidence evaluation (`operations::model_evidence`) binding exact deployed release digest across alerts, SLIs, and SLOs.
+- Disaster recovery lifecycle validation across backup and restore paths, ensuring distinct clean targets and fail-closed validation on malformed targets (`PP7101`), unverified references (`PP6101`), and missing dump files (`PP7601`).
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
