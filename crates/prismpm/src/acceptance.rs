@@ -816,7 +816,6 @@ pub fn validate_v0_3_0_release_acceptance(
         "verified_at_unix": now_unix,
     }))
 }
-
 #[cfg(test)]
 mod tests {
     #[test]
