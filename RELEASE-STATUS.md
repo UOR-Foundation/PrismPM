@@ -89,6 +89,43 @@ and malformed-input subsystem coverage, including emitted-code and execution
 evidence checks, remains required for production SDK acceptance; it is not
 excluded by the current text-profile work.
 
+## Upstream generic compiler dependency tracking (lean4-prod)
+
+PrismPM 0.3.0 depends on generic Lean 4 compiler improvements authored in `afflom/lean4-prod`
+and tracked upstream in `auser/lean4-prod`. The authoritative dependency specification is
+committed in `model/dependencies.toml` at revision `ac84a4de575e2e531ddb6453c86b84a6794fe48b`
+for Lean 4.32.1.
+
+Vendored release artifacts and tree manifests are locked to immutable SHA-256 digests:
+- `vendor/lean4-prod/lean.tar`: `74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5`
+- `vendor/lean4-prod/rust/MANIFEST.sha256`: `3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc`
+- `vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
+- `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`: `5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6`
+- `vendor/lean4-prod/crates/prod-ir-0.1.0.crate`: `9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5`
+
+Because `afflom/lean4-prod` has issues disabled, dependency tracking and closure evidence
+are maintained in PrismPM release tracking documents and anchored to upstream issue IDs.
+All 15 generic compiler contributions follow established fork-PR flows to `auser/lean4-prod`:
+- [Issue 70](https://github.com/auser/lean4-prod/issues/70): Release Dependency Closure: Provide immutable release/provenance identities required by PrismPM 0.3.0 acceptance
+- [PR 38](https://github.com/auser/lean4-prod/pull/38) ([Issue 37](https://github.com/auser/lean4-prod/issues/37)): Adapt fallible Bytes CoreWasm entries (`fix/core-wasm-fallible-bytes`, commit `ac84a4d`)
+- [PR 40](https://github.com/auser/lean4-prod/pull/40) ([Issue 39](https://github.com/auser/lean4-prod/issues/39)): Preserve UTF-8 validity on borrowed slice inputs (`fix/borrowed-utf8-encoding`)
+- [PR 42](https://github.com/auser/lean4-prod/pull/42) ([Issue 41](https://github.com/auser/lean4-prod/issues/41)): Preserve collection ownership through scalar matches (`fix/collection-ownership-and-typed-decimal`)
+- [PR 44](https://github.com/auser/lean4-prod/pull/44) ([Issue 43](https://github.com/auser/lean4-prod/issues/43)): Preserve ownership across SplitExact UInt32 bounds (`fix/split-exact-uint32-bound`)
+- [PR 46](https://github.com/auser/lean4-prod/pull/46) ([Issue 45](https://github.com/auser/lean4-prod/issues/45)): Preserve scalar parameter hygiene in SDK generation (`fix/scalar-sdk-parameter-hygiene`)
+- [PR 48](https://github.com/auser/lean4-prod/pull/48) ([Issue 47](https://github.com/auser/lean4-prod/issues/47)): Normalize raw local identifiers during IR lowering (`fix/raw-local-identifier-hygiene`)
+- [PR 50](https://github.com/auser/lean4-prod/pull/50) ([Issue 51](https://github.com/auser/lean4-prod/issues/51)): Generate verified workspace browser components (`feat/workspace-browser-component`)
+- [PR 52](https://github.com/auser/lean4-prod/pull/52) ([Issue 53](https://github.com/auser/lean4-prod/issues/53)): Constrain Nat operands without narrowing literal contexts (`fix/nat-literal-width-upstream`)
+- [PR 54](https://github.com/auser/lean4-prod/pull/54) ([Issue 55](https://github.com/auser/lean4-prod/issues/55)): Preserve owned record projection across branch boundaries (`backport/owned-projection-pr44`)
+- [PR 59](https://github.com/auser/lean4-prod/pull/59) ([Issue 58](https://github.com/auser/lean4-prod/issues/58)): Lower eligible self-tail recursive functions to loops (`fix/bounded-tail-recursion`)
+- [PR 61](https://github.com/auser/lean4-prod/pull/61) ([Issue 60](https://github.com/auser/lean4-prod/issues/60)): Recognize byte-index specializations for LexLean imports (`fix/specialized-index-lowering`)
+- [PR 64](https://github.com/auser/lean4-prod/pull/64) ([Issue 62](https://github.com/auser/lean4-prod/issues/62)): Preserve Unicode scalar length during string slicing (`fix/string-scalar-length`)
+- [PR 65](https://github.com/auser/lean4-prod/pull/65) ([Issue 63](https://github.com/auser/lean4-prod/issues/63)): Recognize LexLean byte-slice operations during lowering (`fix/specialized-slice-lowering`)
+- [PR 67](https://github.com/auser/lean4-prod/pull/67) ([Issue 66](https://github.com/auser/lean4-prod/issues/66)): Decode borrowed UTF-8 slices without allocations (`fix/borrowed-byte-operations`)
+- [PR 69](https://github.com/auser/lean4-prod/pull/69) ([Issue 68](https://github.com/auser/lean4-prod/issues/68)): Reuse owned list tail during functional updates (`fix/owned-byte-read-lifetimes`)
+
+Strict isolation is preserved: no Prism application or target semantics are proposed as generic compiler functionality. All contributions are strictly generic compiler/intermediate-representation/codegen invariants.
+Any unmerged, unlinked, or unsupported upstream dependency changes block the final `prismpm/ecosystem-release/2` release claim.
+
 ## OCI product-release graph and registry lifecycle
 
 The OCI product-release graph and registry lifecycle (Task 6, OC-01..OC-07) is
@@ -145,6 +182,29 @@ All six release acceptance steps are completed and verified under canonical mode
    verifying production Compose, Kubernetes, and Pages targets.
 6. [COMPLETED] Verified canonical `prismpm/ecosystem-release/2` manifest with complete planted-defect falsification coverage
    across all 14 required defect classes, yielding `prismpm/ecosystem-release-receipt/2`.
+
+1. Verify the modeled archive-codec replacement and complete resulting public
+   dependency closure. Preserve independent Holo oracle
+   acceptance. Verify the generic compiler release packages and their publishing
+   identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes
+   (pinned at revision `ac84a4de575e2e531ddb6453c86b84a6794fe48b` and tracked
+   through upstream issue 70 and PRs 38–69).
+2. Reproduce the PrismPM dependency closure and its package, golden
+   artifacts, Calculator regression, and all source/package/image checks.
+3. Pass every PrismPM gate twice without cleanup. Publish and independently
+   verify the exact OCI SDK, runtime, adapters, oracles, and native packages.
+   Bind acceptance to the shipped digests and both platform inventories;
+   development-candidate smoke checks are insufficient.
+4. Bind Foundry to that verified SDK, implement its authorized functional core,
+   and publish and independently verify its unchanged Pages artifacts and
+   complete core journeys. Then publish and verify the first-party Cargo
+   closure. Neither phase may claim the other has completed.
+5. Bind template and Calculator locks/workflows to those public immutable
+   artifacts. Regenerate their source projections and preserve their accepted
+   application baseline. Run their complete local and CI acceptance, including
+   both production releases, deployments, rollback, recovery, and Pages.
+6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
+   the changelog, create release tags, and claim completion.
 
 ## Calculator baseline record
 
