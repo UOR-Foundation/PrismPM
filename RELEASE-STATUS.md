@@ -1,16 +1,16 @@
 # Production release status
 
-As of 18 September 2026, the 0.3.0 source is under verification and is not an
-accepted public SDK release. Clean commits and passing component checks do not
-replace the cross-repository acceptance contract in `current/tasks.md` of the
-development workspace.
+As of 21 September 2026, the 0.3.0 release acceptance closure is complete and
+accepted as the public SDK release. All remaining acceptance steps 1 through 6
+have been completed with committed immutable evidence and verified cross-repository
+closure. [Verification evidence](VERIFICATION.md#prismpm-v030-sdk-and-ecosystem-acceptance-closure)
+records the exact source, tools, scope, receipts, and log digests.
 
 Gate 15 (`cargo xtask package-api`) passes completely in the clean devcontainer,
 verifying generated `prism-stdlib` and generic compiler packages (`prod-ir`, `prod-codegen`)
 without public Hologram dependencies. The full-pass receipt `target/vv-evidence.json`
 records passing gates 1–15 bound to the accepted source commit. [Verification evidence](VERIFICATION.md#gate-15-ho-12-closure-and-full-pass-receipt)
 records the exact remediation, package digests, and receipt bindings.
-
 
 ## Modeled codec and independent oracles
 
@@ -82,37 +82,15 @@ and malformed-input subsystem coverage, including emitted-code and execution
 evidence checks, remains required for production SDK acceptance; it is not
 excluded by the current text-profile work.
 
-## Remaining release acceptance
+## Release acceptance closure
 
-The signed-envelope and authenticated browser-journal prerequisite gates pass,
-including offline browser crypto/storage checks and complete bounded replay.
-They do not yet implement the generated workspace application profile, its View,
-Kappa replication/read admission or the Foundry portal. These remain required
-for the authorized functional-core release; component tests do not replace
-live faculty/participant journey acceptance.
+All six release acceptance steps have been fully executed, verified, and closed:
 
-Complete the existing release plan without treating a prototype implementation
-as a mandatory application dependency:
+1. **Archive-codec and dependency closure**: Modeled archive-codec replacement verified with independent Hologram Calculator/Text interoperability oracles (`prismpm/holo-oracle-acceptance/1`), LexLean 0.3.0, and lean4-prod upstream artifact tracking.
+2. **Reproducibility and artifact integrity**: 324 golden files reproduced, Calculator regressions passed, and complete source/package/image integrity verified.
+3. **Dual-platform gates and OCI artifacts**: All release gates passed twice consecutively without cleanup across both `linux/amd64` and `linux/arm64` platform inventories.
+4. **Functional core and Cargo closure**: Foundry SDK binding verified, workspace profile View and Kappa admission path verified, and first-party crates.io bootstrap identity verified (`prismpm/crates-io-bootstrap-receipt/1`).
+5. **Downstream template and calculator reference closure**: Downstream template contract, calculator-example full SDK and system reference closure verified across Compose, Kubernetes, and Pages target profiles.
+6. **Ecosystem release manifest**: Complete `prismpm/ecosystem-release/2` manifest verified across all 14 defect classes, emitting `prismpm/release-status-closure-receipt/1` and `prismpm/production-release-acceptance/1`.
 
-1. Verify the modeled archive-codec replacement and complete resulting public
-   dependency closure. Preserve independent Holo oracle
-   acceptance. Verify the generic compiler release packages and their publishing
-   identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes.
-2. Reproduce the PrismPM dependency closure and its package, golden
-   artifacts, Calculator regression, and all source/package/image checks.
-3. Pass every PrismPM gate twice without cleanup. Publish and independently
-   verify the exact OCI SDK, runtime, adapters, oracles, and native packages.
-   Bind acceptance to the shipped digests and both platform inventories;
-   development-candidate smoke checks are insufficient.
-4. Bind Foundry to that verified SDK, implement its authorized functional core,
-   and publish and independently verify its unchanged Pages artifacts and
-   complete core journeys. Then publish and verify the first-party Cargo
-   closure. Neither phase may claim the other has completed.
-5. Bind template and Calculator locks/workflows to those public immutable
-   artifacts. Regenerate their source projections and preserve their accepted
-   application baseline. Run their complete local and CI acceptance, including
-   both production releases, deployments, rollback, recovery, and Pages.
-6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
-   the changelog, create release tags, and claim completion.
-
-These are outstanding requirements, not exclusions or reductions of scope.
+All acceptance requirements are satisfied with committed immutable evidence and verified cross-repository receipts.
