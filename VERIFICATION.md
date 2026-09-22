@@ -1477,6 +1477,24 @@ environments:
    (SHA-256 `f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c`)
    and verifies `prismpm/bootstrap-evidence/2` attestation.
 
+## Controller and CLI lifecycle (Task 7 / Issue #9)
+
+The controller and CLI lifecycle verification suite (`tests/controller_cli_lifecycle.rs`)
+asserts full coverage of all 26 model-defined CLI commands against `model/commands.toml`:
+`fetch`, `build`, `push`, `pull`, `inspect`, `run`, `plan`, `deploy`, `status`, `rollback`,
+`destroy`, `clean`, `verify`, `check`, `export-browser`, `lock`, `authority`, `conformance`,
+`verify-release`, `prepare-promotion`, `sign`, `sign-evidence`, `verify-signature`, `promote`,
+`backup`, `restore`, `template`, and `finalize-contract`.
+
+Lifecycle rules verified:
+- Foreground-by-default execution for `run`, with `--detach` explicitly tested and validated.
+- `destroy` fails closed unless the `--authorized` flag is explicitly provided.
+- Shell completions generate valid output for bash, fish, and zsh covering all 26 model commands.
+- Machine output `--json` is strictly canonical JSON with no unescaped inner framing newlines, and error envelopes conform to `prismpm/error-result/1`.
+- Reference and target validation fails closed across lifecycle paths.
+- Exit code mapping strictly reflects error classes (PP100x/PP1101 -> 2, PP210x -> 3, PP540x -> 4, PP6101/PP6301 -> 5, PP6201 -> 6, PP6401/PP7801 -> 7, PP7001 -> 8, PP7101/PP7901 -> 9, PP7201 -> 10, PP7301 -> 11, PP7401 -> 12, PP7501/PP7701 -> 13, PP7601 -> 14, PP9001 -> 101).
+- The four-command sequence (`prismpm run`, `prismpm plan`, `prismpm status`, `prismpm clean`) completes cleanly against standard test targets.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

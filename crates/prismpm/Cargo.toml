@@ -58,6 +58,7 @@ include = [
     "tests/browser_stdlib_api.rs",
 "tests/reproducible_sdk.rs",
     "tests/oci_release_graph.rs",
+    "tests/controller_cli_lifecycle.rs",
     "tests/data/holo-codec-v1.json",
     "vendor/hologram-live.tar",
     "vendor/lean4-prod/lean.tar",
