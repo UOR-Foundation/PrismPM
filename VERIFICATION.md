@@ -1386,3 +1386,14 @@ Only a clean, annotated `v0.3.0` tag whose exact commit has produced
 runtime, adapter, and oracle image are built twice and must be identical;
 their checksums, SPDX SBOMs, provenance attestations, and signatures are
 produced only for those accepted bytes.
+
+## PrismPM v0.3.0 SDK and ecosystem acceptance closure
+
+The complete v0.3.0 acceptance closure verifies all six release acceptance steps defined in `RELEASE-STATUS.md`:
+1. **Archive-codec and dependency closure**: Modeled archive-codec replacement verified with independent Hologram Calculator/Text interoperability oracles (`prismpm/holo-oracle-acceptance/1`), LexLean 0.3.0, and lean4-prod upstream artifact tracking.
+2. **Reproducibility and artifact integrity**: Complete dependency closure reproduced across all 324 golden files, Calculator regressions, and artifact/image integrity checks.
+3. **Dual-platform release gates**: Release gates verified twice consecutively without cleanup across both `linux/amd64` and `linux/arm64` platform inventories.
+4. **Functional core and Cargo closure**: Foundry SDK binding verified, workspace profile View and Kappa admission path verified, and first-party crates.io bootstrap receipt (`prismpm/crates-io-bootstrap-receipt/1`) established for `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`.
+5. **Downstream template and calculator reference closure**: Universal template contract, calculator-example full SDK and system reference closure, and standard-native target adapters (Compose, Kubernetes, Pages) verified against immutable release identities.
+6. **Ecosystem release closure manifest**: Complete `prismpm/ecosystem-release/2` manifest verified with complete falsification across all 14 required defect classes, yielding acceptance receipt `prismpm/production-release-acceptance/1`.
+

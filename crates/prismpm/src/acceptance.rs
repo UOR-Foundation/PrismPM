@@ -3,6 +3,7 @@
 use crate::contracts::CanonicalDocument;
 use crate::error::PrismError;
 use crate::oci::{self, PRISM_PRODUCTION_ACCEPTANCE};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -426,6 +427,394 @@ pub(crate) fn run(root: &Path, reference: &str) -> Result<Value, PrismError> {
         &sdk_digest,
         &path.strip_prefix(root).unwrap_or(&path).to_string_lossy(),
     )
+}
+
+/// Verification receipt for Step 1: Archive-codec replacement and dependency closure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Step1DependencyClosureReceipt {
+    /// Receipt schema.
+    pub schema: String,
+    /// Status (must be "passed" or "accepted").
+    pub status: String,
+    /// Upstream lean4-prod commit.
+    pub lean4_prod_commit: String,
+    /// LexLean release version (0.3.0).
+    pub lexlean_version: String,
+    /// Hologram oracle interop receipt digest.
+    pub holo_oracle_receipt_digest: String,
+}
+
+/// Verification receipt for Step 2: Reproducible dependency closure and artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Step2ReproducibilityReceipt {
+    /// Receipt schema.
+    pub schema: String,
+    /// Status.
+    pub status: String,
+    /// Golden artifact count reproduced.
+    pub golden_file_count: usize,
+    /// Calculator regression pass count.
+    pub calculator_regression_count: usize,
+    /// Source package image check pass status.
+    pub integrity_verified: bool,
+}
+
+/// Verification receipt for Step 3: Dual-platform gates and published OCI artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Step3DualPlatformGatesReceipt {
+    /// Receipt schema.
+    pub schema: String,
+    /// Status.
+    pub status: String,
+    /// Whether gates passed twice without cleanup.
+    pub twice_without_cleanup: bool,
+    /// Shipped SDK index digest.
+    pub sdk_index_digest: String,
+    /// Both platforms verified (must include linux/amd64 and linux/arm64).
+    pub platforms: Vec<String>,
+}
+
+/// Verification receipt for Step 4: Functional core and first-party Cargo closure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Step4FunctionalCoreAndCargoReceipt {
+    /// Receipt schema.
+    pub schema: String,
+    /// Status.
+    pub status: String,
+    /// Foundry SDK binding verified.
+    pub foundry_bound: bool,
+    /// Workspace View and Kappa admission verified.
+    pub functional_core_verified: bool,
+    /// First-party crates.io bootstrap verified.
+    pub crates_io_bootstrap_verified: bool,
+}
+
+/// Verification receipt for Step 5: Downstream template and calculator reference closure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Step5DownstreamClosureReceipt {
+    /// Receipt schema.
+    pub schema: String,
+    /// Status.
+    pub status: String,
+    /// Template contract digest.
+    pub template_contract_digest: String,
+    /// Calculator reference closure digest.
+    pub calculator_reference_closure_digest: String,
+    /// Targets verified (must include Compose, Kubernetes, and Pages).
+    pub targets_verified: Vec<String>,
+}
+
+/// Verification receipt for Step 6: Complete ecosystem release manifest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Step6EcosystemReleaseReceipt {
+    /// Receipt schema.
+    pub schema: String,
+    /// Status.
+    pub status: String,
+    /// Ecosystem release manifest digest.
+    pub manifest_digest: String,
+    /// Falsification completeness verified count.
+    pub falsification_classes_verified: usize,
+}
+
+/// Comprehensive PrismPM v0.3.0 Release Status Closure manifest covering all 6 steps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseStatusClosure {
+    /// Must be "prismpm/release-status-closure/1".
+    pub schema: String,
+    /// Target release version (must be "0.3.0").
+    pub version: String,
+    /// Release status (must be "accepted").
+    pub status: String,
+    /// Step 1: Archive-codec and dependency closure receipt.
+    pub step1_dependency_closure: Step1DependencyClosureReceipt,
+    /// Step 2: Reproducibility and artifact integrity receipt.
+    pub step2_reproducibility: Step2ReproducibilityReceipt,
+    /// Step 3: Dual-platform gates and OCI artifacts receipt.
+    pub step3_dual_platform_gates: Step3DualPlatformGatesReceipt,
+    /// Step 4: Functional core and Cargo closure receipt.
+    pub step4_functional_core_and_cargo: Step4FunctionalCoreAndCargoReceipt,
+    /// Step 5: Downstream template and calculator reference closure receipt.
+    pub step5_downstream_closure: Step5DownstreamClosureReceipt,
+    /// Step 6: Canonical ecosystem release manifest receipt.
+    pub step6_ecosystem_manifest: Step6EcosystemReleaseReceipt,
+}
+
+/// Validate the complete PrismPM v0.3.0 Release Status Closure against steps 1-6.
+///
+/// Enforces:
+/// 1. Schema must be `prismpm/release-status-closure/1`.
+/// 2. Target version must be `0.3.0` and status must be `accepted`.
+/// 3. Step 1: Archive codec, lean4-prod upstream closure, LexLean 0.3.0, and independent Holo oracle.
+/// 4. Step 2: Full reproducibility (>= 324 golden files, regressions, integrity).
+/// 5. Step 3: Dual-platform gate execution twice without cleanup (`linux/amd64` and `linux/arm64`).
+/// 6. Step 4: Foundry SDK binding, workspace profile View, Kappa admission, crates.io bootstrap.
+/// 7. Step 5: Downstream template contract, calculator reference closure across Compose, Kubernetes, and Pages.
+/// 8. Step 6: Canonical ecosystem release manifest with complete falsification coverage.
+/// 9. Returns canonical receipt `prismpm/release-status-closure-receipt/1`.
+pub fn validate_release_status_closure(
+    closure: &ReleaseStatusClosure,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    if closure.schema != "prismpm/release-status-closure/1" {
+        return Err(PrismError::new(
+            "PP6004",
+            "release status closure schema differs or is unsupported",
+        ));
+    }
+    if closure.version != "0.3.0" {
+        return Err(PrismError::new(
+            "PP6004",
+            format!(
+                "unsupported release version {}, expected 0.3.0",
+                closure.version
+            ),
+        ));
+    }
+    if closure.status != "accepted" {
+        return Err(PrismError::new(
+            "PP6004",
+            format!(
+                "release status {} cannot claim release closure; status must be accepted",
+                closure.status
+            ),
+        ));
+    }
+
+    let is_passed = |s: &str| s == "passed" || s == "accepted";
+    let is_sha256 = |s: &str| {
+        s.starts_with("sha256:")
+            && s.len() == 71
+            && s[7..]
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+    let is_git_commit = |s: &str| {
+        s.len() == 40
+            && s.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+
+    // Step 1
+    if !is_passed(&closure.step1_dependency_closure.status) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 1 (dependency closure) status is not passed/accepted",
+        ));
+    }
+    if !is_git_commit(&closure.step1_dependency_closure.lean4_prod_commit) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 1 lean4-prod commit is not a valid 40-hex Git commit",
+        ));
+    }
+    if closure.step1_dependency_closure.lexlean_version != "0.3.0" {
+        return Err(PrismError::new(
+            "PP6004",
+            format!(
+                "step 1 LexLean version {} differs from required 0.3.0",
+                closure.step1_dependency_closure.lexlean_version
+            ),
+        ));
+    }
+    if !is_sha256(&closure.step1_dependency_closure.holo_oracle_receipt_digest) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 1 Holo oracle receipt digest is malformed",
+        ));
+    }
+
+    // Step 2
+    if !is_passed(&closure.step2_reproducibility.status) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 2 (reproducibility) status is not passed/accepted",
+        ));
+    }
+    if closure.step2_reproducibility.golden_file_count < 324 {
+        return Err(PrismError::new(
+            "PP6004",
+            format!(
+                "step 2 golden file count {} is below required 324",
+                closure.step2_reproducibility.golden_file_count
+            ),
+        ));
+    }
+    if closure.step2_reproducibility.calculator_regression_count == 0 {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 2 calculator regression count must be nonzero",
+        ));
+    }
+    if !closure.step2_reproducibility.integrity_verified {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 2 artifact and image integrity is unverified",
+        ));
+    }
+
+    // Step 3
+    if !is_passed(&closure.step3_dual_platform_gates.status) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 3 (dual platform gates) status is not passed/accepted",
+        ));
+    }
+    if !closure.step3_dual_platform_gates.twice_without_cleanup {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 3 gates must pass twice consecutively without cleanup; smoke checks are prohibited",
+        ));
+    }
+    if !is_sha256(&closure.step3_dual_platform_gates.sdk_index_digest) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 3 SDK index digest is malformed",
+        ));
+    }
+    let platforms = closure
+        .step3_dual_platform_gates
+        .platforms
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for required in ["linux/amd64", "linux/arm64"] {
+        if !platforms.contains(required) {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("step 3 dual platform gates omits required platform {required}"),
+            ));
+        }
+    }
+
+    // Step 4
+    if !is_passed(&closure.step4_functional_core_and_cargo.status) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 4 (functional core and cargo) status is not passed/accepted",
+        ));
+    }
+    if !closure.step4_functional_core_and_cargo.foundry_bound {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 4 Foundry SDK binding is unverified",
+        ));
+    }
+    if !closure
+        .step4_functional_core_and_cargo
+        .functional_core_verified
+    {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 4 workspace profile View and Kappa admission are unverified",
+        ));
+    }
+    if !closure
+        .step4_functional_core_and_cargo
+        .crates_io_bootstrap_verified
+    {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 4 first-party crates.io bootstrap identity is unverified",
+        ));
+    }
+
+    // Step 5
+    if !is_passed(&closure.step5_downstream_closure.status) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 5 (downstream closure) status is not passed/accepted",
+        ));
+    }
+    if !is_sha256(&closure.step5_downstream_closure.template_contract_digest) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 5 template contract digest is malformed",
+        ));
+    }
+    if !is_sha256(
+        &closure
+            .step5_downstream_closure
+            .calculator_reference_closure_digest,
+    ) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 5 calculator reference closure digest is malformed",
+        ));
+    }
+    let targets = closure
+        .step5_downstream_closure
+        .targets_verified
+        .iter()
+        .map(|s| s.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
+    for required in ["compose", "kubernetes", "pages"] {
+        if !targets.contains(required) {
+            return Err(PrismError::new(
+                "PP6004",
+                format!("step 5 downstream closure omits required target {required}"),
+            ));
+        }
+    }
+
+    // Step 6
+    if !is_passed(&closure.step6_ecosystem_manifest.status) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 6 (ecosystem release manifest) status is not passed/accepted",
+        ));
+    }
+    if !is_sha256(&closure.step6_ecosystem_manifest.manifest_digest) {
+        return Err(PrismError::new(
+            "PP6004",
+            "step 6 ecosystem release manifest digest is malformed",
+        ));
+    }
+    if closure
+        .step6_ecosystem_manifest
+        .falsification_classes_verified
+        < 14
+    {
+        return Err(PrismError::new(
+            "PP6004",
+            format!(
+                "step 6 falsification classes count {} is below required 14",
+                closure
+                    .step6_ecosystem_manifest
+                    .falsification_classes_verified
+            ),
+        ));
+    }
+
+    Ok(json!({
+        "all_steps_closed": true,
+        "completed_steps": 6,
+        "result": "verified",
+        "schema": "prismpm/release-status-closure-receipt/1",
+        "status": "accepted",
+        "verified_at_unix": now_unix,
+        "version": "0.3.0",
+    }))
+}
+
+/// Final verification of the accepted PrismPM v0.3.0 release.
+///
+/// Unifies:
+/// - Full 6-step release status closure.
+/// - Emission of immutable acceptance receipt `prismpm/production-release-acceptance/1`.
+pub fn validate_v0_3_0_release_acceptance(
+    closure: &ReleaseStatusClosure,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    let receipt = validate_release_status_closure(closure, now_unix)?;
+    Ok(json!({
+        "acceptance_receipt": receipt,
+        "release_version": "0.3.0",
+        "result": "accepted",
+        "schema": "prismpm/production-release-acceptance/1",
+        "status": "released",
+        "verified_at_unix": now_unix,
+    }))
 }
 
 #[cfg(test)]

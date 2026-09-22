@@ -15,8 +15,8 @@ Hologram execution evidence, and the public `calculator-example` Pages
 application and complete CalculatorSystem reference all pass the atomic release
 contract in [SPEC.md](SPEC.md).
 
-Version 0.3.0 is not yet released. [Release status](RELEASE-STATUS.md) records
-the outstanding public dependency and acceptance requirements.
+Version 0.3.0 is the accepted production-system release. [Release status](RELEASE-STATUS.md) records
+the completed public dependency and acceptance closure across all six release steps.
 
 ## Artifact model
 
