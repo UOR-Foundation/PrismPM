@@ -91,6 +91,14 @@ fn bare_digest_hex(value: &str) -> Option<&str> {
     .then_some(value)
 }
 
+fn git_commit_hex(value: &str) -> Option<&str> {
+    (value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    .then_some(value)
+}
+
 fn secret_marker(bytes: &[u8]) -> Option<&'static str> {
     let text = String::from_utf8_lossy(bytes).to_ascii_lowercase();
     [

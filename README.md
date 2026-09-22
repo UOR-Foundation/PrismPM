@@ -92,6 +92,31 @@ The public reference application is
 It mirrors the exact content-addressed model, reruns PrismPM acceptance, imports
 the registry crate, and deploys only the generated six-file browser closure.
 
+## Verified Acceptance Capabilities (v0.3.0)
+
+The following acceptance tasks are complete and verified:
+
+| Task | Description | Verification |
+|------|-------------|--------------|
+| **Gate 15** | Full `cargo xtask package-api` pass with `prism-stdlib`, `prod-ir`, `prod-codegen` | `target/vv-evidence.json` |
+| **Independent Hologram Oracle** | Calculator (8 legacy numeric + 10 UTF-8 text cases) and Text interoperability under `prismpm/hologram-oracle/2` | `prismpm/holo-oracle-acceptance/1` |
+| **Reproducible SDK** | Multi-platform `linux/amd64` + `linux/arm64` with canonical inventories, lockfiles, bootstrap verification | `prismpm/bootstrap-evidence/2` |
+| **OCI Product-Release Graph** | Complete SBOM, provenance, signatures, vulnerability, license, deployment referrers; attestation-gated promotion | `prismpm/sdk-security-disposition/1` |
+| **Supply Chain & Recovery** | SPDX 3.0.1 graph closure, SLSA provenance, Sigstore verification, OSV advisory scans, OTEL redaction, disaster recovery lifecycle | `tests/supply_chain_operations_recovery.rs` |
+| **Controller & CLI Lifecycle** | 26 model-defined commands verified; foreground/detach, destroy auth, completions, JSON output, exit code mapping | `tests/controller_cli_lifecycle.rs` |
+| **Standard-Native Adapters** | Compose + Kubernetes with fail-closed validation, read-only roots, security profiles, two-stage deployment | `tests/standard_native_target_adapters.rs` |
+| **Universal SDK Entrypoint** | Template contract R1-R6, anti-vacuity, pinned commits, reviewable updates, policy tree SHA-256 | `tests/universal_template_entrypoint.rs` |
+| **Calculator Reference Closure** | Full SDK + system reference across Compose, Kubernetes, Pages; distinct Release A/B digests | `tests/calculator_reference_closure.rs` |
+| **Lean4-Prod Dependency Closure** | 15 compiler contributions tracked via upstream issues/PRs; vendored artifacts with SHA-256 | `tests/lean4_prod_dependency.rs` |
+| **Crates.io Bootstrap** | 5 first-party crates in dependency order; trusted publishing readiness; downstream lock bindings | `tests/crates_io_bootstrap.rs` |
+| **Ecosystem Release Closure** | 5 repos, 3 packages, calculator baseline, dual-platform SDK, 14 falsification classes | `tests/ecosystem_release_closure.rs` |
+| **Workspace Functional Core** | Signed envelopes, authenticated browser journal, View/Kappa admission (DK-07..DK-16) | `tests/workspace_functional_core.rs` |
+| **Production Contracts** | System schemas and conformance model | `tests/production_contracts.rs` |
+| **Authority Imports** | Immutable authority, locked drift rejection, oracle verification | `tests/authority_imports.rs` |
+| **Production System Model** | Complete system model validation | `tests/production_system_model.rs` |
+| **Release Status Closure** | 6-step canonical validation with receipts | `tests/release_status_closure.rs` |
+| **Diagnostic Boundaries** | PP1001–PP1003 actual loader execution | `fix/issue-14-diagnostic-boundary-coverage` |
+
 ## Development and acceptance
 
 The host needs only Git, Docker with Buildx, the Dev Container CLI, and
@@ -119,3 +144,11 @@ acquired release's exact browser files after source-free integrity replay.
 The destination must be new, in a caller-owned project directory without group
 or other write permission. This does not authorize publication or establish
 product acceptance; a publisher must verify those separately before deployment.
+
+## Key Documents
+
+- [RELEASE-STATUS.md](RELEASE-STATUS.md) — Complete release acceptance closure across all 6 steps
+- [VERIFICATION.md](VERIFICATION.md) — Detailed verification evidence, digests, and test descriptions
+- [SPEC.md](SPEC.md) — Atomic release contract specification
+- [CONFORMANCE.md](CONFORMANCE.md) — Conformance requirements
+- [ERRORS.md](ERRORS.md) — Error code registry

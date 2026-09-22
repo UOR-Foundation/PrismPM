@@ -12,6 +12,7 @@ use std::path::Path;
 
 fn sha(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
+}
 
 
 fn release_digest(reference: &str) -> Result<&str, PrismError> {
@@ -32,6 +33,7 @@ fn release_digest(reference: &str) -> Result<&str, PrismError> {
         return Err(PrismError::new("PP6002", "release digest is malformed"));
     }
     Ok(digest)
+}
 
 
 fn registered_values(
@@ -54,6 +56,7 @@ fn registered_values(
                 .ok_or_else(|| PrismError::new("PP9001", "acceptance register value is absent"))
         })
         .collect()
+}
 
 
 pub(crate) fn verify_closure(value: &Value) -> Result<(), PrismError> {
@@ -142,6 +145,7 @@ pub(crate) fn verify_transcript(value: &Value) -> Result<(), PrismError> {
         ));
     }
     Ok(())
+}
 
 
 pub(crate) fn verify_result_counts(value: &Value) -> Result<(), PrismError> {
@@ -451,8 +455,6 @@ pub struct Step1DependencyClosureReceipt {
     pub lexlean_version: String,
     /// Hologram oracle interop receipt digest.
     pub holo_oracle_receipt_digest: String,
-
-}
 }
 
 /// Verification receipt for Step 2: Reproducible dependency closure and artifacts.
@@ -467,8 +469,8 @@ pub struct Step2ReproducibilityReceipt {
     /// Calculator regression pass count.
     pub calculator_regression_count: usize,
     /// Source package image check pass status.
-}
     pub integrity_verified: bool,
+}
 
 
 /// Verification receipt for Step 3: Dual-platform gates and published OCI artifacts.
@@ -482,9 +484,9 @@ pub struct Step3DualPlatformGatesReceipt {
     pub twice_without_cleanup: bool,
     /// Shipped SDK index digest.
     pub sdk_index_digest: String,
-}
     /// Both platforms verified (must include linux/amd64 and linux/arm64).
     pub platforms: Vec<String>,
+}
 
 
 /// Verification receipt for Step 4: Functional core and first-party Cargo closure.
@@ -497,10 +499,10 @@ pub struct Step4FunctionalCoreAndCargoReceipt {
     /// Foundry SDK binding verified.
     pub foundry_bound: bool,
     /// Workspace View and Kappa admission verified.
-}
     pub functional_core_verified: bool,
     /// First-party crates.io bootstrap verified.
     pub crates_io_bootstrap_verified: bool,
+}
 
 
 /// Verification receipt for Step 5: Downstream template and calculator reference closure.
@@ -512,11 +514,11 @@ pub struct Step5DownstreamClosureReceipt {
     pub status: String,
     /// Template contract digest.
     pub template_contract_digest: String,
-}
     /// Calculator reference closure digest.
     pub calculator_reference_closure_digest: String,
     /// Targets verified (must include Compose, Kubernetes, and Pages).
     pub targets_verified: Vec<String>,
+}
 
 
 /// Verification receipt for Step 6: Complete ecosystem release manifest.
@@ -527,10 +529,10 @@ pub struct Step6EcosystemReleaseReceipt {
     /// Status.
     pub status: String,
     /// Ecosystem release manifest digest.
-}
     pub manifest_digest: String,
     /// Falsification completeness verified count.
     pub falsification_classes_verified: usize,
+}
 
 
 /// Comprehensive PrismPM v0.3.0 Release Status Closure manifest covering all 6 steps.
@@ -542,7 +544,6 @@ pub struct ReleaseStatusClosure {
     pub version: String,
     /// Release status (must be "accepted").
     pub status: String,
-}
     /// Step 1: Archive-codec and dependency closure receipt.
     pub step1_dependency_closure: Step1DependencyClosureReceipt,
     /// Step 2: Reproducibility and artifact integrity receipt.
@@ -555,6 +556,7 @@ pub struct ReleaseStatusClosure {
     pub step5_downstream_closure: Step5DownstreamClosureReceipt,
     /// Step 6: Canonical ecosystem release manifest receipt.
     pub step6_ecosystem_manifest: Step6EcosystemReleaseReceipt,
+}
 
 
 /// Canonical model of the Calculator reference system closure (Task 11 / Issue #17).
@@ -583,6 +585,7 @@ pub struct CalculatorReferenceClosure {
     pub diagnostics_covered: u64,
     /// Unix timestamp when the closure was verified.
     pub verified_at_unix: u64,
+}
 
 
 fn valid_sha256_digest(value: &str) -> bool {
@@ -592,6 +595,7 @@ fn valid_sha256_digest(value: &str) -> bool {
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     })
+}
 
 
 /// Validate the complete Calculator reference system closure against production policy.
@@ -686,6 +690,7 @@ pub fn validate_calculator_reference_closure(
         "targets": closure.targets,
         "verified_at_unix": closure.verified_at_unix
     }))
+}
 
 
 /// Validate the complete PrismPM v0.3.0 Release Status Closure against steps 1-6.
@@ -1423,4 +1428,6 @@ pub fn validate_ecosystem_release_closure(
         "status": "passed",
         "verified_at_unix": now_unix
     }))
+}
+
 }
