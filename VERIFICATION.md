@@ -1032,6 +1032,28 @@ executes cleanly offline without external resolution or draft dependencies,
 reproducing package archives and passing downstream compilation. Full gate
 receipt `target/vv-evidence.json` binds all 15 gates as passed.
 
+## Independent Hologram Calculator/Text interoperability acceptance
+
+Independent Hologram oracle interoperability acceptance for Calculator and
+Text applications is executed and digest-bound to release-closure records:
+
+1. **Pinned oracle source and harness inputs**:
+   - Upstream live source archive `crates/prismpm/vendor/hologram-live.tar` matches SHA-256 `caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66`.
+   - Embedded oracle harness manifests (`hologram-oracle.Cargo.toml`, `hologram-oracle.Cargo.lock`, `hologram-oracle.main.rs`, `hologram-oracle.browser.mjs`) match pinned checksums and the independent oracle test harness.
+   - Holo codec oracle manifests (`tests/holo-codec-oracle/Cargo.toml`, `Cargo.lock`) match pinned checksums and verify the frozen wire corpus against upstream revision `2bda6a9a9476872dade705bd61ece4209607f6da`.
+2. **Calculator interoperability acceptance**:
+   - Verified against schema `prismpm/hologram-oracle/2`: 22 direct vectors, 22 resident vectors, 21 UTF-8 intents, verified footer, verified guest allocation boundary, View attached/detached exactly once.
+   - Headless Chromium portable-browser execution passed all 8 legacy numeric cases (`attachment-assets`, `modeled-vectors`, `input-validation-recovery`, `transport-failure-recovery`, `pre-init-privacy`, `delayed-init`, `intent-boundaries`, `detached-session`) with 0 skips and 0 retries.
+3. **Text application interoperability acceptance**:
+   - Verified against schema `prismpm/hologram-oracle/2`: 6 direct vectors, 6 resident vectors, 5 UTF-8 intents, verified footer, verified guest allocation boundary, View attached/detached exactly once.
+   - Headless Chromium portable-browser execution passed all 10 UTF-8 text cases (including `text-response-bounds` and `text-safe-rendering`) with 0 skips and 0 retries.
+4. **Non-vacuous failure probes**:
+   - Rejection of stale/wrong schema editions (`prismpm/hologram-oracle/1` and unknown versions).
+   - Rejection of mismatched or substituted application and archive identities (`application_kappa`, `archive_kappa`, `archive_fingerprint`).
+   - Rejection of tampered vector counts, unverified footers, boundary failures, and failed/retried/skipped browser cases.
+   - Fail-fast rejection of declared request/response limits exceeding pinned transport bounds (64 KiB / 1 MiB).
+5. **Oracle isolation**:
+   - Interoperability checks remain isolated validation oracles, not application authority, and run offline from locked inputs.
 
 ## Compiler-bound bootstrap compatibility
 

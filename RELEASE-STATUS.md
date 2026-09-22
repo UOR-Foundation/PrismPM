@@ -22,8 +22,10 @@ defines these bytes. Integrated package and SDK acceptance is still required.
 
 Pinned Hologram implementations remain isolated validation oracles, acquired
 before offline verification. The frozen wire corpus is checked against
-upstream `2bda6a9a9476872dade705bd61ece4209607f6da`; executable Calculator
-and Text interoperability checks remain required. Neither oracle is the
+upstream `2bda6a9a9476872dade705bd61ece4209607f6da`. Executable Calculator
+and Text interoperability acceptance checks are complete, digest-bound, and
+verified under schema `prismpm/hologram-oracle/2`, including actual Chromium
+portable-browser execution and non-vacuous failure probes. Neither oracle is the
 application authority or a deployed Foundry service. Publishing Hologram is
 not a PrismPM dependency-resolution step.
 
