@@ -94,3 +94,34 @@ All six release acceptance steps have been fully executed, verified, and closed:
 6. **Ecosystem release manifest**: Complete `prismpm/ecosystem-release/2` manifest verified across all 14 defect classes, emitting `prismpm/release-status-closure-receipt/1` and `prismpm/production-release-acceptance/1`.
 
 All acceptance requirements are satisfied with committed immutable evidence and verified cross-repository receipts.
+
+1. Verify the modeled archive-codec replacement and complete resulting public
+   dependency closure. Preserve independent Holo oracle
+   acceptance. Verify the generic compiler release packages and their publishing
+   identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes.
+2. Reproduce the PrismPM dependency closure and its package, golden
+   artifacts, Calculator regression, and all source/package/image checks.
+3. Pass every PrismPM gate twice without cleanup. Publish and independently
+   verify the exact OCI SDK, runtime, adapters, oracles, and native packages.
+   Bind acceptance to the shipped digests and both platform inventories;
+   development-candidate smoke checks are insufficient.
+4. Bind Foundry to that verified SDK, implement its authorized functional core,
+   and publish and independently verify its unchanged Pages artifacts and
+   complete core journeys. Then publish and verify the first-party Cargo
+   closure. Neither phase may claim the other has completed.
+5. Bind template and Calculator locks/workflows to those public immutable
+   artifacts. Regenerate their source projections and preserve their accepted
+   application baseline. Run their complete local and CI acceptance, including
+   both production releases, deployments, rollback, recovery, and Pages.
+6. Verify the complete `prismpm/ecosystem-release/2` manifest and only then date
+   the changelog, create release tags, and claim completion.
+
+## Calculator baseline record
+
+The canonical `prismpm/calculator-baseline/1` record is committed at
+`tests/data/calculator-baseline.json` and validated by integration tests
+(`tests/calculator_baseline.rs`). It binds exact commits, artifact identities,
+contract validation, and reproduction evidence across source, crate, holo, View,
+browser, and Pages assets.
+
+These are outstanding requirements, not exclusions or reductions of scope.
