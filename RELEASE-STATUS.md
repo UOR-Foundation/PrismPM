@@ -96,15 +96,15 @@ excluded by the current text-profile work.
 
 PrismPM 0.3.0 depends on generic Lean 4 compiler improvements authored in `afflom/lean4-prod`
 and tracked upstream in `auser/lean4-prod`. The authoritative dependency specification is
-committed in `model/dependencies.toml` at revision `ac84a4de575e2e531ddb6453c86b84a6794fe48b`
+committed in `model/dependencies.toml` at revision `6272da01ea2045906f5f844988b6265d6c867f39`
 for Lean 4.32.1.
 
 Vendored release artifacts and tree manifests are locked to immutable SHA-256 digests:
-- `vendor/lean4-prod/lean.tar`: `74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5`
-- `vendor/lean4-prod/rust/MANIFEST.sha256`: `3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc`
+- `vendor/lean4-prod/lean.tar`: `ce6c258440eda742df7162bdd4228b2ed4aae5416730cd770a98ecfc4185bf69`
+- `vendor/lean4-prod/rust/MANIFEST.sha256`: `5d10d5fd7a2298a6bcb7484c36f0f91f953a60b4784815227ae7c7cad32e7cf6`
 - `vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
-- `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`: `5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6`
-- `vendor/lean4-prod/crates/prod-ir-0.1.0.crate`: `9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5`
+- `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`: `48d1407dbb7ad7776dd8e2a61ca5620b60b948ace3276c52bf45493730d162e4`
+- `vendor/lean4-prod/crates/prod-ir-0.1.0.crate`: `7cffc0251ee01ce97debe304a41a4e28f6be94ba41691fac1993c811919cdc21`
 
 Because `afflom/lean4-prod` has issues disabled, dependency tracking and closure evidence
 are maintained in PrismPM release tracking documents and anchored to upstream issue IDs.
@@ -200,7 +200,7 @@ All six release acceptance steps are completed and verified under canonical mode
    dependency closure. Preserve independent Holo oracle
    acceptance. Verify the generic compiler release packages and their publishing
    identities, including LexLean 0.3.0 and the lean4-prod fork/upstream changes
-   (pinned at revision `ac84a4de575e2e531ddb6453c86b84a6794fe48b` and tracked
+   (pinned at revision `6272da01ea2045906f5f844988b6265d6c867f39` and tracked
    through upstream issue 70 and PRs 38–69).
 2. Reproduce the PrismPM dependency closure and its package, golden
    artifacts, Calculator regression, and all source/package/image checks.

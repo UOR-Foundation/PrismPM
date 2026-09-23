@@ -23,7 +23,7 @@ VERIFICATION.md:342-347 documents upstream ownership failure tracked in lean4-pr
 - Upstream PR merges **are required** for Ecosystem Release (Phase 2)
 
 ### Vendoring Protocol
-1. **Vendor commit pinned**: `model/dependencies.toml` locks lean4-prod revision `ac84a4de575e2e531ddb6453c86b84a6794fe48b`
+1. **Vendor commit pinned**: `model/dependencies.toml` locks lean4-prod revision `6272da01ea2045906f5f844988b6265d6c867f39`
 2. **Artifact integrity**: SHA-256 hashes committed for all vendored artifacts (RELEASE-STATUS.md:99-105)
 3. **Upstream tracking**: Each vendored change linked to upstream issue/PR for auditability
 4. **Drift detection**: `cargo deny` and vendor manifest checks prevent unauthorized changes

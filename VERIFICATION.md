@@ -1,6 +1,5 @@
 # PrismPM falsifiability and verification record
 
-<<<<<<< HEAD
 ## Integrated emitter source binding
 
 The complete audit rejected the stale emitter digest after metadata-alias
@@ -977,7 +976,7 @@ does not substitute a fixture-only implementation.
 
 The immutable integrations used by the release are LexLean
 `0b53334e5846a1f5e5d9bb3bf6959c085daa4d08` and `lean4-prod`
-`ac84a4de575e2e531ddb6453c86b84a6794fe48b`.
+`6272da01ea2045906f5f844988b6265d6c867f39`.
 
 ## Gate 10 — Holo schema and reviewed golden bytes
 
@@ -1769,15 +1768,15 @@ Verification suite: `cargo test --test sdk_security_advisory_disposition` (6/6 t
 
 Cross-repository release acceptance binds PrismPM 0.3.0 to exact lean4-prod compiler
 provenance and locked artifacts without unmerged or unlinked dependencies:
-- Pinned source revision: `ac84a4de575e2e531ddb6453c86b84a6794fe48b`
+- Pinned source revision: `6272da01ea2045906f5f844988b6265d6c867f39`
 - Vendored Lean toolchain payload (`vendor/lean4-prod/lean.tar`):
-  `74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5`
+  `ce6c258440eda742df7162bdd4228b2ed4aae5416730cd770a98ecfc4185bf69`
 - Vendored Rust generator tree manifest (`vendor/lean4-prod/rust/MANIFEST.sha256`):
-  `3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc`
+  `5d10d5fd7a2298a6bcb7484c36f0f91f953a60b4784815227ae7c7cad32e7cf6`
 - First-party compiler crates:
   - `prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
-  - `prod-codegen-0.1.0.crate`: `5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6`
-  - `prod-ir-0.1.0.crate`: `9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5`
+  - `prod-codegen-0.1.0.crate`: `48d1407dbb7ad7776dd8e2a61ca5620b60b948ace3276c52bf45493730d162e4`
+  - `prod-ir-0.1.0.crate`: `7cffc0251ee01ce97debe304a41a4e28f6be94ba41691fac1993c811919cdc21`
 
 All upstream dependency obligations are tracked through:
 - [Issue 70](https://github.com/auser/lean4-prod/issues/70): Release Dependency Closure
