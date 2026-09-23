@@ -525,6 +525,10 @@ fn hologram_oracle_environment(root: &Path) -> BTreeMap<String, String> {
     ])
 }
 
+static HOLOGRAM_ORACLE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+const HOLOGRAM_ORACLE_BUILD_TIMEOUT_SECONDS: &str = "900";
+const HOLOGRAM_ORACLE_RUN_TIMEOUT_SECONDS: &str = "600";
+
 fn run_hologram_oracle(
     controller: &Controller,
     build_root: &Path,
@@ -532,6 +536,9 @@ fn run_hologram_oracle(
     model_path: &Path,
     wasm_path: &Path,
 ) -> Result<Vec<ProcessRecord>, PrismError> {
+    let _lock = HOLOGRAM_ORACLE_MUTEX
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let document: crate::holo::model_document::ModelDocument = serde_json::from_slice(
         &std::fs::read(model_path).map_err(|error| PrismError::new("PP5301", error.to_string()))?,
     )
@@ -593,7 +600,7 @@ fn run_hologram_oracle(
             "portable browser requires pinned Node v22.23.2",
         ));
     }
-    let build = run_process(
+    let build = run_process_limited(
         "hologram-oracle-build",
         &cargo,
         &[
@@ -607,8 +614,10 @@ fn run_hologram_oracle(
         &env,
         &replacements,
         "PP5301",
+        HOLOGRAM_ORACLE_BUILD_TIMEOUT_SECONDS,
+        CHILD_OUTPUT_LIMIT,
     )?;
-    let run = run_process(
+    let run = run_process_limited(
         "hologram-oracle",
         &cargo,
         &[
@@ -629,6 +638,8 @@ fn run_hologram_oracle(
         &env,
         &replacements,
         "PP5301",
+        HOLOGRAM_ORACLE_RUN_TIMEOUT_SECONDS,
+        CHILD_OUTPUT_LIMIT,
     )?;
     let report: Value = serde_json::from_str(run.stdout.trim())
         .map_err(|error| PrismError::new("PP5301", format!("Hologram oracle report: {error}")))?;
