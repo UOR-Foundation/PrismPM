@@ -64,6 +64,14 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 
+# Native source gates retain every SDK inventory hash, including ARM's
+# portable SHA-256 backend. Optimize hashing without changing driver checks.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.test.package.sha2]
+opt-level = 3
+
 [patch.crates-io]
 lexlean = { path = "vendor/lexlean" }
 prod-codegen = { path = "vendor/lean4-prod/rust/prod-codegen" }

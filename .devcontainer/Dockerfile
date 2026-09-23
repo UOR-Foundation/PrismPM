@@ -70,6 +70,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSfL \
     && node --version \
     && npm --version
 
+COPY sdk/bootstrap/ /opt/prismpm/bootstrap-tools/
+RUN node /opt/prismpm/bootstrap-tools/install.mjs
+
 COPY sdk/oracles/package.json sdk/oracles/package-lock.json /opt/prismpm/oracles/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
     && node -e 'if(require("/opt/prismpm/oracles/node_modules/playwright/package.json").version!=="1.62.1")process.exit(1)'

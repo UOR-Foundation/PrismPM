@@ -8,11 +8,16 @@ use super::model_document::{
 use crate::error::PrismError;
 use lexlean::SemanticSnapshot;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
+#[cfg(test)]
+mod tests;
 
-fn member_name(value: &Value) -> Option<&str> {
+pub(super) type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
+
+const MAX_METADATA_ALIASES: usize = 65_536;
+
+pub(super) fn member_name(value: &Value) -> Option<&str> {
     value.get("result")?.get("member")?.get("name")?.as_str()
 }
 
@@ -20,19 +25,21 @@ fn definition<'a>(
     definitions: &'a Definitions<'a>,
     module: &'a str,
     reference: &'a Value,
-) -> Result<(&'a str, &'a Value), PrismError> {
+) -> Result<(&'a str, &'a str, &'a Value), PrismError> {
     let name = reference
         .get("name")
         .and_then(Value::as_str)
         .ok_or_else(|| PrismError::new("PP2001", "application call has no function name"))?;
-    let owner = reference
-        .get("module")
-        .and_then(Value::as_str)
-        .unwrap_or(module);
+    let owner = match reference.get("module") {
+        None => module,
+        Some(value) => value.as_str().ok_or_else(|| {
+            PrismError::new("PP2001", "application call has a malformed module name")
+        })?,
+    };
     definitions
         .get(&(owner.to_owned(), name.to_owned()))
         .copied()
-        .map(|value| (owner, value))
+        .map(|value| (owner, name, value))
         .ok_or_else(|| {
             PrismError::new(
                 "PP2001",
@@ -43,10 +50,15 @@ fn definition<'a>(
 
 fn evaluated<'a>(
     definitions: &'a Definitions<'a>,
-    module: &'a str,
-    value: &'a Value,
+    mut module: &'a str,
+    mut value: &'a Value,
 ) -> Result<(&'a str, &'a Value), PrismError> {
-    if value.get("kind").and_then(Value::as_str) == Some("call") {
+    let mut remaining = MAX_METADATA_ALIASES;
+    let mut visited = BTreeSet::new();
+    while value.get("kind").and_then(Value::as_str) == Some("call") {
+        remaining = remaining.checked_sub(1).ok_or_else(|| {
+            PrismError::new("PP2001", "application metadata exceeds the alias budget")
+        })?;
         let arguments = value
             .get("arguments")
             .and_then(Value::as_array)
@@ -57,13 +69,19 @@ fn evaluated<'a>(
                 "application metadata calls must be closed",
             ));
         }
-        let (owner, declaration) = definition(
+        let (owner, name, declaration) = definition(
             definitions,
             module,
             value
                 .get("function")
                 .ok_or_else(|| PrismError::new("PP2001", "application call is malformed"))?,
         )?;
+        if !visited.insert((owner, name)) {
+            return Err(PrismError::new(
+                "PP2001",
+                "application metadata contains a cyclic alias",
+            ));
+        }
         if !declaration
             .get("parameters")
             .and_then(Value::as_array)
@@ -74,21 +92,27 @@ fn evaluated<'a>(
                 "application metadata definition is not closed",
             ));
         }
-        return evaluated(
-            definitions,
-            owner,
-            declaration
-                .get("body")
-                .ok_or_else(|| PrismError::new("PP2001", "application definition has no body"))?,
-        );
+        module = owner;
+        value = declaration
+            .get("body")
+            .ok_or_else(|| PrismError::new("PP2001", "application definition has no body"))?;
     }
     Ok((module, value))
 }
 
-fn record<'a>(
+pub(super) fn record<'a>(
     definitions: &'a Definitions<'a>,
     module: &'a str,
     value: &'a Value,
+) -> Result<BTreeMap<&'a str, (&'a str, &'a Value)>, PrismError> {
+    record_with_unevaluated_fields(definitions, module, value, &[])
+}
+
+pub(super) fn record_with_unevaluated_fields<'a>(
+    definitions: &'a Definitions<'a>,
+    module: &'a str,
+    value: &'a Value,
+    deferred_fields: &[&str],
 ) -> Result<BTreeMap<&'a str, (&'a str, &'a Value)>, PrismError> {
     let (module, value) = evaluated(definitions, module, value)?;
     if value.get("kind").and_then(Value::as_str) != Some("record") {
@@ -110,7 +134,11 @@ fn record<'a>(
         let value = field
             .get("value")
             .ok_or_else(|| PrismError::new("PP2001", "application field has no value"))?;
-        let evaluated = evaluated(definitions, module, value)?;
+        let evaluated = if deferred_fields.contains(&name) {
+            (module, value)
+        } else {
+            evaluated(definitions, module, value)?
+        };
         if result.insert(name, evaluated).is_some() {
             return Err(PrismError::new(
                 "PP2001",
@@ -131,7 +159,10 @@ fn field<'a>(
         .ok_or_else(|| PrismError::new("PP2001", format!("application field {name} is absent")))
 }
 
-fn string(fields: &BTreeMap<&str, (&str, &Value)>, name: &str) -> Result<String, PrismError> {
+pub(super) fn string(
+    fields: &BTreeMap<&str, (&str, &Value)>,
+    name: &str,
+) -> Result<String, PrismError> {
     let (_, value) = field(fields, name)?;
     if value.get("kind").and_then(Value::as_str) != Some("string") {
         return Err(PrismError::new(
@@ -247,7 +278,7 @@ fn constructor_list(
     }
 }
 
-fn string_list(
+pub(super) fn string_list(
     fields: &BTreeMap<&str, (&str, &Value)>,
     name: &str,
 ) -> Result<Vec<String>, PrismError> {
@@ -424,7 +455,7 @@ fn view(
     })
 }
 
-fn exact_fields(
+pub(super) fn exact_fields(
     fields: &BTreeMap<&str, (&str, &Value)>,
     expected: &[&str],
 ) -> Result<(), PrismError> {
@@ -508,6 +539,11 @@ pub fn project_application(
         ));
     }
     let ((module, _), declaration) = candidates[0];
+    if member_name(declaration) == Some("BrowserApplication") {
+        let browser = super::browser_application::project(&definitions, module, declaration)?;
+        super::browser_application::validate_roots(&browser, snapshot)?;
+        return projected_document(snapshot, Application::Browser(Box::new(browser)));
+    }
     let fields = record(
         &definitions,
         module,
@@ -515,6 +551,15 @@ pub fn project_application(
             .get("body")
             .ok_or_else(|| PrismError::new("PP2001", "application has no body"))?,
     )?;
+    if fields
+        .get("profile")
+        .is_some_and(|(_, value)| value["value"] == super::browser_application::PROFILE)
+    {
+        return Err(PrismError::new(
+            "PP2010",
+            "browser application profile requires its exact source-owned type",
+        ));
+    }
     let request_maximum = u32::try_from(unsigned(&fields, "requestMaximum", "uint32")?)
         .map_err(|_| PrismError::new("PP2001", "requestMaximum exceeds UInt32"))?;
     let response_maximum = u32::try_from(unsigned(&fields, "responseMaximum", "uint32")?)
@@ -604,10 +649,18 @@ pub fn project_application(
             targets: constructor_list(&fields, "targets")?,
         }))
     };
+    projected_document(snapshot, application)
+}
+
+fn projected_document(
+    snapshot: &SemanticSnapshot,
+    application: Application,
+) -> Result<Option<ModelDocument>, PrismError> {
     let document = ModelDocument {
         schema: match &application {
             Application::Legacy(_) => "prismpm/model-document/1",
             Application::Text(_) => "prismpm/model-document/2",
+            Application::Browser(_) => "prismpm/model-document/4",
         }
         .to_owned(),
         provenance: ProjectionProvenance {
@@ -623,6 +676,7 @@ pub fn project_application(
         security: SecurityModel::default(),
         quality: QualityModel::default(),
         application: Some(application),
+        library: None,
     };
     super::validate::validate(&document)?;
     Ok(Some(document))

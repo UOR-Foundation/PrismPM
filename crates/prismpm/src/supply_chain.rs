@@ -14,17 +14,17 @@ use x509_parser::prelude::parse_x509_certificate;
 
 const SPDX: &str = "application/spdx+json;version=3.0.1";
 const POLICY: &str = "application/vnd.prismpm.supply-chain.v1+json";
-const OSV_DATABASE_ID: &str = "OSV-CRATES-DB-G1788555739396732";
-const OSV_DATABASE_SHA256: &str =
-    "03f56153d83125941b4b6990be1fb767b968dc97e73459f933464c832362882c";
-const OSV_DATABASE_EXPIRES_UNIX: u64 = 1_789_171_200;
+const OSV_INPUTS: &[u8] = include_bytes!("../model/osv-databases.json");
+const OSV_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
+const OSV_ECOSYSTEMS: [&str; 5] = ["crates.io", "Debian", "Go", "npm", "Ubuntu"];
 const IMAGE_PLATFORMS: [(&str, &str); 2] = [("linux/amd64", "amd64"), ("linux/arm64", "arm64")];
 const INTOTO_STATEMENT_V1: &str = "https://in-toto.io/Statement/v1";
 const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com";
 const SIGSTORE_TRUSTED_ROOT: &[u8] =
     include_bytes!("../standards/trust/sigstore-trusted-root-cosign-3.1.3.json");
 const SLSA_PROVENANCE_V1: &str = "https://slsa.dev/provenance/v1";
-pub(crate) const PRISM_BUILD_TYPE: &str = "https://uor.foundation/prismpm/build/v1";
+/// Canonical SLSA build type for PrismPM builds.
+pub const PRISM_BUILD_TYPE: &str = "https://uor.foundation/prismpm/build/v1";
 const GENERATED_ARTIFACT_LICENSE: &str = "MIT OR Apache-2.0";
 const SIGSTORE_BUNDLE_V03: &str = "application/vnd.dev.sigstore.bundle.v0.3+json";
 const FULCIO_ISSUER: &str = "1.3.6.1.4.1.57264.1.8";
@@ -84,6 +84,14 @@ fn digest_hex(value: &str) -> Option<&str> {
 
 fn bare_digest_hex(value: &str) -> Option<&str> {
     (value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    .then_some(value)
+}
+
+fn git_commit_hex(value: &str) -> Option<&str> {
+    (value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
@@ -228,6 +236,7 @@ fn source_tree_digest(root: &Path) -> Result<String, PrismError> {
 #[derive(Debug)]
 pub(crate) struct VulnerabilityScan {
     database_edition: String,
+    database_expires_unix: u64,
     database_source: Value,
     result: Value,
     result_digest: String,
@@ -564,7 +573,113 @@ fn locked_inventory(
     Ok(inventory)
 }
 
+fn osv_input_expiry(lock: &Value, manifest: &Value, now: u64) -> Result<u64, PrismError> {
+    let invalid = || {
+        PrismError::new(
+            "PP7801",
+            "locked OSV database identity or source time changed",
+        )
+    };
+    if manifest["schema"] != "prismpm/osv-inputs/1"
+        || manifest["freshness_policy_seconds"] != OSV_MAX_AGE_SECONDS
+    {
+        return Err(invalid());
+    }
+    let inputs = manifest["databases"].as_array().ok_or_else(invalid)?;
+    let authorities = lock["authorities"].as_array().ok_or_else(invalid)?;
+    let databases = authorities
+        .iter()
+        .filter(|row| {
+            row["canonical_id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("gs://osv-vulnerabilities/"))
+        })
+        .collect::<Vec<_>>();
+    if inputs.len() != OSV_ECOSYSTEMS.len() || databases.len() != OSV_ECOSYSTEMS.len() {
+        return Err(invalid());
+    }
+    let mut oldest = u64::MAX;
+    for (input, ecosystem) in inputs.iter().zip(OSV_ECOSYSTEMS) {
+        let created = input["source_created_unix"].as_u64().ok_or_else(invalid)?;
+        let time = x509_parser::time::ASN1Time::from_timestamp(
+            i64::try_from(created).map_err(|_| invalid())?,
+        )
+        .map_err(|_| invalid())?
+        .to_datetime();
+        let prefix = format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.",
+            time.year(),
+            u8::from(time.month()),
+            time.day(),
+            time.hour(),
+            time.minute(),
+            time.second()
+        );
+        let source_time = input["source_created"].as_str().ok_or_else(invalid)?;
+        let generation = input["generation"].as_str().ok_or_else(invalid)?;
+        let digest = input["sha256"]
+            .as_str()
+            .and_then(bare_digest_hex)
+            .ok_or_else(invalid)?;
+        let expected_url = format!("https://osv-vulnerabilities.storage.googleapis.com/{ecosystem}/all.zip?generation={generation}");
+        let matches = databases
+            .iter()
+            .filter(|row| {
+                row["canonical_id"] == format!("gs://osv-vulnerabilities/{ecosystem}/all.zip")
+            })
+            .collect::<Vec<_>>();
+        if input["ecosystem"] != ecosystem
+            || generation.len() != 16
+            || !generation.bytes().all(|byte| byte.is_ascii_digit())
+            || source_time.len() != 24
+            || !source_time.starts_with(&prefix)
+            || !source_time.as_bytes()[20..23]
+                .iter()
+                .all(u8::is_ascii_digit)
+            || !source_time.ends_with('Z')
+            || input["url"] != expected_url
+            || created > now
+            || matches.len() != 1
+        {
+            return Err(invalid());
+        }
+        let row = matches[0];
+        if row["id"] != input["id"]
+            || row["edition"] != format!("gcs-generation-{generation}")
+            || row["source"]["sha256"] != digest
+            || row["source"]["revision"] != generation
+            || row["source"]["url"] != expected_url
+            || row["source"]["redistribution"] != "citation-only"
+            || row["source"]["signature"] != "gcs-generation-and-acquired-sha256"
+        {
+            return Err(invalid());
+        }
+        oldest = oldest.min(created);
+    }
+    let expires = oldest
+        .checked_add(OSV_MAX_AGE_SECONDS)
+        .ok_or_else(invalid)?;
+    if now >= expires {
+        return Err(PrismError::new(
+            "PP7801",
+            "locked OSV database is stale for the seven-day production policy",
+        ));
+    }
+    Ok(expires)
+}
+
+fn checked_osv_expiry(lock: &Value) -> Result<u64, PrismError> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| PrismError::new("PP7801", format!("system clock: {error}")))?
+        .as_secs();
+    let manifest: Value = serde_json::from_slice(OSV_INPUTS)
+        .map_err(|error| PrismError::new("PP7801", format!("OSV input manifest: {error}")))?;
+    osv_input_expiry(lock, &manifest, now)
+}
+
 fn osv_databases(root: &Path, lock: &Value) -> Result<(Vec<(String, PathBuf)>, Value), PrismError> {
+    checked_osv_expiry(lock)?;
     let mut files = Vec::new();
     let mut facts = Vec::new();
     for database in lock["authorities"].as_array().into_iter().flatten() {
@@ -1207,33 +1322,18 @@ pub(crate) fn scan_vulnerabilities(
     root: &Path,
     systems: &[Value],
 ) -> Result<VulnerabilityScan, PrismError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| PrismError::new("PP7801", format!("system clock: {error}")))?
-        .as_secs();
-    if now >= OSV_DATABASE_EXPIRES_UNIX {
-        return Err(PrismError::new(
-            "PP7801",
-            "locked OSV database is stale for the seven-day production policy",
-        ));
-    }
     let lock: Value = serde_json::from_slice(
         &std::fs::read(root.join("standards.lock"))
             .map_err(|_| PrismError::new("PP1101", "standards.lock is absent"))?,
     )
     .map_err(|error| PrismError::new("PP1101", format!("standards.lock: {error}")))?;
+    let database_expires_unix = checked_osv_expiry(&lock)?;
     let database = lock["authorities"]
         .as_array()
         .into_iter()
         .flatten()
-        .find(|row| row["id"] == OSV_DATABASE_ID)
+        .find(|row| row["canonical_id"] == "gs://osv-vulnerabilities/crates.io/all.zip")
         .ok_or_else(|| PrismError::new("PP7801", "locked OSV database is absent"))?;
-    if database["source"]["sha256"] != OSV_DATABASE_SHA256 {
-        return Err(PrismError::new(
-            "PP7801",
-            "locked OSV database identity changed",
-        ));
-    }
     let (databases, database_facts) = osv_databases(root, &lock)?;
     let database_set_digest = sha(&encode_value(&database_facts)?);
     let (cargo, dependency_relationships, mut unresolved_licenses) = cargo_inventory(root)?;
@@ -1354,6 +1454,7 @@ pub(crate) fn scan_vulnerabilities(
             .cmp(&(right["reference"].as_str(), right["platform"].as_str()))
     });
     Ok(VulnerabilityScan {
+        database_expires_unix,
         database_edition: format!(
             "{} databases through {}",
             database_facts.as_array().map_or(0, Vec::len),
@@ -3054,7 +3155,7 @@ pub fn promote_release(
 }
 
 /// One immutable vulnerability/advisory scan result supplied by a pinned scanner.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AdvisoryScanFact {
     /// Exact `sha256:` digest of the scanned component, SDK, or dependency set.
@@ -3076,7 +3177,7 @@ pub struct AdvisoryScanFact {
 }
 
 /// Closed advisory coverage and freshness policy.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdvisoryPolicy {
     /// Exact subject digests that must each have one scan fact.
     pub required_subjects: Vec<String>,
@@ -3143,6 +3244,550 @@ pub fn validate_advisory_coverage(
     }))
 }
 
+/// Locked source configuration binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockBinding {
+    /// Relative path of the lock within the repository root.
+    pub path: String,
+    /// Exact `sha256:` digest of the lockfile bytes.
+    pub digest: String,
+}
+
+/// Installed dependency graph binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphBinding {
+    /// Path to the dependency graph manifest or lock.
+    pub lockfile_path: String,
+    /// Exact `sha256:` digest of the dependency lockfile bytes.
+    pub lockfile_digest: String,
+    /// Exact `sha256:` digest of the resolved dependency graph or installed tree.
+    pub installed_tree_digest: String,
+}
+
+/// Runtime executable and module tree binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeBinding {
+    /// Locked parser version or runtime descriptor.
+    pub parser_version: String,
+    /// Exact `sha256:` digest of the owned runtime lock.
+    pub runtime_lock_digest: String,
+    /// Length-framed canonical tree digest of installed runtime modules.
+    pub tree_digest: String,
+}
+
+/// Bound launcher script or executable identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LauncherBinding {
+    /// Target system path of the launcher script or executable.
+    pub path: String,
+    /// Exact `sha256:` digest of the launcher executable bytes.
+    pub digest: String,
+}
+
+/// Shipped platform SDK image and inventory binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlatformInventoryBinding {
+    /// Target OCI platform, e.g. `linux/amd64` or `linux/arm64`.
+    pub platform: String,
+    /// Exact `sha256:` digest of the shipped platform SDK image manifest.
+    pub sdk_image_digest: String,
+    /// Exact `sha256:` digest of the platform SDK inventory JSON document.
+    pub inventory_digest: String,
+}
+
+/// Policy governing acceptable SDK security disposition and scan freshness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SdkAdvisoryPolicy {
+    /// Required advisory database identifier.
+    pub database_id: String,
+    /// Required advisory database digest.
+    pub database_digest: String,
+    /// Unix timestamp after which the database is considered expired.
+    pub database_expires_unix: u64,
+    /// Maximum allowable age of scan facts in seconds.
+    pub max_age_seconds: u64,
+    /// Require full SDK image scans on all platforms; component-only evidence fails closed.
+    pub require_full_sdk_scan: bool,
+    /// Maximum allowed rejected findings (must be 0 for production acceptance).
+    pub allowed_rejected_findings: u64,
+}
+
+/// Complete security and vulnerability disposition for the shipped SDK identities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SdkSecurityDisposition {
+    /// Closed schema identifier (`prismpm/sdk-security-disposition/1`).
+    pub schema: String,
+    /// Bound source locks.
+    pub source_locks: Vec<LockBinding>,
+    /// Bound installed dependency graph.
+    pub installed_graph: GraphBinding,
+    /// Bound runtime bytes and modules.
+    pub runtime_bytes: RuntimeBinding,
+    /// Bound launcher script.
+    pub launcher: LauncherBinding,
+    /// Bound platform inventories for shipped architectures.
+    pub platform_inventories: Vec<PlatformInventoryBinding>,
+    /// Observed vulnerability and advisory scan facts.
+    pub scan_facts: Vec<AdvisoryScanFact>,
+    /// Policy under which the disposition is validated.
+    pub policy: SdkAdvisoryPolicy,
+}
+
+/// Validate the complete security and vulnerability disposition for shipped SDK identities.
+///
+/// Enforces:
+/// - Exact schema `prismpm/sdk-security-disposition/1`.
+/// - Complete binding of source locks, installed graph, runtime bytes, launcher, and platform inventories.
+/// - Both `linux/amd64` and `linux/arm64` platform coverage.
+/// - Strict rejection of component-only advisory evidence as a substitute for full shipped SDK disposition.
+/// - Enforced freshness bounds (scan age within `max_age_seconds`, database not expired).
+/// - Zero unresolved rejected findings.
+pub fn validate_sdk_security_disposition(
+    disposition: &SdkSecurityDisposition,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    if disposition.schema != "prismpm/sdk-security-disposition/1" {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition schema differs or is unsupported",
+        ));
+    }
+
+    if disposition.source_locks.is_empty() {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition source locks are empty",
+        ));
+    }
+    for lock in &disposition.source_locks {
+        if lock.path.trim().is_empty() || digest_hex(&lock.digest).is_none() {
+            return Err(PrismError::new(
+                "PP7801",
+                "SDK security disposition source lock path or digest is malformed",
+            ));
+        }
+    }
+
+    if disposition.installed_graph.lockfile_path.trim().is_empty()
+        || digest_hex(&disposition.installed_graph.lockfile_digest).is_none()
+        || digest_hex(&disposition.installed_graph.installed_tree_digest).is_none()
+    {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition installed graph binding is malformed",
+        ));
+    }
+
+    if disposition.runtime_bytes.parser_version.trim().is_empty()
+        || digest_hex(&disposition.runtime_bytes.runtime_lock_digest).is_none()
+        || digest_hex(&disposition.runtime_bytes.tree_digest).is_none()
+    {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition runtime bytes binding is malformed",
+        ));
+    }
+
+    if disposition.launcher.path.trim().is_empty()
+        || digest_hex(&disposition.launcher.digest).is_none()
+    {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition launcher binding is malformed",
+        ));
+    }
+
+    if disposition.platform_inventories.is_empty() {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition platform inventories are empty",
+        ));
+    }
+
+    let mut platforms = BTreeSet::new();
+    for inv in &disposition.platform_inventories {
+        if digest_hex(&inv.sdk_image_digest).is_none()
+            || digest_hex(&inv.inventory_digest).is_none()
+            || !platforms.insert(inv.platform.as_str())
+        {
+            return Err(PrismError::new(
+                "PP7801",
+                "SDK security disposition platform inventory has invalid or duplicate platform entry",
+            ));
+        }
+    }
+
+    for required in ["linux/amd64", "linux/arm64"] {
+        if !platforms.contains(required) {
+            return Err(PrismError::new(
+                "PP7801",
+                format!("SDK security disposition omits required platform {required}"),
+            ));
+        }
+    }
+
+    if !disposition.policy.require_full_sdk_scan {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition policy must require full SDK image scan",
+        ));
+    }
+    if disposition.policy.allowed_rejected_findings != 0 {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition policy cannot allow rejected findings for production release",
+        ));
+    }
+    if digest_hex(&disposition.policy.database_digest).is_none() {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition policy database digest is malformed",
+        ));
+    }
+    if now_unix >= disposition.policy.database_expires_unix {
+        return Err(PrismError::new(
+            "PP7801",
+            "advisory database has expired under production freshness policy",
+        ));
+    }
+
+    let required_sdk_images = disposition
+        .platform_inventories
+        .iter()
+        .map(|inv| inv.sdk_image_digest.as_str())
+        .collect::<BTreeSet<_>>();
+
+    let observed_sdk_images = disposition
+        .scan_facts
+        .iter()
+        .filter(|fact| fact.subject_kind == "sdk-image")
+        .map(|fact| fact.subject_digest.as_str())
+        .collect::<BTreeSet<_>>();
+
+    if observed_sdk_images.is_empty() {
+        return Err(PrismError::new(
+            "PP7801",
+            "component-only advisory evidence cannot substitute for full shipped SDK disposition",
+        ));
+    }
+    if observed_sdk_images != required_sdk_images {
+        return Err(PrismError::new(
+            "PP7801",
+            "advisory scans do not cover every shipped SDK platform identity",
+        ));
+    }
+
+    let mut observed_subjects = BTreeSet::new();
+    for fact in &disposition.scan_facts {
+        if digest_hex(&fact.subject_digest).is_none()
+            || digest_hex(&fact.database_digest).is_none()
+            || digest_hex(&fact.result_digest).is_none()
+            || fact.subject_kind.is_empty()
+            || fact.database_id != disposition.policy.database_id
+            || fact.database_digest != disposition.policy.database_digest
+        {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan fact has malformed digest or database mismatch",
+            ));
+        }
+        if fact.scanned_at_unix > now_unix {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan timestamp is in the future",
+            ));
+        }
+        if now_unix.saturating_sub(fact.scanned_at_unix) > disposition.policy.max_age_seconds {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan evidence exceeds maximum permitted age under freshness policy",
+            ));
+        }
+        if now_unix >= fact.database_expires_unix {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory database was expired at evaluation time",
+            ));
+        }
+        if fact.rejected_findings > disposition.policy.allowed_rejected_findings {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan contains unresolved rejected findings",
+            ));
+        }
+        if !observed_subjects.insert((fact.subject_kind.as_str(), fact.subject_digest.as_str())) {
+            return Err(PrismError::new(
+                "PP7801",
+                "duplicate advisory scan subject fact",
+            ));
+        }
+    }
+
+    let platform_list = platforms.into_iter().map(str::to_owned).collect::<Vec<_>>();
+    let scanned_subjects = disposition
+        .scan_facts
+        .iter()
+        .map(|f| f.subject_digest.clone())
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "database_digest": disposition.policy.database_digest,
+        "database_id": disposition.policy.database_id,
+        "platform_count": disposition.platform_inventories.len(),
+        "platforms": platform_list,
+        "result": "verified",
+        "scanned_subjects": scanned_subjects,
+        "schema": "prismpm/sdk-security-disposition-receipt/1",
+        "unresolved_findings": 0,
+        "verified_at_unix": now_unix
+    }))
+}
+
+/// Required first-party crate names in policy-compliant dependency order.
+pub const REQUIRED_FIRST_PARTY_CRATES: [&str; 5] = [
+    "prod-ir",
+    "prod-codegen",
+    "lexlean",
+    "prism-stdlib",
+    "prismpm",
+];
+
+/// Record of one first-party package initial upload to crates.io.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CratesIoPackageUpload {
+    /// The crate name.
+    pub name: String,
+    /// Semantic version string.
+    pub version: String,
+    /// 64-hex SHA-256 package checksum.
+    pub checksum: String,
+    /// SHA-256 digest of the crate archive bytes.
+    pub crate_bytes_digest: String,
+    /// Git commit SHA of the accepted source release.
+    pub source_commit: String,
+    /// Method used for the upload (must be owner-controlled, not unaided OIDC).
+    pub upload_method: String,
+    /// Registry owner credential identity performing the upload.
+    pub uploader: String,
+    /// Unix timestamp when the package was published.
+    pub published_at_unix: u64,
+}
+
+/// Trusted publishing readiness configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustedPublishingConfig {
+    /// Whether trusted publishing is enabled.
+    pub enabled: bool,
+    /// Identity provider (e.g., "github-actions").
+    pub provider: String,
+    /// Repository allowed to publish (e.g., "UOR-Foundation/PrismPM").
+    pub repository: String,
+    /// Pinned workflow file allowed to publish (e.g., "release.yml").
+    pub workflow: String,
+    /// Whether trusted publishing was configured strictly after owner bootstrap verification.
+    pub configured_after_bootstrap: bool,
+}
+
+/// Binding of downstream lock consumption to published package identities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DownstreamLockBinding {
+    /// Relative or absolute path to the consumer's lockfile.
+    pub lock_path: String,
+    /// Published package name expected in the lockfile.
+    pub package_name: String,
+    /// Published package version expected in the lockfile.
+    pub version: String,
+    /// 64-hex package checksum expected in the lockfile.
+    pub checksum: String,
+}
+
+/// Complete first-party crates.io bootstrap identity and trusted publishing readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CratesIoBootstrap {
+    /// Closed schema identifier (`prismpm/crates-io-bootstrap/1`).
+    pub schema: String,
+    /// Registry base URL (must be crates.io).
+    pub registry: String,
+    /// First-party package uploads in dependency order.
+    pub packages: Vec<CratesIoPackageUpload>,
+    /// Trusted publishing readiness configuration.
+    pub trusted_publishing: TrustedPublishingConfig,
+    /// Downstream lock consumption bindings.
+    pub downstream_locks: Vec<DownstreamLockBinding>,
+}
+
+/// Validate the complete first-party crates.io bootstrap identity and trusted publishing readiness.
+///
+/// Enforces:
+/// - Exact schema `prismpm/crates-io-bootstrap/1`.
+/// - Registry must be `https://crates.io`.
+/// - Exactly the five required first-party crates in dependency order:
+///   `prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`.
+/// - Each package has valid 64-hex checksum, 64-hex crate bytes digest,
+///   and 40-hex source commit.
+/// - Owner-controlled upload method (no unaided OIDC shortcuts).
+/// - Trusted publishing configured strictly after owner bootstrap verification.
+/// - Downstream lock bindings match published package identities.
+/// - No future publication timestamps relative to `now_unix`.
+pub fn validate_crates_io_bootstrap(
+    bootstrap: &CratesIoBootstrap,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    if bootstrap.schema != "prismpm/crates-io-bootstrap/1" {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap schema differs or is unsupported",
+        ));
+    }
+    if bootstrap.registry != "https://crates.io" {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap registry must be https://crates.io",
+        ));
+    }
+    if bootstrap.packages.len() != REQUIRED_FIRST_PARTY_CRATES.len() {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap must contain exactly five required first-party packages",
+        ));
+    }
+    let mut seen = BTreeSet::new();
+    for (idx, package) in bootstrap.packages.iter().enumerate() {
+        if package.name != REQUIRED_FIRST_PARTY_CRATES[idx] {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "{} must precede {} (dependency order: {})",
+                    REQUIRED_FIRST_PARTY_CRATES[idx],
+                    package.name,
+                    REQUIRED_FIRST_PARTY_CRATES.join(" -> ")
+                ),
+            ));
+        }
+        if !seen.insert(package.name.as_str()) {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap contains duplicate package names",
+            ));
+        }
+        if bare_digest_hex(&package.checksum).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap package checksum is not a valid 64-hex SHA-256 digest",
+            ));
+        }
+        if bare_digest_hex(&package.crate_bytes_digest).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap crate bytes digest is not a valid 64-hex SHA-256 digest",
+            ));
+        }
+        if git_commit_hex(&package.source_commit).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap source commit is not a valid 40-hex git commit SHA",
+            ));
+        }
+        if package.upload_method == "unaided-oidc" {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap unaided OIDC bootstrap shortcut prohibited",
+            ));
+        }
+        if package.uploader.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap uploader identity is required",
+            ));
+        }
+        if package.published_at_unix > now_unix {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap publication timestamp is in the future",
+            ));
+        }
+    }
+    if bootstrap.trusted_publishing.enabled {
+        if !bootstrap.trusted_publishing.configured_after_bootstrap {
+            return Err(PrismError::new(
+                "PP4103",
+                "trusted publishing configured before owner bootstrap validation",
+            ));
+        }
+        if bootstrap.trusted_publishing.repository.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP4103",
+                "trusted publishing repository is required",
+            ));
+        }
+    }
+    if bootstrap.downstream_locks.is_empty() {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap must verify at least one downstream lock binding",
+        ));
+    }
+    let mut known_packages = BTreeMap::new();
+    for package in &bootstrap.packages {
+        known_packages.insert(
+            package.name.clone(),
+            (package.version.clone(), package.checksum.clone()),
+        );
+    }
+    for lock in &bootstrap.downstream_locks {
+        let Some((expected_version, expected_checksum)) = known_packages.get(&lock.package_name)
+        else {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "downstream lock references unknown package {}",
+                    lock.package_name
+                ),
+            ));
+        };
+        if lock.version != *expected_version {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "downstream lock version mismatch for {}: expected {}, got {}",
+                    lock.package_name, expected_version, lock.version
+                ),
+            ));
+        }
+        if lock.checksum != *expected_checksum {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "downstream lock checksum mismatch for {}: expected {}, got {}",
+                    lock.package_name, expected_checksum, lock.checksum
+                ),
+            ));
+        }
+    }
+
+    Ok(json!({
+        "downstream_locks_verified": bootstrap.downstream_locks.len(),
+        "package_count": bootstrap.packages.len(),
+        "registry": bootstrap.registry,
+        "result": "verified",
+        "schema": "prismpm/crates-io-bootstrap-receipt/1",
+        "status": "passed",
+        "trusted_publishing_ready": bootstrap.trusted_publishing.enabled,
+        "verified_at_unix": now_unix
+    }))
+}
+
 fn component_element(component: &InventoryComponent) -> Value {
     json!({
         "creationInfo":creation_info(),
@@ -3157,7 +3802,8 @@ fn component_element(component: &InventoryComponent) -> Value {
     })
 }
 
-fn validate_sbom_closure(
+/// Validate the complete SPDX 3.0.1 graph closure against OCI descriptors and external artifacts.
+pub fn validate_sbom_closure(
     spdx: &Value,
     layers: &[oci::Descriptor],
     external_artifacts: &[Value],
@@ -3460,7 +4106,7 @@ pub(crate) fn attach_build_evidence(
         },
         "vulnerability_input":{
             "edition":vulnerability.database_edition,
-            "expires_unix":OSV_DATABASE_EXPIRES_UNIX,
+            "expires_unix":vulnerability.database_expires_unix,
             "freshness_policy_days":7,
             "source":vulnerability.database_source,
             "status":"within-production-policy"
@@ -3495,7 +4141,7 @@ pub(crate) fn attach_build_evidence(
         vulnerability_scope: format!(
             "{} through unix {}; zero Cargo findings in {} packages; {} retained and {} rejected image findings across {} image-package observations",
             vulnerability.database_edition,
-            OSV_DATABASE_EXPIRES_UNIX,
+            vulnerability.database_expires_unix,
             vulnerability.package_count,
             vulnerability.image_finding_count,
             vulnerability.image_rejected_count,
@@ -3506,6 +4152,140 @@ pub(crate) fn attach_build_evidence(
 
 #[cfg(test)]
 mod tests {
+    fn osv_policy_fixture() -> (tempfile::TempDir, serde_json::Value, serde_json::Value) {
+        let root = tempfile::tempdir().unwrap();
+        crate::authority::resolve(root.path(), false).unwrap();
+        let lock =
+            serde_json::from_slice(&std::fs::read(root.path().join("standards.lock")).unwrap())
+                .unwrap();
+        let inputs = serde_json::from_slice(super::OSV_INPUTS).unwrap();
+        (root, lock, inputs)
+    }
+
+    #[test]
+    fn osv_policy_binds_oldest_of_all_five_source_times_and_exact_expiry_boundary() {
+        let (_, lock, inputs) = osv_policy_fixture();
+        let times = inputs["databases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["source_created_unix"].as_u64().unwrap())
+            .collect::<Vec<_>>();
+        let expiry = times.iter().min().unwrap() + 604800;
+        assert_eq!(
+            super::osv_input_expiry(&lock, &inputs, expiry - 1).unwrap(),
+            expiry
+        );
+        assert!(super::osv_input_expiry(&lock, &inputs, expiry)
+            .unwrap_err()
+            .to_string()
+            .contains("stale"));
+        assert!(super::osv_input_expiry(&lock, &inputs, times.iter().max().unwrap() - 1).is_err());
+
+        // Make each ecosystem the oldest in turn: crates.io is not a privileged clock.
+        let earlier = times.iter().min().unwrap() - 86400;
+        let earlier_time = x509_parser::time::ASN1Time::from_timestamp(earlier as i64)
+            .unwrap()
+            .to_datetime();
+        let earlier_source = format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
+            earlier_time.year(),
+            u8::from(earlier_time.month()),
+            earlier_time.day(),
+            earlier_time.hour(),
+            earlier_time.minute(),
+            earlier_time.second()
+        );
+        for index in 0..5 {
+            let mut changed = inputs.clone();
+            changed["databases"][index]["source_created_unix"] = serde_json::json!(earlier);
+            changed["databases"][index]["source_created"] = serde_json::json!(earlier_source);
+            let expected = earlier + 604800;
+            assert_eq!(
+                super::osv_input_expiry(&lock, &changed, expected - 1).unwrap(),
+                expected
+            );
+            assert!(super::osv_input_expiry(&lock, &changed, expected).is_err());
+        }
+    }
+
+    #[test]
+    fn osv_policy_rejects_every_missing_duplicated_or_substituted_database() {
+        let (_, lock, inputs) = osv_policy_fixture();
+        let now = inputs["databases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["source_created_unix"].as_u64().unwrap())
+            .max()
+            .unwrap();
+        for ecosystem in super::OSV_ECOSYSTEMS {
+            let index = lock["authorities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .position(|row| {
+                    row["canonical_id"] == format!("gs://osv-vulnerabilities/{ecosystem}/all.zip")
+                })
+                .unwrap();
+            for field in ["sha256", "revision", "url", "redistribution", "signature"] {
+                let mut changed = lock.clone();
+                changed["authorities"][index]["source"][field] = serde_json::json!("substituted");
+                assert!(
+                    super::osv_input_expiry(&changed, &inputs, now).is_err(),
+                    "{ecosystem}: {field}"
+                );
+            }
+            let mut missing = lock.clone();
+            missing["authorities"].as_array_mut().unwrap().remove(index);
+            assert!(super::osv_input_expiry(&missing, &inputs, now).is_err());
+            let mut duplicate = lock.clone();
+            duplicate["authorities"]
+                .as_array_mut()
+                .unwrap()
+                .push(lock["authorities"][index].clone());
+            assert!(super::osv_input_expiry(&duplicate, &inputs, now).is_err());
+        }
+        for field in ["source_created", "source_created_unix", "generation", "url"] {
+            let mut changed = inputs.clone();
+            changed["databases"][0][field] = serde_json::json!("substituted");
+            assert!(super::osv_input_expiry(&lock, &changed, now).is_err());
+        }
+        let mut relaxed = inputs.clone();
+        relaxed["freshness_policy_seconds"] = serde_json::json!(604801);
+        assert!(super::osv_input_expiry(&lock, &relaxed, now).is_err());
+    }
+
+    #[test]
+    fn osv_scan_and_image_acquisition_enforce_reviewed_identity_before_execution() {
+        let (root, mut lock, _) = osv_policy_fixture();
+        let row = lock["authorities"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|row| row["canonical_id"] == "gs://osv-vulnerabilities/npm/all.zip")
+            .unwrap();
+        row["source"]["sha256"] = serde_json::json!("0".repeat(64));
+        std::fs::write(
+            root.path().join("standards.lock"),
+            serde_json::to_vec(&lock).unwrap(),
+        )
+        .unwrap();
+        let scan = super::scan_vulnerabilities(root.path(), &[]).unwrap_err();
+        assert!(
+            scan.to_string()
+                .contains("locked OSV database identity or source time changed"),
+            "{scan}"
+        );
+        let acquisition = super::osv_databases(root.path(), &lock).unwrap_err();
+        assert!(
+            acquisition
+                .to_string()
+                .contains("locked OSV database identity or source time changed"),
+            "{acquisition}"
+        );
+    }
+
     #[test]
     fn execution_boundary_rejects_wrong_native_inventory() {
         crate::sdk::execution_binding_regression(

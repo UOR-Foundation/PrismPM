@@ -57,12 +57,10 @@ if test -z "${PRISMPM_TEST_SDK_IMAGE:-}"; then
     exit 1
   fi
 
-  docker build \
+  node scripts/sdk-image-inputs.mjs build . "$(git rev-parse HEAD)" runtime \
     --build-arg SOURCE_DATE_EPOCH=0 \
-    --file sdk/Dockerfile \
-    --target runtime \
-    --tag prismpm-vv-sdk:gate \
-    .
+    --load \
+    --tag prismpm-vv-sdk:gate
 
   sdk_tag="$endpoint/prismpm-vv-sdk:gate"
   docker image tag prismpm-vv-sdk:gate "$sdk_tag"

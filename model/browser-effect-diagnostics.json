@@ -1,0 +1,9 @@
+{
+  "spec": "prismpm/browser-effect-diagnostics/1",
+  "capability": "DK-20",
+  "error_class": "EffectHostError",
+  "errors": ["artifact-mismatch", "effect-outcome-unknown", "effect-rejected", "generated-execution-failed", "host-closed", "host-unavailable", "invalid-generated-module", "invalid-generated-output", "invalid-input", "model-rejected", "request-limit", "resource-mismatch", "wire-rejected"],
+  "protocol_errors": ["BadManifest", "BadSession", "Closed", "OutcomeUnknown", "Busy", "OperationExhausted", "WrongApplication", "WrongManifest", "WrongSession", "WrongOperation", "UnknownResource", "InvalidEffect", "NoActiveOperation", "CompletionMismatch", "InvalidResult"],
+  "wire_errors": ["BadLimits", "BadCursor", "Truncated", "WrongType", "UnsupportedHead", "NonCanonical", "ValueLimit", "InvalidUtf8", "TrailingInput"],
+  "effect_failures": ["InvalidInput", "IdentityCorrupt", "CryptoUnavailable", "HeadConflict", "MissingObject", "ObjectCorrupt", "StoreLimit", "StoreClosed", "StorageQuota", "StorageUnavailable", "InvalidGeneratedModule", "GeneratedExecutionFailed", "InvalidGeneratedOutput"]
+}

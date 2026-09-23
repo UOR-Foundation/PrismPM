@@ -97,7 +97,7 @@ function manifestDefinition(name, value) {
 
 export function prepare(root, envelope) {
   const manifest = sourceManifest(root);
-  for (const path of ['scripts/bootstrap-evidence.mjs', 'scripts/bootstrap-evidence.test.mjs']) {
+  for (const path of ['scripts/bootstrap-evidence.mjs', 'scripts/bootstrap-evidence.test.mjs', 'sdk/bootstrap/runner.mjs', 'sdk/bootstrap/runtime.lock.json']) {
     requireThat(manifest.files.some(file => file.path === path), `bootstrap helper is not tracked: ${path}`);
   }
   writeFileSync(join(envelope, 'source-manifest.json'), canonical(manifest));

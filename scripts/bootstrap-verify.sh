@@ -32,6 +32,7 @@ tar --extract --gzip --file "$archive" --directory "$work" \
 prior="$work/prismpm-0.2.0-x86_64-unknown-linux-gnu/prismpm"
 test -x "$prior"
 prior_binary_sha=$(sha256sum "$prior" | cut -d' ' -f1)
+node "$root/sdk/bootstrap/runner.mjs" --describe "$prior"
 
 node --test "$root/scripts/bootstrap-evidence.test.mjs"
 envelope="$work/envelope"
@@ -46,11 +47,11 @@ node "$root/scripts/bootstrap-evidence.mjs" prepare "$root" "$envelope"
 # projection and then validates the full production model below.  The evidence
 # keeps those scopes separate; it never represents compatibility validation as
 # full 0.3 semantic conformance.
-if ! "$prior" --project "$envelope" check --json >"$work/prior-projection.json"; then
+if ! node "$root/sdk/bootstrap/runner.mjs" "$prior" --project "$envelope" check --json >"$work/prior-projection.json"; then
   cat "$work/prior-projection.json" >&2
   exit 1
 fi
-"$prior" --project "$envelope" build --json >"$work/prior-build.json"
+node "$root/sdk/bootstrap/runner.mjs" "$prior" --project "$envelope" build --json >"$work/prior-build.json"
 node "$root/scripts/bootstrap-evidence.mjs" capture "$envelope" \
   "$work/prior-projection.json" "$work/prior-build.json" "$work/prior-capture.json"
 if ! cargo run --locked --offline --quiet --manifest-path \

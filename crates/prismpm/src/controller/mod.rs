@@ -125,6 +125,15 @@ pub struct ExportBrowserRequest {
     pub output: PathBuf,
 }
 
+/// Request for source-free HTTPS byte-integrity verification, not authorization.
+#[derive(Debug, Clone)]
+pub struct VerifyBrowserPublicationRequest {
+    /// Registry-qualified immutable local release reference.
+    pub reference: String,
+    /// Explicit canonical HTTPS base URL, including its trailing slash.
+    pub url: String,
+}
+
 /// Successful build publication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -237,6 +246,10 @@ fn utf8(path: PathBuf) -> Result<Utf8PathBuf, PrismError> {
 }
 
 fn count_entities(doc: &ModelDocument) -> Result<u64, PrismError> {
+    if let Some(library) = &doc.library {
+        return u64::try_from(library.export_roots.len())
+            .map_err(|_| PrismError::new("PP1003", "library export count exceeds u64"));
+    }
     let count = doc.architecture.components.len()
         + doc.architecture.edges.len()
         + doc.architecture.stakeholders.len()
@@ -473,9 +486,23 @@ impl Controller {
             None
         };
         let model_snapshot = application_snapshot.as_ref().unwrap_or(&snapshot);
-        let model = match crate::holo::application::project_application(model_snapshot)? {
-            Some(model) => model,
-            None => project_snapshot(model_snapshot)?,
+        let application_model = crate::holo::application::project_application(model_snapshot)?;
+        let library_model = crate::holo::library::project_library(&snapshot)?;
+        let model = match (application_model, library_model) {
+            (Some(_), Some(_)) => {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "a native library cannot also declare an application",
+                ))
+            }
+            (_, Some(_)) if system.is_some() => {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "a native library cannot also declare a system release",
+                ))
+            }
+            (Some(model), None) | (None, Some(model)) => model,
+            (None, None) => project_snapshot(model_snapshot)?,
         };
         let model_bytes = encode_canonical(&model)?;
         if let Some(system) = &system {
@@ -488,6 +515,9 @@ impl Controller {
                         system.value()["application_profile"]["application_model_digest"]
                     ),
                 ));
+            }
+            if system.schema() == "prismpm/system-model/2" {
+                crate::system::browser::validate_application(system.value(), &model)?;
             }
         }
         let entities = count_entities(&model)?;
@@ -551,6 +581,14 @@ impl Controller {
         crate::oci::export_browser(&self.root, &request.reference, &request.output)
     }
 
+    /// Compare the complete reverified browser closure at one explicit HTTPS target.
+    pub fn verify_browser_publication(
+        &self,
+        request: VerifyBrowserPublicationRequest,
+    ) -> Result<serde_json::Value, PrismError> {
+        crate::oci::verify_browser_publication(&self.root, &request.reference, &request.url)
+    }
+
     /// Build LexLean artifacts and atomically publish the fixed Prism artifact set.
     pub fn build(&self, request: BuildRequest) -> Result<BuildResult, PrismError> {
         self.build_release(request, None)
@@ -563,6 +601,9 @@ impl Controller {
         release: Option<&str>,
     ) -> Result<BuildResult, PrismError> {
         let prepared = self.prepare_release(request.config_path.as_deref(), release)?;
+        if let Some(application) = &prepared.model.application {
+            crate::holo::browser_application::require_runtime(application)?;
+        }
         let lex = prepared
             .engine
             .build(LexBuildRequest {
@@ -721,6 +762,15 @@ impl Controller {
             }
             artifacts.extend(application_artifacts);
         }
+        if prepared.model.library.is_some() {
+            artifacts.extend(crate::library_build::generate(
+                &self.root,
+                &prepared.model,
+                &prepared.model_bytes,
+                &lex_root,
+                &lex_manifest_bytes,
+            )?);
+        }
         if let Some(system) = &prepared.system {
             artifacts.push(("system.prism.json".to_owned(), system.bytes().to_vec()));
             for projection in crate::system::projections(system, &artifacts)? {
@@ -768,6 +818,12 @@ impl Controller {
             inputs["application_artifacts_sha256"] =
                 json!(content_id(&encode_value(&json!(rows))?));
             inputs["schema"] = json!("prismpm/build-inputs/2");
+        }
+        if prepared.model.library.is_some() {
+            inputs["library_artifacts_sha256"] = json!(content_id(&encode_value(&json!(rows))?));
+            inputs["library_generator_sha256"] =
+                json!(content_id(include_bytes!("../library_build.rs")));
+            inputs["schema"] = json!("prismpm/build-inputs/3");
         }
         let build_id = content_id(&encode_value(&inputs)?);
         let manifest_value = serde_json::to_value(json!({
@@ -853,6 +909,17 @@ impl Controller {
             return Err(PrismError::new(
                 "PP1101",
                 "product release construction requires --locked",
+            ));
+        }
+        if self
+            .prepare_release(request.config_path.as_deref(), request.release.as_deref())?
+            .model
+            .library
+            .is_some()
+        {
+            return Err(PrismError::new(
+                "PP6101",
+                "native-library acceptance is not product-release or deployment acceptance",
             ));
         }
         crate::authority::resolve(&self.root, true)?;

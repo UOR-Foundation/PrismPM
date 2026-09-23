@@ -20,6 +20,43 @@ async function inBrowser(operation) {
   });
 }
 
+test('Chromium random bytes use native bounded fresh buffers', {timeout: 30000}, async () => {
+  const result = await inBrowser(async () => {
+    const {randomBytes, MAX_RANDOM_BYTES} = await import('./identity.mjs');
+    const a = randomBytes(32), b = randomBytes(32);
+    const maximum = randomBytes(MAX_RANDOM_BYTES);
+    return {bound: MAX_RANDOM_BYTES, sizes: [randomBytes(1).length, a.length, maximum.length],
+      fresh: a.buffer !== b.buffer, differ: a.some((value, index) => value !== b[index]),
+      native: Object.getPrototypeOf(a) === Uint8Array.prototype};
+  });
+  assert.deepEqual(result, {bound: 65536, sizes: [1, 32, 65536], fresh: true, differ: true, native: true});
+});
+
+test('Chromium random boundary rejects input before effects and sanitizes unavailable providers', {timeout: 30000}, async () => {
+  const result = await inBrowser(async () => {
+    const {randomBytes} = await import('./identity.mjs');
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    const codes = []; let calls = 0;
+    try {
+      Object.defineProperty(globalThis, 'crypto', {configurable: true, get() { calls++; throw Error('private error'); }});
+      for (const size of [0, -1, 1.5, 65537, NaN, Infinity, null, '32', 32n,
+        {valueOf() { calls++; throw Error('coercion'); }}]) {
+        try { randomBytes(size); codes.push('accepted'); } catch (error) { codes.push(error.code); }
+      }
+      if (calls !== 0) throw Error('invalid input reached provider');
+      try { randomBytes(32); codes.push('accepted'); }
+      catch (error) {
+        codes.push(error.code);
+        if (error.message !== 'crypto-unavailable' || Object.hasOwn(error, 'cause')) throw Error('provider leak');
+      }
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'crypto', original); else delete globalThis.crypto;
+    }
+    return {codes, calls, restored: randomBytes(32).length};
+  });
+  assert.deepEqual(result, {codes: [...Array(10).fill('invalid-input'), 'crypto-unavailable'], calls: 1, restored: 32});
+});
+
 test('Chromium identity is nonextractable and its signature verifies independently', {timeout: 30000}, async () => {
   assert.equal(await inBrowser(checkIntrinsicKeys), 14);
   assert.equal(await inBrowser(checkPrototypeLifecycle), 3);

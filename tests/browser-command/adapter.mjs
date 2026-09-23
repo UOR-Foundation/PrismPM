@@ -11,7 +11,7 @@ export async function verifyAdapter(build,run,literalVectors){
     const page=await browser.newPage();await page.route('**/commands.mjs',route=>route.fulfill({status:200,contentType:'text/javascript',body:source}));await page.goto(baseURL);
     return page.evaluate(adapterFixture,{commandBytes:Array.from(commandBytes),journalBytes:Array.from(journalBytes),vectors});
   });
-  assert.equal(result.cases.length,22);assert.equal(result.maximum,58*65536);assert.ok(result.calls.length>500);
+  assert.equal(result.cases.length,22);assert.equal(result.maximum,50*65536);assert.ok(result.calls.length>500);
   const rows=result.calls.map((call,index)=>{assert.deepEqual(Object.keys(call).sort(),['kind','request','response']);assert.ok(['Command','Journal'].includes(call.kind));assert.match(call.request,/^(?:[0-9a-f]{2})*$/);assert.match(call.response,/^(?:[0-9a-f]{2})+$/);return call.kind+index+'\t'+call.request+'\t'+call.response+'\n';});
   const path=join(build.work,'adapter-transcript.tsv');writeFileSync(path,rows.join(''));
   const binary=join(build.work,'native-target/release/browser-workspace-command-runner'),runner=join(build.work,'runner');

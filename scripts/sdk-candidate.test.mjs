@@ -72,6 +72,13 @@ test('SDK inventory compiler metadata follows the exact authoritative register, 
   assert.ok(generator.includes("version: id === 'lean4-prod' ? revision : version"));
   assert.ok(generator.includes("['conformance-corpus', 'test-corpus', 'prismpm/ids/1'"));
   assert.ok(!/\d+-features-\d+-diagnostics/.test(generator));
+  const browserAdapter = readFileSync(new URL('../adapters/github-pages-browser.json', import.meta.url));
+  const descriptor = JSON.parse(browserAdapter);
+  assert.equal(descriptor.id, 'github-pages-browser');
+  assert.equal(descriptor.model_api, 'prismpm/system-model/2');
+  assert.equal(descriptor.target_api, 'github-pages-artifact@v4');
+  assert.equal(generator.split("['adapter-github-pages-browser', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages-browser.json']").length, 2,
+    'the exact browser-system target descriptor must be measured once in the installed SDK inventory');
 });
 
 test('candidate ORAS native pins match the production SDK and official 1.3.0 release checksums', () => {

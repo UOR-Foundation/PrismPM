@@ -1,0 +1,63 @@
+name: Review native golden source records
+
+on:
+  pull_request:
+
+permissions: {}
+concurrency:
+  group: native-golden-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  native-source-review:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=docker.io/moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Start bounded native review diagnostics
+        run: node scripts/ci-observe.mjs start "$RUNNER_TEMP/native-observer"
+      - name: Generate review-only native records
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node scripts/native-golden.mjs tests
+          node scripts/native-golden.mjs run "$SOURCE_REVISION" "$RUNNER_TEMP/native-golden"
+      - name: Stop native review diagnostics
+        if: always()
+        run: node scripts/ci-observe.mjs stop "$RUNNER_TEMP/native-observer"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-golden-review-${{ matrix.arch }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/native-golden/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-golden-diagnostics-${{ matrix.arch }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/native-observer/
+          if-no-files-found: error
+          retention-days: 7
