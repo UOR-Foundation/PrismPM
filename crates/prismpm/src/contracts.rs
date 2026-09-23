@@ -12,7 +12,43 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 48] = [
+const CONTRACTS: [Contract; 56] = [
+    Contract {
+        id: "prismpm/model-document/4",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/model-document-v4.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-publication-integrity/1",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/browser-publication-integrity.schema.json"),
+    },
+    Contract {
+        id: "prismpm/library-build-binding/1",
+        maximum_bytes: 4_194_304,
+        maximum_items: 4_096,
+        schema: include_bytes!("../schemas/library-build-binding.schema.json"),
+    },
+    Contract {
+        id: "prismpm/library-acceptance/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/library-acceptance.schema.json"),
+    },
+    Contract {
+        id: "prismpm/library-verification-manifest/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/library-verification-manifest.schema.json"),
+    },
+    Contract {
+        id: "prismpm/model-document/3",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/model-document-v3.schema.json"),
+    },
     Contract {
         id: "prismpm/browser-export/1",
         maximum_bytes: 1_048_576,
@@ -273,6 +309,18 @@ const CONTRACTS: [Contract; 48] = [
         schema: include_bytes!("../schemas/system-model.schema.json"),
     },
     Contract {
+        id: "prismpm/system-model/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/system-model-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/browser-system-release/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/browser-system-release.schema.json"),
+    },
+    Contract {
         id: "prismpm/template-result/1",
         maximum_bytes: 4_194_304,
         maximum_items: 8_192,
@@ -320,6 +368,88 @@ fn strictly_ordered(rows: &[Value], key: impl Fn(&Value) -> Option<String>) -> b
 }
 
 fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
+    if id == "prismpm/browser-system-release/1" {
+        let rows = value["files"]
+            .as_array()
+            .expect("schema-validated browser system rows");
+        if !strictly_ordered(rows, |row| row["path"].as_str().map(str::to_owned))
+            || rows.iter().any(|row| {
+                row["path"]
+                    .as_str()
+                    .unwrap()
+                    .split('/')
+                    .any(|part| part.is_empty() || part == "." || part == "..")
+            })
+        {
+            return Err(PrismError::new(
+                "PP1101",
+                "browser system artifact paths must be confined, unique, and ordered",
+            ));
+        }
+        return Ok(());
+    }
+    if matches!(
+        id,
+        "prismpm/library-build-binding/1" | "prismpm/library-acceptance/1"
+    ) {
+        let invalid =
+            || PrismError::new("PP4004", "native-library evidence roots are inconsistent");
+        let roots = |rows: &Value| -> Result<Vec<String>, PrismError> {
+            let rows = rows.as_array().ok_or_else(invalid)?;
+            let names = rows
+                .iter()
+                .map(|row| row.as_str().map(str::to_owned).ok_or_else(invalid))
+                .collect::<Result<Vec<_>, _>>()?;
+            if names.is_empty()
+                || names.len() > 1024
+                || names
+                    .iter()
+                    .any(|name| !crate::holo::library::qualified(name))
+                || names.windows(2).any(|rows| rows[0] >= rows[1])
+            {
+                return Err(invalid());
+            }
+            Ok(names)
+        };
+        let exports = roots(&value["export_roots"])?;
+        let acceptance = if id == "prismpm/library-build-binding/1" {
+            roots(&value["acceptance_roots"])?
+        } else {
+            let first = roots(&value["executions"][0]["roots"])?;
+            if first != roots(&value["executions"][1]["roots"])? {
+                return Err(invalid());
+            }
+            first
+        };
+        if acceptance
+            .iter()
+            .any(|root| exports.binary_search(root).is_err())
+        {
+            return Err(invalid());
+        }
+        return Ok(());
+    }
+    if id == "prismpm/library-verification-manifest/1" {
+        let mut prior = None;
+        for row in value["artifacts"]
+            .as_array()
+            .expect("schema-validated artifact array")
+        {
+            let path = row["path"]
+                .as_str()
+                .expect("schema-validated artifact path");
+            if path.split('/').any(|part| matches!(part, "" | "." | ".."))
+                || prior.is_some_and(|previous| previous >= path)
+            {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "native-library artifact paths are not confined and strictly ordered",
+                ));
+            }
+            prior = Some(path);
+        }
+        return Ok(());
+    }
     if id == "prismpm/workspace-view-labels/1" {
         // JSON Schema maxLength counts Unicode scalars; the host contract
         // instead bounds the encoded UTF-8 bytes of every label value.
@@ -333,14 +463,28 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             }
         }
     }
-    if id == "prismpm/model-document/2" {
+    if matches!(
+        id,
+        "prismpm/model-document/2" | "prismpm/model-document/3" | "prismpm/model-document/4"
+    ) {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
-            PrismError::new("PP2009", format!("text application shape: {error}"))
+            PrismError::new(
+                if id == "prismpm/model-document/4" {
+                    "PP2010"
+                } else if id == "prismpm/model-document/2" {
+                    "PP2009"
+                } else {
+                    "PP4004"
+                },
+                format!("model document shape: {error}"),
+            )
         })?;
         return crate::holo::validate::validate(&document);
     }
     let arrays: Vec<(&str, &str)> = match id {
-        "prismpm/browser-export/1" => vec![("files", "path")],
+        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1" => {
+            vec![("files", "path")]
+        }
         "prismpm/capability-coverage/1" => {
             vec![("diagnostics", "code"), ("features", "feature_id")]
         }
@@ -696,7 +840,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             }
         }
     }
-    if id == "prismpm/browser-export/1" {
+    if matches!(
+        id,
+        "prismpm/browser-export/1" | "prismpm/browser-publication-integrity/1"
+    ) {
         let reference = value["reference"]
             .as_str()
             .expect("schema-validated reference");
@@ -708,6 +855,9 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
                 "browser export receipt identities disagree",
             ));
         }
+    }
+    if id == "prismpm/browser-publication-integrity/1" {
+        crate::oci::validate_browser_publication_receipt(value)?;
     }
     Ok(())
 }

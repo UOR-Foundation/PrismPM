@@ -1,0 +1,8 @@
+; RFC 8610 value domain only. RFC 8949 core-deterministic encoding is
+; an additional mandatory constraint, not implied by .size.
+primitive = unsigned / bytes / text / bool / null
+unsigned = uint .size 4
+bytes = bstr .size (0..4294967295)
+text = tstr .size (0..4294967295)
+; Array-head operations expose a count, not a complete CBOR array value.
+array-count = uint .size 4

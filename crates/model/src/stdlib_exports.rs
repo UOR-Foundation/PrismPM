@@ -38,7 +38,7 @@ impl StdlibExports {
         if self.spec != "prismpm/stdlib-exports/1"
             || self.lean_module != "PrismPM.Runtime"
             || self.ir_module != "PrismPM"
-            || self.export.len() != 43
+            || self.export.len() != 54
             || self
                 .export
                 .windows(2)
@@ -89,6 +89,13 @@ impl StdlibExports {
                 | "qualityEdition"
                 | "riskEdition" => ("Holo.StandardsProfile", "fn(StandardsProfile) -> u64"),
                 "contractName" => ("Holo.V1.CoreWasm", "fn() -> String"),
+                "browserAppManifest" => ("Holo.V1.BrowserWire", "fn(Vec<u8>, Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"),
+                "browserArchiveBody" => ("Holo.V1.BrowserWire", "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "browserArchiveBodyBytes" | "browserArchiveFooter" => ("Holo.V1.BrowserWire", "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "browserArchiveExtension" | "browserArchiveSection" | "browserManifestReference" => ("Holo.V1.BrowserWire", "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "browserFrameArchive" => ("Holo.V1.BrowserWire", "fn(Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "browserValidAppManifest" => ("Holo.V1.BrowserWire", "fn(&[u8]) -> bool"),
+                "browserValidArchiveBody" | "browserValidArchiveFrame" => ("Holo.V1.BrowserWire", "fn(&[u8]) -> Result<bool, ComputeError>"),
                 "appManifest" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"),
                 "archiveBody" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
                 "archiveBodyBytes" => ("Holo.V1.Wire", "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
@@ -175,7 +182,7 @@ mod tests {
         let exports: StdlibExports = toml::from_str(SOURCE).unwrap();
         let runtime = vec!["PrismPM.Foundation.Holo.validateComponentIndexes".to_owned()];
         let union = exports.union_with_runtime(&runtime).unwrap();
-        assert_eq!(union.len(), 44);
+        assert_eq!(union.len(), 55);
         assert_eq!(runtime.len(), 1);
         assert!(union.contains(&runtime[0]));
         let mut document: toml::Value = toml::from_str(SOURCE).unwrap();

@@ -204,13 +204,16 @@ test('update captures both exact images without running foreign code and cleans 
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-update-test-'));
   try {
     const {reference, inventories, index} = await fixture(directory);
-    const capture = captureRunner(directory, reference, index);
-    const proposed = await capturePlatformLock(reference, sha(standards), capture.run);
-    assert.deepEqual(proposed, await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
-    assert.equal(capture.calls.length, 13);
-    assert.equal(capture.calls.filter(args => args[0] === 'rm').length, 2);
-    assert.ok(capture.calls.every(args => args[0] !== 'run' && args[0] !== 'start' && args[0] !== 'exec'));
-    assert.ok(capture.destinations.every(file => !existsSync(file)));
+    for (const asynchronous of [false, true]) {
+      const capture = captureRunner(directory, reference, index);
+      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
+      const proposed = await capturePlatformLock(reference, sha(standards), run);
+      assert.deepEqual(proposed, await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
+      assert.equal(capture.calls.length, 13);
+      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, 2);
+      assert.ok(capture.calls.every(args => args[0] !== 'run' && args[0] !== 'start' && args[0] !== 'exec'));
+      assert.ok(capture.destinations.every(file => !existsSync(file)));
+    }
   } finally { await rm(directory, {recursive: true, force: true}); }
 });
 
@@ -218,9 +221,10 @@ test('update rejects index/digest/architecture/copy/standards/symlink failures a
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-update-test-'));
   try {
     const {reference, index} = await fixture(directory);
-    for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards']) {
+    for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards']) {
       const capture = captureRunner(directory, reference, index, mutation);
-      await assert.rejects(capturePlatformLock(reference, mutation === 'standards' ? sha('wrong standards') : sha(standards), capture.run));
+      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
+      await assert.rejects(capturePlatformLock(reference, mutation === 'standards' ? sha('wrong standards') : sha(standards), run));
       const creates = capture.calls.filter(args => args[0] === 'create').length;
       assert.equal(capture.calls.filter(args => args[0] === 'rm').length, creates, mutation);
       assert.ok(capture.destinations.every(file => !existsSync(file)), mutation);

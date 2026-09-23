@@ -10,6 +10,7 @@
 pub mod acceptance;
 mod application_build;
 pub mod authority;
+mod browser_build;
 mod browser_oracle;
 pub mod cli;
 pub mod config;
@@ -19,6 +20,8 @@ pub mod deployment;
 pub mod diagnostics;
 pub mod error;
 pub mod holo;
+mod library_build;
+mod library_verification;
 pub mod lifecycle;
 pub mod oci;
 pub mod operations;

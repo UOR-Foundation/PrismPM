@@ -14,6 +14,8 @@
 
 # Release assembly
 /release/
+/.sdk-gate-evidence/
+/.native-equivalence/
 
 # Compiler and generator output is confined to the build roots above. Do not
 # ignore by extension: immutable upstream conformance corpora may legitimately

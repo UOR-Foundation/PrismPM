@@ -41,3 +41,15 @@ Feature: oci
     Given the locked PrismPM production fixture
     When the OC-07 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @OC-08 @build
+  Scenario: Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance.
+    Given the locked PrismPM production fixture
+    When the OC-08 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected
+
+  @OC-09 @build
+  Scenario: A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment.
+    Given the locked PrismPM production fixture
+    When the OC-09 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

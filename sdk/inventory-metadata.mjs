@@ -50,3 +50,46 @@ export function validateAuthorityMetadata(artifacts, revision) {
   assert.equal(corpus.length, 1);
   assert.equal(corpus[0].version, 'prismpm/ids/1', 'SDK corpus metadata must identify its stable schema, not stale counts');
 }
+
+// These rows measure sealed input data, not a materialized checkout's mutable
+// Git metadata and not proof that any acceptance command ran.
+export function validateImageInputMetadata(artifacts, policy, manifest, manifestDigest, policyDigest) {
+  assert.equal(manifest.schema, 'prismpm/sdk-vv-input-closure/1');
+  assert.equal(manifest.scope, 'sdk-vv-inputs-only');
+  assert.deepEqual(manifest.policy, policy);
+  assert(Array.isArray(manifest.artifacts));
+  assert.deepEqual(manifest.artifacts.map(row => row.path), ['advisory.pack', 'bootstrap.tar.gz', 'source.pack']);
+  for (const row of manifest.artifacts) {
+    assert.deepEqual(Object.keys(row).sort(), ['byte_length', 'path', 'sha256']);
+    assert.match(row.sha256, /^[0-9a-f]{64}$/);
+    assert(Number.isSafeInteger(row.byte_length) && row.byte_length > 0
+      && row.byte_length <= (row.path === 'bootstrap.tar.gz' ? 64 : 256) * 1024 * 1024,
+    'bounded sealed payload length required');
+  }
+  const payloads = new Map(manifest.artifacts.map(row => [row.path, row.sha256]));
+  assert.equal(payloads.size, 3);
+  assert.equal(payloads.get('bootstrap.tar.gz'), policy.bootstrap_sha256);
+  const rows = [
+    ['sdk-vv-source', policy.source_revision, `sha256:${payloads.get('source.pack')}`],
+    ['sdk-vv-advisory', policy.advisory_revision, `sha256:${payloads.get('advisory.pack')}`],
+    ['sdk-vv-bootstrap', '0.2.0', `sha256:${policy.bootstrap_sha256}`],
+    ['sdk-vv-manifest', '1', manifestDigest],
+    ['sdk-vv-policy', '1', policyDigest],
+  ];
+  for (const [id, version, digest] of rows) {
+    const matches = artifacts.filter(row => row.id === id);
+    assert.equal(matches.length, 1, `exact measured SDK input required: ${id}`);
+    assert.deepEqual(matches[0], { id, kind: 'test-corpus', version, digest });
+    assert.match(digest, /^sha256:[0-9a-f]{64}$/);
+  }
+  for (const [id, path] of [
+    ['sdk-vv-verifier', 'scripts/sdk-vv-inputs.mjs'],
+    ['sdk-image-input-verifier', 'scripts/sdk-image-inputs.mjs'],
+    ['sdk-image-input-authorities', 'sdk/vv-inputs.lock.json'],
+  ]) {
+    const selected = manifest.source.files.filter(row => row.path === path);
+    const rows = artifacts.filter(row => row.id === id);
+    assert.equal(selected.length, 1); assert.equal(rows.length, 1);
+    assert.deepEqual(rows[0], { id, kind: 'test-corpus', version: '1', digest: `sha256:${selected[0].sha256}` });
+  }
+}

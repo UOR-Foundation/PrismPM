@@ -80,7 +80,7 @@ fn package_export_roots(source: &str, runtime: &RuntimeRoots) -> Result<Vec<Stri
     if register.spec != "prismpm/stdlib-exports/1"
         || register.lean_module != runtime.lean_module
         || register.ir_module != runtime.ir_module
-        || names.len() != 43
+        || names.len() != 54
         || names.windows(2).any(|pair| pair[0] >= pair[1])
         || symbols.len() != names.len()
         || register.export.iter().any(|row| {
@@ -313,14 +313,14 @@ pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
     ))
 }
 
-struct Toolchain {
+pub(crate) struct Toolchain {
     lake: PathBuf,
     rustfmt: PathBuf,
     rustc: PathBuf,
-    records: Vec<ProcessRecord>,
+    pub(crate) records: Vec<ProcessRecord>,
 }
 
-fn preflight_toolchain(
+pub(crate) fn preflight_toolchain(
     cwd: &Path,
     replacements: &[(&Path, &str)],
 ) -> Result<Toolchain, PrismError> {
@@ -507,6 +507,24 @@ fn stable_success_output(tool: &str, value: String) -> String {
     }
 }
 
+fn hologram_oracle_environment(root: &Path) -> BTreeMap<String, String> {
+    // run_process clears the ambient Cargo policy. Bound this independent
+    // cold compiler explicitly; debug symbols and incremental state do not
+    // participate in the unchanged upstream oracle's execution or assertions.
+    BTreeMap::from([
+        ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
+        ("CARGO_BUILD_JOBS".to_owned(), "2".to_owned()),
+        ("CARGO_PROFILE_DEV_DEBUG".to_owned(), "0".to_owned()),
+        ("CARGO_INCREMENTAL".to_owned(), "0".to_owned()),
+        (
+            "CARGO_TARGET_DIR".to_owned(),
+            root.join("target/hologram-oracle")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+    ])
+}
+
 fn run_hologram_oracle(
     controller: &Controller,
     build_root: &Path,
@@ -559,16 +577,7 @@ fn run_hologram_oracle(
         (build_root, "$BUILD"),
         (work.path(), "$ORACLE_WORK"),
     ];
-    let mut env = BTreeMap::new();
-    env.insert("CARGO_NET_OFFLINE".to_owned(), "true".to_owned());
-    env.insert(
-        "CARGO_TARGET_DIR".to_owned(),
-        controller
-            .root
-            .join("target/hologram-oracle")
-            .to_string_lossy()
-            .into_owned(),
-    );
+    let env = hologram_oracle_environment(&controller.root);
     let node_version = run_process(
         "hologram-browser-node-version",
         &node,
@@ -726,6 +735,9 @@ pub(crate) fn validate_hologram_oracle_report(
             continue;
         };
         let applicable = match application {
+            Application::Browser(_) => {
+                return crate::holo::browser_application::require_runtime(application)
+            }
             Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
             Application::Legacy(value) => {
                 let fields = request.split('\t').collect::<Vec<_>>();
@@ -760,6 +772,9 @@ pub(crate) fn validate_hologram_oracle_report(
         "intent-boundaries",
     ];
     let profile = match application {
+        Application::Browser(_) => {
+            return crate::holo::browser_application::require_runtime(application)
+        }
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
             "utf8-text"
@@ -783,6 +798,78 @@ pub(crate) fn validate_hologram_oracle_report(
 #[cfg(test)]
 mod portable_oracle_tests {
     use super::*;
+
+    #[test]
+    fn oracle_compile_policy_survives_environment_isolation() {
+        const CHILD: &str = "PRISMPM_ORACLE_BUILD_POLICY_TEST";
+        let hostile = BTreeMap::from([
+            ("CARGO_BUILD_JOBS", "999"),
+            ("CARGO_PROFILE_DEV_DEBUG", "2"),
+            ("CARGO_INCREMENTAL", "1"),
+            ("CARGO_NET_OFFLINE", "false"),
+            ("CARGO_TARGET_DIR", "/nonexistent/ambient-oracle-target"),
+        ]);
+        if std::env::var_os(CHILD).is_some() {
+            for (key, value) in &hostile {
+                assert_eq!(std::env::var(key).unwrap(), *value);
+            }
+            assert_eq!(CHILD_TIMEOUT_SECONDS, "300");
+            let root = tempfile::tempdir().unwrap();
+            let policy = hologram_oracle_environment(root.path());
+            let expected = json!({
+                "CARGO_BUILD_JOBS": "2",
+                "CARGO_PROFILE_DEV_DEBUG": "0",
+                "CARGO_INCREMENTAL": "0",
+                "CARGO_NET_OFFLINE": "true",
+                "CARGO_TARGET_DIR": root.path().join("target/hologram-oracle"),
+            });
+            assert_eq!(serde_json::to_value(&policy).unwrap(), expected);
+            let script = "const keys=['CARGO_BUILD_JOBS','CARGO_PROFILE_DEV_DEBUG','CARGO_INCREMENTAL','CARGO_NET_OFFLINE','CARGO_TARGET_DIR'];process.stdout.write(JSON.stringify(Object.fromEntries(keys.map(key=>[key,process.env[key]]))));";
+            let observed = run_process(
+                "oracle-compile-policy-observer",
+                &executable("node").unwrap(),
+                &["-e".to_owned(), script.to_owned()],
+                root.path(),
+                &policy,
+                &[],
+                "PP5301",
+            )
+            .unwrap();
+            assert_eq!(
+                serde_json::from_str::<Value>(&observed.stdout).unwrap(),
+                expected
+            );
+            assert!(observed.stderr.is_empty());
+            return;
+        }
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "verification::portable_oracle_tests::oracle_compile_policy_survives_environment_isolation",
+                "--nocapture",
+            ])
+            .envs(hostile)
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("running 1 test\n"), "{stdout}");
+        assert_eq!(
+            stdout.matches("test verification::portable_oracle_tests::oracle_compile_policy_survives_environment_isolation ... ok").count(),
+            1,
+            "{stdout}"
+        );
+        assert!(
+            stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured;"),
+            "{stdout}"
+        );
+    }
 
     #[cfg(unix)]
     #[test]
@@ -1614,7 +1701,7 @@ fn validate_control_coverage_corpus(
     Ok(())
 }
 
-fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> {
+pub(crate) fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> {
     let object = value
         .as_object()
         .ok_or_else(|| PrismError::new("PP5004", "coverage is not an object"))?;
@@ -1654,7 +1741,7 @@ fn validate_coverage(value: &Value, roots: &[String]) -> Result<(), PrismError> 
     Ok(())
 }
 
-fn parse_kernel(text: &str) -> Result<prod_ir::Module, PrismError> {
+pub(crate) fn parse_kernel(text: &str) -> Result<prod_ir::Module, PrismError> {
     let (remaining, module) = prod_ir::parser::parse_module(text)
         .map_err(|_| PrismError::new("PP5004", "kernel.ir is malformed"))?;
     if !remaining.trim().is_empty() {
@@ -1760,7 +1847,7 @@ pub(crate) fn validate_release_native_evidence(
     validate_control_coverage_corpus(snapshot, &corpus)
 }
 
-fn publish(
+pub(crate) fn publish(
     output_root: &Path,
     attestation_id: &str,
     files: &[(String, Vec<u8>)],
@@ -1883,7 +1970,10 @@ fn publish(
     Ok(())
 }
 
-fn verify_application_build_closure(build_root: &Path, manifest: &Value) -> Result<(), PrismError> {
+pub(crate) fn verify_application_build_closure(
+    build_root: &Path,
+    manifest: &Value,
+) -> Result<(), PrismError> {
     let rows = manifest
         .get("files")
         .and_then(Value::as_array)
@@ -2389,7 +2479,7 @@ pub(crate) fn run(
         .into_iter()
         .collect::<Vec<_>>();
     let package_exports_sha256 = format!("{:x}", Sha256::digest(STDLIB_EXPORTS_SOURCE.as_bytes()));
-    if model.application.is_none() {
+    if model.application.is_none() && model.library.is_none() {
         validate_lexlean_declarations(&lex_value, &lex_snapshot, &corpus)?;
         validate_control_coverage_corpus(&lex_snapshot, &corpus)?;
     }
@@ -2463,6 +2553,23 @@ pub(crate) fn run(
             "PP4004",
             "LexLean manifest attests no generated Lean modules",
         ));
+    }
+    if model.library.is_some() {
+        return crate::library_verification::run(
+            crate::library_verification::LibraryVerification {
+                repository_root: &controller.root,
+                config: &config,
+                build,
+                model,
+                model_bytes,
+                build_manifest,
+                build_root: &build_root,
+                lex_attestation,
+                lex_attestation_id,
+                lex_snapshot,
+                processes: toolchain.records,
+            },
+        );
     }
     if model.application.is_some() {
         return run_application(
@@ -2871,7 +2978,7 @@ mod tests {
     fn package_exports_are_closed_and_do_not_change_runtime_accounting() {
         let (runtime, corpus, _) = corpus();
         let package = package_export_roots(STDLIB_EXPORTS_SOURCE, &runtime).unwrap();
-        assert_eq!(package.len(), 43);
+        assert_eq!(package.len(), 54);
         let union = runtime
             .roots
             .iter()

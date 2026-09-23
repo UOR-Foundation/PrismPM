@@ -114,6 +114,7 @@ The three honesty levels:
 | `HO-10` | `build` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. |
 | `HO-11` | `build` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. |
 | `HO-12` | `build` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. |
+| `HO-13` | `build` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. |
 
 ## lifecycle
 
@@ -137,6 +138,8 @@ The three honesty levels:
 | `OC-05` | `build` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. |
 | `OC-06` | `build` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. |
 | `OC-07` | `build` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. |
+| `OC-08` | `build` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. |
+| `OC-09` | `build` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. |
 
 ## operations
 
@@ -176,7 +179,7 @@ The three honesty levels:
 | `DK-04` | `build` | The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline. |
 | `DK-05` | `build` | SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle. |
 | `DK-06` | `build` | SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation. |
-| `DK-07` | `build` | The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority. |
+| `DK-07` | `build` | The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority. |
 | `DK-08` | `build` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. |
 | `DK-09` | `build` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. |
 | `DK-10` | `build` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. |
@@ -186,6 +189,16 @@ The three honesty levels:
 | `DK-14` | `build` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. |
 | `DK-15` | `build` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. |
 | `DK-16` | `build` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. |
+| `DK-17` | `build` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. |
+| `DK-18` | `build` | The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile. |
+| `DK-19` | `build` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. |
+| `DK-20` | `build` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. |
+| `DK-21` | `build` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. |
+| `DK-22` | `build` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. |
+| `DK-23` | `build` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. |
+| `DK-24` | `build` | The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance. |
+| `DK-25` | `build` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. |
+| `DK-27` | `build` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. |
 
 ## security
 
@@ -214,6 +227,12 @@ The three honesty levels:
 | `ST-08` | `build` | Prism-stdlib exports registered runtime validator roots. |
 | `ST-09` | `build` | Prism-stdlib includes golden test outputs for all published artifacts. |
 | `ST-10` | `build` | Prism-stdlib models validate through the Holo projector and Lean kernel. |
+| `ST-11` | `build` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. |
+| `ST-12` | `build` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. |
+| `ST-13` | `build` | The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution. |
+| `ST-14` | `build` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. |
+| `ST-15` | `build` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. |
+| `ST-16` | `build` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. |
 
 ## supply-chain
 
@@ -237,6 +256,7 @@ The three honesty levels:
 | `SY-05` | `build` | Late-bound configuration is typed and secret values remain external references excluded from artifacts and evidence. |
 | `SY-06` | `build` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. |
 | `SY-07` | `build` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. |
+| `SY-08` | `build` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. |
 
 ## template-ci
 
@@ -290,11 +310,11 @@ The three honesty levels:
 | `SPDX-SCHEMA-3-0-1` | `3.0.1` | https://spdx.org/schema/3.0.1/spdx-json-schema.json | `582c64e809d5b3ef9bd0c4de13a32391b47b0284a3e8d199569fb96f649234b1` | `AU-06`, `SC-01` |
 | `SIGSTORE-COSIGN-3-1-3` | `3.1.3` | https://codeload.github.com/sigstore/cosign/tar.gz/11926fa5bbbbde47e88fc006b625a17769b743b2 | `3a718446bac51466efff6853639e1ca108b456ecbf07cd92938f548715d22d6b` | `AU-05`, `SC-03` |
 | `OSV-SCHEMA-B388` | `b388a18021a3` | https://codeload.github.com/ossf/osv-schema/tar.gz/b388a18021a32b55da40c31eaef9fd4ce780447d | `02fe51837bbb67fcd250151332ad1abc078f789e6d396585a4ae933e0c61c0e7` | `AU-05`, `SC-04` |
-| `OSV-CRATES-DB-G1788555739396732` | `gcs-generation-1788555739396732` | https://osv-vulnerabilities.storage.googleapis.com/crates.io/all.zip?generation=1788555739396732 | `03f56153d83125941b4b6990be1fb767b968dc97e73459f933464c832362882c` | `AU-05`, `SC-04` |
-| `OSV-DEBIAN-DB-G1788649357114367` | `gcs-generation-1788649357114367` | https://osv-vulnerabilities.storage.googleapis.com/Debian/all.zip?generation=1788649357114367 | `6650acb40d4c877edbf742e3f983430ca71b732267bfe7e9bc4e51be301b5465` | `AU-05`, `SC-04` |
-| `OSV-GO-DB-G1788665539029532` | `gcs-generation-1788665539029532` | https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip?generation=1788665539029532 | `798f6e5e177c1717488af7cca5dcc4f9c04ebe703ec7fadee49b13bf2a14d05f` | `AU-05`, `SC-04` |
-| `OSV-NPM-DB-G1788643998508450` | `gcs-generation-1788643998508450` | https://osv-vulnerabilities.storage.googleapis.com/npm/all.zip?generation=1788643998508450 | `2b91963d5260533f103ff8d688cd8da4774d2007ecb2a4ab2d44ca2f5d2bed09` | `AU-05`, `SC-04` |
-| `OSV-UBUNTU-DB-G1788590024186212` | `gcs-generation-1788590024186212` | https://osv-vulnerabilities.storage.googleapis.com/Ubuntu/all.zip?generation=1788590024186212 | `08dfd146b67a608e3c2b9b8f4b14c01f30625de61fa59f4dc5b047fac19e415e` | `AU-05`, `SC-04` |
+| `OSV-CRATES-DB-G1789723713081168` | `gcs-generation-1789723713081168` | https://osv-vulnerabilities.storage.googleapis.com/crates.io/all.zip?generation=1789723713081168 | `a260782a542ffa8e4387558d358aeedf5555dbf4b1df3b00bced2e1b14a8ac22` | `AU-05`, `SC-04` |
+| `OSV-DEBIAN-DB-G1789772800438247` | `gcs-generation-1789772800438247` | https://osv-vulnerabilities.storage.googleapis.com/Debian/all.zip?generation=1789772800438247 | `8682d4e50bac6e25eaaae280288f64ee8e009b1bdd46bc9f06ac546e59da2395` | `AU-05`, `SC-04` |
+| `OSV-GO-DB-G1789755542983649` | `gcs-generation-1789755542983649` | https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip?generation=1789755542983649 | `c258e9106752589b886a2c78984e7c0a9f3fdfbf438caed21a57c808481c2ae0` | `AU-05`, `SC-04` |
+| `OSV-NPM-DB-G1789770960544023` | `gcs-generation-1789770960544023` | https://osv-vulnerabilities.storage.googleapis.com/npm/all.zip?generation=1789770960544023 | `6486bcd1195de4deedfc39d1658fad0d52702125804e521d630c9601b8840ca8` | `AU-05`, `SC-04` |
+| `OSV-UBUNTU-DB-G1789776290924582` | `gcs-generation-1789776290924582` | https://osv-vulnerabilities.storage.googleapis.com/Ubuntu/all.zip?generation=1789776290924582 | `7b8ce1077fffc3b0eff05183bc511717fbaafb034cdf7f99842f2a819ab4c9b9` | `AU-05`, `SC-04` |
 | `OTEL-SPEC-1-60-0` | `1.60.0` | https://codeload.github.com/open-telemetry/opentelemetry-specification/tar.gz/29ae8c7710d2ea52e21a5ff81fb1cd657bcd3306 | `92eb9f83837e0c28909b0bc1fc128001e263be0b8f0317e31323073d957aebe7` | `AU-01`, `OP-01` |
 | `OTEL-SEMCONV-1-37-0` | `1.37.0` | https://codeload.github.com/open-telemetry/semantic-conventions/tar.gz/aec6e9d3e86754683dab7c707655d69d953b2768 | `ff1e16f3cbf9f23a40b917bc15593cb542434412552d27a0fc1bbbd833cfe60e` | `AU-01`, `OP-01` |
 | `OTEL-COLLECTOR-0-136-0` | `0.136.0` | https://codeload.github.com/open-telemetry/opentelemetry-collector-releases/tar.gz/ff8d64f8bbdb45270cde7289bf39218514bbfd2d | `b844833e8c72e2661275c911d79885a49a3171be9563a7c8b4827b202582b207` | `AU-05`, `OP-01` |

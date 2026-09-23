@@ -1,0 +1,31 @@
+{
+  "capability": "OC-09",
+  "protocol_errors": [
+    "BadDeclaration",
+    "BadSubject",
+    "BadContext",
+    "BadClock",
+    "BadState",
+    "ContextChanged",
+    "StaleRevision",
+    "ClockRollback",
+    "WrongPhase",
+    "BadTrust",
+    "IncompleteReadiness",
+    "BadAuthorization",
+    "BadDeployment",
+    "BadIntegrity",
+    "IncompleteLiveAssessment"
+  ],
+  "wire_errors": [
+    "BadLimits",
+    "BadCursor",
+    "Truncated",
+    "WrongType",
+    "UnsupportedHead",
+    "NonCanonical",
+    "ValueLimit",
+    "InvalidUtf8",
+    "TrailingInput"
+  ]
+}

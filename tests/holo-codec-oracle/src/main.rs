@@ -10,6 +10,43 @@ use std::path::Path;
 const REVISION: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
 const DIRECTORY: &str = "https://hologram.foundation/extension/application-directory/v1";
 const PROVENANCE: &str = "https://uor.foundation/extension/prismpm-model/v1";
+const BROWSER_PROVENANCE: &str = "https://uor.foundation/extension/prismpm-browser/v1";
+
+#[derive(Clone, Copy)]
+enum Profile {
+    Portable,
+    Browser,
+}
+
+impl Profile {
+    fn surface(self) -> &'static str {
+        match self {
+            Self::Portable => "portable",
+            Self::Browser => "prismpm-browser/1",
+        }
+    }
+
+    fn provenance(self) -> &'static str {
+        match self {
+            Self::Portable => PROVENANCE,
+            Self::Browser => BROWSER_PROVENANCE,
+        }
+    }
+
+    fn manifest_length(self) -> usize {
+        match self {
+            Self::Portable => 356,
+            Self::Browser => 365,
+        }
+    }
+
+    fn fixture_path(self) -> &'static str {
+        match self {
+            Self::Portable => "../data/holo-codec-v1.json",
+            Self::Browser => "../data/holo-browser-codec-v1.json",
+        }
+    }
+}
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -78,7 +115,7 @@ fn reseal(bytes: &mut [u8]) {
     bytes[footer..].copy_from_slice(digest.as_bytes());
 }
 
-fn fixture() -> Value {
+fn fixture(profile: Profile) -> Value {
     let capabilities = empty_capabilities();
     assert_eq!(capabilities.len(), 104);
     // These bytes intentionally do not claim to be an executable Wasm/View.
@@ -94,14 +131,14 @@ fn fixture() -> Value {
                 kind: LayerKind::View,
                 content: address_bytes(view),
                 entry: "index.html".to_owned(),
-                aux: "portable".to_owned(),
+                aux: profile.surface().to_owned(),
             },
         ],
         children: Vec::new(),
     };
     manifest_value.validate().unwrap();
     let manifest = manifest_value.canonicalize();
-    assert_eq!(manifest.len(), 356);
+    assert_eq!(manifest.len(), profile.manifest_length());
     assert_eq!(
         AppManifest::decode(&manifest).unwrap().canonicalize(),
         manifest
@@ -121,7 +158,7 @@ fn fixture() -> Value {
         ),
         (
             SectionKind::Extension,
-            upstream_extension(PROVENANCE, provenance),
+            upstream_extension(profile.provenance(), provenance),
         ),
     ];
     let mut blobs = [capabilities.as_slice(), guest, model, view]
@@ -147,7 +184,7 @@ fn fixture() -> Value {
         plan.extensions().unwrap(),
         vec![
             (DIRECTORY, directory.as_slice()),
-            (PROVENANCE, provenance.as_slice())
+            (profile.provenance(), provenance.as_slice())
         ]
     );
     assert_eq!(
@@ -185,32 +222,91 @@ fn fixture() -> Value {
 
     let extension_vectors = [("", b"".as_slice()), ("urn:prism:codec", &[0, 128, 255]), ("urn:prism:λ", "π".as_bytes())]
         .map(|(key, value)| json!({"key":key,"value_hex":hex(value),"bytes_hex":hex(&upstream_extension(key,value))}));
-    json!({
+    let mut result = json!({
         "schema":"prismpm/holo-codec-oracle/1",
         "scope":"Synthetic wire-codec vectors; not executable-application, conformance, or release acceptance.",
         "oracle":{"repository":"https://github.com/Hologram-Technologies/hologram","revision":REVISION,"crate":"uor-hologram","crate_version":"0.12.1","features":["archive","space"]},
         "labels":[content(b""),content(b"abc"),content(&[0,128,255]),content(guest),content(view),content(model)],
         "empty_capabilities":content(&capabilities),
-        "manifest":{"bytes_hex":hex(&manifest),"kappa":address_bytes(&manifest).to_string(),"references":references.iter().map(ToString::to_string).collect::<Vec<_>>(),"primary":0,"layers":[{"kind":0,"content_kappa":address_bytes(guest).to_string(),"entry":"holo_run","aux":WASM_CONTRACT_CORE_V1},{"kind":3,"content_kappa":address_bytes(view).to_string(),"entry":"index.html","aux":"portable"}],"children":[]},
+        "manifest":{"bytes_hex":hex(&manifest),"kappa":address_bytes(&manifest).to_string(),"references":references.iter().map(ToString::to_string).collect::<Vec<_>>(),"primary":0,"layers":[{"kind":0,"content_kappa":address_bytes(guest).to_string(),"entry":"holo_run","aux":WASM_CONTRACT_CORE_V1},{"kind":3,"content_kappa":address_bytes(view).to_string(),"entry":"index.html","aux":profile.surface()}],"children":[]},
         "extensions":extension_vectors,
         "archive_inputs":{"metadata_hex":hex(metadata),"directory_json_hex":hex(directory),"provenance_json_hex":hex(provenance),"blobs_hex":sections[4..].iter().map(|(_,payload)|hex(payload)).collect::<Vec<_>>()},
         "archive":{"bytes_hex":hex(&archive),"body_hex":hex(&archive[..archive.len()-32]),"footer_hex":hex(&archive[archive.len()-32..]),"kappa":address_bytes(&archive).to_string(),"sections":plan.sections().iter().zip(&sections).map(|(section,(_,payload))|json!({"kind":section.kind as u8,"offset":section.offset,"length":section.length,"payload_hex":hex(payload)})).collect::<Vec<_>>()},
         "malformed_archives":malformed,
-    })
+    });
+    if matches!(profile, Profile::Browser) {
+        // Coherent, re-addressed native authority request, not a corrupt byte
+        // standing in for a capability substitution.
+        let substituted = CapabilitySet::new(Capabilities {
+            storage_roots: vec![address_bytes(model)],
+            storage_quota_bytes: 0,
+            network_fetch_endpoints: Vec::new(),
+            network_announce_endpoints: Vec::new(),
+            publish_channels: Vec::new(),
+            subscribe_channels: Vec::new(),
+            memory_max_bytes: 0,
+            cpu_time_per_event_ms: 0,
+            priority_weight: 0,
+        })
+        .canonicalize();
+        assert_eq!(
+            CapabilitySet::new(CapabilitySet::to_capabilities(&substituted).unwrap())
+                .canonicalize(),
+            substituted
+        );
+        let mut changed_manifest = AppManifest::decode(&manifest).unwrap();
+        changed_manifest.requires = address_bytes(&substituted);
+        changed_manifest.validate().unwrap();
+        let mut changed = sections[..4].to_vec();
+        changed[0].1 = changed_manifest.canonicalize();
+        let mut changed_blobs = [substituted.as_slice(), guest, model, view]
+            .into_iter()
+            .map(|value| {
+                let mut payload = address_bytes(value).as_bytes().to_vec();
+                payload.extend_from_slice(value);
+                payload
+            })
+            .collect::<Vec<_>>();
+        changed_blobs.sort_by(|left, right| left[..71].cmp(&right[..71]));
+        changed.extend(
+            changed_blobs
+                .iter()
+                .cloned()
+                .map(|payload| (SectionKind::ContentBlob, payload)),
+        );
+        let archive = HoloWriter::assemble(changed);
+        let outcome = loader_outcome(&archive);
+        assert_eq!(outcome["stage"], "accepted-physical-archive");
+        result["capability_substitution"] = json!({
+            "capabilities": content(&substituted),
+            "manifest_hex": hex(&changed_manifest.canonicalize()),
+            "blobs_hex": changed_blobs.iter().map(|blob| hex(blob)).collect::<Vec<_>>(),
+            "archive_hex": hex(&archive),
+            "upstream": outcome
+        });
+    }
+    result
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut bytes = serde_json::to_vec_pretty(&fixture())?;
-    bytes.push(b'\n');
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../data/holo-codec-v1.json");
-    match std::env::args().skip(1).collect::<Vec<_>>().as_slice() {
-        [flag] if flag == "--write" => std::fs::write(&path, bytes)?,
-        [] => {
-            if std::fs::read(&path)? != bytes {
-                return Err("frozen codec fixture differs from exact upstream output".into());
-            }
-        }
+    let write = match std::env::args().skip(1).collect::<Vec<_>>().as_slice() {
+        [flag] if flag == "--write" => true,
+        [] => false,
         _ => return Err("usage: prismpm-holo-codec-oracle [--write]".into()),
+    };
+    for profile in [Profile::Portable, Profile::Browser] {
+        let mut bytes = serde_json::to_vec_pretty(&fixture(profile))?;
+        bytes.push(b'\n');
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(profile.fixture_path());
+        if write {
+            std::fs::write(&path, bytes)?;
+        } else if std::fs::read(&path)? != bytes {
+            return Err(format!(
+                "frozen {} codec fixture differs from exact upstream output",
+                profile.surface()
+            )
+            .into());
+        }
     }
     println!("Holo/1 codec fixture matches upstream {REVISION}; no application acceptance claimed");
     Ok(())

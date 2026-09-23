@@ -29,6 +29,18 @@ f0a86585e2c142af57db2b060e7626accc670ccbcbc42e120f8261429cec5f31  tests/browser-
 01165f79f7a0781566ad21192c9a25eedd160b802e584706290443962c6f839f  tests/browser-query/driver/Cargo.lock
 9a900b56d97f32040f6a6eb386226062822ec299f9e8d3832d880eb67e7980fa  tests/browser-view/driver/Cargo.toml
 acebc6ba5696ee8057f5c7affcba3cdf3503eed6e55cd9aeaef5e7628e49654f  tests/browser-view/driver/Cargo.lock
+34114e4a9080e9fee708d7ced51ddb05e03fe82c633e7847cf596d431ad42348  tests/browser-effects/driver/Cargo.toml
+3c41b979ab8f83003a1f99db2e2934b4e53c0abe2a3c145bce89a276be2bdce0  tests/browser-effects/driver/Cargo.lock
+cd971655426523e79de558c58706629b633f18f55b977f9441279879139b96b8  tests/browser-presentation/driver/Cargo.toml
+8d7d1ee0441527cabe690e8cb81fd9682db87f35526ac4c3adcd1f1928985317  tests/browser-presentation/driver/Cargo.lock
+367929deb65c746365b59a6055c76f8e0ff97f334d08ca5382bc163474346213  tests/browser-custody/driver/Cargo.toml
+2b623f6b44baaf0c245ecf8febe9d936a44082b23435d129924f533ec57fd655  tests/browser-custody/driver/Cargo.lock
+10c2a425a0028ebe478c5a2e4f4435623634ed6529cf7193a2185aed9852206f  tests/browser-operation-journal/driver/Cargo.toml
+bba3da856e3ae9cb5ccc3337a0a808373e1223c3f4fb95383490e1e835128a97  tests/browser-operation-journal/driver/Cargo.lock
+d833db76924bdf573f4d0cd47a24b585bb454879be0ff668670629688277039f  tests/publication-admission/driver/Cargo.toml
+e8e9b30de31477d1e6cf640ac29b42648835c418c09774ac8bdf0f175fe5e920  tests/publication-admission/driver/Cargo.lock
+fc49c5659bded9db17612c76d47370fd715e4fa900f2b0aa8617e77a0fb13581  tests/browser-budget/driver/Cargo.toml
+4268873a128108bc7a74f9f4ecf66500d7c85be411987dd89da62da3595160e3  tests/browser-budget/driver/Cargo.lock
 CHECKSUMS
 cmp tests/hologram-oracle/Cargo.toml crates/prismpm/src/embedded/hologram-oracle.Cargo.toml
 cmp tests/hologram-oracle/Cargo.lock crates/prismpm/src/embedded/hologram-oracle.Cargo.lock
@@ -52,7 +64,13 @@ for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/browser-journal/driver/Cargo.toml \
   tests/browser-command/driver/Cargo.toml \
   tests/browser-query/driver/Cargo.toml \
-  tests/browser-view/driver/Cargo.toml; do
+  tests/browser-view/driver/Cargo.toml \
+  tests/browser-effects/driver/Cargo.toml \
+  tests/browser-presentation/driver/Cargo.toml \
+  tests/browser-custody/driver/Cargo.toml \
+  tests/browser-operation-journal/driver/Cargo.toml \
+  tests/publication-admission/driver/Cargo.toml \
+  tests/browser-budget/driver/Cargo.toml; do
   cargo fetch --locked --manifest-path "$manifest"
   cargo metadata --locked --offline --format-version 1 --manifest-path "$manifest" >/dev/null
 done

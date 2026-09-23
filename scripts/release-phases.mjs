@@ -12,7 +12,7 @@ import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, v
 const repository = 'UOR-Foundation/PrismPM';
 const imageNames = ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles'];
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-const ociNeeds = ['gate', 'images', 'native', 'reproducibility'];
+const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
 
 export function publicationPolicy(value) {
   assert.deepEqual(Object.keys(value).sort(), ['event', 'publishCrates', 'ref', 'repository', 'revision', 'version']);
@@ -30,7 +30,7 @@ export function publicationPolicy(value) {
     assert.equal(value.publishCrates, null);
     publishCrates = true;
   }
-  return {version: value.version, publishCrates, tag: `sdk-oci-${value.revision}`};
+  return {version: value.version, publishCrates};
 }
 
 function policyFromEnvironment(environment) {
@@ -38,6 +38,18 @@ function policyFromEnvironment(environment) {
   return publicationPolicy({repository: environment.GITHUB_REPOSITORY, ref: environment.GITHUB_REF,
     event, version: environment.DISPATCH_VERSION || environment.GITHUB_REF_NAME?.replace(/^v/, ''),
     publishCrates: event === 'push' ? null : JSON.parse(environment.PUBLISH_CRATES), revision: environment.GITHUB_SHA});
+}
+
+function publicationTag(environment) {
+  assert.equal(environment.GITHUB_ACTIONS, 'true', 'publication requires GitHub Actions context');
+  for (const key of ['GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT']) {
+    const value = environment[key];
+    assert(typeof value === 'string' && /^[1-9][0-9]{0,19}$/.test(value) && !/\D/.test(value),
+      'publication requires a canonical decimal ' + key);
+  }
+  // Gate transcripts and signature bundles are specific to an execution, not
+  // deterministic functions of source alone. Never overwrite an earlier run.
+  return `sdk-oci-${environment.GITHUB_SHA}-${environment.GITHUB_RUN_ID}-${environment.GITHUB_RUN_ATTEMPT}`;
 }
 
 export function requirePrerequisites(phase, needs) {
@@ -180,13 +192,18 @@ export function publicationNotes(revision) {
     'These immutable OCI/native assets passed the workflow prerequisites and are published for verification.\n' +
     'This phase does not publish Cargo packages, versioned discovery aliases, or an accepted SDK/ecosystem release.\n' +
     'Each platform has complete raw SPDX in a separately signed OCI artifact, not an inline SPDX attestation.\n' +
-    'Twice-run verification in the exact shipped images and independent SDK acceptance remain required.\n' +
+    'Original native installed-SDK two-run evidence is retained; independent SDK acceptance remains separate.\n' +
     'Public Cargo qualification and ecosystem acceptance are separate later phases.\n';
 }
 
 export function assetNames() {
   return [
-    'SHA256SUMS',
+    'SHA256SUMS', 'source-vv.tar',
+    ...['amd64', 'arm64'].flatMap(architecture => [
+      `sdk-${architecture}-full-sdk-vv.tar`, `sdk-${architecture}-product-cli.tar`,
+      `sdk-${architecture}-native-equivalence.tar`,
+      `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,
+    ]),
     ...['x86_64', 'aarch64'].flatMap(architecture => [
       `prismpm-0.3.0-${architecture}-unknown-linux-gnu.tar.gz`,
       `prismpm-0.3.0-${architecture}-unknown-linux-gnu.tar.gz.sha256`,
@@ -207,7 +224,7 @@ export function assetNames() {
 export async function publishOci(directory, revision, client = {api, checked, environment: process.env}) {
   policyFromEnvironment(client.environment);
   assert.equal(client.environment.GITHUB_SHA, revision);
-  const tag = `sdk-oci-${revision}`, notes = publicationNotes(revision);
+  const tag = publicationTag(client.environment), notes = publicationNotes(revision);
   const expected = {tag, revision, notes, files: await filesIn(directory)};
   assert.deepEqual(expected.files.map(file => file.name), assetNames(), 'publication asset closure is incomplete');
   const endpoint = `repos/${repository}/releases/tags/${tag}`;
