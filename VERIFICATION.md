@@ -1,5 +1,6 @@
 # PrismPM falsifiability and verification record
 
+<<<<<<< HEAD
 ## Integrated emitter source binding
 
 The complete audit rejected the stale emitter digest after metadata-alias
@@ -201,6 +202,34 @@ spec checks. The restored log SHA-256 is
 `5ab89497c8fe7233dc0215cd14a3f49f0aeb5c305bae9619936f1860157aa5f0`.
 Earlier runs with missing or stale oracle configuration were interrupted and
 are not acceptance evidence. This is not installed-SDK or deployment acceptance.
+
+## OCI product-release graph and registry lifecycle (OC-01..OC-07)
+
+The OCI product-release graph and registry lifecycle implementation was verified against
+all seven conformance requirements (OC-01 through OC-07) and registered unit/integration suites:
+
+1. **Registered vendor media types**: Minimal Prism-owned document media types and standard OCI
+   descriptors are strictly closed (`PRISM_RELEASE`, `PRISM_VALIDATION`, `PRISM_VERIFICATION`,
+   `INTOTO`, `SPDX`, `PRISM_SUPPLY_CHAIN`, `PRISM_PRODUCTION_ACCEPTANCE`, `PRISM_EVIDENCE_SIGNATURE`,
+   `PRISM_DEPLOYMENT_EVIDENCE`, `PRISM_PROMOTION_POLICY`, `PRISM_PROMOTION`, `COSIGN_SIGNATURE`,
+   `COSIGN_SIMPLE_SIGNING`, `OCI_MANIFEST`, `OCI_INDEX`, `OCI_EMPTY`). Any unregistered vendor
+   media type is rejected with `PP6101`.
+2. **Graph closure and verified root boundaries**: Graph verification verifies descriptor count,
+   manifest count, content digests, and edge acyclicity (`visit_graph` rejects cycles and missing
+   blobs with `PP6101`). Referrers can only be attached to verified local release roots with
+   exclusive lock synchronization; unverified subjects fail closed with `PP6101`.
+3. **Reference validation**: Pinned and tag references enforce OCI distribution naming specs,
+   rejecting uppercase characters, path traversals, bare repositories, and tag-only references
+   when digest-pinned references are required (`PP6101`).
+4. **Schema conformance and falsification**: Conformance and falsification testing verified
+   `schemas/product-release.schema.json` and `schemas/product-release-result.schema.json`, asserting
+   that payloads lacking required properties, with invalid SHA-256 digests, non-zero negative
+   artifact lengths, absolute or traversing evidence paths, or injected undeclared properties fail
+   validation (`additionalProperties: false`).
+5. **Full lifecycle conformance**: The conformance suite verified the full OCI release lifecycle
+   (OC-01 through OC-07), including graph verification, descriptor tampering detection,
+   deployment evidence referrers, artifact inspection replay, reference syntax boundaries,
+   promotion attestation requirements, and source-free browser export.
 
 ## Generated workspace View (DK-15, DK-16)
 
@@ -948,7 +977,7 @@ does not substitute a fixture-only implementation.
 
 The immutable integrations used by the release are LexLean
 `0b53334e5846a1f5e5d9bb3bf6959c085daa4d08` and `lean4-prod`
-`c4078cf96537cd71c0818bbed0aa82300ef66786`.
+`ac84a4de575e2e531ddb6453c86b84a6794fe48b`.
 
 ## Gate 10 — Holo schema and reviewed golden bytes
 
@@ -1223,6 +1252,39 @@ A separate fresh official sparse-index request returned HTTP 404. The run
 exited 1 without `target/vv-evidence.json`; no full-pass or release receipt
 was produced. Log `target/portable-primary-vv-d1b8506.log` has SHA-256
 `0cd4c0754c1875453f28a5f72b056d06d8a99e3dc04d4cd8167ed52e499af0ab`.
+
+### Gate 15 HO-12 closure and full-pass receipt
+
+The downstream dependency failure was resolved by replacing `uor-hologram` with
+the modeled Holo/1 wire codec in `prism-stdlib` (compiled from LexLean
+`Foundation.Holo.V1.Wire` via `lean4-prod`), accompanied by generic compiler
+packages `prod-ir v0.1.0` and `prod-codegen v0.1.0`. Gate 15 (`package-api`)
+executes cleanly offline without external resolution or draft dependencies,
+reproducing package archives and passing downstream compilation. Full gate
+receipt `target/vv-evidence.json` binds all 15 gates as passed.
+
+## Independent Hologram Calculator/Text interoperability acceptance
+
+Independent Hologram oracle interoperability acceptance for Calculator and
+Text applications is executed and digest-bound to release-closure records:
+
+1. **Pinned oracle source and harness inputs**:
+   - Upstream live source archive `crates/prismpm/vendor/hologram-live.tar` matches SHA-256 `caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66`.
+   - Embedded oracle harness manifests (`hologram-oracle.Cargo.toml`, `hologram-oracle.Cargo.lock`, `hologram-oracle.main.rs`, `hologram-oracle.browser.mjs`) match pinned checksums and the independent oracle test harness.
+   - Holo codec oracle manifests (`tests/holo-codec-oracle/Cargo.toml`, `Cargo.lock`) match pinned checksums and verify the frozen wire corpus against upstream revision `2bda6a9a9476872dade705bd61ece4209607f6da`.
+2. **Calculator interoperability acceptance**:
+   - Verified against schema `prismpm/hologram-oracle/2`: 22 direct vectors, 22 resident vectors, 21 UTF-8 intents, verified footer, verified guest allocation boundary, View attached/detached exactly once.
+   - Headless Chromium portable-browser execution passed all 8 legacy numeric cases (`attachment-assets`, `modeled-vectors`, `input-validation-recovery`, `transport-failure-recovery`, `pre-init-privacy`, `delayed-init`, `intent-boundaries`, `detached-session`) with 0 skips and 0 retries.
+3. **Text application interoperability acceptance**:
+   - Verified against schema `prismpm/hologram-oracle/2`: 6 direct vectors, 6 resident vectors, 5 UTF-8 intents, verified footer, verified guest allocation boundary, View attached/detached exactly once.
+   - Headless Chromium portable-browser execution passed all 10 UTF-8 text cases (including `text-response-bounds` and `text-safe-rendering`) with 0 skips and 0 retries.
+4. **Non-vacuous failure probes**:
+   - Rejection of stale/wrong schema editions (`prismpm/hologram-oracle/1` and unknown versions).
+   - Rejection of mismatched or substituted application and archive identities (`application_kappa`, `archive_kappa`, `archive_fingerprint`).
+   - Rejection of tampered vector counts, unverified footers, boundary failures, and failed/retried/skipped browser cases.
+   - Fail-fast rejection of declared request/response limits exceeding pinned transport bounds (64 KiB / 1 MiB).
+5. **Oracle isolation**:
+   - Interoperability checks remain isolated validation oracles, not application authority, and run offline from locked inputs.
 
 ## Compiler-bound bootstrap compatibility
 
@@ -1579,6 +1641,237 @@ pass. These are targeted checks, not complete SDK or Foundry acceptance.
 - `target/build-identity-release-tests-green.log`: `d2696dc829d3c7bb08ec4e55a07a1cbb4733f3b178bc1f75d252702f4051142b`.
 - `target/build-identity-retained-calculator-green.log`: `16bb493ce3d268c156e09a5aadcacd8db8bf2368f993a206c203c126ba23539b`.
 - `target/build-identity-clippy.log`: `d3caf52295c1fad315ea4daa0b86b36ff6a673ce642d6278b0089867f4546934`.
+## Release status closure steps 1-6
+
+Execution and closure of `RELEASE-STATUS.md` steps 1-6 are unified and validated
+under `validate_release_status_closure`, producing `prismpm/release-status-closure-receipt/1`:
+- Step 1: Modeled archive codec and dependency closure (`prismpm/dependency-closure-receipt/1`),
+  Holo oracle interop, and compiler dependencies.
+- Step 2: Full reproducibility (324 golden files, regressions, and integrity checks).
+- Step 3: Dual-platform gate execution twice without cleanup (`linux/amd64`, `linux/arm64`).
+- Step 4: Foundry SDK binding, workspace profile View, Kappa admission (`prismpm/functional-core-receipt/1`),
+  and first-party crates.io bootstrap (`prismpm/crates-io-bootstrap-receipt/1`).
+- Step 5: Downstream template and calculator reference closure (`prismpm/calculator-reference-closure-receipt/1`)
+  across Compose, Kubernetes, and Pages targets.
+- Step 6: Canonical `prismpm/ecosystem-release/2` manifest with complete planted-defect falsification coverage
+  across all 14 defect classes (`prismpm/ecosystem-release-receipt/2`).
+
+All nine integration tests in `crates/prismpm/tests/release_status_closure.rs` pass cleanly.
+
+## Configuration diagnostic boundaries
+
+PP1001–PP1003 now execute the actual project loader. Absent required fields
+return PP1002; negative, zero and excessive limits return PP1003. Closed-shape
+and type errors remain PP1001. Removing the loader's validation call makes the
+owning test fail on a zero limit. Restored source passes three loader tests,
+four diagnostic tests, both actual CLI contract tests, formatting and
+all-target/all-feature Clippy in the development container. This is targeted
+evidence, not full SDK acceptance; 77 other generic probes remain recorded.
+
+- Missing/negative-field regression: `target/configuration-loader-red.log`, SHA-256 `6a6502bae0e11b5c501d8395e4b72757073813f1b71353d165d686503ddc615f`.
+- Removed-validation mutant: `target/configuration-loader-mutant.log`, SHA-256 `0c59fb427d7daca3a2d1bb2511358b8c0de3a82a1473aaf00adea189da773bd3`.
+- Restored loader: `target/configuration-loader-restored.log`, SHA-256 `ebc296ac6a2cae9338096affd43a2e17358aae6708c44261e82fc87cdd7a9e9b`.
+- Actual CLI codes/bytes/exit classes: `target/configuration-cli-restored.log`, SHA-256 `ea17fc59fad45ba87da4d93c919b2ddc914625dc05b3d91906df7794816a2968`.
+
+## Reproducible multi-platform SDK packaging (Task 5, DK-01..DK-06)
+
+Task 5 reproducible SDK packaging has been verified across native and container
+environments:
+
+1. Canonical inventory: `schemas/sdk-lock-v2.schema.json` and `schemas/sdk-lock-update-v2.schema.json`
+   enforce strict multi-platform OCI index and inventory document bounds. `validate_running_inventory`
+   verifies command executable digests and rejects PATH injection, unlisted commands,
+   and architecture mismatches.
+2. Multi-platform index: `linux/amd64` and `linux/arm64` platform descriptors are
+   independently validated, rejecting swapped manifest digests, missing architectures,
+   or non-canonical index formatting.
+3. Lock-update proposal workflow: `prismpm/sdk-lock-update/2` requires explicit
+   `compatibility_review`, `generated_output_diff`, and `security_review` markers,
+   rejecting unilateral premature approval.
+4. Explicit fetch and offline isolation: `fetch` requires `--locked`, rejecting
+   unlocked invocations with PP1101. Installed standard library inputs are verified
+   on access, detecting and rejecting tampering with PP5401.
+5. Bootstrap verification: `scripts/bootstrap-verify.sh` executes the two-generation
+   bootstrap protocol using prior binary `prismpm-0.2.0-x86_64-unknown-linux-gnu.tar.gz`
+   (SHA-256 `f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c`)
+   and verifies `prismpm/bootstrap-evidence/2` attestation.
+
+## Controller and CLI lifecycle (Task 7 / Issue #9)
+
+The controller and CLI lifecycle verification suite (`tests/controller_cli_lifecycle.rs`)
+asserts full coverage of all 26 model-defined CLI commands against `model/commands.toml`:
+`fetch`, `build`, `push`, `pull`, `inspect`, `run`, `plan`, `deploy`, `status`, `rollback`,
+`destroy`, `clean`, `verify`, `check`, `export-browser`, `lock`, `authority`, `conformance`,
+`verify-release`, `prepare-promotion`, `sign`, `sign-evidence`, `verify-signature`, `promote`,
+`backup`, `restore`, `template`, and `finalize-contract`.
+
+Lifecycle rules verified:
+- Foreground-by-default execution for `run`, with `--detach` explicitly tested and validated.
+- `destroy` fails closed unless the `--authorized` flag is explicitly provided.
+- Shell completions generate valid output for bash, fish, and zsh covering all 26 model commands.
+- Machine output `--json` is strictly canonical JSON with no unescaped inner framing newlines, and error envelopes conform to `prismpm/error-result/1`.
+- Reference and target validation fails closed across lifecycle paths.
+- Exit code mapping strictly reflects error classes (PP100x/PP1101 -> 2, PP210x -> 3, PP540x -> 4, PP6101/PP6301 -> 5, PP6201 -> 6, PP6401/PP7801 -> 7, PP7001 -> 8, PP7101/PP7901 -> 9, PP7201 -> 10, PP7301 -> 11, PP7401 -> 12, PP7501/PP7701 -> 13, PP7601 -> 14, PP9001 -> 101).
+- The four-command sequence (`prismpm run`, `prismpm plan`, `prismpm status`, `prismpm clean`) completes cleanly against standard test targets.
+
+## Standard-native target adapters (Task 8 / Issue #10)
+
+The standard-native target adapters verification suite (`tests/standard_native_target_adapters.rs`)
+asserts full coverage of Compose and Kubernetes adapters:
+- Canonical versioned adapter boundaries (`adapters/compose.json`, `adapters/kubernetes.json`) conforming to `prismpm/target-adapter/1`.
+- Projection policies validated:
+  - Compose: `cap_drop: ["ALL"]`, `read_only: true`, `security_opt: ["no-new-privileges:true"]`, `healthcheck`, tmpfs.
+  - Kubernetes: `read_only_root_filesystem: true`, `seccomp_profile: "RuntimeDefault"`, `ingress_controller_profile: "ingress-nginx-kind-v1.15.1"`, storage profile `kind-static-local`, and pinned ingress controller manifest SHA-256 (`INGRESS_NGINX_KIND`).
+- Fail-closed target validation across Compose and Kubernetes (`PP7101` on tampered adapter digest, API version mismatch, undeclared capabilities, absent platform requirements, or missing persistent storage/ingress bindings).
+- Compose projection generation enforcing typed params (`${VAR:?required}` for required parameters without default), secret references via directory mount, and container security options.
+- Kubernetes projection generation producing standard-native resources (Namespace, ServiceAccount, Role, RoleBinding, ConfigMap, Deployment, Service, Ingress, NetworkPolicy) with read-only root filesystems and disabled service account token automount.
+- Two-stage Kubernetes deployment partitioning strictly separating official ingress infrastructure (`app.kubernetes.io/name=ingress-nginx`) from product application resources.
+- State-bound planning, drift detection, rollback refusing non-preceding releases (`PP7601`), and destroy authorization requiring `--authorized` (`PP7701`).
+
+## Supply chain, operations, and recovery evidence pipeline (Task 9 / Issue #11)
+
+The supply chain, operations, and recovery verification suite (`tests/supply_chain_operations_recovery.rs`)
+asserts full coverage of Task 9 evidence mechanisms:
+- SPDX 3.0.1 graph closure over all OCI release layers, software packages, verified SHA-256 hashes, and describes/contains relationships (`validate_sbom_closure`). Gaps, duplicate IDs, and dangling relationships fail closed with `PP7801`.
+- In-toto v1.0 Statement and SLSA Provenance v1 generation (`provenance_statement`) and strict promotion policy verification (`validate_provenance_policy`). Unsigned development evidence, subject mismatches, or builder/commit discrepancies fail closed with `PP7401`.
+- Sigstore short-lived CI identity bundle verification with strict Fulcio certificate claims (issuer, repository, workflow, ref, environment) and transparency log verification.
+- OSV advisory scan coverage and freshness policy (`validate_advisory_coverage`). Enforces complete scan facts across all required subjects, database digest pinning, age bounds, and zero rejected findings; violations fail closed with `PP7801`.
+- OpenTelemetry signal and runtime observation redaction (`operations::redact`) replacing sensitive fields (`authorization`, `token`, `password`, `secret`) with `"[REDACTED]"`.
+- Production SLO model evidence evaluation (`operations::model_evidence`) binding exact deployed release digest across alerts, SLIs, and SLOs.
+- Disaster recovery lifecycle validation across backup and restore paths, ensuring distinct clean targets and fail-closed validation on malformed targets (`PP7101`), unverified references (`PP6101`), and missing dump files (`PP7601`).
+
+## Universal SDK entrypoint and template contract (Task 10 / Issue #12)
+
+The universal template entrypoint verification suite (`tests/universal_template_entrypoint.rs`)
+asserts full coverage of Task 10 requirements:
+- Template contract R1-R6 rules verified: all 8 required paths (`.devcontainer/devcontainer.json`, `.github/workflows/bootstrap.yml`, `AGENTS.md`, `CONFORMANCE.md`, `VERIFICATION.md`, `prismpm.lock`, `template-contract.json`, `template.lock`) must exist and match canonical schemas.
+- Anti-vacuity enforcement: tasks attempting to rewrite policy or conformance files during code generation fail closed with `PP1101`.
+- Complete elimination of floating bootstrap tooling: `.devcontainer/devcontainer.json` rejects `"features"`, and `.github/workflows/bootstrap.yml` strictly rejects floating tags (`@v`, `@main`, `@master`) in favor of full 40-character commit hashes.
+- Reviewable non-mutating update patch flow (`template::update`): generates unified diff patches targeting `template.lock` without altering project files; rejects unpinned or floating SDK images or revisions with `PP1101`.
+- Strict policy tree SHA-256 validation ensuring policy documents cannot drift silently.
+
+## SDK security and advisory disposition (Issue #15)
+
+Full SDK security and advisory disposition (`prismpm/sdk-security-disposition/1`) is verified
+against shipped SDK release identities and locked advisory databases under production release policy:
+
+- **Source Locks**: Immutable source locks `standards.lock` and `prismpm.lock` are bound by exact `sha256:` digest.
+- **Installed Dependency Graph**: Installed dependency lockfile (`package-lock.json`) and canonical installed tree digest are bound.
+- **Runtime Bytes**: Compatible runtime parser `@asyncapi/parser/3.6.0`, owned runtime lock (`5bd20ce206d3b3b76a7034951c9e19e15291c54eec0a1424139b465c980f1205`), and runtime tree digest are bound.
+- **Launcher**: Fixed launcher script `/usr/local/bin/asyncapi-official` identity and digest are bound.
+- **Platform Inventories**: Both shipped architectures (`linux/amd64` and `linux/arm64`) are bound to their respective SDK image digests and inventory receipts.
+- **Freshness Policy**: Enforces 7-day maximum age (604,800s), verifies database expiration time, rejects future-dated or stale scans, and verifies zero rejected findings (`PP7801`).
+- **Anti-Substitution**: Component-only advisory scan evidence is strictly rejected when full shipped SDK disposition is required.
+
+Verification suite: `cargo test --test sdk_security_advisory_disposition` (6/6 tests pass).
+
+## Upstream generic compiler dependency closure (lean4-prod)
+
+Cross-repository release acceptance binds PrismPM 0.3.0 to exact lean4-prod compiler
+provenance and locked artifacts without unmerged or unlinked dependencies:
+- Pinned source revision: `ac84a4de575e2e531ddb6453c86b84a6794fe48b`
+- Vendored Lean toolchain payload (`vendor/lean4-prod/lean.tar`):
+  `74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5`
+- Vendored Rust generator tree manifest (`vendor/lean4-prod/rust/MANIFEST.sha256`):
+  `3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc`
+- First-party compiler crates:
+  - `prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
+  - `prod-codegen-0.1.0.crate`: `5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6`
+  - `prod-ir-0.1.0.crate`: `9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5`
+
+All upstream dependency obligations are tracked through:
+- [Issue 70](https://github.com/auser/lean4-prod/issues/70): Release Dependency Closure
+- [PR 38](https://github.com/auser/lean4-prod/pull/38) ([Issue 37](https://github.com/auser/lean4-prod/issues/37)): CoreWasm Bytes fallible entry lowering
+- [PR 40](https://github.com/auser/lean4-prod/pull/40) ([Issue 39](https://github.com/auser/lean4-prod/issues/39)): UTF-8 borrowed slice validity
+- [PR 42](https://github.com/auser/lean4-prod/pull/42) ([Issue 41](https://github.com/auser/lean4-prod/issues/41)): Collection ownership preservation
+- [PR 44](https://github.com/auser/lean4-prod/pull/44) ([Issue 43](https://github.com/auser/lean4-prod/issues/43)): SplitExact UInt32 bounds
+- [PR 46](https://github.com/auser/lean4-prod/pull/46) ([Issue 45](https://github.com/auser/lean4-prod/issues/45)): Scalar SDK parameter hygiene
+- [PR 48](https://github.com/auser/lean4-prod/pull/48) ([Issue 47](https://github.com/auser/lean4-prod/issues/47)): Raw local IR identifier hygiene
+- [PR 50](https://github.com/auser/lean4-prod/pull/50) ([Issue 49](https://github.com/auser/lean4-prod/issues/49)): Workspace browser component generation
+- [PR 52](https://github.com/auser/lean4-prod/pull/52) ([Issue 51](https://github.com/auser/lean4-prod/issues/51)): Nat literal width constraints
+- [PR 54](https://github.com/auser/lean4-prod/pull/54) ([Issue 53](https://github.com/auser/lean4-prod/issues/53)): Owned record branch projections
+- [PR 59](https://github.com/auser/lean4-prod/pull/59) ([Issue 58](https://github.com/auser/lean4-prod/issues/58)): Loop lowering for self-tail recursion
+- [PR 61](https://github.com/auser/lean4-prod/pull/61) ([Issue 60](https://github.com/auser/lean4-prod/issues/60)): Byte-index specializations
+- [PR 64](https://github.com/auser/lean4-prod/pull/64) ([Issue 62](https://github.com/auser/lean4-prod/issues/62)): String scalar length preservation
+- [PR 65](https://github.com/auser/lean4-prod/pull/65) ([Issue 63](https://github.com/auser/lean4-prod/issues/63)): Byte-slice lowering
+- [PR 67](https://github.com/auser/lean4-prod/pull/67) ([Issue 66](https://github.com/auser/lean4-prod/issues/66)): Zero-allocation borrowed UTF-8 decoding
+- [PR 69](https://github.com/auser/lean4-prod/pull/69) ([Issue 68](https://github.com/auser/lean4-prod/issues/68)): Tail reuse during functional list updates
+
+Focused regression `crates/prismpm/tests/lean4_prod_dependency.rs` executes:
+1. `lean4_prod_dependency_record_and_checksums_are_valid`: Full dependency model parse and byte-level SHA-256 validation for all 5 locked artifacts.
+2. `lean4_prod_rust_manifest_is_exhaustive_and_valid`: Complete tree manifest parsing, byte-level checking of all 34 source/test files, and rejection of unmanifested files.
+3. `lean4_prod_crates_preserve_strict_generic_compiler_isolation`: Source scan verifying that no application-domain or target semantics contaminate generic compiler crates.
+4. `lean4_prod_dependency_falsification_probes`: Negative test verifying detection of missing sections and tampered SHA-256 digests.
+
+All 4 test cases pass deterministically.
+
+## First-party crates.io identity bootstrap and trusted publishing readiness
+
+First-party packages `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`
+require owner-controlled initial registration on crates.io before trusted publishing
+can be activated. Model `validate_crates_io_bootstrap` strictly rejects schema deviations,
+unapproved registries, incomplete/duplicate/unrecognized crate sets, dependency-order
+inversions (`prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`),
+malformed 64-hex checksums or 40-hex source commits, unaided OIDC shortcuts, and premature
+trusted-publishing activation under `PP4103`. Downstream lock consumption bindings are verified
+against published package identities to guarantee immutable provenance.
+
+All nine integration tests in `crates/prismpm/tests/crates_io_bootstrap.rs` pass cleanly,
+verifying receipt generation (`prismpm/crates-io-bootstrap-receipt/1`) and falsification across
+all defect classes.
+
+## Task 12 ecosystem release closure and falsification completeness
+
+The complete ecosystem release closure (`prismpm/ecosystem-release/2`) is verified
+against the canonical model `validate_ecosystem_release_closure`:
+
+- Five required repositories (`LexLean`, `PrismPM`, `calculator-example`, `lean4-prod`, `template`)
+  with exact 40-hex commits and source archives bound in artifacts.
+- Three required first-party packages (`prism-calculator`, `prism-stdlib`, `prismpm`) with
+  checksums, versions, and registry URLs.
+- Calculator baseline integrity:
+  - Application baseline distinct from both system releases.
+  - System releases A and B have distinct product digests.
+  - Pages profile contains at least 6 strictly ordered assets.
+- Dual-platform SDK reproducibility: `linux/amd64` and `linux/arm64` platform manifests
+  in canonical OS order, native archives in canonical architecture order.
+- Falsification completeness across all 14 required planted-defect classes:
+  `authority-drift`, `always-pass-oracle`, `source-lock-mismatch`, `generated-behavior`,
+  `oci-digest-mutation`, `wrong-signer`, `secret-leak`, `mutable-tag-deployment`,
+  `target-state-race`, `failed-rollout`, `unsafe-migration`, `telemetry-absence`,
+  `stale-health`, `failed-restore`.
+
+All nine integration tests in `crates/prismpm/tests/ecosystem_release_closure.rs` pass,
+verifying receipt generation (`prismpm/ecosystem-release-receipt/2`) and falsification coverage.
+
+## Workspace functional-core profile, View, and Kappa admission path (DK-07..DK-16)
+
+The functional-core prerequisite set implements and independently verifies the
+generated workspace application profile, its View, and the Kappa replication/read
+admission path:
+
+1. Workspace profile: Schema `schemas/workspace-view-labels.schema.json` defines
+   and enforces the closed 39-field workspace View label contract. Diagnostics
+   in `model/browser-view-diagnostics.toml` (11 host errors, 14 registered model
+   rejections), `model/browser-adapter-diagnostics.toml` (DK-13, DK-14), and
+   `model/browser-diagnostics.toml` (DK-12) define closed typed errors.
+2. Generated View behaviors: The binary presentation (`0x50, 0x56, 0x4e, 0x01`)
+   and interaction (`0x50, 0x56, 0x49, 0x01`) contracts enforce single-flight
+   interaction, exact session correlation, focus/live mode semantics, control bits,
+   and deterministic projection across fresh Wasm and native guest instances.
+3. Kappa replication and read admission: WebRTC data-channel peer transport
+   (`sdk/browser/peer.mjs`) restricts traffic to bounded host-only candidates
+   without third-party STUN/TURN discovery. The authenticated journal
+   (`sdk/browser/journal.mjs`) bounds local admission to at most two outstanding
+   operations, re-authenticates complete replay, and commits atomic head transitions.
+   Commands (`sdk/browser/commands.mjs`) verify possession of signing keys under
+   context `prismpm/workspace-event/1`, and queries (`sdk/browser/queries.mjs`)
+   enforce bounded 16-row cursor pagination over admitted state.
+4. Acceptance evidence: Integration test `crates/prismpm/tests/workspace_functional_core.rs`
+   directly verifies schema conformance, diagnostic registries, stdlib export
+   boundaries, presentation projection, and falsification probes (rejecting zero
+   sessions, malformed framing, and out-of-bounds inputs). All 10 DK suites
+   (DK-07 through DK-16) are bound to release gates in `scripts/browser-api-sdk-check.mjs`.
 
 ## Compiler-fixture scheduling and diagnostic retention
 
@@ -2097,3 +2390,13 @@ Only a clean, annotated `v0.3.0` tag whose exact commit has produced
 runtime, adapter, and oracle image are built twice and must be identical;
 their checksums, SPDX SBOMs, provenance attestations, and signatures are
 produced only for those accepted bytes.
+
+## PrismPM v0.3.0 SDK and ecosystem acceptance closure
+
+The complete v0.3.0 acceptance closure verifies all six release acceptance steps defined in `RELEASE-STATUS.md`:
+1. **Archive-codec and dependency closure**: Modeled archive-codec replacement verified with independent Hologram Calculator/Text interoperability oracles (`prismpm/holo-oracle-acceptance/1`), LexLean 0.3.0, and lean4-prod upstream artifact tracking.
+2. **Reproducibility and artifact integrity**: Complete dependency closure reproduced across all 324 golden files, Calculator regressions, and artifact/image integrity checks.
+3. **Dual-platform release gates**: Release gates verified twice consecutively without cleanup across both `linux/amd64` and `linux/arm64` platform inventories.
+4. **Functional core and Cargo closure**: Foundry SDK binding verified, workspace profile View and Kappa admission path verified, and first-party crates.io bootstrap receipt (`prismpm/crates-io-bootstrap-receipt/1`) established for `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`.
+5. **Downstream template and calculator reference closure**: Universal template contract, calculator-example full SDK and system reference closure, and standard-native target adapters (Compose, Kubernetes, Pages) verified against immutable release identities.
+6. **Ecosystem release closure manifest**: Complete `prismpm/ecosystem-release/2` manifest verified with complete falsification across all 14 required defect classes, yielding acceptance receipt `prismpm/production-release-acceptance/1`.

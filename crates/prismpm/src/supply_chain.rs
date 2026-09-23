@@ -23,7 +23,8 @@ const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com
 const SIGSTORE_TRUSTED_ROOT: &[u8] =
     include_bytes!("../standards/trust/sigstore-trusted-root-cosign-3.1.3.json");
 const SLSA_PROVENANCE_V1: &str = "https://slsa.dev/provenance/v1";
-pub(crate) const PRISM_BUILD_TYPE: &str = "https://uor.foundation/prismpm/build/v1";
+/// Canonical SLSA build type for PrismPM builds.
+pub const PRISM_BUILD_TYPE: &str = "https://uor.foundation/prismpm/build/v1";
 const GENERATED_ARTIFACT_LICENSE: &str = "MIT OR Apache-2.0";
 const SIGSTORE_BUNDLE_V03: &str = "application/vnd.dev.sigstore.bundle.v0.3+json";
 const FULCIO_ISSUER: &str = "1.3.6.1.4.1.57264.1.8";
@@ -83,6 +84,14 @@ fn digest_hex(value: &str) -> Option<&str> {
 
 fn bare_digest_hex(value: &str) -> Option<&str> {
     (value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    .then_some(value)
+}
+
+fn git_commit_hex(value: &str) -> Option<&str> {
+    (value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
@@ -3146,7 +3155,7 @@ pub fn promote_release(
 }
 
 /// One immutable vulnerability/advisory scan result supplied by a pinned scanner.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AdvisoryScanFact {
     /// Exact `sha256:` digest of the scanned component, SDK, or dependency set.
@@ -3168,7 +3177,7 @@ pub struct AdvisoryScanFact {
 }
 
 /// Closed advisory coverage and freshness policy.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdvisoryPolicy {
     /// Exact subject digests that must each have one scan fact.
     pub required_subjects: Vec<String>,
@@ -3235,6 +3244,550 @@ pub fn validate_advisory_coverage(
     }))
 }
 
+/// Locked source configuration binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockBinding {
+    /// Relative path of the lock within the repository root.
+    pub path: String,
+    /// Exact `sha256:` digest of the lockfile bytes.
+    pub digest: String,
+}
+
+/// Installed dependency graph binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphBinding {
+    /// Path to the dependency graph manifest or lock.
+    pub lockfile_path: String,
+    /// Exact `sha256:` digest of the dependency lockfile bytes.
+    pub lockfile_digest: String,
+    /// Exact `sha256:` digest of the resolved dependency graph or installed tree.
+    pub installed_tree_digest: String,
+}
+
+/// Runtime executable and module tree binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeBinding {
+    /// Locked parser version or runtime descriptor.
+    pub parser_version: String,
+    /// Exact `sha256:` digest of the owned runtime lock.
+    pub runtime_lock_digest: String,
+    /// Length-framed canonical tree digest of installed runtime modules.
+    pub tree_digest: String,
+}
+
+/// Bound launcher script or executable identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LauncherBinding {
+    /// Target system path of the launcher script or executable.
+    pub path: String,
+    /// Exact `sha256:` digest of the launcher executable bytes.
+    pub digest: String,
+}
+
+/// Shipped platform SDK image and inventory binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlatformInventoryBinding {
+    /// Target OCI platform, e.g. `linux/amd64` or `linux/arm64`.
+    pub platform: String,
+    /// Exact `sha256:` digest of the shipped platform SDK image manifest.
+    pub sdk_image_digest: String,
+    /// Exact `sha256:` digest of the platform SDK inventory JSON document.
+    pub inventory_digest: String,
+}
+
+/// Policy governing acceptable SDK security disposition and scan freshness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SdkAdvisoryPolicy {
+    /// Required advisory database identifier.
+    pub database_id: String,
+    /// Required advisory database digest.
+    pub database_digest: String,
+    /// Unix timestamp after which the database is considered expired.
+    pub database_expires_unix: u64,
+    /// Maximum allowable age of scan facts in seconds.
+    pub max_age_seconds: u64,
+    /// Require full SDK image scans on all platforms; component-only evidence fails closed.
+    pub require_full_sdk_scan: bool,
+    /// Maximum allowed rejected findings (must be 0 for production acceptance).
+    pub allowed_rejected_findings: u64,
+}
+
+/// Complete security and vulnerability disposition for the shipped SDK identities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SdkSecurityDisposition {
+    /// Closed schema identifier (`prismpm/sdk-security-disposition/1`).
+    pub schema: String,
+    /// Bound source locks.
+    pub source_locks: Vec<LockBinding>,
+    /// Bound installed dependency graph.
+    pub installed_graph: GraphBinding,
+    /// Bound runtime bytes and modules.
+    pub runtime_bytes: RuntimeBinding,
+    /// Bound launcher script.
+    pub launcher: LauncherBinding,
+    /// Bound platform inventories for shipped architectures.
+    pub platform_inventories: Vec<PlatformInventoryBinding>,
+    /// Observed vulnerability and advisory scan facts.
+    pub scan_facts: Vec<AdvisoryScanFact>,
+    /// Policy under which the disposition is validated.
+    pub policy: SdkAdvisoryPolicy,
+}
+
+/// Validate the complete security and vulnerability disposition for shipped SDK identities.
+///
+/// Enforces:
+/// - Exact schema `prismpm/sdk-security-disposition/1`.
+/// - Complete binding of source locks, installed graph, runtime bytes, launcher, and platform inventories.
+/// - Both `linux/amd64` and `linux/arm64` platform coverage.
+/// - Strict rejection of component-only advisory evidence as a substitute for full shipped SDK disposition.
+/// - Enforced freshness bounds (scan age within `max_age_seconds`, database not expired).
+/// - Zero unresolved rejected findings.
+pub fn validate_sdk_security_disposition(
+    disposition: &SdkSecurityDisposition,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    if disposition.schema != "prismpm/sdk-security-disposition/1" {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition schema differs or is unsupported",
+        ));
+    }
+
+    if disposition.source_locks.is_empty() {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition source locks are empty",
+        ));
+    }
+    for lock in &disposition.source_locks {
+        if lock.path.trim().is_empty() || digest_hex(&lock.digest).is_none() {
+            return Err(PrismError::new(
+                "PP7801",
+                "SDK security disposition source lock path or digest is malformed",
+            ));
+        }
+    }
+
+    if disposition.installed_graph.lockfile_path.trim().is_empty()
+        || digest_hex(&disposition.installed_graph.lockfile_digest).is_none()
+        || digest_hex(&disposition.installed_graph.installed_tree_digest).is_none()
+    {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition installed graph binding is malformed",
+        ));
+    }
+
+    if disposition.runtime_bytes.parser_version.trim().is_empty()
+        || digest_hex(&disposition.runtime_bytes.runtime_lock_digest).is_none()
+        || digest_hex(&disposition.runtime_bytes.tree_digest).is_none()
+    {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition runtime bytes binding is malformed",
+        ));
+    }
+
+    if disposition.launcher.path.trim().is_empty()
+        || digest_hex(&disposition.launcher.digest).is_none()
+    {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition launcher binding is malformed",
+        ));
+    }
+
+    if disposition.platform_inventories.is_empty() {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition platform inventories are empty",
+        ));
+    }
+
+    let mut platforms = BTreeSet::new();
+    for inv in &disposition.platform_inventories {
+        if digest_hex(&inv.sdk_image_digest).is_none()
+            || digest_hex(&inv.inventory_digest).is_none()
+            || !platforms.insert(inv.platform.as_str())
+        {
+            return Err(PrismError::new(
+                "PP7801",
+                "SDK security disposition platform inventory has invalid or duplicate platform entry",
+            ));
+        }
+    }
+
+    for required in ["linux/amd64", "linux/arm64"] {
+        if !platforms.contains(required) {
+            return Err(PrismError::new(
+                "PP7801",
+                format!("SDK security disposition omits required platform {required}"),
+            ));
+        }
+    }
+
+    if !disposition.policy.require_full_sdk_scan {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition policy must require full SDK image scan",
+        ));
+    }
+    if disposition.policy.allowed_rejected_findings != 0 {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition policy cannot allow rejected findings for production release",
+        ));
+    }
+    if digest_hex(&disposition.policy.database_digest).is_none() {
+        return Err(PrismError::new(
+            "PP7801",
+            "SDK security disposition policy database digest is malformed",
+        ));
+    }
+    if now_unix >= disposition.policy.database_expires_unix {
+        return Err(PrismError::new(
+            "PP7801",
+            "advisory database has expired under production freshness policy",
+        ));
+    }
+
+    let required_sdk_images = disposition
+        .platform_inventories
+        .iter()
+        .map(|inv| inv.sdk_image_digest.as_str())
+        .collect::<BTreeSet<_>>();
+
+    let observed_sdk_images = disposition
+        .scan_facts
+        .iter()
+        .filter(|fact| fact.subject_kind == "sdk-image")
+        .map(|fact| fact.subject_digest.as_str())
+        .collect::<BTreeSet<_>>();
+
+    if observed_sdk_images.is_empty() {
+        return Err(PrismError::new(
+            "PP7801",
+            "component-only advisory evidence cannot substitute for full shipped SDK disposition",
+        ));
+    }
+    if observed_sdk_images != required_sdk_images {
+        return Err(PrismError::new(
+            "PP7801",
+            "advisory scans do not cover every shipped SDK platform identity",
+        ));
+    }
+
+    let mut observed_subjects = BTreeSet::new();
+    for fact in &disposition.scan_facts {
+        if digest_hex(&fact.subject_digest).is_none()
+            || digest_hex(&fact.database_digest).is_none()
+            || digest_hex(&fact.result_digest).is_none()
+            || fact.subject_kind.is_empty()
+            || fact.database_id != disposition.policy.database_id
+            || fact.database_digest != disposition.policy.database_digest
+        {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan fact has malformed digest or database mismatch",
+            ));
+        }
+        if fact.scanned_at_unix > now_unix {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan timestamp is in the future",
+            ));
+        }
+        if now_unix.saturating_sub(fact.scanned_at_unix) > disposition.policy.max_age_seconds {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan evidence exceeds maximum permitted age under freshness policy",
+            ));
+        }
+        if now_unix >= fact.database_expires_unix {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory database was expired at evaluation time",
+            ));
+        }
+        if fact.rejected_findings > disposition.policy.allowed_rejected_findings {
+            return Err(PrismError::new(
+                "PP7801",
+                "advisory scan contains unresolved rejected findings",
+            ));
+        }
+        if !observed_subjects.insert((fact.subject_kind.as_str(), fact.subject_digest.as_str())) {
+            return Err(PrismError::new(
+                "PP7801",
+                "duplicate advisory scan subject fact",
+            ));
+        }
+    }
+
+    let platform_list = platforms.into_iter().map(str::to_owned).collect::<Vec<_>>();
+    let scanned_subjects = disposition
+        .scan_facts
+        .iter()
+        .map(|f| f.subject_digest.clone())
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "database_digest": disposition.policy.database_digest,
+        "database_id": disposition.policy.database_id,
+        "platform_count": disposition.platform_inventories.len(),
+        "platforms": platform_list,
+        "result": "verified",
+        "scanned_subjects": scanned_subjects,
+        "schema": "prismpm/sdk-security-disposition-receipt/1",
+        "unresolved_findings": 0,
+        "verified_at_unix": now_unix
+    }))
+}
+
+/// Required first-party crate names in policy-compliant dependency order.
+pub const REQUIRED_FIRST_PARTY_CRATES: [&str; 5] = [
+    "prod-ir",
+    "prod-codegen",
+    "lexlean",
+    "prism-stdlib",
+    "prismpm",
+];
+
+/// Record of one first-party package initial upload to crates.io.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CratesIoPackageUpload {
+    /// The crate name.
+    pub name: String,
+    /// Semantic version string.
+    pub version: String,
+    /// 64-hex SHA-256 package checksum.
+    pub checksum: String,
+    /// SHA-256 digest of the crate archive bytes.
+    pub crate_bytes_digest: String,
+    /// Git commit SHA of the accepted source release.
+    pub source_commit: String,
+    /// Method used for the upload (must be owner-controlled, not unaided OIDC).
+    pub upload_method: String,
+    /// Registry owner credential identity performing the upload.
+    pub uploader: String,
+    /// Unix timestamp when the package was published.
+    pub published_at_unix: u64,
+}
+
+/// Trusted publishing readiness configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrustedPublishingConfig {
+    /// Whether trusted publishing is enabled.
+    pub enabled: bool,
+    /// Identity provider (e.g., "github-actions").
+    pub provider: String,
+    /// Repository allowed to publish (e.g., "UOR-Foundation/PrismPM").
+    pub repository: String,
+    /// Pinned workflow file allowed to publish (e.g., "release.yml").
+    pub workflow: String,
+    /// Whether trusted publishing was configured strictly after owner bootstrap verification.
+    pub configured_after_bootstrap: bool,
+}
+
+/// Binding of downstream lock consumption to published package identities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DownstreamLockBinding {
+    /// Relative or absolute path to the consumer's lockfile.
+    pub lock_path: String,
+    /// Published package name expected in the lockfile.
+    pub package_name: String,
+    /// Published package version expected in the lockfile.
+    pub version: String,
+    /// 64-hex package checksum expected in the lockfile.
+    pub checksum: String,
+}
+
+/// Complete first-party crates.io bootstrap identity and trusted publishing readiness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CratesIoBootstrap {
+    /// Closed schema identifier (`prismpm/crates-io-bootstrap/1`).
+    pub schema: String,
+    /// Registry base URL (must be crates.io).
+    pub registry: String,
+    /// First-party package uploads in dependency order.
+    pub packages: Vec<CratesIoPackageUpload>,
+    /// Trusted publishing readiness configuration.
+    pub trusted_publishing: TrustedPublishingConfig,
+    /// Downstream lock consumption bindings.
+    pub downstream_locks: Vec<DownstreamLockBinding>,
+}
+
+/// Validate the complete first-party crates.io bootstrap identity and trusted publishing readiness.
+///
+/// Enforces:
+/// - Exact schema `prismpm/crates-io-bootstrap/1`.
+/// - Registry must be `https://crates.io`.
+/// - Exactly the five required first-party crates in dependency order:
+///   `prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`.
+/// - Each package has valid 64-hex checksum, 64-hex crate bytes digest,
+///   and 40-hex source commit.
+/// - Owner-controlled upload method (no unaided OIDC shortcuts).
+/// - Trusted publishing configured strictly after owner bootstrap verification.
+/// - Downstream lock bindings match published package identities.
+/// - No future publication timestamps relative to `now_unix`.
+pub fn validate_crates_io_bootstrap(
+    bootstrap: &CratesIoBootstrap,
+    now_unix: u64,
+) -> Result<Value, PrismError> {
+    if bootstrap.schema != "prismpm/crates-io-bootstrap/1" {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap schema differs or is unsupported",
+        ));
+    }
+    if bootstrap.registry != "https://crates.io" {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap registry must be https://crates.io",
+        ));
+    }
+    if bootstrap.packages.len() != REQUIRED_FIRST_PARTY_CRATES.len() {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap must contain exactly five required first-party packages",
+        ));
+    }
+    let mut seen = BTreeSet::new();
+    for (idx, package) in bootstrap.packages.iter().enumerate() {
+        if package.name != REQUIRED_FIRST_PARTY_CRATES[idx] {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "{} must precede {} (dependency order: {})",
+                    REQUIRED_FIRST_PARTY_CRATES[idx],
+                    package.name,
+                    REQUIRED_FIRST_PARTY_CRATES.join(" -> ")
+                ),
+            ));
+        }
+        if !seen.insert(package.name.as_str()) {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap contains duplicate package names",
+            ));
+        }
+        if bare_digest_hex(&package.checksum).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap package checksum is not a valid 64-hex SHA-256 digest",
+            ));
+        }
+        if bare_digest_hex(&package.crate_bytes_digest).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap crate bytes digest is not a valid 64-hex SHA-256 digest",
+            ));
+        }
+        if git_commit_hex(&package.source_commit).is_none() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap source commit is not a valid 40-hex git commit SHA",
+            ));
+        }
+        if package.upload_method == "unaided-oidc" {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap unaided OIDC bootstrap shortcut prohibited",
+            ));
+        }
+        if package.uploader.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap uploader identity is required",
+            ));
+        }
+        if package.published_at_unix > now_unix {
+            return Err(PrismError::new(
+                "PP4103",
+                "crates.io bootstrap publication timestamp is in the future",
+            ));
+        }
+    }
+    if bootstrap.trusted_publishing.enabled {
+        if !bootstrap.trusted_publishing.configured_after_bootstrap {
+            return Err(PrismError::new(
+                "PP4103",
+                "trusted publishing configured before owner bootstrap validation",
+            ));
+        }
+        if bootstrap.trusted_publishing.repository.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP4103",
+                "trusted publishing repository is required",
+            ));
+        }
+    }
+    if bootstrap.downstream_locks.is_empty() {
+        return Err(PrismError::new(
+            "PP4103",
+            "crates.io bootstrap must verify at least one downstream lock binding",
+        ));
+    }
+    let mut known_packages = BTreeMap::new();
+    for package in &bootstrap.packages {
+        known_packages.insert(
+            package.name.clone(),
+            (package.version.clone(), package.checksum.clone()),
+        );
+    }
+    for lock in &bootstrap.downstream_locks {
+        let Some((expected_version, expected_checksum)) = known_packages.get(&lock.package_name)
+        else {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "downstream lock references unknown package {}",
+                    lock.package_name
+                ),
+            ));
+        };
+        if lock.version != *expected_version {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "downstream lock version mismatch for {}: expected {}, got {}",
+                    lock.package_name, expected_version, lock.version
+                ),
+            ));
+        }
+        if lock.checksum != *expected_checksum {
+            return Err(PrismError::new(
+                "PP4103",
+                format!(
+                    "downstream lock checksum mismatch for {}: expected {}, got {}",
+                    lock.package_name, expected_checksum, lock.checksum
+                ),
+            ));
+        }
+    }
+
+    Ok(json!({
+        "downstream_locks_verified": bootstrap.downstream_locks.len(),
+        "package_count": bootstrap.packages.len(),
+        "registry": bootstrap.registry,
+        "result": "verified",
+        "schema": "prismpm/crates-io-bootstrap-receipt/1",
+        "status": "passed",
+        "trusted_publishing_ready": bootstrap.trusted_publishing.enabled,
+        "verified_at_unix": now_unix
+    }))
+}
+
 fn component_element(component: &InventoryComponent) -> Value {
     json!({
         "creationInfo":creation_info(),
@@ -3249,7 +3802,8 @@ fn component_element(component: &InventoryComponent) -> Value {
     })
 }
 
-fn validate_sbom_closure(
+/// Validate the complete SPDX 3.0.1 graph closure against OCI descriptors and external artifacts.
+pub fn validate_sbom_closure(
     spdx: &Value,
     layers: &[oci::Descriptor],
     external_artifacts: &[Value],

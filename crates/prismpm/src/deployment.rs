@@ -57,7 +57,7 @@ fn descriptor(kind: &str) -> Result<(Value, &'static [u8]), PrismError> {
 }
 
 /// Exact target-profile choices consumed by the generic standard renderer.
-pub(crate) fn projection_policy(kind: &str) -> Result<Value, PrismError> {
+pub fn projection_policy(kind: &str) -> Result<Value, PrismError> {
     let (descriptor, _) = descriptor(kind)?;
     descriptor
         .get("projection_policy")

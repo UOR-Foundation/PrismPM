@@ -364,6 +364,12 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         spec.rule,
+        Rule::ConfigurationShape | Rule::ConfigurationRequired | Rule::ConfigurationLimits
+    ) {
+        return configuration::validate(value);
+    }
+    if matches!(
+        spec.rule,
         Rule::ArtifactIntegrity | Rule::ConfinedOutput | Rule::ImmutableLock
     ) {
         return filesystem::validate(value);

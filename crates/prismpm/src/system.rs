@@ -1324,6 +1324,20 @@ pub fn validate(value: &Value, manifest: &Value) -> Result<(), PrismError> {
         .expect("generated validation certificate is an object")
         .remove("schema");
     if *manifest != formal_certificate {
+        for (k, v) in manifest.as_object().unwrap() {
+            if let Some(other) = formal_certificate.get(k) {
+                if v != other {
+                    eprintln!("FIELD MISMATCH {k}:\nMANIFEST: {v}\nFORMAL:   {other}");
+                }
+            } else {
+                eprintln!("FIELD MISSING IN FORMAL: {k}");
+            }
+        }
+        for (k, _) in formal_certificate.as_object().unwrap() {
+            if !manifest.as_object().unwrap().contains_key(k) {
+                eprintln!("FIELD EXTRA IN FORMAL: {k}");
+            }
+        }
         return Err(PrismError::new(
             "PP2101",
             "authored formal validation certificate does not equal the closed model graph",
@@ -2911,6 +2925,19 @@ pub fn projections(
     });
     projections.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
     Ok(projections)
+}
+
+/// Generate the canonical Compose target projection from the system model.
+pub fn compose_projection(system: &Value) -> Result<Value, PrismError> {
+    compose(system)
+}
+
+/// Generate the canonical Kubernetes target projection from the system model.
+pub fn kubernetes_projection(
+    system: &Value,
+    build_artifacts: &[(String, Vec<u8>)],
+) -> Result<Value, PrismError> {
+    kubernetes(system, build_artifacts)
 }
 
 #[cfg(test)]
