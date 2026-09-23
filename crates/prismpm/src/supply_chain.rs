@@ -3668,12 +3668,14 @@ pub fn validate_crates_io_bootstrap(
             return Err(PrismError::new(
                 "PP4103",
                 format!(
-                    "crates.io bootstrap package {} must be {} (dependency order: prod-ir -> prod-codegen -> lexlean -> prism-stdlib -> prismpm)",
-                    idx, REQUIRED_FIRST_PARTY_CRATES[idx]
+                    "{} must precede {} (dependency order: {})",
+                    REQUIRED_FIRST_PARTY_CRATES[idx],
+                    package.name,
+                    REQUIRED_FIRST_PARTY_CRATES.join(" -> ")
                 ),
             ));
         }
-        if seen.insert(package.name.as_str()) == false {
+        if !seen.insert(package.name.as_str()) {
             return Err(PrismError::new(
                 "PP4103",
                 "crates.io bootstrap contains duplicate package names",
@@ -3738,25 +3740,38 @@ pub fn validate_crates_io_bootstrap(
     }
     let mut known_packages = BTreeMap::new();
     for package in &bootstrap.packages {
-        known_packages.insert(package.name.clone(), (package.version.clone(), package.checksum.clone()));
+        known_packages.insert(
+            package.name.clone(),
+            (package.version.clone(), package.checksum.clone()),
+        );
     }
     for lock in &bootstrap.downstream_locks {
-        let Some((expected_version, expected_checksum)) = known_packages.get(&lock.package_name) else {
+        let Some((expected_version, expected_checksum)) = known_packages.get(&lock.package_name)
+        else {
             return Err(PrismError::new(
                 "PP4103",
-                format!("downstream lock references unknown package {}", lock.package_name),
+                format!(
+                    "downstream lock references unknown package {}",
+                    lock.package_name
+                ),
             ));
         };
         if lock.version != *expected_version {
             return Err(PrismError::new(
                 "PP4103",
-                format!("downstream lock version mismatch for {}: expected {}, got {}", lock.package_name, expected_version, lock.version),
+                format!(
+                    "downstream lock version mismatch for {}: expected {}, got {}",
+                    lock.package_name, expected_version, lock.version
+                ),
             ));
         }
         if lock.checksum != *expected_checksum {
             return Err(PrismError::new(
                 "PP4103",
-                format!("downstream lock checksum mismatch for {}: expected {}, got {}", lock.package_name, expected_checksum, lock.checksum),
+                format!(
+                    "downstream lock checksum mismatch for {}: expected {}, got {}",
+                    lock.package_name, expected_checksum, lock.checksum
+                ),
             ));
         }
     }

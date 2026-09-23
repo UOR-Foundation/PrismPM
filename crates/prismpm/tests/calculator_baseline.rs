@@ -19,7 +19,10 @@ fn calculator_baseline_rejects_tampered_or_unordered_records() {
     let mut baseline: Value = serde_json::from_slice(baseline_bytes).expect("valid JSON");
 
     // Reversing repositories array must trigger ordering / noncanonical failure
-    if let Some(repos) = baseline.get_mut("repositories").and_then(Value::as_array_mut) {
+    if let Some(repos) = baseline
+        .get_mut("repositories")
+        .and_then(Value::as_array_mut)
+    {
         repos.reverse();
     }
     let err = CanonicalDocument::from_value("prismpm/calculator-baseline/1", baseline)
