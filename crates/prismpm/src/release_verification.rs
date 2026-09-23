@@ -229,6 +229,10 @@ pub(crate) fn validate(
     let model_bytes = file(build_files, "model.prism.json")?;
     let model = decode_canonical(model_bytes)
         .map_err(|error| invalid(format!("release model: {}", error.message)))?;
+    ensure(
+        model.library.is_none(),
+        "native-library evidence cannot authorize a product release",
+    )?;
     let inputs = &build["inputs"];
     let mut input_fields = vec![
         "application_generator_sha256",
@@ -485,7 +489,7 @@ fn lexlean_binding(
     // graph. A digest copied into build inputs alone cannot establish that.
     let systems = crate::system::project_all(&typed)
         .map_err(|error| invalid(format!("system snapshot projection: {}", error.message)))?;
-    if let Some(bytes) = files.get("system.prism.json") {
+    let projected_system = if let Some(bytes) = files.get("system.prism.json") {
         let projected = systems
             .iter()
             .find(|system| system.bytes() == bytes)
@@ -495,12 +499,14 @@ fn lexlean_binding(
                 == format!("sha256:{}", hex(file(files, "model.prism.json")?)),
             "system application model binding differs",
         )?;
+        Some(projected)
     } else {
         ensure(
             systems.is_empty(),
             "verification build omitted modeled system projection",
         )?;
-    }
+        None
+    };
     if model.application.is_none() {
         let projected = crate::holo::projector::project_snapshot(&typed)
             .map_err(|error| invalid(format!("native snapshot projection: {}", error.message)))?;
@@ -516,6 +522,13 @@ fn lexlean_binding(
         )?;
     } else {
         selected_application_snapshot(model, snapshot, &manifest, files)?;
+    }
+    if let Some(projected) =
+        projected_system.filter(|system| system.schema() == "prismpm/system-model/2")
+    {
+        crate::system::browser::validate_application(projected.value(), model)
+            .and_then(|_| crate::system::browser::replay(projected, files))
+            .map_err(|error| invalid(format!("browser system replay: {}", error.message)))?;
     }
     declaration_audits(lex, snapshot_modules)?;
     lexlean_processes(lex, &modules)?;

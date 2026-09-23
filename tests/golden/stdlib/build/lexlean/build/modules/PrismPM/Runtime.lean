@@ -7,6 +7,7 @@ public import PrismPM.Foundation.Browser.V1.WorkspaceEnvelopeCorpus
 public import PrismPM.Foundation.Browser.V1.WorkspaceJournalCorpus
 public import PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus
 public import PrismPM.Foundation.Holo
+public import PrismPM.Foundation.Holo.V1.BrowserWire
 public import PrismPM.Foundation.Holo.V1.WireCorpus
 public import PrismPM.Foundation.View.Text.V1.Model
 public import PrismPM.Foundation.View.Workspace.V1.Corpus

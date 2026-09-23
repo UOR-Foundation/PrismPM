@@ -163,6 +163,12 @@ requires_digest = false
 result_schema = "prismpm/verify-result/1"
 
 [[command]]
+name = "verify-browser-publication"
+mutates = "never"
+requires_digest = true
+result_schema = "prismpm/browser-publication-integrity/1"
+
+[[command]]
 name = "verify-release"
 mutates = "never"
 requires_digest = true

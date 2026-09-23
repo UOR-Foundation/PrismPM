@@ -1,5 +1,11 @@
 Feature: holo
 
+  @HO-13 @build
+  Scenario: The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority.
+    Given current verified modeled source and independently produced wire vectors
+    When both generated native modes exercise every browser codec export
+    Then the exact closed profiles remain distinct and malformed framing is rejected
+
   @HO-12 @build
   Scenario: Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence.
     Given a composed application with its exact portable attachment assets

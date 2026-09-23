@@ -42,6 +42,61 @@ pub struct ProjectConfig {
     pub limits: ProjectLimits,
 }
 
+// Retain missing fields and signed TOML integers until their registered
+// configuration diagnostics can be selected. Serde still owns closed shapes
+// and type checking; error classification never parses Serde's prose.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConfigInput {
+    spec: Option<String>,
+    project: Option<String>,
+    lexlean_project: Option<String>,
+    build_root: Option<String>,
+    limits: Option<LimitsInput>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LimitsInput {
+    max_holo_bytes: Option<i64>,
+    max_entities: Option<i64>,
+    max_diagnostics: Option<i64>,
+}
+
+fn required<T>(value: Option<T>, field: &str) -> Result<T, PrismError> {
+    value.ok_or_else(|| {
+        PrismError::new(
+            "PP1002",
+            format!("missing required configuration field {field}"),
+        )
+    })
+}
+
+impl ConfigInput {
+    fn complete(self) -> Result<ProjectConfig, PrismError> {
+        let spec = required(self.spec, "spec")?;
+        let project = required(self.project, "project")?;
+        let lexlean_project = required(self.lexlean_project, "lexlean_project")?;
+        let build_root = required(self.build_root, "build_root")?;
+        let limits = required(self.limits, "limits")?;
+        let integer = |value, field| {
+            u64::try_from(required(value, field)?)
+                .map_err(|_| PrismError::new("PP1003", "project limits are outside fixed bounds"))
+        };
+        Ok(ProjectConfig {
+            spec,
+            project,
+            lexlean_project,
+            build_root,
+            limits: ProjectLimits {
+                max_holo_bytes: integer(limits.max_holo_bytes, "limits.max_holo_bytes")?,
+                max_entities: integer(limits.max_entities, "limits.max_entities")?,
+                max_diagnostics: integer(limits.max_diagnostics, "limits.max_diagnostics")?,
+            },
+        })
+    }
+}
+
 fn relative(path: &str, field: &str) -> Result<PathBuf, PrismError> {
     let value = Path::new(path);
     let valid_component = |component: &str| {
@@ -121,8 +176,9 @@ impl ProjectConfig {
             .map_err(|error| PrismError::new("PP1002", format!("{}: {error}", path.display())))?;
         let text = std::str::from_utf8(&bytes)
             .map_err(|_| PrismError::new("PP1001", "configuration is not UTF-8"))?;
-        let config: Self = toml::from_str(text)
+        let input: ConfigInput = toml::from_str(text)
             .map_err(|error| PrismError::new("PP1001", format!("configuration: {error}")))?;
+        let config = input.complete()?;
         config.validate()?;
         Ok((config, path))
     }
@@ -195,7 +251,59 @@ impl ProjectConfig {
 
 #[cfg(test)]
 mod limit_tests {
-    use super::ProjectLimits;
+    use super::{ProjectConfig, ProjectLimits};
+
+    const CONTROL: &str = "spec = \"prismpm/project/1\"\nproject = \"Diagnostic\"\nlexlean_project = \"lexlean.toml\"\nbuild_root = \".prism\"\n[limits]\nmax_holo_bytes = 1\nmax_entities = 1\nmax_diagnostics = 1\n";
+
+    fn load(text: &str) -> Result<ProjectConfig, crate::error::PrismError> {
+        let project = tempfile::tempdir().unwrap();
+        let path = project.path().join("prismpm.toml");
+        std::fs::write(&path, text).unwrap();
+        let result = ProjectConfig::load(project.path(), None).map(|(config, _)| config);
+        assert_eq!(std::fs::read_to_string(path).unwrap(), text);
+        assert_eq!(std::fs::read_dir(project.path()).unwrap().count(), 1);
+        result
+    }
+
+    #[test]
+    fn loader_reports_absent_required_fields_at_the_registered_boundary() {
+        load(CONTROL).unwrap();
+        for line in CONTROL.lines().filter(|line| line.contains(" = ")) {
+            let malformed = CONTROL.replace(&format!("{line}\n"), "");
+            let actual = load(&malformed).unwrap_err();
+            assert_eq!(actual.code.as_str(), "PP1002", "absent {line}: {actual}");
+        }
+        let actual = load(CONTROL.split("[limits]").next().unwrap()).unwrap_err();
+        assert_eq!(actual.code.as_str(), "PP1002");
+    }
+
+    #[test]
+    fn loader_distinguishes_closed_shape_and_positive_limit_errors() {
+        for malformed in [
+            format!("unknown = true\n{CONTROL}"),
+            format!("{CONTROL}unknown = true\n"),
+            format!("{CONTROL}max_entities = 1\n"),
+            CONTROL.replace("max_entities = 1", "max_entities = \"one\""),
+        ] {
+            assert_eq!(load(&malformed).unwrap_err().code.as_str(), "PP1001");
+        }
+        for (field, maximum) in [
+            ("max_holo_bytes", 1_073_741_824_i64),
+            ("max_entities", 10_000_000),
+            ("max_diagnostics", 10_000),
+        ] {
+            for accepted in [1, maximum] {
+                load(&CONTROL.replace(&format!("{field} = 1"), &format!("{field} = {accepted}")))
+                    .unwrap();
+            }
+            for rejected in [-1, 0, maximum + 1] {
+                let malformed =
+                    CONTROL.replace(&format!("{field} = 1"), &format!("{field} = {rejected}"));
+                let actual = load(&malformed).unwrap_err();
+                assert_eq!(actual.code.as_str(), "PP1003", "{field}: {actual}");
+            }
+        }
+    }
 
     #[test]
     fn holo_length_limit_includes_the_boundary_and_rejects_larger_bytes() {

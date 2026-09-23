@@ -177,6 +177,12 @@ fn application_view(
     core_sha: &str,
 ) -> Result<(GeneratedViewV1, String, String), PrismError> {
     let (generated, model_id, view_model_id) = match application {
+        Application::Browser(_) => {
+            return Err(PrismError::new(
+                "PP2011",
+                "browser application View generation is unavailable",
+            ))
+        }
         Application::Legacy(application) => {
             let evaluated = view_value(model, application, core_sha);
             let generated = generate_view_v1(
@@ -439,6 +445,7 @@ fn application_export_arguments(
             // Display labels are not IR identifiers. Use the already validated
             // Cargo identity, preserving the legacy Calculator's exact output.
             Application::Text(application) => application.cargo_name.replace('-', "_"),
+            Application::Browser(application) => application.cargo_name.replace('-', "_"),
         },
         "--out".to_owned(),
         export.to_string_lossy().into_owned(),
@@ -462,6 +469,9 @@ pub(crate) fn generate(
             "application generation was requested for a non-application",
         )
     })?;
+    if matches!(application, Application::Browser(_)) {
+        crate::holo::browser_application::require_runtime(application)?;
+    }
     let stdlib: StdlibRelease = serde_json::from_str(STDLIB_RELEASE_SOURCE)
         .map_err(|error| PrismError::new("PP4101", format!("stdlib release: {error}")))?;
     if stdlib.schema != "prismpm/stdlib-release/1"

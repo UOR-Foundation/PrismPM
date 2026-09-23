@@ -155,6 +155,12 @@ pub fn decode_canonical(bytes: &[u8]) -> Result<ModelDocument, PrismError> {
         PrismError::new("PP4004", format!("invalid model-document shape: {error}"))
     })?;
     super::validate::validate(&doc)?;
+    if encode_canonical(&doc)? != bytes {
+        return Err(PrismError::new(
+            "PP4004",
+            "model-document fields do not have their canonical typed shape",
+        ));
+    }
     Ok(doc)
 }
 

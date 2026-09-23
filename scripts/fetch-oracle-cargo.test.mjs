@@ -25,6 +25,18 @@ const pinned = [
   'tests/browser-query/driver/Cargo.lock',
   'tests/browser-view/driver/Cargo.toml',
   'tests/browser-view/driver/Cargo.lock',
+  'tests/browser-effects/driver/Cargo.toml',
+  'tests/browser-effects/driver/Cargo.lock',
+  'tests/browser-presentation/driver/Cargo.toml',
+  'tests/browser-presentation/driver/Cargo.lock',
+  'tests/browser-custody/driver/Cargo.toml',
+  'tests/browser-custody/driver/Cargo.lock',
+  'tests/browser-operation-journal/driver/Cargo.toml',
+  'tests/browser-operation-journal/driver/Cargo.lock',
+  'tests/publication-admission/driver/Cargo.toml',
+  'tests/publication-admission/driver/Cargo.lock',
+  'tests/browser-budget/driver/Cargo.toml',
+  'tests/browser-budget/driver/Cargo.lock',
   'crates/prismpm/vendor/hologram-live.tar',
 ];
 const embedded = [
@@ -50,6 +62,10 @@ test('oracle acquisition inputs match reviewed pins and embedded verifier inputs
   const revision = /^revision = "([a-f0-9]{40})"$/m.exec(upstream)?.[1];
   assert.ok(digest && revision);
   assert.ok(script.includes(`${digest}  crates/prismpm/vendor/hologram-live.tar`));
+  for (const family of ['browser-operation-journal', 'publication-admission', 'browser-budget']) for (const file of ['Cargo.toml', 'Cargo.lock']) {
+    const path = `tests/${family}/driver/${file}`;
+    assert.ok(script.includes('  ' + path + '\n'), 'closed owning acquisition pin: ' + path);
+  }
   for (const oracle of ['hologram-oracle', 'holo-codec-oracle']) {
     assert.ok(readFileSync(join(root, `tests/${oracle}/Cargo.toml`), 'utf8').includes(`rev = "${revision}"`));
     assert.ok(readFileSync(join(root, `tests/${oracle}/Cargo.lock`), 'utf8').includes(`?rev=${revision}#${revision}`));

@@ -1,0 +1,1866 @@
+{
+  "schema": "prismpm/internal-browser-effect-corpus/1",
+  "roots": [
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmissionAfterClose",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmissionAfterUnknown",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitCommit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitDigest",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitGuest",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitHead",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitRandom",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitSign",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitVerify",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeApplicationReferenceWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeBegin",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCapturedActiveCounterMismatch",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCapturedNativeMaximumOperation",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCapturedWaiterCounterMismatch",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeChangedCommitPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCloseIdempotent",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCloseRetainsBoth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCloseUnknownRetainsBoth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitBadExpected",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitBadHead",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitBadNext",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDuplicateObjects",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitNoObjects",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitObjectLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitTooManyObjects",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteCommit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteDigest",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteGuest",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteHead",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteRandom",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteSign",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteVerify",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionAfterUnknown",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionForeignapplication",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionForeignmanifest",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionForeignsession",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionOperation",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionResource",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeConsumedCompletion",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCounterExhausted",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDefiniteConflictPromotesWaiter",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestMaximumPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestOutputNoncanonical",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestOversizedPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDuplicateResources",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeEmptyGrants",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeEmptyResourceReference",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeFinalOperationCompletion",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeFinalRepresentableOperation",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeForeignapplication",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeForeignmanifest",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeForeignsession",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestArtifactWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletionartifact",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletionentry",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletioninput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletionprotocol",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestDefiniteGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestDefiniteInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestDefiniteInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEmptyEntrySegment",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEmptyProtocol",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEntryNonAscii",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEntryStartsDigit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEntryTrailingDot",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestInputOutputExceedMemory",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestInputOverHost",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestInputZero",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestNativeMaximumInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestOutputOverHost",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestOutputOverMaximum",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestOutputZero",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestPagesOverHost",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestPagesZero",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestProtocolOverLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestartifact",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestentry",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestinput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestprotocol",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestUnqualifiedEntry",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadNotFound",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadResultLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostInputOutputExceedMemory",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostNativeMaximumInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostNativeMaximumPages",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostinputMaximum0",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostinputMaximum4294967296",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostmemoryPages0",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostmemoryPages65537",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostoutputMaximum0",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostoutputMaximum4294967296",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeInvalidCapturedCounter",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeLateCompletionAfterClose",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeManifestReferenceWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectNotFound",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectResultLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeOversizedResourceReference",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probePromoteBoundWaiter",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeQueueSecond",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomDeclaredMaximum",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomOutputWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomOverMaximum",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomZero",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeResourceCountMaximum",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeResourceCountOverflow",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeReusedOperation",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSessionWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignDefiniteIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignMaximumPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignOversizedPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsVerifyResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignatureOutputWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext79",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext80",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext81",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext82",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext83",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext84",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningKeyPrefix",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningKeyWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSkippedOperation",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxHeads0",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxHeads65",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjectBytes0",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjectBytes1048577",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjects0",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjects4097",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoreNamespacePath",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeThirdAdmission",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownResource",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownRetainsBoth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownStorageNotDefiniteRejection",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownWithoutActive",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerificationInputSignatureWidth",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyDefiniteCryptoUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyDefiniteInvalidInput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyMaximumPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyOversizedPayload",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsCommitResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsDigestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignGeneratedExecutionFailed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignHeadConflict",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignIdentityCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignInvalidGeneratedModule",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignInvalidGeneratedOutput",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignMissingObject",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignObjectCorrupt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStorageQuota",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStorageUnavailable",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStoreClosed",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStoreLimit",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsGuestResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsHeadResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsObjectResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsRandomResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsSignResult",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyUnknownRetained",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWaiterCannotComplete",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWaiterWithoutActive",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWideGuestDeclaredBudgets",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWrongAdapter",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWrongCommitReceipt",
+    "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWrongResultType"
+  ],
+  "errors": [
+    "BadManifest",
+    "BadSession",
+    "Closed",
+    "OutcomeUnknown",
+    "Busy",
+    "OperationExhausted",
+    "WrongApplication",
+    "WrongManifest",
+    "WrongSession",
+    "WrongOperation",
+    "UnknownResource",
+    "InvalidEffect",
+    "NoActiveOperation",
+    "CompletionMismatch",
+    "InvalidResult"
+  ],
+  "cases": [
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmissionAfterClose",
+      "area": "close",
+      "expectation": "Closed"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmissionAfterUnknown",
+      "area": "unknown",
+      "expectation": "OutcomeUnknown"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitCommit",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitDigest",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitGuest",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitHead",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitObject",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitRandom",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitSign",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeAdmitVerify",
+      "area": "admission",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeApplicationReferenceWidth",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeBegin",
+      "area": "session",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCapturedActiveCounterMismatch",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCapturedNativeMaximumOperation",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCapturedWaiterCounterMismatch",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeChangedCommitPayload",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCloseIdempotent",
+      "area": "close",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCloseRetainsBoth",
+      "area": "close",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCloseUnknownRetainsBoth",
+      "area": "close",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitBadExpected",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitBadHead",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitBadNext",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteHeadConflict",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteMissingObject",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteObjectCorrupt",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteStorageQuota",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteStoreClosed",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDefiniteStoreLimit",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitDuplicateObjects",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitNoObjects",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitObjectLimit",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsForeignStorageUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitTooManyObjects",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCommitUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteCommit",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteDigest",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteGuest",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteHead",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteObject",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteRandom",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteSign",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompleteVerify",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionAfterUnknown",
+      "area": "unknown",
+      "expectation": "OutcomeUnknown"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionForeignapplication",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionForeignmanifest",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionForeignsession",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionOperation",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCompletionResource",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeConsumedCompletion",
+      "area": "replay",
+      "expectation": "NoActiveOperation"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeCounterExhausted",
+      "area": "bounds",
+      "expectation": "OperationExhausted"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDefiniteConflictPromotesWaiter",
+      "area": "queue",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestMaximumPayload",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestOutputNoncanonical",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestOversizedPayload",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignObjectCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStorageQuota",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStorageUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStoreClosed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDigestUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeDuplicateResources",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeEmptyGrants",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeEmptyResourceReference",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeFinalOperationCompletion",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeFinalRepresentableOperation",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeForeignapplication",
+      "area": "binding",
+      "expectation": "WrongApplication"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeForeignmanifest",
+      "area": "binding",
+      "expectation": "WrongManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeForeignsession",
+      "area": "binding",
+      "expectation": "WrongSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestArtifactWidth",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletionartifact",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletionentry",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletioninput",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestCompletionprotocol",
+      "area": "binding",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestDefiniteGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestDefiniteInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestDefiniteInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEmptyEntrySegment",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEmptyProtocol",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEntryNonAscii",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEntryStartsDigit",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestEntryTrailingDot",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestInputOutputExceedMemory",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestInputOverHost",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestInputZero",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestNativeMaximumInput",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestOutputOverHost",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestOutputOverMaximum",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestOutputZero",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestPagesOverHost",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestPagesZero",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestProtocolOverLimit",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignCryptoUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignInvalidInput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignObjectCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStorageQuota",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStorageUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStoreClosed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestartifact",
+      "area": "binding",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestentry",
+      "area": "binding",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestinput",
+      "area": "binding",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestRequestprotocol",
+      "area": "binding",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeGuestUnqualifiedEntry",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteObjectCorrupt",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteStorageQuota",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteStorageUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadDefiniteStoreClosed",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadNotFound",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadResultLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHeadUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostInputOutputExceedMemory",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostNativeMaximumInput",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostNativeMaximumPages",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostinputMaximum0",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostinputMaximum4294967296",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostmemoryPages0",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostmemoryPages65537",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostoutputMaximum0",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeHostoutputMaximum4294967296",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeInvalidCapturedCounter",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeLateCompletionAfterClose",
+      "area": "close",
+      "expectation": "Closed"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeManifestReferenceWidth",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteObjectCorrupt",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteStorageQuota",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteStorageUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectDefiniteStoreClosed",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectNotFound",
+      "area": "completion",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectResultLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeObjectUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeOversizedResourceReference",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probePromoteBoundWaiter",
+      "area": "queue",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeQueueSecond",
+      "area": "queue",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomDeclaredMaximum",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomOutputWidth",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomOverMaximum",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignObjectCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStorageQuota",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStorageUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStoreClosed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeRandomZero",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeResourceCountMaximum",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeResourceCountOverflow",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeReusedOperation",
+      "area": "replay",
+      "expectation": "WrongOperation"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSessionWidth",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignDefiniteIdentityCorrupt",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignMaximumPayload",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignOversizedPayload",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignObjectCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStorageQuota",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStorageUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStoreClosed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignRejectsVerifyResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSignatureOutputWidth",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext79",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext80",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext81",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext82",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext83",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningContext84",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningKeyPrefix",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSigningKeyWidth",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeSkippedOperation",
+      "area": "replay",
+      "expectation": "WrongOperation"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxHeads0",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxHeads65",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjectBytes0",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjectBytes1048577",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjects0",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoragemaxObjects4097",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeStoreNamespacePath",
+      "area": "manifest",
+      "expectation": "BadManifest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeThirdAdmission",
+      "area": "queue",
+      "expectation": "Busy"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownResource",
+      "area": "binding",
+      "expectation": "UnknownResource"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownRetainsBoth",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownStorageNotDefiniteRejection",
+      "area": "unknown",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeUnknownWithoutActive",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerificationInputSignatureWidth",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyDefiniteCryptoUnavailable",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyDefiniteInvalidInput",
+      "area": "result",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyMaximumPayload",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyOversizedPayload",
+      "area": "bounds",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsCommitResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsDigestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignGeneratedExecutionFailed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignHeadConflict",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignIdentityCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignInvalidGeneratedModule",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignInvalidGeneratedOutput",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignMissingObject",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignObjectCorrupt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStorageQuota",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStorageUnavailable",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStoreClosed",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsForeignStoreLimit",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsGuestResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsHeadResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsObjectResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsRandomResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyRejectsSignResult",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeVerifyUnknownRetained",
+      "area": "unknown",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWaiterCannotComplete",
+      "area": "queue",
+      "expectation": "CompletionMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWaiterWithoutActive",
+      "area": "session",
+      "expectation": "BadSession"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWideGuestDeclaredBudgets",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWrongAdapter",
+      "area": "binding",
+      "expectation": "InvalidEffect"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWrongCommitReceipt",
+      "area": "result",
+      "expectation": "InvalidResult"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Browser.Application.V1.EffectsCorpus.probeWrongResultType",
+      "area": "result",
+      "expectation": "InvalidResult"
+    }
+  ]
+}

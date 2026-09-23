@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { compilerRevision, encodeInventory, validateAuthorityMetadata } from './inventory-metadata.mjs';
+import { compilerRevision, encodeInventory, validateAuthorityMetadata, validateImageInputMetadata } from './inventory-metadata.mjs';
 
 const output = process.argv[2];
 if (!output) throw new Error('inventory output path is required');
@@ -62,6 +62,7 @@ const definitions = [
   ['action', 'workflow', '0.3.0', 'action', 'tree'],
   ['adapter-compose', 'adapter', 'compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d', 'adapters/compose.json'],
   ['adapter-github-pages', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages.json'],
+  ['adapter-github-pages-browser', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages-browser.json'],
   ['adapter-kubernetes', 'adapter', '1.36.4', 'adapters/kubernetes.json'],
   ['asyncapi-oracle', 'oracle', '3.1.0', 'sdk/oracles', 'tree'],
   ['asyncapi-embedded-runtime-lock', 'dependency-lock', '@asyncapi/parser/3.6.0', '/opt/prismpm/asyncapi-official/scripts/package-lock.json'],
@@ -72,6 +73,8 @@ const definitions = [
   ['asyncapi-website-adeo-schemas', 'test-corpus', '20a31a0396b41dd24b1bac877ab7ce3f58037c28', 'standards/oracles/asyncapi-website-20a31a03', 'tree'],
   ['build-base', 'base-image', 'rust-1.97.1-bookworm', null, 'sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'],
   ['browser-host-primitives', 'adapter', '1', '/opt/prismpm/browser', 'tree'],
+  ['bootstrap-historical-runtime', 'binary', '0.2.0-runner/1', '/opt/prismpm/bootstrap-0.2.0', 'tree'],
+  ['bootstrap-historical-runner', 'binary', '0.2.0-runner/1', 'sdk/bootstrap/runner.mjs'],
   ['conformance-corpus', 'test-corpus', 'prismpm/ids/1', '/opt/prismpm/share/conformance-root', 'tree'],
   ['cloudevents-1.0.2-fixtures', 'test-corpus', '1.0.2', 'standards/corpora/cloudevents-1.0.2', 'tree'],
   ['cloudevents-sdk-go-corpus', 'test-corpus', '2.16.2', 'standards/oracles/cloudevents-sdk-go-2.16.2', 'tree'],
@@ -119,6 +122,20 @@ const definitions = [
   ['opentelemetry-0.136.0-signal-corpus', 'test-corpus', '0.136.0', 'standards/corpora/opentelemetry-0.136.0', 'tree'],
   ['workflow-reusable-sdk', 'workflow', '0.3.0', '.github/workflows/sdk.yml'],
 ];
+const inputRoot = '/opt/prismpm/share/vv-inputs';
+const inputPolicyBytes = await readFile('/opt/prismpm/share/vv-input-policy.json');
+const inputManifestBytes = await readFile(`${inputRoot}/manifest.json`);
+const inputPolicy = JSON.parse(inputPolicyBytes), inputManifest = JSON.parse(inputManifestBytes);
+definitions.push(
+  ['sdk-vv-source', 'test-corpus', inputPolicy.source_revision, `${inputRoot}/source.pack`],
+  ['sdk-vv-advisory', 'test-corpus', inputPolicy.advisory_revision, `${inputRoot}/advisory.pack`],
+  ['sdk-vv-bootstrap', 'test-corpus', '0.2.0', `${inputRoot}/bootstrap.tar.gz`],
+  ['sdk-vv-manifest', 'test-corpus', '1', `${inputRoot}/manifest.json`],
+  ['sdk-vv-policy', 'test-corpus', '1', '/opt/prismpm/share/vv-input-policy.json'],
+  ['sdk-vv-verifier', 'test-corpus', '1', 'scripts/sdk-vv-inputs.mjs'],
+  ['sdk-image-input-verifier', 'test-corpus', '1', 'scripts/sdk-image-inputs.mjs'],
+  ['sdk-image-input-authorities', 'test-corpus', '1', 'sdk/vv-inputs.lock.json'],
+);
 let artifacts;
 const dependencies = process.env.PRISMPM_ARTIFACT_INVENTORY
   ? '/opt/prismpm/share/conformance-root/model/dependencies.toml' : 'model/dependencies.toml';
@@ -146,6 +163,7 @@ if (process.env.PRISMPM_ARTIFACT_INVENTORY) {
   artifacts.sort((left, right) => Buffer.from(left.id).compare(Buffer.from(right.id)));
 }
 validateAuthorityMetadata(artifacts, revision);
+validateImageInputMetadata(artifacts, inputPolicy, inputManifest, sha(inputManifestBytes), sha(inputPolicyBytes));
 const value = process.env.PRISMPM_ARTIFACTS_ONLY === '1'
   ? { artifacts, schema: 'prismpm/sdk-artifact-inventory/1' }
   : { artifacts, commands, schema: 'prismpm/sdk-inventory/1' };

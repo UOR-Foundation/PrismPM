@@ -17,10 +17,12 @@ const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}
 const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/main',
   event: 'workflow_dispatch', version: '0.3.0', publishCrates: false, revision});
 const prerequisites = names => Object.fromEntries(names.map(name => [name, {result: 'success'}]));
-const ociNeeds = ['gate', 'images', 'native', 'reproducibility'];
+const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
 const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa';
 const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/main',
-  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.3.0', PUBLISH_CRATES: 'false'});
+  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.3.0', PUBLISH_CRATES: 'false',
+  GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1'});
+const publicationTag = `sdk-oci-${revision}-123456789-1`;
 
 function validateWorkflow(value) {
   assert.deepEqual(value.jobs['oci-native'].needs, ociNeeds);
@@ -52,15 +54,39 @@ function validateWorkflow(value) {
   ], 'Cargo must retain complete verification for both selected-target operations');
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
-  assert.match(value.jobs.gate.steps.at(-1).with.runCmd, /^set -euo pipefail\njust vv\njust vv\n?$/);
+  const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
+  assert.equal(sourceGate, 'set -euo pipefail\n' + [1, 2].map(run =>
+    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join(''));
+  const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
+  assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
+  assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
-  const builds = value.jobs.images.steps.find(step => step.id === 'build').with;
-  assert.equal(builds.outputs, 'type=registry,name=${{ matrix.repository }},push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true');
-  assert.equal(builds.tags, undefined, 'unaccepted publication must not move discovery aliases');
+  const installed = value.jobs['installed-sdk'];
+  assert.deepEqual(installed.needs, ['gate', 'images']);
+  assert.equal(installed.if, undefined); assert.equal(installed['continue-on-error'], undefined);
+  assert.equal(installed['runs-on'], '${{ matrix.os }}');
+  assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
+  const complete = installed.steps.find(step => step.run?.includes('sdk-vv-check.mjs run'));
+  assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
+  assert.match(complete.run, /sdk-vv-check\.mjs tests/);
+  assert(installed.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
+  const retained = installed.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}');
+  assert.equal(retained.if, 'always()'); assert.equal(retained.with['if-no-files-found'], 'error');
+  const builds = value.jobs.images.steps.find(step => step.id === 'build');
+  assert.equal(builds.uses, undefined);
+  assert.equal(builds.with, undefined);
+  assert.equal(builds.env.REPOSITORY, '${{ matrix.repository }}');
+  assert.match(builds.run, /--output "type=registry,name=\$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true"/);
+  assert.ok(!builds.run.includes('--tag'), 'unaccepted publication must not move discovery aliases');
+  assert.match(builds.run, /build=\(node scripts\/sdk-image-inputs\.mjs build \. "\$GITHUB_SHA" "\$TARGET"\)/);
+  assert.match(builds.run, /--platform linux\/amd64,linux\/arm64/);
+  assert.match(builds.run, /--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0/);
+  assert.match(builds.run, /digest=\$\(node scripts\/sdk-image-inputs\.mjs digest "\$RUNNER_TEMP\/sdk-build\.json"\)/);
   const rebuild = value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE);
-  for (const label of builds.labels.trim().split('\n')) {
-    const key = label.split('=')[0];
-    assert.ok(rebuild.run.includes(`--label "${key}=`), `rebuild omits ${key}`);
+  for (const key of ['created', 'revision', 'source', 'version']) {
+    assert.ok(builds.run.includes(`--label "org.opencontainers.image.${key}=`)
+      || builds.run.includes(`--label org.opencontainers.image.${key}=`), `build omits ${key}`);
+    assert.ok(rebuild.run.includes(`--label "org.opencontainers.image.${key}=`), `rebuild omits ${key}`);
   }
   assert.match(rebuild.run, /--label "org\.opencontainers\.image\.revision=\$GITHUB_SHA"/);
   assert.match(rebuild.run, /--label "org\.opencontainers\.image\.source=https:\/\/github\.com\/\$GITHUB_REPOSITORY"/);
@@ -87,7 +113,7 @@ function validateWorkflow(value) {
       || step.uses?.startsWith('rust-lang/crates-io-auth-action') || step.env?.GH_TOKEN);
     assert.ok(firstCredential < 0 || policyStep < firstCredential);
   }
-  for (const name of ['images', 'native', 'reproducibility', 'release']) {
+  for (const name of ['images', 'native', 'reproducibility', 'installed-sdk', 'release']) {
     const builder = value.jobs[name].steps.find(step => step.uses?.startsWith('docker/setup-buildx-action'));
     assert.equal(builder.with.version, 'v0.28.0');
     assert.equal(builder.with['driver-opts'], `image=${buildkit}`);
@@ -118,6 +144,11 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
   for (const mutate of [
     value => value.jobs['oci-native'].needs.push('crates'),
     value => value.jobs['oci-native'].needs.pop(),
+    value => { delete value.jobs['installed-sdk']; },
+    value => { value.jobs['installed-sdk'].if = '${{ false }}'; },
+    value => { value.jobs['installed-sdk'].strategy.matrix.include.pop(); },
+    value => { value.jobs['installed-sdk'].strategy.matrix.include[1].os = 'ubuntu-24.04'; },
+    value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('sdk-vv-check.mjs run')).if = '${{ false }}'; },
     value => { value.jobs['oci-native'].if = '${{ always() }}'; },
     value => { value.jobs.release.if = '${{ always() }}'; },
     value => value.jobs.release.needs.pop(),
@@ -139,10 +170,16 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
       const step = value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()'));
       step.run = mutate(step.run);
     }),
-    value => { value.jobs.gate.steps.at(-1).with.runCmd = 'just vv'; },
+    value => { value.jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
     value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
-    value => { value.jobs.images.steps.find(step => step.id === 'build').with.tags = '${{ matrix.repository }}:sha-${{ github.sha }}'; },
+    ...[
+      run => run + '\n--tag mutable:unaccepted\n',
+      run => run.replace('push-by-digest=true', 'push-by-digest=false'),
+      run => run.replace('node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET"', 'docker buildx build'),
+      run => run.replace('--platform linux/amd64,linux/arm64', '--platform linux/amd64'),
+      run => run.replace('--provenance=false', '--provenance=true'),
+    ].map(mutate => value => { const step = value.jobs.images.steps.find(step => step.id === 'build'); step.run = mutate(step.run); }),
     value => { value.jobs.images.steps.push({uses: 'actions/attest-sbom@fixture'}); },
     value => { value.jobs.images.steps.find(step => step.id === 'sbom-amd64').with['syft-version'] = 'latest'; },
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
@@ -208,7 +245,7 @@ test('Cargo publication target selection binds the exact package and version arc
 });
 
 test('explicit OCI-only dispatch is distinct from Cargo publication and rejects foreign refs', () => {
-  assert.deepEqual(publicationPolicy(policy()), {version: '0.3.0', publishCrates: false, tag: `sdk-oci-${revision}`});
+  assert.deepEqual(publicationPolicy(policy()), {version: '0.3.0', publishCrates: false});
   assert.equal(publicationPolicy({...policy(), publishCrates: true}).publishCrates, true);
   assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.3.0', publishCrates: null}).publishCrates, true);
   for (const change of [{publishCrates: 'false'}, {publishCrates: null}, {repository: 'other/PrismPM'},
@@ -270,13 +307,13 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
   } finally { rmSync(directory, {recursive: true, force: true}); }
 });
 
-test('the actual twice-VV shell must fail on either invocation, including first-run-only failure', () => {
-  const normative = load(readFileSync(new URL('../.github/workflows/vv.yml', import.meta.url), 'utf8'));
-  const bodies = [workflow().jobs.gate.steps.at(-1).with.runCmd,
-    normative.jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd];
+test('the release twice-VV shell must fail on either invocation, including first-run-only failure', () => {
+  // This checks the actual shell sequence's failure propagation. The helper's
+  // fixed just-vv command and real process capture have separate owning tests.
+  const bodies = [workflow().jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd];
   const verify = body => {
     for (const [first, second] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const script = `count=0; just() { count=$((count+1)); printf 'call:%s\\n' "$count"; if [ "$count" = 1 ]; then return ${first}; else return ${second}; fi; };\n${body}`;
+      const script = `count=0; node() { count=$((count+1)); test "$1" = scripts/release-gate-evidence.mjs && test "$2" = source-run && test "\${10}" = "$count" || return 99; printf 'call:%s\\n' "$count"; if [ "$count" = 1 ]; then return ${first}; else return ${second}; fi; };\n${body}`;
       if (first === 0 && second === 0) {
         assert.equal(execFileSync('bash', ['-c', script], {encoding: 'utf8'}), 'call:1\ncall:2\n');
       } else {
@@ -417,7 +454,7 @@ test('publisher reuses identical release without writes and refuses all substitu
   try {
     const names = assetNames();
     for (const name of names) writeFileSync(join(directory, name), 'abc');
-    const initial = {tag_name: `sdk-oci-${revision}`, target_commitish: revision,
+    const initial = {tag_name: publicationTag, target_commitish: revision,
       draft: false, prerelease: true, body: publicationNotes(revision),
       assets: names.map(name => ({name, size: 3}))};
     const fixture = (change = {}, content = 'abc', tagCommit = revision) => {
@@ -435,7 +472,7 @@ test('publisher reuses identical release without writes and refuses all substitu
     };
     const same = fixture();
     assert.equal(await publishOci(directory, revision, same.client),
-      `https://github.com/UOR-Foundation/PrismPM/releases/tag/sdk-oci-${revision}`);
+      `https://github.com/UOR-Foundation/PrismPM/releases/tag/${publicationTag}`);
     assert.equal(same.calls.length, 1);
     for (const [change, content, tagCommit] of [
       [{}, 'abd', revision], [{draft: true, assets: []}, 'abc', revision],
@@ -460,7 +497,7 @@ test('new and complete staged publications verify all bytes before becoming publ
     const names = assetNames();
     for (const name of names) writeFileSync(join(directory, name), 'abc');
     for (const [corrupt, resume] of [[false, false], [true, false], [false, true], [true, true]]) {
-      let release = resume ? {tag_name: `sdk-oci-${revision}`, target_commitish: revision,
+      let release = resume ? {tag_name: publicationTag, target_commitish: revision,
         draft: true, prerelease: true, body: publicationNotes(revision),
         assets: names.map(name => ({name, size: 3}))} : null;
       let tag = null;
@@ -472,7 +509,7 @@ test('new and complete staged publications verify all bytes before becoming publ
           assert.ok(!args.includes('--clobber'));
           if (args[1] === 'create') {
             assert.ok(args.includes('--draft') && args.includes('--prerelease'));
-            release = {tag_name: `sdk-oci-${revision}`, target_commitish: revision, draft: true,
+            release = {tag_name: publicationTag, target_commitish: revision, draft: true,
               prerelease: true, body: args[args.indexOf('--notes') + 1], assets: []};
           } else if (args[1] === 'upload') {
             release.assets = names.map(name => ({name, size: 3}));
@@ -494,6 +531,57 @@ test('new and complete staged publications verify all bytes before becoming publ
       }
     }
   } finally { rmSync(directory, {recursive: true, force: true}); }
+});
+
+test('publication attempts have distinct discovery tags and invalid run contexts perform no I/O', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'prismpm-attempt-release-'));
+  t.after(() => rmSync(directory, {recursive: true, force: true}));
+  const names = assetNames();
+  for (const name of names) writeFileSync(join(directory, name), 'abc');
+  const releases = new Map(), commits = new Map(), endpoints = [], writes = [];
+  const client = {environment: environment(), api: path => {
+    endpoints.push(path);
+    if (path.includes('/commits/')) return commits.get(path.split('/').at(-1)) ?? null;
+    return releases.get(path.split('/').at(-1)) ?? null;
+  }, checked: args => {
+    const tag = args[2];
+    if (args[1] !== 'download') writes.push(args);
+    if (args[1] === 'create') {
+      assert(!releases.has(tag));
+      releases.set(tag, {tag_name: tag, target_commitish: revision, draft: true, prerelease: true,
+        body: args[args.indexOf('--notes') + 1], assets: []});
+    } else if (args[1] === 'upload') {
+      releases.get(tag).assets = names.map(name => ({name, size: 3}));
+    } else if (args[1] === 'download') {
+      const target = args[args.indexOf('--dir') + 1];
+      for (const name of names) writeFileSync(join(target, name), 'abc');
+    } else if (args[1] === 'edit') {
+      releases.get(tag).draft = false; commits.set(tag, {sha: revision});
+    } else assert.fail('unexpected release operation');
+  }};
+  for (const [run, attempt] of [['123456789', '1'], ['123456789', '2'], ['987654321', '1']]) {
+    client.environment = {...environment(), GITHUB_RUN_ID: run, GITHUB_RUN_ATTEMPT: attempt};
+    const expected = `sdk-oci-${revision}-${run}-${attempt}`;
+    assert.equal(await publishOci(directory, revision, client),
+      `https://github.com/UOR-Foundation/PrismPM/releases/tag/${expected}`);
+    assert(endpoints.some(path => path.endsWith('/tags/' + expected)));
+  }
+  assert.equal(releases.size, 3, 'reruns must not collide with earlier evidence');
+  const before = writes.length;
+  await publishOci(directory, revision, client);
+  assert.equal(writes.length, before, 'identical same-attempt publication is read-only');
+  writeFileSync(join(directory, names[0]), 'abd');
+  await assert.rejects(publishOci(directory, revision, client), /cannot be overwritten/);
+  assert.equal(writes.length, before);
+  for (const change of [{GITHUB_ACTIONS: undefined}, {GITHUB_ACTIONS: 'false'},
+    ...['', '0', '01', '-1', '1.0', '1e3', ' 1', '1\n', '../main', undefined]
+      .flatMap(value => [{GITHUB_RUN_ID: value}, {GITHUB_RUN_ATTEMPT: value}])]) {
+    client.environment = {...environment(), ...change};
+    const requests = endpoints.length;
+    await assert.rejects(publishOci(directory, revision, client));
+    assert.equal(endpoints.length, requests, 'invalid run identity must fail before API access');
+    assert.equal(writes.length, before);
+  }
 });
 
 test('pinned Buildx pushes a genuine two-platform OCI index by digest without creating tags', {timeout: 240_000}, async () => {

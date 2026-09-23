@@ -555,8 +555,40 @@ mod tests {
             .contracts
             .check(&root)
             .expect("all public data contracts must be registered");
-        assert_eq!(model.contracts.contract.len(), 48);
+        assert_eq!(model.contracts.contract.len(), 56);
         for (schema, path) in [
+            (
+                "prismpm/system-model/2",
+                "schemas/system-model-v2.schema.json",
+            ),
+            (
+                "prismpm/browser-system-release/1",
+                "schemas/browser-system-release.schema.json",
+            ),
+            (
+                "prismpm/model-document/4",
+                "schemas/model-document-v4.schema.json",
+            ),
+            (
+                "prismpm/browser-publication-integrity/1",
+                "schemas/browser-publication-integrity.schema.json",
+            ),
+            (
+                "prismpm/model-document/3",
+                "schemas/model-document-v3.schema.json",
+            ),
+            (
+                "prismpm/library-build-binding/1",
+                "schemas/library-build-binding.schema.json",
+            ),
+            (
+                "prismpm/library-acceptance/1",
+                "schemas/library-acceptance.schema.json",
+            ),
+            (
+                "prismpm/library-verification-manifest/1",
+                "schemas/library-verification-manifest.schema.json",
+            ),
             (
                 "prismpm/verification-closure/1",
                 "schemas/verification-closure.schema.json",

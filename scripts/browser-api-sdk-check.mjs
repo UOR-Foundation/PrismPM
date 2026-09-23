@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {constants,closeSync,fstatSync,lstatSync,openSync,readFileSync,readdirSync,readSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
-import {dirname,join,resolve} from 'node:path';
+import {dirname,join,parse,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 
@@ -12,11 +12,24 @@ export const sourceRoots=Object.freeze([
  'stdlib/src','sdk/browser','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
+ 'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
+ 'tests/fixtures/library/native-library/project',
+ 'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
+ 'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
+ 'crates/prismpm/src/browser_build.rs','crates/prismpm/src/browser_build',
+ 'crates/conformance/src/cases/browser_compiler.rs','crates/conformance/tests/conformance.rs',
+ 'crates/conformance/src/cases/mod.rs','schemas/model-document-v4.schema.json',
  'vendor/lexlean','vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust',
- 'scripts/browser-api-sdk-check.mjs',
+ 'scripts/browser-api-sdk-check.mjs','scripts/browser-api-sdk-check.sh','scripts/owning-node-reporter.mjs',
+ 'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
 ]);
+// These installed host primitives include private prerequisites, not a public
+// browser application runtime. DK-21/22 retain their full installed-V&V owners.
+export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
+ 'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
+ 'presentation-wire','presentation-dom','credential-custody','operation-journal']);
 export const suites=Object.freeze([
- {id:'DK-07',minimum:10,files:['identity.test.mjs','identity.browser.test.mjs']},
+ {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
  {id:'DK-08',minimum:14,files:['store.test.mjs','boundary.test.mjs']},
  {id:'DK-09',minimum:24,files:['peer.test.mjs']},
  {id:'DK-10',minimum:6,files:['workspace-model-test.mjs']},
@@ -26,7 +39,14 @@ export const suites=Object.freeze([
  {id:'DK-14',minimum:11,files:['query-model-test.mjs']},
  {id:'DK-15',minimum:7,files:['view-model-test.mjs']},
  {id:'DK-16',minimum:10,files:['view-host-test.mjs']},
-].map(row=>Object.freeze({...row,files:Object.freeze(row.files)})));
+ {id:'DK-19',minimum:14,files:['rs256.test.mjs','rs256.browser.test.mjs']},
+ {id:'DK-20',minimum:18,files:['effects-wire.test.mjs','effects-module.test.mjs','effects-test.mjs']},
+ {id:'DK-23',minimum:9,files:['tests/browser-presentation/wire.test.mjs','tests/browser-presentation/dom.test.mjs','presentation.test.mjs']},
+ {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
+ {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
+].map(row=>Object.freeze({...row,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25'].includes(row.id)?3600000:1500000,
+ files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
 const hex=(value,width)=>{assert.equal(typeof value,'string');assert.match(value,new RegExp('^[0-9a-f]{'+width+'}$'));};
@@ -75,6 +95,17 @@ export function verifySource(root,expected){
  assert.deepEqual(capture(root,expected.revision),expected,'exact current source and installed SDK compiler/test closure');
 }
 
+export function verifyModules(root,installed){
+ const names=hostModules.map(name=>name+'.mjs');
+ const sources=selectedFiles(resolve(root),names.map(name=>'sdk/browser/'+name));
+ const actual=selectedFiles(resolve(installed),names);
+ assert.deepEqual(readdirSync(installed).sort(),names.slice().sort(),'exact installed host module closure');
+ for(let index=0;index<names.length;index++){
+  assert.deepEqual(boundedBytes(actual[index],lstatSync(actual[index])),
+   boundedBytes(sources[index],lstatSync(sources[index])),'installed host module bytes: '+names[index]);
+ }
+}
+
 export function verifyImage(value,image,architecture,revision){
  assert.equal(typeof image,'string');assert.match(image,/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/);
  assert.ok(['amd64','arm64'].includes(architecture));hex(revision,40);
@@ -104,16 +135,75 @@ export function verifyTap(tap,minimum){
  return tests;
 }
 
+function selectedFiles(root, files) {
+ assert.ok(Array.isArray(files) && files.length > 0 && files.length <= 64);
+ assert.equal(new Set(files).size, files.length, 'duplicate selected test file');
+ const absolute = files.map(file => {
+  assert.equal(typeof file, 'string');
+  assert.ok(file.split('/').every(part => /^[A-Za-z0-9_.-]+$/.test(part)
+   && part !== '.' && part !== '..'), 'closed relative test file');
+  return join(root, file);
+ });
+ for (const file of absolute) {
+  let current = parse(file).root;
+  const parts = file.slice(current.length).split('/');
+  for (let index = 0; index < parts.length; index++) {
+   current = join(current, parts[index]);
+   const metadata = lstatSync(current);
+   assert.ok(!metadata.isSymbolicLink(), 'selected test path alias ' + current);
+   assert.ok(index === parts.length - 1 ? metadata.isFile() : metadata.isDirectory(),
+    'selected regular test file and directory parents ' + current);
+  }
+ }
+ return absolute;
+}
+
+export function verifyFileCompletions(tap, files, total) {
+ const prefix = '# prismpm-owning-file ';
+ const rows = tap.split(/\r?\n/).filter(line => line.startsWith(prefix))
+  .map(line => {
+   const raw = line.slice(prefix.length), row = JSON.parse(raw);
+   assert.equal(JSON.stringify(row), raw, 'exact non-duplicate file completion JSON');
+   return row;
+  });
+ assert.equal(rows.length, files.length, 'complete selected test file summaries');
+ let count = 0;
+ for (const row of rows) {
+  keys(row, ['file', 'success', 'tests', 'passed', 'failed', 'cancelled', 'skipped',
+   'todo', 'topLevel', 'suites']);
+  assert.equal(typeof row.file, 'string');
+  assert.equal(row.success, true, 'successful selected test file');
+  for (const field of ['tests', 'passed', 'failed', 'cancelled', 'skipped', 'todo', 'topLevel', 'suites']) {
+   assert.ok(Number.isSafeInteger(row[field]) && row[field] >= 0, 'bounded file test count');
+  }
+  assert.ok(row.tests > 0 && row.topLevel > 0 && row.topLevel <= row.tests,
+   'nonempty registered tests in every selected file');
+  assert.equal(row.passed, row.tests, 'complete selected file pass set');
+  for (const outcome of ['failed', 'cancelled', 'skipped', 'todo']) assert.equal(row[outcome], 0);
+  count += row.tests;
+  assert.ok(Number.isSafeInteger(count));
+ }
+ assert.deepEqual(rows.map(row => row.file).sort(), files.slice().sort(), 'exact selected file completions');
+ assert.equal(count, total, 'file completions match complete TAP test count');
+}
+
 // Invoked only in the inspected current SDK. Source V&V remains independent.
 export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(text)){
+ root=resolve(root);
+ // Preflight the complete inventory before any test can execute. The installed
+ // SDK separately binds these immutable source bytes; this is not a race lock.
+ const selected=new Map(suites.map(suite=>[suite.id,selectedFiles(root,suite.files)]));
+ const reporter='data:text/javascript;base64,'+readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)).toString('base64');
  const completed=[],env={...process.env};delete env.NODE_TEST_CONTEXT;
  for(const suite of suites){
-  const deadline=['DK-15','DK-16'].includes(suite.id)?3600000:1500000;
-  const args=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout='+deadline,...suite.files.map(file=>'sdk/browser/'+file)];
+  const deadline=suite.deadline;
+  const args=['--test','--test-concurrency=1','--test-reporter='+reporter,'--test-timeout='+deadline,...suite.files];
   const output=launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:deadline+100000,maxBuffer:64*1024*1024,env});
   emit('SDK browser suite '+suite.id+'\n'+(output.stdout??'')+(output.stderr??''));
   assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+suite.id);
-  const tests=verifyTap(output.stdout,suite.minimum);completed.push({id:suite.id,tests});
+  const tests=verifyTap(output.stdout,suite.minimum);
+  verifyFileCompletions(output.stdout,selected.get(suite.id),tests);
+  completed.push({id:suite.id,tests});
  }
  assert.deepEqual(completed.map(row=>row.id),suites.map(row=>row.id));return completed;
 }
@@ -121,6 +211,7 @@ export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const[mode,...args]=process.argv.slice(2);
  if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));
+ else if(mode==='modules'&&args.length===2)verifyModules(...args);
  else if(mode==='capture'&&args.length===2)console.log(JSON.stringify(capture(...args)));
  else if(mode==='verify'&&args.length===2)verifySource(args[0],JSON.parse(readFileSync(args[1])));
  else if(mode==='image'&&args.length===3)verifyImage(JSON.parse(readFileSync(0)),...args);

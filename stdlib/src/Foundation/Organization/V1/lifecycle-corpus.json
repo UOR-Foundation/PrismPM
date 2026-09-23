@@ -1,0 +1,603 @@
+{
+  "schema": "prismpm/internal-organization-lifecycle-corpus/1",
+  "roots": [
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivateCompleteOwnership",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivateIndependentScopes",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivationNeedsEveryScopeQuorum",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivationRequiresEveryScope",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActorEmpty",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActorOversize",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAddSuccessor",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminActorSubstitution",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminCrossOrganizationRoute",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminDuplicateStateCreationRequest",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminDuplicateStateIdentity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminEmptyTarget",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminEntriesExceedPartition",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminExcessStateCapacity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminHistoryRevisionMismatch",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInnerReplay",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidCapacity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidEmbeddedSnapshot",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidEntryCreator",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidEntryRequest",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidRegistryReference",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminLastRevision",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminOuterReplay",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminRevisionExhausted",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminRevisionOutsideDomain",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminStateRevisionOutsideDomain",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminUnknownOrganization",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminWrongRegistry",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeApprovalPlanSubstitution",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeApprovedRequestMayBeForwarded",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateActorSubstitution",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateFutureRevision",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateLastRevision",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateReplay",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateRevisionExhausted",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateRevisionOutsideDomain",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateWrongRegistry",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreatorMetadataIsNotAuthority",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCrossOrganizationApproval",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateApprovals",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateCreationRequest",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateDisplayName",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateOpaqueIdentity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateStateCreationRequest",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateStateIdentity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmailDisplayName",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmptyAuthenticatedAccount",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmptyRegistry",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmptyRegistryReference",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEntriesExceedPartition",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeExcessCapacity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeExcessStateCapacity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeFillMaximumPartition",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeFirstOrganization",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeFoundationDisplayName",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeHistoryRevisionMismatch",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidCapacity",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidEmbeddedSnapshot",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidEntryCreator",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidEntryRequest",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidRegistryReference",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeLabelEmpty",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeLabelOversize",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeLongRegistryReference",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeMaximumPartition",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeMaximumPartitionRejectsNext",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeMinimumPartition",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeNoChange",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeOrganizationEmpty",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeOrganizationOversize",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeOversizeAuthenticatedAccount",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probePartitionFull",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRegistryEmpty",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRegistryOversize",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRequestEmpty",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRequestOversize",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRetireFoundingGrant",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRetirementPreservesStrongerMinimum",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRootEmpty",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRootOversize",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeSameAccountSeparateMemberships",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeScopedHandoverNeedsAffectedQuorums",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeScopedMultiUserHandover",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeSiblingCreatorHasNoAuthority",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeSoleCreatorCannotActivate",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStaleApproval",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStateRevisionOutsideDomain",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStrongerQuorumMet",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStrongerQuorumNotMet",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUnapprovedActivation",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUnapprovedFoundingGrantRetirement",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUnknownApproverCannotActivate",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUpdateMaximumPartitionTail",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUpdatePreservesSibling",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUpdateSecondEntry",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUtf8MaximumReferences",
+    "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeZeroCapacity"
+  ],
+  "errors": [
+    "BadRegistry",
+    "BadRequest",
+    "WrongRegistry",
+    "StaleRevision",
+    "RevisionExhausted",
+    "ActorMismatch",
+    "DuplicateOrganization",
+    "DuplicateCreationRequest",
+    "RegistryFull",
+    "UnknownOrganization",
+    "WrongOrganization",
+    "AdministrationRejected"
+  ],
+  "cases": [
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivateCompleteOwnership",
+      "area": "activation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivateIndependentScopes",
+      "area": "activation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivationNeedsEveryScopeQuorum",
+      "area": "activation",
+      "expectation": "AdministrationRejected.InsufficientApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActivationRequiresEveryScope",
+      "area": "activation",
+      "expectation": "AdministrationRejected.CoverageLoss"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActorEmpty",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeActorOversize",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAddSuccessor",
+      "area": "handover",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminActorSubstitution",
+      "area": "actor-binding",
+      "expectation": "ActorMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminCrossOrganizationRoute",
+      "area": "isolation",
+      "expectation": "WrongOrganization"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminDuplicateStateCreationRequest",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminDuplicateStateIdentity",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminEmptyTarget",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminEntriesExceedPartition",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminExcessStateCapacity",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminHistoryRevisionMismatch",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInnerReplay",
+      "area": "replay",
+      "expectation": "AdministrationRejected.StaleRevision"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidCapacity",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidEmbeddedSnapshot",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidEntryCreator",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidEntryRequest",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminInvalidRegistryReference",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminLastRevision",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminOuterReplay",
+      "area": "replay",
+      "expectation": "StaleRevision"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminRevisionExhausted",
+      "area": "bounds",
+      "expectation": "RevisionExhausted"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminRevisionOutsideDomain",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminStateRevisionOutsideDomain",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminUnknownOrganization",
+      "area": "isolation",
+      "expectation": "UnknownOrganization"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeAdminWrongRegistry",
+      "area": "isolation",
+      "expectation": "WrongRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeApprovalPlanSubstitution",
+      "area": "authorization",
+      "expectation": "AdministrationRejected.BadApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeApprovedRequestMayBeForwarded",
+      "area": "actor-binding",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateActorSubstitution",
+      "area": "actor-binding",
+      "expectation": "ActorMismatch"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateFutureRevision",
+      "area": "replay",
+      "expectation": "StaleRevision"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateLastRevision",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateReplay",
+      "area": "replay",
+      "expectation": "StaleRevision"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateRevisionExhausted",
+      "area": "bounds",
+      "expectation": "RevisionExhausted"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateRevisionOutsideDomain",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreateWrongRegistry",
+      "area": "isolation",
+      "expectation": "WrongRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCreatorMetadataIsNotAuthority",
+      "area": "name-nonauthority",
+      "expectation": "AdministrationRejected.OutOfScopeApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeCrossOrganizationApproval",
+      "area": "isolation",
+      "expectation": "AdministrationRejected.BadApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateApprovals",
+      "area": "authorization",
+      "expectation": "AdministrationRejected.DuplicateApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateCreationRequest",
+      "area": "uniqueness",
+      "expectation": "DuplicateCreationRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateDisplayName",
+      "area": "creation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateOpaqueIdentity",
+      "area": "uniqueness",
+      "expectation": "DuplicateOrganization"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateStateCreationRequest",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeDuplicateStateIdentity",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmailDisplayName",
+      "area": "name-nonauthority",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmptyAuthenticatedAccount",
+      "area": "actor-binding",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmptyRegistry",
+      "area": "empty",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEmptyRegistryReference",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeEntriesExceedPartition",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeExcessCapacity",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeExcessStateCapacity",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeFillMaximumPartition",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeFirstOrganization",
+      "area": "creation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeFoundationDisplayName",
+      "area": "name-nonauthority",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeHistoryRevisionMismatch",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidCapacity",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidEmbeddedSnapshot",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidEntryCreator",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidEntryRequest",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeInvalidRegistryReference",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeLabelEmpty",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeLabelOversize",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeLongRegistryReference",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeMaximumPartition",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeMaximumPartitionRejectsNext",
+      "area": "bounds",
+      "expectation": "RegistryFull"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeMinimumPartition",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeNoChange",
+      "area": "authorization",
+      "expectation": "AdministrationRejected.NoChange"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeOrganizationEmpty",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeOrganizationOversize",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeOversizeAuthenticatedAccount",
+      "area": "actor-binding",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probePartitionFull",
+      "area": "bounds",
+      "expectation": "RegistryFull"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRegistryEmpty",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRegistryOversize",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRequestEmpty",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRequestOversize",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRetireFoundingGrant",
+      "area": "handover",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRetirementPreservesStrongerMinimum",
+      "area": "handover",
+      "expectation": "AdministrationRejected.CoverageLoss"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRootEmpty",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeRootOversize",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeSameAccountSeparateMemberships",
+      "area": "isolation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeScopedHandoverNeedsAffectedQuorums",
+      "area": "handover",
+      "expectation": "AdministrationRejected.InsufficientApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeScopedMultiUserHandover",
+      "area": "handover",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeSiblingCreatorHasNoAuthority",
+      "area": "isolation",
+      "expectation": "AdministrationRejected.OutOfScopeApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeSoleCreatorCannotActivate",
+      "area": "activation",
+      "expectation": "AdministrationRejected.CoverageLoss"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStaleApproval",
+      "area": "replay",
+      "expectation": "AdministrationRejected.BadApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStateRevisionOutsideDomain",
+      "area": "state-integrity",
+      "expectation": "BadRegistry"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStrongerQuorumMet",
+      "area": "authorization",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeStrongerQuorumNotMet",
+      "area": "authorization",
+      "expectation": "AdministrationRejected.InsufficientApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUnapprovedActivation",
+      "area": "activation",
+      "expectation": "AdministrationRejected.InsufficientApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUnapprovedFoundingGrantRetirement",
+      "area": "handover",
+      "expectation": "AdministrationRejected.InsufficientApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUnknownApproverCannotActivate",
+      "area": "activation",
+      "expectation": "AdministrationRejected.OutOfScopeApproval"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUpdateMaximumPartitionTail",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUpdatePreservesSibling",
+      "area": "isolation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUpdateSecondEntry",
+      "area": "isolation",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeUtf8MaximumReferences",
+      "area": "bounds",
+      "expectation": "exact-state"
+    },
+    {
+      "root": "LibraryProbe.Foundation.Organization.V1.LifecycleCorpus.probeZeroCapacity",
+      "area": "bounds",
+      "expectation": "BadRequest"
+    }
+  ]
+}

@@ -55,8 +55,16 @@ jobs:
           push: never
           runCmd: |
             set -euo pipefail
-            just vv
-            just vv
+            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 1
+            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: source-vv
+          path: target/source-vv-evidence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
 
   images:
     needs: gate
@@ -98,6 +106,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - name: Require the source-bound publication policy before registry credentials
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
@@ -114,21 +124,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
-          platforms: linux/amd64,linux/arm64
-          outputs: type=registry,name=${{ matrix.repository }},push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true
-          provenance: false
-          sbom: false
-          build-args: SOURCE_DATE_EPOCH=0
-          labels: |
-            org.opencontainers.image.created=1970-01-01T00:00:00Z
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ needs.gate.outputs.version }}
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          TARGET: ${{ matrix.target }}
+          REPOSITORY: ${{ matrix.repository }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
+            build=(node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" "$TARGET")
+          else
+            test "$DOCKERFILE" = sdk/runtime/Dockerfile
+            build=(docker buildx build --file "$DOCKERFILE")
+          fi
+          context=()
+          if [ "$DOCKERFILE" = sdk/runtime/Dockerfile ]; then context=(.); fi
+          "${build[@]}" --platform linux/amd64,linux/arm64 \
+            --output "type=registry,name=$REPOSITORY,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true" \
+            --metadata-file "$RUNNER_TEMP/sdk-build.json" \
+            --provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0 \
+            --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.version=$VERSION" "${context[@]}"
+          digest=$(node scripts/sdk-image-inputs.mjs digest "$RUNNER_TEMP/sdk-build.json")
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
       - id: platforms
         shell: bash
         env:
@@ -361,10 +381,17 @@ jobs:
         with:
           path: root-a
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: root-b
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
           version: v0.28.0
@@ -390,18 +417,23 @@ jobs:
           identity_file=".shipped-image/$IMAGE-image.txt"
           identity=$(cat "$identity_file")
           docker buildx imagetools inspect --raw "$identity" > shipped-index.json
-          target=()
-          if [ -n "$TARGET" ]; then target=(--target "$TARGET"); fi
           for root in root-a root-b; do
-            docker buildx build --no-cache --provenance=false --sbom=false \
+            context=()
+            if [ "$DOCKERFILE" = sdk/Dockerfile ]; then
+              build=(node "$root/scripts/sdk-image-inputs.mjs" build "$root" "$GITHUB_SHA" "$TARGET")
+            else
+              test "$DOCKERFILE" = sdk/runtime/Dockerfile
+              build=(docker buildx build --file "$root/$DOCKERFILE")
+              context=("$root")
+            fi
+            "${build[@]}" --no-cache --provenance=false --sbom=false \
               --build-arg SOURCE_DATE_EPOCH=0 \
               --label "org.opencontainers.image.created=1970-01-01T00:00:00Z" \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
               --label "org.opencontainers.image.version=$VERSION" \
-              --platform "$PLATFORM" --file "$root/$DOCKERFILE" \
-              "${target[@]}" \
-              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "$root"
+              --platform "$PLATFORM" \
+              --output "type=oci,dest=$root.oci.tar,rewrite-timestamp=true,oci-mediatypes=true" "${context[@]}"
             mkdir "$root.oci"
             tar -xf "$root.oci.tar" -C "$root.oci"
             jq -r '.manifests[0].digest' "$root.oci/index.json" > "$root.digest"
@@ -432,6 +464,88 @@ jobs:
           path: ${{ matrix.name }}-browser-sdk.log
           if-no-files-found: error
           retention-days: 30
+      - name: Verify exact current SDK native-library closure offline and read-only
+        if: matrix.image == 'sdk'
+        shell: bash
+        env:
+          RESULT_NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/library-sdk-check.mjs tests
+          bash root-a/scripts/library-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" > "$RESULT_NAME-library-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && matrix.image == 'sdk'
+        with:
+          name: library-sdk-${{ matrix.name }}
+          path: ${{ matrix.name }}-library-sdk.log
+          if-no-files-found: error
+          retention-days: 30
+  installed-sdk:
+    needs: [gate, images]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-a
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: .shipped-image
+      - name: Verify both complete installed-SDK runs on the native isolated runner
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+          NATIVE_PLATFORM: linux/${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/sdk-vv-check.mjs tests
+          node root-a/scripts/sdk-vv-check.mjs run "$(cat .shipped-image/sdk-image.txt)" \
+            "$GITHUB_SHA" "${NATIVE_PLATFORM#linux/}" "$RESULT_NAME-full-sdk-vv"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: full-sdk-vv-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-full-sdk-vv/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify genuine installed product CLI and source-free browser release
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/product-sdk-check.mjs tests
+          bash root-a/scripts/product-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" \
+            "$GITHUB_SHA" "$RESULT_NAME-product-cli"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: product-cli-sdk-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-product-cli/
+          if-no-files-found: error
+          retention-days: 30
 
   native:
     needs: [gate, images]
@@ -445,12 +559,16 @@ jobs:
         include:
           - platform: linux/amd64
             target: x86_64-unknown-linux-gnu
+            arch: amd64
           - platform: linux/arm64
             target: aarch64-unknown-linux-gnu
+            arch: arm64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: false
+          fetch-depth: 0
+          persist-credentials: false
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
         with:
@@ -471,13 +589,10 @@ jobs:
           VERSION: ${{ needs.gate.outputs.version }}
         run: |
           set -euo pipefail
-          docker buildx build \
+          node scripts/sdk-image-inputs.mjs build . "$GITHUB_SHA" cli-archive \
             --build-arg "SDK_VERSION=$VERSION" \
             --platform "$PLATFORM" \
-            --file sdk/Dockerfile \
-            --target cli-archive \
-            --output type=local,dest=.native-release \
-            .
+            --output type=local,dest=.native-release
           archive=$(find .native-release -maxdepth 1 -type f -name 'prismpm-*.tar.gz' -print)
           test -n "$archive"
           test -f "$archive.sha256"
@@ -492,38 +607,17 @@ jobs:
           esac
           mkdir .native-cli
           tar --extract --gzip --file "$archive" --directory .native-cli
-          native_runtime=docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD/.native-cli,target=/native,readonly" \
-            --mount "type=bind,source=$PWD,target=/workspace" --workdir /workspace \
-            --entrypoint /native/prismpm "$native_runtime" \
-            --project /workspace --json check > native-check.json
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD,target=/workspace" \
-            "$sdk_image" prismpm --project /workspace --json check > container-check.json
-          cmp native-check.json container-check.json
-          set +e
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD/.native-cli,target=/native,readonly" \
-            --mount "type=bind,source=$PWD,target=/workspace" --workdir /workspace \
-            --entrypoint /native/prismpm "$native_runtime" \
-            --project /workspace --json inspect \
-            ghcr.io/uor-foundation/calculator:mutable > native-error.json 2>&1
-          native_status=$?
-          docker run --rm --platform "$PLATFORM" --network none --user "$(id -u):$(id -g)" \
-            --cap-drop ALL --security-opt no-new-privileges \
-            --mount "type=bind,source=$PWD,target=/workspace" \
-            "$sdk_image" prismpm --project /workspace --json inspect \
-            ghcr.io/uor-foundation/calculator:mutable > container-error.json 2>&1
-          container_status=$?
-          set -e
-          test "$native_status" -eq 6
-          test "$container_status" -eq "$native_status"
-          cmp native-error.json container-error.json
+          node scripts/release-gate-evidence.mjs native . .native-equivalence "$GITHUB_SHA" \
+            "${PLATFORM#linux/}" "$sdk_image" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$archive"
           mv "$archive" "$archive.sha256" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: sdk-equivalence-${{ matrix.arch }}
+          path: .native-equivalence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-${{ matrix.target }}
@@ -535,7 +629,7 @@ jobs:
 
   oci-native:
     name: publish source-addressed OCI/native verification assets
-    needs: [gate, images, native, reproducibility]
+    needs: [gate, images, native, reproducibility, installed-sdk]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -575,6 +669,67 @@ jobs:
           pattern: reproducibility-*
           path: release
           merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: full-sdk-vv-sdk-amd64
+          path: .sdk-gate-evidence/full-sdk-vv-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: full-sdk-vv-sdk-arm64
+          path: .sdk-gate-evidence/full-sdk-vv-sdk-arm64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: product-cli-sdk-amd64
+          path: .sdk-gate-evidence/product-cli-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: product-cli-sdk-arm64
+          path: .sdk-gate-evidence/product-cli-sdk-arm64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: browser-sdk-sdk-amd64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: browser-sdk-sdk-arm64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: library-sdk-sdk-amd64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: library-sdk-sdk-arm64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: source-vv
+          path: .sdk-gate-evidence/source-vv
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-equivalence-amd64
+          path: .sdk-gate-evidence/native-equivalence-sdk-amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-equivalence-arm64
+          path: .sdk-gate-evidence/native-equivalence-sdk-arm64
+      - name: Preserve complete native SDK gate evidence without changing acceptance scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=$(cat release/sdk-image.txt)
+          node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \
+            release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          for architecture in amd64 arm64; do
+            for kind in full-sdk-vv product-cli; do
+              node scripts/sdk-release-evidence.mjs "$kind" \
+                ".sdk-gate-evidence/$kind-sdk-$architecture" "release/sdk-$architecture-$kind.tar" \
+                "$image" "$GITHUB_SHA" "$architecture"
+            done
+            node scripts/sdk-release-evidence.mjs native-equivalence \
+              ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \
+              "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          done
       - shell: bash
         run: |
           set -euo pipefail
@@ -602,7 +757,7 @@ jobs:
 
   crates:
     if: ${{ needs.gate.outputs.publish-crates == 'true' }}
-    needs: [gate, images, native, reproducibility, oci-native]
+    needs: [gate, images, native, reproducibility, installed-sdk, oci-native]
     runs-on: ubuntu-24.04
     environment: crates.io
     permissions:
@@ -716,7 +871,7 @@ jobs:
             '
 
   release:
-    needs: [gate, images, native, reproducibility, oci-native, crates]
+    needs: [gate, images, native, reproducibility, installed-sdk, oci-native, crates]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

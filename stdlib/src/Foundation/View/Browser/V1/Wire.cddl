@@ -1,0 +1,30 @@
+; DK-23: deterministic RFC 8949, definite lengths and shortest uint32 heads only.
+; Whole presentation/intent <= 67108864 bytes; no maps, tags or floats.
+presentation = [1, revision: u32, phase: 0..3, status: label-or-none,
+                live: 0..2, focus: node-or-none, nodes: [*256 node]]
+node = [parent: node-or-none, content]
+content = section / navigation / form / heading / text / input / multiline /
+          choice / action / table / secret-input
+section = [0, label]
+navigation = [1, label]
+form = [2, label]
+heading = [3, level: 1..6, label]
+text = [4, tstr]
+input = [5, label, enabled: bool, required: bool, maximum: 1..67108864, tstr, draft-epoch: u32]
+multiline = [6, label, enabled: bool, required: bool, maximum: 1..67108864, tstr, draft-epoch: u32]
+choice = [7, label, enabled: bool, required: bool, selected: u32,
+          options: [*256 [id: 1..4294967295, label]], draft-epoch: u32]
+action = [8, label, id: 1..4294967295, enabled: bool, default: bool,
+          fields: [*16 node-id]]
+table = [9, caption: label, columns: [1*16 label], rows: [*4096 [1*16 tstr]]]
+; Secret input has no model-provided value/default and uses a private transient sink.
+secret-input = [10, label, enabled: bool, required: bool, maximum: 1..67108864,
+                draft-epoch: u32]
+intent = [1, revision: u32, action: 1..4294967295,
+          fields: [*16 [node-id, value: tstr / u32]]]
+label = 0..255
+label-or-none = 0..256 ; zero absent; otherwise label + 1
+node-id = 1..256
+node-or-none = 0..256
+u32 = 0..4294967295
+failure = [1, 1, code: u32]

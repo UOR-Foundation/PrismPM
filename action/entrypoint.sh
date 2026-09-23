@@ -15,6 +15,7 @@ project=$GITHUB_WORKSPACE/$context
 command=${PRISMPM_ACTION_COMMAND:-}
 reference=${PRISMPM_ACTION_REFERENCE:-}
 export_output=${PRISMPM_ACTION_OUTPUT:-}
+publication_url=${PRISMPM_ACTION_URL:-}
 release=${PRISMPM_ACTION_RELEASE:-}
 target=${PRISMPM_ACTION_TARGET:-}
 plan=${PRISMPM_ACTION_PLAN:-}
@@ -84,6 +85,13 @@ case "$command" in
     test -n "$export_output"
     args=(--project "$project" "${args[@]}")
     args+=(export-browser "$reference" --output "$export_output")
+    ;;
+  verify-browser-publication)
+    test -n "$reference"
+    test -n "$publication_url"
+    network_args=()
+    args=(--project "$project" "${args[@]}")
+    args+=(verify-browser-publication "$reference" --url "$publication_url")
     ;;
   conformance)
     test -n "$reference"

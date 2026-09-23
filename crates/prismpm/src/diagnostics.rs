@@ -10,12 +10,17 @@ use std::collections::BTreeSet;
 #[path = "diagnostics/filesystem.rs"]
 mod filesystem;
 
+#[path = "diagnostics/configuration.rs"]
+mod configuration;
+
 #[derive(Clone, Copy)]
 enum Rule {
     ArtifactIntegrity,
     ConfinedOutput,
     ImmutableLock,
-    ClosedObject,
+    ConfigurationShape,
+    ConfigurationRequired,
+    ConfigurationLimits,
     Required,
     PositiveBound,
     Reference,
@@ -31,15 +36,26 @@ enum Rule {
     SecretFree,
     Internal,
     TextApplication,
+    BrowserApplication,
+    BrowserRuntime,
 }
 
 impl Rule {
     fn specimens(self) -> (Value, Value) {
         match self {
+            Self::BrowserApplication => {
+                let valid = browser_specimen();
+                let mut invalid = valid.clone();
+                invalid["durability"]["max_pending"] = json!(2);
+                (valid, invalid)
+            }
+            Self::BrowserRuntime => (Self::TextApplication.specimens().0, browser_specimen()),
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
             Self::ImmutableLock => filesystem::specimens("PP1101"),
-            Self::ClosedObject => (json!({"known":true}), json!({"unknown":true})),
+            Self::ConfigurationShape => configuration::specimens("PP1001"),
+            Self::ConfigurationRequired => configuration::specimens("PP1002"),
+            Self::ConfigurationLimits => configuration::specimens("PP1003"),
             Self::Required => (json!({"required":"present"}), json!({})),
             Self::PositiveBound => (
                 json!({"maximum":1,"value":1}),
@@ -106,12 +122,14 @@ impl Rule {
 
     fn accepts(self, value: &Value) -> bool {
         match self {
+            Self::BrowserApplication => validate_browser_specimen(value).is_ok(),
+            Self::BrowserRuntime => validate_browser_runtime(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
-            Self::ClosedObject => value
-                .as_object()
-                .is_some_and(|object| object.keys().all(|key| key == "known")),
+            Self::ConfigurationShape | Self::ConfigurationRequired | Self::ConfigurationLimits => {
+                configuration::validate(value).is_ok()
+            }
             Self::Required => value
                 .get("required")
                 .and_then(Value::as_str)
@@ -183,9 +201,13 @@ macro_rules! probes {
 }
 
 probes!(
-    ("PP1001", "unknown-configuration-field", ClosedObject),
-    ("PP1002", "missing-required-configuration", Required),
-    ("PP1003", "invalid-project-limit", PositiveBound),
+    ("PP1001", "unknown-configuration-field", ConfigurationShape),
+    (
+        "PP1002",
+        "missing-required-configuration",
+        ConfigurationRequired
+    ),
+    ("PP1003", "invalid-project-limit", ConfigurationLimits),
     ("PP2001", "unresolved-document-reference", Reference),
     ("PP2002", "ambiguous-facet-term", Unique),
     ("PP2003", "duplicate-component-id", Unique),
@@ -200,6 +222,16 @@ probes!(
         TextApplication
     ),
     ("PP3001", "malformed-holo-header", Exact),
+    (
+        "PP2010",
+        "invalid-browser-application-declaration",
+        BrowserApplication
+    ),
+    (
+        "PP2011",
+        "browser-application-runtime-unavailable",
+        BrowserRuntime
+    ),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -301,7 +333,41 @@ fn validate_text_specimen(value: &Value) -> Result<(), PrismError> {
     crate::holo::validate::validate_text_application(&application)
 }
 
+fn browser_specimen() -> Value {
+    serde_json::from_str(r#"{"profile":"prismpm/browser-application/1","name":"Browser Contract","cargo_name":"prism-browser-contract","cargo_version":"0.1.0","cargo_description":"Source projection fixture, not an executable application.","cargo_repository":"https://github.com/UOR-Foundation/PrismPM","cargo_homepage":"https://github.com/UOR-Foundation/PrismPM","library_roots":["BrowserContract.Probe.dispatch","BrowserContract.Probe.present","BrowserContract.Probe.replay"],"acceptance_vectors":[{"request":[0],"response":[0]}],"entry_root":"BrowserContract.Probe.dispatch","core_contract":"hologram:guest/core-wasm@1","request_maximum":1,"response_maximum":1,"guest_allocation_maximum":1,"memory_pages":32,"capabilities_empty":true,"fat_archive":true,"primary_layer":0,"view_layer":1,"protocol":"prismpm/browser-application-session/1","requested_effects":[{"resource":"digest","adapter":{"kind":"digest","maximum":1048576}},{"resource":"guest","adapter":{"kind":"guest","entry_root":"BrowserContract.Probe.dispatch","protocol":"fixture/1","input_maximum":1,"output_maximum":1,"memory_pages":32}},{"resource":"random","adapter":{"kind":"random","maximum":65536}},{"resource":"sign","adapter":{"kind":"sign","credential_slot":"selected","context":"prismpm/fixture/1","maximum":1048576}},{"resource":"store","adapter":{"kind":"store","namespace":"browser-contract","max_object_bytes":1048576,"max_objects":4096,"max_heads":64}},{"resource":"verify","adapter":{"kind":"verify","context":"prismpm/fixture/1","maximum":1048576}}],"durability":{"protocol":"prismpm/browser-operation-journal/1","resource":"journal","head":"operations","replay_root":"BrowserContract.Probe.replay","max_pending":1,"namespace":"browser-contract-journal","staging_head":"staging","signing_resource":"journal-sign","credential_slot":"selected","maximum_records":1024},"view":{"surface":"prismpm-browser/1","protocol":"prismpm/browser-presentation/1","title":"Browser Contract","heading":"Declaration fixture","presentation_root":"BrowserContract.Probe.present","maximum":1,"labels":[{"id":"status","text":"Runtime unavailable"}]}}"#).expect("closed browser diagnostic fixture")
+}
+
+fn validate_browser_specimen(value: &Value) -> Result<(), PrismError> {
+    let declaration = serde_json::from_value(value.clone())
+        .map_err(|_| PrismError::new("PP2010", "invalid browser declaration specimen"))?;
+    crate::holo::browser_application::validate(&declaration)
+}
+
+fn validate_browser_runtime(value: &Value) -> Result<(), PrismError> {
+    let declaration = serde_json::from_value(value.clone())
+        .map_err(|_| PrismError::new("PP2010", "invalid application runtime specimen"))?;
+    crate::holo::browser_application::require_runtime(&declaration)
+}
+
 fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
+    if matches!(spec.rule, Rule::BrowserApplication) {
+        return validate_browser_specimen(value);
+    }
+    if matches!(spec.rule, Rule::BrowserRuntime) {
+        return validate_browser_runtime(value);
+    }
+    if matches!(
+        spec.rule,
+        Rule::ConfigurationShape | Rule::ConfigurationRequired | Rule::ConfigurationLimits
+    ) {
+        return configuration::validate(value);
+    }
+    if matches!(
+        spec.rule,
+        Rule::ConfigurationShape | Rule::ConfigurationRequired | Rule::ConfigurationLimits
+    ) {
+        return configuration::validate(value);
+    }
     if matches!(
         spec.rule,
         Rule::ArtifactIntegrity | Rule::ConfinedOutput | Rule::ImmutableLock
@@ -360,6 +426,32 @@ pub fn exercise_all() -> Result<Vec<DiagnosticProbeResult>, PrismError> {
 mod tests {
     use super::{exercise_all, validate, Rule, PROBES};
     use std::collections::BTreeSet;
+
+    #[test]
+    fn configuration_dispatch_preserves_the_real_loader_diagnostic() {
+        let control = "spec = \"prismpm/project/1\"\nproject = \"Diagnostic\"\nlexlean_project = \"lexlean.toml\"\nbuild_root = \".prism\"\n[limits]\nmax_holo_bytes = 1\nmax_entities = 1\nmax_diagnostics = 1\n";
+        for (code, malformed) in [
+            ("PP1001", format!("unknown = true\n{control}")),
+            ("PP1002", control.replace("project = \"Diagnostic\"\n", "")),
+            (
+                "PP1003",
+                control.replace("max_entities = 1", "max_entities = 0"),
+            ),
+        ] {
+            let spec = *PROBES.iter().find(|row| row.code == code).unwrap();
+            let project = tempfile::tempdir().unwrap();
+            std::fs::write(project.path().join("prismpm.toml"), &malformed).unwrap();
+            let expected = crate::config::ProjectConfig::load(project.path(), None).unwrap_err();
+            assert_eq!(expected.code.as_str(), code);
+            validate(spec, &serde_json::json!({"configuration": control})).unwrap();
+            let actual =
+                validate(spec, &serde_json::json!({"configuration": malformed})).unwrap_err();
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
+        }
+    }
 
     #[test]
     fn filesystem_dispatch_preserves_the_real_public_owner_diagnostic() {

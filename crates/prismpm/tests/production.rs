@@ -281,7 +281,64 @@ fn cli_machine_contract_is_one_canonical_line_with_stable_exits() {
     let value: serde_json::Value =
         serde_json::from_slice(&failure.stdout).expect("machine diagnostic JSON");
     assert_eq!(value["schema"], "prismpm/error-result/1");
-    assert_eq!(value["diagnostic"]["code"], "PP1001");
+    assert_eq!(value["diagnostic"]["code"], "PP1002");
+}
+
+#[test]
+fn cli_configuration_errors_preserve_codes_canonical_bytes_and_input() {
+    let project = tempfile::tempdir().expect("temporary configuration project");
+    let path = project.path().join("prismpm.toml");
+    let control = "spec = \"prismpm/project/1\"\nproject = \"Diagnostic\"\nlexlean_project = \"lexlean.toml\"\nbuild_root = \".prism\"\n[limits]\nmax_holo_bytes = 1\nmax_entities = 1\nmax_diagnostics = 1\n";
+    for (configuration, code) in [
+        (control.to_owned(), None),
+        (format!("unknown = true\n{control}"), Some("PP1001")),
+        (
+            control.replace("project = \"Diagnostic\"\n", ""),
+            Some("PP1002"),
+        ),
+        (
+            control.replace("max_entities = 1", "max_entities = -1"),
+            Some("PP1003"),
+        ),
+        (
+            control.replace("max_entities = 1", "max_entities = 0"),
+            Some("PP1003"),
+        ),
+        (
+            control.replace("max_entities = 1", "max_entities = 10000001"),
+            Some("PP1003"),
+        ),
+    ] {
+        std::fs::write(&path, &configuration).expect("write configuration specimen");
+        let output = Command::new(env!("CARGO_BIN_EXE_prismpm"))
+            .args([
+                "--project",
+                project.path().to_str().expect("UTF-8"),
+                "--json",
+                "clean",
+            ])
+            .output()
+            .expect("execute actual CLI");
+        assert_eq!(
+            output.status.code(),
+            Some(if code.is_some() { 2 } else { 0 })
+        );
+        assert!(output.stderr.is_empty());
+        let value: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("machine result");
+        let mut canonical =
+            prismpm::holo::canonical::encode_value(&value).expect("canonical result");
+        canonical.push(b'\n');
+        assert_eq!(output.stdout, canonical);
+        if let Some(code) = code {
+            assert_eq!(value["schema"], "prismpm/error-result/1");
+            assert_eq!(value["diagnostic"]["code"], code);
+        } else {
+            assert_eq!(value["schema"], "prismpm/clean-result/1");
+        }
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), configuration);
+        assert_eq!(std::fs::read_dir(project.path()).unwrap().count(), 1);
+    }
 }
 
 #[test]

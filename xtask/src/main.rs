@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 
 mod audit;
 mod codegen;
+mod formatting;
 mod gate_driver;
 mod spec_links;
 mod stdlib;
@@ -18,33 +19,37 @@ mod stdlib;
 /// General error type for xtask commands.
 pub type Fail = Box<dyn std::error::Error>;
 
-static BUILD: OnceLock<Result<prismpm::controller::BuildResult, String>> = OnceLock::new();
-static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, String>> = OnceLock::new();
+static BUILD: OnceLock<Result<prismpm::controller::BuildResult, prismpm::PrismError>> =
+    OnceLock::new();
+static VERIFY: OnceLock<Result<prismpm::controller::VerifyResult, prismpm::PrismError>> =
+    OnceLock::new();
+
+fn diagnostic_failure(error: &prismpm::PrismError) -> Fail {
+    serde_json::to_string(error)
+        .expect("structured Prism diagnostic serializes")
+        .into()
+}
 
 fn build_once(root: &Path) -> Result<&'static prismpm::controller::BuildResult, Fail> {
     BUILD
         .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.build(prismpm::controller::BuildRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.build(prismpm::controller::BuildRequest { config_path: None })
+            })
         })
         .as_ref()
-        .map_err(|error| error.clone().into())
+        .map_err(diagnostic_failure)
 }
 
 fn verify_once(root: &Path) -> Result<&'static prismpm::controller::VerifyResult, Fail> {
     VERIFY
         .get_or_init(|| {
-            prismpm::Controller::load(root)
-                .and_then(|controller| {
-                    controller.verify(prismpm::controller::VerifyRequest { config_path: None })
-                })
-                .map_err(|error| error.to_string())
+            prismpm::Controller::load(root).and_then(|controller| {
+                controller.verify(prismpm::controller::VerifyRequest { config_path: None })
+            })
         })
         .as_ref()
-        .map_err(|error| error.clone().into())
+        .map_err(diagnostic_failure)
 }
 
 fn main() -> ExitCode {
@@ -118,7 +123,21 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/oracle-source-closure.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
+            "scripts/library-sdk-check.test.mjs",
+            "scripts/library-sdk-check-shell.test.mjs",
+            "scripts/sdk-vv-inputs.test.mjs",
+            "scripts/sdk-vv-run.test.mjs",
+            "scripts/sdk-image-inputs.test.mjs",
+            "scripts/sdk-vv-check.test.mjs",
+            "scripts/native-golden.test.mjs",
+            "scripts/browser-prerequisites.test.mjs",
+            "scripts/compiler-driver-cache.test.mjs",
             "scripts/release-phases.test.mjs",
+            "scripts/sdk-release-evidence.test.mjs",
+            "scripts/release-gate-evidence.test.mjs",
+            "scripts/refresh-osv.test.mjs",
+            "scripts/ci-observe.test.mjs",
+            "sdk/bootstrap/runner.test.mjs",
         ],
     )?;
     audit::audit_no_handwritten_lean(root)?;
@@ -136,11 +155,17 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
 }
 
 fn command(root: &Path, program: &str, args: &[&str]) -> Result<(), Fail> {
-    let status = Command::new(program)
+    let mut child = Command::new(program);
+    child
         .args(args)
         .current_dir(root)
-        .env("CARGO_NET_OFFLINE", "true")
-        .status()?;
+        .env("CARGO_NET_OFFLINE", "true");
+    // Cargo injects its Rust loader search path into xtask. It is not a Node
+    // compiler input; use the same boundary as the owning conformance runner.
+    if program == "node" {
+        child.env_remove("LD_LIBRARY_PATH");
+    }
+    let status = child.status()?;
     if !status.success() {
         return Err(format!("{program} {} exited {status}", args.join(" ")).into());
     }
@@ -414,50 +439,9 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     let driver = gate_driver::GateDriver::capture(root)?;
 
     println!("VV gate 1/15: formatting");
-    // The generated stdlib is a local runtime dependency, but its exact bytes
-    // are checked by the regeneration gate, not rewritten by rustfmt. Check
-    // every authored workspace and pinned compiler source separately.
-    command(root, "cargo", &["fmt", "--", "--check"])?;
-    for manifest in [
-        "vendor/lean4-prod/rust/Cargo.toml",
-        "vendor/lexlean/Cargo.toml",
-    ] {
-        command(
-            root,
-            "cargo",
-            &["fmt", "--manifest-path", manifest, "--all", "--", "--check"],
-        )?;
+    for invocation in formatting::commands(root)? {
+        command(root, invocation.program, &invocation.arguments)?;
     }
-    for manifest in [
-        "tests/browser-workspace/Cargo.toml",
-        "tests/browser-envelope/driver/Cargo.toml",
-        "tests/browser-journal/driver/Cargo.toml",
-        "tests/browser-command/driver/Cargo.toml",
-        "tests/browser-query/driver/Cargo.toml",
-        "tests/browser-view/driver/Cargo.toml",
-        "tests/holo-codec-oracle/Cargo.toml",
-    ] {
-        command(
-            root,
-            "cargo",
-            &["fmt", "--manifest-path", manifest, "--", "--check"],
-        )?;
-    }
-    command(
-        root,
-        "rustfmt",
-        &[
-            "--edition",
-            "2021",
-            "--check",
-            "tests/browser-workspace/runner.rs",
-            "tests/browser-envelope/runner.rs",
-            "tests/browser-journal/runner.rs",
-            "tests/browser-command/runner.rs",
-            "tests/browser-query/runner.rs",
-            "tests/browser-view/runner.rs",
-        ],
-    )?;
 
     println!("VV gate 2/15: model, diagnostics, standards, and generated documentation");
     codegen::check_model(root, false)?;
@@ -801,11 +785,12 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
     let manifest = serde_json::json!({
         "attestation_id": verify_res.attestation_id,
         "build_id": build_res.build_id,
+        "comparison_profile": repo_conformance::golden::PROFILE,
         "compiler_semantics_id": compiler_semantics_id,
         "files": rows,
         "generated_lean": generated_lean,
         "review_reason": review_reason,
-        "schema": "prismpm/golden-manifest/1",
+        "schema": "prismpm/golden-manifest/2",
         "sources": sources
     });
     files.push((
@@ -813,11 +798,14 @@ fn golden_files(root: &Path, review_reason: &str) -> Result<Vec<(String, Vec<u8>
         prismpm::holo::canonical::encode_value(&manifest)?,
     ));
     files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    repo_conformance::golden::current_caller(&files, &std::fs::read(std::env::current_exe()?)?)?;
     Ok(files)
 }
 
 fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
-    let destination = root.join("tests/golden/stdlib");
+    use repo_conformance::golden::{self, platform::Platform};
+    let platform = Platform::current()?;
+    let destination = root.join(platform.directory());
     let review_reason = if write {
         std::env::var("PRISMPM_GOLDEN_REASON")
             .map_err(|_| "golden rewrite requires nonempty PRISMPM_GOLDEN_REASON")?
@@ -839,6 +827,13 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
     }
     let expected = golden_files(root, &review_reason)?;
     if write {
+        let expected = if platform == Platform::DevelopmentAmd64 {
+            golden::native_records(&expected, &expected, platform)?;
+            expected
+        } else {
+            let base = golden::read(&root.join(Platform::DevelopmentAmd64.directory()))?;
+            golden::native_records(&base, &expected, platform)?
+        };
         let parent = destination
             .parent()
             .ok_or("golden destination has no parent")?;
@@ -864,12 +859,11 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
         );
         return Ok(());
     }
-    let observed = tree_files(&destination)?;
-    if observed != expected {
-        return Err("golden artifact tree drifted; use just golden-write with a review reason and review the exact diff".into());
-    }
+    let observed = golden::read_platform(root, platform)?;
+    golden::native_records(&observed, &expected, platform)?;
+    golden::compare(&observed, &expected)?;
     println!(
-        "check-golden: {} files match reviewed build {}",
+        "check-golden: {} files match reviewed build {} ({platform:?})",
         observed.len(),
         build_once(root)?.build_id
     );
@@ -1000,6 +994,8 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "model/browser-diagnostics.toml",
         "model/browser-adapter-diagnostics.toml",
         "model/browser-view-diagnostics.toml",
+        "model/browser-effect-diagnostics.json",
+        "model/browser-presentation-diagnostics.json",
         "sdk/browser/identity.mjs",
         "sdk/browser/store.mjs",
         "sdk/browser/peer.mjs",
@@ -1009,6 +1005,11 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "sdk/browser/view-host.mjs",
         "sdk/browser/view-dom.mjs",
         "sdk/browser/view-error.mjs",
+        "sdk/browser/effects.mjs",
+        "sdk/browser/effects-wire.mjs",
+        "sdk/browser/effects-module.mjs",
+        "sdk/browser/presentation-wire.mjs",
+        "sdk/browser/presentation-dom.mjs",
         "tests/browser_stdlib_api.rs",
         "model/stdlib-package.toml",
         "schemas/model-document.schema.json",
@@ -1505,6 +1506,27 @@ fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
 #[cfg(test)]
 mod golden_tests {
     #[test]
+    fn cached_gate_failure_keeps_structured_diagnostics_after_boxing() {
+        let error = prismpm::PrismError::new("PP5001", "LexLean verification failed")
+            .with_note("original child diagnostic must survive the gate boundary");
+        let cache = std::sync::OnceLock::<Result<(), prismpm::PrismError>>::new();
+        for attempt in 0..2 {
+            let failure = cache
+                .get_or_init(|| {
+                    assert_eq!(attempt, 0, "cached failure is not recomputed");
+                    Err(error.clone())
+                })
+                .as_ref()
+                .map_err(super::diagnostic_failure)
+                .unwrap_err();
+            assert_eq!(
+                serde_json::from_str::<prismpm::PrismError>(&failure.to_string()).unwrap(),
+                error
+            );
+        }
+    }
+
+    #[test]
     fn native_payload_exclusions_preserve_exact_evidence_and_executable_descriptor() {
         let executable = b"native payload";
         let manifest = prismpm::holo::canonical::encode_value(&serde_json::json!({
@@ -1532,6 +1554,19 @@ mod golden_tests {
             files.push((path.to_owned(), executable.to_vec()));
         }
         assert_eq!(super::golden_verification_files(files), evidence);
+    }
+}
+
+#[cfg(test)]
+mod command_tests {
+    #[test]
+    fn node_gate_does_not_inherit_cargo_loader_state() {
+        super::command(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+            "node",
+            &["--input-type=module", "-e", "import assert from 'node:assert/strict'; import {run} from '../tests/browser-view/compile.mjs'; assert.equal(process.env.LD_LIBRARY_PATH, undefined); assert.equal(process.env.CARGO_NET_OFFLINE, 'true'); process.env.RUSTFLAGS='-C opt-level=0'; assert.throws(()=>run('cargo',['--version'],process.cwd()),/inherited compiler override refused: RUSTFLAGS/);"],
+        )
+        .unwrap();
     }
 }
 

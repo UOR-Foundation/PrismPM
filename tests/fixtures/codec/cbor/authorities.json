@@ -1,0 +1,26 @@
+{
+  "schema": "prismpm/cbor-primitive-authorities/1",
+  "sources": [
+    {
+      "id": "RFC8949",
+      "url": "https://www.rfc-editor.org/rfc/rfc8949.txt",
+      "path": "rfc8949.txt",
+      "sha256": "f1164a5b31a39350ad46abe29b83575eb933ca6c45366989c118b6b1058a214a",
+      "sections": ["3.1", "3.3", "4.2.1", "5.3.1", "Appendix A", "Appendix F"]
+    },
+    {
+      "id": "RFC8610",
+      "url": "https://www.rfc-editor.org/rfc/rfc8610.txt",
+      "path": "rfc8610.txt",
+      "sha256": "3713f2a50e23a2bea0a6147ad6c4433605a00c3d00a868bfa86a42b204997089",
+      "sections": ["3.4", "3.8.1"]
+    },
+    {
+      "id": "RFC3629",
+      "url": "https://www.rfc-editor.org/rfc/rfc3629.txt",
+      "path": "rfc3629.txt",
+      "sha256": "a2a3a39457d30420c812f87a38cc2b9194832f6982ef17e619de7d816879d6a6",
+      "sections": ["3", "4"]
+    }
+  ]
+}

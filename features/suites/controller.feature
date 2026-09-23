@@ -52,7 +52,7 @@ Feature: controller
   Scenario: Project configuration is strictly validated against schemas/project.schema.json.
     Given prismpm.toml configuration
     When loaded by Controller
-    Then unknown fields and invalid formats are rejected
+    Then unknown fields, absent required fields, invalid formats and out-of-range limits return their registered diagnostics
 
   @CT-10 @build
   Scenario: The Controller preserves cause chains for underlying LexLean diagnostics.

@@ -1,0 +1,575 @@
+{
+  "$id": "prismpm/model-document/4",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BrowserApplicationDeclaration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "application": {
+      "$ref": "#/$defs/application"
+    },
+    "architecture": {
+      "const": {
+        "component_kinds": [],
+        "components": [],
+        "concerns": [],
+        "edge_kinds": [],
+        "edges": [],
+        "model_kinds": [],
+        "stakeholders": [],
+        "viewpoints": [],
+        "views": []
+      }
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "quality": {
+      "const": {
+        "characteristics": [],
+        "measures": [],
+        "requirements": [],
+        "subcharacteristics": []
+      }
+    },
+    "schema": {
+      "const": "prismpm/model-document/4"
+    },
+    "security": {
+      "const": {
+        "activities": [],
+        "assets": [],
+        "controls": [],
+        "impacts": [],
+        "likelihoods": [],
+        "measurements": [],
+        "risks": [],
+        "threats": []
+      }
+    },
+    "standards_profile": {
+      "const": []
+    }
+  },
+  "required": [
+    "application",
+    "architecture",
+    "provenance",
+    "quality",
+    "schema",
+    "security",
+    "standards_profile"
+  ],
+  "$defs": {
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "const": "prismpm/browser-application/1"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "cargo_name": {
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        "cargo_version": {
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "cargo_description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "cargo_repository": {
+          "format": "uri",
+          "pattern": "^https://",
+          "type": "string",
+          "maxLength": 2048
+        },
+        "cargo_homepage": {
+          "format": "uri",
+          "pattern": "^https://",
+          "type": "string",
+          "maxLength": 2048
+        },
+        "library_roots": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 1024,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+          }
+        },
+        "acceptance_vectors": {
+          "items": {
+            "$ref": "#/$defs/application_acceptance_vector"
+          },
+          "minItems": 1,
+          "type": "array",
+          "maxItems": 256
+        },
+        "entry_root": {
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "core_contract": {
+          "const": "hologram:guest/core-wasm@1"
+        },
+        "request_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "response_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "guest_allocation_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "capabilities_empty": {
+          "const": true
+        },
+        "fat_archive": {
+          "const": true
+        },
+        "primary_layer": {
+          "const": 0
+        },
+        "view_layer": {
+          "const": 1
+        },
+        "view": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "surface": {
+              "const": "prismpm-browser/1"
+            },
+            "protocol": {
+              "const": "prismpm/browser-presentation/1"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "heading": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "presentation_root": {
+              "type": "string",
+              "maxLength": 1024,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+            },
+            "maximum": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864
+            },
+            "labels": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "id",
+                  "text"
+                ]
+              }
+            }
+          },
+          "required": [
+            "surface",
+            "protocol",
+            "title",
+            "heading",
+            "presentation_root",
+            "maximum",
+            "labels"
+          ]
+        },
+        "memory_pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "protocol": {
+          "const": "prismpm/browser-application-session/1"
+        },
+        "requested_effects": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "resource": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "adapter": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "guest"
+                      },
+                      "entry_root": {
+                        "type": "string",
+                        "maxLength": 1024,
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+                      },
+                      "protocol": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "input_maximum": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2097152
+                      },
+                      "output_maximum": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2097152
+                      },
+                      "memory_pages": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 16384
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "entry_root",
+                      "protocol",
+                      "input_maximum",
+                      "output_maximum",
+                      "memory_pages"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "random"
+                      },
+                      "maximum": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65536
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "maximum"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "digest"
+                      },
+                      "maximum": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1048576
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "maximum"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "sign"
+                      },
+                      "credential_slot": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                      },
+                      "context": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$",
+                        "not": {
+                          "pattern": "\\.\\.|[^A-Za-z0-9._/-]"
+                        }
+                      },
+                      "maximum": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1048576
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "credential_slot",
+                      "context",
+                      "maximum"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "verify"
+                      },
+                      "context": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$",
+                        "not": {
+                          "pattern": "\\.\\.|[^A-Za-z0-9._/-]"
+                        }
+                      },
+                      "maximum": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1048576
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "context",
+                      "maximum"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "store"
+                      },
+                      "namespace": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                      },
+                      "max_object_bytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1048576
+                      },
+                      "max_objects": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 4096
+                      },
+                      "max_heads": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 64
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "namespace",
+                      "max_object_bytes",
+                      "max_objects",
+                      "max_heads"
+                    ]
+                  }
+                ]
+              }
+            },
+            "required": [
+              "resource",
+              "adapter"
+            ]
+          }
+        },
+        "durability": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "protocol": {
+              "const": "prismpm/browser-operation-journal/1"
+            },
+            "resource": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "head": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "replay_root": {
+              "type": "string",
+              "maxLength": 1024,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+            },
+            "max_pending": {
+              "const": 1
+            },
+            "namespace": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "staging_head": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "signing_resource": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "credential_slot": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "maximum_records": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 1024
+            }
+          },
+          "required": [
+            "protocol",
+            "resource",
+            "head",
+            "replay_root",
+            "max_pending",
+            "namespace",
+            "staging_head",
+            "signing_resource",
+            "credential_slot",
+            "maximum_records"
+          ]
+        }
+      },
+      "required": [
+        "profile",
+        "name",
+        "cargo_name",
+        "cargo_version",
+        "cargo_description",
+        "cargo_repository",
+        "cargo_homepage",
+        "library_roots",
+        "acceptance_vectors",
+        "entry_root",
+        "core_contract",
+        "request_maximum",
+        "response_maximum",
+        "guest_allocation_maximum",
+        "capabilities_empty",
+        "fat_archive",
+        "primary_layer",
+        "view_layer",
+        "view",
+        "memory_pages",
+        "protocol",
+        "requested_effects",
+        "durability"
+      ]
+    },
+    "application_acceptance_vector": {
+      "additionalProperties": false,
+      "properties": {
+        "request": {
+          "items": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 24576
+        },
+        "response": {
+          "items": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 24576
+        }
+      },
+      "required": [
+        "request",
+        "response"
+      ],
+      "type": "object"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "compiler_semantics_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "emitter_semantics_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "facet_packages": {
+          "const": []
+        },
+        "semantic_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "snapshot_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_id": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "compiler_semantics_id",
+        "emitter_semantics_id",
+        "facet_packages",
+        "semantic_id",
+        "snapshot_id",
+        "source_id"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}

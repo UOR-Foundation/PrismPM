@@ -43,6 +43,304 @@ fn calculator_project() -> tempfile::TempDir {
 }
 
 #[test]
+fn browser_system_contract_is_registered_and_closed() {
+    let schema = "prismpm/system-model/2";
+    let error = crate::contracts::CanonicalDocument::from_value(schema, json!({"schema":schema}))
+        .unwrap_err();
+    assert!(
+        !error.message.contains("unsupported contract"),
+        "browser-system contract must be registered: {error:?}"
+    );
+    assert_eq!(error.code, "PP1101");
+}
+
+fn browser_system_project() -> tempfile::TempDir {
+    let temporary = calculator_project();
+    let root = temporary.path();
+    let fixture = repository().join("tests/browser-system");
+    std::fs::create_dir(root.join("src/Production")).unwrap();
+    for name in ["Core", "BrowserSystem"] {
+        std::fs::copy(
+            repository().join(format!("stdlib/src/Production/{name}.lex.tex")),
+            root.join(format!("src/Production/{name}.lex.tex")),
+        )
+        .unwrap();
+    }
+    std::fs::copy(
+        fixture.join("Release.lex.tex"),
+        root.join("src/Release.lex.tex"),
+    )
+    .unwrap();
+    std::fs::copy(fixture.join("lexlean.toml"), root.join("lexlean.toml")).unwrap();
+    relock(root);
+    temporary
+}
+
+#[test]
+fn browser_system_source_selection_and_requirements_fail_closed() {
+    let temporary = browser_system_project();
+    let root = temporary.path();
+    let controller = Controller::load(root).unwrap();
+    let a = controller.prepare_release(None, Some("A")).unwrap();
+    let b = controller.prepare_release(None, Some("B")).unwrap();
+    assert_eq!(a.model_bytes, b.model_bytes);
+    assert_eq!(
+        a.system.as_ref().unwrap().schema(),
+        "prismpm/system-model/2"
+    );
+    assert_ne!(
+        a.system.as_ref().unwrap().bytes(),
+        b.system.as_ref().unwrap().bytes()
+    );
+    // Empty Holo-native capabilities do not mean an effectful browser model
+    // satisfies this deliberately static core-Wasm/DOM containing system.
+    let mut effectful: crate::holo::model_document::ModelDocument =
+        serde_json::from_slice(&a.model_bytes).unwrap();
+    let browser: crate::holo::browser_application::BrowserApplication = serde_json::from_slice(
+        &std::fs::read(repository().join("tests/data/browser-application-declaration.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    crate::holo::browser_application::validate(&browser).unwrap();
+    effectful.schema = "prismpm/model-document/4".into();
+    effectful.application = Some(crate::holo::model_document::Application::Browser(Box::new(
+        browser,
+    )));
+    let mut selected = a.system.as_ref().unwrap().value().clone();
+    selected["components"][0]["version"] =
+        json!(effectful.application.as_ref().unwrap().cargo_version());
+    selected["application_profile"]["application_model_digest"] = json!(format!(
+        "sha256:{}",
+        crate::holo::canonical::content_id(
+            &crate::holo::canonical::encode_value(&serde_json::to_value(&effectful).unwrap())
+                .unwrap()
+        )
+    ));
+    assert_eq!(
+        crate::system::browser::validate_application(&selected, &effectful)
+            .unwrap_err()
+            .code,
+        "PP2101"
+    );
+    assert_eq!(
+        controller.prepare(None).unwrap().system.unwrap().bytes(),
+        b.system.unwrap().bytes()
+    );
+    for selector in ["Missing", "../A", ""] {
+        assert!(controller.prepare_release(None, Some(selector)).is_err());
+    }
+    drop(controller);
+    let path = root.join("src/Release.lex.tex");
+    let original = std::fs::read_to_string(&path).unwrap();
+    for changed in [
+        original.replace("\"value\":\"none\"", "\"value\":\"indexeddb\""),
+        original.replace(
+            "\"value\":\"artifact-closure\"",
+            "\"value\":\"omitted-control\"",
+        ),
+        original.replace(
+            "\"value\":\"webassembly\"",
+            "\"value\":\"unmodeled-resource\"",
+        ),
+        original.replace(
+            "\"value\":\"github-pages-browser\"",
+            "\"value\":\"compose\"",
+        ),
+        original.replace(
+            "\"value\":\"selected-application\"",
+            "\"value\":\"caller-bundle\"",
+        ),
+        original.replace("\"name\":\"systemModelB\"", "\"name\":\"systemModelA\""),
+        original.replace(
+            "\"module\":\"Production.BrowserSystem\",\"name\":\"SystemModel\"",
+            "\"module\":\"Production.Core\",\"name\":\"Product\"",
+        ),
+        original.replace(
+            a.system.as_ref().unwrap().value()["application_profile"]["application_model_digest"]
+                .as_str()
+                .unwrap(),
+            &format!("sha256:{}", "f".repeat(64)),
+        ),
+    ] {
+        assert_ne!(
+            changed, original,
+            "mutation must change its intended source"
+        );
+        let stale_application = changed.contains(&format!("sha256:{}", "f".repeat(64)));
+        std::fs::write(&path, changed).unwrap();
+        relock(root);
+        let error = Controller::load(root)
+            .unwrap()
+            .prepare(None)
+            .err()
+            .expect("changed browser-system source was accepted");
+        if stale_application {
+            assert!(error
+                .message
+                .contains("but the imported application model is"));
+            assert!(error.message.contains(
+                a.system.as_ref().unwrap().value()["application_profile"]
+                    ["application_model_digest"]
+                    .as_str()
+                    .unwrap()
+            ));
+        }
+        assert!(!root.join(".prism/build").exists());
+    }
+    let declarations = semantic_data(&original);
+    let duplicate = declarations["declarations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["name"] == "systemModelA")
+        .unwrap()
+        .clone();
+    std::fs::write(root.join("src/OtherRelease.lex.tex"), format!(
+        "\\begin{{lexlean}}{{OtherRelease}}\n\\useglossary{{lexlean.std.bool@1.1.0}}\n\\importmodule{{Production.Core}}\n\\importmodule{{Production.BrowserSystem}}\n\\title{{Boolean}}\n\\begin{{semanticmodule}}\n\\semanticdata{{{}}}\n\\end{{semanticmodule}}\n\\end{{lexlean}}\n",
+        serde_json::to_string(&json!({"spec":"lexlean/semantic-module/1","declarations":[duplicate]})).unwrap()
+    )).unwrap();
+    std::fs::write(
+        &path,
+        original.replace(
+            "\\title{Boolean}",
+            "\\importmodule{OtherRelease}\n\\title{Boolean}",
+        ),
+    )
+    .unwrap();
+    relock(root);
+    let error = Controller::load(root)
+        .unwrap()
+        .prepare(None)
+        .err()
+        .expect("ambiguous source must fail");
+    assert_eq!(error.code, "PP2101");
+    assert!(error
+        .message
+        .contains("duplicates a named system model root"));
+    std::fs::write(&path, original).unwrap();
+    relock(root);
+}
+
+#[test]
+fn browser_system_named_release_proves_artifacts_oracles_and_source_free_export() {
+    let temporary = browser_system_project();
+    let root = temporary.path();
+    let controller = Controller::load(root).unwrap();
+    let a = controller
+        .build_release(BuildRequest { config_path: None }, Some("A"))
+        .unwrap();
+    let verified_a = controller
+        .verify_release(VerifyRequest { config_path: None }, Some("A"))
+        .unwrap();
+    assert_receipt(root, &verified_a, &a);
+    let b = controller
+        .build_release(BuildRequest { config_path: None }, Some("B"))
+        .unwrap();
+    let verified_b = controller
+        .verify_release(VerifyRequest { config_path: None }, Some("B"))
+        .unwrap();
+    assert_receipt(root, &verified_b, &b);
+    assert_eq!(
+        require_verified_build(&verified_a, &b).unwrap_err().code,
+        "PP6101"
+    );
+    assert_eq!(
+        require_verified_build(&verified_b, &a).unwrap_err().code,
+        "PP6101"
+    );
+    let mut releases = Vec::new();
+    for (build, verified) in [(&a, &verified_a), (&b, &verified_b)] {
+        let directory = root.join(&build.manifest_path).parent().unwrap().to_owned();
+        let manifest: Value =
+            serde_json::from_slice(&std::fs::read(root.join(&build.manifest_path)).unwrap())
+                .unwrap();
+        let files = manifest["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                let path = row["path"].as_str().unwrap();
+                (
+                    path.to_owned(),
+                    std::fs::read(directory.join(path)).unwrap(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let system = crate::system::parse(&files["system.prism.json"]).unwrap();
+        crate::system::browser::replay(&system, &files).unwrap();
+        let binding_path = crate::system::browser::BINDING;
+        let binding: Value = serde_json::from_slice(&files[binding_path]).unwrap();
+        for mode in ["reordered", "duplicate", "parent", "empty-segment"] {
+            let mut changed = binding.clone();
+            let rows = changed["files"].as_array_mut().unwrap();
+            match mode {
+                "reordered" => rows.swap(0, 1),
+                "duplicate" => rows[1] = rows[0].clone(),
+                "parent" => rows[0]["path"] = json!("a/../outside"),
+                "empty-segment" => rows[0]["path"] = json!("a//outside"),
+                _ => unreachable!(),
+            }
+            let error = crate::contracts::CanonicalDocument::from_value(
+                "prismpm/browser-system-release/1",
+                changed,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "PP1101", "{mode}");
+        }
+        for mode in ["missing", "extra", "stale", "substitution"] {
+            let mut changed = files.clone();
+            match mode {
+                "missing" => {
+                    changed.remove("view/browser/app.js");
+                }
+                "extra" => {
+                    changed.insert(
+                        "view/browser/injected.js".to_owned(),
+                        b"not generated".to_vec(),
+                    );
+                }
+                "stale" => {
+                    changed.insert(binding_path.to_owned(), b"{}".to_vec());
+                }
+                "substitution" => {
+                    changed.insert(
+                        "view/browser/app.js".to_owned(),
+                        b"not the generated app".to_vec(),
+                    );
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                crate::system::browser::replay(&system, &changed).is_err(),
+                "{mode}"
+            );
+        }
+        let results = crate::oci::projection_oracle_fixture(root, build);
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r["oracle"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["spdx-3.0.1-model"]
+        );
+        assert!(results.iter().all(|r| r["valid"] == true));
+        releases.push(browser_release(root, build, verified));
+    }
+    assert_ne!(releases[0].digest, releases[1].digest);
+    assert_eq!(
+        releases[0].files, releases[1].files,
+        "containing-system selection must not rewrite the selected Calculator browser bytes"
+    );
+    drop(controller);
+    let source = root.to_owned();
+    temporary.close().unwrap();
+    assert!(!source.exists());
+    for release in releases {
+        assert_source_free_browser_export(&release);
+    }
+}
+
+#[test]
 fn application_build_identity_binds_closed_artifacts_and_rejects_tampering() {
     let temporary = calculator_project();
     let root = temporary.path();

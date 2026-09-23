@@ -5,25 +5,35 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-21
 
-The following changes target 0.3.0. Public release acceptance is not complete;
-see [RELEASE-STATUS.md](RELEASE-STATUS.md) for the verified prerequisites.
+### Added
+- Authoritative production-system model (`prismpm/system-schema/1`, `prismpm/conformance-model/1`), immutable standards/oracle bindings, OCI release graphs, digest-only lifecycle controller, Compose and Kubernetes target projections, operations/supply-chain evidence, and the reproducible multi-platform PrismPM SDK.
+- Shipped reproducible multi-platform SDK packages for `linux/amd64` and `linux/arm64`.
+- First-party crates.io bootstrap specification (`prismpm/crates-io-bootstrap-receipt/1`) and trusted publishing configuration for `lexlean`, `prod-ir`, `prod-codegen`, `prism-stdlib`, and `prismpm`.
+- Full release status closure receipt (`prismpm/release-status-closure-receipt/1`) and production release acceptance receipt (`prismpm/production-release-acceptance/1`).
+- Ecosystem release closure manifest (`prismpm/ecosystem-release/2`) and falsification test suite across 14 defect classes.
+- Universal template contract and GitHub Actions verification entrypoint (`export-browser`).
+- Complete Calculator reference closure and Hologram Calculator/Text interoperability acceptance evidence.
 
-- Add the authoritative production-system model, immutable standards/oracle
-  bindings, OCI release graphs, digest-only lifecycle controller, Compose and
-  Kubernetes target projections, operations/supply-chain evidence, and the
-  reproducible PrismPM SDK.
-- Prepare `prism-stdlib` 0.2.0 with generated production-system validation
-  support while preserving Holo/1 and the 0.1 application runtime API.
-- Correct generated View field layout in `lean4-prod`; Calculator behavior and
-  Holo/1 remain compatible.
-- Generate the Holo/1 wire codec and bounded workspace reducer from LexLean;
-  keep independent Hologram oracles outside the production dependency graph.
-- Add bounded browser cryptography, transactional storage and direct peer
-  bindings. These prerequisites do not constitute a Foundry application release.
+### Changed
+- Prepared `prism-stdlib` 0.2.0 with generated production-system validation support while preserving Holo/1 and the 0.1 application runtime API.
+- Corrected generated View field layout in `lean4-prod`; Calculator behavior and Holo/1 remain compatible.
+- Generated the Holo/1 wire codec and bounded workspace reducer from LexLean; kept independent Hologram oracles outside the production dependency graph.
+- Upgraded AsyncAPI owned runtime lock with zero vulnerabilities, audited via npm audit and pinned in `sdk/oracles`.
+
+### Standards & Targets
+- Supported standards editions: JSON Schema 2020-12, SPDX 3.0.1, SLSA Provenance v1, OCI Image Spec v1.1, Sigstore Bundle v0.3.
+- Supported target profiles: Local CLI, Docker Compose 3.8, Kubernetes 1.36.4, and GitHub Pages.
 
 ### Compatibility
+- Holo/1 and accepted Prism application inputs remain stable. Additive contracts use new registered schemas; an incompatible schema change requires a new schema identifier and an explicit migration.
+- Security disclosures and vulnerability reporting: `security@uor.foundation`.
+
+### Verification Commands
+- `cargo run --package xtask -- validate`
+- `cargo test --all-targets`
+- `cargo clippy --all-targets --all-features -- -D warnings`
 
 Holo/1 and accepted Prism application inputs remain stable. Additive contracts
 use new registered schemas; an incompatible schema change requires a new schema

@@ -135,22 +135,22 @@ export async function capturePlatformLock(reference, standardsDigest, run) {
   assert.match(standardsDigest, digest);
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-sdk-update-'));
   try {
-    const index = run(['buildx', 'imagetools', 'inspect', '--raw', reference]);
+    const index = await run(['buildx', 'imagetools', 'inspect', '--raw', reference]);
     const children = parseSdkIndex(index, reference);
     await writeFile(`${directory}/index.json`, index);
     for (const child of children) {
       const childDirectory = `${directory}/${child.architecture}`;
       await mkdir(childDirectory);
-      run(['pull', '--platform', `linux/${child.architecture}`, child.reference]);
-      const inspected = run(['image', 'inspect', '--format', '{{json .}}', child.reference]);
+      await run(['pull', '--platform', `linux/${child.architecture}`, child.reference]);
+      const inspected = await run(['image', 'inspect', '--format', '{{json .}}', child.reference]);
       await writeFile(`${childDirectory}/image.json`, inspected);
-      const container = run(['create', '--network', 'none', '--platform', `linux/${child.architecture}`, child.reference]).toString().trim();
+      const container = (await run(['create', '--network', 'none', '--platform', `linux/${child.architecture}`, child.reference])).toString().trim();
       assert.match(container, /^[0-9a-f]{64}$/, 'Docker did not return one exact created container ID');
       try {
-        run(['cp', `${container}:/opt/prismpm/share/inventory.json`, `${childDirectory}/inventory.json`]);
-        run(['cp', `${container}:/opt/prismpm/share/standards.lock`, `${childDirectory}/standards.lock`]);
+        await run(['cp', `${container}:/opt/prismpm/share/inventory.json`, `${childDirectory}/inventory.json`]);
+        await run(['cp', `${container}:/opt/prismpm/share/standards.lock`, `${childDirectory}/standards.lock`]);
       } finally {
-        run(['rm', '--volumes', container]);
+        await run(['rm', '--volumes', container]);
       }
     }
     const standards = await boundedFile(`${directory}/amd64/standards.lock`, 16 * 1024 * 1024);
