@@ -9,6 +9,7 @@ use std::path::Path;
 
 const COMPOSE: &[u8] = include_bytes!("../adapters/compose.json");
 const GITHUB_PAGES: &[u8] = include_bytes!("../adapters/github-pages.json");
+const GITHUB_PAGES_BROWSER: &[u8] = include_bytes!("../adapters/github-pages-browser.json");
 const KUBERNETES: &[u8] = include_bytes!("../adapters/kubernetes.json");
 const INGRESS_NGINX_KIND: &[u8] = include_bytes!("../adapters/ingress-nginx-kind-v1.15.1.yaml");
 
@@ -20,6 +21,7 @@ fn descriptor(kind: &str) -> Result<(Value, &'static [u8]), PrismError> {
     let bytes = match kind {
         "compose" => COMPOSE,
         "github-pages" => GITHUB_PAGES,
+        "github-pages-browser" => GITHUB_PAGES_BROWSER,
         "kubernetes" => KUBERNETES,
         _ => return Err(PrismError::new("PP7101", "unsupported target adapter")),
     };
@@ -199,35 +201,62 @@ pub fn validate_targets(system: &Value) -> Result<(), PrismError> {
     Ok(())
 }
 
-/// Validate all standard projections that have deterministic offline oracles.
+/// Closed SDK-owned projection/oracle plan shared with source-free OCI replay.
+pub(crate) fn required_oracles(
+    system: &Value,
+) -> Result<&'static [(&'static str, &'static str, &'static str)], PrismError> {
+    match system["schema"].as_str() {
+        Some("prismpm/system-model/1") => Ok(&[
+            ("openapi", "openapi.json", "openapi-3.2-schema"),
+            ("asyncapi", "asyncapi.json", "asyncapi-3.1-schema"),
+            ("spdx", "spdx.json", "spdx-3.0.1-model"),
+            (
+                "otel",
+                "opentelemetry-collector.json",
+                "otel-collector-0.136.0",
+            ),
+            ("compose", "compose.json", "compose-fee041b3"),
+            ("kubernetes", "kubernetes.json", "kubernetes-1.36.4"),
+            ("cloudevents", "", "cloudevents-1.0-json"),
+        ]),
+        Some("prismpm/system-model/2") => Ok(&[("spdx", "spdx.json", "spdx-3.0.1-model")]),
+        _ => Err(PrismError::new(
+            "PP7101",
+            "unsupported system projection oracle profile",
+        )),
+    }
+}
+
+/// Validate every standard projection required by the exact system profile.
 pub fn validate_build(root: &Path, build_id: &str) -> Result<Vec<Value>, PrismError> {
     let base = root.join(".prism/build").join(build_id).join("projections");
-    let profiles = [
-        ("openapi", "openapi.json"),
-        ("asyncapi", "asyncapi.json"),
-        ("spdx", "spdx.json"),
-        ("otel", "opentelemetry-collector.json"),
-        ("compose", "compose.json"),
-        ("kubernetes", "kubernetes.json"),
-    ];
+    let system_bytes = std::fs::read(
+        base.parent()
+            .expect("build parent")
+            .join("system.prism.json"),
+    )
+    .map_err(|error| PrismError::new("PP7101", format!("system oracle profile: {error}")))?;
+    let system = crate::system::parse(&system_bytes)?;
     let mut results = Vec::new();
-    for (profile, path) in profiles {
-        let result = crate::authority::run_oracle_in_project(root, profile, &base.join(path))?;
+    for (profile, path, _) in required_oracles(system.value())? {
+        let event_file;
+        let subject = if path.is_empty() {
+            event_file = tempfile::NamedTempFile::new_in(&base).map_err(|error| {
+                PrismError::new("PP5404", format!("CloudEvents fixture: {error}"))
+            })?;
+            std::fs::write(event_file.path(), cloud_event_validation_fixture()?).map_err(
+                |error| PrismError::new("PP5404", format!("CloudEvents fixture: {error}")),
+            )?;
+            event_file.path().to_owned()
+        } else {
+            base.join(path)
+        };
+        let result = crate::authority::run_oracle_in_project(root, profile, &subject)?;
         results.push(
             serde_json::to_value(result)
                 .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
         );
     }
-    let event = cloud_event_validation_fixture()?;
-    let event_file = tempfile::NamedTempFile::new_in(&base)
-        .map_err(|error| PrismError::new("PP5404", format!("CloudEvents fixture: {error}")))?;
-    std::fs::write(event_file.path(), event)
-        .map_err(|error| PrismError::new("PP5404", format!("CloudEvents fixture: {error}")))?;
-    let result = crate::authority::run_oracle_in_project(root, "cloudevents", event_file.path())?;
-    results.push(
-        serde_json::to_value(result)
-            .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
-    );
     results.sort_by(|left, right| left["oracle"].as_str().cmp(&right["oracle"].as_str()));
     Ok(results)
 }
@@ -249,9 +278,11 @@ mod tests {
     fn adapter_descriptors_are_canonical_and_distinct() {
         let compose = super::digest("compose").unwrap();
         let github_pages = super::digest("github-pages").unwrap();
+        let browser_pages = super::digest("github-pages-browser").unwrap();
         let kubernetes = super::digest("kubernetes").unwrap();
         assert_ne!(compose, kubernetes);
         assert_ne!(compose, github_pages);
+        assert_ne!(browser_pages, github_pages);
         assert!(super::digest("shell").is_err());
     }
 }

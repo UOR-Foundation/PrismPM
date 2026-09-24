@@ -93,9 +93,7 @@ fn target_id(value: &str) -> Result<&str, PrismError> {
 
 fn system(root: &Path, digest: &str) -> Result<Value, PrismError> {
     let bytes = oci::artifact(root, digest, "system.prism.json")?;
-    Ok(CanonicalDocument::parse("prismpm/system-model/1", &bytes)?
-        .value()
-        .clone())
+    Ok(crate::system::parse(&bytes)?.value().clone())
 }
 
 fn target<'a>(system: &'a Value, id: &str) -> Result<&'a Value, PrismError> {
@@ -111,7 +109,7 @@ fn projection(root: &Path, digest: &str, kind: &str) -> Result<(String, Vec<u8>)
     let title = match kind {
         "compose" => "projections/compose.json",
         "kubernetes" => "projections/kubernetes.json",
-        "github-pages" => {
+        "github-pages" | "github-pages-browser" => {
             return Err(PrismError::new(
                 "PP7101",
                 "GitHub Pages publication uses its protected Pages workflow",

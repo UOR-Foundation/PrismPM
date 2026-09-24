@@ -77,6 +77,18 @@ A text application violates its closed profile, metadata, byte bounds, exported 
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2010` --- Invalid browser application declaration
+
+A browser application violates its closed source-owned profile, resource requests, recovery or presentation declaration.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2011` --- Browser application runtime unavailable
+
+The browser application profile cannot build or publish before its generated runtime, effective-grant admission, credential custody and durable recovery implementation are available.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

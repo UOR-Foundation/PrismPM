@@ -85,6 +85,20 @@ exit = 1
 statement = "A text application violates its closed profile, metadata, byte bounds, exported roots, View, or acceptance-vector contract."
 
 [[error]]
+code = "PP2010"
+title = "Invalid browser application declaration"
+class = "semantic"
+exit = 1
+statement = "A browser application violates its closed source-owned profile, resource requests, recovery or presentation declaration."
+
+[[error]]
+code = "PP2011"
+title = "Browser application runtime unavailable"
+class = "semantic"
+exit = 1
+statement = "The browser application profile cannot build or publish before its generated runtime, effective-grant admission, credential custody and durable recovery implementation are available."
+
+[[error]]
 code = "PP3001"
 title = "Malformed Hologram archive header or version"
 class = "holo"

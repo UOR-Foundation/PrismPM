@@ -13,6 +13,8 @@ clap = { workspace = true }
 jsonschema = { workspace = true }
 lexlean = { workspace = true }
 prismpm = { workspace = true }
+prod-codegen = { workspace = true }
+prod-ir = { workspace = true }
 repo-model = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

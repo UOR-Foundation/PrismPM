@@ -114,21 +114,21 @@ fn lean4_prod_dependency_record_and_checksums_are_valid() {
 
     assert_eq!(record.id, "lean4-prod");
     assert_eq!(record.lean_version.as_deref(), Some("4.32.1"));
-    assert_eq!(record.revision, "ac84a4de575e2e531ddb6453c86b84a6794fe48b");
+    assert_eq!(record.revision, "6272da01ea2045906f5f844988b6265d6c867f39");
     assert_eq!(record.source, "vendored");
 
     let expected_artifacts: HashMap<&str, (&str, Option<&str>)> = HashMap::from([
         (
             "vendor/lean4-prod/lean.tar",
             (
-                "74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5",
+                "ce6c258440eda742df7162bdd4228b2ed4aae5416730cd770a98ecfc4185bf69",
                 None,
             ),
         ),
         (
             "vendor/lean4-prod/rust/MANIFEST.sha256",
             (
-                "3b976d0bf2c0509c28b069417bf9bdb8d12f68d9c6ba383910f03b75e7a303dc",
+                "5d10d5fd7a2298a6bcb7484c36f0f91f953a60b4784815227ae7c7cad32e7cf6",
                 Some("vendor/lean4-prod/rust"),
             ),
         ),
@@ -142,14 +142,14 @@ fn lean4_prod_dependency_record_and_checksums_are_valid() {
         (
             "vendor/lean4-prod/crates/prod-codegen-0.1.0.crate",
             (
-                "5b56d5ed74c05404e21e29daeda69c11eebb3e23cf923757fb5faddc70a05be6",
+                "48d1407dbb7ad7776dd8e2a61ca5620b60b948ace3276c52bf45493730d162e4",
                 None,
             ),
         ),
         (
             "vendor/lean4-prod/crates/prod-ir-0.1.0.crate",
             (
-                "9c54edb43e1dd317cbca1b2a4109cfd0b0103cbb75e4b41ca3dc7a99b6ddd2c5",
+                "7cffc0251ee01ce97debe304a41a4e28f6be94ba41691fac1993c811919cdc21",
                 None,
             ),
         ),
@@ -309,17 +309,17 @@ spec = "prismpm/dependencies/1"
 [[dependency]]
 id = "lean4-prod"
 lean_version = "4.32.1"
-revision = "ac84a4de575e2e531ddb6453c86b84a6794fe48b"
+revision = "6272da01ea2045906f5f844988b6265d6c867f39"
 source = "vendored"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/lean.tar"
-sha256 = "74eb4600836c873f9ffdff30f8062c5dc1314aba572c36afd1c851434affadc5"
+sha256 = "ce6c258440eda742df7162bdd4228b2ed4aae5416730cd770a98ecfc4185bf69"
 "#;
 
     let parsed = parse_lean4_prod_dependency(valid_toml).expect("valid parse");
-    assert_eq!(parsed.revision, "ac84a4de575e2e531ddb6453c86b84a6794fe48b");
+    assert_eq!(parsed.revision, "6272da01ea2045906f5f844988b6265d6c867f39");
 
     // Probe 1: Missing lean4-prod section
     let missing_toml = r#"

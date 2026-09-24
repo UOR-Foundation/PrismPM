@@ -1,5 +1,22 @@
 //! Conformance test cases verifying every registered capability.
 
+#[path = "../../../../tests/support/browser_application.rs"]
+mod browser_application;
+mod browser_bootstrap;
+mod browser_compiler;
+mod browser_effect;
+mod browser_publication;
+mod browser_system;
+mod cbor_primitive;
+mod holo_browser;
+mod mailbox_admission;
+mod native_library;
+mod node_suite;
+mod organization_lifecycle;
+mod saved_recovery;
+mod scoped_administration;
+
+use node_suite::verify as verify_node_suite;
 use repo_model::repo_root;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -364,6 +381,7 @@ pub fn run_at(root: &Path, id: &str) {
         | "HO-10" | "HO-11" | "HO-12" => {
             verify_holo(root, id);
         }
+        "HO-13" => holo_browser::verify(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
@@ -374,6 +392,12 @@ pub fn run_at(root: &Path, id: &str) {
         | "ST-10" => {
             verify_stdlib(root, id);
         }
+        "ST-11" => saved_recovery::verify(root),
+        "ST-12" => scoped_administration::verify(root),
+        "ST-13" => mailbox_admission::verify(root),
+        "ST-14" => browser_bootstrap::verify(root),
+        "ST-15" => organization_lifecycle::verify(root),
+        "ST-16" => cbor_primitive::verify(root),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {
@@ -395,13 +419,35 @@ pub fn run_at(root: &Path, id: &str) {
         }
 
         "AU-01" | "AU-02" | "AU-03" | "AU-04" | "AU-05" | "AU-06" => verify_authorities(root, id),
+        "SY-08" => browser_system::verify(root),
         "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" | "SY-07" => {
             verify_system(root, id)
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15"
-        | "DK-16" => verify_browser_host(root, id),
+        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" => {
+            verify_browser_host(root, id)
+        }
+        "DK-17" => native_library::verify(root),
+        "DK-21" => browser_application::verify(root),
+        "DK-22" => browser_compiler::verify(root),
+        "DK-27" => verify_node_suite(
+            root,
+            id,
+            &["sdk/browser/budget-model-test.mjs"],
+            13,
+            "3600000",
+        ),
+        "DK-18" => browser_effect::verify(root),
         "OC-07" => verify_browser_export(root),
+        "OC-08" => browser_publication::verify(root),
+        "OC-09" => verify_node_suite(
+            root,
+            id,
+            &["tests/publication-admission/owner.test.mjs"],
+            12,
+            "3600000",
+        ),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
         "DP-01" | "DP-02" | "DP-03" | "DP-04" | "DP-05" | "DP-06" => verify_deployment(id),
@@ -420,7 +466,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "sdk/browser/identity.test.mjs",
                 "sdk/browser/identity.browser.test.mjs",
             ],
-            10,
+            15,
         ),
         "DK-08" => (
             &[
@@ -437,12 +483,40 @@ fn verify_browser_host(root: &Path, id: &str) {
         "DK-14" => (&["sdk/browser/query-model-test.mjs"], 11),
         "DK-15" => (&["sdk/browser/view-model-test.mjs"], 7),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
+        "DK-19" => (
+            &[
+                "sdk/browser/rs256.test.mjs",
+                "sdk/browser/rs256.browser.test.mjs",
+            ],
+            14,
+        ),
+        "DK-20" => (
+            &[
+                "sdk/browser/effects-wire.test.mjs",
+                "sdk/browser/effects-module.test.mjs",
+                "sdk/browser/effects-test.mjs",
+            ],
+            18,
+        ),
+        "DK-23" => (
+            &[
+                "tests/browser-presentation/wire.test.mjs",
+                "tests/browser-presentation/dom.test.mjs",
+                "sdk/browser/presentation.test.mjs",
+            ],
+            9,
+        ),
+        "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 28),
+        "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
         _ => unreachable!("closed browser host capability"),
     };
     // Node also applies this limit to the file-level wrapper. Full model and
     // multi-guest View builds carry explicit bounded deadlines; host-only
     // suites retain their short deadline.
-    let timeout = if matches!(id, "DK-15" | "DK-16") {
+    let timeout = if matches!(
+        id,
+        "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25"
+    ) {
         "3600000"
     } else if matches!(id, "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14") {
         "1500000"
@@ -450,47 +524,6 @@ fn verify_browser_host(root: &Path, id: &str) {
         "120000"
     };
     verify_node_suite(root, id, files, minimum_tests, timeout);
-}
-
-fn verify_node_suite(root: &Path, id: &str, files: &[&str], minimum_tests: usize, timeout: &str) {
-    let output = Command::new("node")
-        // Cargo injects its Rust dynamic-library search path into test binaries.
-        // Browser/compiler subprocesses use the SDK's own loader paths.
-        .env_remove("LD_LIBRARY_PATH")
-        .env_remove("NODE_TEST_CONTEXT")
-        .args(["--test", "--test-reporter=tap", "--test-timeout", timeout])
-        .args(files)
-        .current_dir(root)
-        .output()
-        .expect("execute complete owning Node suite in the devcontainer");
-    let stdout = String::from_utf8(output.stdout).expect("UTF-8 TAP output");
-    assert!(
-        output.status.success(),
-        "{id}: {stdout}\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let count = |name: &str| {
-        let prefix = format!("# {name} ");
-        let values = stdout
-            .lines()
-            .filter_map(|line| line.strip_prefix(&prefix))
-            .map(|value| value.parse::<usize>().expect("numeric TAP summary"))
-            .collect::<Vec<_>>();
-        assert_eq!(values.len(), 1, "{id}: missing or duplicate {name} summary");
-        values[0]
-    };
-    assert!(
-        count("tests") >= minimum_tests,
-        "{id}: incomplete test suite"
-    );
-    assert_eq!(count("tests"), count("pass"), "{id}: incomplete pass set");
-    for outcome in ["fail", "cancelled", "skipped", "todo"] {
-        assert_eq!(
-            count(outcome),
-            0,
-            "{id}: {outcome} tests cannot satisfy acceptance"
-        );
-    }
 }
 
 fn canonical_file(value: &Value) -> tempfile::NamedTempFile {
@@ -2476,7 +2509,7 @@ fn verify_template(root: &Path, id: &str) {
             );
         }
         "TM-03" => {
-            verify_node_suite(root, id, &["action/entrypoint.test.mjs"], 11, "120000");
+            verify_node_suite(root, id, &["action/entrypoint.test.mjs"], 19, "120000");
             assert!(prismpm::template::check(temp.path()).is_ok());
             std::fs::write(
                 temp.path().join(".github/workflows/bootstrap.yml"),
@@ -3650,6 +3683,71 @@ fn verify_security(root: &Path, id: &str) {
 #[cfg(test)]
 mod node_suite_tests {
     use super::{required, verify_node_suite};
+
+    #[test]
+    fn owning_node_gate_rejects_a_partially_missing_selected_file() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("present.mjs"),
+            "import {test} from 'node:test'; for(let i=0;i<11;i++)test('case '+i,()=>{});",
+        )
+        .unwrap();
+        assert!(std::panic::catch_unwind(|| {
+            verify_node_suite(
+                root.path(),
+                "TM-03",
+                &["present.mjs", "missing.mjs"],
+                11,
+                "5000",
+            );
+        })
+        .is_err());
+        std::fs::write(
+            root.path().join("missing.mjs"),
+            "import {test} from 'node:test'; test('restored',()=>{});",
+        )
+        .unwrap();
+        verify_node_suite(
+            root.path(),
+            "TM-03",
+            &["present.mjs", "missing.mjs"],
+            11,
+            "5000",
+        );
+    }
+
+    #[test]
+    fn owning_node_gate_rejects_an_empty_selected_file_beside_a_complete_sibling() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("present.mjs"),
+            "import {test} from 'node:test'; for(let i=0;i<11;i++)test('case '+i,()=>{});",
+        )
+        .unwrap();
+        std::fs::write(root.path().join("empty.mjs"), "").unwrap();
+        assert!(std::panic::catch_unwind(|| {
+            verify_node_suite(
+                root.path(),
+                "TM-03",
+                &["present.mjs", "empty.mjs"],
+                11,
+                "5000",
+            );
+        })
+        .is_err());
+        std::fs::write(
+            root.path().join("empty.mjs"),
+            "import {test} from 'node:test'; test('restored',()=>{});",
+        )
+        .unwrap();
+        verify_node_suite(
+            root.path(),
+            "TM-03",
+            &["present.mjs", "empty.mjs"],
+            11,
+            "5000",
+        );
+    }
 
     #[test]
     fn cached_prism_diagnostic_preserves_the_original_structured_cause() {

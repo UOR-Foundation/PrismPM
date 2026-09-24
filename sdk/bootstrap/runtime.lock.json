@@ -1,0 +1,71 @@
+{
+  "schema": "bootstrap-runtime-lock/1",
+  "archive_sha256": "f3dd999f5618db154fa06222a06f9de95d86e1dbf683954426ea91c974cbe24c",
+  "binary_sha256": "fed990f31a1cdc5f819f5a99e79bc441c7db11f7c8ea45c748d9cec1097ee8e6",
+  "qemu": {
+    "amd64": {
+      "url": "https://snapshot.debian.org/archive/debian/20260901T000000Z/pool/main/q/qemu/qemu-user-static_7.2+dfsg-7+deb12u18+b3_amd64.deb",
+      "sha256": "c3e3ba2bd87f8c5b9a5da5ef21b5a3b82d7c63b89dd448d9ddaa4eabc5b6e402",
+      "binary_sha256": "8f2e8d5017b23a877fdf52e4021e6348bb5ad92306dd0d0615159ab6276da442"
+    },
+    "arm64": {
+      "url": "https://snapshot.debian.org/archive/debian/20260901T000000Z/pool/main/q/qemu/qemu-user-static_7.2+dfsg-7+deb12u18+b3_arm64.deb",
+      "sha256": "e420c417c12b42ca774795b62888d5388da0e08c1ef263dea1490e5ce4e32a0b",
+      "binary_sha256": "16ce7dbb6626f3c0e1f932f831817dbf3b506c848a168d16f2172151e9666594"
+    }
+  },
+  "packages": {
+    "libc": {
+      "url": "https://snapshot.debian.org/archive/debian/20260901T000000Z/pool/main/g/glibc/libc6_2.36-9+deb12u14_amd64.deb",
+      "sha256": "ba4f88f73dbc3ae9055f3c20f4523bfdbaf1ad13ff95e258924f77d20b4fbedf"
+    },
+    "libgcc": {
+      "url": "https://snapshot.debian.org/archive/debian/20260901T000000Z/pool/main/g/gcc-12/libgcc-s1_12.2.0-14+deb12u1_amd64.deb",
+      "sha256": "3016e62cb4b7cd8038822870601f5ed131befe942774d0f745622cc77d8a88f7"
+    },
+    "gcc-license": {
+      "url": "https://snapshot.debian.org/archive/debian/20260901T000000Z/pool/main/g/gcc-12/gcc-12-base_12.2.0-14+deb12u1_amd64.deb",
+      "sha256": "1896a2aacf4ad681ff5eacc24a5b0ca4d5d9c9b9c9e4b6de5197bc1e116ea619"
+    }
+  },
+  "libraries": [
+    {
+      "package": "libc",
+      "member": "lib/x86_64-linux-gnu/libc.so.6",
+      "path": "sysroot/lib/x86_64-linux-gnu/libc.so.6",
+      "sha256": "6b4a45352fd0c540a9c7c718f35ce8c8e46a4e482f9d3885a910c32d1a0e1421"
+    },
+    {
+      "package": "libgcc",
+      "member": "lib/x86_64-linux-gnu/libgcc_s.so.1",
+      "path": "sysroot/lib/x86_64-linux-gnu/libgcc_s.so.1",
+      "sha256": "2bd1552c47799ef67e701e81d4383061fd76059868e446e63560f0dd0d5ec14e"
+    },
+    {
+      "package": "libc",
+      "member": "lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "path": "sysroot/lib64/ld-linux-x86-64.so.2",
+      "sha256": "02bcda52c1a5dfc236f94d9e5255b4a0e26347d8a372a5223b650e31f291ce3c"
+    }
+  ],
+  "licenses": [
+    {
+      "package": "gcc-license",
+      "member": "usr/share/doc/gcc-12-base/copyright",
+      "path": "licenses/gcc",
+      "sha256": "da8191658b3452ce9caf31638ba61dab31a38c619fa39df119812e050f592fd3"
+    },
+    {
+      "package": "libc",
+      "member": "usr/share/doc/libc6/copyright",
+      "path": "licenses/glibc",
+      "sha256": "40c7e1f2118531f038ca22999bd976901254e1bc5cd1b0f0211bdd064c599987"
+    },
+    {
+      "package": "qemu",
+      "member": "usr/share/doc/qemu-user-static/copyright",
+      "path": "licenses/qemu",
+      "sha256": "0bdb9dd77149a6283f99fca200c49296349738fa9c5ad48e7f92c0816aeda8fc"
+    }
+  ]
+}

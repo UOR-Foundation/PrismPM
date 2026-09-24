@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/web-platform-tests/wpt",
+  "revision": "986e75d7897742148c16253c08c50c8ba0e7b0f7",
+  "scope": "RSASSA-PKCS1-v1_5 fixed signature vectors; SHA-256 positive and SHA-1/SHA-384/SHA-512 algorithm-substitution negatives, not the full WebCrypto suite",
+  "files": [
+    {"path":"WebCryptoAPI/sign_verify/rsa_pkcs_vectors.js","file":"rsa_pkcs_vectors.js","sha256":"423a4291ff6a1529bc0692e242c067ec688629c3236deb1f49631d6eefd14835"},
+    {"path":"WebCryptoAPI/util/rsa_key_fixtures.js","file":"rsa_key_fixtures.js","sha256":"4b755a11ce4cfc161103e4269423d5d025ab04aec39c4d1bd3df773503906d50"},
+    {"path":"LICENSE.md","file":"LICENSE.md","sha256":"5fac07febb0e2a97fb0d7b0def149ec08b642e1ba4b9c345283ab1cbd2af6570"}
+  ]
+}

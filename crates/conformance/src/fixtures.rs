@@ -558,7 +558,7 @@ pub fn write(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
+pub(crate) fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
     let metadata = std::fs::symlink_metadata(from)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Err(std::io::Error::new(

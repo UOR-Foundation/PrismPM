@@ -1207,6 +1207,8 @@ dependencies = [
  "jsonschema",
  "lexlean",
  "prismpm",
+ "prod-codegen",
+ "prod-ir",
  "repo-model",
  "serde",
  "serde_json",

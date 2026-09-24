@@ -114,6 +114,7 @@ The three honesty levels:
 | `HO-10` | `build` | Holo/1 validation checks canonical sections, identities, content closure, directory derivation, and closed Prism provenance. |
 | `HO-11` | `build` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. |
 | `HO-12` | `build` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. |
+| `HO-13` | `build` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. |
 
 ## lifecycle
 
@@ -137,6 +138,8 @@ The three honesty levels:
 | `OC-05` | `build` | Local and GHCR registry profiles pass claimed OCI distribution operations and fail safely under mutation, interruption, concurrency, and tag races. |
 | `OC-06` | `build` | Promotion adds signed evidence around one immutable subject digest and never changes or rebuilds release content. |
 | `OC-07` | `build` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. |
+| `OC-08` | `build` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. |
+| `OC-09` | `build` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. |
 
 ## operations
 
@@ -176,7 +179,7 @@ The three honesty levels:
 | `DK-04` | `build` | The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline. |
 | `DK-05` | `build` | SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle. |
 | `DK-06` | `build` | SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation. |
-| `DK-07` | `build` | The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority. |
+| `DK-07` | `build` | The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority. |
 | `DK-08` | `build` | The browser storage host boundary retains identity keys and content-addressed bytes across reopening and atomically rejects stale heads, partial writes, corruption, and resource-policy changes. |
 | `DK-09` | `build` | The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery. |
 | `DK-10` | `build` | The LexLean workspace reducer executes its complete bounded state-transition corpus through freshly generated Rust and Core-Wasm; authentication, durable effects, and application acceptance remain separate obligations. |
@@ -186,6 +189,16 @@ The three honesty levels:
 | `DK-14` | `build` | Generated admitted queries use privately authenticated replay and possessed identity to paginate every bounded member and message row, rejecting stale or revoked contexts before disclosure. |
 | `DK-15` | `build` | The modeled workspace View preserves complete admitted rows, closed single-flight interaction, exact private correlation and replay-required recovery through fresh native, no_std and Core-Wasm execution of every bounded vector. |
 | `DK-16` | `build` | The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure. |
+| `DK-17` | `build` | Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance. |
+| `DK-18` | `build` | The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile. |
+| `DK-19` | `build` | The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority. |
+| `DK-20` | `build` | The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance. |
+| `DK-21` | `build` | The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance. |
+| `DK-22` | `build` | The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds. |
+| `DK-23` | `build` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. |
+| `DK-24` | `build` | The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance. |
+| `DK-25` | `build` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. |
+| `DK-27` | `build` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. |
 
 ## security
 
@@ -214,6 +227,12 @@ The three honesty levels:
 | `ST-08` | `build` | Prism-stdlib exports registered runtime validator roots. |
 | `ST-09` | `build` | Prism-stdlib includes golden test outputs for all published artifacts. |
 | `ST-10` | `build` | Prism-stdlib models validate through the Holo projector and Lean kernel. |
+| `ST-11` | `build` | Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence. |
+| `ST-12` | `build` | The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution. |
+| `ST-13` | `build` | The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution. |
+| `ST-14` | `build` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. |
+| `ST-15` | `build` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. |
+| `ST-16` | `build` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. |
 
 ## supply-chain
 
@@ -237,6 +256,7 @@ The three honesty levels:
 | `SY-05` | `build` | Late-bound configuration is typed and secret values remain external references excluded from artifacts and evidence. |
 | `SY-06` | `build` | Migrations, recovery, rollout, rollback, drift, retirement, and positive and negative acceptance are explicit modeled values. |
 | `SY-07` | `build` | Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches. |
+| `SY-08` | `build` | Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay. |
 
 ## template-ci
 

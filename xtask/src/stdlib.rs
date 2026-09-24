@@ -260,10 +260,17 @@ fn update_package(root: &Path, package: &GeneratedPackage, write: bool) -> Resul
 }
 
 fn verify_current(root: &Path) -> Result<(BuildResult, VerifyResult), Fail> {
-    let controller = prismpm::Controller::load(root)?;
-    let before = controller.build(BuildRequest { config_path: None })?;
-    let verified = controller.verify(VerifyRequest { config_path: None })?;
-    let after = controller.build(BuildRequest { config_path: None })?;
+    let controller =
+        prismpm::Controller::load(root).map_err(|error| crate::diagnostic_failure(&error))?;
+    let before = controller
+        .build(BuildRequest { config_path: None })
+        .map_err(|error| crate::diagnostic_failure(&error))?;
+    let verified = controller
+        .verify(VerifyRequest { config_path: None })
+        .map_err(|error| crate::diagnostic_failure(&error))?;
+    let after = controller
+        .build(BuildRequest { config_path: None })
+        .map_err(|error| crate::diagnostic_failure(&error))?;
     current_results(&before, &verified, after)
 }
 
@@ -365,6 +372,38 @@ mod tests {
     use super::*;
 
     const IR: &[u8] = b"(module PrismPM (def identity ((value Bool)) Bool value))\n";
+
+    #[test]
+    fn stdlib_package_preserves_real_nested_build_diagnostics() {
+        let temporary = tempfile::tempdir().unwrap();
+        let source =
+            repo_model::repo_root().join("tests/fixtures/holo/ho-10-minimal-model/project");
+        for entry in walkdir::WalkDir::new(&source) {
+            let entry = entry.unwrap();
+            let destination = temporary
+                .path()
+                .join(entry.path().strip_prefix(&source).unwrap());
+            if entry.file_type().is_dir() {
+                std::fs::create_dir_all(destination).unwrap();
+            } else {
+                assert!(entry.file_type().is_file());
+                std::fs::copy(entry.path(), destination).unwrap();
+            }
+        }
+        // A directory cannot be the compiler's lock file. This exercises a
+        // real nested build failure without relying on UID-specific permissions.
+        std::fs::create_dir_all(temporary.path().join(".lexlean/.lock")).unwrap();
+        let error = verify_current(temporary.path()).unwrap_err();
+        let diagnostic: serde_json::Value = serde_json::from_str(&error.to_string()).unwrap();
+        assert_eq!(diagnostic["code"], "PP4002");
+        assert_eq!(diagnostic["causes"][0]["subsystem"], "lexlean");
+        assert_eq!(diagnostic["causes"][0]["code"], "LLV7010");
+        assert!(diagnostic["causes"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains(".lexlean/.lock"));
+        assert!(!temporary.path().join(".prism/verified").exists());
+    }
 
     fn build() -> BuildResult {
         BuildResult {

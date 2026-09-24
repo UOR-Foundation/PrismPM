@@ -1,0 +1,58 @@
+; Conditional metadata; cryptographic/provider facts are independently replayed.
+digest = bstr .size 32
+revision = bstr .size 20
+tick = 0..4294967295
+text = tstr .size (1..2048)
+maybe-digest = [0] / [1, digest]
+moment = [0] / [1]
+assurance = [0..7]
+outcome = [0..2]
+trust-status = [0..3]
+ref-kind = [0] / [1]
+phase = [0..3]
+target = [url: text, publisher: text, environment: text, adapter: digest]
+obligation = [id: 1..4294967295, moment, assurance, authority: digest, scope: digest]
+declaration = [stage: text, policy: digest, target, clock: digest,
+ clock-authority: digest, trust-authority: digest, decision-authority: digest,
+ ref-authority: digest, deployment-authority: digest, integrity-authority: digest,
+ minimum-trust: trust-status, ref-kind, obligations: [2*4096 obligation]]
+subject = [producer: text, source: revision, release: digest, model: digest,
+ build: digest, services: digest, controls: digest, dependencies: digest,
+ sdk: digest, compiler: digest, runtime: digest, oracles: digest, tree: digest]
+context = [declaration, declaration-identity: digest, subject, instance: digest,
+ publisher-revision: revision, publisher-ref: text, context-digest: digest]
+clock = [domain: digest, authority: digest, receipt: digest, tick]
+fact = [context: digest, obligation: tick, assurance, authority: digest,
+ scope: digest, evidence: digest, deployment: maybe-digest,
+ from: tick, until: tick, outcome]
+trust-fact = [context: digest, authority: digest, receipt: digest, trust-status,
+ from: tick, until: tick]
+decision = [context: digest, authority: digest, ref-authority: digest,
+ decision: digest, ref-evidence: digest, ready: digest,
+ publisher-revision: revision, publisher-ref: text, ref-kind,
+ from: tick, until: tick, outcome]
+deployment = [context: digest, decision: digest, authority: digest, receipt: digest,
+ publisher-revision: revision, deployment-revision: revision, deployment-id: text,
+ observed: tick, from: tick, until: tick]
+integrity = [context: digest, authority: digest, receipt: digest, release: digest,
+ model: digest, build: digest, tree: digest, url: text, deployment: digest,
+ observed: tick, from: tick, until: tick]
+state = [context, revision: 0..4, phase, clock, ready-at: tick,
+ authorized-at: tick, observed-at: tick,
+ trust: ([0] / [1, trust-fact]), readiness: [*4096 fact], ready: maybe-digest,
+ decision: ([0] / [1, decision]), deployment: ([0] / [1, deployment]),
+ integrity: ([0] / [1, integrity]), live: [*4096 fact]]
+operation = [0, trust-fact, readiness: [*4096 fact], ready: digest]
+ / [1, decision] / [2, deployment, integrity] / [3, live: [*4096 fact]]
+request = [1, 0, context, clock]
+ / [1, 1, context, state, revision: tick, clock, operation]
+ / [1, 2, context, state, clock]
+ / [1, 3, declaration] / [1, 4, context]
+; Identity preimages are projected by the generated codec, never by a second
+; host-defined declaration serializer. Hashing/authentication remain external.
+context-body = [declaration, declaration-identity: digest, subject,
+ instance: digest, publisher-revision: revision, publisher-ref: text]
+; opcode3: UTF8("prismpm/publication-declaration/1") + 0x00 + CBOR(declaration)
+; opcode4: UTF8("prismpm/publication-context/1") + 0x00 + CBOR(context-body)
+response = [1, 0, state] / [1, 1, [0..14]] / [1, 2, 0..8]
+ / [1, 3, preimage: bstr .size (1..67108864)]

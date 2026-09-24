@@ -1,0 +1,8 @@
+{
+  "spec": "prismpm/browser-custody-diagnostics/1",
+  "capability": "DK-25",
+  "error_class": "CredentialCustodyError",
+  "errors": ["invalid-input", "custody-closed", "invalid-generated-module", "invalid-generated-output", "generated-execution-failed", "model-rejected", "wire-rejected", "custody-corrupt", "storage-quota", "storage-unavailable", "custody-outcome-unknown", "custody-missing", "custody-conflict", "artifact-mismatch"],
+  "protocol_errors": ["BadPolicy", "BadSnapshot", "AlreadyInitialized", "MissingCustody", "PolicyMismatch", "BadBindings", "UnknownResource", "PayloadLimit"],
+  "wire_errors": ["BadLimits", "BadCursor", "Truncated", "WrongType", "UnsupportedHead", "NonCanonical", "ValueLimit", "InvalidUtf8", "TrailingInput"]
+}

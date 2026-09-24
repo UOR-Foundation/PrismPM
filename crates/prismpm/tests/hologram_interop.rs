@@ -91,11 +91,17 @@ fn test_hologram_oracle_pinned_source_identities() {
     );
 }
 
+static HOLOGRAM_ORACLE_SERIAL_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn test_calculator_hologram_oracle_interoperability_acceptance() {
+    let _serial_guard = HOLOGRAM_ORACLE_SERIAL_MUTEX.lock().unwrap();
     let r = root();
     let app_root = r.join("examples/Calculator");
+    let _ = std::fs::remove_dir_all(app_root.join(".prism"));
+    let _ = std::fs::remove_dir_all(app_root.join(".lexlean/verified"));
     let _guard = CleanupGuard(app_root.join(".prism"));
+    let _lexlean_guard = CleanupGuard(app_root.join(".lexlean/verified"));
 
     let controller = Controller::load(&app_root).expect("load Calculator controller");
     let check = controller
@@ -198,9 +204,13 @@ fn test_calculator_hologram_oracle_interoperability_acceptance() {
 
 #[test]
 fn test_text_application_hologram_oracle_interoperability_acceptance() {
+    let _serial_guard = HOLOGRAM_ORACLE_SERIAL_MUTEX.lock().unwrap();
     let r = root();
     let app_root = r.join("tests/fixtures/holo/ho-11-text-application/project");
+    let _ = std::fs::remove_dir_all(app_root.join(".prism"));
+    let _ = std::fs::remove_dir_all(app_root.join(".lexlean/verified"));
     let _guard = CleanupGuard(app_root.join(".prism"));
+    let _lexlean_guard = CleanupGuard(app_root.join(".lexlean/verified"));
 
     let controller = Controller::load(&app_root).expect("load Text controller");
     let check = controller

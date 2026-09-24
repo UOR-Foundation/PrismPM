@@ -205,6 +205,12 @@ level = "build"
 statement = "Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence."
 
 [[id]]
+id = "HO-13"
+suite = "holo"
+level = "build"
+statement = "The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"
@@ -329,6 +335,42 @@ id = "ST-10"
 suite = "stdlib"
 level = "build"
 statement = "Prism-stdlib models validate through the Holo projector and Lean kernel."
+
+[[id]]
+id = "ST-11"
+suite = "stdlib"
+level = "build"
+statement = "Saved-code recovery transitions bind admitted current credentials, consume codes atomically, preserve authorization, and reject stale or substituted recovery evidence."
+
+[[id]]
+id = "ST-12"
+suite = "stdlib"
+level = "build"
+statement = "The internal scoped-administration reducer preserves revision-bound approval and complete post-change ownership in generated native execution."
+
+[[id]]
+id = "ST-13"
+suite = "stdlib"
+level = "build"
+statement = "The internal mailbox-admission kernel binds profile-specific admitted proof to current authority, account, challenge and credential state in generated native execution."
+
+[[id]]
+id = "ST-14"
+suite = "stdlib"
+level = "build"
+statement = "The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution."
+
+[[id]]
+id = "ST-15"
+suite = "stdlib"
+level = "build"
+statement = "The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover."
+
+[[id]]
+id = "ST-16"
+suite = "stdlib"
+level = "build"
+statement = "The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution."
 
 [[id]]
 id = "AR-01"
@@ -649,6 +691,12 @@ level = "build"
 statement = "Modeled ordered control coverage rejects missing obligations, invalid inheritance, residual omissions, and binding mismatches."
 
 [[id]]
+id = "SY-08"
+suite = "system"
+level = "build"
+statement = "Browser-resident system releases bind selected proved applications, mandatory controls, exact generated artifacts, locked projection oracles, and source-free replay."
+
+[[id]]
 id = "DK-01"
 suite = "sdk"
 level = "build"
@@ -688,7 +736,7 @@ statement = "SDK execution rejects undeclared PATH tools, tampered executables, 
 id = "DK-07"
 suite = "sdk"
 level = "build"
-statement = "The browser cryptography host boundary signs bounded domain-separated bytes with nonextractable keys and detects changed authors, contexts, payloads, and persisted key bindings without assigning organizational authority."
+statement = "The browser cryptography host boundary supplies bounded WebCrypto randomness, signs domain-separated bytes with nonextractable keys, and rejects changed bindings or unavailable cryptography without assigning organizational authority."
 
 [[id]]
 id = "DK-08"
@@ -745,6 +793,66 @@ level = "build"
 statement = "The private workspace View host dispatches only modeled effects and renders verified plain-text labels and admitted presentation; genuine browser journeys, native transcript replay and planted defects verify closure, durability, recovery and terminal failure."
 
 [[id]]
+id = "DK-17"
+suite = "sdk"
+level = "build"
+statement = "Explicit native libraries bind typed model exports and execute every modeled acceptance root in generated std and no_std packages without claiming application or deployment acceptance."
+
+[[id]]
+id = "DK-18"
+suite = "sdk"
+level = "build"
+statement = "The internal modeled effect protocol binds admitted guest and browser primitive requests to immutable resources and exact single-consumption completions, retaining uncertain and closed pending operations without claiming an executable application profile."
+
+[[id]]
+id = "DK-19"
+suite = "sdk"
+level = "build"
+statement = "The browser RS256 host primitive verifies exact bounded bytes with an imported RSA public key and rejects changed signatures, weak keys and unavailable cryptography without interpreting tokens or assigning authority."
+
+[[id]]
+id = "DK-20"
+suite = "sdk"
+level = "build"
+statement = "The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance."
+
+[[id]]
+id = "DK-21"
+suite = "sdk"
+level = "build"
+statement = "The source-owned browser application declaration closes resource requests, generated entry points, safe presentation and durable replay metadata while refusing build before runtime acceptance."
+
+[[id]]
+id = "DK-22"
+suite = "sdk"
+level = "build"
+statement = "The private browser compiler verifies the complete modeled source and axiom closure, binds each resource to its exact generated root and budget, and requires independent native and Wasm artifact replay without enabling public application builds."
+
+[[id]]
+id = "DK-23"
+suite = "sdk"
+level = "build"
+statement = "A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application."
+
+[[id]]
+id = "DK-24"
+suite = "sdk"
+level = "build"
+statement = "The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance."
+
+[[id]]
+id = "DK-25"
+suite = "sdk"
+level = "build"
+statement = "Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority."
+
+[[id]]
+id = "DK-27"
+suite = "sdk"
+level = "build"
+statement = "Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"
@@ -785,6 +893,18 @@ id = "OC-07"
 suite = "oci"
 level = "build"
 statement = "Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority."
+
+[[id]]
+id = "OC-08"
+suite = "oci"
+level = "build"
+statement = "Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance."
+
+[[id]]
+id = "OC-09"
+suite = "oci"
+level = "build"
+statement = "A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment."
 
 [[id]]
 id = "LC-01"

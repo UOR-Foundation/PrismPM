@@ -1,0 +1,1614 @@
+{
+  "schema": "prismpm/cbor-primitive-corpus/1",
+  "roots": [
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayCountLimit",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead23",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead24",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead255",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead256",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead4294967295",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead65535",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead65536",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected00",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected98",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9800",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected990018",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9901",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9a00000100",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9a01ff00",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9b0000000000000000",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejectedEmpty",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayWriteCountLimit",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorLimitPastBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorNativeMaximumLimit",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorNativeMaximumOffset",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorOffsetPastLimit",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorWindow",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorWindowTruncated",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix00At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1818At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1818At1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix190100At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix190100At1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix190100At2",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At2",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At3",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At4",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At2",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At3",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At4",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At2",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At3",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At4",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefixf4At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefixf5At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefixf6At0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeFinishEmptyWindow",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeFinishTrailing",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeHugeTruncated5affffffff00",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeHugeTruncated7affffffff00",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitBytesBeforeTruncation",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitInput",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeMaximumBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeMaximumText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumArrayItems",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumInput",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumOutput",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalU16",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalU32",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalU8",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeOversizeBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeOversizeText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcAscii",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcEmptyBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcEmptyText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedArrayIsNotPrimitive",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedBignum",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedFloat",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedIndefiniteBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedIndefiniteText",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedMap",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedNegative",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedSimple",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedTag",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedUint64",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedUint64Max",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedUndefined",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcFalse",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcIetf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcNull",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcQuoted",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcSupplementary",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcTrue",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUmlaut",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned1",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned10",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned100",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned1000",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned1000000",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned23",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned24",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned25",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcWater",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing00",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing1818",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing190100",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing1a00010000",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing4401020304",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing6449455446",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailingf4",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailingf5",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailingf6",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated18",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated19",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated1901",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated1a",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated1a0102",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated41",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated58",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated61",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated78",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncatedEmpty",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary255",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary256",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary4294967295",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary65535",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary65536",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1c",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1d",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1e",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5c",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5d",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5e",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7c",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7d",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7e",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8AfterSurrogate",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8AsciiMax",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8BeforeSurrogate",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8BmpMax",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8BomPreserved",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8DecomposedPreserved",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8FourMax",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8FourMin",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalid80",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidbf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc1bf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc2",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc27f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc2c0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invaliddf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalide08080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalide09fbf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalide0a0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalideda080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalideda18cedbeb4",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidedbfbf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidee80",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf0808080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf08fbfbf",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf09080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf4908080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf58f8080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf888808080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidfc8480808080",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidff",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Nul",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8ThreeMin",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8TwoMax",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8TwoMin",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitBytes",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitBytesHeader",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitNativeMaximumInteger",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitNull",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitTextHeader",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitTextUtf8",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitUnsignedWidth",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongType20",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongType9f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypea0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypec0",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypef8",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypef818",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypef81f",
+    "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypeff"
+  ],
+  "errors": [
+    "BadLimits",
+    "BadCursor",
+    "Truncated",
+    "WrongType",
+    "UnsupportedHead",
+    "NonCanonical",
+    "ValueLimit",
+    "InvalidUtf8",
+    "TrailingInput"
+  ],
+  "cases": [
+    {
+      "id": "ArrayCountLimit",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayCountLimit",
+      "kind": "array-limit"
+    },
+    {
+      "id": "ArrayHead0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead0",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "80",
+      "count": 0
+    },
+    {
+      "id": "ArrayHead1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead1",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "81",
+      "count": 1
+    },
+    {
+      "id": "ArrayHead23",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead23",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "97",
+      "count": 23
+    },
+    {
+      "id": "ArrayHead24",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead24",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9818",
+      "count": 24
+    },
+    {
+      "id": "ArrayHead255",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead255",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "98ff",
+      "count": 255
+    },
+    {
+      "id": "ArrayHead256",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead256",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "990100",
+      "count": 256
+    },
+    {
+      "id": "ArrayHead4294967295",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead4294967295",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9affffffff",
+      "count": 4294967295
+    },
+    {
+      "id": "ArrayHead65535",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead65535",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "99ffff",
+      "count": 65535
+    },
+    {
+      "id": "ArrayHead65536",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayHead65536",
+      "kind": "array-head-only",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9a00010000",
+      "count": 65536
+    },
+    {
+      "id": "ArrayRejected00",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected00",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "00",
+      "error": "WrongType"
+    },
+    {
+      "id": "ArrayRejected98",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected98",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "98",
+      "error": "Truncated"
+    },
+    {
+      "id": "ArrayRejected9800",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9800",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9800",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "ArrayRejected990018",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected990018",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "990018",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "ArrayRejected9901",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9901",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9901",
+      "error": "Truncated"
+    },
+    {
+      "id": "ArrayRejected9a00000100",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9a00000100",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9a00000100",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "ArrayRejected9a01ff00",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9a01ff00",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9a01ff00",
+      "error": "Truncated"
+    },
+    {
+      "id": "ArrayRejected9b0000000000000000",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9b0000000000000000",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9b0000000000000000",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "ArrayRejected9f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejected9f",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "9f",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "ArrayRejectedEmpty",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayRejectedEmpty",
+      "kind": "array-head-rejection",
+      "source": "RFC8949-3.1-4.2.1",
+      "hex": "",
+      "error": "Truncated"
+    },
+    {
+      "id": "ArrayWriteCountLimit",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeArrayWriteCountLimit",
+      "kind": "array-limit"
+    },
+    {
+      "id": "CursorLimitPastBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorLimitPastBytes",
+      "kind": "cursor-rejection"
+    },
+    {
+      "id": "CursorNativeMaximumLimit",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorNativeMaximumLimit",
+      "kind": "cursor-rejection"
+    },
+    {
+      "id": "CursorNativeMaximumOffset",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorNativeMaximumOffset",
+      "kind": "cursor-rejection"
+    },
+    {
+      "id": "CursorOffsetPastLimit",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorOffsetPastLimit",
+      "kind": "cursor-rejection"
+    },
+    {
+      "id": "CursorWindow",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorWindow",
+      "kind": "cursor"
+    },
+    {
+      "id": "CursorWindowTruncated",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeCursorWindowTruncated",
+      "kind": "cursor"
+    },
+    {
+      "id": "EveryPrefix00At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix00At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefix1818At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1818At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefix1818At1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1818At1",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "18"
+    },
+    {
+      "id": "EveryPrefix190100At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix190100At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefix190100At1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix190100At1",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "19"
+    },
+    {
+      "id": "EveryPrefix190100At2",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix190100At2",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "1901"
+    },
+    {
+      "id": "EveryPrefix1a00010000At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefix1a00010000At1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At1",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "1a"
+    },
+    {
+      "id": "EveryPrefix1a00010000At2",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At2",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "1a00"
+    },
+    {
+      "id": "EveryPrefix1a00010000At3",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At3",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "1a0001"
+    },
+    {
+      "id": "EveryPrefix1a00010000At4",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix1a00010000At4",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "1a000100"
+    },
+    {
+      "id": "EveryPrefix4401020304At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefix4401020304At1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At1",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "44"
+    },
+    {
+      "id": "EveryPrefix4401020304At2",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At2",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "4401"
+    },
+    {
+      "id": "EveryPrefix4401020304At3",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At3",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "440102"
+    },
+    {
+      "id": "EveryPrefix4401020304At4",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix4401020304At4",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "44010203"
+    },
+    {
+      "id": "EveryPrefix6449455446At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefix6449455446At1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At1",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "64"
+    },
+    {
+      "id": "EveryPrefix6449455446At2",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At2",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "6449"
+    },
+    {
+      "id": "EveryPrefix6449455446At3",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At3",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "644945"
+    },
+    {
+      "id": "EveryPrefix6449455446At4",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefix6449455446At4",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": "64494554"
+    },
+    {
+      "id": "EveryPrefixf4At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefixf4At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefixf5At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefixf5At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "EveryPrefixf6At0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeEveryPrefixf6At0",
+      "kind": "prefix-rejection",
+      "source": "RFC8949-F",
+      "hex": ""
+    },
+    {
+      "id": "FinishEmptyWindow",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeFinishEmptyWindow",
+      "kind": "finish"
+    },
+    {
+      "id": "FinishTrailing",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeFinishTrailing",
+      "kind": "finish"
+    },
+    {
+      "id": "HugeTruncated5affffffff00",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeHugeTruncated5affffffff00",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "5affffffff00",
+      "error": "Truncated"
+    },
+    {
+      "id": "HugeTruncated7affffffff00",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeHugeTruncated7affffffff00",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "7affffffff00",
+      "error": "Truncated"
+    },
+    {
+      "id": "LimitBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitBytes",
+      "kind": "rejected-primitive",
+      "source": "profile-boundary",
+      "hex": "4100",
+      "error": "ValueLimit"
+    },
+    {
+      "id": "LimitBytesBeforeTruncation",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitBytesBeforeTruncation",
+      "kind": "rejected-primitive",
+      "source": "profile-boundary",
+      "hex": "5affffffff00",
+      "error": "ValueLimit"
+    },
+    {
+      "id": "LimitInput",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitInput",
+      "kind": "rejected-primitive",
+      "source": "profile-boundary",
+      "hex": "00",
+      "error": "BadCursor"
+    },
+    {
+      "id": "LimitText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeLimitText",
+      "kind": "rejected-primitive",
+      "source": "profile-boundary",
+      "hex": "6161",
+      "error": "ValueLimit"
+    },
+    {
+      "id": "MaximumBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeMaximumBytes",
+      "kind": "maximum-payload",
+      "bytes": 4202612,
+      "source": "measured-invocation-boundary"
+    },
+    {
+      "id": "MaximumText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeMaximumText",
+      "kind": "maximum-payload",
+      "bytes": 4202612,
+      "source": "measured-invocation-boundary"
+    },
+    {
+      "id": "NativeMaximumLimitmaximumArrayItems",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumArrayItems",
+      "kind": "limit-rejection"
+    },
+    {
+      "id": "NativeMaximumLimitmaximumBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumBytes",
+      "kind": "limit-rejection"
+    },
+    {
+      "id": "NativeMaximumLimitmaximumInput",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumInput",
+      "kind": "limit-rejection"
+    },
+    {
+      "id": "NativeMaximumLimitmaximumOutput",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumOutput",
+      "kind": "limit-rejection"
+    },
+    {
+      "id": "NativeMaximumLimitmaximumText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNativeMaximumLimitmaximumText",
+      "kind": "limit-rejection"
+    },
+    {
+      "id": "NonminimalBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalBytes",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "5800",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "NonminimalText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalText",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "790000",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "NonminimalU16",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalU16",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "190018",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "NonminimalU32",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalU32",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "1a00000100",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "NonminimalU8",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeNonminimalU8",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "1800",
+      "error": "NonCanonical"
+    },
+    {
+      "id": "OversizeBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeOversizeBytes",
+      "kind": "maximum-plus-one",
+      "bytes": 4202613,
+      "source": "measured-invocation-boundary"
+    },
+    {
+      "id": "OversizeText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeOversizeText",
+      "kind": "maximum-plus-one",
+      "bytes": 4202613,
+      "source": "measured-invocation-boundary"
+    },
+    {
+      "id": "RfcAscii",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcAscii",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "6161"
+    },
+    {
+      "id": "RfcBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcBytes",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "4401020304"
+    },
+    {
+      "id": "RfcEmptyBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcEmptyBytes",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "40"
+    },
+    {
+      "id": "RfcEmptyText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcEmptyText",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "60"
+    },
+    {
+      "id": "RfcExcludedArrayIsNotPrimitive",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedArrayIsNotPrimitive",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "80",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedBignum",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedBignum",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "c249010000000000000000",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedFloat",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedFloat",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "f93e00",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedIndefiniteBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedIndefiniteBytes",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "5f42010243030405ff",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "RfcExcludedIndefiniteText",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedIndefiniteText",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "7f657374726561646d696e67ff",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "RfcExcludedMap",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedMap",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "a0",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedNegative",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedNegative",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "20",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedSimple",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedSimple",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "f0",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedTag",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedTag",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "c11a514b67b0",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcExcludedUint64",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedUint64",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "1b000000e8d4a51000",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "RfcExcludedUint64Max",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedUint64Max",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "1bffffffffffffffff",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "RfcExcludedUndefined",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcExcludedUndefined",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-A-profile-exclusion",
+      "hex": "f7",
+      "error": "WrongType"
+    },
+    {
+      "id": "RfcFalse",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcFalse",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "f4"
+    },
+    {
+      "id": "RfcIetf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcIetf",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "6449455446"
+    },
+    {
+      "id": "RfcNull",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcNull",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "f6"
+    },
+    {
+      "id": "RfcQuoted",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcQuoted",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "62225c"
+    },
+    {
+      "id": "RfcSupplementary",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcSupplementary",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "64f0908591"
+    },
+    {
+      "id": "RfcTrue",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcTrue",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "f5"
+    },
+    {
+      "id": "RfcUmlaut",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUmlaut",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "62c3bc"
+    },
+    {
+      "id": "RfcUnsigned0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned0",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "00"
+    },
+    {
+      "id": "RfcUnsigned1",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned1",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "01"
+    },
+    {
+      "id": "RfcUnsigned10",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned10",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "0a"
+    },
+    {
+      "id": "RfcUnsigned100",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned100",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "1864"
+    },
+    {
+      "id": "RfcUnsigned1000",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned1000",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "1903e8"
+    },
+    {
+      "id": "RfcUnsigned1000000",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned1000000",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "1a000f4240"
+    },
+    {
+      "id": "RfcUnsigned23",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned23",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "17"
+    },
+    {
+      "id": "RfcUnsigned24",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned24",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "1818"
+    },
+    {
+      "id": "RfcUnsigned25",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcUnsigned25",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "1819"
+    },
+    {
+      "id": "RfcWater",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeRfcWater",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-A",
+      "hex": "63e6b0b4"
+    },
+    {
+      "id": "Trailing00",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing00",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "0000"
+    },
+    {
+      "id": "Trailing1818",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing1818",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "181800"
+    },
+    {
+      "id": "Trailing190100",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing190100",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "19010000"
+    },
+    {
+      "id": "Trailing1a00010000",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing1a00010000",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "1a0001000000"
+    },
+    {
+      "id": "Trailing4401020304",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing4401020304",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "440102030400"
+    },
+    {
+      "id": "Trailing6449455446",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailing6449455446",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "644945544600"
+    },
+    {
+      "id": "Trailingf4",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailingf4",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "f400"
+    },
+    {
+      "id": "Trailingf5",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailingf5",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "f500"
+    },
+    {
+      "id": "Trailingf6",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTrailingf6",
+      "kind": "whole-primitive-trailing",
+      "source": "RFC8949-F",
+      "hex": "f600"
+    },
+    {
+      "id": "Truncated18",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated18",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "18",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated19",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated19",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "19",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated1901",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated1901",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "1901",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated1a",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated1a",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "1a",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated1a0102",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated1a0102",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "1a0102",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated41",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated41",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "41",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated58",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated58",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "58",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated61",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated61",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "61",
+      "error": "Truncated"
+    },
+    {
+      "id": "Truncated78",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncated78",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "78",
+      "error": "Truncated"
+    },
+    {
+      "id": "TruncatedEmpty",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeTruncatedEmpty",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-F.1",
+      "hex": "",
+      "error": "Truncated"
+    },
+    {
+      "id": "UnsignedBoundary255",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary255",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "18ff"
+    },
+    {
+      "id": "UnsignedBoundary256",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary256",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "190100"
+    },
+    {
+      "id": "UnsignedBoundary4294967295",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary4294967295",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "1affffffff"
+    },
+    {
+      "id": "UnsignedBoundary65535",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary65535",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "19ffff"
+    },
+    {
+      "id": "UnsignedBoundary65536",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsignedBoundary65536",
+      "kind": "accepted-primitive",
+      "source": "RFC8949-4.2.1",
+      "hex": "1a00010000"
+    },
+    {
+      "id": "UnsupportedHead1c",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1c",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "1c",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead1d",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1d",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "1d",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead1e",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1e",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "1e",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead1f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead1f",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "1f",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead5c",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5c",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "5c",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead5d",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5d",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "5d",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead5e",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5e",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "5e",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead5f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead5f",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "5f",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead7c",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7c",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "7c",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead7d",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7d",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "7d",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead7e",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7e",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "7e",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "UnsupportedHead7f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUnsupportedHead7f",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "7f",
+      "error": "UnsupportedHead"
+    },
+    {
+      "id": "Utf8AfterSurrogate",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8AfterSurrogate",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63ee8080"
+    },
+    {
+      "id": "Utf8AsciiMax",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8AsciiMax",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "617f"
+    },
+    {
+      "id": "Utf8BeforeSurrogate",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8BeforeSurrogate",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63ed9fbf"
+    },
+    {
+      "id": "Utf8BmpMax",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8BmpMax",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63efbfbf"
+    },
+    {
+      "id": "Utf8BomPreserved",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8BomPreserved",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63efbbbf"
+    },
+    {
+      "id": "Utf8DecomposedPreserved",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8DecomposedPreserved",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "6365cc81"
+    },
+    {
+      "id": "Utf8FourMax",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8FourMax",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "64f48fbfbf"
+    },
+    {
+      "id": "Utf8FourMin",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8FourMin",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "64f0908080"
+    },
+    {
+      "id": "Utf8Invalid80",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalid80",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "6180",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidbf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidbf",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "61bf",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidc0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc0",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "61c0",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidc080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62c080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidc1bf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc1bf",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62c1bf",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidc2",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc2",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "61c2",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidc27f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc27f",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62c27f",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidc2c0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidc2c0",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62c2c0",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invaliddf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invaliddf",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "61df",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalide08080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalide08080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63e08080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalide09fbf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalide09fbf",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63e09fbf",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalide0a0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalide0a0",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62e0a0",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalideda080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalideda080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63eda080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalideda18cedbeb4",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalideda18cedbeb4",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "66eda18cedbeb4",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidedbfbf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidedbfbf",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63edbfbf",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidee80",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidee80",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62ee80",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidf0808080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf0808080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "64f0808080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidf08fbfbf",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf08fbfbf",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "64f08fbfbf",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidf09080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf09080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63f09080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidf4908080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf4908080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "64f4908080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidf58f8080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf58f8080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "64f58f8080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidf888808080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidf888808080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "65f888808080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidfc8480808080",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidfc8480808080",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "66fc8480808080",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Invalidff",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Invalidff",
+      "kind": "rejected-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "61ff",
+      "error": "InvalidUtf8"
+    },
+    {
+      "id": "Utf8Nul",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8Nul",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "6100"
+    },
+    {
+      "id": "Utf8ThreeMin",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8ThreeMin",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "63e0a080"
+    },
+    {
+      "id": "Utf8TwoMax",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8TwoMax",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62dfbf"
+    },
+    {
+      "id": "Utf8TwoMin",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeUtf8TwoMin",
+      "kind": "accepted-primitive",
+      "source": "RFC3629-3-4",
+      "hex": "62c280"
+    },
+    {
+      "id": "WriteLimitBytes",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitBytes",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WriteLimitBytesHeader",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitBytesHeader",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WriteLimitNativeMaximumInteger",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitNativeMaximumInteger",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WriteLimitNull",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitNull",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WriteLimitTextHeader",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitTextHeader",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WriteLimitTextUtf8",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitTextUtf8",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WriteLimitUnsignedWidth",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWriteLimitUnsignedWidth",
+      "kind": "encode-limit"
+    },
+    {
+      "id": "WrongType20",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongType20",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "20",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongType9f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongType9f",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "9f",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongTypea0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypea0",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "a0",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongTypec0",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypec0",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "c0",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongTypef8",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypef8",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "f8",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongTypef818",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypef818",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "f818",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongTypef81f",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypef81f",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "f81f",
+      "error": "WrongType"
+    },
+    {
+      "id": "WrongTypeff",
+      "root": "LibraryProbe.Foundation.Codec.Cbor.V1.PrimitiveCorpus.probeWrongTypeff",
+      "kind": "rejected-primitive",
+      "source": "RFC8949-3",
+      "hex": "ff",
+      "error": "WrongType"
+    }
+  ]
+}

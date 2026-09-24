@@ -98,6 +98,61 @@ rust_name = "riskEdition"
 rust_signature = "fn(StandardsProfile) -> u64"
 
 [[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserAppManifest"
+rust_name = "browserAppManifest"
+rust_signature = "fn(Vec<u8>, Vec<u8>, Vec<u8>) -> Option<Vec<u8>>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserArchiveBody"
+rust_name = "browserArchiveBody"
+rust_signature = "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserArchiveBodyBytes"
+rust_name = "browserArchiveBodyBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserArchiveExtension"
+rust_name = "browserArchiveExtension"
+rust_signature = "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserArchiveFooter"
+rust_name = "browserArchiveFooter"
+rust_signature = "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserArchiveSection"
+rust_name = "browserArchiveSection"
+rust_signature = "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserFrameArchive"
+rust_name = "browserFrameArchive"
+rust_signature = "fn(Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserManifestReference"
+rust_name = "browserManifestReference"
+rust_signature = "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserValidAppManifest"
+rust_name = "browserValidAppManifest"
+rust_signature = "fn(&[u8]) -> bool"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserValidArchiveBody"
+rust_name = "browserValidArchiveBody"
+rust_signature = "fn(&[u8]) -> Result<bool, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Holo.V1.BrowserWire.browserValidArchiveFrame"
+rust_name = "browserValidArchiveFrame"
+rust_signature = "fn(&[u8]) -> Result<bool, ComputeError>"
+
+[[export]]
 lean_name = "PrismPM.Foundation.Holo.V1.CoreWasm.contractName"
 rust_name = "contractName"
 rust_signature = "fn() -> String"

@@ -12,7 +12,8 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
-mod browser_export;
+pub(crate) mod browser_export;
+mod browser_publication;
 mod verification_closure;
 
 /// OCI image-manifest media type adopted by Prism release graphs.
@@ -1800,6 +1801,20 @@ pub fn export_browser(root: &Path, reference: &str, output: &Path) -> Result<Val
     browser_export::export(root, reference, output)
 }
 
+/// Compare a reverified local release's browser bytes at an explicit HTTPS base.
+/// This verifies byte integrity, not target authorization or product acceptance.
+pub fn verify_browser_publication(
+    root: &Path,
+    reference: &str,
+    url: &str,
+) -> Result<Value, PrismError> {
+    browser_publication::verify(root, reference, url)
+}
+
+pub(crate) fn validate_browser_publication_receipt(value: &Value) -> Result<(), PrismError> {
+    browser_publication::validate_receipt(value)
+}
+
 #[cfg(test)]
 pub(crate) fn browser_export_fixture(
     project: &Path,
@@ -2827,17 +2842,22 @@ mod tests {
         let lock = fixture_sdk_lock(&standards_lock, &sdk_image);
         std::fs::write(project.path().join("prismpm.lock"), lock.bytes()).unwrap();
         let projection_root = project.path().join(".prism/build").join(build_id);
-        for (path, bytes) in build_files
-            .iter()
-            .filter(|(path, _)| path.starts_with("projections/"))
-        {
+        for (path, bytes) in build_files.iter().filter(|(path, _)| {
+            path.starts_with("projections/") || path.as_str() == "system.prism.json"
+        }) {
             let destination = projection_root.join(path);
             std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
             std::fs::write(destination, bytes).unwrap();
         }
         let results = crate::deployment::validate_build(project.path(), build_id)
             .expect("all actual system projection oracles must pass without omissions");
-        assert_eq!(results.len(), 7);
+        let system = crate::system::parse(&build_files["system.prism.json"]).unwrap();
+        assert_eq!(
+            results.len(),
+            crate::deployment::required_oracles(system.value())
+                .unwrap()
+                .len()
+        );
         let mut attestations = BTreeMap::new();
         for result in &results {
             assert_eq!(result["valid"], true);
@@ -2868,6 +2888,13 @@ mod tests {
                 .insert(format!("{oracle}.intoto.json"), bytes)
                 .is_none());
         }
+        super::verification_closure::assert_oracle_mutations_rejected(
+            &json!(results),
+            &attestations,
+            build_files,
+            &serde_json::from_slice(&standards_lock).unwrap(),
+            lock.value(),
+        );
         ProjectionOracleEvidence {
             standards_lock,
             sdk_image,

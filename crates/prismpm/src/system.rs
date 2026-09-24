@@ -8,6 +8,8 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(crate) mod browser;
+
 const INGRESS_NGINX_KIND: &[u8] = include_bytes!("../adapters/ingress-nginx-kind-v1.15.1.yaml");
 
 // Production.SystemValidation.modelEntityCount counts the product plus these
@@ -86,15 +88,18 @@ fn system_root<'a>(
                     .pointer("/result/member/name")
                     .and_then(Value::as_str)
                     != Some("SystemModel")
-                || linked
-                    .pointer("/result/member/module")
-                    .and_then(Value::as_str)
-                    != Some("Production.System")
+                || !matches!(
+                    linked
+                        .pointer("/result/member/module")
+                        .and_then(Value::as_str),
+                    Some("Production.System" | "Production.BrowserSystem")
+                )
                 || linked.pointer("/body/kind").and_then(Value::as_str) != Some("record")
+                || linked.pointer("/body/type/module") != linked.pointer("/result/member/module")
             {
                 return Err(PrismError::new(
                     "PP2101",
-                    "systemModel must be a typed Production.System.SystemModel record",
+                    "systemModel must be a typed supported SystemModel record",
                 ));
             }
             if found.insert(name, &linked["body"]).is_some() {
@@ -261,10 +266,12 @@ fn evaluate_model_term(term: &Value) -> Result<Value, PrismError> {
 fn system_manifest(
     snapshot: &SemanticSnapshot,
     release: Option<&str>,
-    expected_model: Option<&str>,
+    expected_model: Option<(&str, &str)>,
 ) -> Result<Option<Value>, PrismError> {
     let mut found = BTreeMap::new();
     let mut release_ready = BTreeMap::new();
+    let mut owners = BTreeMap::new();
+    let mut validators = BTreeMap::new();
     for module in snapshot.modules() {
         for declaration in module.declarations() {
             if declaration.kind() == "theorem"
@@ -294,10 +301,12 @@ fn system_manifest(
                         .pointer("/statement/left/function/name")
                         .and_then(Value::as_str)
                         != Some("validateManifest")
-                    || linked
-                        .pointer("/statement/left/function/module")
-                        .and_then(Value::as_str)
-                        != Some("Production.SystemValidation")
+                    || !matches!(
+                        linked
+                            .pointer("/statement/left/function/module")
+                            .and_then(Value::as_str),
+                        Some("Production.SystemValidation" | "Production.BrowserSystem")
+                    )
                     || linked
                         .pointer("/statement/left/arguments")
                         .and_then(Value::as_array)
@@ -328,6 +337,13 @@ fn system_manifest(
                         "system release-ready theorem does not decide the generated manifest validator",
                     ));
                 }
+                validators.insert(
+                    manifest_name.to_owned(),
+                    linked
+                        .pointer("/statement/left/function/module")
+                        .and_then(Value::as_str)
+                        .unwrap(),
+                );
                 if release_ready
                     .insert(manifest_name.to_owned(), model_name.to_owned())
                     .is_some()
@@ -356,12 +372,18 @@ fn system_manifest(
             let owner = linked
                 .pointer("/result/member/module")
                 .and_then(Value::as_str);
-            if member != Some("SystemManifest") || owner != Some("Production.System") {
+            if member != Some("SystemManifest")
+                || !matches!(
+                    owner,
+                    Some("Production.System" | "Production.BrowserSystem")
+                )
+            {
                 return Err(PrismError::new(
                     "PP2101",
                     "systemManifest has the wrong generated type",
                 ));
             }
+            owners.insert(name, owner.unwrap());
             let manifest = evaluate_model_term(&linked["body"])?;
             const RELATIONS: [&str; 12] = [
                 "capability_satisfaction",
@@ -377,13 +399,26 @@ fn system_manifest(
                 "secret_flow",
                 "uniqueness",
             ];
+            let relations: &[&str] = if owner == Some(browser::MODULE) {
+                &[
+                    "application_model_digest",
+                    "artifact_id",
+                    "component_id",
+                    "controls",
+                    "product_id",
+                    "product_version",
+                    "target_id",
+                ]
+            } else {
+                &RELATIONS
+            };
             if manifest.as_object().is_none_or(|value| {
-                value.len() != RELATIONS.len()
-                    || RELATIONS.iter().any(|name| !value.contains_key(*name))
+                value.len() != relations.len()
+                    || relations.iter().any(|name| !value.contains_key(*name))
             }) {
                 return Err(PrismError::new(
                     "PP2101",
-                    "systemManifest must contain exactly the twelve validation relations",
+                    "systemManifest must contain exactly its profile's validation bindings",
                 ));
             }
             if found.insert(name, manifest).is_some() {
@@ -407,6 +442,19 @@ fn system_manifest(
             "each named system manifest requires exactly one release-ready theorem",
         ));
     }
+    for (name, owner) in &owners {
+        let validator = if *owner == browser::MODULE {
+            browser::MODULE
+        } else {
+            "Production.SystemValidation"
+        };
+        if validators.get(*name).copied() != Some(validator) {
+            return Err(PrismError::new(
+                "PP2101",
+                "system manifest validator type differs",
+            ));
+        }
+    }
     let selected = if let Some(release) = release {
         found.get(format!("systemManifest{release}").as_str())
     } else if let Some(value) = found.get("systemManifest") {
@@ -419,7 +467,7 @@ fn system_manifest(
         None
     }
     .ok_or_else(|| PrismError::new("PP2101", "named system manifest selection is ambiguous"))?;
-    if let Some(expected_model) = expected_model {
+    if let Some((expected_model, expected_owner)) = expected_model {
         let manifest_name = if let Some(release) = release {
             format!("systemManifest{release}")
         } else if found.contains_key("systemManifest") {
@@ -433,7 +481,9 @@ fn system_manifest(
                 .expect("selected manifest exists")
                 .to_string()
         };
-        if release_ready.get(&manifest_name).map(String::as_str) != Some(expected_model) {
+        if release_ready.get(&manifest_name).map(String::as_str) != Some(expected_model)
+            || owners.get(manifest_name.as_str()).copied() != Some(expected_owner)
+        {
             return Err(PrismError::new(
                 "PP2101",
                 "system release-ready theorem does not bind the selected model and manifest roots",
@@ -1373,17 +1423,49 @@ pub fn project(
         }
         return Ok(None);
     };
+    let owner = root
+        .pointer("/type/module")
+        .and_then(Value::as_str)
+        .expect("typed root");
+    let schema = if owner == browser::MODULE {
+        browser::SCHEMA
+    } else {
+        "prismpm/system-model/1"
+    };
     let mut value = evaluate_model_term(root)?;
-    value["schema"] = Value::String("prismpm/system-model/1".to_owned());
-    let document = CanonicalDocument::from_value("prismpm/system-model/1", value)?;
-    let manifest = system_manifest(snapshot, release, Some(root_name))?.ok_or_else(|| {
-        PrismError::new(
-            "PP2101",
-            "systemModel requires a generated, proved systemManifest",
-        )
-    })?;
-    validate(document.value(), &manifest)?;
+    value["schema"] = Value::String(schema.to_owned());
+    let document = CanonicalDocument::from_value(schema, value)?;
+    let manifest =
+        system_manifest(snapshot, release, Some((root_name, owner)))?.ok_or_else(|| {
+            PrismError::new(
+                "PP2101",
+                "systemModel requires a generated, proved systemManifest",
+            )
+        })?;
+    if schema == browser::SCHEMA {
+        browser::validate(document.value(), &manifest)?;
+    } else {
+        validate(document.value(), &manifest)?;
+    }
     Ok(Some(document))
+}
+
+/// Parse only explicitly supported system contracts; never infer a profile.
+pub(crate) fn parse(bytes: &[u8]) -> Result<CanonicalDocument, PrismError> {
+    if bytes.len() > 16_777_216 {
+        return Err(PrismError::new(
+            "PP1101",
+            "system document exceeds the byte limit",
+        ));
+    }
+    let value: Value = serde_json::from_slice(bytes)
+        .map_err(|error| PrismError::new("PP2101", format!("system document: {error}")))?;
+    let schema = match value["schema"].as_str() {
+        Some("prismpm/system-model/1") => "prismpm/system-model/1",
+        Some(browser::SCHEMA) => browser::SCHEMA,
+        _ => return Err(PrismError::new("PP2101", "unsupported system profile")),
+    };
+    CanonicalDocument::parse(schema, bytes)
 }
 
 /// Project every named release root in the closed source graph.
@@ -2761,6 +2843,9 @@ pub fn projections(
     system: &CanonicalDocument,
     artifacts: &[(String, Vec<u8>)],
 ) -> Result<Vec<Projection>, PrismError> {
+    if system.schema() == browser::SCHEMA {
+        return browser::projections(system, artifacts);
+    }
     let value = system.value();
     let coverage = capability_coverage(&system.digest())?;
     let documents = [

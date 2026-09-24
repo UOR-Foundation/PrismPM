@@ -35,7 +35,32 @@ fn compiler_slot() -> CompilerSlot {
 pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
     matches!(
         id,
-        "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15" | "DK-16" | "DK-17" | "OC-07"
+        "DK-10"
+            | "DK-11"
+            | "DK-12"
+            | "DK-13"
+            | "DK-14"
+            | "DK-15"
+            | "DK-16"
+            | "DK-17"
+            | "DK-18"
+            | "DK-20"
+            | "DK-22"
+            | "DK-23"
+            | "DK-24"
+            | "DK-25"
+            | "DK-27"
+            | "HO-13"
+            | "OC-07"
+            | "OC-08"
+            | "OC-09"
+            | "ST-11"
+            | "ST-12"
+            | "ST-13"
+            | "ST-14"
+            | "ST-15"
+            | "ST-16"
+            | "SY-08"
     )
     .then(compiler_slot)
 }
@@ -59,9 +84,27 @@ mod tests {
 
     #[test]
     fn every_waiting_compiler_owner_runs_once_without_overlap_or_skip() {
-        let owners = (10..=17)
+        let owners = (10..=18)
             .map(|id| format!("DK-{id}"))
-            .chain(["OC-07".to_owned()])
+            .chain([
+                "DK-20".to_owned(),
+                "DK-22".to_owned(),
+                "DK-23".to_owned(),
+                "DK-24".to_owned(),
+                "DK-25".to_owned(),
+                "DK-27".to_owned(),
+                "HO-13".to_owned(),
+                "OC-07".to_owned(),
+                "OC-08".to_owned(),
+                "OC-09".to_owned(),
+                "ST-11".to_owned(),
+                "ST-12".to_owned(),
+                "ST-13".to_owned(),
+                "ST-14".to_owned(),
+                "ST-15".to_owned(),
+                "ST-16".to_owned(),
+                "SY-08".to_owned(),
+            ])
             .collect::<Vec<_>>();
         let barrier = Arc::new(Barrier::new(owners.len() + 1));
         let active = AtomicUsize::new(0);
@@ -84,7 +127,9 @@ mod tests {
         actual.sort();
         assert_eq!(actual, owners);
         assert_eq!(active.load(Ordering::SeqCst), 0);
-        for id in ["DK-07", "DK-08", "DK-09", "DK-18", "RP-01", "VR-01"] {
+        for id in [
+            "DK-07", "DK-08", "DK-09", "DK-19", "RP-01", "ST-10", "VR-01",
+        ] {
             assert!(
                 for_owner(id).is_none(),
                 "lightweight dispatch is unchanged: {id}"

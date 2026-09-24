@@ -6,6 +6,8 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+pub mod platform;
+
 /// The explicit comparison recipe; it never authorizes a release.
 pub const PROFILE: &str = "prismpm/golden-comparison/1";
 /// The complete, sorted set of original reviewed files.
@@ -451,6 +453,158 @@ pub fn current_caller(files: &[(String, Vec<u8>)], executable: &[u8]) -> Result<
     )
 }
 
+const NATIVE_RECORDS: [&str; 3] = [
+    "golden-manifest.json",
+    "verified/lexlean-attestation.json",
+    "verified/manifest.json",
+];
+
+/// Extract complete, unmodified native records after validating shared semantics.
+/// This does not normalize evidence or accept a newly generated baseline.
+pub fn native_records(
+    base: &GoldenFiles,
+    actual: &GoldenFiles,
+    platform: platform::Platform,
+) -> Result<GoldenFiles, String> {
+    let (base_golden, base_lex, base_manifest) = validate(base)?;
+    let (golden, lex, manifest) = validate(actual)?;
+    ensure(
+        lex["host"] == json!({"arch":platform.architecture(),"os":"linux"}),
+        "golden raw host differs from selected process platform",
+    )?;
+    let shared = |files: &GoldenFiles| {
+        files
+            .iter()
+            .filter(|(path, _)| !NATIVE_RECORDS.contains(&path.as_str()))
+            .cloned()
+            .collect::<GoldenFiles>()
+    };
+    ensure(
+        shared(base) == shared(actual),
+        "native golden changes platform-independent file bytes",
+    )?;
+    for key in [
+        "build_id",
+        "comparison_profile",
+        "compiler_semantics_id",
+        "generated_lean",
+        "schema",
+        "sources",
+    ] {
+        ensure(
+            base_golden[key] == golden[key],
+            "native golden changes shared model identity",
+        )?;
+    }
+    for key in [
+        "build_id",
+        "build_manifest",
+        "declarations",
+        "lake_workspace",
+        "semantic_id",
+        "source_id",
+        "spec",
+        "status",
+    ] {
+        ensure(
+            base_lex[key] == lex[key],
+            "native golden changes source or declaration audit",
+        )?;
+    }
+    for key in ["compiler_semantics", "version"] {
+        ensure(
+            base_lex["lexlean"][key] == lex["lexlean"][key],
+            "native golden changes compiler identity",
+        )?;
+    }
+    for key in [
+        "build_id",
+        "execution",
+        "export_roots",
+        "package_export_roots",
+        "runtime_roots",
+        "schema",
+    ] {
+        ensure(
+            base_manifest[key] == manifest[key],
+            "native golden changes execution or roots",
+        )?;
+    }
+    for (key, descriptor) in base_manifest["artifacts"]
+        .as_object()
+        .ok_or("golden artifacts absent")?
+    {
+        if !matches!(key.as_str(), "executable" | "lexlean_attestation") {
+            ensure(
+                descriptor == &manifest["artifacts"][key],
+                "native golden changes portable artifact descriptor",
+            )?;
+        }
+    }
+    // Recorded tool bytes/output may be platform-specific. Their invocation,
+    // order and successful outcome remain exactly the same; a future run still
+    // compares EVERY raw byte against its reviewed platform's records.
+    for (base, actual) in [(&base_lex, &lex), (&base_manifest, &manifest)] {
+        let before = array(&base["processes"])?;
+        let after = array(&actual["processes"])?;
+        ensure(
+            before.len() == after.len(),
+            "native golden changes process closure",
+        )?;
+        for (before, after) in before.iter().zip(after) {
+            for key in ["argv", "exit_code", "module", "tool"] {
+                ensure(
+                    before[key] == after[key],
+                    "native golden changes process invocation",
+                )?;
+            }
+        }
+    }
+    Ok(actual
+        .iter()
+        .filter(|(path, _)| NATIVE_RECORDS.contains(&path.as_str()))
+        .cloned()
+        .collect())
+}
+
+/// Compose only the three closed native-record replacements with shared bytes.
+pub fn compose_native_records(
+    base: &GoldenFiles,
+    records: &GoldenFiles,
+    platform: platform::Platform,
+) -> Result<GoldenFiles, String> {
+    ensure(
+        records
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .eq(NATIVE_RECORDS),
+        "native golden record set is not exact",
+    )?;
+    let mut result = base
+        .iter()
+        .filter(|(path, _)| !NATIVE_RECORDS.contains(&path.as_str()))
+        .cloned()
+        .collect::<GoldenFiles>();
+    result.extend(records.iter().cloned());
+    result.sort_by(|left, right| left.0.cmp(&right.0));
+    ensure(
+        native_records(base, &result, platform)? == *records,
+        "native golden records changed during composition",
+    )?;
+    Ok(result)
+}
+
+/// Read the selected reviewed records; never fall back to another platform.
+pub fn read_platform(root: &Path, platform: platform::Platform) -> Result<GoldenFiles, String> {
+    let base = read(&root.join(platform::Platform::DevelopmentAmd64.directory()))?;
+    if platform == platform::Platform::DevelopmentAmd64 {
+        native_records(&base, &base, platform)?;
+        return Ok(base);
+    }
+    let records = read(&root.join(platform.directory()))?;
+    compose_native_records(&base, &records, platform)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,6 +689,113 @@ mod tests {
             row["source_sha256"] = json!(content_id(bytes));
         }
         replace(files, "golden-manifest.json", &golden, false);
+    }
+
+    #[test]
+    fn native_records_preserve_exact_bytes_and_reject_semantic_or_closure_changes() {
+        let original = fixture();
+        let selected = platform::Platform::SdkAmd64;
+        let records = native_records(&original, &original, selected).unwrap();
+        assert_eq!(records.len(), 3);
+        assert_eq!(
+            compose_native_records(&original, &records, selected).unwrap(),
+            original
+        );
+        for index in 0..records.len() {
+            let mut missing = records.clone();
+            missing.remove(index);
+            assert!(compose_native_records(&original, &missing, selected).is_err());
+        }
+        let mut duplicate = records.clone();
+        duplicate.push(records[0].clone());
+        assert!(compose_native_records(&original, &duplicate, selected).is_err());
+        assert!(native_records(&original, &original, platform::Platform::SdkArm64).is_err());
+        let mut changed = original.clone();
+        let mut lex = value(&changed, "verified/lexlean-attestation.json");
+        lex["declarations"][0]["policy"]["axioms"] = json!(["sorryAx"]);
+        replace(
+            &mut changed,
+            "verified/lexlean-attestation.json",
+            &lex,
+            true,
+        );
+        rebind(&mut changed);
+        validate(&changed).unwrap();
+        assert!(native_records(&original, &changed, selected)
+            .unwrap_err()
+            .contains("declaration audit"));
+        for pointer in [
+            "/artifacts/kernel_ir/sha256",
+            "/artifacts/generated_rust/sha256",
+        ] {
+            let mut changed = original.clone();
+            let mut manifest = value(&changed, "verified/manifest.json");
+            *manifest.pointer_mut(pointer).unwrap() = json!("a".repeat(64));
+            replace(&mut changed, "verified/manifest.json", &manifest, false);
+            rebind(&mut changed);
+            validate(&changed).unwrap();
+            assert!(native_records(&original, &changed, selected)
+                .unwrap_err()
+                .contains("portable artifact"));
+        }
+        let mut changed = original.clone();
+        changed
+            .iter_mut()
+            .find(|(path, _)| path.starts_with("source/"))
+            .unwrap()
+            .1
+            .push(b' ');
+        rebind(&mut changed);
+        validate(&changed).unwrap();
+        assert!(native_records(&original, &changed, selected)
+            .unwrap_err()
+            .contains("platform-independent"));
+    }
+
+    #[test]
+    fn native_record_review_does_not_relax_later_raw_evidence_comparison() {
+        let original = fixture();
+        let selected = platform::Platform::SdkAmd64;
+        let mut changed = original.clone();
+        let mut manifest = value(&changed, "verified/manifest.json");
+        manifest["processes"][0]["executable_sha256"] = json!("a".repeat(64));
+        replace(&mut changed, "verified/manifest.json", &manifest, false);
+        rebind(&mut changed);
+        let records = native_records(&original, &changed, selected).unwrap();
+        assert_eq!(
+            compose_native_records(&original, &records, selected).unwrap(),
+            changed
+        );
+        assert!(
+            compare(&original, &changed).is_err(),
+            "platform composition cannot normalize raw tool bytes"
+        );
+        assert!(compare(&changed, &original).is_err());
+        assert_eq!(fixture(), original);
+    }
+
+    #[test]
+    fn missing_native_records_never_fall_back_to_development_records() {
+        let work = tempfile::tempdir().unwrap();
+        let base = fixture();
+        for (path, bytes) in &base {
+            let path = work
+                .path()
+                .join(platform::Platform::DevelopmentAmd64.directory())
+                .join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        assert_eq!(
+            read_platform(work.path(), platform::Platform::DevelopmentAmd64).unwrap(),
+            base
+        );
+        for platform in [platform::Platform::SdkAmd64, platform::Platform::SdkArm64] {
+            assert!(
+                read_platform(work.path(), platform).is_err(),
+                "missing {platform:?} records accepted"
+            );
+        }
     }
 
     #[test]
