@@ -4,8 +4,8 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
-import {run, sha} from '../browser-view/compile.mjs';
-export {run, sha};
+import {ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const modules = ['Fixture', 'Foundation.View.Browser.V1.Model',
@@ -171,9 +171,7 @@ function prepareStage(mutation, sourceOnly) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "presentation_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const exporter = join(work, 'exporter'); mkdirSync(exporter);
-    run('tar', ['-xf', join(repository, 'vendor/lean4-prod/lean.tar'), '-C', exporter], repository);
-    run('lake', ['build', 'prod-export'], exporter);
+    const {dir: exporter, bin: prodExport} = ensureProdExport();
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.View.Browser.V1.Wire.viewWireBytes', ...[
       'fixturePresentationBytes', 'fixtureLabelsBytes', 'fixtureIntentFitsBytes',
@@ -183,7 +181,7 @@ function prepareStage(mutation, sourceOnly) {
       'fixtureProgressFitsBytes',
       'fixtureProgressMaximumBytes',
     ].map(name => 'PrismPM.Fixture.' + name)].sort();
-    run(join(exporter, '.lake/build/bin/prod-export'), ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
+    run(prodExport, ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
       '--ir-module', 'BrowserPresentation', '--out', exported], exporter, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});
     const generated = join(work, 'generated'), ir = join(exported, 'kernel.ir');
     const generation = JSON.parse(run(driver, ['native', ir, generated, repository], repository));

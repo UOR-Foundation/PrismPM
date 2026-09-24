@@ -9,6 +9,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
+import {ensureProdExport} from '../../tests/browser-view/compile.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const moduleName = 'Foundation.Browser.V1.Workspace';
@@ -299,13 +300,10 @@ name = "PrismGenerated"
 roots = ["PrismPM.${moduleName}", "PrismPM.${moduleName}Corpus"]
 `, {flag: 'wx'});
   run('lake', ['build', 'PrismGenerated'], lean);
-  const exporter = join(work, 'exporter');
-  mkdirSync(exporter);
-  run('tar', ['-xf', join(repository, 'vendor/lean4-prod/lean.tar'), '-C', exporter], repository);
-  run('lake', ['build', 'prod-export'], exporter);
+  const {dir: exporter, bin: prodExport} = ensureProdExport(repository);
   const exported = join(work, 'export');
   const roots = ['reduceWorkspaceBytes', 'workspaceRole', 'workspaceSigningPreimage'].map(name => `PrismPM.${moduleName}.${name}`);
-  run(join(exporter, '.lake/build/bin/prod-export'), [
+  run(prodExport, [
     '--module', `PrismPM.${moduleName}`, ...roots.flatMap(name => ['--root', name]),
     '--ir-module', 'BrowserWorkspace', '--out', exported,
   ], exporter, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});

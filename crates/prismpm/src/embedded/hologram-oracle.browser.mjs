@@ -87,7 +87,14 @@ assert.ok(valid.length > 0, 'no modeled request can exercise the actual View');
 const recovery = valid[0].vector;
 async function submit(vector, target = page, keyboard = false) {
   await fill(vector, target);
-  const response = target.waitForResponse(reply => reply.url() === `${origin}/_hologram/intent`);
+  let bodyBuffer = null;
+  const response = target.waitForResponse(async reply => {
+    if (reply.url() === `${origin}/_hologram/intent`) {
+      try { bodyBuffer = await reply.body(); } catch (_) {}
+      return true;
+    }
+    return false;
+  });
   if (keyboard) {
     if (text) await target.locator('#request').press('Control+Enter');
     else await target.locator('#right').press('Enter');
@@ -96,7 +103,9 @@ async function submit(vector, target = page, keyboard = false) {
   assert.equal(reply.status(), 200);
   assert.deepEqual(reply.request().postDataJSON(), {version: 1, name: 'application.invoke',
     payload: decode.decode(Uint8Array.from(vector.request))});
-  assert.deepEqual(await reply.json(), {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
+  const replyBody = bodyBuffer ?? await reply.body();
+  const envelope = JSON.parse(replyBody.toString('utf-8'));
+  assert.deepEqual(envelope, {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
   await shows(displayed(vector), target);
 }
 async function journey(name, work) {

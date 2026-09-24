@@ -17,8 +17,8 @@ function verifyPins(){
     const seen=new Set();for(const line of bytes.toString('utf8').trimEnd().split('\n')){const row=/^([0-9a-f]{64})  ([A-Za-z0-9_./-]+)$/.exec(line);assert.ok(row);const[,digest,path]=row;assert.ok(!path.startsWith('/')&&!path.split('/').some(part=>!part||part==='.'||part==='..'));assert.ok(!seen.has(path));seen.add(path);assert.equal(sha(readFileSync(join(repository,tree,path))),digest,path);}
   }
 }
-export {run} from '../browser-journal/compile.mjs';
-import {run} from '../browser-journal/compile.mjs';
+export {ensureProdExport, run} from '../browser-journal/compile.mjs';
+import {ensureProdExport, run} from '../browser-journal/compile.mjs';
 export function prepare(){
   verifyPins();
   const work=mkdtempSync(join(tmpdir(),'prismpm-query-'));
@@ -44,8 +44,8 @@ export function prepare(){
   copyFileSync(join(repository,'lean-toolchain'),join(lean,'lean-toolchain'));
   writeFileSync(join(lean,'lakefile.toml'),'name = "workspace_query_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['+files.map(n=>'"PrismPM.Foundation.Browser.V1.'+n+'"').join(',')+']\n',{flag:'wx'});
   run('lake',['build','PrismGenerated'],lean);
-  const exporter=join(work,'exporter');mkdirSync(exporter);run('tar',['-xf',join(repository,'vendor/lean4-prod/lean.tar'),'-C',exporter],repository);run('lake',['build','prod-export'],exporter);
-  const exported=join(work,'export');run(join(exporter,'.lake/build/bin/prod-export'),['--module','PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus','--root','PrismPM.Foundation.Browser.V1.WorkspaceJournal.workspaceJournalBytes','--root','PrismPM.Foundation.Browser.V1.WorkspaceQuery.workspaceQueryBytes','--root','PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus.queryDecodeProbeBytes','--ir-module','BrowserWorkspaceQuery','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
+  const {dir: exporter, bin: prodExport} = ensureProdExport();
+  const exported=join(work,'export');run(prodExport,['--module','PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus','--root','PrismPM.Foundation.Browser.V1.WorkspaceJournal.workspaceJournalBytes','--root','PrismPM.Foundation.Browser.V1.WorkspaceQuery.workspaceQueryBytes','--root','PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus.queryDecodeProbeBytes','--ir-module','BrowserWorkspaceQuery','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
   const generated=join(work,'generated');const generation=JSON.parse(run(driver,['generate',join(exported,'kernel.ir'),generated,repository],repository));
   const runner=join(work,'runner');mkdirSync(join(runner,'src'),{recursive:true});copyFileSync(join(draft,'runner.rs'),join(runner,'src/main.rs'));
   writeFileSync(join(runner,'Cargo.lock'),'version = 4\n[[package]]\nname = "browser-workspace-query-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-workspace-query-runner"\nversion = "0.1.0"\ndependencies = ["browser-workspace-query-core-probe"]\n',{flag:'wx'});
