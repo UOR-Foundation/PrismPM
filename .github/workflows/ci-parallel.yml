@@ -56,7 +56,7 @@ jobs:
           push: never
           runCmd: |
             set -euo pipefail
-            cargo test --workspace --bins --lib --all-features --locked --offline
+            ./scripts/vv.sh unit-tests
 
   conformance:
     name: Conformance / ${{ matrix.suite }}

@@ -71,6 +71,7 @@ fn main() -> ExitCode {
         "release-check" => release_check(&root),
         "validate" => validate_all(&root, false),
         "conformance" => run_conformance(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
+        "unit-tests" => run_unit_tests(&root),
         "vv" => run_vv(&root),
         _ => {
             eprintln!("Usage: cargo xtask <task>");
@@ -149,6 +150,27 @@ fn run_conformance(root: &Path, args: &[String]) -> Result<(), Fail> {
 
     println!("Running conformance suite: {category}");
     command(root, "cargo", &cargo_args)?;
+    Ok(())
+}
+
+fn run_unit_tests(root: &Path) -> Result<(), Fail> {
+    println!("Running workspace unit and integration tests");
+    command(
+        root,
+        "cargo",
+        &[
+            "test",
+            "--workspace",
+            "--bins",
+            "--lib",
+            "--tests",
+            "--exclude",
+            "repo-conformance",
+            "--all-features",
+            "--locked",
+            "--offline",
+        ],
+    )?;
     Ok(())
 }
 
