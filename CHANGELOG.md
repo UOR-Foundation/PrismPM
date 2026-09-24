@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - First-party crates.io bootstrap specification (`prismpm/crates-io-bootstrap-receipt/1`) and trusted publishing configuration for `lexlean`, `prod-ir`, `prod-codegen`, `prism-stdlib`, and `prismpm`.
 - Full release status closure receipt (`prismpm/release-status-closure-receipt/1`) and production release acceptance receipt (`prismpm/production-release-acceptance/1`).
 - Ecosystem release closure manifest (`prismpm/ecosystem-release/2`) and falsification test suite across 14 defect classes.
-- Universal template contract and GitHub Actions verification entrypoint (`export-browser`).
+- Universal template contract, source-free browser export (`export-browser`), and HTTPS publication verification (`verify-browser-publication`) supporting foundry-web production deployment.
 - Complete Calculator reference closure and Hologram Calculator/Text interoperability acceptance evidence.
 
 ### Changed
