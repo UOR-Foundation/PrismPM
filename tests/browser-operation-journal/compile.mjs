@@ -123,7 +123,7 @@ export function prepare(mutation = null, sourceOnly = false) {
     writeFileSync(join(project, 'lakefile.toml'), 'name = "operation_journal_conformance"\nversion = "0.1.0"\n', {flag: 'wx'});
     copyFileSync(join(repository, 'lean-toolchain'), join(project, 'lean-toolchain'));
     copyFileSync(join(repository, 'rust-toolchain.toml'), join(work, 'rust-toolchain.toml'));
-    const driverTarget = join(work, 'driver-target');
+    const driverTarget = resolve(repository, 'target/browser-test-drivers');
     const compiler = stageCompiler(work);
     run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'profile.dev.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
     const driver = join(driverTarget, 'debug/browser-operation-journal-driver');

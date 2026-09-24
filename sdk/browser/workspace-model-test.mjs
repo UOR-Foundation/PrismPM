@@ -275,7 +275,7 @@ max_diagnostics = 256
 max_child_output_bytes = 16777216
 child_timeout_ms = 300000
 `, {flag: 'wx'});
-  const driverTarget = join(work, 'driver-target');
+  const driverTarget = resolve(repository, 'target/browser-test-drivers');
   run('cargo', ['build', '--locked', '--offline', '--manifest-path',
     join(repository, 'tests/browser-workspace/Cargo.toml')], repository, {CARGO_TARGET_DIR: driverTarget});
   const driver = join(driverTarget, 'debug/browser-workspace-model-driver');

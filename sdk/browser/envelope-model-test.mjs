@@ -168,7 +168,7 @@ test('fresh generated envelope codec and actual browser crypto interoperability'
   mkdirSync(sourceRoot, {recursive: true});
   for (const [file, bytes] of sources) writeFileSync(join(sourceRoot, file), bytes, {flag: 'wx'});
   for (const file of ['lexlean.toml', 'lakefile.toml', 'lean-toolchain']) copyFileSync(join(fixture, file), join(project, file));
-  const driverTarget = join(work, 'driver-target');
+  const driverTarget = resolve(repository, 'target/browser-test-drivers');
   run('cargo', ['build', '--locked', '--offline', '--manifest-path', join(fixture, 'driver/Cargo.toml')], repository, {CARGO_TARGET_DIR: driverTarget});
   const driver = join(driverTarget, 'debug/browser-workspace-envelope-driver');
   run('lake', ['update'], project);
