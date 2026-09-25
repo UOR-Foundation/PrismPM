@@ -3,12 +3,14 @@
 use crate::error::PrismError;
 use crate::holo::archive::{compose_application, ApplicationArchiveInput, ArchiveProvenance};
 use crate::holo::canonical::{content_id, encode_value};
+use crate::holo::browser_application::BrowserApplication;
 use crate::holo::model_document::{Application, ApplicationModel, ModelDocument};
 use crate::verification::{executable, run_process};
 use prod_codegen::{
-    generate_cargo_package, generate_core_wasm_package, generate_text_view_v1, generate_view_v1,
-    BrowserAdapterBinding, CargoDependency, CargoPackageSpec, CoreWasmSpec, EvaluatedViewV1,
-    GeneratedPackage, GeneratedViewV1, TextBrowserAdapterBinding, TextViewV1, ViewOperation,
+    generate_cargo_package, generate_core_wasm_package, generate_holoview_bundle,
+    generate_text_view_v1, generate_view_v1, BrowserAdapterBinding, CargoDependency,
+    CargoPackageSpec, CoreWasmSpec, EvaluatedViewV1, GeneratedPackage, GeneratedViewV1,
+    PackageFile, TextBrowserAdapterBinding, TextViewV1, ViewOperation,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -171,17 +173,156 @@ fn view_value(
     }
 }
 
+fn generate_browser_view_v1(
+    application: &BrowserApplication,
+    model_id: &str,
+    view_model_id: &str,
+    core_sha: &str,
+    entry: &str,
+) -> Result<GeneratedViewV1, PrismError> {
+    let core_crate_name = application.cargo_name.clone();
+    let core_crate_snake = core_crate_name.replace('-', "_");
+    let package_name = format!("{core_crate_name}-browser");
+    let package_version = application.cargo_version.clone();
+
+    let cargo_toml = format!(
+        "[package]\nname = \"{package_name}\"\nversion = \"{package_version}\"\nedition = \"2021\"\npublish = false\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[dependencies]\njs-sys = \"=0.3.99\"\nwasm-bindgen = \"=0.2.122\"\n{core_crate_name} = \"={package_version}\"\n"
+    );
+    let adapter_src = format!(
+        "use wasm_bindgen::prelude::*;\n\n// Transport copies allocate only after their byte limits are checked.\n// The core's own allocation bound remains an application-model obligation.\n#[wasm_bindgen]\npub fn invoke_bytes(input: JsValue) -> Result<js_sys::Uint8Array, JsValue> {{\n    let input = input.dyn_into::<js_sys::Uint8Array>().map_err(|_| JsValue::from_str(\"expected Uint8Array\"))?;\n    if input.length() > {} {{ return Err(JsValue::from_str(\"input byte limit\")); }}\n    let bytes = input.to_vec();\n    let output = {}::{}(bytes);\n    if output.len() > {} {{ return Err(JsValue::from_str(\"output byte limit\")); }}\n    Ok(js_sys::Uint8Array::from(output.as_slice()))\n}}\n",
+        application.guest_allocation_maximum, core_crate_snake, entry, application.response_maximum,
+    );
+    let mut adapter_files = vec![
+        PackageFile {
+            path: "Cargo.toml".into(),
+            bytes: cargo_toml.into_bytes(),
+        },
+        PackageFile {
+            path: "src/lib.rs".into(),
+            bytes: adapter_src.into_bytes(),
+        },
+    ];
+    let records = adapter_files
+        .iter()
+        .map(|f| format!("{{\"path\":{:?},\"sha256\":{:?}}}", f.path, sha256(&f.bytes)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let generation_manifest = format!(
+        "{{\"core_crate\":{:?},\"core_function\":{:?},\"core_version\":{:?},\"files\":[{}],\"generated_core_sha256\":{:?},\"max_input_bytes\":{},\"max_output_bytes\":{},\"model_id\":{:?},\"profile\":\"prism.browser-view/1\",\"schema\":\"lean4-prod/browser-adapter/1\",\"view_model_id\":{:?}}}\n",
+        core_crate_name, entry, package_version, records, core_sha, application.guest_allocation_maximum, application.response_maximum, model_id, view_model_id
+    );
+    adapter_files.push(PackageFile {
+        path: "generation-manifest.json".into(),
+        bytes: generation_manifest.into_bytes(),
+    });
+    adapter_files.sort_by(|a, b| a.path.cmp(&b.path));
+    let browser_adapter = GeneratedPackage { files: adapter_files };
+
+    let css = "*{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;color:#172033;background:#f6f7fb}main{width:min(70rem,calc(100% - 2rem));margin:2rem auto;padding:1.5rem;background:white}\n";
+    let html = format!(
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n<link rel=\"stylesheet\" href=\"app.css\">\n</head>\n<body>\n<main>\n<h1>{}</h1>\n<div id=\"app\"></div>\n</main>\n<script type=\"module\" src=\"app.js\"></script>\n</body>\n</html>\n",
+        application.view.title, application.view.heading
+    );
+    let browser_js = format!(
+        "const loadBinding=()=>import('./{core_crate_snake}.js');\nexport async function mount(root){{\n  const {{invoke_bytes}}=await loadBinding();\n  root.innerHTML='<h1>{}</h1>';\n}}\n",
+        application.view.heading
+    );
+    let hologram_js = format!(
+        "export function mount(root){{\n  root.innerHTML='<h1>{}</h1>';\n}}\n",
+        application.view.heading
+    );
+
+    let browser_assets = vec![
+        PackageFile {
+            path: "app.css".into(),
+            bytes: css.as_bytes().to_vec(),
+        },
+        PackageFile {
+            path: "app.js".into(),
+            bytes: browser_js.into_bytes(),
+        },
+        PackageFile {
+            path: "index.html".into(),
+            bytes: html.as_bytes().to_vec(),
+        },
+    ];
+    let hologram_assets = vec![
+        PackageFile {
+            path: "app.css".into(),
+            bytes: css.as_bytes().to_vec(),
+        },
+        PackageFile {
+            path: "app.js".into(),
+            bytes: hologram_js.into_bytes(),
+        },
+        PackageFile {
+            path: "index.html".into(),
+            bytes: html.into_bytes(),
+        },
+    ];
+
+    let hologram_bundle = generate_holoview_bundle(&hologram_assets)
+        .map_err(|error| PrismError::new("PP5203", error.to_string()))?;
+
+    let target_records = |target: &str, files: &[PackageFile]| {
+        let rows = files
+            .iter()
+            .map(|f| format!("{{\"path\":{:?},\"sha256\":{:?}}}", f.path, sha256(&f.bytes)))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{{\"files\":[{}],\"target\":{:?}}}", rows, target)
+    };
+
+    let manifest = format!(
+        "{{\"browser_adapter\":[{}],\"generated_core_sha256\":{:?},\"hologram_bundle\":{{\"path\":{:?},\"sha256\":{:?}}},\"max_input_bytes\":{},\"max_output_bytes\":{},\"model_id\":{:?},\"profile\":\"prism.browser-view/1\",\"projections\":[{},{}],\"schema\":\"lean4-prod/browser-view-projection/1\",\"view_model_id\":{:?}}}\n",
+        records, core_sha, hologram_bundle.path, sha256(&hologram_bundle.bytes),
+        application.guest_allocation_maximum, application.response_maximum, model_id,
+        target_records("browser-wasm-bindgen", &browser_assets),
+        target_records("hologram-intent-v1", &hologram_assets),
+        view_model_id
+    );
+
+    let view_manifest = PackageFile {
+        path: "view-manifest.json".into(),
+        bytes: manifest.into_bytes(),
+    };
+
+    Ok(GeneratedViewV1 {
+        hologram_assets,
+        hologram_bundle,
+        browser_assets,
+        browser_adapter,
+        view_manifest,
+    })
+}
+
 fn application_view(
     model: &ModelDocument,
     application: &Application,
     core_sha: &str,
 ) -> Result<(GeneratedViewV1, String, String), PrismError> {
     let (generated, model_id, view_model_id) = match application {
-        Application::Browser(_) => {
-            return Err(PrismError::new(
-                "PP2011",
-                "browser application View generation is unavailable",
-            ))
+        Application::Browser(application) => {
+            let model_id = content_id(&encode_value(
+                &serde_json::to_value(model)
+                    .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+            )?);
+            let view_model_id = content_id(&encode_value(
+                &serde_json::to_value(&application.view)
+                    .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+            )?);
+            let entry =
+                application.entry_root.rsplit('.').next().ok_or_else(|| {
+                    PrismError::new("PP2001", "application entry root is malformed")
+                })?;
+            let generated = generate_browser_view_v1(
+                application,
+                &model_id,
+                &view_model_id,
+                core_sha,
+                entry,
+            );
+            return Ok((generated?, model_id, view_model_id));
         }
         Application::Legacy(application) => {
             let evaluated = view_value(model, application, core_sha);

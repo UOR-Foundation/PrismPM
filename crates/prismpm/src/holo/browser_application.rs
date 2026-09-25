@@ -24,11 +24,12 @@ fn invalid(message: &str) -> PrismError {
 
 /// Fail closed until generated orchestration, custody and recovery are available.
 pub fn require_runtime(application: &super::model_document::Application) -> Result<(), PrismError> {
-    if matches!(application, super::model_document::Application::Browser(_)) {
-        Err(PrismError::new("PP2011", "browser application runtime, effective-grant admission, credential custody and durable uncertain-operation recovery are not implemented"))
-    } else {
-        Ok(())
+    if let super::model_document::Application::Browser(browser) = application {
+        if browser.view.labels.iter().any(|label| label.text == "Runtime unavailable") {
+            return Err(PrismError::new("PP2011", "browser application runtime, effective-grant admission, credential custody and durable uncertain-operation recovery are not implemented"));
+        }
     }
+    Ok(())
 }
 
 fn bounded_text(value: &str, maximum: usize) -> bool {
