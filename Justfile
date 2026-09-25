@@ -11,6 +11,14 @@ vv:
 validate:
     cargo run --package xtask -- validate
 
+# Run conformance test suite by category (contracts, core, holo-stdlib, desktop-browser, system-oci, verification-schemas, or all)
+conformance category="all":
+    cargo run --package xtask -- conformance {{category}}
+
+# Run workspace unit, property, and integration tests
+unit-tests:
+    cargo run --package xtask -- unit-tests
+
 # Check all positive and negative fixture suites
 check-fixtures:
     cargo run --package xtask -- check-fixtures

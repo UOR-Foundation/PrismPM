@@ -70,6 +70,8 @@ fn main() -> ExitCode {
         "release-artifacts" => release_artifacts(&root),
         "release-check" => release_check(&root),
         "validate" => validate_all(&root, false),
+        "conformance" => run_conformance(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
+        "unit-tests" => run_unit_tests(&root),
         "vv" => run_vv(&root),
         _ => {
             eprintln!("Usage: cargo xtask <task>");
@@ -105,6 +107,70 @@ fn validate_contract() -> Result<(), Fail> {
     let bytes = std::fs::read(&path)?;
     let document = prismpm::contracts::CanonicalDocument::parse(id, &bytes)?;
     println!("{} {}", document.schema(), document.digest());
+    Ok(())
+}
+
+fn run_conformance(root: &Path, args: &[String]) -> Result<(), Fail> {
+    let category = args.first().map(|s| s.as_str()).unwrap_or("all");
+    let filters: &[&str] = match category {
+        "all" => &[],
+        "contracts" => &["conformance_rp", "conformance_ar", "conformance_au"],
+        "core" => &["conformance_ct", "conformance_ft", "conformance_lc"],
+        "holo-stdlib" => &["conformance_ho", "conformance_st"],
+        "desktop-browser" => &["conformance_dk"],
+        "system-oci" => &[
+            "conformance_sy",
+            "conformance_oc",
+            "conformance_dp",
+            "conformance_op",
+        ],
+        "verification-schemas" => &[
+            "conformance_sc",
+            "conformance_se",
+            "conformance_tm",
+            "conformance_vr",
+            "conformance_ex",
+        ],
+        custom => &[custom],
+    };
+
+    let mut cargo_args = vec![
+        "test",
+        "-p",
+        "repo-conformance",
+        "--test",
+        "conformance",
+        "--locked",
+        "--offline",
+    ];
+    if !filters.is_empty() {
+        cargo_args.push("--");
+        cargo_args.extend_from_slice(filters);
+    }
+
+    println!("Running conformance suite: {category}");
+    command(root, "cargo", &cargo_args)?;
+    Ok(())
+}
+
+fn run_unit_tests(root: &Path) -> Result<(), Fail> {
+    println!("Running workspace unit and integration tests");
+    command(
+        root,
+        "cargo",
+        &[
+            "test",
+            "--workspace",
+            "--bins",
+            "--lib",
+            "--tests",
+            "--exclude",
+            "repo-conformance",
+            "--all-features",
+            "--locked",
+            "--offline",
+        ],
+    )?;
     Ok(())
 }
 

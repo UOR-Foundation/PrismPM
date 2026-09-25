@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {copyFileSync,mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {copyFileSync,existsSync,mkdirSync,mkdtempSync,readFileSync,renameSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -124,6 +124,31 @@ export function run(program,args,cwd,env={}) {
   if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
   return execute(program,args,cwd,env);
 }
+export function ensureProdExport(repo = repository) {
+  verifyPins();
+  const dir = resolve(repo, 'target/lean4-prod-export');
+  const bin = join(dir, '.lake/build/bin/prod-export');
+  if (existsSync(bin)) return { dir, bin };
+  const tmp = resolve(repo, `target/lean4-prod-export-tmp-${process.pid}`);
+  rmSync(tmp, { recursive: true, force: true });
+  mkdirSync(tmp, { recursive: true });
+  run('tar', ['-xf', join(repo, 'vendor/lean4-prod/lean.tar'), '-C', tmp], repo);
+  run('lake', ['build', 'prod-export'], tmp);
+  assert.ok(existsSync(join(tmp, '.lake/build/bin/prod-export')), 'built prod-export binary');
+  try {
+    mkdirSync(dirname(dir), { recursive: true });
+    if (!existsSync(bin)) {
+      rmSync(dir, { recursive: true, force: true });
+      renameSync(tmp, dir);
+    } else {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  } catch (err) {
+    if (!existsSync(bin)) throw err;
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  return { dir, bin };
+}
 export function prepare(mutation=null){
   assert.ok([null,"session","rows"].includes(mutation),"closed negative-only model mutation");
   verifyPins();
@@ -146,7 +171,7 @@ export function prepare(mutation=null){
     for(const [name,bytes]of sources){const path=join(project,'src',...name.split('.'))+'.lex.tex';mkdirSync(dirname(path),{recursive:true});writeFileSync(path,bytes,{flag:'wx'});}
     for(const file of ['lexlean.toml','lakefile.toml','lean-toolchain'])copyFileSync(join(draft,file),join(project,file));
     copyFileSync(join(repository,'rust-toolchain.toml'),join(work,'rust-toolchain.toml'));
-    const driverTarget=join(work,'driver-target');
+    const driverTarget=resolve(repository,'target/browser-test-drivers');
     run('cargo',['build','--locked','--offline','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
     const driver=join(driverTarget,'debug/browser-workspace-view-driver');
     run('lake',['update'],project);
@@ -157,9 +182,9 @@ export function prepare(mutation=null){
     copyFileSync(join(repository,'lean-toolchain'),join(lean,'lean-toolchain'));
     writeFileSync(join(lean,'lakefile.toml'),'name = "workspace_view_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['+modules.map(n=>'"PrismPM.'+n+'"').join(',')+']\n',{flag:'wx'});
     run('lake',['build','PrismGenerated'],lean);
-    const exporter=join(work,'exporter');mkdirSync(exporter);run('tar',['-xf',join(repository,'vendor/lean4-prod/lean.tar'),'-C',exporter],repository);run('lake',['build','prod-export'],exporter);
+    const {dir: exporter, bin: prodExport} = ensureProdExport();
     const exported=join(work,'export');
-    run(join(exporter,'.lake/build/bin/prod-export'),['--module','PrismPM.Foundation.View.Workspace.V1.Labels','--root','PrismPM.Foundation.View.Workspace.V1.Interaction.workspaceInteractionBytes','--root','PrismPM.Foundation.View.Workspace.V1.Interaction.workspacePresentationBytes','--root','PrismPM.Foundation.View.Workspace.V1.Labels.workspaceViewLabelsBytes','--ir-module','BrowserWorkspaceView','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
+    run(prodExport,['--module','PrismPM.Foundation.View.Workspace.V1.Labels','--root','PrismPM.Foundation.View.Workspace.V1.Interaction.workspaceInteractionBytes','--root','PrismPM.Foundation.View.Workspace.V1.Interaction.workspacePresentationBytes','--root','PrismPM.Foundation.View.Workspace.V1.Labels.workspaceViewLabelsBytes','--ir-module','BrowserWorkspaceView','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
     const generated=join(work,'generated'),generation=JSON.parse(run(driver,['generate',join(exported,'kernel.ir'),generated,repository],repository));
     const runner=join(work,'runner');mkdirSync(join(runner,'src'),{recursive:true});copyFileSync(join(draft,'runner.rs'),join(runner,'src/main.rs'));
     writeFileSync(join(runner,'Cargo.lock'),'version = 4\n[[package]]\nname = "browser-workspace-view-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-workspace-view-runner"\nversion = "0.1.0"\ndependencies = ["browser-workspace-view-core-probe"]\n',{flag:'wx'});

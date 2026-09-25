@@ -4,8 +4,8 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
-import {run, sha} from '../browser-view/compile.mjs';
-export {run, sha};
+import {ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const modules = ['Fixture', 'Foundation.Browser.Application.V1.Effects',
@@ -115,7 +115,7 @@ export function prepare(mutation = null) {
     writeFileSync(join(project, 'lakefile.toml'), 'name = "custody_conformance"\nversion = "0.1.0"\n', {flag: 'wx'});
     copyFileSync(join(repository, 'lean-toolchain'), join(project, 'lean-toolchain'));
     copyFileSync(join(repository, 'rust-toolchain.toml'), join(work, 'rust-toolchain.toml'));
-    const driverTarget = join(work, 'driver-target');
+    const driverTarget = resolve(repository, 'target/browser-test-drivers');
     const compiler = stageCompiler(work);
     run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
       '--config', 'build.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
@@ -149,12 +149,10 @@ export function prepare(mutation = null) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "custody_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const exporter = join(work, 'exporter'); mkdirSync(exporter);
-    run('tar', ['-xf', join(repository, 'vendor/lean4-prod/lean.tar'), '-C', exporter], repository);
-    run('lake', ['build', 'prod-export'], exporter);
+    const {dir: exporter, bin: prodExport} = ensureProdExport();
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.Browser.Application.V1.CustodyWire.custodyWireBytes'];
-    run(join(exporter, '.lake/build/bin/prod-export'), ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
+    run(prodExport, ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
       '--ir-module', 'BrowserCustody', '--out', exported], exporter, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});
     const generated = join(work, 'generated'), ir = join(exported, 'kernel.ir');
     const generation = JSON.parse(run(driver, ['native', ir, generated, repository], repository));

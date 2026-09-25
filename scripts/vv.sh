@@ -85,4 +85,8 @@ if test -z "${PRISMPM_TEST_SDK_IMAGE:-}"; then
   export PRISMPM_TEST_SDK_IMAGE="$sdk_reference"
 fi
 
-cargo xtask vv
+if test "$#" -gt 0; then
+  cargo xtask "$@"
+else
+  cargo xtask vv
+fi
