@@ -2,8 +2,8 @@
 
 use crate::error::PrismError;
 use crate::holo::archive::{compose_application, ApplicationArchiveInput, ArchiveProvenance};
-use crate::holo::canonical::{content_id, encode_value};
 use crate::holo::browser_application::BrowserApplication;
+use crate::holo::canonical::{content_id, encode_value};
 use crate::holo::model_document::{Application, ApplicationModel, ModelDocument};
 use crate::verification::{executable, run_process};
 use prod_codegen::{
@@ -204,7 +204,13 @@ fn generate_browser_view_v1(
     ];
     let records = adapter_files
         .iter()
-        .map(|f| format!("{{\"path\":{:?},\"sha256\":{:?}}}", f.path, sha256(&f.bytes)))
+        .map(|f| {
+            format!(
+                "{{\"path\":{:?},\"sha256\":{:?}}}",
+                f.path,
+                sha256(&f.bytes)
+            )
+        })
         .collect::<Vec<_>>()
         .join(",");
     let generation_manifest = format!(
@@ -216,7 +222,9 @@ fn generate_browser_view_v1(
         bytes: generation_manifest.into_bytes(),
     });
     adapter_files.sort_by(|a, b| a.path.cmp(&b.path));
-    let browser_adapter = GeneratedPackage { files: adapter_files };
+    let browser_adapter = GeneratedPackage {
+        files: adapter_files,
+    };
 
     let css = "*{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;color:#172033;background:#f6f7fb}main{width:min(70rem,calc(100% - 2rem));margin:2rem auto;padding:1.5rem;background:white}\n";
     let html = format!(
@@ -267,7 +275,13 @@ fn generate_browser_view_v1(
     let target_records = |target: &str, files: &[PackageFile]| {
         let rows = files
             .iter()
-            .map(|f| format!("{{\"path\":{:?},\"sha256\":{:?}}}", f.path, sha256(&f.bytes)))
+            .map(|f| {
+                format!(
+                    "{{\"path\":{:?},\"sha256\":{:?}}}",
+                    f.path,
+                    sha256(&f.bytes)
+                )
+            })
             .collect::<Vec<_>>()
             .join(",");
         format!("{{\"files\":[{}],\"target\":{:?}}}", rows, target)
@@ -315,13 +329,8 @@ fn application_view(
                 application.entry_root.rsplit('.').next().ok_or_else(|| {
                     PrismError::new("PP2001", "application entry root is malformed")
                 })?;
-            let generated = generate_browser_view_v1(
-                application,
-                &model_id,
-                &view_model_id,
-                core_sha,
-                entry,
-            );
+            let generated =
+                generate_browser_view_v1(application, &model_id, &view_model_id, core_sha, entry);
             return Ok((generated?, model_id, view_model_id));
         }
         Application::Legacy(application) => {
