@@ -551,6 +551,10 @@ fn run_hologram_oracle(
         application.request_maximum(),
         application.response_maximum(),
     )?;
+    if let crate::holo::model_document::Application::Browser(_) = application {
+        crate::holo::browser_application::require_runtime(application)?;
+        return Ok(Vec::new());
+    }
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
         return Err(PrismError::new(
             "PP5301",
