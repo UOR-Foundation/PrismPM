@@ -42,3 +42,11 @@ are required; this attempt supplies no generation or component acceptance.
 The retry rebuilt the exact package, wrote only this worktree's generated outputs,
 and normal `validate-model` passed: 185 IDs, 86 codes, clean meta-gate/audits. The
 source archive is current; this is not generated Rust/package or SDK acceptance.
+
+First full owner: RED after 153.10s; retained `/tmp/prismpm-dynamic-choice-JoDhwd`.
+`OptionExtraField` incorrectly expected WrongType. Both existing/new option
+readers call the capped array reader with maximum two before exact-arity checking;
+three fields therefore produce ValueLimit. Product semantics were unchanged.
+Diagnostic-only retained execution found no other disagreement across the 166
+native vectors. Corrected expectation adds short-arity and catalogue-arity
+regressions; a fresh complete owner is still required.

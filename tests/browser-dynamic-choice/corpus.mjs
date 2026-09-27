@@ -25,6 +25,7 @@ export function corpus() {
     ['OverNameBytes', x => { x[6][1][1][5][1][1] = '😀'.repeat(1024) + 'x'; }],
     ['CatalogueIndexAsText', x => { x[6][1][1][5][1][1] = 1; }],
     ['OptionExtraField', x => { x[6][1][1][5][1].push('extra'); }],
+    ['OptionMissingField', x => { x[6][1][1][5][1].pop(); }],
     ['MissingEpoch', x => { x[6][1][1].pop(); }],
     ['OutsideForm', x => { x[6][1][0] = 0; }],
     ['EnabledPending', x => { x[2] = 1; }],
@@ -60,9 +61,14 @@ export function sourceFixture(revision = 1, phase = 0, focus = 0) {
 
 const failure = code => Uint8Array.of(0x83, 1, 1, code);
 export function ownerCorpus() {
-  const shapeErrors = new Set(['CatalogueIndexAsText', 'OptionExtraField', 'MissingEpoch']);
+  const shapeErrors = new Set(['CatalogueIndexAsText', 'OptionMissingField', 'MissingEpoch']);
   const rows = corpus().map(row => ({...row, role: 'wire',
-    response: row.accepted ? row.request : failure(shapeErrors.has(row.id) ? 3 : 9)}));
+    // Existing tag7 and new tag11 both cap the option array at two elements
+    // before checking its exact arity: oversize is ValueLimit, short is WrongType.
+    response: row.accepted ? row.request : failure(row.id === 'OptionExtraField' ? 6 : shapeErrors.has(row.id) ? 3 : 9)}));
+  const catalogueExtra = frame([[1, 'unused']], 1);
+  catalogueExtra[6][1][1][0] = 7; catalogueExtra[6][1][1][5] = [[1, 0, 'extra']];
+  rows.push({id: 'CatalogueOptionExtraField', role: 'wire', request: encodeWire(catalogueExtra), response: failure(6)});
   for (const [id, count] of [['MixedOptionsExact', 256], ['MixedOptionsOver', 257]]) {
     const request = encodeWire(mixedOptions(count));
     rows.push({id, role: 'wire', request, response: count === 256 ? request : failure(9)});
