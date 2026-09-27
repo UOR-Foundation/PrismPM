@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import {readFileSync, writeFileSync, rmSync} from 'node:fs';
-import {join} from 'node:path';
+import {chmodSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync} from 'node:fs';
+import {dirname, join} from 'node:path';
 import {prepare, frozenInputs, assertFrozenInputs, sha, repository} from './compile.mjs';
 import {ownerCorpus} from './corpus.mjs';
 import {maximumFrame, maximumIds} from './maximum-fixtures.mjs';
@@ -18,12 +18,107 @@ export function nativeReplay(build, rows, stem) {
   assert.match(stem, /^[a-z][a-z0-9-]*$/); assert.ok(rows.length);
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
   for (const row of rows) { assert.match(row.id, /^[A-Za-z0-9]+$/); assert.ok(roles.includes(row.role)); }
-  const path = join(build.work, stem + '.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
+  const path = join(build.work, stem + '.tsv'), bytes = Buffer.from(tsv(rows)); writeFileSync(path, bytes, {flag: 'wx'});
   for (const standard of [true, false]) {
+    assert.deepEqual(readFileSync(path), bytes, 'exact native transcript before replay');
     const output = build.runNative(standard, [path]);
-    assert.deepEqual([...output.matchAll(/^PASS ([A-Za-z0-9]+)$/gm)].map(row => row[1]), rows.map(row => row.id));
-    assert.ok(output.endsWith('PASS ' + rows.length + ' complete dynamic choice vectors twice\n'));
+    assert.deepEqual(readFileSync(path), bytes, 'exact native transcript after replay');
+    assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
+      + 'PASS ' + rows.length + ' complete dynamic choice vectors twice\n', 'exact ordered complete native stdout');
   }
+}
+
+function snapshotInputs(build) {
+  const root = join(build.work, 'frozen-inputs'); mkdirSync(root);
+  for (const [path, hash] of Object.entries(build.inputs)) {
+    const bytes = readFileSync(join(repository, path)); assert.equal(sha(bytes), hash);
+    const target = join(root, path); mkdirSync(dirname(target), {recursive: true});
+    writeFileSync(target, bytes, {flag: 'wx', mode: 0o444});
+  }
+  return root;
+}
+
+function retain(build, result, inputSnapshot) {
+  build.unchanged();
+  // Every source/tool/test byte is retained once by the baseline, also for the
+  // negative owners. Mutated source bytes remain in each actual staged project.
+  for (const [path, hash] of Object.entries(build.inputs))
+    assert.equal(sha(readFileSync(join(inputSnapshot, path))), hash, 'retained complete source input ' + path);
+  const retained = {};
+  function files(path) {
+    const stat = lstatSync(path); assert.ok(!stat.isSymbolicLink(), 'retained proof/product is not an alias');
+    if (stat.isDirectory()) for (const name of readdirSync(path).sort()) files(join(path, name));
+    else { assert.ok(stat.isFile()); retained[path.slice(build.work.length + 1)] = {bytes: stat.size, sha256: sha(readFileSync(path))}; }
+  }
+  for (const path of ['project/src', 'project/lexlean.toml', 'project/lean-toolchain', 'project/lakefile.toml',
+    'export', 'generated', 'runner/src', 'runner/Cargo.toml', 'runner/Cargo.lock', 'compiler-cache-retirement.json'])
+    files(join(build.work, path));
+  files(build.verified.root);
+  for (const row of build.generatedPackages) if (row.kind === 'wasm') files(join(build.work, row.path));
+  const wasm = build.wasmEvidence();
+  for (const value of Object.values(wasm)) for (const side of ['original', 'private']) files(join(build.work, value[side].path));
+  for (const mode of ['std', 'no_std']) files(join(build.work, 'native-' + mode + '-observer'));
+  for (const name of readdirSync(build.work).sort())
+    if (/\.(tsv|request|response|size)$/.test(name)) files(join(build.work, name));
+  const receipt = {spec: 'prismpm/private-dynamic-choice-evidence/1', scope: 'component-only',
+    completeApplicationAccepted: false, ...result, inputs: build.inputs, inputSnapshot,
+    sources: Object.fromEntries([...build.sources].map(([name, bytes]) => [name, sha(bytes)])),
+    proof: build.verified, ir: build.generation.ir_sha256, native: build.nativeEvidence(), wasm,
+    generatedPackages: build.generatedPackages, retainedFiles: retained};
+  const path = join(build.work, 'dynamic-choice-evidence.json'), bytes = Buffer.from(JSON.stringify(receipt) + '\n');
+  writeFileSync(path, bytes, {flag: 'wx', mode: 0o444});
+  assert.deepEqual(JSON.parse(readFileSync(path)), receipt);
+  build.unchanged();
+  return {path, sha256: sha(bytes), retainedFiles: Object.keys(retained).length};
+}
+
+function verifyArtifactSubstitutions(build) {
+  const source = join(build.work, 'generated/src/lib.rs'), manifest = join(build.work, 'generated/generation-manifest.json');
+  const original = readFileSync(source), originalManifest = readFileSync(manifest), names = [];
+  for (const standard of [true, false]) for (const kind of ['source', 'forged-manifest', 'extra-file', 'hardlink']) {
+    const mode = standard ? 'std' : 'no_std', extra = join(build.work, kind === 'hardlink' ? 'source-alias' : 'generated/extra');
+    assert.equal(lstatSync(join(build.work, 'native-' + mode + '-observer'), {throwIfNoEntry: false}), undefined);
+    assert.equal(lstatSync(join(build.work, 'native-' + mode), {throwIfNoEntry: false}), undefined);
+    try {
+      if (kind === 'source' || kind === 'forged-manifest') {
+        const changed = Buffer.concat([original, Buffer.from('\n// actual package substitution\n')]); writeFileSync(source, changed);
+        if (kind === 'forged-manifest') {
+          const changedManifest = JSON.parse(originalManifest); changedManifest.files.find(row => row.path === 'src/lib.rs').sha256 = sha(changed);
+          writeFileSync(manifest, JSON.stringify(changedManifest));
+        }
+      } else if (kind === 'extra-file') writeFileSync(extra, 'extra', {flag: 'wx'});
+      else linkSync(source, extra);
+      assert.throws(() => build.compileNative(standard), ({source: /manifest digest/, 'forged-manifest': /immutable generated package/,
+        'extra-file': /complete generated package file inventory/, hardlink: /singly linked generated package/})[kind]);
+      assert.equal(lstatSync(join(build.work, 'native-' + mode + '-observer'), {throwIfNoEntry: false}), undefined);
+      assert.equal(lstatSync(join(build.work, 'native-' + mode), {throwIfNoEntry: false}), undefined);
+      names.push(mode + ':' + kind);
+    } finally {
+      writeFileSync(source, original); writeFileSync(manifest, originalManifest);
+      if (lstatSync(extra, {throwIfNoEntry: false})) unlinkSync(extra);
+    }
+    build.unchanged();
+  }
+  for (const role of roles) {
+    const evidence = build.wasmEvidence()[role];
+    for (const side of ['original', 'private']) {
+      const path = join(build.work, evidence[side].path), original = readFileSync(path), changed = Buffer.from(original);
+      changed[8] ^= 1; const mode = lstatSync(path).mode & 0o777; let called = false;
+      try {
+        chmodSync(path, 0o600); writeFileSync(path, changed);
+        assert.throws(() => build.withWasm(role, () => {called = true;}), new RegExp('immutable ' + side + ' generated Wasm'));
+        assert.equal(called, false, 'altered actual artifact cannot reach execution'); names.push(role + ':' + side);
+      } finally {writeFileSync(path, original); chmodSync(path, mode);}
+      build.unchanged();
+    }
+    let buffer, original;
+    try {
+      assert.throws(() => build.withWasm(role, bytes => {buffer = bytes; original = bytes[8]; bytes[8] ^= 1;}),
+        /immutable execution Wasm buffer/); names.push(role + ':buffer');
+    } finally {if (buffer) buffer[8] = original;}
+    build.unchanged();
+  }
+  assert.equal(names.length, 32); return names;
 }
 
 function replayCalls(build, calls, stem) {
@@ -39,8 +134,14 @@ function replayCalls(build, calls, stem) {
 }
 
 function binaryReplay(build, role, input, output) {
-  for (const standard of [true, false]) assert.equal(build.runNative(standard,
-    ['--binary', role, input, output]), 'PASS binary dynamic choice vector twice\n');
+  const hashes = [input, output].map(path => sha(readFileSync(path)));
+  const unchanged = () => assert.deepEqual([input, output].map(path => sha(readFileSync(path))), hashes,
+    'exact binary input and independent expected result');
+  for (const standard of [true, false]) {
+    unchanged();
+    assert.equal(build.runNative(standard, ['--binary', role, input, output]), 'PASS binary dynamic choice vector twice\n');
+    unchanged();
+  }
 }
 
 function verifyMaximum(build) {
@@ -73,7 +174,7 @@ function verifyMaximum(build) {
   return results;
 }
 
-function verifySourceMutation(kind, baseline) {
+function verifySourceMutation(kind, baseline, inputSnapshot) {
   const id = ({duplicate: 'DuplicateIdentifier', 'name-limit': 'OverNameBytes', selection: 'IntentUnknownId',
     aggregate: 'MixedOptionsOver', 'semantic-field': 'SemanticDynamicFieldHelpers', size: 'SizeSourceOrderDuplicateNames'})[kind];
   const row = ownerCorpus().find(row => row.id === id); assert.ok(row);
@@ -86,9 +187,10 @@ function verifySourceMutation(kind, baseline) {
     build.withWasm(row.role, bytes => assert.throws(() => executeWasm(bytes, [row]),
       new RegExp(id + ' generated Wasm output mismatch'), 'intended Wasm mutation assertion ' + kind));
     build.unchanged();
-    return {kind, id, source: build.verified.source_id, attestation: build.verified.attestation_id,
-      ir: build.generation.ir_sha256, native: build.nativeEvidence(), wasm: build.wasmEvidence()};
-  } finally { rmSync(build.work, {recursive: true, force: true}); }
+    return {kind, id, evidence: retain(build, {kind, vector: id, intendedMutationRejected: true}, inputSnapshot)};
+  } catch (error) {
+    process.stderr.write('Retained failed dynamic choice mutation ' + kind + ' at ' + build.work + '\n'); throw error;
+  }
 }
 
 export async function verifyDynamicChoice(t) {
@@ -96,6 +198,7 @@ export async function verifyDynamicChoice(t) {
   let success = false;
   try {
     assert.ok(build.verified.attestation_id && build.cacheRetirement.owner === 'dynamic-choice');
+    const inputSnapshot = snapshotInputs(build), artifactSubstitutions = verifyArtifactSubstitutions(build);
     // No new diagnostic codes or weakened legacy code ownership.
     const registry = JSON.parse(readFileSync(join(repository, 'model/browser-semantic-presentation-diagnostics.json')));
     assert.equal(registry.capability, 'DK-29'); assert.equal(registry.error_class, 'PresentationError');
@@ -129,20 +232,21 @@ export async function verifyDynamicChoice(t) {
     const sourceMutants = [];
     for (const kind of mutationNames) {
       t.diagnostic('Compiling intended source mutation ' + kind);
-      sourceMutants.push(verifySourceMutation(kind, build));
+      sourceMutants.push(verifySourceMutation(kind, build, inputSnapshot));
     }
     build.unchanged(); assertFrozenInputs(inputs);
-    t.diagnostic(JSON.stringify({scope: 'dynamic-choice-component-only', source: build.verified.source_id,
+    const result = {scope: 'dynamic-choice-component-only', source: build.verified.source_id,
       attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
       corpus: rows.length, native: build.nativeEvidence(), wasm: build.wasmEvidence(),
       packages: build.generatedPackages, memory, maxima, browser: {cases: browser.cases, calls: browser.calls.length,
-        audits: browser.audits, maximum: maximumBrowser.results, rendererMutants: rendererMutants.names}, sourceMutants,
+        audits: browser.audits, maximum: maximumBrowser.results, rendererMutants: rendererMutants.names}, sourceMutants, artifactSubstitutions,
       frozenInputs: {files: Object.keys(inputs).length, sha256: sha(Buffer.from(JSON.stringify(inputs)))},
       obligations: ['unchanged DK-23, DK-26 and DK-29 full owners', 'installed SDK/source archive regeneration',
-        'application authorization, meaningful option names and human usability/accessibility assessment']}));
+        'application authorization, meaningful option names and human usability/accessibility assessment']};
+    const evidence = retain(build, result, inputSnapshot);
+    t.diagnostic(JSON.stringify({evidence, scope: result.scope, corpus: rows.length, sourceMutants, artifactSubstitutions}));
     success = true;
   } finally {
-    if (success) rmSync(build.work, {recursive: true, force: true});
-    else process.stderr.write('Retained failed dynamic choice owner ' + build.work + '\n');
+    process.stderr.write('Retained ' + (success ? 'complete component' : 'failed') + ' dynamic choice evidence ' + build.work + '\n');
   }
 }

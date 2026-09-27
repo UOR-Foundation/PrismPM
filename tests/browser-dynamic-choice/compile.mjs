@@ -39,6 +39,7 @@ export function frozenInputs() {
     'crates/conformance/src/cases/mod.rs', 'crates/conformance/tests/conformance.rs',
     'model/dependencies.toml', 'rust-toolchain.toml', 'lean-toolchain', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
+    'sdk/stdlib-sources.tar',
     'model/browser-semantic-presentation-oracles.json', 'model/browser-semantic-presentation-diagnostics.json',
     'scripts/browser-api-sdk-check.mjs', 'scripts/owning-node-reporter.mjs',
     'vendor/lean4-prod/lean.tar', 'vendor/lean4-prod/rust/MANIFEST.sha256', 'vendor/lexlean/MANIFEST.sha256',

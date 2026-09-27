@@ -449,8 +449,12 @@ pub fn run_at(root: &Path, id: &str) {
         "DK-31" => verify_node_suite(
             root,
             id,
-            &["sdk/browser/dynamic-choice.test.mjs"],
-            1,
+            &[
+                "tests/browser-dynamic-choice/wire.test.mjs",
+                "tests/browser-dynamic-choice/component.test.mjs",
+                "sdk/browser/dynamic-choice.test.mjs",
+            ],
+            8,
             "3600000",
         ),
         "OC-07" => verify_browser_export(root),
