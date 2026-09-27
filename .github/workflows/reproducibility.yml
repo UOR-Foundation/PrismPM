@@ -1,10 +1,11 @@
 name: Reproducibility Gate
 
+# Included in both complete vv.yml passes; retained for explicit diagnosis.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   reproducibility:
@@ -14,4 +15,5 @@ jobs:
       - name: Compare complete platform-independent outputs in two absolute roots
         uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
         with:
+          push: never
           runCmd: cargo xtask check-reproducibility

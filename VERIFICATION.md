@@ -2429,6 +2429,21 @@ executable; it produced no reviewed golden update. The successful write and
 readback above used the same stable executable. This development-platform
 evidence does not establish full V&V, installed-SDK or other-platform acceptance.
 
+## Automatic full CI ownership — 27 September 2026
+
+The workflow-policy regression first failed because pull requests omitted the
+normative gate. Both PR and main events now execute the unchanged two complete
+`just vv` passes in one checkout. Duplicate partial/bootstrap/honesty/repro
+workflows remain manual diagnostics; native amd64/arm64 review is unchanged.
+The complete 21-case observer suite passes, including actual first/second
+command failures and mutants for omitted/filtered triggers, skipped/weakened
+gates, duplicate automatic owners and cancellation of non-PR verification.
+Actionlint 1.7.8 accepts every workflow after removing decorative backticks from
+the candidate summary's literal format string (SC2016); no lint is suppressed.
+Full `cargo xtask validate` also passes all 190 infrastructure cases. These
+infrastructure tests do not establish successful execution of the two full V&V
+passes or publication.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

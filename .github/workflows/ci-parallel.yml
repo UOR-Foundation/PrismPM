@@ -1,10 +1,9 @@
-name: Parallel CI Gates
+name: Parallel gate diagnostics (not acceptance)
 
+# These slices are useful diagnostics, not an exhaustive V&V substitute.
+# vv.yml owns automatic PR/main acceptance and its complete repeatability run.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -203,5 +203,5 @@ jobs:
           retention-days: 90
       - name: State the development-only boundary
         run: |
-          printf 'Development SDK only: `%s`.\n\nEach platform has a complete signed OCI SPDX artifact; index provenance is retained. This is not an inline SPDX attestation.\n\nNo production acceptance, public Cargo qualification, full VV, or release promotion is claimed.\n' \
+          printf 'Development SDK only: %s.\n\nEach platform has a complete signed OCI SPDX artifact; index provenance is retained. This is not an inline SPDX attestation.\n\nNo production acceptance, public Cargo qualification, full VV, or release promotion is claimed.\n' \
             "$(cat "$RUNNER_TEMP/sdk-candidate-image.txt")" >> "$GITHUB_STEP_SUMMARY"
