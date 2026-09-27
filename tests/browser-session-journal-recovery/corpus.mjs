@@ -36,6 +36,9 @@ export function recoveryCorpus() {
   for (const [name, state] of [['Ready', ready], ['ClosedQuiescent', quiescentClosed], ['Settled', terminal]]) {
     add(name + 'NewEpoch', state); add(name + 'SameEpoch', state, state[3][3]);
   }
+  const counters = initial({sequence: 0xffffffff, operation: 0xffffffff, revision: 0xffffffff, phase: 3});
+  counters[3][3][2] = 0xffffffff;
+  add('MaximumCountersResetOnlyVolatile', counters, counters[3][3]);
   for (const [name, state] of [['Prepared', pending], ['Unknown', unknown], ['ClosedPending', closed], ['ClosedUnknown', closedUnknown]]) {
     no(name + 'CannotRecoverWithoutTerminal', state, 8);
     contexts.push({id: name + 'Context', request: contextRequest(state), response: contextSuccess(state)});
@@ -55,6 +58,9 @@ export function recoveryCorpus() {
   no('SelectorOver', quiescentClosed, 0, authority, execution, bytes(ready[1][1] + 1));
   no('ViewRevision', quiescentClosed, 5, authority, execution, selector, presentation(1));
   no('ViewPhase', quiescentClosed, 5, authority, execution, selector, presentation(0, 3));
+  const smallView = structuredClone(quiescentClosed); smallView[1][6] = smallView[4][4].length;
+  const wide = decode(view); wide[6].push([0, [4, 'longer presentation']]);
+  no('PresentationOver', smallView, 5, authority, execution, selector, encode(wide));
   const malformedState = structuredClone(quiescentClosed); malformedState[3][0] = bytes(31);
   no('InvalidPredecessor', malformedState, 3);
   contexts.push({id: 'InvalidContextPredecessor', request: contextRequest(malformedState), response: rejected(3)});
@@ -75,6 +81,34 @@ export function recoveryCorpus() {
     contexts.push({id: 'ContextBinds' + name, request: contextRequest(state), response: contextSuccess(state)});
     assert.notDeepEqual(contextSuccess(state), contextSuccess(ready));
   }
+  for (let index = 1; index < ready[1].length; index++) {
+    const state = structuredClone(ready); state[1][index]++;
+    contexts.push({id: 'ContextBindsLimit' + index, request: contextRequest(state), response: contextSuccess(state)});
+    assert.notDeepEqual(contextSuccess(state), contextSuccess(ready));
+  }
+  for (const [name, change] of [
+    ['Sequence', x => {x[3][1]++; x[3][4][1][0][1]++;}],
+    ['Step', x => {x[3][4][1][1]++;}],
+    ['Continuation', x => {x[3][4][1][3] = bytes(5, 28);}],
+    ['Request', x => {const value = decode(x[3][4][1][2]); value[5][1]++; x[3][4][1][2] = encode(value);}],
+    ['Intent', x => {const value = decode(x[3][4][1][0][3]); value[3][0][1] = 'changed'; x[3][4][1][0][3] = encode(value);}],
+    ['Authority', x => {x[3][3][2]++; x[3][4][1][0][2] = structuredClone(x[3][3]);}],
+    ['Execution', x => {x[4][0] = bytes(32, 28); x[3][4][1][0][0] = x[4][0];
+      const value = decode(x[3][4][1][2]); value[2] = x[4][0]; x[3][4][1][2] = encode(value);}],
+    ['Counter', x => {x[4][1]++; const value = decode(x[3][4][1][2]); value[3]++; x[3][4][1][2] = encode(value);}],
+  ]) {
+    const state = structuredClone(pending); change(state);
+    contexts.push({id: 'ContextBindsPending' + name, request: contextRequest(state), response: contextSuccess(state)});
+    assert.notDeepEqual(contextSuccess(state), contextSuccess(pending));
+  }
+  const changedManifest = structuredClone(ready), manifest = decode(changedManifest[2]);
+  manifest[3].push(['zzextra', [1]]); changedManifest[2] = encode(manifest);
+  contexts.push({id: 'ContextBindsManifest', request: contextRequest(changedManifest), response: contextSuccess(changedManifest)});
+  assert.notDeepEqual(contextSuccess(changedManifest), contextSuccess(ready));
+  const alternateView = structuredClone(ready), alternate = decode(alternateView[4][4]);
+  alternate[6].push([0, [4, 'presentation is intentionally excluded']]); alternateView[4][4] = encode(alternate);
+  contexts.push({id: 'ContextExcludesOnlyPresentation', request: contextRequest(alternateView), response: contextSuccess(alternateView)});
+  assert.deepEqual(contextSuccess(alternateView), contextSuccess(ready));
   const oldTerminal = sessionCorpus().filter(row => ['ClosedLateCompletion', 'UnknownLateCompletion'].includes(row.id));
   assert.equal(oldTerminal.length, 2, 'unchanged DK26 refuses late completions');
   const composition = [{id: 'TerminalThenQuiescentRecovery',
@@ -90,6 +124,15 @@ export function recoveryCorpus() {
       const trailing = new Uint8Array(row.request.length + 1); trailing.set(row.request);
       group.push({id: row.id + 'Trailing', request: trailing, response: malformed(8)});
     }
+    assert.equal(new Set(group.map(row => row.id)).size, group.length);
+  }
+  for (const [group, example] of [[rows, rows[0]], [contexts, contexts[0]]]) {
+    for (let length = 0; length < example.request.length; length++)
+      group.push({id: 'Truncated' + length, request: example.request.slice(0, length), response: malformed(2)});
+    const value = decode(example.request), wrongVersion = structuredClone(value); wrongVersion[0] = 2;
+    group.push({id: 'WrongVersion', request: encode(wrongVersion), response: malformed(3)});
+    group.push({id: 'NoncanonicalTop', request: Uint8Array.of(0x98, value.length, ...example.request.slice(1)), response: malformed(5)});
+    group.push({id: 'IndefiniteTop', request: Uint8Array.of(0x9f, ...example.request.slice(1)), response: malformed(4)});
     assert.equal(new Set(group.map(row => row.id)).size, group.length);
   }
   return {recovery: rows, context: contexts, composition, unchangedLateCompletion: oldTerminal};
