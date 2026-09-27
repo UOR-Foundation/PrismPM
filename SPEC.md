@@ -1583,7 +1583,12 @@ Acceptance requires independent complete source/kernel/native/no_std/Wasm
 corpora, 64 MiB combined maxima, one-over negatives, generated browser transcripts
 replayed natively, real keyboard/reflow/error/secret journeys and source/adapter
 mutants. The pinned axe-core oracle executes on rendered output and must detect
-real broken-label/contrast controls. Its automated subset is not complete WCAG
+real broken-label/contrast controls. Adapter mutation evidence requires a complete
+pristine baseline, including that oracle, and an assertion-owned counterexample
+at the mutation's exact expected journey and semantic check. Missing tooling,
+browser failures, surviving mutations and different failures cannot count as
+detected mutants; actual negative tests enforce each boundary. Its automated
+subset is not complete WCAG
 conformance, manual usability assessment, a brand approval or Foundry acceptance.
 The private tokens do not claim Design Tokens Community Group conformance.
 

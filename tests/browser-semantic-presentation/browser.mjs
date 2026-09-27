@@ -12,7 +12,19 @@ import {fixture, labels, designs} from './corpus.mjs';
 
 const cases = [];
 const test = (name, run) => cases.push({name, run});
+const DOM_CASE = 'actual DOM exposes names, purposes, descriptions, validation and skip target';
+const LAYOUT_CASE = 'actual source-bound layout reflows, changes appearance and retains forced-color focus';
+const PREFLIGHT_CASE = 'complete metadata preflight is atomic and changed equal revision cannot replace context';
+const semanticFailures = new WeakMap();
 let active;
+function semanticEqual(check, actual, expected) {
+  try { assert.deepEqual(actual, expected); }
+  catch (cause) {
+    const error = new Error('semantic counterexample: ' + check, {cause});
+    semanticFailures.set(error, Object.freeze({case:active.currentCase, check, actual, expected}));
+    throw error;
+  }
+}
 async function withBrowser(callback) {
   return realBrowser(async context => {
     const result = await callback(context);
@@ -89,25 +101,25 @@ test('semantic entry rejects accessor catalogues and open option extensions', ()
   assert.throws(() => openSemanticPresentation({}, 1), PresentationError);
 });
 
-test('actual DOM exposes names, purposes, descriptions, validation and skip target', async () => {
+test(DOM_CASE, async () => {
   await withBrowser(async ({browser, baseURL}) => {
     const page = await browser.newPage(), frame = fixture(); frame[5][2][3] = 5;
     await setup(page, baseURL, frame);
-    assert.equal(await page.getByRole('main').count(), 1);
+    semanticEqual('main-landmark', await page.getByRole('main').count(), 1);
     assert.equal(await page.getByRole('heading', {level: 1, name: 'Welcome'}).count(), 1);
-    assert.equal(await page.getByLabel('Email', {exact: true}).getAttribute('autocomplete'), 'email');
+    semanticEqual('email-autocomplete', await page.getByLabel('Email', {exact: true}).getAttribute('autocomplete'), 'email');
+    semanticEqual('email-type', await page.getByLabel('Email', {exact: true}).getAttribute('type'), 'text');
     assert.equal(await page.getByLabel('Email', {exact: true}).getAttribute('inputmode'), 'email');
-    assert.equal(await page.getByLabel('Email', {exact: true}).getAttribute('type'), 'text');
     assert.equal(await page.getByLabel('Recovery code', {exact: true}).getAttribute('autocomplete'), 'one-time-code');
     assert.equal(await page.getByLabel('Recovery code', {exact: true}).getAttribute('type'), 'password');
     const result = await page.evaluate(() => {
       const {root} = semanticTest, input = root.querySelector('input');
       return {invalid: input.getAttribute('aria-invalid'),
         descriptions: input.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id).textContent),
-        error: document.getElementById(input.getAttribute('aria-errormessage')).textContent,
+        error: document.getElementById(input.getAttribute('aria-errormessage'))?.textContent ?? null,
         sameTarget: root.querySelector('a').hash === '#' + root.querySelector('[role="main"]').id};
     });
-    assert.deepEqual(result, {invalid: 'true', descriptions: [labels[3].text, labels[4].text],
+    semanticEqual('error-associations', result, {invalid: 'true', descriptions: [labels[3].text, labels[4].text],
       error: labels[4].text, sameTarget: true});
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Skip to main content');
@@ -118,12 +130,12 @@ test('actual DOM exposes names, purposes, descriptions, validation and skip targ
   });
 });
 
-test('actual source-bound layout reflows, changes appearance and retains forced-color focus', async () => {
+test(LAYOUT_CASE, async () => {
   await withBrowser(async ({browser, baseURL}) => {
     const page = await browser.newPage({viewport: {width: 1280, height: 720}}), frame = fixture();
     frame[5][1][5] = 3;
     await setup(page, baseURL, frame);
-    assert.equal(await page.locator('form').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 2);
+    semanticEqual('wide-layout-columns', await page.locator('form').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 2);
     await page.setViewportSize({width: 320, height: 640});
     assert.equal(await page.locator('form').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 1);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '320 CSS px has no horizontal overflow');
@@ -160,26 +172,38 @@ test('ordinary email and ephemeral recovery bytes survive native keyboard captur
   });
 });
 
-test('complete metadata preflight is atomic and changed equal revision cannot replace context', async () => {
+test(PREFLIGHT_CASE, async () => {
   await withBrowser(async ({browser, baseURL}) => {
     const page = await browser.newPage(); await setup(page, baseURL);
     await page.getByLabel('Recovery code', {exact: true}).fill('retained synthetic');
-    const codes = await page.evaluate(() => {
-      const {root, view, frame, wire} = semanticTest, before = root.outerHTML, codes = [];
+    const outcomes = await page.evaluate(() => {
+      const {root, view, frame, wire} = semanticTest, before = root.outerHTML, outcomes = [];
       for (const change of [x => { x[2] = 1; }, x => { x[5][2][2] = 256; },
         x => { x[5][0][4] = 0; }, x => { x[5][2][1] = 6; }]) {
         const candidate = structuredClone(frame); candidate[1][1]++;
         change(candidate);
-        try { view.render(wire.encodeWire(candidate)); throw Error('invalid accepted'); }
-        catch (error) { if (error.name !== 'PresentationError') throw error; codes.push(error.code); }
-        if (root.outerHTML !== before || root.querySelector('input[type=password]').value !== 'retained synthetic') throw Error('preflight mutated DOM');
+        let code = 'accepted', errorName = null;
+        try { view.render(wire.encodeWire(candidate)); }
+        catch (error) {
+          if (error.name !== 'PresentationError') throw error;
+          code = error.code; errorName = error.name;
+        }
+        outcomes.push({code, errorName, unchanged:root.outerHTML === before,
+          secretRetained:root.querySelector('input[type=password]')?.value === 'retained synthetic'});
       }
+      return outcomes;
+    });
+    assert.equal(outcomes.length, 4);
+    for (const [at, code] of ['labels', 'labels', 'binding', 'binding'].entries())
+      semanticEqual('catalogue-preflight-' + at, outcomes[at],
+        {code, errorName:'PresentationError', unchanged:true, secretRetained:true});
+    const equalRevision = await page.evaluate(() => {
+      const {view, frame, wire} = semanticTest;
       const equal = structuredClone(frame); equal[5][2][3] = 5;
       try { view.render(wire.encodeWire(equal)); throw Error('same revision accepted'); }
-      catch (error) { if (error.code !== 'stale') throw error; codes.push(error.code); }
-      return codes;
+      catch (error) { if (error.name !== 'PresentationError' || error.code !== 'stale') throw error; return error.code; }
     });
-    assert.deepEqual(codes, ['labels', 'labels', 'binding', 'binding', 'stale']);
+    assert.equal(equalRevision, 'stale');
     const context = await page.evaluate(() => {
       const {root, view, frame, wire} = semanticTest, held = root.querySelector('input[type=password]');
       const candidate = structuredClone(frame); candidate[1][1]++;
@@ -238,6 +262,7 @@ test('actual imported axe oracle audits rendered component and detects broken co
         incomplete: result.incomplete.map(row => row.id), passes: result.passes.map(row => row.id)};
     });
     const valid = await run(); assert.deepEqual(valid.violations, []);
+    assert.deepEqual(valid.incomplete, [], 'the actual component oracle must finish every selected check');
     assert.ok(valid.passes.includes('label') && valid.passes.includes('color-contrast'));
     t.diagnostic(JSON.stringify({scope: pins.scope, oracle: 'axe-core/4.13.0', sha256: pins.engine.sha256, ...valid}));
     await page.evaluate(() => {
@@ -261,6 +286,7 @@ export async function journey(t, build = null, replacements = {}) {
   const completed = [];
   try {
     for (const {name, run} of cases) {
+      active.currentCase = name;
       await run(t); completed.push(name);
     }
     return {modelChecked: Boolean(build), cases: completed, calls: active.calls};
@@ -268,24 +294,46 @@ export async function journey(t, build = null, replacements = {}) {
 }
 
 export async function verifyMutants(t, build = null) {
+  // A missing oracle or broken environment must fail before any kill is counted.
+  const baseline = await journey(t, build);
+  assert.equal(baseline.cases.length, 7);
+  assert.deepEqual(baseline.cases, cases.map(row => row.name));
   const file = new URL('../../sdk/browser/presentation-dom.mjs', import.meta.url), original = readFileSync(file, 'utf8');
   const mutants = [
-    ['input purpose', "'name', 'organization', 'email', 'username'", "'name', 'organization', 'off', 'username'"],
-    ['native byte preservation', "if (purpose === 4) control.inputMode = 'email';", "if (purpose === 4) control.type = 'email';"],
-    ['error association', "control.setAttribute('aria-errormessage', `${scope}-error-${id}`);", "control.removeAttribute('aria-errormessage');"],
-    ['landmark semantics', "if (landmark) record.element.setAttribute('role', ['', 'main', 'banner', 'complementary', 'contentinfo'][landmark]);", ''],
-    ['catalogue preflight', "if (semantic && !semanticCatalogueFits(envelope, labels.length, designs.length)) fail('labels');", ''],
+    ['input purpose', DOM_CASE, 'email-autocomplete', 'off', "'name', 'organization', 'email', 'username'", "'name', 'organization', 'off', 'username'"],
+    ['native byte preservation', DOM_CASE, 'email-type', 'email', "if (purpose === 4) control.inputMode = 'email';", "if (purpose === 4) control.type = 'email';"],
+    ['error association', DOM_CASE, 'error-associations', {invalid:'true', descriptions:[labels[3].text, labels[4].text], error:null, sameTarget:true},
+      "control.setAttribute('aria-errormessage', `${scope}-error-${id}`);", "control.removeAttribute('aria-errormessage');"],
+    ['landmark semantics', DOM_CASE, 'main-landmark', 0, "if (landmark) record.element.setAttribute('role', ['', 'main', 'banner', 'complementary', 'contentinfo'][landmark]);", ''],
+    ['catalogue preflight', PREFLIGHT_CASE, 'catalogue-preflight-0', {code:'design', errorName:'PresentationError', unchanged:false, secretRetained:false},
+      "if (semantic && !semanticCatalogueFits(envelope, labels.length, designs.length)) fail('labels');", ''],
   ];
-  for (const [name, from, to] of mutants) {
+  const evidence = [];
+  async function reject(name, caseName, check, observed, replacements) {
+    let failure;
+    try { await journey(t, build, replacements); }
+    catch (error) {
+      failure = semanticFailures.get(error);
+      if (!failure) throw new Error('unrelated failure cannot kill semantic ' + name, {cause:error});
+    }
+    assert.ok(failure, 'semantic mutant survived: ' + name);
+    assert.equal(failure.case, caseName, 'exact expected semantic journey');
+    assert.equal(failure.check, check, 'exact expected semantic check');
+    assert.deepEqual(failure.actual, observed, 'exact expected semantic counterexample');
+    evidence.push(Object.freeze({name, ...failure}));
+    t.diagnostic('killed semantic ' + name + ' at ' + check);
+  }
+  for (const [name, caseName, check, observed, from, to] of mutants) {
     assert.equal(original.split(from).length, 2, 'one exact adapter mutation ' + name);
-    await assert.rejects(journey(t, build, {'presentation-dom.mjs': original.replace(from, to)}));
-    t.diagnostic('killed semantic ' + name);
+    await reject(name, caseName, check, observed, {'presentation-dom.mjs': original.replace(from, to)});
   }
   const styleFile = new URL('../../sdk/browser/semantic-presentation-style.mjs', import.meta.url), style = readFileSync(styleFile, 'utf8');
   assert.equal(style.split('@media(max-width:').length, 2);
-  await assert.rejects(journey(t, build, {'semantic-presentation-style.mjs': style.replace('@media(max-width:', '@media(min-width:')}));
-  t.diagnostic('killed semantic reflow');
+  await reject('reflow', LAYOUT_CASE, 'wide-layout-columns', 1,
+    {'semantic-presentation-style.mjs': style.replace('@media(max-width:', '@media(min-width:')});
   assert.equal(readFileSync(file, 'utf8'), original); assert.equal(readFileSync(styleFile, 'utf8'), style);
+  assert.equal(evidence.length, 6);
+  return Object.freeze(evidence);
 }
 
 export async function verifyMaximum(t, build) {

@@ -8,7 +8,21 @@ The follow-up freezes each generator manifest, declared file/directory inventory
 and IR binding before first compilation; targets are outside that inventory.
 A planted actual generated-source substitution must fail before either native
 observer is built. Successful source mutants now retain proof/program receipts;
-failed work is preserved. The unchanged full 16-test owner must pass again.
+failed work is preserved. The full owner now requires 21 tests: all original 16
+plus five false-mutation-evidence safeguards. It must pass again on this closure.
+
+The previous unqualified rejection check counted all six mutants when the
+actual imported oracle was missing. The corrected gate first executes all seven
+pristine journeys, including pinned axe, then requires assertion-owned evidence
+at each mutant's exact journey/check. The bounded DOM suite passes 7/7: complete
+positive journeys, six real mutants, and actual missing-oracle, launch, closed-page,
+no-op and wrong-check negatives in private copies. Both registered and installed
+minima are 21; real Node fixtures reject omission of each safeguard. This does
+not replace complete generated native/Wasm, maximum-frame or source-mutant gates.
+The complete SDK-boundary/wire/DOM check passed 42/42 in 124.25 seconds; after
+requiring the exact observed counterexample, wire/DOM passed 12/12 in 27.66
+seconds. Rust formatting and diff checks pass. The complete 21-test generated
+owner and immutable installed SDK remain unaccepted on this revision.
 
 - The complete registered owner passed 16/16 without skips or TODOs: 150 wire
   cases, 93 typed predicates,
