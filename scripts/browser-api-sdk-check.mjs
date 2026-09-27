@@ -13,7 +13,7 @@ export const sourceRoots=Object.freeze([
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
- 'tests/browser-session',
+ 'tests/browser-session','tests/browser-budget','tests/browser-contextual-effects',
  'tests/fixtures/library/native-library/project',
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
@@ -25,7 +25,8 @@ export const sourceRoots=Object.freeze([
  'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
 ]);
 // These installed host primitives include private prerequisites, not a public
-// browser application runtime. DK-26 is a pure kernel, not a host module.
+// browser application runtime. DK-26/27 are pure kernels, not host modules.
+// DK-28 extends the existing private effects module, not that public runtime.
 // DK-21/22 retain their full installed-V&V owners.
 export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
@@ -47,8 +48,10 @@ export const suites=Object.freeze([
  {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
  {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
  {id:'DK-26',minimum:34,files:['session-model-test.mjs','tests/browser-session/wire.test.mjs']},
+ {id:'DK-27',minimum:13,files:['budget-model-test.mjs']},
+ {id:'DK-28',minimum:24,files:['contextual-effects.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};

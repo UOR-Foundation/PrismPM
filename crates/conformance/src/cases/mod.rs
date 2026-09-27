@@ -438,6 +438,13 @@ pub fn run_at(root: &Path, id: &str) {
             13,
             "3600000",
         ),
+        "DK-28" => verify_node_suite(
+            root,
+            id,
+            &["sdk/browser/contextual-effects.test.mjs"],
+            24,
+            "3600000",
+        ),
         "DK-18" => browser_effect::verify(root),
         "OC-07" => verify_browser_export(root),
         "OC-08" => browser_publication::verify(root),

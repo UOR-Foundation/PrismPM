@@ -1670,6 +1670,28 @@ history, effect acknowledgments, safe checkpoint/segment rotation, rollback
 witnesses and private secret-to-nonsecret evidence composition remain separately
 required SessionJournal/runtime obligations. `PP2011` and Holo/1 are unchanged.
 
+### Private contextual effect staging
+
+DK-28 extends only private SDK composition over DK-18's existing generated
+effect admission. Its separate factory observes copied application, manifest,
+execution and next-operation bindings; observations reserve no counter, grant
+no authority and contain no signing key. The caller cannot choose an execution
+identifier. Exact canonical requests reach the generated reducer unchanged;
+stale or substituted fields cannot be repaired by relabeling them.
+
+Admitted requests execute only through a private single-use release. Its result
+binds the originally captured request to the actual modeled primitive result,
+never a caller completion. Close and unknown outcomes cannot authorize retries
+or manufacture durable receipts. Existing DK-20 and DK-24 interfaces, custody
+checks, queue bounds and acceptance remain unchanged and mandatory.
+
+The owner exercises all primitive families, stale and competing observations,
+cross-execution reuse, input/output aliasing, malformed frames, queue exhaustion,
+unknown/close races and planted host defects in real browsers, with native
+std/no_std replay of actual generated transcripts. This is not SessionJournal,
+source-wrapper authorization, per-resource budget composition or public runtime
+acceptance; it does not open PP2011 or establish a deployable Foundry.
+
 ### Private per-resource admission
 
 DK-27's `Foundation.Browser.Application.V1.Budget` supplements the existing
@@ -2207,6 +2229,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
 | `DK-26` | `sdk` | The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
+| `DK-28` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

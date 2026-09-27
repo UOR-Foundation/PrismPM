@@ -859,6 +859,12 @@ level = "build"
 statement = "Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds."
 
 [[id]]
+id = "DK-28"
+suite = "sdk"
+level = "build"
+statement = "Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

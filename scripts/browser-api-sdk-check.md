@@ -6,7 +6,7 @@ it. Both native release jobs run the gate independently of source V&V.
 
 The gate compares the complete installed host-module directory and measured
 source/compiler/fixture closure, then executes all DK-07–16, DK-19, DK-20,
-DK-23–26 Node owners offline with read-only sources and private temporary caches.
+DK-23–28 Node owners offline with read-only sources and private temporary caches.
 Every selected file must register passing tests; missing, skipped or invented
 completion records reject. Driver manifests and locks are acquisition-pinned.
 DK-21/DK-22 execute in the separate mandatory full installed native V&V.
@@ -22,6 +22,13 @@ compiler, presentation, operation-journal and credential-custody prerequisites d
 `PP2011`, issue grants or accept an application, deployment or account/recovery
 journey. The operation journal retains its complete 28-test owner and the
 unchanged effect owner; neither is replaced by inventory checks.
+The pure DK-27 resource-budget kernel retains its complete 13-test one-hour
+owner and source/fixture closure, including generated-package license inputs.
+DK-28 retains its complete 24-test contextual-staging owner and fixture closure,
+extending only the existing private effects module. It issues no durable receipt
+or application authorization and does not replace the unchanged DK-20/DK-24 owners.
+Tests compare files, counts and deadlines with the actual registered Rust owners
+and reject omitted files, below-minimum runs and changed source/compiler inputs.
 
 ## Verification
 

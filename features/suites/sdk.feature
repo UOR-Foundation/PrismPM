@@ -7,6 +7,13 @@ Feature: sdk
     Then substituted authority, intents, state, requests and continuations reject without losing custody of unresolved operations
     And actual source guard mutations fail while durable orchestration and public acceptance remain separate requirements
 
+  @DK-28 @build
+  Scenario: Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance.
+    Given independently bound generated effect artifacts and private credential custody
+    When exact source-generated requests pass the existing modeled admission and the private release is consumed once
+    Then stale contexts, substituted bindings, concurrent admissions and altered caller buffers cannot relabel or prematurely execute a primitive
+    And actual browser completions replay in native std and no_std while existing effect and journal owners remain mandatory
+
   @DK-27 @build
   Scenario: Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds.
     Given a complete independently bound manifest and source-derived per-resource budgets
