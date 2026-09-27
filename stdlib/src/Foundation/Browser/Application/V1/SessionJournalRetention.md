@@ -29,7 +29,10 @@ the whole replacement/addition/retirement and await transaction completion.
 Revision-only comparison or readback before a separate CAS does not close GC
 races. Abort or lost acknowledgement cannot release an effect.
 
-The private wire is canonical CBOR to EOF, with bounded balanced list writers;
+The private wire is canonical CBOR to EOF. Balanced parsing and indexed-range
+validation/writing preserve the complete domain without linear stack growth or
+repeated copies of the full reference frontier. The source emits the fixed
+canonical CBOR header only after checking each reference's exact 32-byte width;
 it does not broaden the existing Effects codec's 64-item domain. Request/reply
 limits remain 64 MiB and generated Wasm remains 1 GiB. Whole-owner execution must
 cover 64×4096 references, actual 4096-object retirement, 16-addition full-capacity

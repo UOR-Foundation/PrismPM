@@ -89,6 +89,35 @@ export function retentionCorpus() {
   const full = [1, 9, Array.from({length: 4096}, (_, index) => reference(index + 1)), []];
   add('RetentionObject4097Refused', full, none(), [reference(4097)], [], error(8), 'capacity');
   add('RetentionAddition17Refused', empty, none(), Array.from({length: 17}, (_, index) => reference(index + 1)), [], error(2), 'capacity');
+  // Independent split/range boundaries exercise the actual4096-item domain;
+  // malformed objects use no roots so another closure guard cannot mask a
+  // missed ordering/width check in the balanced validator.
+  for (const count of [1, 3, 63, 127, 4095]) {
+    const objects = Array.from({length: count}, (_, index) => reference(index + 1)), snapshot = [1, 20, objects, []];
+    rows.push(vector('RetentionOddSnapshot' + count, [1, 1, snapshot], ok(true), 'split-boundary'));
+    add('RetentionOddCommit' + count, snapshot, none(), [], [], ok([1, 21, objects, []]), 'split-boundary');
+  }
+  for (const index of [0, 2047, 2048, 4095]) {
+    const objects = Array.from({length: 4096}, (_, at) => reference(at + 1));
+    objects[index] = new Uint8Array(31);
+    rows.push(vector('RetentionWidthAt' + index, [1, 1, [1, 0, objects, []]], ok(false), 'split-boundary'));
+  }
+  for (const index of [1, 2047, 2048, 4095]) {
+    const objects = Array.from({length: 4096}, (_, at) => reference(at + 1));
+    objects[index] = reference(index);
+    rows.push(vector('RetentionDuplicateAt' + index, [1, 1, [1, 0, objects, []]], ok(false), 'split-boundary'));
+  }
+  for (const index of [0, 2047, 2048, 4094]) {
+    const objects = Array.from({length: 4096}, (_, at) => reference(at + 1));
+    [objects[index], objects[index + 1]] = [objects[index + 1], objects[index]];
+    rows.push(vector('RetentionUnsortedAt' + index, [1, 1, [1, 0, objects, []]], ok(false), 'split-boundary'));
+  }
+  const oddObjects = Array.from({length: 255}, (_, index) => reference(2 * index + 2));
+  const inserted = [reference(1), reference(255), reference(511)];
+  const combined = [...oddObjects, ...inserted].toSorted((left, right) => new DataView(left.buffer).getUint32(0) - new DataView(right.buffer).getUint32(0));
+  add('RetentionOddInsertRanges', [1, 20, oddObjects, []], none(), inserted, [], ok([1, 21, combined, []]), 'split-boundary');
+  add('RetentionOddRetireRanges', [1, 20, oddObjects, []], none(), [], [oddObjects[0], oddObjects[127], oddObjects[254]],
+    ok([1, 21, oddObjects.filter((_, index) => ![0, 127, 254].includes(index)), []]), 'split-boundary');
   const canonical = encodeRetentionFixture([1, 1, initial]);
   for (const [name, request, code] of [['Empty', [], 2], ['Trailing', [...canonical, 0], 8], ['Nonminimal', [0x83, 0x18, 1, ...canonical.slice(2)], 5],
     ['Indefinite', [0x9f, ...canonical.slice(1), 0xff], 4], ['Operation', [0x82, 1, 2], 3], ['OuterOver', [0x87], 6]])
