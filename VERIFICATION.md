@@ -1,5 +1,38 @@
 # PrismPM falsifiability and verification record
 
+## Recovered private session kernel (DK-26)
+
+The complete registered owner passed in the pinned development container:
+34 underlying tests, 895 protocol cases, seven source-wrapper cases, 686 writer
+parity cases, 18 session/9 effect-domain/18 writer maxima, and 21 genuine source
+mutants in generated native std/no_std and Wasm execution. The 2,543.38-second
+run retained every maximum and mutation; all 825 source/tool input hashes still
+match after the non-kernel CI/golden-base fast-forward to `c6faf97`.
+
+`target/dk26-integration/registered-owner.log` SHA-256:
+`d012e3490167ac419f0dcadbbe9ff73b6ff7a9f3b8fc171413fe432f48419621`.
+The actual `session-acceptance.json` receipt SHA-256 is
+`b3cbaca6933aadef39d82770b6c43e7940d46e2a23865888db6de7c190055dea`.
+Complete supporting runs passed: 24 SDK/acquisition boundary tests, 57
+conformance/model library tests, 30 xtask tests, 191 source-audit checks and
+scoped all-target/all-feature Clippy. An earlier isolated-container audit failed
+for lack of its Docker socket; the complete Docker-enabled rerun passed.
+After the base fast-forward, the complete source audit passed all 192 checks
+in 86.46 seconds, including the full CI-policy regression.
+
+The normal golden writer and non-writing readback passed all 359 files for
+build `c61f76a5280d23d717d738d10ae2e7965f4dc938caf8674ed16b84b12628e81c`
+(`DevelopmentAmd64`). Only two exact authored-source copies and three linked
+metadata/manifests changed; generated Lean/native behavior bytes are unchanged.
+Writer/readback log SHA-256:
+`e9b87737a4777e313659c17265fe868e740c23b8dd11fdc6ab087c137b36c09e` /
+`2c4d895c93c1e8bdffc87f82add7d97800e44bca6d01238b526cceadce25b761`.
+
+This establishes the private pure kernel only, not durability, authenticated
+authority, a SessionJournal, public Browser admission, an installed SDK or
+Foundry acceptance. Integrating changed compiler helpers requires fresh
+combined owner/SDK evidence; this receipt cannot cover new inputs.
+
 ## Integrated emitter source binding
 
 The complete audit rejected the stale emitter digest after metadata-alias
