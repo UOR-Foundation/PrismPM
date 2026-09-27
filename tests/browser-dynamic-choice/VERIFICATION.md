@@ -4,35 +4,44 @@ Private additive dynamic-choice prerequisite; not an accepted SDK or application
 Base: `a3f831b`. The registered owner initially failed in the pinned devcontainer
 with `ERR_MODULE_NOT_FOUND` for its absent `checks.mjs` implementation.
 
-The full owner must execute fresh source/kernel, native std/no_std, Core-Wasm,
-actual browser selection and semantic-annotation journeys, complete maxima,
-unchanged DK-23/DK-29 owners and actual source/renderer mutations. Construction
-checks are not acceptance. No heavy owner has run for this extension.
+Fresh owner at `590a9e4`: 8/8 PASS in 1005.285s, no skipped tests. Execution:
+`node --test --test-concurrency=1 --test-timeout=3600000
+tests/browser-dynamic-choice/wire.test.mjs
+tests/browser-dynamic-choice/component.test.mjs sdk/browser/dynamic-choice.test.mjs`
+in the pinned `prismpm-dev` devcontainer.
 
-Construction: 17 host/model tests pass; pinned Chromium executes seven journeys
-and kills five actual renderer mutations. The fixture's pinned axe 4.13.0 audit
-has no violations or incomplete checks. These are not generated-source results.
+Evidence: `/tmp/prismpm-dynamic-choice-IjidZV/dynamic-choice-evidence.json`,
+SHA-256 `1c8efd5d4d5aeefc2ca5f6e48f44daa6996e3becdd990d6022a0c0e54616334e`.
+Frozen input receipt: 885 files,
+`eac6e4a8a11d03b07e88ed9ba8cbf887e6f66215dd7edcf30dc14d129a30b56c`.
+An independent readback verified all input snapshots and 1,392 retained files
+across the baseline and six source mutants, including native/Wasm identities.
 
-Owning inventory: 13 source modules; eight roots; fresh native std/no_std; two
-independently generated Wasm packages per root; complete new/legacy wire corpus;
-eight combined exact-64-MiB dynamic/mixed frames and one-over; 53 actual browser
-calls plus 33 renderer-mutant calls replayed by both native modes; six independently
-compiled source mutations. Each mutation regenerates the native package and two
-Wasm packages for its affected root, not unrelated roots. Maximum browser bytes
-are bound by hashes to the exact native input files, not synthetic transcripts.
+Coverage: 13 kernel-checked source modules; eight roots; fresh native std/no_std;
+two independently generated Wasm packages per root; 168 new/legacy vectors;
+eight combined exact-64-MiB dynamic/mixed frames and one-over; seven generated
+browser journeys (53 calls), five killed renderer mutations (33 calls) and
+maximum browser frames (16 calls), all replayed by both native modes. Maximum
+Wasm memory was 965,279,744 bytes within the unchanged 1 GiB limit. Maximum
+browser bytes are hash-bound to the exact native input files. Six independently
+compiled source mutants were killed by native/Wasm observations. Each regenerates
+native and two Wasm packages for its affected root, not unrelated roots.
+The fixture's imported axe 4.13.0 audit reported no violations or incomplete
+checks; this is component evidence, not complete accessibility or usability.
 
 Integration still requires unchanged DK-23/DK-26/DK-29 owners, source-package
 regeneration and installed SDK checks. Route/history and transient secret-output SDK
 prerequisites, Foundry journeys/authority, production design and human assessment
 remain separate application obligations. This capability claims none of them.
 
-Review hardening retains every failed build. Successful baseline/mutant owners
+The owner retains every failed build. Successful baseline/mutant owners
 retain source, kernel evidence, IR, packages, original/private Wasm, native
 observers, exact replay files and a rehashed receipt; complete input bytes are
-snapshotted once. Native stdout is exact and ordered. Before first native compile
-in both modes, four actual package substitutions must refuse; all eight generated
-Wasm roles must refuse original/private/buffer substitutions. Installed SDK
-registration owns all eight DK-31 tests with a one-hour deadline.
+snapshotted once. Native stdout is exact and ordered. All 32 actual artifact
+substitutions refused: changed source, matching forged manifest, extra file and
+hardlink before the first native compile in both modes; original/private/buffer
+substitution for all eight generated Wasm roles. Installed SDK registration owns
+all eight DK-31 tests with a one-hour deadline; registration is not SDK acceptance.
 
 Generator diagnostic: a normal shared-target Cargo build reused `repo-model`
 with another worktree's baked `CARGO_MANIFEST_DIR`. Its five outputs were unchanged
@@ -48,5 +57,5 @@ First full owner: RED after 153.10s; retained `/tmp/prismpm-dynamic-choice-JoDhw
 readers call the capped array reader with maximum two before exact-arity checking;
 three fields therefore produce ValueLimit. Product semantics were unchanged.
 Diagnostic-only retained execution found no other disagreement across the 166
-native vectors. Corrected expectation adds short-arity and catalogue-arity
-regressions; a fresh complete owner is still required.
+native vectors. The fresh passing owner adds short-arity and catalogue-arity
+regressions. Retained diagnostic products were not used for acceptance.
