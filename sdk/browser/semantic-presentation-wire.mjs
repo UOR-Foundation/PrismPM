@@ -27,7 +27,7 @@ export function validateSemanticPresentation(value) {
   for (const [id, purpose, helper, error, landmark, layout] of annotations) {
     const [parent, content] = nodes[id - 1], kind = content[0];
     need(purpose === 0 || (purpose <= 5 ? kind === 5 : kind === 10), 'binding');
-    need((helper === 0 && error === 0) || [5, 6, 7, 10].includes(kind), 'binding');
+    need((helper === 0 && error === 0) || [5, 6, 7, 10, 11].includes(kind), 'binding');
     need(layout === 0 || kind <= 2, 'binding');
     if (landmark !== 0) {
       need(kind === 0, 'binding'); counts[landmark]++;

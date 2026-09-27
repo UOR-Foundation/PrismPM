@@ -118,7 +118,7 @@ function open(options, semantic) {
   };
   function onEdit(event) {
     for (const record of nodes.values()) {
-      if (record.control === event.target && [5, 6, 7].includes(record.tag)) record.edited = true;
+      if (record.control === event.target && [5, 6, 7, 11].includes(record.tag)) record.edited = true;
     }
   }
   // Deliberately outside the raw request capture scope. Retained handlers own
@@ -141,7 +141,7 @@ function open(options, semantic) {
     const fields = action[5].map(id => {
       const record = nodes.get(id), control = record.control;
       let value = control.value;
-      if (record.tag === 7) value = value === '' ? 0 : Number(value);
+      if (record.tag === 7 || record.tag === 11) value = value === '' ? 0 : Number(value);
       else if (record.tag !== 10 && !record.edited && value === record.nativeDefault) value = record.defaultValue;
       return [id, value];
     });
@@ -277,19 +277,19 @@ function open(options, semantic) {
           control.disabled = !content[2]; control.required = content[3]; control.maxLength = content[4];
           record.secretShape = content; record.draftEpoch = content[5];
           record.element.replaceChildren(element('span', label(content[1])), control);
-        } else if ([5, 6, 7].includes(tag)) {
+        } else if ([5, 6, 7, 11].includes(tag)) {
           record = retained ?? {element: element('label'), control: element(tag === 5 ? 'input' : tag === 6 ? 'textarea' : 'select')};
-          const control = record.control, defaultValue = tag === 7 ? content[4] : content[5];
+          const control = record.control, defaultValue = tag === 7 || tag === 11 ? content[4] : content[5];
           const preserve = retained && record.defaultValue === defaultValue && record.draftEpoch === content[6]
             && (!semantic || (annotations.get(id)?.[1] ?? 0) === (record.annotation?.[1] ?? 0));
           record.preservedDraft = Boolean(preserve);
           const current = control.value;
           if (tag === 5) control.type = 'text';
           control.autocomplete = 'off'; control.disabled = !content[2]; control.required = content[3];
-          if (tag === 7) {
+          if (tag === 7 || tag === 11) {
             const options = [element('option', '')]; options[0].value = '';
             for (const [optionId, title] of content[5]) {
-              const option = element('option', label(title)); option.value = String(optionId); options.push(option);
+              const option = element('option', tag === 11 ? title : label(title)); option.value = String(optionId); options.push(option);
             }
             control.replaceChildren(...options);
             control.value = preserve && (current === '' || content[5].some(option => String(option[0]) === current))
@@ -329,7 +329,7 @@ function open(options, semantic) {
           record.element.id = `${scope}-node-${id}`;
           if (landmark) record.element.setAttribute('role', ['', 'main', 'banner', 'complementary', 'contentinfo'][landmark]);
           if (layout) record.element.dataset.presentationLayout = String(layout);
-          if ([5, 6, 7, 10].includes(tag)) {
+          if ([5, 6, 7, 10, 11].includes(tag)) {
             const control = record.control, caption = record.element.firstChild;
             caption.id = `${scope}-label-${id}`;
             control.setAttribute('aria-labelledby', caption.id);
