@@ -49,3 +49,27 @@ test('metadata oracle retains full replay, full step and descriptor maxima witho
   assert.equal(rows.find(row => row.id === 'MetadataMaximum1024Replay').facts.records, 1024);
   for (const row of rows) assert.ok(row.request.byteLength <= 67108864);
 });
+
+test('metadata calls retain exact pinned source definition arities', () => {
+  const declarations = new Map();
+  function capture(module) {
+    if (declarations.has(module)) return;
+    const bytes = source(module).toString('utf8');
+    declarations.set(module, JSON.parse(/\\semanticdata\{(.*)\}/.exec(bytes)[1]).declarations);
+    for (const match of bytes.matchAll(/\\importmodule\{([^}]+)\}/g)) capture(match[1]);
+  }
+  capture(model + 'Wire');
+  for (const module of [model, model + 'Wire']) {
+    function visit(value) {
+      if (!value || typeof value !== 'object') return;
+      if (value.kind === 'call') {
+        const selected = value.function.module ?? module;
+        const definition = declarations.get(selected)?.find(row => row.name === value.function.name);
+        assert.equal(definition?.kind, 'definition', selected + '.' + value.function.name);
+        assert.equal(value.arguments.length, definition.parameters.length, 'exact pinned call ' + selected + '.' + definition.name);
+      }
+      Object.values(value).forEach(child => Array.isArray(child) ? child.forEach(visit) : visit(child));
+    }
+    declarations.get(module).forEach(visit);
+  }
+});
