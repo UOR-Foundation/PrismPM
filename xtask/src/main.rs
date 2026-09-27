@@ -13,6 +13,7 @@ mod audit;
 mod codegen;
 mod formatting;
 mod gate_driver;
+mod gate_root;
 mod spec_links;
 mod stdlib;
 
@@ -55,7 +56,23 @@ fn verify_once(root: &Path) -> Result<&'static prismpm::controller::VerifyResult
 fn main() -> ExitCode {
     let task = std::env::args().nth(1).unwrap_or_else(|| "help".to_owned());
     let write = std::env::args().any(|arg| arg == "--write");
-    let root = repo_model::repo_root();
+    let root = match std::env::current_dir()
+        .map_err(|error| error.to_string())
+        .and_then(|invocation| {
+            gate_root::checked_root(
+                &repo_model::repo_root(),
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .expect("xtask is directly beneath the repository root"),
+                &invocation,
+            )
+        }) {
+        Ok(root) => root,
+        Err(error) => {
+            eprintln!("gate failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     let result = match task.as_str() {
         "validate-model" => codegen::check_model(&root, write),
