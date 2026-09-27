@@ -396,6 +396,16 @@ pub fn run_at(root: &Path, id: &str) {
             assert_eq!(evidence.negative, 0);
             assert_eq!(evidence.planted_rejections, 5);
         }
+        "HO-15" => verify_node_suite(
+            root,
+            "HO-15",
+            &[
+                "tests/holo-primary-component/component.test.mjs",
+                "tests/holo-primary-component/owner.test.mjs",
+            ],
+            8,
+            "3600000",
+        ),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {

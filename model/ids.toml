@@ -217,6 +217,12 @@ level = "build"
 statement = "Pinned BLAKE3 vectors qualify every imported digest mode, streaming partition and content-identity result without claiming cryptographic proof or durable native storage."
 
 [[id]]
+id = "HO-15"
+suite = "holo"
+level = "build"
+statement = "The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

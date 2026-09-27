@@ -7,6 +7,7 @@ import {basename, dirname, join} from 'node:path';
 import {repository, run, sha} from './compile.mjs';
 
 const owners = Object.freeze({
+  'holo-primary-component': {directory:'holo-primary-component', executable:'holo-primary-component-driver'},
   'session-retention': {directory:'browser-session-journal-retention', executable:'browser-session-journal-retention-driver'},
   'session-payloads': {directory:'browser-session-payloads', executable:'browser-session-payloads-driver'},
   publication: {directory:'publication-admission', executable:'publication-admission-driver'},

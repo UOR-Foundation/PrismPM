@@ -7,6 +7,12 @@ Feature: holo
     Then full extended outputs and content identities match imported expectations
     And changed expectations, lengths, pattern, key and context are rejected
 
+  @HO-15 @build
+  Scenario: The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application.
+    Given current verified component source and its complete generated artifact closure
+    When the exact modeled archive executes binary vectors and maxima in native Wasm and pinned Live
+    Then malformed substituted and incomplete evidence is refused without changing public application admission
+
   @HO-13 @build
   Scenario: The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority.
     Given current verified modeled source and independently produced wire vectors
