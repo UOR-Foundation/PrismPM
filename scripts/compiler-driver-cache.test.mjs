@@ -105,6 +105,7 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   const work = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(work, {recursive:true, force:true}));
   const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody',
+    'session-payloads':'browser-session-payloads',
     'operation-journal':'browser-operation-journal', presentation:'browser-presentation',
     'semantic-presentation':'browser-semantic-presentation',
     'dynamic-choice':'browser-dynamic-choice',
@@ -150,8 +151,8 @@ test('Cargo fingerprints cannot authorize a planted driver executable or reuse i
   assert.throws(() => compiler.createPrivateDriverTarget(fresh), /already exists/);
 });
 
-test('completed effects and custody tool caches retire under their exact owning paths', t => {
-  for (const owner of ['effects', 'custody']) {
+test('completed effects, custody and session-payload tool caches retire under their exact owning paths', t => {
+  for (const owner of ['effects', 'custody', 'session-payloads']) {
     const f = fixture(t, 'prismpm-' + owner + '-', owner);
     const path = join(f.target, 'debug', f.executable), bytes = readFileSync(path);
     const receipt = retireCompletedCompilerCaches(f.work, owner);
