@@ -250,6 +250,30 @@ not claims of the pure framing model. This prerequisite does not implement a
 public browser runtime, trusted effect policy, accepted application, or release.
 The normative boundary is `stdlib/src/Foundation/Holo/V1/BrowserWire.md`.
 
+### 3.2 Private primary-only component interoperability
+
+`Foundation.Holo.V1.PrimaryWire` defines a distinct private component profile:
+one primary Core-Wasm v1 layer, empty native capabilities, no View or children,
+and three sorted addressed blobs containing capabilities, the generated guest
+and its exact component/source closure. Seven physical-v4 sections carry the
+manifest, source metadata, application directory, distinct component provenance
+and blobs. The component extension is
+`https://uor.foundation/extension/prismpm-component/v1`. Generated source owns
+canonical framing and parsing; cryptographic adapters bind every actual byte.
+Existing portable and browser profiles and Holo/1 remain unchanged.
+
+HO-14 freshly verifies the source/compiler/package closure, executes generated
+std/no_std framing against pinned upstream encoding, and runs the exact produced
+archive through pinned Live direct and resident binary execution. Native/Wasm
+parity, complete Session vectors and 64-MiB boundaries remain required. Missing,
+changed or empty provenance/corpora, malformed profiles and actual source/host
+defects must fail. Upstream-written archives are independent codec expectations,
+never substitutes for the executed producer artifact. No portable View evidence
+is fabricated or transport limit raised. A workstation receipt is diagnostic
+input only; the registered owner is self-contained on a clean devcontainer.
+This component gate cannot satisfy public application, browser design, authority,
+journal, SDK or deployment acceptance. `PP2011` remains enforced.
+
 ## 4. Controller API, CLI, and diagnostics
 
 The public API consists of `Controller::load`, `check`, `build`, `verify`, and `clean`
@@ -2174,6 +2198,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-11` | `holo` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. | §3 |
 | `HO-12` | `holo` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. | §3 |
 | `HO-13` | `holo` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. | §3 |
+| `HO-14` | `holo` | The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
