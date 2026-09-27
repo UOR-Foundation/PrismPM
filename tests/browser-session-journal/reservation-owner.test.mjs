@@ -10,6 +10,7 @@ import {reservationMaximumCorpus} from './reservation-maxima.mjs';
 import {tsv} from './runtime.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
 import {verifyReservationNativeInventory} from './reservation-checks.mjs';
+import {verifyReservationInputSubstitutions} from './reservation-input-checks.mjs';
 
 function native(build, rows, name, refusal = false) {
   const path = join(build.work, name + '.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
@@ -31,7 +32,8 @@ function archive(build, destination, additional) {
 }
 
 test('source-owned complete journal reservation and real guard mutants', {timeout: 3500000}, async t => {
-  const inputs = frozenInputs(), baseline = prepareReservation(null, null, inputs);
+  const inputs = frozenInputs(), inputSubstitutions = verifyReservationInputSubstitutions(inputs);
+  const baseline = prepareReservation(null, null, inputs);
   let complete = false;
   t.after(() => {
     if (complete) rmSync(baseline.work, {recursive: true, force: true});
@@ -112,7 +114,7 @@ test('source-owned complete journal reservation and real guard mutants', {timeou
     preparationMs: baseline.preparationMs,
     generatedPackages: baseline.generatedPackages,
     wasmArtifacts: baseline.wasmArtifacts,
-    closure: {files: Object.keys(inputs).length, sha256: sha(Buffer.from(JSON.stringify(inputs)))},
+    closure: {files: Object.keys(inputs).length, sha256: sha(Buffer.from(JSON.stringify(inputs)))}, inputSubstitutions,
     evidence, archive: positiveArchive};
   writeFileSync(join(evidence, 'positive.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
   t.diagnostic(JSON.stringify(receipt));

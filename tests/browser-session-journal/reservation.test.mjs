@@ -1,13 +1,50 @@
 // Construction/oracle checks, not generated-source acceptance.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {chmodSync, existsSync, readFileSync, renameSync} from 'node:fs';
+import {join} from 'node:path';
 import {abstractPosition, graphCapacity, exploreReservedGraph, UINT32_MAX} from './reservation-oracle.mjs';
 import {stateAt, resolutionTrace, reservationCorpus} from './reservation-corpus.mjs';
 import {reservationModule, reservationMutations, mutateReservationSource} from './reservation-mutations.mjs';
 import {verifyReservationNativeInventory} from './reservation-checks.mjs';
 import {reservationMaximumCorpus} from './reservation-maxima.mjs';
 import {decodeEffectWire as decode} from '../../sdk/browser/effects-wire.mjs';
+import {frozenInputs, repository} from './reservation-compile.mjs';
+import {verifyReservationInputSubstitutions} from './reservation-input-checks.mjs';
+
+test('direct private-input entry refuses the original source before any substitution', () => {
+  const input = join(repository, 'tests/browser-effects/corpus.mjs'), before = readFileSync(input);
+  const child = spawnSync(process.execPath,
+    [join(repository, 'tests/browser-session-journal/reservation-input-checks.mjs'), '--private-input-checks'],
+    {cwd: repository, encoding: 'utf8', timeout: 120000, maxBuffer: 1048576});
+  assert.ifError(child.error); assert.equal(child.signal, null); assert.equal(child.status, 1);
+  assert.match(child.stderr, /private input-copy parent/); assert.equal(child.stdout, '');
+  assert.deepEqual(readFileSync(input), before);
+  assert.equal(existsSync(input + '.reservation-input-held'), false);
+});
+
+test('private input guards retain five actual defects and refuse nonprivate modes and names', () => {
+  const {work, cases} = verifyReservationInputSubstitutions(frozenInputs());
+  assert.deepEqual(cases, ['omitted-map', 'missing-file', 'changed-file', 'forged-matching-map', 'hard-linked-file']);
+  const input = 'tests/browser-effects/corpus.mjs', before = readFileSync(join(work, input));
+  function refused(directory, reason) {
+    const child = spawnSync(process.execPath,
+      [join(directory, 'tests/browser-session-journal/reservation-input-checks.mjs'), '--private-input-checks'],
+      {cwd: directory, encoding: 'utf8', timeout: 120000, maxBuffer: 1048576});
+    assert.ifError(child.error); assert.equal(child.signal, null); assert.equal(child.status, 1);
+    assert.match(child.stderr, reason); assert.equal(child.stdout, '');
+    assert.deepEqual(readFileSync(join(directory, input)), before);
+    assert.equal(existsSync(join(directory, input + '.reservation-input-held')), false);
+  }
+  chmodSync(work, 0o755);
+  try {refused(work, /owned private input-copy directory/);}
+  finally {chmodSync(work, 0o700);}
+  const renamed = work + '-wrong-name';
+  assert.equal(existsSync(renamed), false); renameSync(work, renamed);
+  try {refused(renamed, /private input-copy directory name/);}
+  finally {renameSync(renamed, work);}
+});
 
 test('native evidence requires every exact vector and no extra or repeated success rows', () => {
   const rows = [{id: 'first-vector'}, {id: 'second-vector'}];

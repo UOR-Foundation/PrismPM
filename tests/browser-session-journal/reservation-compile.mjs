@@ -16,6 +16,7 @@ export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const selected = 'Foundation.Browser.Application.V1.SessionJournalReservationWire';
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
+const capturedInputs = new WeakSet();
 function read(path) {
   const absolute = join(repository, path), stat = lstatSync(absolute);
   assert.equal(realpathSync(absolute), absolute, 'unaliased compiler input ' + path);
@@ -66,7 +67,15 @@ export function frozenInputs() {
   }
   const inputs = Object.freeze(Object.fromEntries([...files].sort().map(path => [path, sha(read(path))])));
   for (const [path, bytes] of modules) assert.equal(sha(bytes), inputs[path], 'captured static module ' + path);
+  capturedInputs.add(inputs);
   return inputs;
+}
+export function verifyFrozenInputs(inputs) {
+  assert.ok(capturedInputs.has(inputs), 'actual complete captured reservation inputs required');
+  // A changed static import necessarily changes a captured byte. Parse the
+  // complete closure once; retain every path/link/hash check on each use.
+  for (const [path, digest] of Object.entries(inputs))
+    assert.equal(sha(read(path)), digest, 'immutable captured reservation input ' + path);
 }
 export function assertCapturedReservationSources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
@@ -217,7 +226,7 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
       for (const capturedPackage of generatedPackages) capturedPackage.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
       for (const artifact of wasmArtifacts) artifact.verify();
-      assert.deepEqual(frozenInputs(), inputs);
+      verifyFrozenInputs(inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
       assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), buildManifest);
