@@ -9,3 +9,8 @@ and compile every `metadataMutations` defect. Each actual mutant must fail its
 named behavioral assertion, not merely fail compilation. Preserve canonical
 replay/maxima, source projection, recovery, storage, freshness and browser fault
 owners. An installed SDK and public runtime remain separately unaccepted.
+
+`metadataMaximumCorpus` requires all 1024 replay entries, a complete 512-step
+command with 511 pending checkpoints at the minimum two-record segment bound,
+and the largest recovery descriptors. These test metadata; they do not claim
+that shape-valid references establish actual 64-MiB payload storage or authority.
