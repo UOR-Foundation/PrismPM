@@ -52,8 +52,13 @@ const storageError = error => error instanceof SessionStorageError ? error
   : fail(error?.name === 'QuotaExceededError' ? 'storage-quota' : 'storage-unavailable');
 async function transaction(db, mode, operation) {
   let tx;
-  try { tx = db.transaction(['metadata', 'objects', 'roots'], mode, {durability: 'strict'}); }
-  catch (error) { throw storageError(error); }
+  try {
+    tx = db.transaction(['metadata', 'objects', 'roots'], mode, {durability: 'strict'});
+    if (tx.durability !== 'strict') throw fail('storage-unavailable');
+  } catch (error) {
+    try { tx?.abort(); } catch { /* No operation or acknowledgement has occurred. */ }
+    throw storageError(error);
+  }
   const done = new Promise((resolve, reject) => {
     tx.oncomplete = resolve; tx.onabort = () => reject(storageError(tx.error)); tx.onerror = () => {};
   });
