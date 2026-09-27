@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {createCompilerOwner, requireCompilerOwner} from './compiler-owner.mjs';
+
+test('compiler owner refuses forged handles and unregistered tool families', () => {
+  for (const value of [null, {}, {runDriver() {}, runExporter() {}, verify() {}}])
+    assert.throws(() => requireCompilerOwner(value, {}), /actual fresh compiler owner/);
+  for (const name of ['', '../escape', 'caller-driver', null, {toString() {throw Error('coercion');}}])
+    assert.throws(() => createCompilerOwner(name, {}), /registered compiler family/);
+});
+
+test('compiler owner refuses malformed or incomplete input closures before building', () => {
+  let called = false;
+  const accessor = {get malicious() {called = true; return '0'.repeat(64);}};
+  for (const inputs of [null, [], accessor, {'../escape': '0'.repeat(64)},
+    {'vendor/lexlean/MANIFEST.sha256': 'invalid'}, {'a': null}, {'a': 42}, {}])
+    assert.throws(() => createCompilerOwner('session-retention', inputs),
+      /compiler input (map|path|digest|closure)/);
+  assert.equal(called, false, 'input accessors cannot run before immutable capture');
+});

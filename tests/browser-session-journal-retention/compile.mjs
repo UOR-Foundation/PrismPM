@@ -4,8 +4,8 @@ import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
-import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
+import {run, sha} from '../browser-view/compile.mjs';
+import {requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
@@ -15,6 +15,7 @@ export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const projection = 'Foundation.Browser.Application.V1.SessionJournalRetentionWire';
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
+const capturedInputs = new WeakSet();
 function read(path) {
   const absolute = join(repository, path), stat = lstatSync(absolute);
   assert.equal(realpathSync(absolute), absolute, 'unaliased compiler input ' + path);
@@ -36,6 +37,8 @@ export function frozenInputs() {
   for (const path of ['compile.mjs', 'checks.mjs', 'component.test.mjs', 'owner.test.mjs', 'runtime.mjs', 'maximum-runner.mjs', 'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
     files.add('tests/browser-session-journal-retention/' + path);
   for (const path of ['tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
+    'tests/browser-view/compiler-owner.test.mjs', 'tests/browser-view/compiler-artifact.test.mjs',
+    'tests/browser-view/compiler-artifact-mutations.test.mjs',
     'tests/browser-session-journal/retention.test.mjs', 'tests/browser-session-journal/retention-wire.test.mjs',
     'tests/browser-session-journal/storage-browser.mjs', 'sdk/browser/session-storage.mjs',
     'sdk/browser/session-retention-wire.mjs',
@@ -66,7 +69,15 @@ export function frozenInputs() {
   }
   const inputs = Object.fromEntries([...files].sort().map(path => [path, sha(read(path))]));
   for (const [path, bytes] of capturedModules) assert.equal(sha(bytes), inputs[path], 'actual parsed module snapshot ' + path);
-  return Object.freeze(inputs);
+  Object.freeze(inputs); capturedInputs.add(inputs); return inputs;
+}
+export function verifyFrozenInputs(inputs) {
+  assert.ok(capturedInputs.has(inputs), 'actual complete captured retention inputs required');
+  // The complete static graph was parsed during capture. Every original file
+  // remains checked on every use: changed import edges necessarily change one
+  // of these bytes. Do not reparse an identical graph in child Node processes.
+  for (const [path, digest] of Object.entries(inputs))
+    assert.equal(sha(read(path)), digest, 'immutable captured retention input ' + path);
 }
 export function assertCapturedRetentionSources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
@@ -75,10 +86,12 @@ export function assertCapturedRetentionSources(inputs, sources) {
   for (const [name, bytes] of sources) assert.equal(sha(bytes), inputs[modulePath(name)],
     'actual captured source must match original snapshot ' + name);
 }
-export function prepareRetention(mutationId = null, expectedInputs = null) {
+export function prepareRetention(compilerOwner, mutationId = null, expectedInputs = null) {
+  const startedAt = performance.now();
   for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_SESSION_RETENTION_'), 'no owner bypass');
   const inputs = frozenInputs(), sources = sourceClosure();
   if (expectedInputs) assert.deepEqual(inputs, expectedInputs, 'one immutable complete owner closure');
+  const compiler = requireCompilerOwner(compilerOwner, inputs);
   assertCapturedRetentionSources(inputs, sources);
   const mutation = mutationId === null ? null : mutateRetentionSource(sources, mutationId);
   const captured = path => { const bytes = read(path); assert.equal(sha(bytes), inputs[path], 'frozen input ' + path); return bytes; };
@@ -91,18 +104,8 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
   let complete = false;
   try {
     stage('rust-toolchain.toml', captured('rust-toolchain.toml'));
-    // This verifies registered compiler trees before any captured driver runs.
-    const exporter = ensureProdExport(repository, work);
-    for (const path of Object.keys(inputs).filter(path => path.startsWith('vendor/lexlean/') || path.startsWith('vendor/lean4-prod/rust/')))
-      stage(path, captured(path));
-    for (const name of ['Cargo.toml', 'Cargo.lock', 'src/main.rs']) {
-      const path = 'tests/browser-session-journal-retention/driver/' + name; stage(path, captured(path));
-    }
-    const driverTarget = createPrivateDriverTarget(work);
-    const manifest = join(work, 'tests/browser-session-journal-retention/driver/Cargo.toml');
-    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
-      '--config', 'build.incremental=false', '--manifest-path', manifest], work, {CARGO_TARGET_DIR: driverTarget});
-    const driver = join(driverTarget, 'debug/browser-session-journal-retention-driver');
+    // Only compiler tools are reused. This new model project, kernel evidence,
+    // generated Lean/IR/native/two Wasm packages are rebuilt for every mutation.
     for (const [name, bytes] of sources) stage('project/src/' + name.replaceAll('.', '/') + '.lex.tex', bytes);
     const project = join(work, 'project');
     stage('project/lexlean.toml', captured('tests/fixtures/library/native-library/project/lexlean.toml').toString('utf8')
@@ -112,7 +115,7 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
     stage('project/lean-toolchain', captured('lean-toolchain'));
     stage('project/lakefile.toml', 'name = "session_journal_conformance"\nversion = "0.1.0"\n');
     run('lake', ['update'], project);
-    const verified = JSON.parse(run(driver, ['verify', join(project, 'lexlean.toml')], work));
+    const verified = JSON.parse(compiler.runDriver(['verify', join(project, 'lexlean.toml')], work));
     assert.deepEqual(verified.modules, [...sources.keys()]);
     const attestationBytes = readFileSync(join(verified.root, 'attestation.json'));
     const buildManifest = readFileSync(join(verified.root, 'build-manifest.json'));
@@ -140,12 +143,12 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
       + [...sources.keys()].map(name => '"PrismPM.' + name + '"').join(',') + ']\n');
     run('lake', ['build', 'PrismGenerated'], lean);
     const exported = join(work, 'export'), roots = ['PrismPM.' + projection + '.sessionRetentionWireBytes'];
-    run(exporter.bin, ['--module', 'PrismPM.' + projection, ...roots.flatMap(name => ['--root', name]),
-      '--ir-module', 'SessionJournalRetention', '--out', exported], exporter.dir, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});
+    compiler.runExporter(['--module', 'PrismPM.' + projection, ...roots.flatMap(name => ['--root', name]),
+      '--ir-module', 'SessionJournalRetention', '--out', exported], join(lean, '.lake/build/lib/lean'));
     const ir = join(exported, 'kernel.ir'), generated = join(work, 'generated');
     for (const name of ['LICENSE-MIT', 'LICENSE-APACHE']) stage('licenses/' + name, captured(name));
     const licenses = join(work, 'licenses');
-    const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], work));
+    const generation = JSON.parse(compiler.runDriver(['native', ir, generated, licenses], work));
     const nativePackage = captureGeneratedPackage(generated, {kind: 'native', inputIrSha256: generation.ir_sha256});
     const packages = new Map([['native', nativePackage]]);
     const wasm = {}, wasmOwners = {}, wasmArtifacts = {};
@@ -153,7 +156,7 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
       const guests = [];
       for (const label of ['a', 'b']) {
         const output = join(work, entry + '-' + label);
-        assert.deepEqual(JSON.parse(run(driver, [entry, ir, output, licenses], work)), generation);
+        assert.deepEqual(JSON.parse(compiler.runDriver([entry, ir, output, licenses], work)), generation);
         const package_ = captureGeneratedPackage(output, {kind: 'wasm', inputIrSha256: generation.ir_sha256});
         packages.set(entry + '-' + label, package_); package_.verify();
         const target = join(work, 'wasm-target-' + entry + '-' + label);
@@ -203,19 +206,21 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
       }));
     }
     function unchanged() {
+      requireCompilerOwner(compiler, inputs);
       for (const package_ of packages.values()) package_.verify();
       for (const artifact of Object.values(wasmArtifacts)) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
-      assert.deepEqual(frozenInputs(), inputs);
+      verifyFrozenInputs(inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
       assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), buildManifest);
       assert.equal(sha(readFileSync(ir)), generation.ir_sha256);
     }
-    unchanged(); const cacheRetirement = retireCompletedCompilerCaches(work, 'session-retention'); unchanged();
+    unchanged();
     complete = true;
     const generatedPackages = Object.fromEntries([...packages].map(([name, package_]) => [name, package_.files]));
     return Object.freeze({work, sources, verified, generation, wasm, wasmOwners, wasmArtifacts, generatedWasm,
-      compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation, generatedPackages});
+      compileNative, runNative, nativeEvidence, unchanged, inputs, mutation, generatedPackages,
+      compilerOwner: compiler, compilerTools: compiler.evidence, preparationMs: performance.now() - startedAt});
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }

@@ -3,6 +3,11 @@ import test from 'node:test';
 import {assertCapturedRetentionSources, frozenInputs, sourceClosure} from './compile.mjs';
 import {retentionCorpus} from '../browser-session-journal/retention-corpus.mjs';
 import {verifyNativeInventory} from './checks.mjs';
+import {verifyRetentionInputSubstitutions} from './input-checks.mjs';
+
+test('per-use input checks refuse real transitive defects without reparsing unchanged source', () => {
+  assert.equal(verifyRetentionInputSubstitutions(frozenInputs()).cases.length, 5);
+});
 
 test('retention compiler freezes complete source and transitive host/oracle inputs', () => {
   const inputs = frozenInputs(), sources = sourceClosure(); assertCapturedRetentionSources(inputs, sources);
