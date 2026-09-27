@@ -20,9 +20,11 @@ reject captured-source substitution and incomplete native result inventories.
 
 The current private `projection-owner.test.mjs` additionally requires eight
 compiled source defects, all 48 actual maxima and before/after executable
-identity checks. Its seven construction checks pass; its new complete captured
-closure has not yet passed the full owner. The historical receipt above does
-not attest these new harness inputs.
+identity checks. Complete native/Wasm package inventories are captured immediately
+after generation and checked before/after compilation. Substituted native source
+must fail before either observer is created. Thirteen construction/provenance
+checks pass; the new complete captured closure has not yet passed the full owner.
+The historical receipt above does not attest these new harness inputs.
 
 This is not complete DK-30 acceptance. Compiled source mutants, authenticated
 journal/host composition, freshness, retirement, browser faults and installed

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {lstatSync, readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepareProjection, run, sha, draft} from './compile.mjs';
 import {projectionCorpus, projectExpected, observationCorpus, observedExpected} from './projection-corpus.mjs';
@@ -17,6 +17,17 @@ export function verifyNativeProjectionInventory(output, rows) {
 
 export function verifyProjection() {
   const build = prepareProjection(), projection = projectionCorpus(), session = corpus(), observation = observationCorpus();
+  const generatedSource = join(build.work, 'generated/src/lib.rs'), generatedBytes = readFileSync(generatedSource);
+  try {
+    writeFileSync(generatedSource, Buffer.concat([generatedBytes, Buffer.from('\n// substituted before first compile\n')]));
+    for (const standard of [true, false]) {
+      assert.throws(() => build.compileNative(standard), /generated package manifest digest/);
+      assert.equal(lstatSync(join(build.work, 'runner-' + (standard ? 'std' : 'no-std')), {throwIfNoEntry: false}), undefined,
+        'changed generated package refuses before creating or compiling the native observer');
+    }
+    assert.throws(() => build.unchanged(), /generated package manifest digest/);
+  } finally {writeFileSync(generatedSource, generatedBytes);}
+  build.unchanged();
   assert.equal(projection.length, 904); assert.equal(session.length, 895); assert.equal(observation.length, 596);
   const vectors = {predecessor: projection, session, observation};
   const paths = {};
@@ -35,7 +46,8 @@ export function verifyProjection() {
     source: build.verified.source_id, attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
     artifacts: Object.fromEntries(Object.entries(build.wasm).map(([entry, bytes]) => [entry, sha(bytes)])),
     cases: {predecessor: projection.length, session: session.length, observation: observation.length}, observed,
-    native: build.nativeEvidence(), inputs: build.inputs, cacheRetirement: build.cacheRetirement};
+    native: build.nativeEvidence(), inputs: build.inputs, cacheRetirement: build.cacheRetirement,
+    generatedPackages: build.generatedPackages, generatedSourceSubstitutionRejected: ['before-first-std', 'before-first-no-std']};
   writeFileSync(join(build.work, 'projection-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   return {build, evidence};
 }
@@ -110,7 +122,7 @@ function verifyProjectionMutation(mutation, baseline) {
     attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
     wasm: sha(build.wasm[mutation.entry]), native: build.nativeEvidence(),
     cases: rows.map(row => ({id: row.id, request: sha(row.request), expected: sha(row.response)})),
-    cacheRetirement: build.cacheRetirement};
+    cacheRetirement: build.cacheRetirement, generatedPackages: build.generatedPackages};
   writeFileSync(join(build.work, 'projection-mutation-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   console.log(JSON.stringify({id: mutation.id, work: build.work, cases: rows.length})); return evidence;
 }

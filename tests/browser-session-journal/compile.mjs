@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
+import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {mutateProjectionSource} from './projection-mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
@@ -147,14 +148,20 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
     for (const name of ['LICENSE-MIT', 'LICENSE-APACHE']) stage('licenses/' + name, captured(name));
     const licenses = join(work, 'licenses');
     const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], work));
+    const generatedPackages = [captureGeneratedPackage(generated,
+      {kind: 'native', inputIrSha256: generation.ir_sha256})];
     const wasm = {};
     for (const entry of mutation ? [mutation.entry] : ['predecessor', 'session', 'observation']) {
       const guests = [];
       for (const label of ['a', 'b']) {
         const output = join(work, entry + '-' + label);
         assert.deepEqual(JSON.parse(run(driver, [entry, ir, output, licenses], work)), generation);
-        run('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: join(output, 'target')});
-        guests.push(readFileSync(join(output, 'target/wasm32-unknown-unknown/release/browser_session_journal_wire_probe.wasm')));
+        const capturedPackage = captureGeneratedPackage(output, {kind: 'wasm', inputIrSha256: generation.ir_sha256});
+        generatedPackages.push(capturedPackage); capturedPackage.verify();
+        const target = join(work, entry + '-' + label + '-target');
+        try {run('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: target});}
+        finally {capturedPackage.verify();}
+        guests.push(readFileSync(join(target, 'wasm32-unknown-unknown/release/browser_session_journal_wire_probe.wasm')));
       }
       assert.deepEqual(guests[0], guests[1], 'two independent complete generated ' + entry + ' packages'); wasm[entry] = guests[0];
     }
@@ -167,12 +174,14 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
       return record.binary;
     }
     function compileNative(standard) {
+      for (const capturedPackage of generatedPackages) capturedPackage.verify();
       if (nativePrograms.has(standard)) return checkedNative(nativePrograms.get(standard));
       const name = standard ? 'std' : 'no-std', runner = join(work, 'runner-' + name);
       stage('runner-' + name + '/src/main.rs', captured('tests/browser-session-journal/runner.rs'));
       stage('runner-' + name + '/Cargo.toml', '[package]\nname = "browser-session-journal-runner"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n[workspace]\n[dependencies]\nbrowser-session-journal-core-probe = {path = "../generated", default-features = ' + standard + '}\n');
       stage('runner-' + name + '/Cargo.lock', 'version = 4\n[[package]]\nname = "browser-session-journal-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-session-journal-runner"\nversion = "0.1.0"\ndependencies = ["browser-session-journal-core-probe"]\n');
-      run('cargo', ['build', '--locked', '--offline', '--release'], runner, {CARGO_TARGET_DIR: join(runner, 'target')});
+      try {run('cargo', ['build', '--locked', '--offline', '--release'], runner, {CARGO_TARGET_DIR: join(runner, 'target')});}
+      finally {for (const capturedPackage of generatedPackages) capturedPackage.verify();}
       const binary = join(work, 'native-' + name + '-runner');
       stage('native-' + name + '-runner', readFileSync(join(runner, 'target/release/browser-session-journal-runner')));
       chmodSync(binary, 0o700);
@@ -190,6 +199,7 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
       }));
     }
     function unchanged() {
+      for (const capturedPackage of generatedPackages) capturedPackage.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
       assert.deepEqual(frozenInputs(), inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
@@ -199,6 +209,7 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
     }
     unchanged(); const cacheRetirement = retireCompletedCompilerCaches(work, 'session-journal'); unchanged();
     complete = true;
-    return {work, sources, verified, generation, wasm, compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation};
+    return {work, sources, verified, generation, wasm, compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation,
+      generatedPackages: generatedPackages.map(({directory, kind, files}) => ({path: directory.slice(work.length + 1), kind, files}))};
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }
