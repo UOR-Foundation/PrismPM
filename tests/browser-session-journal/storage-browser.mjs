@@ -37,6 +37,32 @@ async function fixture(wire, operation) {
 }
 
 export async function verifySessionStorage(t, wire) {
+  await t.test('a transaction must report strict durability before any read or publication', async () => {
+    const result = await fixture(wire, page => page.evaluate(async () => {
+      const {open, encode, decode, digest, replace, fail} = retentionFixture;
+      const rows = [];
+      for (const [index, durability] of ['relaxed', 'default', undefined].entries()) {
+        const store = await open('journal-retention-durability-' + index), expected = await store.snapshot();
+        const bytes = Uint8Array.of(81 + index), id = await digest(bytes), original = IDBDatabase.prototype.transaction;
+        IDBDatabase.prototype.transaction = function(...args) {
+          const tx = original.apply(this, args);
+          Object.defineProperty(tx, 'durability', {value: durability}); return tx;
+        };
+        let write, read;
+        try {
+          write = await fail(() => store.commit({expected, replacement: replace('journal', null, id, [id]),
+            objects: [bytes], retire: encode([])}));
+          read = await fail(() => store.snapshot());
+        } finally {IDBDatabase.prototype.transaction = original;}
+        const snapshot = decode(await store.snapshot()), absent = await store.read(id); store.close();
+        rows.push({write, read, revision: snapshot[1], objects: snapshot[2].length, roots: snapshot[3].length, absent});
+      }
+      return rows;
+    }));
+    assert.deepEqual(result, Array.from({length: 3}, () => ({write: 'storage-unavailable', read: 'storage-unavailable',
+      revision: 0, objects: 0, roots: 0, absent: null})));
+  });
+
   await t.test('real durable root closure survives close/reopen without a mutable caller alias', async () => {
     const result = await fixture(wire, page => page.evaluate(async () => {
       const {open, encode, decode, digest, replace} = retentionFixture;

@@ -5,13 +5,19 @@ retention model: content-addressed immutable objects, exact-frontier compare-and
 swap, shared-root retention and acknowledgement after transaction completion.
 It grants no identity, authority, freshness or application acceptance.
 
-27 September 2026: three canonical-framing tests and nine real Chromium storage
+27 September 2026: three canonical-framing tests and ten real Chromium storage
 journeys pass, including separate tabs, persistent browser restart, rollback,
-quota failure and delayed completion acknowledgement. The fixture executes
+quota failure, delayed completion acknowledgement and actual transactions that
+report relaxed/default/missing durability. Reads and writes refuse those modes
+before performing storage operations. The fixture executes
 generated retention Wasm, not a JavaScript transition substitute.
 
 - Wasm: `92ce26f8513293215320f1aa34922ea4704c92539d63e5684bdd2c88479beddd`.
-- Receipt: `c375beb263b98013dc037d6fa765039a6117349e42caf32ec2fc9b88af18be2a`.
+- Receipt: `ab26ff91c8cf188b69a31d28fefe2981dcf822fe4d77f366ddd415ebbab932cd`.
+
+The negative durability cases failed before the correction and pass afterward.
+Four existing Store browser tests also pass. This verifies browser-reported
+durability and transaction behavior, not a physical power-loss guarantee.
 
 Full retention source-owner verification, native browser-transcript replay,
 host mutation checks, joint storage maxima and authenticated journal composition
