@@ -7,6 +7,7 @@ import {basename, dirname, join} from 'node:path';
 import {repository, run, sha} from './compile.mjs';
 
 const owners = Object.freeze({
+  'session-retention': {directory:'browser-session-journal-retention', executable:'browser-session-journal-retention-driver'},
   publication: {directory:'publication-admission', executable:'publication-admission-driver'},
   budget: {directory:'browser-budget', executable:'browser-budget-driver'},
   session: {directory:'browser-session', executable:'browser-session-driver'},

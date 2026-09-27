@@ -1,13 +1,17 @@
-# Retention candidate
+# Private retention verification
 
-Private DK-30 source/codec contribution, not journal or storage acceptance.
+Private DK-30 source/codec contribution, not complete journal acceptance.
 `retention.test.mjs` checks fixture construction and source signatures only.
 
-The combined owner must execute every `retentionCorpus` and
-`retentionMaximumCorpus` vector through generated std/no_std and independently
-generated Wasm. Compile every `retentionMutations` defect and require its named
-native/Wasm behavioral failure; compilation refusal does not count. Preserve
-all 64 roots, 4096 objects/references, 16 additions, full-capacity replacement
-and 4096-object retirement. Actual IndexedDB transactions, stale-snapshot races,
-abort/acknowledgement faults and source-derived closure authentication remain
-separate mandatory integrated owners.
+The complete private owner is
+`tests/browser-session-journal-retention/owner.test.mjs`; its command, immutable
+receipt and remaining integration obligations are recorded in that directory's
+`VERIFICATION.md`. It runs every finite/maximal vector through generated native
+std/no_std and two independently generated Wasm packages, actual IndexedDB
+journeys and every compiled source defect. Compilation refusal or a Wasm trap
+does not substitute for a defect's named behavioral mismatch.
+
+Preserve all 64 roots, 4096 objects/references, 16 additions, full-capacity
+replacement and 4096-object retirement. Integrated journal authentication,
+native browser-transcript replay, host mutation checks, actual joint storage
+capacity and strict-durability refusal remain separate mandatory obligations.
