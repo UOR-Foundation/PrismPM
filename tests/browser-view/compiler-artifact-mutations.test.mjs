@@ -36,7 +36,7 @@ for (const [id, before, after, witness] of mutations) test('actual compiler cust
     'failure must name the intended behavioral witness, not import/tool failure');
   assert.match(result.stdout, id === 'pre-execution-check'
     ? /substituted executable refused before planted sentinel/ : /Missing expected exception/);
-  assert.match(result.stdout, /# tests 6\n/);
+  assert.match(result.stdout, /# tests 7\n/);
   assert.match(result.stdout, /# skipped 0\n/); assert.match(result.stdout, /# todo 0\n/);
   assert.doesNotMatch(result.stdout + result.stderr, /ERR_MODULE_NOT_FOUND|SyntaxError/);
 });

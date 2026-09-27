@@ -202,6 +202,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "tests/browser-view/generated-wasm-mutations.test.mjs",
             "tests/browser-view/compiler-artifact.test.mjs",
             "tests/browser-view/compiler-artifact-mutations.test.mjs",
+            "tests/browser-view/compiler-owner.test.mjs",
             "tests/browser-session-journal/wasm-artifact-checks.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",

@@ -1,7 +1,7 @@
 // Test infrastructure: executable custody is not compiler-source provenance.
 // Only an owning fresh, pinned compilation may supply an actual compiler here.
 import assert from 'node:assert/strict';
-import {closeSync, constants, fstatSync, lstatSync, openSync, readSync,
+import {closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync,
   realpathSync, writeFileSync} from 'node:fs';
 import {dirname, join, relative, resolve, sep} from 'node:path';
 import {run, sha} from './compile.mjs';
@@ -58,13 +58,21 @@ export function captureCompilerArtifact(work, original, name) {
   }
   ancestors();
   assert.match(name, /^[a-z][a-z0-9-]{0,95}$/, 'closed compiler artifact name');
-  const captured = read(original), path = join(work, name + '-execution');
+  const captured = read(original);
+  // The tool runner confines LEAN_PATH to the generated prod-export entrypoint.
+  // Preserve that basename in the separately owned private execution directory;
+  // do not widen the environment guard to arbitrary captured executables.
+  let path = join(work, name + '-execution');
+  if (name === 'exporter') {
+    assert.ok(original.endsWith('/prod-export'), 'exact generated exporter basename required');
+    mkdirSync(path, {mode: 0o700}); path = join(path, 'prod-export');
+  }
   assert.notEqual(original, path, 'separate compiler execution artifact required');
   writeFileSync(path, captured.bytes, {flag: 'wx', mode: 0o500});
   const private_ = read(path, 1n);
   assert.equal(private_.identity.sha256, captured.identity.sha256);
   const evidence = Object.freeze({original: Object.freeze({path: child, ...captured.identity}),
-    private: Object.freeze({path: name + '-execution', ...private_.identity})});
+    private: Object.freeze({path: relative(work, path), ...private_.identity})});
   function verify() {
     ancestors();
     assert.deepEqual(read(original, BigInt(captured.identity.links)).identity, captured.identity,

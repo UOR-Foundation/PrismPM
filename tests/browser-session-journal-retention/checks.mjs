@@ -2,7 +2,9 @@
 import assert from 'node:assert/strict';
 import {existsSync, readFileSync, writeFileSync, linkSync, unlinkSync} from 'node:fs';
 import {join} from 'node:path';
-import {prepareRetention, run, sha, draft} from './compile.mjs';
+import {prepareRetention, frozenInputs, run, sha, draft} from './compile.mjs';
+import {createCompilerOwner} from '../browser-view/compiler-owner.mjs';
+import {verifyCompilerOwnerSubstitutions} from '../browser-view/compiler-owner-checks.mjs';
 import {retentionCorpus, retentionMaximumCorpus} from '../browser-session-journal/retention-corpus.mjs';
 import {retentionMutations} from '../browser-session-journal/retention-mutations.mjs';
 import {verifySessionStorage} from '../browser-session-journal/storage-browser.mjs';
@@ -16,8 +18,8 @@ export function verifyNativeInventory(output, rows) {
     + 'PASS ' + rows.length + ' journal retention vectors twice\n', 'exact complete native case inventory');
 }
 
-export function verifyRetentionComponents() {
-  const build = prepareRetention(), rows = retentionCorpus();
+export function verifyRetentionComponents(compilerOwner) {
+  const build = prepareRetention(compilerOwner), rows = retentionCorpus();
   assert.equal(rows.length, 86, 'complete fixed independent retention corpus');
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
   // Plant actual generated-source defects before either first Cargo build.
@@ -53,7 +55,7 @@ export function verifyRetentionComponents() {
     wasm: artifact.evidence.original.sha256, cases: rows.length, observed, native: build.nativeEvidence(),
     inputs: build.inputs, generatedPackages: build.generatedPackages, generatedWasm: build.generatedWasm, wasmSubstitutions,
     generatedSourceSubstitutionRejected: ['source', 'source-and-manifest', 'extra-file', 'hard-link'],
-    cacheRetirement: build.cacheRetirement};
+    compilerTools: build.compilerTools, preparationMs: build.preparationMs};
   writeFileSync(join(build.work, 'retention-component-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   return {build, evidence};
 }
@@ -80,7 +82,7 @@ export function verifyRetentionMaxima(build) {
 
 export function verifyCompiledMutation(mutation, baseline) {
   const row = retentionCorpus().find(row => row.id === mutation.probe); assert.ok(row);
-  baseline.unchanged(); const build = prepareRetention(mutation.id, baseline.inputs);
+  baseline.unchanged(); const build = prepareRetention(baseline.compilerOwner, mutation.id, baseline.inputs);
   assert.notEqual(build.verified.source_id, baseline.verified.source_id);
   assert.notEqual(build.verified.attestation_id, baseline.verified.attestation_id);
   assert.notEqual(build.generation.ir_sha256, baseline.generation.ir_sha256);
@@ -96,13 +98,16 @@ export function verifyCompiledMutation(mutation, baseline) {
   const evidence = {mutation: build.mutation, source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: artifact.evidence.original.sha256, generatedWasm: build.generatedWasm,
     request: sha(row.request), expected: sha(row.response),
-    native: build.nativeEvidence(), generatedPackages: build.generatedPackages, cacheRetirement: build.cacheRetirement};
+    native: build.nativeEvidence(), generatedPackages: build.generatedPackages,
+    compiler: build.compilerOwner.identity, preparationMs: build.preparationMs};
   writeFileSync(join(build.work, 'retention-mutation-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   console.log(JSON.stringify({id: mutation.id, work: build.work, status: 'real compiled defect detected'})); return evidence;
 }
 
 export async function verifyRetentionOwner(t) {
-  const {build, evidence} = verifyRetentionComponents();
+  const compiler = createCompilerOwner('session-retention', frozenInputs());
+  const compilerSubstitutions = verifyCompilerOwnerSubstitutions(compiler, frozenInputs());
+  const {build, evidence} = verifyRetentionComponents(compiler);
   for (const standard of [true, false]) {
     const path = build.compileNative(standard), bytes = readFileSync(path);
     try {writeFileSync(path, Buffer.concat([bytes, Buffer.from([0])]));
@@ -130,7 +135,11 @@ export async function verifyRetentionOwner(t) {
   const mutations = retentionMutations.map(mutation => verifyCompiledMutation(mutation, build));
   assert.equal(mutations.length, 9); build.unchanged();
   const receipt = {...evidence, scope: 'private-retention-source-and-storage-component',
-    executableSubstitutionRejected: ['std', 'no-std', 'wasm'], maxima, browser, browserTranscript, hostMutations, mutations};
+    executableSubstitutionRejected: ['std', 'no-std', 'wasm'], compilerSubstitutions,
+    maxima, browser, browserTranscript, hostMutations, mutations};
+  receipt.compilerCacheRetirement = compiler.close();
+  assert.throws(() => compiler.runDriver(['--help'], build.work), /compiler owner closed/);
+  assert.throws(() => compiler.close(), /compiler owner closed/);
   writeFileSync(join(build.work, 'retention-source-owner-evidence.json'), JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'});
   return {build, evidence: receipt};
 }

@@ -32,6 +32,18 @@ test('fresh compiler capture retains original and separate singly linked private
   assert.throws(() => captureCompilerArtifact(work, original, 'driver'), /EEXIST/);
 });
 
+test('private exporter keeps its guarded entrypoint without allowing driver environment overrides', t => {
+  const {work, original} = fixture(t, '/bin/sh');
+  const exporter = join(work, 'target', 'prod-export'); renameSync(original, exporter);
+  const driver = captureCompilerArtifact(work, exporter, 'driver');
+  assert.throws(() => driver.run(['-c', 'printf %s "$LEAN_PATH"'], work, {LEAN_PATH: work}),
+    /LEAN_PATH belongs only to the exact generated exporter/);
+  const owner = captureCompilerArtifact(work, exporter, 'exporter');
+  assert.equal(owner.evidence.private.path, 'exporter-execution/prod-export');
+  assert.equal(owner.run(['-c', 'printf %s "$LEAN_PATH"'], work, {LEAN_PATH: work}), work);
+  owner.verify();
+});
+
 test('changed original/private executable refuses before execution and cannot be adopted', t => {
   const {work, original} = fixture(t, '/bin/sh');
   const owner = captureCompilerArtifact(work, original, 'driver'), sentinel = join(work, 'executed');
