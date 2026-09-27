@@ -9,6 +9,9 @@ anchors and checkpoint segment accounting. `SessionJournalWire` owns canonical
 CBOR to EOF. DK-24 payload descriptors retain their exact 64-MiB/64-chunk domain;
 separate operation and successor frames are never nested inside one larger frame.
 The metadata codec has the unchanged 64-MiB input and 1-GiB Wasm limits.
+Entry parsing and replay use ordered binary subdivision, preserving complete
+canonical parsing before transitions. The 1024-record wire bound is unchanged;
+linear recursion across whole records must not consume the 64-KiB Wasm stack.
 
 ## Binding and transitions
 
