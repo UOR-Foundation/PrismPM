@@ -12,7 +12,9 @@ export const reservationMutations = [
   {id: 'reservation-continue-slot', probe: 'ReservationFullCapacity'},
   {id: 'reservation-final-close', probe: 'ReservationRetainedCapacity'},
   {id: 'reservation-remaining-step', probe: 'ReservationFullCapacity'},
-  {id: 'reservation-split-state', probe: 'ReservationFullCapacity'},
+  // Empty retained segment + three continuations exposes a severed right seed.
+  // FullCapacity starts retained=1, for which this defect is observationally equal.
+  {id: 'reservation-split-state', probe: 'ReservationCost45'},
   {id: 'reservation-split-right', probe: 'ReservationFullCapacity'},
   {id: 'reservation-split-fuel', probe: 'ReservationFullCapacity'},
 ];

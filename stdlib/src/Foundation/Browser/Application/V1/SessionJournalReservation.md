@@ -51,3 +51,13 @@ call and exhaustion returns `BadRecord`, not a partial reservation. The private
 helper propagates that error; wire operations and numeric/resource bounds stay
 unchanged. Three additional mutants sever the right predecessor, omit the right
 half or exhaust fuel. The corrected complete generated owner is still required.
+
+The subsequent full owner passed all 6,490 vectors, seven actual maxima and
+18 compiled mutants, then rejected the `reservation-split-state` test mapping
+because its FullCapacity probe did not distinguish the changed program
+(2887.209 s; `target/reservation-verification/run-log-LyCNRhvx/owner.log`).
+Executing that same retained mutant against the unchanged complete corpus
+exposed `ReservationCost45`: three continuations, two retained slots, initially
+empty segment, required cost 11. The mapping now selects that existing vector;
+no source behavior, corpus, maximum or mutation was removed. The failed owner
+and products remain diagnostic evidence; a fresh complete owner is required.

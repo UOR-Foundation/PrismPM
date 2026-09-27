@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
-import {graphCapacity, exploreReservedGraph, UINT32_MAX} from './reservation-oracle.mjs';
+import {abstractPosition, graphCapacity, exploreReservedGraph, UINT32_MAX} from './reservation-oracle.mjs';
 import {stateAt, resolutionTrace, reservationCorpus} from './reservation-corpus.mjs';
 import {reservationModule, reservationMutations, mutateReservationSource} from './reservation-mutations.mjs';
 import {verifyReservationNativeInventory} from './reservation-checks.mjs';
@@ -108,6 +108,15 @@ test('actual source mutations target all operation guards and independent refusa
     assert.equal(mutateReservationSource(inputs, mutation.id).probe, mutation.probe);
     assert.ok(rows.has(mutation.probe)); assert.notDeepEqual(inputs.get(reservationModule), source);
   }
+});
+
+test('balanced-fold predecessor mutant retains its actual distinguishing corpus state', () => {
+  const mutation = reservationMutations.find(row => row.id === 'reservation-split-state');
+  const row = reservationCorpus().find(row => row.id === mutation.probe);
+  assert.equal(row.id, 'ReservationCost45');
+  assert.deepEqual(abstractPosition(decode(row.request)[2]),
+    {phase: 1, remaining: 3, maximum: 2, retained: 0});
+  assert.deepEqual(decode(row.response), [1, 0, 11]);
 });
 
 test('full payload maxima retain unsafe recovery refusal and a safe final Close', () => {
