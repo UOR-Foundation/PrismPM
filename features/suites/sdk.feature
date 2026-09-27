@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-31 @build
+  Scenario: Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority.
+    Given source-generated text choices alongside unchanged catalogue-based choices
+    When complete native, no_std, Wasm and browser owners exercise text and aggregate maxima, selection, reordering and semantic annotations
+    Then duplicate identifiers, missing selections, oversized names and stale contexts reject while hostile text remains plain text
+    And rebuilt source and renderer mutations fail without granting organization authority or public application acceptance
+
   @DK-26 @build
   Scenario: The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance.
     Given source-owned session wrappers and the complete bounded session protocol

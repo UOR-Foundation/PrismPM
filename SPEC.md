@@ -1587,6 +1587,28 @@ real broken-label/contrast controls. Its automated subset is not complete WCAG
 conformance, manual usability assessment, a brand approval or Foundry acceptance.
 The private tokens do not claim Design Tokens Community Group conformance.
 
+#### 12.11.1 Dynamic plain-text choices
+
+DK-31 adds the private `Content.TextSelect` presentation prerequisite to DK-23.
+Wire tag 11 is `[11,label,enabled,required,selected,[[id,text],...],draftEpoch]`.
+Option identifiers are distinct nonzero uint32 values in source-chosen display
+order. Names are nonempty strict UTF-8 text of at most 4096 bytes each; duplicate
+names are allowed. Selection is zero or an existing identifier, never an index
+or display name. The 256-option aggregate includes both tag 7 and tag 11.
+Every existing tag, catalogue reference, epoch, lifecycle, intent, parent,
+structural limit and 64 MiB aggregate frame contract remains unchanged.
+DK-29 helper/error annotations apply to the new field, but its option text is
+not a catalogue index. No control or selected identifier grants authority.
+
+Acceptance requires complete generated native/std/no_std/Wasm parity, actual
+browser selection and accessible-name observations, mixed aggregate and text
+maxima, unchanged DK-23/DK-29 owners, and actual source/renderer mutations.
+Source order, filtered options, duplicate names, preserved edits, epoch resets,
+stale revisions and hostile plain text are owning cases. Nonempty text alone
+does not establish useful accessible naming or human-centered design. Foundry
+journeys, organization authority and public application acceptance remain
+separate requirements; `PP2011` remains mandatory.
+
 ### 12.12 Private durable operation journal
 
 DK-24 owns source-generated local operation admission, canonical records and
