@@ -11,6 +11,7 @@ const owners = Object.freeze({
   budget: {directory:'browser-budget', executable:'browser-budget-driver'},
   session: {directory:'browser-session', executable:'browser-session-driver'},
   'session-journal': {directory:'browser-session-journal', executable:'browser-session-journal-driver'},
+  'session-recovery-frames': {directory:'browser-session-recovery-frames', executable:'browser-session-recovery-frames-driver'},
   'session-journal-recovery': {directory:'browser-session-journal-recovery', executable:'browser-session-journal-recovery-driver'},
   effects: {directory:'browser-effects', executable:'browser-effects-driver'},
   custody: {directory:'browser-custody', executable:'browser-custody-driver'},
