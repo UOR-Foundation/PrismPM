@@ -2,8 +2,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
-import {metadataCorpus} from './metadata-corpus.mjs';
+import {metadataCorpus, metadataExamples, initial} from './metadata-corpus.mjs';
 import {metadataMutations, mutateMetadataSource} from './metadata-mutations.mjs';
+import {metadataMaximumCorpus, encodeMetadataReplay} from './metadata-maxima.mjs';
+import {encodeEffectWire as encode} from '../../sdk/browser/effects-wire.mjs';
 const root = new URL('../../stdlib/src/', import.meta.url), model = 'Foundation.Browser.Application.V1.SessionJournal';
 const source = module => readFileSync(new URL(module.replaceAll('.', '/') + '.lex.tex', root));
 
@@ -36,4 +38,14 @@ test('metadata schema has exact source fields and no self-referential prepared e
   assert.deepEqual(fields('SessionJournalAnchor'), ['envelope', 'position', 'step', 'observedReceipt']);
   assert.deepEqual(fields('SessionJournalRecoveryPlan'), ['preparedEnvelope', 'context', 'settleBefore', 'settleOperation', 'settled', 'rebindOperation', 'receipt']);
   assert.ok(!fields('SessionJournalRecord').includes('envelope'));
+});
+
+test('metadata oracle retains full replay, full step and descriptor maxima without hidden narrowing', () => {
+  const x = metadataExamples(), entries = [[x.begin, x.envelope], [x.continued, x.continuedEnvelope]];
+  assert.deepEqual(encodeMetadataReplay(initial, entries), encode([1, 2, initial, entries]), 'shared small replay framing agrees exactly');
+  const rows = metadataMaximumCorpus(); assert.equal(rows.length, 5);
+  assert.deepEqual(rows.find(row => row.id === 'MetadataMaximum512StepsWithPendingCheckpoints').facts,
+    {steps: 512, checkpoints: 511, records: 1024, maximumRetained: 2});
+  assert.equal(rows.find(row => row.id === 'MetadataMaximum1024Replay').facts.records, 1024);
+  for (const row of rows) assert.ok(row.request.byteLength <= 67108864);
 });
