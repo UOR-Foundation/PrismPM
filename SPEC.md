@@ -686,6 +686,16 @@ owning slot; a failed owner releases it without suppressing subsequent tests.
 Scheduling changes neither checks nor deadlines. Cached failures retain their
 structured diagnostics, and failed prerequisites stop dependent browser checks.
 
+Browser compiler fixtures never accept the existence of a cached executable as
+compiler evidence. The shared exporter helper captures and verifies the selected
+repository's pinned source, refuses aliases, and builds with the verified SDK
+toolchain in a new private directory; existing shared caches are untouched.
+All browser fixture drivers compile into new private targets; Cargo fingerprint
+freshness does not authenticate a previously emitted executable.
+Effects and Custody compile captured driver sources into these private targets.
+Their completed-cache retirement records exact original tool identities before
+removing only reconstructible tool caches, preserving source and execution evidence.
+
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
 LexLean 0.2.0, the exact lean4-prod fork revision, `prism-stdlib = 0.1.0`,

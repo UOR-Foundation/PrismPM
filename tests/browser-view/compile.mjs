@@ -1,22 +1,32 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {copyFileSync,existsSync,mkdirSync,mkdtempSync,readFileSync,renameSync,rmSync,writeFileSync} from 'node:fs';
+import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 export const draft=dirname(fileURLToPath(import.meta.url));
 export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
-function verifyPins(){
-  const artifacts=readFileSync(join(repository,'model/dependencies.toml'),'utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
+function sourceFile(repo, name) {
+  const path = resolve(repo, name);
+  assert.equal(realpathSync(path), path, 'aliased compiler source refused: '+name);
+  const stat = lstatSync(path);
+  assert.ok(stat.isFile() && stat.nlink === 1, 'singly owned regular compiler source required: '+name);
+  return readFileSync(path);
+}
+function verifyPins(repo = repository){
+  const captured = new Map();
+  const read = name => { const bytes=sourceFile(repo,name); captured.set(name,bytes); return bytes; };
+  const artifacts=read('model/dependencies.toml').toString('utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
     const text=section.split('[[dependency]]')[0];return {path:/^path = "([^"]+)"$/m.exec(text)?.[1],hash:/^sha256 = "([0-9a-f]{64})"$/m.exec(text)?.[1],tree:/^tree_root = "([^"]+)"$/m.exec(text)?.[1]};
   });
   for(const name of ['vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust/MANIFEST.sha256','vendor/lexlean/MANIFEST.sha256']){
     const matches=artifacts.filter(row=>row.path===name);assert.equal(matches.length,1);const[{hash,tree}]=matches;
-    const bytes=readFileSync(join(repository,name));assert.equal(sha(bytes),hash,name);if(!tree)continue;
-    const seen=new Set();for(const line of bytes.toString('utf8').trimEnd().split('\n')){const row=/^([0-9a-f]{64})  ([A-Za-z0-9_./-]+)$/.exec(line);assert.ok(row);const[,digest,path]=row;assert.ok(!path.startsWith('/')&&!path.split('/').some(part=>!part||part==='.'||part==='..'));assert.ok(!seen.has(path));seen.add(path);assert.equal(sha(readFileSync(join(repository,tree,path))),digest,path);}
+    const bytes=read(name);assert.equal(sha(bytes),hash,name);if(!tree)continue;
+    const seen=new Set();for(const line of bytes.toString('utf8').trimEnd().split('\n')){const row=/^([0-9a-f]{64})  ([A-Za-z0-9_./-]+)$/.exec(line);assert.ok(row);const[,digest,path]=row;assert.ok(!path.startsWith('/')&&!path.split('/').some(part=>!part||part==='.'||part==='..'));assert.ok(!seen.has(path));seen.add(path);assert.equal(sha(read(join(tree,path))),digest,path);}
   }
+  return captured;
 }
 function toolchainPins() {
   const rustText = readFileSync(join(repository, 'rust-toolchain.toml'), 'utf8');
@@ -124,29 +134,42 @@ export function run(program,args,cwd,env={}) {
   if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
   return execute(program,args,cwd,env);
 }
-export function ensureProdExport(repo = repository) {
-  verifyPins();
-  const dir = resolve(repo, 'target/lean4-prod-export');
-  const bin = join(dir, '.lake/build/bin/prod-export');
-  if (existsSync(bin)) return { dir, bin };
-  const tmp = resolve(repo, `target/lean4-prod-export-tmp-${process.pid}`);
-  rmSync(tmp, { recursive: true, force: true });
-  mkdirSync(tmp, { recursive: true });
-  run('tar', ['-xf', join(repo, 'vendor/lean4-prod/lean.tar'), '-C', tmp], repo);
-  run('lake', ['build', 'prod-export'], tmp);
-  assert.ok(existsSync(join(tmp, '.lake/build/bin/prod-export')), 'built prod-export binary');
-  try {
-    mkdirSync(dirname(dir), { recursive: true });
-    if (!existsSync(bin)) {
-      rmSync(dir, { recursive: true, force: true });
-      renameSync(tmp, dir);
-    } else {
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  } catch (err) {
-    if (!existsSync(bin)) throw err;
-    rmSync(tmp, { recursive: true, force: true });
+export function createPrivateDriverTarget(work) {
+  assert.equal(realpathSync(work), resolve(work), 'aliased driver parent refused');
+  assert.ok(lstatSync(work).isDirectory(), 'driver parent must be a directory');
+  const target = join(work, 'driver-target');
+  // Cargo fingerprints bind source freshness, not the bytes of a previously
+  // emitted executable. Never adopt even an apparently current target.
+  mkdirSync(target, {mode:0o700});
+  return target;
+}
+export function ensureProdExport(repo = repository, work = null) {
+  const captured = verifyPins(repo);
+  for (const name of ['lean-toolchain', 'rust-toolchain.toml']) {
+    const bytes = sourceFile(repo, name);
+    assert.deepEqual(bytes, sourceFile(repository, name), 'exporter uses the verified SDK toolchain');
+    captured.set(name, bytes);
   }
+  // Existence, mtimes and Cargo/Lake fingerprints do not authenticate a cached
+  // executable. Build from captured pinned source in a new private directory.
+  // Never read, adopt, overwrite or execute the former shared target cache.
+  let dir;
+  if (work === null) dir = mkdtempSync(join(tmpdir(), 'prismpm-exporter-'));
+  else {
+    assert.equal(realpathSync(work), resolve(work), 'aliased exporter parent refused');
+    assert.ok(lstatSync(work).isDirectory(), 'exporter parent must be a directory');
+    dir = join(work, 'exporter');
+    mkdirSync(dir, {mode:0o700});
+  }
+  const archive = join(dir, '.source-lean.tar');
+  writeFileSync(archive, captured.get('vendor/lean4-prod/lean.tar'), {flag:'wx',mode:0o600});
+  run('tar', ['-xf', archive, '-C', dir], dir);
+  run('lake', ['build', 'prod-export'], dir);
+  const bin = join(dir, '.lake/build/bin/prod-export');
+  sourceFile(dir, '.lake/build/bin/prod-export');
+  for (const [name, bytes] of captured) assert.deepEqual(sourceFile(repo, name), bytes,
+    'compiler source remained frozen: '+name);
+  assert.deepEqual(readFileSync(archive), captured.get('vendor/lean4-prod/lean.tar'), 'captured exporter archive remained frozen');
   return { dir, bin };
 }
 export function prepare(mutation=null){
@@ -171,8 +194,8 @@ export function prepare(mutation=null){
     for(const [name,bytes]of sources){const path=join(project,'src',...name.split('.'))+'.lex.tex';mkdirSync(dirname(path),{recursive:true});writeFileSync(path,bytes,{flag:'wx'});}
     for(const file of ['lexlean.toml','lakefile.toml','lean-toolchain'])copyFileSync(join(draft,file),join(project,file));
     copyFileSync(join(repository,'rust-toolchain.toml'),join(work,'rust-toolchain.toml'));
-    const driverTarget=resolve(repository,'target/browser-test-drivers');
-    run('cargo',['build','--locked','--offline','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+    const driverTarget=createPrivateDriverTarget(work);
+    run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
     const driver=join(driverTarget,'debug/browser-workspace-view-driver');
     run('lake',['update'],project);
     const verified=JSON.parse(run(driver,['verify',join(project,'lexlean.toml')],repository));
