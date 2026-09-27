@@ -115,7 +115,7 @@ export async function verifyRetentionOwner(t) {
     let failure; await t.test(name, async () => {try {await body();} catch (error) {failure = error; throw error;}});
     if (failure) throw failure; browser.push(name);
   }}, build.wasm.retention);
-  assert.equal(browser.length, 9); build.unchanged();
+  assert.equal(browser.length, 10); build.unchanged();
   const mutations = retentionMutations.map(mutation => verifyCompiledMutation(mutation, build));
   assert.equal(mutations.length, 9); build.unchanged();
   const receipt = {...evidence, scope: 'private-retention-source-and-storage-component',
