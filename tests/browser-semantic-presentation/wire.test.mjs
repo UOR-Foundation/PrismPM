@@ -11,6 +11,7 @@ import {captureDesignCatalogue, decodeSemanticPresentation, encodeSemanticPresen
   semanticCatalogueFits, semanticMainNode, semanticProgressFits} from '../../sdk/browser/semantic-presentation-wire.mjs';
 import {corpus, fixture, designs, light} from './corpus.mjs';
 import {semanticStyle} from '../../sdk/browser/semantic-presentation-style.mjs';
+import {verifyNativeInventory} from './checks.mjs';
 
 test('whole-owner closure binds every source, compiler input and exact mutation baseline', () => {
   const inputs = frozenInputs(), sources = new Map();
@@ -25,7 +26,8 @@ test('whole-owner closure binds every source, compiler input and exact mutation 
   for (const path of ['model/authorities.toml', 'model/dependencies.toml', 'lean-toolchain',
     'rust-toolchain.toml', 'LICENSE-MIT', 'LICENSE-APACHE', 'vendor/lean4-prod/lean.tar',
     'tests/fixtures/library/native-library/project/lexlean.toml', 'sdk/browser/presentation-dom.mjs',
-    'sdk/oracles/package-lock.json', 'tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs']) {
+    'sdk/oracles/package-lock.json', 'tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
+    'tests/browser-view/generated-package.mjs', 'tests/browser-view/generated-package.test.mjs']) {
     assert.equal(inputs[path], sha(readFileSync(join(repository, path))), path);
   }
   for (const tree of ['vendor/lexlean', 'vendor/lean4-prod/rust']) {
@@ -50,6 +52,11 @@ test('whole-owner closure binds every source, compiler input and exact mutation 
 });
 
 test('every independent semantic wire corpus row is accepted or rejected', () => {
+  const rows = [{id: 'first-row'}, {id: 'second-row'}], output = 'PASS first-row\nPASS second-row\nPASS 2 complete semantic vectors twice\n';
+  verifyNativeInventory(output, rows);
+  for (const changed of ['', output.replace('PASS first-row\n', ''), output + 'PASS extra\n',
+    output.replace('PASS second-row', 'PASS first-row'), 'PASS 2 complete semantic vectors twice\n'])
+    assert.throws(() => verifyNativeInventory(changed, rows));
   const seen = new Set();
   for (const {id, request, response} of corpus()) {
     assert.ok(!seen.has(id)); seen.add(id);

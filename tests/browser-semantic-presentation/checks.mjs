@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepare, run, sha, repository, frozenInputs} from './compile.mjs';
 import {corpus, predicates, fixture, labels, designs} from './corpus.mjs';
@@ -12,20 +12,47 @@ const tsv = rows => rows.map(row => row.id + '\t' + Buffer.from(row.request).toS
   + '\t' + Buffer.from(row.response).toString('hex') + '\n').join('');
 export const closure = frozenInputs;
 
+export function verifyNativeInventory(output, rows) {
+  assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
+    + 'PASS ' + rows.length + ' complete semantic vectors twice\n', 'complete exact semantic native inventory');
+}
+
+function archive(build, directory, name, extras) {
+  build.unchanged();
+  const path = join(directory, name + '.tar.gz');
+  run('tar', ['-czf', path, '-C', build.work, 'project/src', 'project/lexlean.toml',
+    'project/.lexlean/verified', 'export', 'generated', ...extras,
+    ...['a', 'b', 'fixture', 'labels', 'designs', 'predicates'].flatMap(label => ['guest-' + label, 'guest-' + label + '.wasm']),
+    'native-std-observer', 'native-no_std-observer'], build.work);
+  build.unchanged(); return {file: name + '.tar.gz', sha256: sha(readFileSync(path))};
+}
+
 export function nativeReplay(build, rows, stem) {
   assert.match(stem, /^[a-z][a-z0-9-]*$/);
   const path = join(build.work, stem + '.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
   for (const standard of [true, false]) {
-    const binary = build.compileNative(standard), output = run(binary, [path], build.runner);
-    assert.deepEqual([...output.matchAll(/^PASS ([A-Za-z0-9]+)$/gm)].map(row => row[1]), rows.map(row => row.id));
-    assert.match(output, new RegExp('PASS ' + rows.length + ' complete semantic vectors twice'));
+    verifyNativeInventory(build.runNative(standard, [path]), rows);
   }
 }
 
 export function verifyWire(t) {
   const before = closure(), build = prepare(null, null, before);
-  t.after(() => rmSync(build.work, {recursive: true, force: true}));
+  t.after(() => {
+    if (build.complete) rmSync(build.work, {recursive: true, force: true});
+    else process.stderr.write('Retained incomplete semantic component ' + build.work + '\n');
+  });
   assert.ok(build.verified?.attestation_id && build.cacheRetirement?.owner === 'semantic-presentation');
+  const generatedSource = join(build.work, 'generated/src/lib.rs'), generatedBytes = readFileSync(generatedSource);
+  try {
+    writeFileSync(generatedSource, Buffer.concat([generatedBytes, Buffer.from('\n// substituted before first native compile\n')]));
+    for (const standard of [true, false]) {
+      assert.throws(() => build.compileNative(standard), /generated package manifest digest/);
+      assert.equal(lstatSync(join(build.work, 'native-' + (standard ? 'std' : 'no_std')), {throwIfNoEntry: false}), undefined,
+        'changed source refuses before creating native target');
+    }
+    assert.throws(() => build.unchanged(), /generated package manifest digest/);
+  } finally {writeFileSync(generatedSource, generatedBytes);}
+  build.unchanged();
   // Diagnostic inventory only. Executed corpus, browser journeys and mutants
   // below establish behavior; matching source tokens never establishes it.
   const registry = JSON.parse(readFileSync(join(repository, 'model/browser-semantic-presentation-diagnostics.json')));
@@ -43,6 +70,7 @@ export function verifyWire(t) {
     {id: 'DesignsBaseline', request: new Uint8Array(), response: encodeWire(designs)},
   ];
   const rows = corpus(), typed = predicates();
+  assert.equal(rows.length, 150); assert.equal(typed.length, 93);
   nativeReplay(build, [...rows, ...typed, ...samples], 'all-vectors');
   for (const standard of [true, false]) {
     const path = build.compileNative(standard), original = readFileSync(path), changed = Buffer.from(original);
@@ -50,6 +78,7 @@ export function verifyWire(t) {
     try {
       writeFileSync(path, changed);
       assert.throws(() => build.compileNative(standard), /immutable actual native binary/);
+      assert.throws(() => build.unchanged(), /immutable actual native binary/);
     } finally { writeFileSync(path, original); }
     assert.equal(build.compileNative(standard), path);
   }
@@ -66,8 +95,7 @@ export function verifyWire(t) {
     const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
     writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
     for (const standard of [true, false]) {
-      const binary = build.compileNative(standard);
-      assert.equal(run(binary, ['--binary', input, output], build.runner), 'PASS binary complete semantic vector twice\n');
+      assert.equal(build.runNative(standard, ['--binary', input, output]), 'PASS binary complete semantic vector twice\n');
     }
     if (row.id === 'EnvelopeOneOver') {
       const instance = new WebAssembly.Instance(new WebAssembly.Module(build.wasmBytes), {});
@@ -78,11 +106,18 @@ export function verifyWire(t) {
         request: sha(row.request), response: sha(row.response), ...maximum});
     }
   }
+  assert.equal(build.maxima.length, 8);
+  const directory = join(repository, 'target/semantic-verification'); mkdirSync(directory, {recursive: true});
+  build.evidenceDirectory = mkdtempSync(join(directory, 'run-'));
+  build.positiveArchive = archive(build, build.evidenceDirectory, 'positive-artifacts', ['all-vectors.tsv']);
+  build.mutationEvidence = [];
   assert.deepEqual(closure(), before);
   t.diagnostic(JSON.stringify({scope: 'semantic-component-only', source: build.verified.source_id,
     attestation: build.verified.attestation_id, ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes),
     corpus: rows.length, typed: typed.length, maxima: build.maxima,
-    inputs: {files: Object.keys(before).length, sha256: sha(Buffer.from(JSON.stringify(before)))}}));
+    inputs: {files: Object.keys(before).length, sha256: sha(Buffer.from(JSON.stringify(before)))},
+    generatedPackages: build.generatedPackages, native: build.nativeEvidence(),
+    evidenceDirectory: build.evidenceDirectory, archive: build.positiveArchive}));
   return build;
 }
 
@@ -99,16 +134,45 @@ export function replayBrowser(build, result) {
 
 export function verifyMutation(kind, baseline) {
   const build = prepare(kind, baseline.sources, baseline.inputs);
+  let complete = false;
   try {
     const row = kind === 'design' ? predicates()[1] : kind === 'catalogue' ? predicates()[5]
       : corpus().find(row => row.id === ({purpose: 'PublicSecretPurpose', main: 'MissingMain', trailing: 'Trailing'}[kind]));
     assert.ok(row);
+    assert.notEqual(build.verified.source_id, baseline.verified.source_id);
+    assert.notEqual(build.verified.attestation_id, baseline.verified.attestation_id);
+    assert.notEqual(build.generation.ir_sha256, baseline.generation.ir_sha256);
+    const guest = ['design', 'catalogue'].includes(kind) ? 'predicatesBytes' : 'wasmBytes';
+    assert.notEqual(sha(build[guest]), sha(baseline[guest]));
     const path = join(build.work, 'mutation.tsv'); writeFileSync(path, tsv([row]), {flag: 'wx'});
     for (const standard of [true, false]) {
-      const binary = build.compileNative(standard);
-      assert.throws(() => run(binary, [path], build.runner), /native output mismatch/, kind);
+      assert.throws(() => build.runNative(standard, [path]), /native output mismatch/, kind);
     }
-    assert.throws(() => executeWasm(build[['design', 'catalogue'].includes(kind) ? 'predicatesBytes' : 'wasmBytes'], [row],
+    assert.throws(() => executeWasm(build[guest], [row],
       ['design', 'catalogue'].includes(kind) ? 32 : 67108864), /generated Wasm output mismatch/, kind);
-  } finally { rmSync(build.work, {recursive: true, force: true}); }
+    const artifacts = archive(build, baseline.evidenceDirectory, kind + '-artifacts', ['mutation.tsv']);
+    const receipt = {kind, probe: row.id, request: sha(row.request), response: sha(row.response),
+      source: build.verified.source_id, attestation: build.verified.attestation_id,
+      ir: build.generation.ir_sha256, wasm: sha(build[guest]), native: build.nativeEvidence(),
+      generatedPackages: build.generatedPackages, archive: artifacts};
+    writeFileSync(join(baseline.evidenceDirectory, kind + '.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
+    baseline.mutationEvidence.push(receipt); complete = true;
+  } finally {
+    if (complete) rmSync(build.work, {recursive: true, force: true});
+    else process.stderr.write('Retained incomplete semantic mutation ' + build.work + '\n');
+  }
+}
+
+export function completeEvidence(build) {
+  assert.deepEqual(build.mutationEvidence.map(row => row.kind), ['purpose', 'main', 'trailing', 'design', 'catalogue']);
+  build.unchanged();
+  const receipt = {scope: 'private-semantic-component-only', publicApplicationAccepted: false,
+    source: build.verified.source_id, attestation: build.verified.attestation_id,
+    ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), native: build.nativeEvidence(),
+    generatedPackages: build.generatedPackages, inputs: build.inputs, maxima: build.maxima,
+    mutations: build.mutationEvidence, archive: build.positiveArchive,
+    finalArchive: archive(build, build.evidenceDirectory, 'completed-artifacts',
+      ['all-vectors.tsv', 'observed-browser.tsv', 'changed-browser.tsv'])};
+  writeFileSync(join(build.evidenceDirectory, 'owner.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
+  build.complete = true; return build.evidenceDirectory;
 }

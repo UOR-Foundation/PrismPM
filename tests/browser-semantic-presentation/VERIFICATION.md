@@ -2,6 +2,14 @@
 
 Private component evidence; installed SDK and application acceptance are separate.
 
+The recorded run below predates complete generated-package provenance checks.
+It remains functional evidence, not acceptance of the strengthened harness.
+The follow-up freezes each generator manifest, declared file/directory inventory
+and IR binding before first compilation; targets are outside that inventory.
+A planted actual generated-source substitution must fail before either native
+observer is built. Successful source mutants now retain proof/program receipts;
+failed work is preserved. The unchanged full 16-test owner must pass again.
+
 - The complete registered owner passed 16/16 without skips or TODOs: 150 wire
   cases, 93 typed predicates,
   native/no_std/Wasm parity, eight exact 64-MiB frames rendered in Chromium,

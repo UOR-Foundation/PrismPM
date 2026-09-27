@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import {copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync} from 'node:fs';
+import {chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
+import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -25,7 +26,8 @@ export function frozenInputs() {
       'driver/src/main.rs', 'runner.rs'].map(path => 'tests/browser-semantic-presentation/' + path),
     ...readdirSync(join(repository, 'sdk/browser')).filter(path => path.endsWith('.mjs')).map(path => 'sdk/browser/' + path),
     ...['compile.mjs', 'checks.mjs', 'corpus.mjs', 'maximum-fixtures.mjs'].map(path => 'tests/browser-presentation/' + path),
-    ...['compile.mjs', 'driver-cache.mjs', 'prerequisites.mjs'].map(path => 'tests/browser-view/' + path),
+    ...['compile.mjs', 'driver-cache.mjs', 'prerequisites.mjs', 'generated-package.mjs',
+      'generated-package.test.mjs'].map(path => 'tests/browser-view/' + path),
     'tests/fixtures/library/native-library/project/lexlean.toml', 'model/authorities.toml',
     'model/dependencies.toml', 'rust-toolchain.toml', 'lean-toolchain', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
@@ -217,31 +219,72 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
     const licenses = join(work, 'licenses'); mkdirSync(licenses);
     for (const path of ['LICENSE-MIT', 'LICENSE-APACHE']) writeFileSync(join(licenses, path), capturedInput(path, inputs), {flag: 'wx'});
     const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], repository));
+    const generatedPackages = [captureGeneratedPackage(generated, {kind: 'native', inputIrSha256: generation.ir_sha256})];
+    const wasmArtifacts = new Map();
     const runner = join(work, 'runner'); mkdirSync(join(runner, 'src'), {recursive: true});
     writeFileSync(join(runner, 'src/main.rs'), capturedInput('tests/browser-semantic-presentation/runner.rs', inputs), {flag: 'wx'});
     writeFileSync(join(runner, 'Cargo.lock'), 'version = 4\n[[package]]\nname = "browser-semantic-presentation-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-semantic-presentation-runner"\nversion = "0.1.0"\ndependencies = ["browser-semantic-presentation-core-probe"]\n', {flag: 'wx'});
     const nativeBinaries = new Map();
-    function compileNative(standard) {
-      assertFrozenInputs(inputs);
-      assert.equal(sha(readFileSync(join(runner, 'src/main.rs'))), inputs['tests/browser-semantic-presentation/runner.rs'], 'exact staged native observer');
-      const mode = standard ? 'std' : 'no_std', previous = nativeBinaries.get(mode);
-      if (previous) {
-        assert.equal(sha(readFileSync(previous.path)), previous.sha256, 'immutable actual native binary');
-        return previous.path;
+    function checkedNative(record) {
+      const stat = lstatSync(record.path);
+      assert.equal(realpathSync(record.path), record.path, 'unaliased private native observer');
+      assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked private native observer');
+      assert.equal(sha(readFileSync(record.path)), record.sha256, 'immutable actual native binary');
+      return record.path;
+    }
+    function unchanged() {
+      assertFrozenInputs(inputs); compiler.unchanged();
+      for (const capturedPackage of generatedPackages) capturedPackage.verify();
+      for (const record of nativeBinaries.values()) checkedNative(record);
+      for (const {path, sha256, bytes} of wasmArtifacts.values()) {
+        const stat = lstatSync(path);
+        assert.equal(realpathSync(path), path, 'unaliased private generated Wasm');
+        assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked private generated Wasm');
+        assert.equal(sha(readFileSync(path)), sha256, 'immutable actual generated Wasm artifact');
+        assert.equal(sha(bytes), sha256, 'immutable actual generated Wasm execution bytes');
       }
+      assert.equal(sha(readFileSync(join(runner, 'src/main.rs'))), inputs['tests/browser-semantic-presentation/runner.rs'], 'exact staged native observer');
+      assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
+      assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), manifestBytes);
+      assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
+      for (const [module, bytes] of sources) assert.deepEqual(readFileSync(join(project, 'src', ...module.split('.')) + '.lex.tex'), bytes);
+      for (const path of ['LICENSE-MIT', 'LICENSE-APACHE']) assert.equal(sha(readFileSync(join(licenses, path))), inputs[path]);
+      assert.equal(sha(readFileSync(join(exporter, '.source-lean.tar'))), inputs['vendor/lean4-prod/lean.tar']);
+    }
+    function compileNative(standard) {
+      unchanged();
+      const mode = standard ? 'std' : 'no_std', previous = nativeBinaries.get(mode);
+      if (previous) return checkedNative(previous);
       writeFileSync(join(runner, 'Cargo.toml'), '[package]\nname = "browser-semantic-presentation-runner"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n[workspace]\n[dependencies]\nbrowser-semantic-presentation-core-probe = {path = "../generated", default-features = ' + standard + '}\n');
       const target = join(work, 'native-' + mode);
-      run('cargo', ['build', '--locked', '--offline', '--release', '--manifest-path', join(runner, 'Cargo.toml')], runner, {CARGO_TARGET_DIR: target});
-      const path = join(target, 'release/browser-semantic-presentation-runner');
-      nativeBinaries.set(mode, {path, sha256: sha(readFileSync(path))});
-      return path;
+      try {run('cargo', ['build', '--locked', '--offline', '--release', '--manifest-path', join(runner, 'Cargo.toml')], runner, {CARGO_TARGET_DIR: target});}
+      finally {unchanged();}
+      const path = join(work, 'native-' + mode + '-observer');
+      writeFileSync(path, readFileSync(join(target, 'release/browser-semantic-presentation-runner')), {flag: 'wx', mode: 0o700});
+      chmodSync(path, 0o700);
+      const record = {path, sha256: sha(readFileSync(path))}; nativeBinaries.set(mode, record);
+      return checkedNative(record);
+    }
+    function runNative(standard, arguments_) {
+      const binary = compileNative(standard);
+      try {return run(binary, arguments_, runner);}
+      finally {checkedNative(nativeBinaries.get(standard ? 'std' : 'no_std'));}
+    }
+    function nativeEvidence() {
+      return Object.fromEntries([...nativeBinaries].map(([mode, record]) => {checkedNative(record); return [mode, record.sha256];}));
     }
     const guests = [];
     for (const [label, mode] of [['a', 'wasm'], ['b', 'wasm'], ['fixture', 'fixture'], ['labels', 'labels'], ['designs', 'designs'], ['predicates', 'predicates']]) {
       const guest = join(work, 'guest-' + label);
       assert.deepEqual(JSON.parse(run(driver, [mode, ir, guest, licenses], repository)), generation);
-      run('cargo', ['build', '--locked', '--offline', '--release'], guest, {CARGO_TARGET_DIR: join(guest, 'target')});
-      guests.push(readFileSync(join(guest, 'target/wasm32-unknown-unknown/release/browser_semantic_presentation_' + (mode === 'wasm' ? 'wire' : mode) + '_probe.wasm')));
+      const capturedPackage = captureGeneratedPackage(guest, {kind: 'wasm', inputIrSha256: generation.ir_sha256});
+      generatedPackages.push(capturedPackage); capturedPackage.verify();
+      const target = join(work, 'guest-' + label + '-target');
+      try {run('cargo', ['build', '--locked', '--offline', '--release'], guest, {CARGO_TARGET_DIR: target});}
+      finally {capturedPackage.verify();}
+      const bytes = readFileSync(join(target, 'wasm32-unknown-unknown/release/browser_semantic_presentation_' + (mode === 'wasm' ? 'wire' : mode) + '_probe.wasm'));
+      const artifact = join(work, 'guest-' + label + '.wasm'); writeFileSync(artifact, bytes, {flag: 'wx'});
+      wasmArtifacts.set(label, {path: artifact, sha256: sha(bytes), bytes}); guests.push(bytes);
     }
     assert.deepEqual(guests[0], guests[1], 'two independent generated Core-Wasm packages');
     pins(); compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
@@ -254,8 +297,9 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
     for (const [module, bytes] of sources) assert.deepEqual(readFileSync(join(project, 'src', ...module.split('.')) + '.lex.tex'), bytes, 'exact staged source after tool execution ' + module);
     for (const path of ['LICENSE-MIT', 'LICENSE-APACHE']) assert.equal(sha(readFileSync(join(licenses, path))), inputs[path], 'unchanged staged license');
     assert.equal(sha(readFileSync(join(exporter, '.source-lean.tar'))), inputs['vendor/lean4-prod/lean.tar'], 'unchanged actual exporter archive');
-    completed = true;
-    return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0],
-      fixtureBytes: guests[2], labelsBytes: guests[3], designsBytes: guests[4], predicatesBytes: guests[5], cacheRetirement, inputs};
+    unchanged(); completed = true;
+    return {work, sources, verified, generation, compileNative, runNative, nativeEvidence, unchanged, runner, wasmBytes: guests[0],
+      fixtureBytes: guests[2], labelsBytes: guests[3], designsBytes: guests[4], predicatesBytes: guests[5], cacheRetirement, inputs,
+      generatedPackages: generatedPackages.map(({directory, kind, files}) => ({path: directory.slice(work.length + 1), kind, files}))};
   } finally { if (!completed) process.stderr.write('Retained incomplete presentation diagnostic build ' + work + '\n'); }
 }
