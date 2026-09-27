@@ -44,6 +44,14 @@ const HARNESSES: &[(&str, &str)] = &[
         "tests/browser-presentation/driver/src/main.rs",
     ),
     (
+        "tests/browser-semantic-presentation/driver/Cargo.toml",
+        "tests/browser-semantic-presentation/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-dynamic-choice/driver/Cargo.toml",
+        "tests/browser-dynamic-choice/driver/src/main.rs",
+    ),
+    (
         "tests/browser-custody/driver/Cargo.toml",
         "tests/browser-custody/driver/src/main.rs",
     ),
@@ -82,6 +90,8 @@ const SOURCES: &[&str] = &[
     "tests/browser-view/runner.rs",
     "tests/browser-effects/runner.rs",
     "tests/browser-presentation/runner.rs",
+    "tests/browser-semantic-presentation/runner.rs",
+    "tests/browser-dynamic-choice/runner.rs",
     "tests/browser-custody/runner.rs",
     "tests/browser-operation-journal/runner.rs",
     "tests/browser-session/runner.rs",

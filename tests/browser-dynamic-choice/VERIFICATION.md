@@ -59,3 +59,12 @@ three fields therefore produce ValueLimit. Product semantics were unchanged.
 Diagnostic-only retained execution found no other disagreement across the 166
 native vectors. The fresh passing owner adds short-arity and catalogue-arity
 regressions. Retained diagnostic products were not used for acceptance.
+
+Post-owner integration: formatting inventory now includes the semantic and
+dynamic-choice harnesses; DK-31 uses the compiler scheduler. Both omissions had
+failing regressions before correction. Direct pinned `rustc --test` execution of
+the actual modules passed all five formatting tests and all three scheduler
+tests. The unchanged complete formatter gate ran in an exact private source
+copy outside the nested worktree, avoiding Cargo's outer-workspace discovery
+for the pinned LexLean manifest; no compiler manifest was modified. All 885
+frozen DK-31 owner inputs remained unchanged. These checks are not full SDK V&V.
