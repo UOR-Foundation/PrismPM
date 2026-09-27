@@ -136,11 +136,14 @@ export function run(program,args,cwd,env={}) {
 }
 export function createPrivateDriverTarget(work) {
   assert.equal(realpathSync(work), resolve(work), 'aliased driver parent refused');
-  assert.ok(lstatSync(work).isDirectory(), 'driver parent must be a directory');
+  const parent = lstatSync(work);
+  assert.ok(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o077) === 0,
+    'driver parent must be an owned private directory');
   const target = join(work, 'driver-target');
   // Cargo fingerprints bind source freshness, not the bytes of a previously
-  // emitted executable. Never adopt even an apparently current target.
-  mkdirSync(target, {mode:0o700});
+  // emitted executable. Never adopt even an apparently current target. Cargo
+  // must create the directory itself to initialize its actual CACHEDIR.TAG.
+  assert.equal(lstatSync(target, {throwIfNoEntry:false}), undefined, 'private driver target already exists');
   return target;
 }
 export function ensureProdExport(repo = repository, work = null) {

@@ -14,6 +14,10 @@
   fixtures; negative executables are test data, never acceptance compilers.
 - All ten affected browser drivers now create private targets. Exporters compile
   captured, hash-verified source privately with the verified SDK toolchain.
+- The first fresh DK-28 integration rejected a missing Cargo cache tag: creating
+  an empty target before Cargo suppressed its initialization. The owning Cargo
+  adversary reproduced this failure. Targets now must be absent beneath an owned
+  private parent; Cargo creates and tags them itself. No cache tag is fabricated.
 
 Complete affected browser owners, combined installed-SDK execution and full
 release gates remain required. Cache-integrity tests do not establish application

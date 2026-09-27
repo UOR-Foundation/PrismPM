@@ -133,15 +133,17 @@ test('Cargo fingerprints cannot authorize a planted driver executable or reuse i
   // replaced output. The owner must create a new target before compiling.
   run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',f.manifest], f.work, {CARGO_TARGET_DIR:f.target});
   assert.equal(run(driver, [], f.work), 'planted-driver');
-  assert.throws(() => compiler.createPrivateDriverTarget(f.work), /EEXIST/);
+  assert.throws(() => compiler.createPrivateDriverTarget(f.work), /already exists/);
   assert.equal(readFileSync(driver, 'utf8'), poison, 'rejection preserves unowned cache evidence');
   const fresh = mkdtempSync(join(tmpdir(), 'prismpm-driver-fresh-'));
   t.after(() => rmSync(fresh, {recursive:true, force:true}));
   const target = compiler.createPrivateDriverTarget(fresh);
   assert.equal(target, join(fresh, 'driver-target'));
   run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',f.manifest], f.work, {CARGO_TARGET_DIR:target});
+  assert.equal(readFileSync(join(target, 'CACHEDIR.TAG'), 'utf8').split('\n')[0],
+    'Signature: 8a477f597d28d172789f06886806bc55', 'Cargo must initialize its own private cache');
   assert.equal(run(join(target, 'debug', f.executable), [], f.work), '');
-  assert.throws(() => compiler.createPrivateDriverTarget(fresh), /EEXIST/);
+  assert.throws(() => compiler.createPrivateDriverTarget(fresh), /already exists/);
 });
 
 test('completed effects and custody tool caches retire under their exact owning paths', t => {
