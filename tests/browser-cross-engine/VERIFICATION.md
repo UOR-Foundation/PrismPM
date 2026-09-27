@@ -22,6 +22,27 @@ node --test tests/browser-cross-engine/store.test.mjs
 Firefox and WebKit. The default standalone Store owner still registers four
 tests. Retention/journal matrix acceptance remains a separate owner.
 
+The 27 September storage follow-up passed 55/55 checks in 55.553 s: all 11
+storage journeys, 92 actual generated calls replayed by both native modes, and
+six executed host defects in each of the three pinned engines. Receipt:
+`09570c0cbbab513baf9a84409e26c980b78b82f6ca551a9816fa95d8208430e1`.
+This historical receipt predates immutable HTTP module capture; it does not
+accept that corrected closure, the complete journal, or an application.
+Its genuine Wasm/native inputs are bound to source-owner receipt
+`5f8a637551ca59ed81df15c67c60425eca3554b34e52d9ff232a015c8928ed64`.
+The first attempt refused execution on the sidecar's noexec `/tmp`; the passed
+run used exact hash-checked, singly linked native captures in its private
+disk-backed evidence directory. Original artifacts were not modified.
+
+After immutable SDK-module delivery and exact mutation-baseline binding, the
+complete matrix passed again: 55/55, 47.411 s, no skips. Receipt:
+`a4cf6264e790bda63f06e2dedb0b29f6b6a8dab854d5ef0e9d5ecaf0348e94d3`.
+`verifyRetentionEngines` requires the current captured host inputs plus genuine
+source-bound Wasm/native artifacts; it runs every storage journey and host
+mutant on every engine. Each engine's complete 92-call transcript must agree
+with both native modes. This is component follow-up evidence, not a fresh full
+source-owner run, complete journal authentication, or deployed acceptance.
+
 All three engines report strict IndexedDB transactions. This is not eviction-
 proof persistence: the separate ephemeral-context probe returned `persist=false`
 in Chromium, awaited permission in Firefox, and lacked the persistence API in
