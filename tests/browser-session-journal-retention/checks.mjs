@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {prepareRetention, frozenInputs, run, sha, draft} from './compile.mjs';
 import {createCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {verifyCompilerOwnerSubstitutions} from '../browser-view/compiler-owner-checks.mjs';
+import {verifyRetentionInputSubstitutions} from './input-checks.mjs';
 import {retentionCorpus, retentionMaximumCorpus} from '../browser-session-journal/retention-corpus.mjs';
 import {retentionMutations} from '../browser-session-journal/retention-mutations.mjs';
 import {verifySessionStorage} from '../browser-session-journal/storage-browser.mjs';
@@ -105,8 +106,9 @@ export function verifyCompiledMutation(mutation, baseline) {
 }
 
 export async function verifyRetentionOwner(t) {
-  const compiler = createCompilerOwner('session-retention', frozenInputs());
-  const compilerSubstitutions = verifyCompilerOwnerSubstitutions(compiler, frozenInputs());
+  const inputs = frozenInputs(), inputSubstitutions = verifyRetentionInputSubstitutions(inputs);
+  const compiler = createCompilerOwner('session-retention', inputs);
+  const compilerSubstitutions = verifyCompilerOwnerSubstitutions(compiler, inputs);
   const {build, evidence} = verifyRetentionComponents(compiler);
   for (const standard of [true, false]) {
     const path = build.compileNative(standard), bytes = readFileSync(path);
@@ -135,7 +137,7 @@ export async function verifyRetentionOwner(t) {
   const mutations = retentionMutations.map(mutation => verifyCompiledMutation(mutation, build));
   assert.equal(mutations.length, 9); build.unchanged();
   const receipt = {...evidence, scope: 'private-retention-source-and-storage-component',
-    executableSubstitutionRejected: ['std', 'no-std', 'wasm'], compilerSubstitutions,
+    executableSubstitutionRejected: ['std', 'no-std', 'wasm'], compilerSubstitutions, inputSubstitutions,
     maxima, browser, browserTranscript, hostMutations, mutations};
   receipt.compilerCacheRetirement = compiler.close();
   assert.throws(() => compiler.runDriver(['--help'], build.work), /compiler owner closed/);

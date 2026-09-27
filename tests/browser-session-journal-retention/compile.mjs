@@ -15,6 +15,7 @@ export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const projection = 'Foundation.Browser.Application.V1.SessionJournalRetentionWire';
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
+const capturedInputs = new WeakSet();
 function read(path) {
   const absolute = join(repository, path), stat = lstatSync(absolute);
   assert.equal(realpathSync(absolute), absolute, 'unaliased compiler input ' + path);
@@ -68,7 +69,15 @@ export function frozenInputs() {
   }
   const inputs = Object.fromEntries([...files].sort().map(path => [path, sha(read(path))]));
   for (const [path, bytes] of capturedModules) assert.equal(sha(bytes), inputs[path], 'actual parsed module snapshot ' + path);
-  return Object.freeze(inputs);
+  Object.freeze(inputs); capturedInputs.add(inputs); return inputs;
+}
+export function verifyFrozenInputs(inputs) {
+  assert.ok(capturedInputs.has(inputs), 'actual complete captured retention inputs required');
+  // The complete static graph was parsed during capture. Every original file
+  // remains checked on every use: changed import edges necessarily change one
+  // of these bytes. Do not reparse an identical graph in child Node processes.
+  for (const [path, digest] of Object.entries(inputs))
+    assert.equal(sha(read(path)), digest, 'immutable captured retention input ' + path);
 }
 export function assertCapturedRetentionSources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
@@ -201,7 +210,7 @@ export function prepareRetention(compilerOwner, mutationId = null, expectedInput
       for (const package_ of packages.values()) package_.verify();
       for (const artifact of Object.values(wasmArtifacts)) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
-      assert.deepEqual(frozenInputs(), inputs);
+      verifyFrozenInputs(inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
       assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), buildManifest);

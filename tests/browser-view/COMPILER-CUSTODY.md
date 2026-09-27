@@ -39,4 +39,18 @@ identities were independently rehashed. Receipt:
 
 This is private component evidence, not journal, SDK or application acceptance.
 The preceding owner took 1048.997 seconds; these runs establish no meaningful
-end-to-end speed improvement. Repeated static-closure parsing remains overhead.
+end-to-end speed improvement.
+
+The complete static closure is now parsed and branded once per fresh capture;
+every subsequent use still verifies all captured paths, regular singly linked
+files and bytes. Five actual transitive-input defects run only in an independently
+captured private copy, never in repository or installed SDK sources. The
+read-only, network-disabled SDK construction probe passes 3/3.
+
+The updated full owner passes 18/18 in 1009.311 seconds, retaining all vectors,
+actual maxima, journeys and compiled defects above. Independent rechecking
+verified 840 captured inputs, all ten programs' packages, native/Wasm outputs,
+kernel evidence and both retained private compiler identities: 1,092 hashes.
+Receipt: `5d560cf058a75a5cfe469822d23210573ca91c95d4ac128b07e4f7fbfc63d5f1`,
+`/tmp/prismpm-session-retention-36xUKX/retention-source-owner-evidence.json`.
+This small timing difference is not evidence of an end-to-end CI speedup.
