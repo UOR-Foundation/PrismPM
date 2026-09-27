@@ -301,7 +301,7 @@ name = "PrismGenerated"
 roots = ["PrismPM.${moduleName}", "PrismPM.${moduleName}Corpus"]
 `, {flag: 'wx'});
   run('lake', ['build', 'PrismGenerated'], lean);
-  const {dir: exporter, bin: prodExport} = ensureProdExport(repository);
+  const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
   const exported = join(work, 'export');
   const roots = ['reduceWorkspaceBytes', 'workspaceRole', 'workspaceSigningPreimage'].map(name => `PrismPM.${moduleName}.${name}`);
   run(prodExport, [

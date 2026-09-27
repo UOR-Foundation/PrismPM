@@ -693,8 +693,11 @@ toolchain in a new private directory; existing shared caches are untouched.
 All browser fixture drivers compile into new private targets; Cargo fingerprint
 freshness does not authenticate a previously emitted executable.
 Effects and Custody compile captured driver sources into these private targets.
-Their completed-cache retirement records exact original tool identities before
-removing only reconstructible tool caches, preserving source and execution evidence.
+Retained fixtures retire completed tool caches after the final compiler invocation,
+recording exact original tool identities and preserving source and execution evidence.
+Older fixtures may read only their registered repository manifests for Cargo cleanup;
+every removed path remains private owned work. Workspace and envelope fixtures keep
+exporters inside their existing test-owned cleanup scope. No shared cache is adopted.
 
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,

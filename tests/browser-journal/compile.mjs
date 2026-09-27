@@ -10,6 +10,7 @@ export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 export {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
 import {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
+import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 function verifyPins(){
   const artifacts=readFileSync(join(repository,'model/dependencies.toml'),'utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
     const text=section.split('[[dependency]]')[0];return {path:/^path = "([^"]+)"$/m.exec(text)?.[1],hash:/^sha256 = "([0-9a-f]{64})"$/m.exec(text)?.[1],tree:/^tree_root = "([^"]+)"$/m.exec(text)?.[1]};
@@ -150,7 +151,7 @@ export function prepare(){
   copyFileSync(join(repository,'lean-toolchain'),join(lean,'lean-toolchain'));
   writeFileSync(join(lean,'lakefile.toml'),'name = "workspace_journal_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['+files.map(n=>'"PrismPM.Foundation.Browser.V1.'+n+'"').join(',')+']\n',{flag:'wx'});
   run('lake',['build','PrismGenerated'],lean);
-  const {dir: exporter, bin: prodExport} = ensureProdExport();
+  const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
   const exported=join(work,'export');run(prodExport,['--module','PrismPM.Foundation.Browser.V1.WorkspaceJournal','--root','PrismPM.Foundation.Browser.V1.WorkspaceJournal.workspaceJournalBytes','--ir-module','BrowserWorkspaceJournal','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
   const generated=join(work,'generated');const generation=JSON.parse(run(driver,['generate',join(exported,'kernel.ir'),generated,repository],repository));
   const runner=join(work,'runner');mkdirSync(join(runner,'src'),{recursive:true});copyFileSync(join(draft,'runner.rs'),join(runner,'src/main.rs'));
@@ -160,7 +161,8 @@ export function prepare(){
   const guest=join(work,'guest');assert.deepEqual(JSON.parse(run(driver,['generate-wasm',join(exported,'kernel.ir'),guest,repository],repository)),generation);run('cargo',['build','--locked','--offline','--release'],guest,{CARGO_TARGET_DIR:join(guest,'target')});
   const wasmBytes=readFileSync(join(guest,'target/wasm32-unknown-unknown/release/browser_workspace_journal_wasm_probe.wasm'));
   verifyPins();assert.equal(generation.ir_sha256,sha(readFileSync(join(exported,'kernel.ir'))));
+  const cacheRetirement=retireCompletedCompilerCaches(work,'journal');
   completed=true;
-  return {work,sources,verified,generation,compileNative,runner,wasmBytes};
+  return {work,sources,verified,generation,compileNative,runner,cacheRetirement,wasmBytes};
   } finally { if(!completed)rmSync(work,{recursive:true,force:true}); }
 }

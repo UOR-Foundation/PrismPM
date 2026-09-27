@@ -104,9 +104,11 @@ test('a private exporter destination cannot be adopted or overwritten', t => {
 function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   const work = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(work, {recursive:true, force:true}));
-  const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody'}[owner];
+  const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody',
+    'operation-journal':'browser-operation-journal', presentation:'browser-presentation',
+    view:'browser-view', journal:'browser-journal', query:'browser-query', command:'browser-command'}[owner];
   assert.ok(directory);
-  const executable = directory + '-driver';
+  const executable = (['view','journal','query','command'].includes(owner) ? 'browser-workspace-' + owner : directory) + '-driver';
   const manifest = join(work, 'tests', directory, 'driver/Cargo.toml');
   mkdirSync(join(dirname(manifest), 'src'), {recursive:true});
   writeFileSync(manifest, '[package]\nname="' + executable + '"\nversion="0.1.0"\nedition="2021"\npublish=false\n[workspace]\n');
@@ -158,6 +160,28 @@ test('completed effects and custody tool caches retire under their exact owning 
     assert(existsSync(f.manifest));
     for (const [name, preserved] of f.preserved) assert.deepEqual(readFileSync(join(f.work, name)), preserved);
     assert.throws(() => retireCompletedCompilerCaches(f.work, owner));
+  }
+});
+
+test('all remaining retained browser fixtures retire only their exact tool caches', t => {
+  for (const owner of ['operation-journal','presentation','view','journal','query','command']) {
+    const f = fixture(t, 'prismpm-' + owner + '-', owner);
+    const source = join(repository, 'tests/browser-' + owner + '/driver/Cargo.toml');
+    const original = readFileSync(source);
+    const binary = readFileSync(join(f.target, 'debug', f.executable));
+    const result = retireCompletedCompilerCaches(f.work, owner);
+    assert.equal(result.owner, owner);
+    const external = ['view','journal','query','command'].includes(owner);
+    assert.deepEqual(result.records[0], {path:external ? 'repository/tests/browser-' + owner + '/driver/Cargo.toml'
+      : 'tests/browser-' + owner + '/driver/Cargo.toml',
+    byte_length:external ? original.length : readFileSync(f.manifest).length,
+    sha256:sha(external ? original : readFileSync(f.manifest))});
+    assert.deepEqual(result.records[1], {path:'driver-target/debug/' + f.executable,
+      byte_length:binary.length, sha256:sha(binary)});
+    assert.deepEqual(readFileSync(source), original, 'source manifest must never be modified by retirement');
+    assert(!existsSync(join(f.target, 'debug', f.executable)) && !existsSync(join(f.exporter, '.lake/build')));
+    for (const [name, bytes] of f.preserved) assert.deepEqual(readFileSync(join(f.work, name)), bytes);
+    assert.throws(() => retireCompletedCompilerCaches(f.work, owner), /overwrite/);
   }
 });
 

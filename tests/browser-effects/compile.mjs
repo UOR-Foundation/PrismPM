@@ -5,6 +5,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -175,7 +176,8 @@ export function prepare(mutation = null) {
     assert.deepEqual(guests[0], guests[1], 'two independent generated Core-Wasm packages');
     pins(); compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
     for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'frozen source ' + module);
+    const cacheRetirement = retireCompletedCompilerCaches(work, 'effects');
     completed = true;
-    return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0], guestBytes: guests[2]};
+    return {work, sources, verified, generation, compileNative, runner, cacheRetirement, wasmBytes: guests[0], guestBytes: guests[2]};
   } finally { if (!completed) process.stderr.write('Retained incomplete effects diagnostic build ' + work + '\n'); }
 }

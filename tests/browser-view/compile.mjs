@@ -5,6 +5,7 @@ import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,w
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {retireCompletedCompilerCaches} from './driver-cache.mjs';
 export const draft=dirname(fileURLToPath(import.meta.url));
 export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -208,7 +209,7 @@ export function prepare(mutation=null){
     copyFileSync(join(repository,'lean-toolchain'),join(lean,'lean-toolchain'));
     writeFileSync(join(lean,'lakefile.toml'),'name = "workspace_view_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['+modules.map(n=>'"PrismPM.'+n+'"').join(',')+']\n',{flag:'wx'});
     run('lake',['build','PrismGenerated'],lean);
-    const {dir: exporter, bin: prodExport} = ensureProdExport();
+    const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
     const exported=join(work,'export');
     run(prodExport,['--module','PrismPM.Foundation.View.Workspace.V1.Labels','--root','PrismPM.Foundation.View.Workspace.V1.Interaction.workspaceInteractionBytes','--root','PrismPM.Foundation.View.Workspace.V1.Interaction.workspacePresentationBytes','--root','PrismPM.Foundation.View.Workspace.V1.Labels.workspaceViewLabelsBytes','--ir-module','BrowserWorkspaceView','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
     const generated=join(work,'generated'),generation=JSON.parse(run(driver,['generate',join(exported,'kernel.ir'),generated,repository],repository));
@@ -228,6 +229,7 @@ export function prepare(mutation=null){
     assert.deepEqual(wasm[0],wasm[1],'two freshly generated and compiled guests');
     verifyPins();assert.equal(generation.ir_sha256,sha(readFileSync(join(exported,'kernel.ir'))));
     for(const [name,bytes]of originalSources)assert.deepEqual(bytes,readFileSync(sourcePath(name)),'source remained frozen '+name);
-    completed=true;return {work,sources,verified,generation,compileNative,runner,wasmBytes:wasm[0]};
+    const cacheRetirement=retireCompletedCompilerCaches(work,'view');
+    completed=true;return {work,sources,verified,generation,compileNative,runner,cacheRetirement,wasmBytes:wasm[0]};
   } finally {if(!completed)process.stderr.write('Retained incomplete View diagnostic build '+work+'\n');}
 }

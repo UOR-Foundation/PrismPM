@@ -5,6 +5,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -157,7 +158,7 @@ export function prepare(mutation = null, sourceOnly = false) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "operation_journal_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const {dir: exporter, bin: prodExport} = ensureProdExport();
+    const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.Browser.Application.V1.OperationJournalWire.journalWireBytes', 'PrismPM.Foundation.Browser.Application.V1.OperationJournalWire.journalPartitionBytes', 'PrismPM.Foundation.Browser.Application.V1.EffectsWire.effectWireBytes', 'PrismPM.Fixture.fixtureEchoBytes'].sort();
     run(prodExport, ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
@@ -193,7 +194,8 @@ export function prepare(mutation = null, sourceOnly = false) {
     assert.deepEqual(guests[4], guests[6], 'two independent generated partition packages');
     pins(); compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
     for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'frozen source ' + module);
+    const cacheRetirement = retireCompletedCompilerCaches(work, 'operation-journal');
     completed = true;
-    return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0], guestBytes: guests[2], journalBytes: guests[3], partitionBytes: guests[4]};
+    return {work, sources, verified, generation, compileNative, runner, cacheRetirement, wasmBytes: guests[0], guestBytes: guests[2], journalBytes: guests[3], partitionBytes: guests[4]};
   } finally { if (!completed) process.stderr.write('Retained incomplete operation-journal diagnostic build ' + work + '\n'); }
 }

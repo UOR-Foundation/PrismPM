@@ -5,6 +5,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -172,7 +173,7 @@ function prepareStage(mutation, sourceOnly) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "presentation_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const {dir: exporter, bin: prodExport} = ensureProdExport();
+    const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.View.Browser.V1.Wire.viewWireBytes', ...[
       'fixturePresentationBytes', 'fixtureLabelsBytes', 'fixtureIntentFitsBytes',
@@ -206,8 +207,9 @@ function prepareStage(mutation, sourceOnly) {
     assert.deepEqual(guests[0], guests[1], 'two independent generated Core-Wasm packages');
     pins(); compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
     for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'frozen source ' + module);
+    const cacheRetirement = retireCompletedCompilerCaches(work, 'presentation');
     completed = true;
-    return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0], fixtureBytes: guests[2], labelsBytes: guests[3], intentBytes: guests[4],
+    return {work, sources, verified, generation, compileNative, runner, cacheRetirement, wasmBytes: guests[0], fixtureBytes: guests[2], labelsBytes: guests[3], intentBytes: guests[4],
       secretBytes: guests[5], routeBytes: guests[6], sinkBytes: guests[7],
       maxrouteBytes: guests[8], maxsinkBytes: guests[9], maxfieldBytes: guests[10], maxsecretBytes: guests[11], progressBytes: guests[12], maxprogressBytes: guests[13]};
   } finally { if (!completed) process.stderr.write('Retained incomplete presentation diagnostic build ' + work + '\n'); }
