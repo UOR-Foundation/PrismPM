@@ -51,3 +51,10 @@ This is Linux AMD64/Chromium component evidence. A fresh combined owner must bin
 the final integrated source and all three browser engines. Authenticated journal
 linkage, current-authority admission, atomic ownership, witnesses, installed SDK
 and deployed-application acceptance remain mandatory independent gates.
+
+The complete receipt's 829 inputs are byte-recoverable from commit `50ca7f2`;
+an independent comparison against that Git tree found no differences. The next
+commit formats only the Rust test driver/observer, corrects the driver's unused
+usage text and spaces a schema comment. Its construction and formatting checks
+do not reaccept the full owner. The receipt above applies to `50ca7f2`, not the
+changed fixture closure; fresh combined verification of the final tree is required.

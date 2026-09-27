@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => {
             return Err(
-                "verify PROJECT or native|layout|session|parity IR ABSENT_OUTPUT LICENSE_ROOT".into(),
+                "verify PROJECT or native|layout|tail|parity IR ABSENT_OUTPUT LICENSE_ROOT".into(),
             )
         }
     }

@@ -1,5 +1,5 @@
 use browser_session_recovery_frames_core_probe::{
-    sourceRecoveryWireBytes, sourceRecoveryFrameLayoutBytes, sourceRecoveryFrameTailBytes,
+    sourceRecoveryFrameLayoutBytes, sourceRecoveryFrameTailBytes, sourceRecoveryWireBytes,
 };
 use std::{error::Error, fs};
 
@@ -14,9 +14,7 @@ fn unhex(text: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    if arguments.len() < 2
-        || !["layout", "tail", "parity"].contains(&arguments[0].as_str())
-    {
+    if arguments.len() < 2 || !["layout", "tail", "parity"].contains(&arguments[0].as_str()) {
         return Err("closed entry and corpus or binary input/expected".into());
     }
     let call = if arguments[0] == "layout" {
