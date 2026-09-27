@@ -2381,6 +2381,35 @@ Receipt `/tmp/prismpm-publication-RI5Ngo/publication-acceptance.json`, SHA-256
 `0514ce3653fb7b0993e36bf3f0c8215ecca9cd2dd45d362434c119e90a144f07`.
 This verifies conditional source admission only, not SDK or deployment acceptance.
 
+## Browser-runtime admission regression — 27 September 2026
+
+The actual private oracle invocation initially returned `Ok([])` for a browser
+declaration labeled `Ready`. Its new owning regression failed on that result.
+Restoring unconditional `PP2011` for the unsupported browser profile makes the
+regression pass for `Ready`, `Runtime unavailable` and `Verified production
+service`; display text is not execution evidence. Successful oracle invocation
+now has exactly three process records by type, produced only after pinned Node
+identity, Hologram Live build/execution and complete report validation.
+
+The registered DK-21 owner reprojects all three changed LexLean declarations,
+then exercises public check/build/verify and requires no generated output.
+Its source/projection owner and public integration test pass. All four private
+oracle guards, upstream source-pin and report-mutation tests, the complete
+189-test infrastructure audit, model/spec accounting (181 IDs, 86 codes),
+five authored-formatting tests and scoped warnings-denied Clippy pass in the
+devcontainer. Original logs remain in `target/audit-27sep26/`; the complete
+DK-21 log is SHA-256
+`e068a4917a3ae25673a2c6f992cb3e7256a090b866dbe504de2b2eba83873084`,
+and the audit log is
+`1d2b800c39d2b30560d9e58d80309f3400ae321f1109c83efbf4776970dadda1`.
+
+The selected Calculator fixture's actual source projection reported its new
+model digest, `sha256:b9c4dda152fea5e238249c1e460c1ba2c0436ef62bb29f0bf6de92dfbddcfd42`.
+All four modeled references were updated through the documented source-review
+procedure; the complete source-selection/negative owner passes. This restores
+an existing refusal boundary, not the missing browser runtime, public Foundry
+service, SDK release or deployment.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
