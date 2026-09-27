@@ -33,6 +33,15 @@ Follow-up receipt:
 evidence: `target/retention-observed-BZ5pFR/evidence.json`.
 The original source-owner receipt is bound, not relabeled as current acceptance.
 
+The HTTP delivery follow-up serves only immutable strings captured from all five
+SDK modules and checked against the original owner input digests. Undeclared
+module/network requests fail; each host mutant starts from that same verified
+snapshot. Actual file substitution cannot alter the captured strings and fails
+recapture. Twenty scoped checks pass in 7.882 seconds, retaining the eleven
+journeys, 92 native-replayed calls and six host mutants. Receipt:
+`255e43853b134c05d39d3d5774733e16c9a19e0b4737a34fcfe13bf5211b056e`;
+evidence: `target/retention-observed-EBpGGb/evidence.json`.
+
 Fresh complete changed-closure source-owner verification, joint storage maxima,
 all-browser execution and authenticated journal composition remain required.
 Snapshots bind the reference frontier; callers must read and hash the complete

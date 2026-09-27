@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {verifySessionStorage} from './storage-browser.mjs';
+import {captureStorageSources, verifySessionStorage} from './storage-browser.mjs';
 import {sha} from '../browser-view/compile.mjs';
 import {validateStorageObservations} from './storage-observations.mjs';
 
@@ -60,8 +60,9 @@ export function mutateStorageHost(source, mutation) {
   return source.replace(mutation.before, mutation.after);
 }
 
-export async function verifyStorageHostMutations(t, wire, {engine = 'chromium'} = {}) {
-  const path = new URL('../../sdk/browser/session-storage.mjs', import.meta.url), source = readFileSync(path, 'utf8');
+export async function verifyStorageHostMutations(t, wire, {engine = 'chromium', inputs} = {}) {
+  const path = new URL('../../sdk/browser/session-storage.mjs', import.meta.url);
+  const source = captureStorageSources(inputs)['session-storage.mjs'];
   const results = [];
   for (const mutation of storageHostMutations) {
     const changed = mutateStorageHost(source, mutation);
@@ -72,7 +73,7 @@ export async function verifyStorageHostMutations(t, wire, {engine = 'chromium'} 
         await assert.rejects(verifySessionStorage({async test(name, body) {
           if (!name.startsWith(mutation.case)) return;
           selected++; await body();
-        }}, wire, {source: changed, engine}), error => error.code === 'ERR_ASSERTION',
+        }}, wire, {source: changed, engine, inputs}), error => error.code === 'ERR_ASSERTION',
         'the actual browser journey must detect changed behavior, not a launch or syntax failure');
         assert.equal(selected, 1, 'one exact behavioral counterexample');
       } catch (error) {failure = error; throw error;}
