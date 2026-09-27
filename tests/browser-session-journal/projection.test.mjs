@@ -4,6 +4,7 @@ import test from 'node:test';
 import {projectionCorpus, observationCorpus} from './projection-corpus.mjs';
 import {assertCapturedProjectionSources, frozenInputs, sourceClosure} from './compile.mjs';
 import {verifyNativeProjectionInventory} from './projection-checks.mjs';
+import {mutateProjectionSource, projectionMutations} from './projection-mutations.mjs';
 
 const root = new URL('../../stdlib/src/Foundation/Browser/Application/V1/', import.meta.url);
 const semantic = name => JSON.parse(/\\semanticdata\{(.*)\}/.exec(
@@ -94,4 +95,25 @@ test('native inventory preserves hyphenated boundary cases and rejects missing o
     output + 'PASS Extra\n', output.replace('PASS Initialize\n', 'PASS Initialize\nPASS Initialize\n'),
     output.replace('PASS 2 journal', 'PASS 1 journal')])
     assert.throws(() => verifyNativeProjectionInventory(changed, rows), /complete exact native vector inventory/);
+});
+
+test('closed projection defect catalogue changes only the named source declaration', () => {
+  const rows = {predecessor: projectionCorpus(), observation: observationCorpus()};
+  const baseline = sourceClosure(); assert.equal(projectionMutations.length, 8);
+  for (const mutation of projectionMutations) {
+    const changed = new Map(baseline), result = mutateProjectionSource(changed, mutation.id);
+    assert.equal(result.changed, mutation.id === 'predecessor-eof' ? 9 : 1);
+    const parse = bytes => JSON.parse(/\\semanticdata\{(.*)\}/.exec(bytes.toString('utf8'))[1]);
+    for (const [name, bytes] of baseline) {
+      if (name !== mutation.module) {assert.deepEqual(changed.get(name), bytes); continue;}
+      const before = parse(bytes), after = parse(changed.get(name));
+      assert.deepEqual(after.declarations.map(row => row.name), before.declarations.map(row => row.name));
+      for (let i = 0; i < before.declarations.length; i++) {
+        if (before.declarations[i].name === mutation.definition) assert.notDeepEqual(after.declarations[i], before.declarations[i]);
+        else assert.deepEqual(after.declarations[i], before.declarations[i]);
+      }
+    }
+    for (const probe of mutation.probes) assert.equal(rows[mutation.entry].filter(row => row.id === probe).length, 1);
+  }
+  assert.throws(() => mutateProjectionSource(new Map(baseline), 'not-a-source-defect'), /closed projection mutation/);
 });

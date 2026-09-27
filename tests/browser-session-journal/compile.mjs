@@ -1,12 +1,13 @@
 // Private test orchestration; no host implementation of modeled transitions.
 import assert from 'node:assert/strict';
-import {lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
+import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
+import {mutateProjectionSource} from './projection-mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -32,7 +33,7 @@ export function sourceClosure() {
 export function frozenInputs() {
   const files = new Set([...sourceClosure().keys()].map(modulePath));
   for (const path of ['compile.mjs', 'projection-corpus.mjs', 'projection-checks.mjs',
-    'projection.test.mjs', 'runtime.mjs', 'maximum-runner.mjs', 'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
+    'projection.test.mjs', 'projection-owner.test.mjs', 'runtime.mjs', 'maximum-runner.mjs', 'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
     files.add('tests/browser-session-journal/' + path);
   for (const path of ['tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
     'tests/browser-session/wire.mjs', 'tests/browser-session/corpus.mjs',
@@ -71,10 +72,12 @@ export function assertCapturedProjectionSources(inputs, sources) {
   for (const [name, bytes] of sources) assert.equal(sha(bytes), inputs[modulePath(name)],
     'actual captured source must match original snapshot ' + name);
 }
-export function prepareProjection() {
+export function prepareProjection(mutationId = null, expectedInputs = null) {
   for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_SESSION_JOURNAL_'), 'no owner bypass');
   const inputs = frozenInputs(), sources = sourceClosure();
+  if (expectedInputs) assert.deepEqual(inputs, expectedInputs, 'one immutable complete projection owner closure');
   assertCapturedProjectionSources(inputs, sources);
+  const mutation = mutationId === null ? null : mutateProjectionSource(sources, mutationId);
   const captured = path => { const bytes = read(path); assert.equal(sha(bytes), inputs[path], 'frozen input ' + path); return bytes; };
   const work = mkdtempSync(join(tmpdir(), 'prismpm-session-journal-'));
   const staged = new Map();
@@ -145,7 +148,7 @@ export function prepareProjection() {
     const licenses = join(work, 'licenses');
     const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], work));
     const wasm = {};
-    for (const entry of ['predecessor', 'session', 'observation']) {
+    for (const entry of mutation ? [mutation.entry] : ['predecessor', 'session', 'observation']) {
       const guests = [];
       for (const label of ['a', 'b']) {
         const output = join(work, entry + '-' + label);
@@ -156,21 +159,38 @@ export function prepareProjection() {
       assert.deepEqual(guests[0], guests[1], 'two independent complete generated ' + entry + ' packages'); wasm[entry] = guests[0];
     }
     const nativePrograms = new Map();
+    function checkedNative(record) {
+      const stat = lstatSync(record.binary);
+      assert.equal(realpathSync(record.binary), record.binary, 'unaliased generated native observer');
+      assert.ok(stat.isFile() && stat.nlink === 1, 'singly linked generated native observer');
+      assert.equal(sha(readFileSync(record.binary)), record.hash, 'immutable generated native observer');
+      return record.binary;
+    }
     function compileNative(standard) {
-      if (nativePrograms.has(standard)) {
-        const previous = nativePrograms.get(standard);
-        assert.equal(sha(readFileSync(previous.binary)), previous.hash, 'immutable generated native observer');
-        return previous.binary;
-      }
+      if (nativePrograms.has(standard)) return checkedNative(nativePrograms.get(standard));
       const name = standard ? 'std' : 'no-std', runner = join(work, 'runner-' + name);
       stage('runner-' + name + '/src/main.rs', captured('tests/browser-session-journal/runner.rs'));
       stage('runner-' + name + '/Cargo.toml', '[package]\nname = "browser-session-journal-runner"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n[workspace]\n[dependencies]\nbrowser-session-journal-core-probe = {path = "../generated", default-features = ' + standard + '}\n');
       stage('runner-' + name + '/Cargo.lock', 'version = 4\n[[package]]\nname = "browser-session-journal-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-session-journal-runner"\nversion = "0.1.0"\ndependencies = ["browser-session-journal-core-probe"]\n');
       run('cargo', ['build', '--locked', '--offline', '--release'], runner, {CARGO_TARGET_DIR: join(runner, 'target')});
-      const binary = join(runner, 'target/release/browser-session-journal-runner');
-      nativePrograms.set(standard, {binary, hash: sha(readFileSync(binary))}); return binary;
+      const binary = join(work, 'native-' + name + '-runner');
+      stage('native-' + name + '-runner', readFileSync(join(runner, 'target/release/browser-session-journal-runner')));
+      chmodSync(binary, 0o700);
+      const record = {binary, hash: sha(readFileSync(binary))};
+      nativePrograms.set(standard, record); return checkedNative(record);
+    }
+    function runNative(standard, args) {
+      const binary = compileNative(standard);
+      try { return run(binary, args, work); }
+      finally { checkedNative(nativePrograms.get(standard)); }
+    }
+    function nativeEvidence() {
+      return Object.fromEntries([...nativePrograms].map(([standard, record]) => {
+        checkedNative(record); return [standard ? 'std' : 'no-std', record.hash];
+      }));
     }
     function unchanged() {
+      for (const record of nativePrograms.values()) checkedNative(record);
       assert.deepEqual(frozenInputs(), inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
       assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
@@ -179,6 +199,6 @@ export function prepareProjection() {
     }
     unchanged(); const cacheRetirement = retireCompletedCompilerCaches(work, 'session-journal'); unchanged();
     complete = true;
-    return {work, sources, verified, generation, wasm, compileNative, unchanged, inputs, cacheRetirement};
+    return {work, sources, verified, generation, wasm, compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation};
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }

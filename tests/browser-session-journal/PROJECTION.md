@@ -18,6 +18,12 @@ Owning functions: `verifyProjection`, `verifyProjectionMaxima` and
 Construction tests independently bind the original complete parser shape and
 reject captured-source substitution and incomplete native result inventories.
 
+The current private `projection-owner.test.mjs` additionally requires eight
+compiled source defects, all 48 actual maxima and before/after executable
+identity checks. Its seven construction checks pass; its new complete captured
+closure has not yet passed the full owner. The historical receipt above does
+not attest these new harness inputs.
+
 This is not complete DK-30 acceptance. Compiled source mutants, authenticated
 journal/host composition, freshness, retirement, browser faults and installed
 SDK verification remain mandatory. No public application gate is opened.
