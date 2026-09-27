@@ -24,6 +24,10 @@
   proof, IR and Wasm evidence, and record original tool hashes. Repository
   manifests are read from closed registered paths, never deleted or modified.
   Incomplete and source-only diagnostic builds remain retained, not accepted.
+- After all three cache corrections, the complete `cargo xtask validate` run
+  passed: 199 infrastructure tests and the normative registry/specification
+  checks (181 capability identifiers, 86 diagnostics). This is infrastructure
+  validation, not the still-required browser-owner or installed-SDK acceptance.
 
 Complete affected browser owners, combined installed-SDK execution and full
 release gates remain required. Cache-integrity tests do not establish application
