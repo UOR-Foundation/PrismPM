@@ -2,6 +2,32 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { withBrowser } from './browser-test-server.mjs';
 
+test('storage refuses actual transactions that do not report strict durability', {timeout: 30000}, async () => {
+  await withBrowser(async ({browser, baseURL}) => {
+    const page = await browser.newPage(); await page.goto(baseURL);
+    const actual = await page.evaluate(async () => {
+      const {openStore} = await import('./store.mjs'), {digestBytes} = await import('./identity.mjs');
+      const rows = [], failure = async fn => {try {await fn(); return 'unexpected-success';} catch (error) {return error.code;}};
+      for (const [index, durability] of ['relaxed', 'default', undefined].entries()) {
+        const store = await openStore('test-durability-' + index), bytes = Uint8Array.of(1), id = await digestBytes(bytes);
+        const original = IDBDatabase.prototype.transaction;
+        IDBDatabase.prototype.transaction = function(...args) {
+          const tx = original.apply(this, args); Object.defineProperty(tx, 'durability', {value: durability}); return tx;
+        };
+        let write, read;
+        try {
+          write = await failure(() => store.commit({head: 'main', expected: null, next: id, objects: [bytes]}));
+          read = await failure(() => store.readHead('main'));
+        } finally {IDBDatabase.prototype.transaction = original;}
+        const head = await store.readHead('main'), object = await store.readObject(id); store.close();
+        rows.push({write, read, head, object});
+      }
+      return rows;
+    });
+    assert.deepEqual(actual, Array.from({length: 3}, () => ({write: 'storage-unavailable', read: 'storage-unavailable', head: null, object: null})));
+  });
+});
+
 test('browser storage retains keys and an atomic content-addressed head after reopening', { timeout: 30000 }, async () => {
   await withBrowser(async ({ browser, baseURL }) => {
     const context = await browser.newContext();
