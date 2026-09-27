@@ -8,6 +8,7 @@ import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
+import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 import {mutateProjectionSource} from './projection-mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
@@ -150,7 +151,7 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
     const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], work));
     const generatedPackages = [captureGeneratedPackage(generated,
       {kind: 'native', inputIrSha256: generation.ir_sha256})];
-    const wasm = {};
+    const wasm = {}, wasmOwners = {}, wasmArtifacts = {};
     for (const entry of mutation ? [mutation.entry] : ['predecessor', 'session', 'observation']) {
       const guests = [];
       for (const label of ['a', 'b']) {
@@ -161,10 +162,15 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
         const target = join(work, entry + '-' + label + '-target');
         try {run('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: target});}
         finally {capturedPackage.verify();}
-        guests.push(readFileSync(join(target, 'wasm32-unknown-unknown/release/browser_session_journal_wire_probe.wasm')));
+        const artifact = captureGeneratedWasm(work,
+          join(target, 'wasm32-unknown-unknown/release/browser_session_journal_wire_probe.wasm'), entry + '-' + label + '-execution');
+        wasmArtifacts[entry + '-' + label] = artifact; guests.push(artifact);
       }
-      assert.deepEqual(guests[0], guests[1], 'two independent complete generated ' + entry + ' packages'); wasm[entry] = guests[0];
+      assert.deepEqual(guests[0].bytes, guests[1].bytes, 'two independent complete generated ' + entry + ' packages');
+      wasm[entry] = guests[0].bytes; wasmOwners[entry] = guests[0];
     }
+    Object.freeze(wasm); Object.freeze(wasmOwners); Object.freeze(wasmArtifacts);
+    const generatedWasm = Object.freeze(Object.fromEntries(Object.entries(wasmArtifacts).map(([name, owner]) => [name, owner.evidence])));
     const nativePrograms = new Map();
     function checkedNative(record) {
       const stat = lstatSync(record.binary);
@@ -200,6 +206,7 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
     }
     function unchanged() {
       for (const capturedPackage of generatedPackages) capturedPackage.verify();
+      for (const artifact of Object.values(wasmArtifacts)) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
       assert.deepEqual(frozenInputs(), inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
@@ -209,7 +216,8 @@ export function prepareProjection(mutationId = null, expectedInputs = null) {
     }
     unchanged(); const cacheRetirement = retireCompletedCompilerCaches(work, 'session-journal'); unchanged();
     complete = true;
-    return {work, sources, verified, generation, wasm, compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation,
-      generatedPackages: generatedPackages.map(({directory, kind, files}) => ({path: directory.slice(work.length + 1), kind, files}))};
+    return Object.freeze({work, sources, verified, generation, wasm, wasmOwners, wasmArtifacts, generatedWasm,
+      compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation,
+      generatedPackages: generatedPackages.map(({directory, kind, files}) => ({path: directory.slice(work.length + 1), kind, files}))});
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }

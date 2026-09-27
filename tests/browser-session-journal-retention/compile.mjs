@@ -8,6 +8,7 @@ import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
+import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 import {mutateRetentionSource} from '../browser-session-journal/retention-mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
@@ -147,7 +148,7 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
     const generation = JSON.parse(run(driver, ['native', ir, generated, licenses], work));
     const nativePackage = captureGeneratedPackage(generated, {kind: 'native', inputIrSha256: generation.ir_sha256});
     const packages = new Map([['native', nativePackage]]);
-    const wasm = {};
+    const wasm = {}, wasmOwners = {}, wasmArtifacts = {};
     for (const entry of ['retention']) {
       const guests = [];
       for (const label of ['a', 'b']) {
@@ -156,12 +157,17 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
         const package_ = captureGeneratedPackage(output, {kind: 'wasm', inputIrSha256: generation.ir_sha256});
         packages.set(entry + '-' + label, package_); package_.verify();
         const target = join(work, 'wasm-target-' + entry + '-' + label);
-        run('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: target});
-        package_.verify();
-        guests.push(readFileSync(join(target, 'wasm32-unknown-unknown/release/browser_session_journal_retention_wire_probe.wasm')));
+        try {run('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: target});}
+        finally {package_.verify();}
+        const artifact = captureGeneratedWasm(work,
+          join(target, 'wasm32-unknown-unknown/release/browser_session_journal_retention_wire_probe.wasm'), entry + '-' + label + '-execution');
+        wasmArtifacts[entry + '-' + label] = artifact; guests.push(artifact);
       }
-      assert.deepEqual(guests[0], guests[1], 'two independent complete generated ' + entry + ' packages'); wasm[entry] = guests[0];
+      assert.deepEqual(guests[0].bytes, guests[1].bytes, 'two independent complete generated ' + entry + ' packages');
+      wasm[entry] = guests[0].bytes; wasmOwners[entry] = guests[0];
     }
+    Object.freeze(wasm); Object.freeze(wasmOwners); Object.freeze(wasmArtifacts);
+    const generatedWasm = Object.freeze(Object.fromEntries(Object.entries(wasmArtifacts).map(([name, owner]) => [name, owner.evidence])));
     const nativePrograms = new Map();
     function checkedNative(record) {
       const stat = lstatSync(record.binary);
@@ -198,6 +204,7 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
     }
     function unchanged() {
       for (const package_ of packages.values()) package_.verify();
+      for (const artifact of Object.values(wasmArtifacts)) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
       assert.deepEqual(frozenInputs(), inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
@@ -208,6 +215,7 @@ export function prepareRetention(mutationId = null, expectedInputs = null) {
     unchanged(); const cacheRetirement = retireCompletedCompilerCaches(work, 'session-retention'); unchanged();
     complete = true;
     const generatedPackages = Object.fromEntries([...packages].map(([name, package_]) => [name, package_.files]));
-    return {work, sources, verified, generation, wasm, compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation, generatedPackages};
+    return Object.freeze({work, sources, verified, generation, wasm, wasmOwners, wasmArtifacts, generatedWasm,
+      compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, mutation, generatedPackages});
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }

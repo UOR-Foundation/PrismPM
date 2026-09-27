@@ -8,7 +8,8 @@ test('retention compiler freezes complete source and transitive host/oracle inpu
   const inputs = frozenInputs(), sources = sourceClosure(); assertCapturedRetentionSources(inputs, sources);
   for (const path of ['sdk/browser/session-storage.mjs', 'sdk/browser/session-retention-wire.mjs',
     'tests/browser-session-journal/storage-browser.mjs', 'tests/browser-session-journal/retention-corpus.mjs',
-    'tests/browser-session-journal/retention-mutations.mjs', 'tests/browser-view/local-module-inputs.mjs']) assert.ok(inputs[path], path);
+    'tests/browser-session-journal/retention-mutations.mjs', 'tests/browser-view/local-module-inputs.mjs',
+    'tests/browser-view/generated-wasm.mjs', 'tests/browser-session-journal/wasm-artifact-checks.mjs']) assert.ok(inputs[path], path);
   const name = 'Foundation.Browser.Application.V1.SessionJournalRetention';
   const changed = new Map(sources); changed.set(name, Buffer.concat([sources.get(name), Buffer.from('\n')]));
   assert.throws(() => assertCapturedRetentionSources(inputs, changed), /actual captured source/);
