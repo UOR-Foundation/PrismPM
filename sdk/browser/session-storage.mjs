@@ -7,6 +7,7 @@ import {inspectEffectModule} from './effects-module.mjs';
 const FRAME = 67108864, CHUNK = 1048576, OBJECTS = 4096, ROOTS = 64;
 const namePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const hashPattern = /^[a-f0-9]{64}$/;
+const storageHandles = new WeakSet();
 const equal = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
 const hash = async bytes => new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
 const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
@@ -116,9 +117,12 @@ class SessionStorage {
   #db; #model; #closed = false; #busy = false;
   constructor(db, model) {
     this.#db = db; this.#model = model;
-    db.onversionchange = () => this.close(); db.onclose = () => { this.#closed = true; };
+    db.onversionchange = () => this.#shutdown(); db.onclose = () => { this.#closed = true; };
   }
   #check() { if (this.#closed) throw fail('storage-closed'); }
+  #shutdown() {
+    if (!this.#closed) { this.#closed = true; this.#db.close(); }
+  }
   #valid(bytes) {
     if (this.#model(encode([1, 1, canonical(bytes)])) !== true) throw fail('storage-corrupt');
   }
@@ -173,8 +177,17 @@ class SessionStorage {
   }
   close() {
     if (arguments.length !== 0) throw fail('invalid-input');
-    if (!this.#closed) this.#db.close(); this.#closed = true;
+    this.#shutdown();
   }
+}
+// Private composition access captures actual SDK methods, not caller-supplied
+// lookalikes or overwritten methods on a genuine instance. It grants no authority.
+const storageMethods = Object.freeze(Object.fromEntries(['snapshot', 'read', 'commit']
+  .map(name => [name, SessionStorage.prototype[name]])));
+export function sessionStorageAccess(storage) {
+  if (arguments.length !== 1 || !storageHandles.has(storage)) throw fail('invalid-input');
+  return Object.freeze(Object.fromEntries(Object.entries(storageMethods)
+    .map(([name, method]) => [name, (...arguments_) => Reflect.apply(method, storage, arguments_)])));
 }
 export async function openSessionStorage(value) {
   if (arguments.length !== 1) throw fail('invalid-input');
@@ -202,6 +215,11 @@ export async function openSessionStorage(value) {
         if (store.keyPath !== null || store.autoIncrement || store.indexNames.length) throw fail('storage-corrupt');
       }
     });
-    const storage = new SessionStorage(db, model); await storage.snapshot(); return storage;
+    const storage = new SessionStorage(db, model);
+    await Reflect.apply(storageMethods.snapshot, storage, []);
+    // An instance exposes its constructor/prototype. Only this completed
+    // factory may brand it; constructor calls and method overrides are not proof.
+    storageHandles.add(storage);
+    return storage;
   } catch (error) { db?.close(); throw storageError(error); }
 }
