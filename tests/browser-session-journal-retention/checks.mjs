@@ -8,6 +8,8 @@ import {retentionMutations} from '../browser-session-journal/retention-mutations
 import {verifySessionStorage} from '../browser-session-journal/storage-browser.mjs';
 import {verifyStorageTranscript, verifyStorageHostMutations} from '../browser-session-journal/storage-verification.mjs';
 import {executeWasm, tsv} from './runtime.mjs';
+import {requireGeneratedWasm} from '../browser-view/generated-wasm.mjs';
+import {verifyWasmArtifactSubstitutions} from '../browser-session-journal/wasm-artifact-checks.mjs';
 
 export function verifyNativeInventory(output, rows) {
   assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
@@ -43,11 +45,13 @@ export function verifyRetentionComponents() {
   }
   const file = join(build.work, 'retention.tsv'); writeFileSync(file, tsv(rows), {flag: 'wx'});
   for (const standard of [true, false]) verifyNativeInventory(build.runNative(standard, ['retention', file]), rows);
-  const observed = executeWasm(build.wasm.retention, rows); build.unchanged();
+  const wasmSubstitutions = verifyWasmArtifactSubstitutions(build);
+  const artifact = requireGeneratedWasm(build.wasmOwners.retention);
+  const observed = artifact.run(bytes => executeWasm(bytes, rows)); build.unchanged();
   const evidence = {scope: 'private-retention-component', publicApplicationAccepted: false,
     source: build.verified.source_id, attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
-    wasm: sha(build.wasm.retention), cases: rows.length, observed, native: build.nativeEvidence(),
-    inputs: build.inputs, generatedPackages: build.generatedPackages,
+    wasm: artifact.evidence.original.sha256, cases: rows.length, observed, native: build.nativeEvidence(),
+    inputs: build.inputs, generatedPackages: build.generatedPackages, generatedWasm: build.generatedWasm, wasmSubstitutions,
     generatedSourceSubstitutionRejected: ['source', 'source-and-manifest', 'extra-file', 'hard-link'],
     cacheRetirement: build.cacheRetirement};
   writeFileSync(join(build.work, 'retention-component-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
@@ -56,16 +60,16 @@ export function verifyRetentionComponents() {
 
 export function verifyRetentionMaxima(build) {
   const input = join(build.work, 'maximum-input.bin'), expected = join(build.work, 'maximum-expected.bin');
-  const artifact = join(build.work, 'maximum-retention.wasm'); writeFileSync(artifact, build.wasm.retention, {flag: 'wx'});
+  const artifact = requireGeneratedWasm(build.wasmOwners.retention);
   const evidence = [];
   for (const row of retentionMaximumCorpus()) {
     writeFileSync(input, row.request); writeFileSync(expected, row.response);
     for (const standard of [true, false]) assert.equal(build.runNative(standard, ['retention', input, expected]),
       'PASS binary journal retention twice\n', 'complete native maximum ' + row.id);
-    const observed = JSON.parse(run(process.execPath,
-      [join(draft, 'maximum-runner.mjs'), artifact, input, expected, sha(build.wasm.retention)], build.work));
+    const observed = artifact.run(() => JSON.parse(run(process.execPath,
+      [join(draft, 'maximum-runner.mjs'), artifact.path, input, expected, artifact.evidence.original.sha256], build.work)));
     assert.equal(observed.request, sha(row.request)); assert.equal(observed.response, sha(row.response));
-    assert.equal(observed.wasm, sha(build.wasm.retention));
+    assert.equal(observed.wasm, artifact.evidence.original.sha256);
     const result = {id: row.id, requestBytes: row.request.length, responseBytes: row.response.length, ...observed};
     console.log(JSON.stringify(result)); evidence.push(result);
   }
@@ -80,16 +84,18 @@ export function verifyCompiledMutation(mutation, baseline) {
   assert.notEqual(build.verified.source_id, baseline.verified.source_id);
   assert.notEqual(build.verified.attestation_id, baseline.verified.attestation_id);
   assert.notEqual(build.generation.ir_sha256, baseline.generation.ir_sha256);
-  assert.notEqual(sha(build.wasm.retention), sha(baseline.wasm.retention));
+  const artifact = requireGeneratedWasm(build.wasmOwners.retention);
+  assert.notEqual(artifact.evidence.original.sha256, requireGeneratedWasm(baseline.wasmOwners.retention).evidence.original.sha256);
   const file = join(build.work, 'mutation.tsv'); writeFileSync(file, tsv([row]), {flag: 'wx'});
   for (const standard of [true, false]) assert.throws(() => build.runNative(standard, ['retention', file]),
     /native output mismatch/, 'actual compiled source defect must change native behavior');
-  assert.throws(() => executeWasm(build.wasm.retention, [row]),
+  assert.throws(() => artifact.run(bytes => executeWasm(bytes, [row])),
     error => error.code === 'ERR_ASSERTION' && error.message.includes(row.id),
     'actual Wasm response mismatch required, not a compilation failure or trap');
   build.unchanged(); baseline.unchanged();
   const evidence = {mutation: build.mutation, source: build.verified.source_id, attestation: build.verified.attestation_id,
-    ir: build.generation.ir_sha256, wasm: sha(build.wasm.retention), request: sha(row.request), expected: sha(row.response),
+    ir: build.generation.ir_sha256, wasm: artifact.evidence.original.sha256, generatedWasm: build.generatedWasm,
+    request: sha(row.request), expected: sha(row.response),
     native: build.nativeEvidence(), generatedPackages: build.generatedPackages, cacheRetirement: build.cacheRetirement};
   writeFileSync(join(build.work, 'retention-mutation-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   console.log(JSON.stringify({id: mutation.id, work: build.work, status: 'real compiled defect detected'})); return evidence;
@@ -105,20 +111,21 @@ export async function verifyRetentionOwner(t) {
     } finally {writeFileSync(path, bytes);}
   }
   const poisoned = join(build.work, 'changed-generated.wasm'), probe = retentionCorpus()[0];
+  const artifact = requireGeneratedWasm(build.wasmOwners.retention);
   const input = join(build.work, 'identity-input.bin'), expected = join(build.work, 'identity-expected.bin');
-  writeFileSync(poisoned, Buffer.concat([build.wasm.retention, Buffer.from([0])]), {flag: 'wx'});
+  artifact.run(bytes => writeFileSync(poisoned, Buffer.concat([bytes, Buffer.from([0])]), {flag: 'wx'}));
   writeFileSync(input, probe.request, {flag: 'wx'}); writeFileSync(expected, probe.response, {flag: 'wx'});
   assert.throws(() => run(process.execPath,
-    [join(draft, 'maximum-runner.mjs'), poisoned, input, expected, sha(build.wasm.retention)], build.work),
+    [join(draft, 'maximum-runner.mjs'), poisoned, input, expected, artifact.evidence.original.sha256], build.work),
   /actual generated maximum Wasm identity/);
   const maxima = verifyRetentionMaxima(build), browser = [];
-  const calls = await verifySessionStorage({async test(name, body) {
+  const calls = await artifact.runAsync(bytes => verifySessionStorage({async test(name, body) {
     let failure; await t.test(name, async () => {try {await body();} catch (error) {failure = error; throw error;}});
     if (failure) throw failure; browser.push(name);
-  }}, build.wasm.retention, {inputs: build.inputs});
+  }}, bytes, {inputs: build.inputs}));
   assert.equal(browser.length, 11); build.unchanged();
   const browserTranscript = verifyStorageTranscript(build, calls);
-  const hostMutations = await verifyStorageHostMutations(t, build.wasm.retention, {inputs: build.inputs});
+  const hostMutations = await artifact.runAsync(bytes => verifyStorageHostMutations(t, bytes, {inputs: build.inputs}));
   assert.equal(hostMutations.length, 6); build.unchanged();
   const mutations = retentionMutations.map(mutation => verifyCompiledMutation(mutation, build));
   assert.equal(mutations.length, 9); build.unchanged();

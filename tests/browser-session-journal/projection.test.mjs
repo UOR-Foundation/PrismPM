@@ -76,7 +76,8 @@ test('projection consumes the same complete canonical parser and EOF checks as S
 test('captured projection source substitution and incomplete module inventories reject before compilation', () => {
   const inputs = frozenInputs(), sources = sourceClosure();
   for (const path of ['tests/browser-effects/corpus.mjs', 'tests/browser-view/local-module-inputs.mjs',
-    'tests/browser-session-journal/runtime.mjs', 'tests/browser-session-journal/maximum-runner.mjs'])
+    'tests/browser-session-journal/runtime.mjs', 'tests/browser-session-journal/maximum-runner.mjs',
+    'tests/browser-view/generated-wasm.mjs', 'tests/browser-session-journal/wasm-artifact-checks.mjs'])
     assert.match(inputs[path], /^[a-f0-9]{64}$/, 'transitive or separately invoked owner dependency ' + path);
   assertCapturedProjectionSources(inputs, sources);
   const [name, bytes] = sources.entries().next().value;

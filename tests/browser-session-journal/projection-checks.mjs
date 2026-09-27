@@ -8,6 +8,8 @@ import {corpus} from '../browser-session/corpus.mjs';
 import {maximumVectors, effectResultMaxima} from '../browser-session/maxima.mjs';
 import {executeWasm, tsv} from './runtime.mjs';
 import {projectionMutations} from './projection-mutations.mjs';
+import {requireGeneratedWasm} from '../browser-view/generated-wasm.mjs';
+import {verifyWasmArtifactSubstitutions} from './wasm-artifact-checks.mjs';
 
 export function verifyNativeProjectionInventory(output, rows) {
   const expected = rows.map(row => 'PASS ' + row.id + '\n').join('')
@@ -40,21 +42,23 @@ export function verifyProjection() {
       verifyNativeProjectionInventory(output, rows);
     }
   }
-  const observed = Object.fromEntries(Object.entries(vectors).map(([entry, rows]) => [entry, executeWasm(build.wasm[entry], rows)]));
+  const wasmSubstitutions = verifyWasmArtifactSubstitutions(build);
+  const observed = Object.fromEntries(Object.entries(vectors).map(([entry, rows]) =>
+    [entry, requireGeneratedWasm(build.wasmOwners[entry]).run(bytes => executeWasm(bytes, rows))]));
   build.unchanged();
   const evidence = {scope: 'private-predecessor-projection-component', publicApplicationAccepted: false,
     source: build.verified.source_id, attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
-    artifacts: Object.fromEntries(Object.entries(build.wasm).map(([entry, bytes]) => [entry, sha(bytes)])),
+    artifacts: Object.fromEntries(Object.entries(build.wasmOwners).map(([entry, owner]) => [entry, requireGeneratedWasm(owner).evidence.original.sha256])),
     cases: {predecessor: projection.length, session: session.length, observation: observation.length}, observed,
     native: build.nativeEvidence(), inputs: build.inputs, cacheRetirement: build.cacheRetirement,
-    generatedPackages: build.generatedPackages, generatedSourceSubstitutionRejected: ['before-first-std', 'before-first-no-std']};
+    generatedPackages: build.generatedPackages, generatedWasm: build.generatedWasm, wasmSubstitutions,
+    generatedSourceSubstitutionRejected: ['before-first-std', 'before-first-no-std']};
   writeFileSync(join(build.work, 'projection-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   return {build, evidence};
 }
 
 export function verifyProjectionMaxima(build) {
-  const wasm = join(build.work, 'projection-maxima.wasm');
-  writeFileSync(wasm, build.wasm.predecessor, {flag: 'wx'});
+  const artifact = requireGeneratedWasm(build.wasmOwners.predecessor);
   const input = join(build.work, 'projection-maximum-input.bin'), expected = join(build.work, 'projection-maximum-output.bin');
   const results = [];
   // Generator chaining avoids retaining every complete 64-MiB vector at once.
@@ -63,9 +67,10 @@ export function verifyProjectionMaxima(build) {
     writeFileSync(input, row.request); writeFileSync(expected, row.response);
     for (const standard of [true, false]) assert.equal(build.runNative(standard, ['predecessor', input, expected]),
       'PASS binary journal projection twice\n');
-    const observed = JSON.parse(run(process.execPath, [join(draft, 'maximum-runner.mjs'), wasm, input, expected, sha(build.wasm.predecessor)], build.work));
+    const observed = artifact.run(() => JSON.parse(run(process.execPath,
+      [join(draft, 'maximum-runner.mjs'), artifact.path, input, expected, artifact.evidence.original.sha256], build.work)));
     assert.equal(observed.request, sha(row.request)); assert.equal(observed.response, sha(row.response));
-    assert.equal(observed.wasm, sha(build.wasm.predecessor));
+    assert.equal(observed.wasm, artifact.evidence.original.sha256);
     assert.ok(observed.maximumBytes <= 1073741824); assert.equal(observed.declaredPages, 16384);
     const result = {id: row.id, requestBytes: row.request.length, responseBytes: row.response.length, ...observed};
     console.log(JSON.stringify(result)); results.push(result);
@@ -77,8 +82,7 @@ export function verifyProjectionMaxima(build) {
 }
 
 export function verifyObservationMaxima(build) {
-  const wasm = join(build.work, 'observation-maxima.wasm');
-  writeFileSync(wasm, build.wasm.observation, {flag: 'wx'});
+  const artifact = requireGeneratedWasm(build.wasmOwners.observation);
   const input = join(build.work, 'observation-maximum-input.bin'), expected = join(build.work, 'observation-maximum-output.bin');
   const results = [];
   for (const factory of [maximumVectors, effectResultMaxima]) for (const baseline of factory()) {
@@ -88,9 +92,10 @@ export function verifyObservationMaxima(build) {
     writeFileSync(input, row.request); writeFileSync(expected, row.response);
     for (const standard of [true, false]) assert.equal(build.runNative(standard, ['observation', input, expected]),
       'PASS binary journal projection twice\n');
-    const observed = JSON.parse(run(process.execPath, [join(draft, 'maximum-runner.mjs'), wasm, input, expected, sha(build.wasm.observation)], build.work));
+    const observed = artifact.run(() => JSON.parse(run(process.execPath,
+      [join(draft, 'maximum-runner.mjs'), artifact.path, input, expected, artifact.evidence.original.sha256], build.work)));
     assert.equal(observed.request, sha(row.request)); assert.equal(observed.response, sha(row.response));
-    assert.equal(observed.wasm, sha(build.wasm.observation));
+    assert.equal(observed.wasm, artifact.evidence.original.sha256);
     const result = {id: row.id, requestBytes: row.request.length, responseBytes: row.response.length, ...observed};
     console.log(JSON.stringify(result)); results.push(result);
   }
@@ -108,19 +113,20 @@ function verifyProjectionMutation(mutation, baseline) {
   assert.notEqual(build.verified.source_id, baseline.verified.source_id);
   assert.notEqual(build.verified.attestation_id, baseline.verified.attestation_id);
   assert.notEqual(build.generation.ir_sha256, baseline.generation.ir_sha256);
-  assert.notEqual(sha(build.wasm[mutation.entry]), sha(baseline.wasm[mutation.entry]));
+  const artifact = requireGeneratedWasm(build.wasmOwners[mutation.entry]);
+  assert.notEqual(artifact.evidence.original.sha256, requireGeneratedWasm(baseline.wasmOwners[mutation.entry]).evidence.original.sha256);
   for (const row of rows) {
     const file = join(build.work, row.id + '.tsv'); writeFileSync(file, tsv([row]), {flag: 'wx'});
     for (const standard of [true, false]) assert.throws(() => build.runNative(standard, [mutation.entry, file]),
       /native output mismatch/, 'source defect changes native behavior, not compilation');
-    assert.throws(() => executeWasm(build.wasm[mutation.entry], [row]),
+    assert.throws(() => artifact.run(bytes => executeWasm(bytes, [row])),
       error => error.code === 'ERR_ASSERTION' && error.message.includes(row.id),
       'source defect changes actual Wasm response, not a compilation failure or trap');
   }
   build.unchanged(); baseline.unchanged();
   const evidence = {mutation: build.mutation, source: build.verified.source_id,
     attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
-    wasm: sha(build.wasm[mutation.entry]), native: build.nativeEvidence(),
+    wasm: artifact.evidence.original.sha256, generatedWasm: build.generatedWasm, native: build.nativeEvidence(),
     cases: rows.map(row => ({id: row.id, request: sha(row.request), expected: sha(row.response)})),
     cacheRetirement: build.cacheRetirement, generatedPackages: build.generatedPackages};
   writeFileSync(join(build.work, 'projection-mutation-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
@@ -138,11 +144,12 @@ export function verifyProjectionOwner() {
     } finally {writeFileSync(path, bytes);}
   }
   const poisoned = join(build.work, 'changed-generated.wasm'), probe = projectionCorpus()[0];
+  const artifact = requireGeneratedWasm(build.wasmOwners.predecessor);
   const input = join(build.work, 'identity-input.bin'), expected = join(build.work, 'identity-expected.bin');
-  writeFileSync(poisoned, Buffer.concat([build.wasm.predecessor, Buffer.from([0])]), {flag: 'wx'});
+  artifact.run(bytes => writeFileSync(poisoned, Buffer.concat([bytes, Buffer.from([0])]), {flag: 'wx'}));
   writeFileSync(input, probe.request, {flag: 'wx'}); writeFileSync(expected, probe.response, {flag: 'wx'});
   assert.throws(() => run(process.execPath, [join(draft, 'maximum-runner.mjs'), poisoned, input, expected,
-    sha(build.wasm.predecessor)], build.work), /actual generated projection Wasm identity/);
+    artifact.evidence.original.sha256], build.work), /actual generated projection Wasm identity/);
   const predecessorMaxima = verifyProjectionMaxima(build), observationMaxima = verifyObservationMaxima(build);
   const mutations = projectionMutations.map(mutation => verifyProjectionMutation(mutation, build));
   assert.equal(mutations.length, 8); build.unchanged();
