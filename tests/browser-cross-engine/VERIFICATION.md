@@ -61,16 +61,35 @@ native replay file and receipt remain. Firefox/WebKit full-capacity runs,
 fresh complete source-owner closure, journal authority/freshness, eviction
 resilience and application acceptance are not established by this receipt.
 
-The unchanged Firefox153.0 full-capacity owner then passed in1913.817s
+The unchanged Firefox 153.0 full-capacity owner then passed in 1913.817 s
 (31m54s), without skips or quota fallback. Receipt:
 `88f21d697b008b015e1e6ccaadd228e163590c10f202a45e7518176724be5749`.
-All779 calls replayed in both native modes; the exact final frontier and full
+All 779 calls replayed in both native modes; the exact final frontier and full
 transcript match Chromium. It completed both persistent-process restarts,
-8GiB readback and full-capacity16-object replacement. Start/end-before-cleanup
-free space was23494811648/16917475328 bytes; peak Wasm845742080 bytes.
+8 GiB readback and full-capacity 16-object replacement. Start/end-before-cleanup
+free space was 23494811648/16917475328 bytes; peak Wasm 845742080 bytes.
 The successful private profile was removed; compact evidence and original
 artifacts remain. WebKit capacity and complete journal/application acceptance
 are still separate requirements.
+
+The unchanged WebKit 26.5 capacity owner failed closed with `storage-quota`
+after 29.133 s, around the 1-GiB stage. Start free space was 22999883776 bytes;
+the 12-GiB filesystem reserve remained available. No quota override, smaller
+domain or acceptance receipt was substituted. The failed profile
+`target/browser-cross-engine-evidence/prismpm-capacity-profile-XhmaAa`, partial
+native-replayed calls in `retention-capacity-9NR1An/capacity-progress.jsonl`, and
+`retention-capacity-webkit.log` remain available. A generated candidate
+transition in that partial log is not evidence that IndexedDB committed it.
+
+This pinned Linux headless runner selects WPE MiniBrowser. A separate secure
+loopback-context probe reported `navigator.storage` absent; it did not request
+permission or modify the failed profile. The upstream
+[GLib implementation](https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebKit/UIProcess/API/glib/WebKitWebsiteDataManager.cpp)
+documents a default 1-GiB quota, consistent with the observed failure but not
+proof of this bundled build's configuration. Playwright explicitly distinguishes
+its [patched WebKit builds from Safari](https://playwright.dev/docs/browsers);
+[Apple-platform quotas](https://webkit.org/blog/14403/updates-to-storage-policy/)
+are different. Full-capacity WebKit/platform qualification remains unresolved.
 
 `verifyStorageCapacity` requires genuine source-bound artifacts and the entire
 current static helper/SDK/fixture input closure. Run one engine/profile at a
