@@ -6,10 +6,14 @@ it. Both native release jobs run the gate independently of source V&V.
 
 The gate compares the complete installed host-module directory and measured
 source/compiler/fixture closure, then executes all DK-07–16, DK-19, DK-20,
-DK-23–25 Node owners offline with read-only sources and private temporary caches.
+DK-23–26 Node owners offline with read-only sources and private temporary caches.
 Every selected file must register passing tests; missing, skipped or invented
 completion records reject. Driver manifests and locks are acquisition-pinned.
 DK-21/DK-22 execute in the separate mandatory full installed native V&V.
+
+DK-26 retains its full 34-test source/kernel/native/Wasm/maxima/mutation owner
+and session fixtures plus compiler licenses in the measured input closure.
+It is a pure kernel, not a new browser host module or public dispatcher.
 
 `node --test scripts/browser-api-sdk-check.test.mjs scripts/fetch-oracle-cargo.test.mjs`
 checks these boundaries, including module-tree and byte-equality mutations.
