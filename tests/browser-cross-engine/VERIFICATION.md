@@ -61,6 +61,17 @@ native replay file and receipt remain. Firefox/WebKit full-capacity runs,
 fresh complete source-owner closure, journal authority/freshness, eviction
 resilience and application acceptance are not established by this receipt.
 
+The unchanged Firefox153.0 full-capacity owner then passed in1913.817s
+(31m54s), without skips or quota fallback. Receipt:
+`88f21d697b008b015e1e6ccaadd228e163590c10f202a45e7518176724be5749`.
+All779 calls replayed in both native modes; the exact final frontier and full
+transcript match Chromium. It completed both persistent-process restarts,
+8GiB readback and full-capacity16-object replacement. Start/end-before-cleanup
+free space was23494811648/16917475328 bytes; peak Wasm845742080 bytes.
+The successful private profile was removed; compact evidence and original
+artifacts remain. WebKit capacity and complete journal/application acceptance
+are still separate requirements.
+
 `verifyStorageCapacity` requires genuine source-bound artifacts and the entire
 current static helper/SDK/fixture input closure. Run one engine/profile at a
 time in the pinned browser devcontainer, with a disk-backed private evidence
