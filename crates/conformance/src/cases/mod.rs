@@ -425,7 +425,7 @@ pub fn run_at(root: &Path, id: &str) {
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15"
-        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" | "DK-26" => {
+        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" | "DK-26" | "DK-29" => {
             verify_browser_host(root, id)
         }
         "DK-17" => native_library::verify(root),
@@ -522,6 +522,14 @@ fn verify_browser_host(root: &Path, id: &str) {
             ],
             34,
         ),
+        "DK-29" => (
+            &[
+                "tests/browser-semantic-presentation/wire.test.mjs",
+                "tests/browser-semantic-presentation/dom.test.mjs",
+                "sdk/browser/semantic-presentation.test.mjs",
+            ],
+            16,
+        ),
         _ => unreachable!("closed browser host capability"),
     };
     // Node also applies this limit to the file-level wrapper. Full model and
@@ -529,7 +537,7 @@ fn verify_browser_host(root: &Path, id: &str) {
     // suites retain their short deadline.
     let timeout = if matches!(
         id,
-        "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25" | "DK-26"
+        "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25" | "DK-26" | "DK-29"
     ) {
         "3600000"
     } else if matches!(id, "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14") {

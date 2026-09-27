@@ -14,6 +14,13 @@ Feature: sdk
     Then stale contexts, substituted bindings, concurrent admissions and altered caller buffers cannot relabel or prematurely execute a primitive
     And actual browser completions replay in native std and no_std while existing effect and journal owners remain mandatory
 
+  @DK-29 @build
+  Scenario: Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance.
+    Given immutable source-bound label and design catalogues and typed semantic presentations
+    When native, no_std, Wasm and actual browser oracles execute complete envelopes, limits and human-interface behavior
+    Then malformed, stale, substituted and inaccessible presentations reject and source or adapter mutants fail
+    And public application acceptance still requires complete independently verified product journeys
+
   @DK-27 @build
   Scenario: Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds.
     Given a complete independently bound manifest and source-derived per-resource budgets

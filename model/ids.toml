@@ -865,6 +865,12 @@ level = "build"
 statement = "Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance."
 
 [[id]]
+id = "DK-29"
+suite = "sdk"
+level = "build"
+statement = "Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

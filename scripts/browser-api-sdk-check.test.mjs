@@ -9,7 +9,8 @@ import * as browserGate from './browser-api-sdk-check.mjs';
 
 const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'queries',
  'view-host', 'view-dom', 'view-error', 'rs256', 'effects', 'effects-wire',
- 'effects-module', 'presentation-wire', 'presentation-dom', 'credential-custody', 'operation-journal'];
+ 'effects-module', 'presentation-wire', 'presentation-dom', 'semantic-presentation-wire',
+ 'semantic-presentation-style', 'credential-custody', 'operation-journal'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const additionalOwners = [
  {id:'DK-27',minimum:13,deadline:3600000,files:['sdk/browser/budget-model-test.mjs']},
@@ -90,7 +91,7 @@ test('installed browser closure includes complete new owning fixtures and actual
   assert.ok(sourceRoots.includes(path), 'required installed source: ' + path);
  }
  const source = sdkSource('crates/conformance/tests/conformance.rs');
- for (const id of [21, 22, 24, 25, 27, 28]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
+ for (const id of [21, 22, 24, 25, 26, 27, 28, 29]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
  assert.match(sdkSource('crates/prismpm/src/holo/browser_application.rs'), /Err\(PrismError::new\("PP2011"/);
  assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
  const workflow = sdkSource('.github/workflows/release.yml');
@@ -112,6 +113,9 @@ test('new installed Node suites retain exact complete owning files and deadlines
  const custody = suites.find(row => row.id === 'DK-25');
  assert.deepEqual(custody?.files, ['sdk/browser/credential-custody-test.mjs']);
  assert.equal(custody?.minimum, 11); assert.equal(custody?.deadline, 3600000);
+ const semantic = suites.find(row => row.id === 'DK-29');
+ assert.deepEqual(semantic?.files, ['tests/browser-semantic-presentation/wire.test.mjs', 'tests/browser-semantic-presentation/dom.test.mjs', 'sdk/browser/semantic-presentation.test.mjs']);
+ assert.equal(semantic?.minimum, 16); assert.equal(semantic?.deadline, 3600000);
  const journal = suites.find(row => row.id === 'DK-24');
  assert.deepEqual(journal?.files, ['sdk/browser/operation-journal.test.mjs']);
  assert.equal(journal?.minimum, 28); assert.equal(journal?.deadline, 3600000);
@@ -131,6 +135,20 @@ test('installed session kernel preserves its exact registered owner, complete so
  }
  assert.ok(sdkSource('crates/conformance/tests/conformance.rs').includes('test_case!(conformance_dk_26, "DK-26");'));
  assert.ok(!browserGate.hostModules.includes('session'), 'pure kernel is not an implemented public session host');
+});
+
+test('semantic owner registration preserves actual Rust files, minimum and deadline', () => {
+ const semantic = suites.find(row => row.id === 'DK-29');
+ assert.ok(semantic); assert.equal(semantic.minimum, 16); assert.equal(semantic.deadline, 3600000);
+ const source = sdkSource('crates/conformance/src/cases/mod.rs');
+ const owner = /"DK-29"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(source);
+ assert.ok(owner); assert.equal(Number(owner[2]), semantic.minimum);
+ assert.deepEqual([...owner[1].matchAll(/"([^"]+)"/g)].map(row => row[1]), semantic.files);
+ assert.deepEqual(semantic.files, ['tests/browser-semantic-presentation/wire.test.mjs',
+  'tests/browser-semantic-presentation/dom.test.mjs', 'sdk/browser/semantic-presentation.test.mjs']);
+ assert.match(source, /let timeout = if matches!\([\s\S]*?"DK-29"[\s\S]*?3600000/);
+ for (const path of ['tests/browser-semantic-presentation', 'LICENSE-MIT', 'LICENSE-APACHE',
+  'sdk/oracles/package.json', 'sdk/oracles/package-lock.json']) assert.ok(sourceRoots.includes(path), path);
 });
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
@@ -237,7 +255,42 @@ test('private prerequisite actual Node owners reject below-minimum and empty sib
    assert.throws(()=>runSuites(root,spawnSync,()=>{}),/nonempty registered tests|complete selected test file summaries|complete sequential outer test numbering/);restore();
   }
  }
- assert.equal(runSuites(root,spawnSync,()=>{}).length,18);
+ assert.equal(runSuites(root,spawnSync,()=>{}).length,19);
+});
+
+test('semantic suite refuses missing or empty siblings even with surplus real passing tests', t => {
+ const semantic = suites.find(row => row.id === 'DK-29');
+ for (const file of semantic.files) {
+  const root = temporary(t); testFixtures(root);
+  rmSync(join(root, file));
+  assert.throws(() => runSuites(root, spawnSync, () => {}), /ENOENT/);
+  put(root, file, '');
+  assert.throws(() => runSuites(root, spawnSync, () => {}), /complete selected test file summaries|complete sequential outer test numbering/);
+  put(root, file, testSource(1));
+  assert.equal(runSuites(root, spawnSync, () => {}).find(row => row.id === 'DK-29').tests, semantic.minimum * 2 + 1);
+ }
+});
+
+test('semantic registry regression kills owner, minimum and deadline substitutions', t => {
+ const original = sdkSource('scripts/browser-api-sdk-check.mjs');
+ const row = original.split('\n').find(line => line.includes("{id:'DK-29'")); assert.ok(row);
+ const changes = [row.replace('minimum:16', 'minimum:15'),
+  row.replace('wire.test.mjs', 'substitute.test.mjs')];
+ const mutated = changes.map(changed => original.replace(row, changed));
+ const deadline = "deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28','DK-29'].includes(row.id)?3600000:1500000";
+ assert.equal(original.split(deadline).length, 2);
+ mutated.push(original.replace(deadline, deadline.replace(", 'DK-29'", '').replace(",'DK-29'", '')));
+ for (const source of mutated) {
+  assert.notEqual(source, original);
+  const root = temporary(t);
+  put(root, 'scripts/browser-api-sdk-check.mjs', source);
+  put(root, 'scripts/browser-api-sdk-check.test.mjs', sdkSource('scripts/browser-api-sdk-check.test.mjs'));
+  put(root, 'crates/conformance/src/cases/mod.rs', sdkSource('crates/conformance/src/cases/mod.rs'));
+  const env = {...process.env}; delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, ['--test', '--test-name-pattern=^semantic owner registration',
+   join(root, 'scripts/browser-api-sdk-check.test.mjs')], {encoding: 'utf8', env, timeout: 15000, maxBuffer: 1024 * 1024});
+  assert.ifError(result.error); assert.equal(result.status, 1); assert.match(result.stdout, /ERR_ASSERTION/);
+ }
 });
 
 test('installed DK23 gate rejects omission of the ninth secret-input test', t => {
@@ -315,8 +368,8 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28']);
- assert.equal(runSuites(root,launch,()=>{}).length,18);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28','DK-29']);
+ assert.equal(runSuites(root,launch,()=>{}).length,19);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';

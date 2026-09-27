@@ -201,6 +201,7 @@ The three honesty levels:
 | `DK-26` | `build` | The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance. |
 | `DK-27` | `build` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. |
 | `DK-28` | `build` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. |
+| `DK-29` | `build` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. |
 
 ## security
 

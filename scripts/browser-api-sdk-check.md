@@ -6,7 +6,7 @@ it. Both native release jobs run the gate independently of source V&V.
 
 The gate compares the complete installed host-module directory and measured
 source/compiler/fixture closure, then executes all DK-07–16, DK-19, DK-20,
-DK-23–28 Node owners offline with read-only sources and private temporary caches.
+DK-23–29 Node owners offline with read-only sources and private temporary caches.
 Every selected file must register passing tests; missing, skipped or invented
 completion records reject. Driver manifests and locks are acquisition-pinned.
 DK-21/DK-22 execute in the separate mandatory full installed native V&V.

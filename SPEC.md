@@ -1561,6 +1561,32 @@ This private presentation prerequisite leaves `PP2011`, credential custody,
 generated authorized dispatch, durable recovery and complete public application,
 Foundry and deployment gates unchanged.
 
+#### 12.11.1 Private semantic presentation
+
+DK-29 owns the separate `SemanticPresentation/1` envelope, `Design`,
+`DesignWire`, `Semantics` and `SemanticsWire` LexLean sources. Its closed contract
+is `stdlib/src/Foundation/View/Browser/V1/Semantics.md` and `SemanticsWire.cddl`.
+DK-23 Presentation/Intent bytes, limits and secret routing remain unchanged.
+Sorted annotations bind typed input purposes, help/error labels, landmarks and
+layout to exact nodes and the complete revision/lifecycle. A unique Main and
+local skip target are required except in an empty Closed frame. Immutable
+source-bound light/dark design catalogues admit only bounded numeric tokens and
+closed font families; raw CSS, HTML, URLs and arbitrary attributes remain refused.
+
+The generic adapter preserves exact input bytes, native labels, autofill/paste,
+reading order, focus visibility, responsive reflow and forced-color overrides.
+Secret metadata changes clear prior drafts. Complete metadata/catalogue preflight
+precedes DOM mutation; a changed equal-revision envelope cannot replace context.
+Shape validity is neither authority nor contrast/usability evidence.
+
+Acceptance requires independent complete source/kernel/native/no_std/Wasm
+corpora, 64 MiB combined maxima, one-over negatives, generated browser transcripts
+replayed natively, real keyboard/reflow/error/secret journeys and source/adapter
+mutants. The pinned axe-core oracle executes on rendered output and must detect
+real broken-label/contrast controls. Its automated subset is not complete WCAG
+conformance, manual usability assessment, a brand approval or Foundry acceptance.
+The private tokens do not claim Design Tokens Community Group conformance.
+
 ### 12.12 Private durable operation journal
 
 DK-24 owns source-generated local operation admission, canonical records and
@@ -2230,6 +2256,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-26` | `sdk` | The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
+| `DK-29` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

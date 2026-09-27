@@ -66,6 +66,12 @@ function decode(bytes, maximum) {
   const value = read(0); need(cursor === input.length, 'trailing'); return value;
 }
 
+// SDK-private composition only. Consumers must validate their complete closed
+// frame after this bounded canonical decoder; decoded arrays grant no authority.
+export function decodePresentationWireValue(bytes, maximum = PRESENTATION_MAXIMUM) {
+  return decode(bytes, maximum);
+}
+
 export function validatePresentation(frame) {
   need(array(frame, 7) && frame[0] === 1 && integer(frame[1]) && integer(frame[2], 0, 3)
     && integer(frame[3], 0, 256) && integer(frame[4], 0, 2) && integer(frame[5], 0, 256)

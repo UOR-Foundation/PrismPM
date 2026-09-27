@@ -14,6 +14,7 @@ const owners = Object.freeze({
   custody: {directory:'browser-custody', executable:'browser-custody-driver'},
   'operation-journal': {directory:'browser-operation-journal', executable:'browser-operation-journal-driver'},
   presentation: {directory:'browser-presentation', executable:'browser-presentation-driver'},
+  'semantic-presentation': {directory:'browser-semantic-presentation', executable:'browser-semantic-presentation-driver'},
   view: {repositoryManifest:'tests/browser-view/driver/Cargo.toml', executable:'browser-workspace-view-driver'},
   journal: {repositoryManifest:'tests/browser-journal/driver/Cargo.toml', executable:'browser-workspace-journal-driver'},
   query: {repositoryManifest:'tests/browser-query/driver/Cargo.toml', executable:'browser-workspace-query-driver'},

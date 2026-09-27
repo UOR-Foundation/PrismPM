@@ -106,6 +106,7 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   t.after(() => rmSync(work, {recursive:true, force:true}));
   const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody',
     'operation-journal':'browser-operation-journal', presentation:'browser-presentation',
+    'semantic-presentation':'browser-semantic-presentation',
     view:'browser-view', journal:'browser-journal', query:'browser-query', command:'browser-command'}[owner];
   assert.ok(directory);
   const executable = (['view','journal','query','command'].includes(owner) ? 'browser-workspace-' + owner : directory) + '-driver';
@@ -164,7 +165,7 @@ test('completed effects and custody tool caches retire under their exact owning 
 });
 
 test('all remaining retained browser fixtures retire only their exact tool caches', t => {
-  for (const owner of ['operation-journal','presentation','view','journal','query','command']) {
+  for (const owner of ['operation-journal','presentation','semantic-presentation','view','journal','query','command']) {
     const f = fixture(t, 'prismpm-' + owner + '-', owner);
     const source = join(repository, 'tests/browser-' + owner + '/driver/Cargo.toml');
     const original = readFileSync(source);
