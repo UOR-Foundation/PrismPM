@@ -1,0 +1,39 @@
+// Construction checks only; the DK-30 owner must execute the actual artifacts.
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {readFileSync} from 'node:fs';
+import {metadataCorpus} from './metadata-corpus.mjs';
+import {metadataMutations, mutateMetadataSource} from './metadata-mutations.mjs';
+const root = new URL('../../stdlib/src/', import.meta.url), model = 'Foundation.Browser.Application.V1.SessionJournal';
+const source = module => readFileSync(new URL(module.replaceAll('.', '/') + '.lex.tex', root));
+
+test('metadata expected corpus is independent and covers every transition family', () => {
+  const rows = metadataCorpus(); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
+  for (const name of ['Genesis', 'ReadOnly', 'Prepared', 'ContinuedPrepared', 'Settled', 'Unknown', 'CloseUnknown',
+    'CloseReady', 'CloseBusy', 'Rebound', 'RecoveryReady', 'RecoveryTerminalUnknown', 'RecoveryTerminalClosed',
+    'CheckpointReady', 'CheckpointBusy', 'CheckpointUnknown', 'CheckpointClosedPending', 'SettleAfterPendingCheckpoint',
+    'ReplayPreparedContinue', 'ReplayUnknownClose', 'ReserveTerminalSlot', 'CheckpointFullSegment', 'EnvelopeExact'])
+    assert.ok(rows.some(row => row.id === 'Metadata' + name), name);
+  for (const row of rows) {assert.ok(row.request instanceof Uint8Array); assert.ok(row.response instanceof Uint8Array);}
+});
+
+test('each metadata source mutation changes a closed real declaration and has an independent refusal probe', () => {
+  const rows = metadataCorpus();
+  for (const mutation of metadataMutations) {
+    const sources = new Map([model, model + 'Wire'].map(module => [module, source(module)]));
+    const result = mutateMetadataSource(sources, mutation.id);
+    assert.equal(result.probe, mutation.probe); assert.ok(rows.some(row => row.id === result.probe));
+    assert.equal(result.changed, mutation.id === 'metadata-trailing' ? 6 : 1);
+    const untouched = mutation.module === model ? model + 'Wire' : model;
+    assert.deepEqual(sources.get(untouched), source(untouched), 'no collateral module mutation');
+  }
+});
+
+test('metadata schema has exact source fields and no self-referential prepared envelope', () => {
+  const data = JSON.parse(/\\semanticdata\{(.*)\}/.exec(source(model).toString('utf8'))[1]);
+  const fields = name => data.declarations.find(row => row.name === name).fields.map(row => row.name);
+  assert.deepEqual(fields('SessionJournalRecord'), ['binding', 'genesis', 'sequence', 'previous', 'kind', 'before', 'operation', 'after', 'receipt', 'frontier', 'recovery']);
+  assert.deepEqual(fields('SessionJournalAnchor'), ['envelope', 'position', 'step', 'observedReceipt']);
+  assert.deepEqual(fields('SessionJournalRecoveryPlan'), ['preparedEnvelope', 'context', 'settleBefore', 'settleOperation', 'settled', 'rebindOperation', 'receipt']);
+  assert.ok(!fields('SessionJournalRecord').includes('envelope'));
+});
