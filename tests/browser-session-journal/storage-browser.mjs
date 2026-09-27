@@ -1,16 +1,41 @@
 // Actual IndexedDB execution against a freshly generated retention reducer.
 // The enclosing DK-30 owner supplies and attests the artifact; no fake reducer.
 import assert from 'node:assert/strict';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {withBrowser} from '../../sdk/browser/browser-test-server.mjs';
 import {storageJourneyInventory} from './storage-observations.mjs';
 
+export function captureStorageSources(inputs, directory = new URL('../../sdk/browser/', import.meta.url)) {
+  assert.ok(inputs && typeof inputs === 'object', 'original frozen storage source inventory required');
+  const files = {};
+  for (const name of ['session-storage.mjs', 'session-retention-wire.mjs', 'identity.mjs', 'effects-module.mjs', 'effects-wire.mjs']) {
+    const path = fileURLToPath(new URL(name, directory)), stat = lstatSync(path);
+    assert.equal(realpathSync(path), path); assert.ok(stat.isFile() && stat.nlink === 1);
+    const bytes = readFileSync(path);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), inputs['sdk/browser/' + name],
+      'actual served storage source must match original frozen input ' + name);
+    files[name] = bytes.toString('utf8');
+  }
+  return Object.freeze(files);
+}
+
 async function preparePage(page, baseURL, wire, options) {
-    if (options.source !== null) await page.route(baseURL + 'session-storage.mjs', route => route.fulfill({
-      status: 200, contentType: 'text/javascript', body: options.source,
-    }));
+    await page.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if ([baseURL, baseURL + 'favicon.ico'].includes(url.href) && route.request().method() === 'GET') return route.continue();
+      const name = url.pathname.slice(1);
+      if (url.origin !== new URL(baseURL).origin || url.search || route.request().method() !== 'GET'
+        || !Object.hasOwn(options.sources, name)) {
+        options.unexpected.push({method: route.request().method(), url: url.href});
+        return route.abort('blockedbyclient');
+      }
+      return route.fulfill({status: 200, contentType: 'text/javascript', body:
+        name === 'session-storage.mjs' && options.source !== null ? options.source : options.sources[name]});
+    });
     await page.goto(baseURL);
     await page.evaluate(bytes => {
       globalThis.retentionWireBytes = bytes;
@@ -60,6 +85,7 @@ async function preparePage(page, baseURL, wire, options) {
 }
 
 async function capturePage(page, options) {
+  assert.deepEqual(options.unexpected, [], 'storage fixture cannot conceal undeclared network or module requests');
   const rows = await page.evaluate(() => globalThis.retentionObservedCalls.splice(0));
   assert.ok(rows.length > 0, 'every storage fixture page must execute the actual generated retention model');
   options.calls.push(...rows);
@@ -78,8 +104,8 @@ async function runFixture(wire, operation, options) {
   }, {engine: options.engine});
 }
 
-export async function verifySessionStorage(t, wire, {source = null, engine = 'chromium'} = {}) {
-  const options = {source, engine, calls: []};
+export async function verifySessionStorage(t, wire, {source = null, engine = 'chromium', inputs} = {}) {
+  const options = {source, engine, calls: [], unexpected: [], sources: captureStorageSources(inputs)};
   const fixture = (bytes, operation) => runFixture(bytes, operation, options);
   const owner = t; let journey = 0;
   t = {async test(name, body) {
