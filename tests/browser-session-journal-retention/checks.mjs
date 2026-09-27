@@ -115,10 +115,10 @@ export async function verifyRetentionOwner(t) {
   const calls = await verifySessionStorage({async test(name, body) {
     let failure; await t.test(name, async () => {try {await body();} catch (error) {failure = error; throw error;}});
     if (failure) throw failure; browser.push(name);
-  }}, build.wasm.retention);
+  }}, build.wasm.retention, {inputs: build.inputs});
   assert.equal(browser.length, 11); build.unchanged();
   const browserTranscript = verifyStorageTranscript(build, calls);
-  const hostMutations = await verifyStorageHostMutations(t, build.wasm.retention);
+  const hostMutations = await verifyStorageHostMutations(t, build.wasm.retention, {inputs: build.inputs});
   assert.equal(hostMutations.length, 6); build.unchanged();
   const mutations = retentionMutations.map(mutation => verifyCompiledMutation(mutation, build));
   assert.equal(mutations.length, 9); build.unchanged();
