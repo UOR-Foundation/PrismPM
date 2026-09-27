@@ -8,11 +8,12 @@ import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 
 export const sourceRoots=Object.freeze([
- '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','model','language',
+ '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','model','language',
  'stdlib/src','sdk/browser','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
+ 'tests/browser-session',
  'tests/fixtures/library/native-library/project',
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
@@ -24,7 +25,8 @@ export const sourceRoots=Object.freeze([
  'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
 ]);
 // These installed host primitives include private prerequisites, not a public
-// browser application runtime. DK-21/22 retain their full installed-V&V owners.
+// browser application runtime. DK-26 is a pure kernel, not a host module.
+// DK-21/22 retain their full installed-V&V owners.
 export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
  'presentation-wire','presentation-dom','credential-custody','operation-journal']);
@@ -44,8 +46,9 @@ export const suites=Object.freeze([
  {id:'DK-23',minimum:9,files:['tests/browser-presentation/wire.test.mjs','tests/browser-presentation/dom.test.mjs','presentation.test.mjs']},
  {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
  {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
+ {id:'DK-26',minimum:34,files:['session-model-test.mjs','tests/browser-session/wire.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
@@ -131,7 +134,7 @@ export function verifyTap(tap,minimum){
  assert.ok(!/^\s*ok\b[^\n]*#\s*(?:SKIP|TODO)\b/im.test(tap),'skipped/TODO TAP row');
  const plans=lines.filter(line=>/^1\.\./.test(line));assert.equal(plans.length,1,'one outer plan');
  const match=/^1\.\.([1-9][0-9]*)$/.exec(plans[0]);assert.ok(match);const top=lines.filter(line=>/^ok [1-9][0-9]* - /.test(line));assert.equal(top.length,Number(match[1]),'complete outer test plan');
- assert.deepEqual(top.map(line=>Number(/^ok ([0-9]+)/.exec(line)[1])),Array.from({length:top.length},(_,index)=>index+1));
+ assert.deepEqual(top.map(line=>Number(/^ok ([0-9]+)/.exec(line)[1])),Array.from({length:top.length},(_,index)=>index+1),'complete sequential outer test numbering');
  return tests;
 }
 

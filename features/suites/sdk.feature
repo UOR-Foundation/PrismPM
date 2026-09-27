@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-26 @build
+  Scenario: The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance.
+    Given source-owned session wrappers and the complete bounded session protocol
+    When actual kernel, native, no_std and Wasm execution checks every transition and aggregate bound
+    Then substituted authority, intents, state, requests and continuations reject without losing custody of unresolved operations
+    And actual source guard mutations fail while durable orchestration and public acceptance remain separate requirements
+
   @DK-27 @build
   Scenario: Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds.
     Given a complete independently bound manifest and source-derived per-resource budgets
