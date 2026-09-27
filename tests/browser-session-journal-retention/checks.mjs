@@ -6,6 +6,7 @@ import {prepareRetention, run, sha, draft} from './compile.mjs';
 import {retentionCorpus, retentionMaximumCorpus} from '../browser-session-journal/retention-corpus.mjs';
 import {retentionMutations} from '../browser-session-journal/retention-mutations.mjs';
 import {verifySessionStorage} from '../browser-session-journal/storage-browser.mjs';
+import {verifyStorageTranscript, verifyStorageHostMutations} from '../browser-session-journal/storage-verification.mjs';
 import {executeWasm, tsv} from './runtime.mjs';
 
 export function verifyNativeInventory(output, rows) {
@@ -111,15 +112,18 @@ export async function verifyRetentionOwner(t) {
     [join(draft, 'maximum-runner.mjs'), poisoned, input, expected, sha(build.wasm.retention)], build.work),
   /actual generated maximum Wasm identity/);
   const maxima = verifyRetentionMaxima(build), browser = [];
-  await verifySessionStorage({async test(name, body) {
+  const calls = await verifySessionStorage({async test(name, body) {
     let failure; await t.test(name, async () => {try {await body();} catch (error) {failure = error; throw error;}});
     if (failure) throw failure; browser.push(name);
   }}, build.wasm.retention);
-  assert.equal(browser.length, 10); build.unchanged();
+  assert.equal(browser.length, 11); build.unchanged();
+  const browserTranscript = verifyStorageTranscript(build, calls);
+  const hostMutations = await verifyStorageHostMutations(t, build.wasm.retention);
+  assert.equal(hostMutations.length, 6); build.unchanged();
   const mutations = retentionMutations.map(mutation => verifyCompiledMutation(mutation, build));
   assert.equal(mutations.length, 9); build.unchanged();
   const receipt = {...evidence, scope: 'private-retention-source-and-storage-component',
-    executableSubstitutionRejected: ['std', 'no-std', 'wasm'], maxima, browser, mutations};
+    executableSubstitutionRejected: ['std', 'no-std', 'wasm'], maxima, browser, browserTranscript, hostMutations, mutations};
   writeFileSync(join(build.work, 'retention-source-owner-evidence.json'), JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'});
   return {build, evidence: receipt};
 }

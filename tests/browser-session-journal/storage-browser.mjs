@@ -5,10 +5,44 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {withBrowser} from '../../sdk/browser/browser-test-server.mjs';
+import {storageJourneyInventory} from './storage-observations.mjs';
 
-async function preparePage(page, baseURL, wire) {
+async function preparePage(page, baseURL, wire, options) {
+    if (options.source !== null) await page.route(baseURL + 'session-storage.mjs', route => route.fulfill({
+      status: 200, contentType: 'text/javascript', body: options.source,
+    }));
     await page.goto(baseURL);
-    await page.evaluate(bytes => {globalThis.retentionWireBytes = bytes;}, Array.from(wire));
+    await page.evaluate(bytes => {
+      globalThis.retentionWireBytes = bytes;
+      // Observe real generated execution without changing inputs or responses.
+      // Every instance must originate in the exact owner-supplied artifact.
+      const originalCompile = WebAssembly.compile, OriginalInstance = WebAssembly.Instance;
+      const modules = new WeakSet(), calls = [];
+      const hex = value => Array.from(value, byte => byte.toString(16).padStart(2, '0')).join('');
+      WebAssembly.compile = async function(input) {
+        const captured = new Uint8Array(input).slice();
+        if (captured.length !== bytes.length || !captured.every((byte, index) => byte === bytes[index]))
+          throw Error('retention observer requires the exact generated artifact');
+        const module = await Reflect.apply(originalCompile, WebAssembly, [captured]); modules.add(module); return module;
+      };
+      WebAssembly.Instance = class {
+        constructor(module, imports) {
+          if (!modules.has(module)) throw Error('retention observer requires captured module provenance');
+          const real = new OriginalInstance(module, imports), exports = {...real.exports};
+          exports.holo_run = (pointer, length) => {
+            const request = new Uint8Array(exports.memory.buffer, pointer, length).slice();
+            const result = real.exports.holo_run(pointer, length), packed = BigInt.asUintN(64, result);
+            const start = Number(packed >> 32n), size = Number(packed & 0xffffffffn);
+            const response = new Uint8Array(exports.memory.buffer, start, size).slice();
+            if (exports.memory.buffer.byteLength > 1073741824) throw Error('retention observer memory bound');
+            calls.push({request: hex(request), response: hex(response), memory: exports.memory.buffer.byteLength});
+            return result;
+          };
+          return {exports};
+        }
+      };
+      globalThis.retentionObservedCalls = calls;
+    }, Array.from(wire));
     await page.addScriptTag({type: 'module', content: `
       import {openSessionStorage} from './session-storage.mjs';
       import {encodeRetentionWire as encode, decodeRetentionWire as decode} from './session-retention-wire.mjs';
@@ -25,18 +59,38 @@ async function preparePage(page, baseURL, wire) {
     await page.waitForFunction(() => globalThis.retentionFixture !== undefined);
 }
 
-async function fixture(wire, operation) {
+async function capturePage(page, options) {
+  const rows = await page.evaluate(() => globalThis.retentionObservedCalls.splice(0));
+  assert.ok(rows.length > 0, 'every storage fixture page must execute the actual generated retention model');
+  options.calls.push(...rows);
+}
+
+async function runFixture(wire, operation, options) {
   assert.ok(wire instanceof Uint8Array && wire.length > 8);
   return withBrowser(async ({browser, baseURL}) => {
     const context = await browser.newContext();
     try {
-      const page = await context.newPage(); await preparePage(page, baseURL, wire);
-      return await operation(page, {browser, baseURL, prepare: next => preparePage(next, baseURL, wire)});
+      const page = await context.newPage(); await preparePage(page, baseURL, wire, options);
+      const result = await operation(page, {browser, baseURL, prepare: next => preparePage(next, baseURL, wire, options)});
+      for (const observed of context.pages()) await capturePage(observed, options);
+      return result;
     } finally {await context.close();}
-  });
+  }, {engine: options.engine});
 }
 
-export async function verifySessionStorage(t, wire) {
+export async function verifySessionStorage(t, wire, {source = null, engine = 'chromium'} = {}) {
+  const options = {source, engine, calls: []};
+  const fixture = (bytes, operation) => runFixture(bytes, operation, options);
+  const owner = t; let journey = 0;
+  t = {async test(name, body) {
+    const index = journey++, expected = storageJourneyInventory[index];
+    assert.ok(expected && name.startsWith(expected[0]), 'closed storage journey inventory');
+    return owner.test(name, async () => {
+      const start = options.calls.length;
+      await body();
+      for (const row of options.calls.slice(start)) row.journey = index;
+    });
+  }};
   await t.test('a transaction must report strict durability before any read or publication', async () => {
     const result = await fixture(wire, page => page.evaluate(async () => {
       const {open, encode, decode, digest, replace, fail} = retentionFixture;
@@ -195,7 +249,7 @@ export async function verifySessionStorage(t, wire) {
     try {
       await withBrowser(async ({baseURL, launchPersistentContext}) => {
         const first = await launchPersistentContext(profile), page = await first.newPage();
-        await preparePage(page, baseURL, wire);
+        await preparePage(page, baseURL, wire, options);
         const saved = await page.evaluate(async () => {
           const {open, encode, digest, replace} = retentionFixture, store = await open('journal-retention-process');
           const bytes = Uint8Array.of(51, 52, 53), id = await digest(bytes);
@@ -203,16 +257,17 @@ export async function verifySessionStorage(t, wire) {
             objects: [bytes], retire: encode([])});
           store.close(); return {id: Array.from(id), after: Array.from(after)};
         });
-        await first.close();
+        await capturePage(page, options); await first.close();
         const second = await launchPersistentContext(profile), reopened = await second.newPage();
-        await preparePage(reopened, baseURL, wire);
+        await preparePage(reopened, baseURL, wire, options);
         const actual = await reopened.evaluate(async id => {
           const store = await retentionFixture.open('journal-retention-process');
           const bytes = await store.read(Uint8Array.from(id)), snapshot = await store.snapshot(); store.close();
           return {bytes: Array.from(bytes), snapshot: Array.from(snapshot)};
         }, saved.id);
-        assert.deepEqual(actual, {bytes: [51, 52, 53], snapshot: saved.after}); await second.close();
-      });
+        assert.deepEqual(actual, {bytes: [51, 52, 53], snapshot: saved.after});
+        await capturePage(reopened, options); await second.close();
+      }, {engine: options.engine});
       passed = true;
     } finally {
       // Only this freshly created fixture profile; retain failed-run evidence.
@@ -263,4 +318,32 @@ export async function verifySessionStorage(t, wire) {
     }));
     assert.deepEqual(result, {code: 'storage-quota', after: 1, retained: [70], absent: null, revision: 1});
   });
+
+  await t.test('read refuses changed stored payload bytes even when the root and object key are unchanged', async () => {
+    const result = await fixture(wire, page => page.evaluate(async () => {
+      const {open, encode, digest, replace, fail} = retentionFixture;
+      const namespace = 'journal-retention-corrupt-payload', store = await open(namespace);
+      const bytes = Uint8Array.of(91, 92), id = await digest(bytes);
+      const original = await store.commit({expected: await store.snapshot(),
+        replacement: replace('journal', null, id, [id]), objects: [bytes], retire: encode([])});
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('prismpm.browser.session.v1/' + namespace, 1);
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      try {
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(['objects'], 'readwrite', {durability: 'strict'});
+          tx.oncomplete = resolve; tx.onabort = () => reject(tx.error);
+          tx.objectStore('objects').put(Uint8Array.of(91, 93),
+            Array.from(id, byte => byte.toString(16).padStart(2, '0')).join(''));
+        });
+      } finally {db.close();}
+      const unchanged = Array.from(await store.snapshot()).join(',') === Array.from(original).join(',');
+      const corrupt = await fail(() => store.read(id)); store.close();
+      return {unchanged, corrupt};
+    }));
+    assert.deepEqual(result, {unchanged: true, corrupt: 'object-corrupt'});
+  });
+  assert.equal(journey, storageJourneyInventory.length);
+  return options.calls;
 }

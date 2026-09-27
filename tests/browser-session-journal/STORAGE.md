@@ -19,7 +19,23 @@ The negative durability cases failed before the correction and pass afterward.
 Four existing Store browser tests also pass. This verifies browser-reported
 durability and transaction behavior, not a physical power-loss guarantee.
 
-Full retention source-owner verification, native browser-transcript replay,
-host mutation checks, joint storage maxima and authenticated journal composition
-remain required. Snapshots bind the reference frontier; callers must read and
-hash the complete authenticated closure before executing or recovering effects.
+The strengthened follow-up passes 18/18 TAP tests in 7.479 seconds: eleven actual
+Chromium journeys, 92 observed generated calls replayed twice by both native
+configurations, altered-transcript refusal and six executed host defects.
+The added journey changes stored object bytes while preserving its root/key;
+the real adapter rejects the corrupted payload. Every observed Wasm instance
+is bound to the exact source-owner artifact before execution. Exact per-journey
+inventories require 24 transitions and 68 validations; dropped observations and
+transition-to-validation substitutions are rejected.
+
+Follow-up receipt:
+`fb07d7fb833f2358680907737081c85d4c90f98e27e6009a193334e9705e4784`;
+evidence: `target/retention-observed-BZ5pFR/evidence.json`.
+The original source-owner receipt is bound, not relabeled as current acceptance.
+
+Fresh complete changed-closure source-owner verification, joint storage maxima,
+all-browser execution and authenticated journal composition remain required.
+Snapshots bind the reference frontier; callers must read and hash the complete
+authenticated closure before executing or recovering effects. Strict transaction
+completion does not establish permission for persistent storage, eviction
+resistance, a physical power-loss guarantee or peer-backed recovery.
