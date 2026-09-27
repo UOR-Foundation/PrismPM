@@ -80,6 +80,10 @@ const HARNESSES: &[(&str, &str)] = &[
         "tests/browser-session-payloads/driver/src/main.rs",
     ),
     (
+        "tests/browser-session-recovery-frames/driver/Cargo.toml",
+        "tests/browser-session-recovery-frames/driver/src/main.rs",
+    ),
+    (
         "tests/publication-admission/driver/Cargo.toml",
         "tests/publication-admission/driver/src/main.rs",
     ),
@@ -115,6 +119,7 @@ const SOURCES: &[&str] = &[
     "tests/browser-session-journal-retention/runner.rs",
     "tests/browser-session-journal-recovery/runner.rs",
     "tests/browser-session-payloads/runner.rs",
+    "tests/browser-session-recovery-frames/runner.rs",
     "tests/publication-admission/runner.rs",
     "tests/browser-budget/runner.rs",
     "tests/hologram-oracle/src/main.rs",
