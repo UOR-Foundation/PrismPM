@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {verifyWire, verifyMutation, replayBrowser, closure} from '../../tests/browser-semantic-presentation/checks.mjs';
+import {verifyWire, verifyMutation, replayBrowser, closure, completeEvidence} from '../../tests/browser-semantic-presentation/checks.mjs';
 import {journey, verifyMutants, verifyMaximum} from '../../tests/browser-semantic-presentation/browser.mjs';
 import {prerequisite} from '../../tests/browser-view/prerequisites.mjs';
 
@@ -16,4 +16,5 @@ test('DK-29 private generated semantic presentation and actual DOM oracle', {tim
     await prerequisite(t, 'actual source ' + kind + ' mutant fails std/no_std/Wasm', () => verifyMutation(kind, build));
   }
   assert.deepEqual(closure(), before, 'all owning implementation and oracle inputs remained frozen');
+  t.diagnostic('Retained complete private semantic component evidence ' + completeEvidence(build));
 });
