@@ -2410,6 +2410,25 @@ procedure; the complete source-selection/negative owner passes. This restores
 an existing refusal boundary, not the missing browser runtime, public Foundry
 service, SDK release or deployment.
 
+The complete DK-22 compiler owner also passes. Normal golden regeneration and
+fresh readback verify all 357 files for build
+`c61f76a5280d23d717d738d10ae2e7965f4dc938caf8674ed16b84b12628e81c`.
+The five changed JSON files contain only emitter/model/build provenance,
+the actual verifier executable/attestation identities and the review reason;
+generated Lean, runtime artifacts and execution evidence are unchanged.
+Log SHA-256 values in `target/audit-27sep26/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `dk22-compiler-owner.log` | `16c443c6d622b3f153a1a47b00198a2cf38dde317f56ca595fe20e2561ec2393` |
+| `golden-write-stable.log` | `9cf24b9cc0a27edccd78bc3d2bacddbeed77dc672c06c05b3d28e372b6975a84` |
+| `golden-readback.log` | `69fcac92c78c90c0d9a58d077d2ff5e37f2dfdb9ab1bd440bfeaf15871794766` |
+
+An earlier write failed when another build replaced its running verifier
+executable; it produced no reviewed golden update. The successful write and
+readback above used the same stable executable. This development-platform
+evidence does not establish full V&V, installed-SDK or other-platform acceptance.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
