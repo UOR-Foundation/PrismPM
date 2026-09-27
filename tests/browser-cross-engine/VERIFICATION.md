@@ -43,6 +43,30 @@ mutant on every engine. Each engine's complete 92-call transcript must agree
 with both native modes. This is component follow-up evidence, not a fresh full
 source-owner run, complete journal authentication, or deployed acceptance.
 
+The Chromium full-capacity follow-up passed in 1924.005 s (32m04s), without
+skips or quota fallback. Receipt:
+`b38753f70c87682f494ac04d25cbeb61e2f7af1aeee11f3bcd71719bf9520ccc`.
+It stored 4096 distinct 1-MiB objects, populated 64 roots with 4096 references
+and 128-character names, restarted the browser twice, read back 8 GiB exactly,
+and atomically replaced/retired 16 objects while preserving the other roots.
+Independent Node AES-CTR/SHA-256 data and canonical fixture encoding bind every
+complete expected frontier. All 779 observed model calls replayed in both
+native modes. Four construction checks also passed.
+
+Peak Wasm memory: 845742080 bytes; largest request: 9201853 bytes. The guarded
+run started with 22791479296 free bytes and ended with 16904728576 before
+cleanup; a 12-GiB reserve was checked throughout. Its successful private
+4.1-GiB profile was removed; original artifacts, compact per-call hashes,
+native replay file and receipt remain. Firefox/WebKit full-capacity runs,
+fresh complete source-owner closure, journal authority/freshness, eviction
+resilience and application acceptance are not established by this receipt.
+
+`verifyStorageCapacity` requires genuine source-bound artifacts and the entire
+current static helper/SDK/fixture input closure. Run one engine/profile at a
+time in the pinned browser devcontainer, with a disk-backed private evidence
+directory and at least 20 GiB initially free. It refuses quota/reserve failures
+and preserves failed profiles; it never substitutes a reduced-size case.
+
 All three engines report strict IndexedDB transactions. This is not eviction-
 proof persistence: the separate ephemeral-context probe returned `persist=false`
 in Chromium, awaited permission in Firefox, and lacked the persistence API in
