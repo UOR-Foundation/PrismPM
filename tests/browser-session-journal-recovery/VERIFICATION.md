@@ -4,6 +4,22 @@ Full DK-30 and public Browser admission remain unaccepted. Authentication,
 freshness and journal composition remain required separately; the following is
 component evidence only.
 
+## Current artifact-identity follow-up
+
+The current harness captures both original Cargo outputs and distinct private
+execution copies before exposing bytes. Every native-independent Wasm execution
+checks these files and its actual buffer before and afterward; maximum children
+receive that same captured private artifact and digest. All four roots carry
+real original/private/buffer substitution probes (20 total), and the selection
+map, outer execution handle and generated-package evidence are immutable.
+Replacement probes cover all three public execution/artifact fields. Shared
+helper mutations exercise removal of SHA/inode guards.
+
+The 21 lightweight closure/helper tests passed. The complete changed-closure
+3,135-vector/64-maximum/24-source-mutant owner has **not** run. Its earlier result
+below is historical evidence, not acceptance of these added guards. The full
+owner remains required in the final combined integration.
+
 ## Complete source-component run
 
 2026-09-27, pinned devcontainer, fresh private owner: **PASS, 4,277.633 s**.

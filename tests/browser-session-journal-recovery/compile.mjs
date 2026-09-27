@@ -8,6 +8,7 @@ import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
+import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 import {mutateComponentSource} from './mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
@@ -351,7 +352,7 @@ export function prepareRecovery(mutationId = null, expectedInputs = null, shared
     const generation = JSON.parse(compilerOwner.execute('driver', ['native', ir, generated, licenses], work));
     const generatedPackages = [captureGeneratedPackage(generated,
       {kind: 'native', inputIrSha256: generation.ir_sha256})];
-    const wasm = {};
+    const wasm = {}, wasmArtifacts = new Map();
     for (const entry of (mutation ? [mutation.entry] : ['context', 'recovery', 'session', 'metadata'])) {
       const guests = [];
       for (const label of ['a', 'b']) {
@@ -362,10 +363,14 @@ export function prepareRecovery(mutationId = null, expectedInputs = null, shared
         const target = join(work, entry + '-' + label + '-target');
         try {compilerOwner.execute('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: target});}
         finally {capturedPackage.verify();}
-        guests.push(readFileSync(join(target, 'wasm32-unknown-unknown/release/browser_session_journal_recovery_wire_probe.wasm')));
+        guests.push(captureGeneratedWasm(work,
+          join(target, 'wasm32-unknown-unknown/release/browser_session_journal_recovery_wire_probe.wasm'),
+          entry + '-' + label));
       }
-      assert.deepEqual(guests[0], guests[1], 'two independent complete generated ' + entry + ' packages'); wasm[entry] = guests[0];
+      assert.deepEqual(guests[0].bytes, guests[1].bytes, 'two independent complete generated ' + entry + ' packages');
+      wasm[entry] = guests[0].bytes; wasmArtifacts.set(entry, guests);
     }
+    Object.freeze(wasm);
     const nativePrograms = new Map();
     function checkedNative(record) {
       const stat = lstatSync(record.binary);
@@ -400,9 +405,17 @@ export function prepareRecovery(mutationId = null, expectedInputs = null, shared
         checkedNative(record); return [standard ? 'std' : 'no-std', record.sha256];
       }));
     }
+    function withWasm(entry, operation) {
+      assert.ok(wasmArtifacts.has(entry), 'actual captured generated recovery entry required');
+      assert.equal(typeof operation, 'function'); unchanged();
+      const artifact = wasmArtifacts.get(entry)[0];
+      try {return artifact.run(bytes => operation(bytes, artifact.path));}
+      finally {unchanged();}
+    }
     function unchanged() {
       compilerOwner.verify();
       for (const capturedPackage of generatedPackages) capturedPackage.verify();
+      for (const artifacts of wasmArtifacts.values()) for (const artifact of artifacts) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
       assert.deepEqual(frozenInputs(), inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
@@ -412,7 +425,10 @@ export function prepareRecovery(mutationId = null, expectedInputs = null, shared
     }
     unchanged();
     complete = true;
-    return {work, sources, verified, generation, wasm, compileNative, runNative, nativeEvidence, unchanged, inputs, compilerOwner, mutation,
-      generatedPackages: generatedPackages.map(({directory, kind, files}) => ({path: directory.slice(work.length + 1), kind, files}))};
+    return Object.freeze({work, sources, verified, generation, wasm, withWasm, compileNative, runNative, nativeEvidence, unchanged, inputs, compilerOwner, mutation,
+      wasmArtifacts: Object.freeze(Object.fromEntries([...wasmArtifacts].map(([entry, artifacts]) =>
+        [entry, Object.freeze(artifacts.map(artifact => artifact.evidence))]))),
+      generatedPackages: Object.freeze(generatedPackages.map(({directory, kind, files}) =>
+        Object.freeze({path: directory.slice(work.length + 1), kind, files})))});
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }

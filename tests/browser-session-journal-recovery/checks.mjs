@@ -1,6 +1,6 @@
 // Complete generated component execution; not authenticated journal acceptance.
 import assert from 'node:assert/strict';
-import {lstatSync, readFileSync, unlinkSync, writeFileSync} from 'node:fs';
+import {chmodSync, lstatSync, readFileSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {assertCompilerOwner, prepareRecovery, run, sha, draft} from './compile.mjs';
 import {recoveryCorpus} from './corpus.mjs';
@@ -14,6 +14,42 @@ import {metadataTraversalCorpus} from './traversal-corpus.mjs';
 export function verifyNativeInventory(output, rows) {
   assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
     + 'PASS ' + rows.length + ' journal recovery vectors twice\n', 'complete exact native vector inventory');
+}
+function verifyWasmSubstitutionGuards(build) {
+  const rejected = [];
+  assert.throws(() => {build.wasm = {};}, TypeError);
+  assert.throws(() => {build.withWasm = () => {};}, TypeError);
+  assert.throws(() => {build.wasmArtifacts = {};}, TypeError);
+  assert.throws(() => {build.generatedPackages[0].path = 'substituted';}, TypeError);
+  const packageFile = Object.keys(build.generatedPackages[0].files)[0];
+  assert.throws(() => {build.generatedPackages[0].files[packageFile] = '0'.repeat(64);}, TypeError);
+  for (const [entry, artifacts] of Object.entries(build.wasmArtifacts)) {
+    assert.throws(() => {build.wasm[entry] = new Uint8Array();}, TypeError);
+    for (const [index, record] of artifacts.entries()) for (const kind of ['original', 'private']) {
+      const path = join(build.work, record[kind].path), original = readFileSync(path), mode = lstatSync(path).mode & 0o777;
+      const changed = Buffer.concat([original, Buffer.from([0, 3, 1, 120, 42])]);
+      assert.equal(WebAssembly.validate(changed), true, 'actual substituted artifact remains valid Wasm');
+      let invoked = false;
+      try {
+        chmodSync(path, 0o600); writeFileSync(path, changed);
+        assert.throws(() => build.withWasm(entry, () => {invoked = true;}),
+          /immutable (original|private) generated Wasm/);
+        assert.throws(() => build.unchanged(), /immutable (original|private) generated Wasm/);
+        assert.equal(invoked, false, 'artifact replacement must refuse before execution');
+      } finally {writeFileSync(path, original); chmodSync(path, mode);}
+      build.unchanged(); rejected.push(entry + '-' + index + '-' + kind);
+    }
+    build.wasm[entry][0] ^= 1;
+    let invoked = false;
+    try {
+      assert.throws(() => build.withWasm(entry, () => {invoked = true;}), /immutable execution Wasm buffer/);
+      assert.throws(() => build.unchanged(), /immutable execution Wasm buffer/);
+      assert.equal(invoked, false, 'mutable buffer replacement must refuse before execution');
+    } finally {build.wasm[entry][0] ^= 1;}
+    build.unchanged(); rejected.push(entry + '-execution-buffer');
+  }
+  assert.equal(rejected.length, 20, 'both artifacts and execution buffers for all four actual roots');
+  return rejected;
 }
 export function verifyRecoveryComponents() {
   const build = prepareRecovery(), recovery = recoveryCorpus();
@@ -30,6 +66,7 @@ export function verifyRecoveryComponents() {
     assert.throws(() => build.unchanged(), /generated package manifest digest/);
   } finally {writeFileSync(generatedSource, generatedBytes);}
   build.unchanged();
+  const wasmSubstitutionRejected = verifyWasmSubstitutionGuards(build);
   const vectors = {context: recovery.context, recovery: recovery.recovery,
     session: sessionCorpus(), metadata: [...metadataCorpus(), ...metadataTraversalCorpus()]};
   assert.deepEqual(Object.fromEntries(Object.entries(vectors).map(([entry, rows]) => [entry, rows.length])),
@@ -44,14 +81,16 @@ export function verifyRecoveryComponents() {
     for (const [entry, rows] of Object.entries(vectors))
       verifyNativeInventory(build.runNative(standard, [entry, files[entry]]), rows);
   }
-  const observed = Object.fromEntries(Object.entries(vectors).map(([entry, rows]) => [entry, executeWasm(build.wasm[entry], rows)]));
+  const observed = Object.fromEntries(Object.entries(vectors).map(([entry, rows]) =>
+    [entry, build.withWasm(entry, bytes => executeWasm(bytes, rows))]));
   build.unchanged();
   const evidence = {scope: 'private-recovery-and-metadata-components', publicApplicationAccepted: false,
     source: build.verified.source_id, attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
     artifacts: Object.fromEntries(Object.entries(build.wasm).map(([entry, bytes]) => [entry, sha(bytes)])),
     cases: Object.fromEntries(Object.entries(vectors).map(([entry, rows]) => [entry, rows.length])),
     observed, native: build.nativeEvidence(), inputs: build.inputs, compilerOwner: build.compilerOwner.evidence(),
-    generatedPackages: build.generatedPackages, generatedSourceSubstitutionRejected: ['before-first-std', 'before-first-no-std']};
+    generatedPackages: build.generatedPackages, wasmArtifacts: build.wasmArtifacts, wasmSubstitutionRejected,
+    generatedSourceSubstitutionRejected: ['before-first-std', 'before-first-no-std']};
   writeFileSync(join(build.work, 'recovery-component-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   return {build, evidence};
 }
@@ -59,15 +98,13 @@ export function verifyRecoveryComponents() {
 export function verifyRecoveryMaxima(build) {
   const evidence = [];
   const request = join(build.work, 'maximum-input.bin'), expected = join(build.work, 'maximum-expected.bin');
-  const artifacts = Object.fromEntries(Object.entries(build.wasm).map(([entry, bytes]) => {
-    const path = join(build.work, 'maximum-' + entry + '.wasm'); writeFileSync(path, bytes, {flag: 'wx'}); return [entry, path];
-  }));
   for (const row of recoveryMaximumCorpus()) {
     writeFileSync(request, row.request); writeFileSync(expected, row.response);
     for (const standard of [true, false]) assert.equal(build.runNative(standard, [row.entry, request, expected]),
       'PASS binary journal recovery twice\n', 'actual complete native maximum ' + row.id);
     const observed = row.nativeOnly ? {nativeOnly: true, request: sha(row.request), response: sha(row.response)}
-      : JSON.parse(run(process.execPath, [join(draft, 'maximum-runner.mjs'), artifacts[row.entry], request, expected, sha(build.wasm[row.entry])], build.work));
+      : build.withWasm(row.entry, (bytes, path) => JSON.parse(run(process.execPath,
+        [join(draft, 'maximum-runner.mjs'), path, request, expected, sha(bytes)], build.work)));
     assert.equal(observed.request, sha(row.request)); assert.equal(observed.response, sha(row.response));
     if (!row.nativeOnly) assert.equal(observed.wasm, sha(build.wasm[row.entry]));
     const result = {entry: row.entry, id: row.id, requestBytes: row.request.length, responseBytes: row.response.length, ...observed};
@@ -91,14 +128,14 @@ export function verifyCompiledMutation(mutation, baseline) {
   const file = join(build.work, 'mutation.tsv'); writeFileSync(file, tsv([row]), {flag: 'wx'});
   for (const standard of [true, false]) assert.throws(() => build.runNative(standard, [mutation.entry, file]),
     /native output mismatch/, 'compiled source defect must reach actual native behavior');
-  assert.throws(() => executeWasm(build.wasm[mutation.entry], [row]),
+  assert.throws(() => build.withWasm(mutation.entry, bytes => executeWasm(bytes, [row])),
     error => error.code === 'ERR_ASSERTION' && error.message.includes(row.id),
     'compiled source defect must change the Wasm response, not crash compilation or execution');
   build.unchanged(); baseline.unchanged();
   const evidence = {mutation: build.mutation, source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: sha(build.wasm[mutation.entry]),
     request: sha(row.request), expected: sha(row.response), native: build.nativeEvidence(), compilerOwner: build.compilerOwner.evidence(),
-    generatedPackages: build.generatedPackages};
+    generatedPackages: build.generatedPackages, wasmArtifacts: build.wasmArtifacts};
   writeFileSync(join(build.work, 'recovery-mutation-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   console.log(JSON.stringify({id: mutation.id, work: build.work, status: 'real compiled defect detected',
     elapsedMs: performance.now() - startedAt}));

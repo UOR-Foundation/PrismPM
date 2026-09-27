@@ -38,6 +38,7 @@ test('complete transitive source and runner snapshots reject buffer substitution
   assert.ok(inputs['tests/browser-effects/corpus.mjs'], 'actual transitive Session fixture input');
   assert.ok(inputs['tests/browser-session-journal/metadata-maxima.mjs']);
   assert.ok(inputs['tests/browser-session-journal-recovery/mutations.mjs']);
+  assert.ok(inputs['tests/browser-view/generated-wasm.mjs'], 'actual artifact guard belongs to frozen closure');
   source.set('Fixture', Buffer.concat([source.get('Fixture'), Buffer.from('\n')]));
   assert.throws(() => assertCapturedRecoverySources(inputs, source), /actual captured source/);
   const rows = [{id: 'a-b'}, {id: 'b-c'}], complete = 'PASS a-b\nPASS b-c\nPASS 2 journal recovery vectors twice\n';
