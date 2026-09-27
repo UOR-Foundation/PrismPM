@@ -14,4 +14,5 @@ does not substitute for a defect's named behavioral mismatch.
 Preserve all 64 roots, 4096 objects/references, 16 additions, full-capacity
 replacement and 4096-object retirement. Integrated journal authentication,
 native browser-transcript replay, host mutation checks, actual joint storage
-capacity and strict-durability refusal remain separate mandatory obligations.
+capacity and strict-durability refusal remain mandatory integrated obligations;
+the separate durability correction does not replace a fresh combined owner.

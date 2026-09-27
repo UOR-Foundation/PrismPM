@@ -33,7 +33,16 @@ The adjacent `positive-artifacts.tar.gz` retains source/proofs/IR/native/Wasm:
 `0c43971c0156c8c30c8bd27a53c3db26da32c9dd7f4fec8eb7679336bc5263ea`.
 
 The frozen storage host requested, but did not check, reported strict durability;
-its correction requires separate evidence. This receipt does not establish
+its separate correction is recorded in `../browser-session-journal/STORAGE.md`.
+The complete owner now requires all ten browser journeys, including the added
+relaxed/default/missing-durability refusal. Its changed input closure requires
+a fresh complete run; the original receipt is not relabeled as that result.
+The corrected ten-journey fixture plus four existing Store cases passed 15/15
+TAP tests in 7.562 seconds against the exact original artifact and full receipt.
+Separate follow-up receipt:
+`42054aac06d8f1822e0dd7ed3551a5203743179f367f1fd8118a7228f7c79d00`.
+
+This receipt does not establish
 authenticated journal closure, freshness, native browser-transcript replay,
 host mutation coverage, joint real IndexedDB capacity, all-browser support,
 installed SDK acceptance, public runtime admission or Foundry acceptance.
