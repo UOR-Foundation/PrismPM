@@ -14,7 +14,17 @@ contexts are respectively `prismpm/account-binding/1`, `prismpm/account-request/
 The unsigned canonical body contains version, complete context and public key.
 Signing uses the existing `identity.mjs` domain and P-256/SHA-256 P1363 profile.
 The source owns complete parsing, serialization, projection and exact expected
-context/key comparison. Key shape is not curve membership or signature proof.
+context/key comparison. Both the signer key and independently expected key must
+pass the shared `Foundation.Crypto.P256.Model.p256PublicKeyValid` predicate,
+in addition to the existing effect signing-grant shape/domain checks. Exact
+SEC1/SEC2 point admission precedes signature-width checks and provider import;
+it does not prove signature validity or possession. Invalid points retain
+`BadKey` (wire code 1); the host reports `model-rejected` without invoking key
+import, rather than waiting for a provider-level import failure.
+Key validity, envelope validity and matching declare DK-34's exact
+`Quot.sound`/`propext` kernel policy. Their wire dependents already declare
+these axioms through canonical CBOR. The owning attestation checks each exact
+policy; no additional axioms are admitted.
 No operation accepts a verification boolean or returns an authorization decision.
 
 The private SDK factory captures every option before awaiting, verifies the exact

@@ -10,8 +10,10 @@ import {decodeEffectWire} from '../../sdk/browser/effects-wire.mjs';
 import {requireGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 import {sha} from '../browser-view/compile.mjs';
 import {tsv} from './runtime.mjs';
+import {pointCases} from './corpus.mjs';
 
 const modules = ['signed-context.mjs', 'identity.mjs', 'effects-module.mjs', 'effects-wire.mjs'];
+const invalidPoints = pointCases().filter(row => !row.valid);
 const semanticFailures = new WeakMap();
 export const isSemanticCounterexample = (error, expected) => semanticFailures.has(error)
   && isDeepStrictEqual(semanticFailures.get(error), expected);
@@ -20,7 +22,8 @@ export const journeys = Object.freeze([
   ['bad-signature', [2, 1]], ['wrong-domain', [2, 1]], ['wrong-signing-key', [2, 1]],
   ...Array.from({length: 6}, (_, index) => ['binding-' + index, [2]]),
   ...[1, 2, 3, 4, 5, 6, 7, 8].map(index => ['context-' + index, [2]]),
-  ['expected-key', [2]], ['invalid-point', [2, 1]], ['accessor-options', []],
+  ['expected-key', [2]], ['invalid-point', [2]],
+  ...invalidPoints.map(row => ['point-' + row.id, row.key.length > 65 ? [2] : [2, 2]]), ['accessor-options', []],
   ['captured-inputs', [2, 1]], ['returned-copies', []], ['opaque-instance', []],
   ['captured-bootstrap', [2, 1]], ['malleable-signature', [2, 1]],
 ].map(([id, tags]) => Object.freeze({id, tags: Object.freeze(tags)})));
@@ -43,7 +46,9 @@ export function verifyObservations(result) {
     cursor = row.end;
   }
   assert.equal(result.calls.length, cursor);
-  assert.equal(cursor, 37, 'independently fixed complete generated call count');
+  assert.equal(invalidPoints.length, 82);
+  assert.equal(invalidPoints.filter(row => row.key.length > 65).length, 5);
+  assert.equal(cursor, 195, 'independently fixed complete generated call count');
 }
 export async function browserFixture(build, engine, source = null) {
   const sources = captureSources(build.inputs), artifact = requireGeneratedWasm(build.wasmOwners['signed-context']);
@@ -93,7 +98,7 @@ export async function browserFixture(build, engine, source = null) {
         globalThis.signedFixture = {openSignedContext, createIdentity, signBytes, encode};
       `});
       await page.waitForFunction(() => globalThis.signedFixture !== undefined);
-      const result = await page.evaluate(async bytes => {
+      const result = await page.evaluate(async ({bytes, invalidPoints}) => {
         const calls = globalThis.signedObservedCalls;
         const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
         const {openSignedContext, createIdentity, signBytes, encode} = globalThis.signedFixture;
@@ -149,7 +154,20 @@ export async function browserFixture(build, engine, source = null) {
         await run('invalid-point', async () => {
           const key = new Uint8Array(65); key[0] = 4;
           await rejects(() => verifier.authenticate({envelope: encode([1, base.value, key, base.signature]),
-            expectedContext: base.expectedContext, expectedKey: key}), 'invalid-key-or-signature', 'invalid point refused');});
+            expectedContext: base.expectedContext, expectedKey: key}), 'model-rejected', 'invalid point refused');});
+        for (const row of invalidPoints) await run('point-' + row.id, async () => {
+          const key = Uint8Array.from(row.key), originalImport = crypto.subtle.importKey;
+          let imports = 0;
+          crypto.subtle.importKey = function (...args) {imports++; return Reflect.apply(originalImport, this, args);};
+          try {
+            await rejects(() => verifier.authenticate({...options(base), expectedKey: key}),
+              key.length > 65 ? 'invalid-input' : 'model-rejected', 'invalid expected point refused before provider');
+            await rejects(() => verifier.authenticate({...options(base),
+              envelope: encode([1, base.value, key, base.signature])}),
+              'model-rejected', 'invalid signer point refused before provider');
+            check(imports === 0, 'invalid points never reach provider import', 0, imports);
+          } finally {crypto.subtle.importKey = originalImport;}
+        });
         await run('accessor-options', async () => {
           for (const name of ['envelope', 'expectedContext', 'expectedKey']) {let reads = 0; const item = options(base);
             Object.defineProperty(item, name, {get() {reads++; return base[name];}, enumerable: true});
@@ -199,7 +217,7 @@ export async function browserFixture(build, engine, source = null) {
           if (!assertions.has(error)) throw error;
           return {semanticFailure: assertions.get(error)};
         }
-      }, Array.from(wire));
+      }, {bytes: Array.from(wire), invalidPoints: invalidPoints.map(row => ({id: row.id, key: Array.from(row.key)}))});
       assert.deepEqual(failures, []);
       if (result.semanticFailure) {
         const error = Error('actual signed-context semantic counterexample');

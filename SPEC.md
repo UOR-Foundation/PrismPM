@@ -2305,8 +2305,10 @@ challenge to an exact expected context/key and canonical unsigned statement.
 `SignedContext.cddl` fixes the internal versioned frame. References are 32 bytes,
 epoch is uint32, the raw uncompressed P-256 key is 65 bytes and its P1363
 signature is 64 bytes. Source owns canonical parsing, exact matching and signing
-projection; the SDK supplies actual key import, hashing and signature verification
-through the existing domain-separated Web Cryptography profile. The largest
+projection. Signer and expected keys must pass DK-34's complete P-256 predicate
+before signature-width admission or provider import, retaining the existing
+key error and precedence. The SDK supplies actual key import, hashing and
+signature verification through the existing domain-separated Web Cryptography profile. The largest
 valid match request is 1037 bytes within a 2048-byte frame; malformed and
 one-over frames are rejected without reducing any application frame domain.
 
@@ -2327,6 +2329,25 @@ replay, the complete pinned original WPT ECDSA entry in Window and
 DedicatedWorker, and independent native cryptographic verification. This
 selected suite is not whole Web Cryptography, DID/VC/JOSE/COSE, identity,
 application or installed-SDK acceptance. `PP2011` remains closed.
+
+#### 12.11.3 Complete P-256 point admission
+
+DK-34 owns the bounded source-generated predicate in
+`Foundation.Crypto.P256.Model` and its private canonical CBOR verification
+boundary. Only SEC1 uncompressed P-256 points with exact coordinate widths,
+coordinates below the SEC2 prime and the complete curve equation are admitted.
+The cofactor-one subgroup implication is specific to this fixed domain.
+Malformed field representations are refused without reducing caller inputs.
+Fixed-limb intermediates are bounded below `u64`; no unbounded integer backend,
+handwritten host field arithmetic or provider-import validity assumption is used.
+
+Acceptance requires complete imported applicable NIST key-validation vectors,
+independent field/curve oracles, actual native/std/no_std/two-Wasm parity,
+all three pinned browser engines, exact artifact/source custody and genuine
+arithmetic/codec mutants. DK-33 account and DK-32 signer admission must use this
+source predicate and independently pass their complete owning journeys. This
+component grants no key possession, account authority, freshness, signature
+conformance, NIST certification or public application acceptance.
 
 ### 12.12 Private durable operation journal
 

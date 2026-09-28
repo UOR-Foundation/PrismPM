@@ -45,6 +45,9 @@ export function frozenInputs() {
     'model/authorities.toml', 'lean-toolchain', 'rust-toolchain.toml', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json', 'vendor/lean4-prod/lean.tar']) files.add(path);
   const wpt = 'sdk/browser/oracles/wpt-ecdsa/';
+  // Imported authoritative point sources are data, not static JS import edges.
+  for (const path of ['PKV.rsp.base64', 'ACVP-KeyVer-FIPS186-5.json.base64'])
+    files.add('tests/browser-p256/oracles/' + path);
   files.add(wpt + 'source.json');
   for (const row of JSON.parse(read(wpt + 'source.json')).files) {
     assert.ok(typeof row.path === 'string' && /^[A-Za-z0-9_./-]+$/.test(row.path)
