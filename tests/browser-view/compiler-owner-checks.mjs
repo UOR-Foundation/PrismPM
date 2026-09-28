@@ -12,7 +12,7 @@ export function verifyCompilerOwnerSubstitutions(owner, inputs) {
   assert.throws(() => {owner.evidence.inputs['lean-toolchain'] = '0'.repeat(64);}, TypeError);
   assert.throws(() => {owner.runDriver = () => '';}, TypeError);
   const work = owner.evidence.work, observed = ['cloned-handle', 'changed-input-map', 'immutable-owner'];
-  const directories = {'session-retention': 'browser-session-journal-retention', 'session-operation': 'browser-session-operation'};
+  const directories = {pkce: 'browser-pkce', 'session-retention': 'browser-session-journal-retention', 'session-operation': 'browser-session-operation'};
   assert.ok(Object.hasOwn(directories, owner.evidence.family), 'registered actual compiler mutation family');
   const driverDirectory = 'tests/' + directories[owner.evidence.family] + '/driver';
   const library = Object.keys(owner.evidence.exporterRuntime).find(path => path.endsWith('.olean'));
