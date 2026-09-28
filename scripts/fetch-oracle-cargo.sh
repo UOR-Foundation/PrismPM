@@ -43,6 +43,8 @@ d833db76924bdf573f4d0cd47a24b585bb454879be0ff668670629688277039f  tests/publicat
 e8e9b30de31477d1e6cf640ac29b42648835c418c09774ac8bdf0f175fe5e920  tests/publication-admission/driver/Cargo.lock
 fc49c5659bded9db17612c76d47370fd715e4fa900f2b0aa8617e77a0fb13581  tests/browser-budget/driver/Cargo.toml
 4268873a128108bc7a74f9f4ecf66500d7c85be411987dd89da62da3595160e3  tests/browser-budget/driver/Cargo.lock
+2fb0bb8ba645ff99e72007455fbbb9b5ee0716e2182fb061f3a84ae37ffb1379  sdk/oracles/oscal/Cargo.toml
+1e33bbf4be333f4f745e976f7b8529c559aea7b7dcc5b7905ca75ce416d5d2e1  sdk/oracles/oscal/Cargo.lock
 CHECKSUMS
 cmp tests/hologram-oracle/Cargo.toml crates/prismpm/src/embedded/hologram-oracle.Cargo.toml
 cmp tests/hologram-oracle/Cargo.lock crates/prismpm/src/embedded/hologram-oracle.Cargo.lock
@@ -73,7 +75,8 @@ for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/browser-session/driver/Cargo.toml \
   tests/browser-operation-journal/driver/Cargo.toml \
   tests/publication-admission/driver/Cargo.toml \
-  tests/browser-budget/driver/Cargo.toml; do
+  tests/browser-budget/driver/Cargo.toml \
+  sdk/oracles/oscal/Cargo.toml; do
   cargo fetch --locked --manifest-path "$manifest"
   cargo metadata --locked --offline --format-version 1 --manifest-path "$manifest" >/dev/null
 done

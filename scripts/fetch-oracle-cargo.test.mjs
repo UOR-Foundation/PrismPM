@@ -39,6 +39,8 @@ const pinned = [
   'tests/publication-admission/driver/Cargo.lock',
   'tests/browser-budget/driver/Cargo.toml',
   'tests/browser-budget/driver/Cargo.lock',
+  'sdk/oracles/oscal/Cargo.toml',
+  'sdk/oracles/oscal/Cargo.lock',
   'crates/prismpm/vendor/hologram-live.tar',
 ];
 const embedded = [
@@ -68,6 +70,8 @@ test('oracle acquisition inputs match reviewed pins and embedded verifier inputs
     const path = `tests/${family}/driver/${file}`;
     assert.ok(script.includes('  ' + path + '\n'), 'closed owning acquisition pin: ' + path);
   }
+  for (const file of ['Cargo.toml', 'Cargo.lock'])
+    assert.ok(script.includes('  sdk/oracles/oscal/' + file + '\n'), 'closed published OSCAL engine pin');
   for (const oracle of ['hologram-oracle', 'holo-codec-oracle']) {
     assert.ok(readFileSync(join(root, `tests/${oracle}/Cargo.toml`), 'utf8').includes(`rev = "${revision}"`));
     assert.ok(readFileSync(join(root, `tests/${oracle}/Cargo.lock`), 'utf8').includes(`?rev=${revision}#${revision}`));
