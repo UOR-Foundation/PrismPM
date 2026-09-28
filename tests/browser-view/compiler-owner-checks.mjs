@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {chmodSync, copyFileSync, lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {requireCompilerOwner} from './compiler-owner.mjs';
+import {compilerOwnerDriverDirectory, requireCompilerOwner} from './compiler-owner.mjs';
 
 export function verifyCompilerOwnerSubstitutions(owner, inputs) {
   requireCompilerOwner(owner, inputs);
@@ -12,7 +12,10 @@ export function verifyCompilerOwnerSubstitutions(owner, inputs) {
   assert.throws(() => {owner.evidence.inputs['lean-toolchain'] = '0'.repeat(64);}, TypeError);
   assert.throws(() => {owner.runDriver = () => '';}, TypeError);
   const work = owner.evidence.work, observed = ['cloned-handle', 'changed-input-map', 'immutable-owner'];
-  const driverDirectory = 'tests/browser-session-journal-retention/driver';
+  const driverDirectory = compilerOwnerDriverDirectory(owner, inputs);
+  const alternate = owner.evidence.family === 'session-retention' ? 'publication-linkage' : 'session-retention';
+  assert.throws(() => requireCompilerOwner(owner, inputs, alternate), /same registered compiler family/);
+  assert.throws(() => compilerOwnerDriverDirectory({...owner}, inputs), /actual fresh compiler owner/);
   const library = Object.keys(owner.evidence.exporterRuntime).find(path => path.endsWith('.olean'));
   assert.ok(library, 'actual compiled exporter runtime library required');
   const files = [

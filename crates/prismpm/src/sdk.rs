@@ -14,7 +14,7 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::path::{Component, Path};
 
-const STDLIB_SOURCES: &[u8] = include_bytes!("../sdk/stdlib-sources.tar");
+pub(crate) const STDLIB_SOURCES: &[u8] = include_bytes!("../sdk/stdlib-sources.tar");
 const RELEASED_INVENTORY: &str = "/opt/prismpm/share/inventory.json";
 const SDK_INVENTORY_MAX_BYTES: usize = 8 * 1024 * 1024;
 const SDK_INDEX_MAX_BYTES: usize = 1024 * 1024;

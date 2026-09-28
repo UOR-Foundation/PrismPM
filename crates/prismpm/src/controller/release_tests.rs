@@ -76,6 +76,87 @@ fn browser_system_project() -> tempfile::TempDir {
     temporary
 }
 
+impl Controller {
+    /// Fresh modeled publication fixture; caller must build and verify it.
+    pub(crate) fn publication_linkage_project() -> tempfile::TempDir {
+        let temporary = browser_system_project();
+        let root = temporary.path();
+        for namespace in ["Foundation", "Production"] {
+            copy_tree(
+                &repository().join("stdlib/src").join(namespace),
+                &root.join("src").join(namespace),
+            );
+        }
+        std::fs::copy(
+            repository().join("tests/publication-context-linkage/src/Publication.lex.tex"),
+            root.join("src/Publication.lex.tex"),
+        )
+        .unwrap();
+        let config = std::fs::read_to_string(root.join("lexlean.toml")).unwrap();
+        assert!(config.contains("entrypoints = [\"src/Release.lex.tex\"]"));
+        std::fs::write(
+            root.join("lexlean.toml"),
+            config.replace(
+                "entrypoints = [\"src/Release.lex.tex\"]",
+                "entrypoints = [\"src/Publication.lex.tex\"]",
+            ),
+        )
+        .unwrap();
+        relock(root);
+        let snapshot = Engine::load(&utf8(root.join("lexlean.toml")).unwrap())
+            .unwrap()
+            .snapshot(LexCheckRequest {
+                selection: Selection::Files([Utf8PathBuf::from("src/Calculator.lex.tex")].into()),
+            })
+            .unwrap();
+        let application = crate::holo::application::project_application(&snapshot)
+            .unwrap()
+            .unwrap();
+        let digest = format!(
+            "sha256:{}",
+            content_id(&encode_canonical(&application).unwrap())
+        );
+        let path = root.join("src/Release.lex.tex");
+        let source = std::fs::read_to_string(&path).unwrap();
+        let mut semantic = semantic_data(&source);
+        fn bind(value: &mut Value, digest: &str) -> usize {
+            if value["field"] == "applicationModelDigest" {
+                assert_eq!(value["value"]["kind"], "string");
+                value["value"]["value"] = json!(digest);
+                return 1;
+            }
+            match value {
+                Value::Object(fields) => fields.values_mut().map(|value| bind(value, digest)).sum(),
+                Value::Array(values) => values.iter_mut().map(|value| bind(value, digest)).sum(),
+                _ => 0,
+            }
+        }
+        assert_eq!(
+            bind(&mut semantic, &digest),
+            4,
+            "both source models and manifests bind the final application"
+        );
+        let lines = source
+            .lines()
+            .filter(|line| line.starts_with("\\semanticdata{"))
+            .collect::<Vec<_>>();
+        assert_eq!(lines.len(), 1);
+        std::fs::write(
+            &path,
+            source.replace(
+                lines[0],
+                &format!(
+                    "\\semanticdata{{{}}}",
+                    serde_json::to_string(&semantic).unwrap()
+                ),
+            ),
+        )
+        .unwrap();
+        relock(root);
+        temporary
+    }
+}
+
 #[test]
 fn browser_system_source_selection_and_requirements_fail_closed() {
     let temporary = browser_system_project();
