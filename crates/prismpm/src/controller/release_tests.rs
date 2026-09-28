@@ -12,6 +12,39 @@ fn repository() -> PathBuf {
         .to_owned()
 }
 
+fn copy_fixture_file(source: impl AsRef<Path>, destination: impl AsRef<Path>) {
+    // The installed/captured SDK source is read-only. A fresh modeled fixture
+    // owns mutable input bytes, not the source file's permissions or inode.
+    std::fs::write(destination, std::fs::read(source).unwrap()).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn readonly_source_copy_is_mutable_only_in_the_private_fixture() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("captured-source");
+    let destination = temporary.path().join("private-fixture");
+    std::fs::write(&source, b"exact captured source").unwrap();
+    std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o400)).unwrap();
+    let original = std::fs::metadata(&source).unwrap();
+    copy_fixture_file(&source, &destination);
+    assert_eq!(
+        std::fs::read(&destination).unwrap(),
+        b"exact captured source"
+    );
+    assert_ne!(
+        std::fs::metadata(&destination).unwrap().ino(),
+        original.ino()
+    );
+    std::fs::write(&destination, b"modeled fixture changes").unwrap();
+    assert_eq!(std::fs::read(&source).unwrap(), b"exact captured source");
+    let after = std::fs::metadata(&source).unwrap();
+    assert_eq!(after.ino(), original.ino());
+    assert_eq!(after.permissions().mode(), original.permissions().mode());
+}
+
 fn copy_tree(source: &Path, destination: &Path) {
     for entry in walkdir::WalkDir::new(source) {
         let entry = entry.unwrap();
@@ -20,7 +53,7 @@ fn copy_tree(source: &Path, destination: &Path) {
             std::fs::create_dir_all(path).unwrap();
         } else {
             assert!(entry.file_type().is_file());
-            std::fs::copy(entry.path(), path).unwrap();
+            copy_fixture_file(entry.path(), path);
         }
     }
 }
@@ -36,7 +69,7 @@ fn calculator_project() -> tempfile::TempDir {
         "lake-manifest.json",
         "lean-toolchain",
     ] {
-        std::fs::copy(example.join(path), temporary.path().join(path)).unwrap();
+        copy_fixture_file(example.join(path), temporary.path().join(path));
     }
     relock(temporary.path());
     temporary
@@ -60,18 +93,16 @@ fn browser_system_project() -> tempfile::TempDir {
     let fixture = repository().join("tests/browser-system");
     std::fs::create_dir(root.join("src/Production")).unwrap();
     for name in ["Core", "BrowserSystem"] {
-        std::fs::copy(
+        copy_fixture_file(
             repository().join(format!("stdlib/src/Production/{name}.lex.tex")),
             root.join(format!("src/Production/{name}.lex.tex")),
-        )
-        .unwrap();
+        );
     }
-    std::fs::copy(
+    copy_fixture_file(
         fixture.join("Release.lex.tex"),
         root.join("src/Release.lex.tex"),
-    )
-    .unwrap();
-    std::fs::copy(fixture.join("lexlean.toml"), root.join("lexlean.toml")).unwrap();
+    );
+    copy_fixture_file(fixture.join("lexlean.toml"), root.join("lexlean.toml"));
     relock(root);
     temporary
 }
@@ -87,11 +118,10 @@ impl Controller {
                 &root.join("src").join(namespace),
             );
         }
-        std::fs::copy(
+        copy_fixture_file(
             repository().join("tests/publication-context-linkage/src/Publication.lex.tex"),
             root.join("src/Publication.lex.tex"),
-        )
-        .unwrap();
+        );
         let config = std::fs::read_to_string(root.join("lexlean.toml")).unwrap();
         assert!(config.contains("entrypoints = [\"src/Release.lex.tex\"]"));
         std::fs::write(

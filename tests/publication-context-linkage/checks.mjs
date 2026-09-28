@@ -10,6 +10,7 @@ import {executeWasm} from './execute.mjs';
 import {createCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {verifyCompilerOwnerSubstitutions} from '../browser-view/compiler-owner-checks.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
+import {verifyCapturedPublicationLinkage, requireCaptureCompletion} from './capture-owner.mjs';
 const tsv = rows => rows.map(row => row.id + '\t' + Buffer.from(row.request).toString('hex') + '\t'
   + Buffer.from(row.response).toString('hex') + '\n').join('');
 const contextTsv = rows => {
@@ -188,7 +189,9 @@ function mutant(kind, baseline, inputSnapshot) {
   }
 }
 
-export async function verifyGeneratedLinkage(t) {
+export async function verifyGeneratedLinkage(t) { return verifyLinkage(t, false); }
+export async function verifyCompletePublicationLinkage(t) { return verifyLinkage(t, true); }
+async function verifyLinkage(t, completeOwner) {
   const inputs = frozenInputs(), compiler = createCompilerOwner('publication-linkage', inputs);
   const build = prepare(compiler, null, null, inputs);
   const inputSnapshot = snapshotInputs(build);
@@ -205,6 +208,16 @@ export async function verifyGeneratedLinkage(t) {
       const rows = corpus(); assert.equal(rows.length, 119);
       nativeReplay(build, rows, 'complete-vectors');
       result.wasm = build.withWasm('wasm', bytes => executeWasm(bytes, rows));
+    });
+    await prerequisite(t, 'actual native semantic helpers satisfy complete independent boundary witnesses', () => {
+      const expected = 'PASS 260 independent collector order, duplicates, missing-member and fuel witnesses\n'
+        + 'PASS 131592 independent bit-mask and repeated-index witnesses\n'
+        + 'PASS 710 independent public exact partition and bounded duplicate/fuel witnesses\n'
+        + 'PASS 3192 independent and original-helper payload boundary/error-order witnesses\n'
+        + 'PASS four complete independent semantic witness groups\n';
+      for (const standard of [true, false])
+        assert.equal(build.runNative(standard, ['--semantic-witnesses']), expected, 'exact complete semantic witness inventory');
+      result.semanticWitnesses = {collector:260, bits:131592, partition:710, payload:3192, modes:['std', 'no_std']};
     });
     await prerequisite(t, 'typed six-field preimage and private projection agree with unchanged opcode four', () => {
       result.contextFields = contextReplay(build);
@@ -227,6 +240,10 @@ export async function verifyGeneratedLinkage(t) {
     });
     assert.equal(result.maxima.length, maximumNames.length);
     assert.equal(result.mutations.length, mutationNames.length);
+    if (completeOwner) {
+      result.actualCapture = await verifyCapturedPublicationLinkage(t, build);
+      requireCaptureCompletion(result.actualCapture);
+    }
     build.unchanged();
     result.evidence = retain(build, result, inputSnapshot);
     result.compilerRetirement = compiler.close();

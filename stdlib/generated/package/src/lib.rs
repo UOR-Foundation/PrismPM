@@ -123,6 +123,14 @@ pub struct PublicationLinkageBatchPublicationIds {
     pub cause: Option<crate::CborError>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationBitMarks {
+    pub word0: u64,
+    pub word1: u64,
+    pub word2: u64,
+    pub word3: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicationWirePrimitive {
     pub value: crate::CborValue,
@@ -1255,6 +1263,12 @@ pub struct PublicationWireFlatOutcomePublicationObligations {
     pub chunks: alloc::vec::Vec<crate::PublicationObligationChunk>,
     pub cursor: u64,
     pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIndexBatch {
+    pub indices: alloc::vec::Vec<u64>,
+    pub valid: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11459,14 +11473,27 @@ pub fn coverageValidSubmission() -> crate::ControlSubmission {
     { let _x_1 = 1; { let _x_4 = 10; { let _x_7 = coverageOctets11Length32(); { let _x_8 = (_x_7).octets; { let _x_11 = coverageOctetsAALength32(); { let _x_12 = (_x_11).octets; { let _x_14 = coverageOctets01Length32(); { let _x_15 = (_x_14).octets; { let _x_16 = crate::ControlOrigin::Local; { let _x_17 = crate::ControlContribution { obligation: _x_1, control: _x_4, policy: _x_8.clone(), scope: alloc::string::String::from("control-scope"), version: alloc::string::String::from("1"), subject: _x_12.clone(), evidenceKind: alloc::string::String::from("accepted-test-evidence"), evidence: _x_15.clone(), origin: _x_16.clone() }; { let _x_18 = 2; { let _x_21 = 20; { let _x_24 = coverageOctetsBBLength32(); { let _x_25 = (_x_24).octets; { let _x_26 = coverageOctets02Length32(); { let _x_27 = (_x_26).octets; { let _x_28 = crate::ControlContribution { obligation: _x_18, control: _x_21, policy: _x_8.clone(), scope: alloc::string::String::from("control-scope"), version: alloc::string::String::from("1"), subject: _x_25.clone(), evidenceKind: alloc::string::String::from("accepted-test-evidence"), evidence: _x_27, origin: _x_16.clone() }; { let _x_29 = 3; { let _x_32 = coverageOctets03Length32(); { let _x_33 = (_x_32).octets; { let _x_34 = crate::ControlOrigin::Inherited { field_0: _x_1, field_1: _x_12.clone(), field_2: _x_15.clone() }; { let _x_35 = crate::ControlContribution { obligation: _x_29, control: _x_4, policy: _x_8.clone(), scope: alloc::string::String::from("control-scope"), version: alloc::string::String::from("1"), subject: _x_25.clone(), evidenceKind: alloc::string::String::from("accepted-test-evidence"), evidence: _x_33, origin: _x_34 }; { let _x_37 = alloc::vec![_x_35]; { let _x_38 = { let mut __list = (_x_28, _x_37); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_39 = { let mut __list = (_x_17, _x_38); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_40 = crate::ControlSubmission { contributions: _x_39 }; _x_40 } } } } } } } } } } } } } } } } } } } } } } } } } }
 }
 
-pub fn publicationLinkageBucketChunks(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: alloc::vec::Vec<u8>, mut x_5: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+pub fn publicationLinkageBitBuckets(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: u64) -> Result<bool, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => (x_3 <= x_2),
+        _ => { let n_47 = (x_4).saturating_sub(1); { let _x_92 = (x_3 <= x_2); match _x_92 {
+        false => { let _x_121 = 0; { let _x_122 = 0; { let _x_123 = crate::PublicationBitMarks { word0: _x_122, word1: _x_122, word2: _x_122, word3: _x_122 }; { let _x_124 = 256; { let _x_125 = publicationLinkageBitChunks(&(x_1), _x_121, x_2, _x_123, _x_124)?; match _x_125 {
+        None => _x_92,
+        Some(val_127) => { let _x_128 = 256; { let _x_129 = core::convert::identity::<u64>(x_2).checked_add(_x_128).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4,) = (_x_129, n_47,); continue; } } },
+    } } } } } },
+        true => _x_92,
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageBitChunks(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: crate::PublicationBitMarks, mut x_5: u64) -> Result<Option<crate::PublicationBitMarks>, crate::ComputeError> {
     loop { return Ok(match x_5 {
         0 => { let _x_101 = (x_1).len() as u64; { let _x_102 = (_x_101 <= x_2); match _x_102 {
         false => None,
         true => Some(x_4),
     } } },
         _ => { let n_52 = (x_5).saturating_sub(1); { let _x_118 = (x_1).len() as u64; { let _x_119 = (_x_118 <= x_2); match _x_119 {
-        false => { let _x_143 = 256; { let _x_144 = publicationLinkageBucketRows(&(x_1), x_2, x_3, x_4, _x_143)?; match _x_144 {
+        false => { let _x_143 = 256; { let _x_144 = publicationLinkageBitRows(&(x_1), x_2, x_3, x_4, _x_143)?; match _x_144 {
         None => _x_144,
         Some(val_145) => { let _x_146 = 256; { let _x_147 = core::convert::identity::<u64>(x_2).checked_add(_x_146).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (_x_147, val_145, n_52,); continue; } } },
     } } },
@@ -11475,7 +11502,54 @@ pub fn publicationLinkageBucketChunks(x_1: &[u64], mut x_2: u64, x_3: u64, mut x
     }); }
 }
 
-pub fn publicationLinkageBucketRows(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: alloc::vec::Vec<u8>, mut x_5: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
+pub fn publicationLinkageBitMark(marks: crate::PublicationBitMarks, offset: u64) -> Option<crate::PublicationBitMarks> {
+    { let _x_168 = 256; { let _x_171 = (offset < _x_168); match _x_171 {
+        false => None,
+        true => { let _x_328 = 64; { let _x_329 = 0; { let _x_330 = if _x_328 == 0 { _x_329 } else { offset % _x_328 }; { let _x_332 = 1; { let _x_333 = 63; { let _x_334 = publicationLinkageBitMaskLoop(_x_330, _x_332, _x_333); match _x_334 {
+        None => None,
+        Some(val_337) => { let _x_441 = 64; { let _x_442 = (offset < _x_441); match _x_442 {
+        false => { let _x_520 = 128; { let _x_521 = (offset < _x_520); match _x_521 {
+        false => { let _x_570 = 192; { let _x_571 = (offset < _x_570); match _x_571 {
+        false => { let _x_588 = (marks).word3; { let _x_589 = (_x_588 & val_337); { let _x_591 = 0; { let _x_592 = (_x_589 == _x_591); match _x_592 {
+        false => None,
+        true => { let _x_597 = (marks).word0; { let _x_598 = (marks).word1; { let _x_599 = (marks).word2; { let _x_601 = (marks).word3; { let _x_602 = (_x_601 | val_337); { let _x_603 = crate::PublicationBitMarks { word0: _x_597, word1: _x_598, word2: _x_599, word3: _x_602 }; { let _x_604 = Some(_x_603); _x_604 } } } } } } },
+    } } } } },
+        true => { let _x_617 = (marks).word2; { let _x_618 = (_x_617 & val_337); { let _x_620 = 0; { let _x_621 = (_x_618 == _x_620); match _x_621 {
+        false => None,
+        true => { let _x_626 = (marks).word0; { let _x_627 = (marks).word1; { let _x_629 = (marks).word2; { let _x_630 = (_x_629 | val_337); { let _x_631 = (marks).word3; { let _x_632 = crate::PublicationBitMarks { word0: _x_626, word1: _x_627, word2: _x_630, word3: _x_631 }; { let _x_633 = Some(_x_632); _x_633 } } } } } } },
+    } } } } },
+    } } },
+        true => { let _x_646 = (marks).word1; { let _x_647 = (_x_646 & val_337); { let _x_649 = 0; { let _x_650 = (_x_647 == _x_649); match _x_650 {
+        false => None,
+        true => { let _x_655 = (marks).word0; { let _x_657 = (marks).word1; { let _x_658 = (_x_657 | val_337); { let _x_659 = (marks).word2; { let _x_660 = (marks).word3; { let _x_661 = crate::PublicationBitMarks { word0: _x_655, word1: _x_658, word2: _x_659, word3: _x_660 }; { let _x_662 = Some(_x_661); _x_662 } } } } } } },
+    } } } } },
+    } } },
+        true => { let _x_675 = (marks).word0; { let _x_676 = (_x_675 & val_337); { let _x_678 = 0; { let _x_679 = (_x_676 == _x_678); match _x_679 {
+        false => None,
+        true => { let _x_685 = (marks).word0; { let _x_686 = (_x_685 | val_337); { let _x_687 = (marks).word1; { let _x_688 = (marks).word2; { let _x_689 = (marks).word3; { let _x_690 = crate::PublicationBitMarks { word0: _x_686, word1: _x_687, word2: _x_688, word3: _x_689 }; { let _x_691 = Some(_x_690); _x_691 } } } } } } },
+    } } } } },
+    } } },
+    } } } } } } },
+    } } }
+}
+
+pub fn publicationLinkageBitMaskLoop(mut x_1: u64, mut x_2: u64, mut x_3: u64) -> Option<u64> {
+    loop { return match x_3 {
+        0 => { let _x_70 = 0; { let _x_71 = (x_1 == _x_70); match _x_71 {
+        false => None,
+        true => Some(x_2),
+    } } },
+        _ => { let n_52 = (x_3).saturating_sub(1); match x_1 {
+        0 => Some(x_2),
+        _ => { let n_86 = (x_1).saturating_sub(1); { let _x_90 = 1; { let _x_91 = (x_2).checked_shl(_x_90); match _x_91 {
+        None => _x_91,
+        Some(val_93) => { (x_1, x_2, x_3,) = (n_86, val_93, n_52,); continue; },
+    } } } },
+    } },
+    }; }
+}
+
+pub fn publicationLinkageBitRows(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: crate::PublicationBitMarks, mut x_5: u64) -> Result<Option<crate::PublicationBitMarks>, crate::ComputeError> {
     loop { return Ok(match x_5 {
         0 => Some(x_4),
         _ => { let n_84 = (x_5).saturating_sub(1); { let _x_181 = usize::try_from(x_2).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_181 {
@@ -11483,14 +11557,14 @@ pub fn publicationLinkageBucketRows(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4
         Some(val_184) => { let _x_190 = (x_3 <= val_184); match _x_190 {
         false => { let _y_192 = _x_190; match _y_192 {
         false => { let _x_223 = 1; { let _x_224 = core::convert::identity::<u64>(x_2).checked_add(_x_223).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (_x_224, x_4, n_84,); continue; } } },
-        true => { let _x_227 = core::convert::identity::<u64>(val_184).saturating_sub(x_3); { let _x_228 = publicationLinkageMark(x_4, _x_227)?; match _x_228 {
+        true => { let _x_227 = core::convert::identity::<u64>(val_184).saturating_sub(x_3); { let _x_228 = publicationLinkageBitMark(x_4, _x_227); match _x_228 {
         None => _x_228,
         Some(val_229) => { let _x_230 = 1; { let _x_231 = core::convert::identity::<u64>(x_2).checked_add(_x_230).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (_x_231, val_229, n_84,); continue; } } },
     } } },
     } },
         true => { let _x_220 = 256; { let _x_221 = core::convert::identity::<u64>(x_3).checked_add(_x_220).ok_or(crate::ComputeError::AddOverflow)?; { let _x_222 = (val_184 < _x_221); { let prod_local_0 = _x_222; match prod_local_0 {
         false => { let prod_local_1 = 1; { let prod_local_2 = core::convert::identity::<u64>(x_2).checked_add(prod_local_1).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (prod_local_2, x_4, n_84,); continue; } } },
-        true => { let prod_local_4 = core::convert::identity::<u64>(val_184).saturating_sub(x_3); { let prod_local_5 = publicationLinkageMark(x_4, prod_local_4)?; match prod_local_5 {
+        true => { let prod_local_4 = core::convert::identity::<u64>(val_184).saturating_sub(x_3); { let prod_local_5 = publicationLinkageBitMark(x_4, prod_local_4); match prod_local_5 {
         None => prod_local_5,
         Some(prod_local_6) => { let prod_local_7 = 1; { let prod_local_8 = core::convert::identity::<u64>(x_2).checked_add(prod_local_7).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (prod_local_8, prod_local_6, n_84,); continue; } } },
     } } },
@@ -11500,95 +11574,82 @@ pub fn publicationLinkageBucketRows(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4
     }); }
 }
 
-pub fn publicationLinkageBuckets(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: u64) -> Result<bool, crate::ComputeError> {
-    loop { return Ok(match x_4 {
-        0 => (x_3 <= x_2),
-        _ => { let n_63 = (x_4).saturating_sub(1); { let _x_120 = (x_3 <= x_2); match _x_120 {
-        false => { let _x_171 = 0; { let _x_172 = 8; { let _x_173 = publicationLinkageZeroMarks(_x_172); { let _x_174 = 256; { let _x_175 = publicationLinkageBucketChunks(&(x_1), _x_171, x_2, _x_173, _x_174)?; match _x_175 {
-        None => _x_120,
-        Some(val_177) => { let _x_181 = (val_177).len() as u64; { let _x_182 = 256; { let _x_183 = (_x_181 == _x_182); match _x_183 {
-        false => _x_183,
-        true => { let _x_184 = 256; { let _x_185 = core::convert::identity::<u64>(x_2).checked_add(_x_184).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4,) = (_x_185, n_63,); continue; } } },
-    } } } },
-    } } } } } },
-        true => _x_120,
+pub fn publicationLinkageCollectIdChunksAcc(x_1: &[crate::PublicationIdsChunk], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    Ok(match x_5 {
+        0 => { let _x_110 = (x_1).len() as u64; { let _x_111 = (_x_110 == x_3); match _x_111 {
+        false => { let _x_118 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_111 }; _x_118 },
+        true => { let _x_120 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_111 }; _x_120 },
     } } },
-    }); }
-}
-
-pub fn publicationLinkageCollectIdChunks(x_1: &[crate::PublicationIdsChunk], x_2: &crate::PublicationRecords, x_3: u64) -> Result<Option<alloc::vec::Vec<u64>>, crate::ComputeError> {
-    Ok(match x_3 {
-        0 => { let _x_91 = (x_1).len() as u64; { let _x_92 = 0; { let _x_93 = (_x_91 == _x_92); match _x_93 {
-        false => None,
-        true => { let _x_160 = Some(alloc::vec::Vec::new()); _x_160 },
-    } } } },
-        _ => { let n_64 = (x_3).saturating_sub(1); match x_1 {
-        [] => { let _x_132 = Some(alloc::vec::Vec::new()); _x_132 },
-        [head_128, tail_129 @ ..] => { let _x_142 = &(head_128).entries; { let _x_143 = 256; { let _x_144 = publicationLinkageCollectRows(&(_x_142), &(x_2), _x_143)?; match _x_144 {
-        None => _x_144,
-        Some(val_146) => { let _x_152 = publicationLinkageCollectIdChunks(&(tail_129), &(x_2), n_64)?; match _x_152 {
-        None => _x_152,
-        Some(val_154) => { let _x_157 = { let mut __value = val_146; __value.extend_from_slice(&val_154); __value }; { let _x_158 = Some(_x_157); _x_158 } },
-    } },
-    } } } },
-    } },
-    })
-}
-
-pub fn publicationLinkageCollectRows(x_1: &[alloc::string::String], x_2: &crate::PublicationRecords, x_3: u64) -> Result<Option<alloc::vec::Vec<u64>>, crate::ComputeError> {
-    Ok(match x_3 {
-        0 => { let _x_94 = (x_1).len() as u64; { let _x_95 = 0; { let _x_96 = (_x_94 == _x_95); match _x_96 {
-        false => None,
-        true => { let _x_163 = Some(alloc::vec::Vec::new()); _x_163 },
-    } } } },
-        _ => { let n_66 = (x_3).saturating_sub(1); match x_1 {
-        [] => { let _x_136 = Some(alloc::vec::Vec::new()); _x_136 },
-        [head_132, tail_133 @ ..] => { let _x_145 = 0; { let _x_146 = publicationLinkagePublicationRecordsCount(&(x_2))?; { let _x_147 = 17; { let _x_148 = __prod_borrowed_publicationLinkageRecordIndex(&(x_2), (head_132).as_ref(), _x_145, _x_146, _x_147)?; match _x_148 {
-        None => None,
-        Some(val_151) => { let _x_156 = publicationLinkageCollectRows(&(tail_133), &(x_2), n_66)?; match _x_156 {
-        None => _x_156,
-        Some(val_158) => { let _x_160 = { let mut __list = (val_151, val_158); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_161 = Some(_x_160); _x_161 } },
-    } },
+        _ => { let n_80 = (x_5).saturating_sub(1); { let _x_149 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_149 {
+        None => { let _x_154 = true; { let _x_155 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_154 }; _x_155 } },
+        Some(val_152) => { let _x_171 = (val_152).entries; { let _x_172 = 0; { let _x_174 = 256; { let _x_175 = publicationLinkageCollectRowsAcc(&(_x_171), &(x_2), _x_172, &(alloc::vec::Vec::new()), _x_174)?; match _x_175 {
+        crate::PublicationIndexBatch { indices: indices_176, valid: valid_177 } => match valid_177 {
+        false => { let _x_195 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: valid_177 }; _x_195 },
+        true => { let _x_196 = 1; { let _x_197 = core::convert::identity::<u64>(x_3).checked_add(_x_196).ok_or(crate::ComputeError::AddOverflow)?; { let _x_199 = { let mut __value = alloc::borrow::ToOwned::to_owned(x_4); __value.extend_from_slice(&indices_176); __value }; { let _x_200 = publicationLinkageCollectIdChunksAcc(&(x_1), &(x_2), _x_197, &(_x_199), n_80)?; _x_200 } } } },
+    },
     } } } } },
-    } },
+    } } },
     })
 }
 
-pub fn publicationLinkageCollectServiceChunks(x_1: &[crate::PublicationServicesChunk], x_2: &crate::PublicationRecords, x_3: u64) -> Result<Option<alloc::vec::Vec<u64>>, crate::ComputeError> {
-    Ok(match x_3 {
-        0 => { let _x_91 = (x_1).len() as u64; { let _x_92 = 0; { let _x_93 = (_x_91 == _x_92); match _x_93 {
-        false => None,
-        true => { let _x_160 = Some(alloc::vec::Vec::new()); _x_160 },
-    } } } },
-        _ => { let n_64 = (x_3).saturating_sub(1); match x_1 {
-        [] => { let _x_132 = Some(alloc::vec::Vec::new()); _x_132 },
-        [head_128, tail_129 @ ..] => { let _x_142 = &(head_128).entries; { let _x_143 = 256; { let _x_144 = publicationLinkageCollectServiceRows(&(_x_142), &(x_2), _x_143)?; match _x_144 {
-        None => _x_144,
-        Some(val_146) => { let _x_152 = publicationLinkageCollectServiceChunks(&(tail_129), &(x_2), n_64)?; match _x_152 {
-        None => _x_152,
-        Some(val_154) => { let _x_157 = { let mut __value = val_146; __value.extend_from_slice(&val_154); __value }; { let _x_158 = Some(_x_157); _x_158 } },
-    } },
-    } } } },
-    } },
-    })
-}
-
-pub fn publicationLinkageCollectServiceRows(x_1: &[crate::PublicationService], x_2: &crate::PublicationRecords, x_3: u64) -> Result<Option<alloc::vec::Vec<u64>>, crate::ComputeError> {
-    Ok(match x_3 {
-        0 => { let _x_92 = (x_1).len() as u64; { let _x_93 = 0; { let _x_94 = (_x_92 == _x_93); match _x_94 {
-        false => None,
-        true => { let _x_163 = Some(alloc::vec::Vec::new()); _x_163 },
-    } } } },
-        _ => { let n_65 = (x_3).saturating_sub(1); match x_1 {
-        [] => { let _x_134 = Some(alloc::vec::Vec::new()); _x_134 },
-        [head_130, tail_131 @ ..] => { let _x_144 = &(head_130).components; { let _x_145 = &(_x_144).chunks; { let _x_146 = 256; { let _x_147 = publicationLinkageCollectIdChunks(&(_x_145), &(x_2), _x_146)?; match _x_147 {
-        None => _x_147,
-        Some(val_149) => { let _x_155 = publicationLinkageCollectServiceRows(&(tail_131), &(x_2), n_65)?; match _x_155 {
-        None => _x_155,
-        Some(val_157) => { let _x_160 = { let mut __value = val_149; __value.extend_from_slice(&val_157); __value }; { let _x_161 = Some(_x_160); _x_161 } },
-    } },
+pub fn publicationLinkageCollectRowsAcc(x_1: &[alloc::string::String], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    Ok(match x_5 {
+        0 => { let _x_104 = (x_1).len() as u64; { let _x_105 = (_x_104 == x_3); match _x_105 {
+        false => { let _x_112 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_105 }; _x_112 },
+        true => { let _x_114 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_105 }; _x_114 },
+    } } },
+        _ => { let n_75 = (x_5).saturating_sub(1); { let _x_140 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_140 {
+        None => { let _x_145 = true; { let _x_146 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_145 }; _x_146 } },
+        Some(val_143) => { let _x_159 = 0; { let _x_160 = publicationLinkagePublicationRecordsCount(&(x_2))?; { let _x_161 = 17; { let _x_162 = __prod_borrowed_publicationLinkageRecordIndex(&(x_2), (val_143).as_ref(), _x_159, _x_160, _x_161)?; match _x_162 {
+        None => { let _x_168 = false; { let _x_169 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_168 }; _x_169 } },
+        Some(val_165) => { let _x_170 = 1; { let _x_171 = core::convert::identity::<u64>(x_3).checked_add(_x_170).ok_or(crate::ComputeError::AddOverflow)?; { let _x_174 = alloc::vec![val_165]; { let _x_175 = { let mut __value = alloc::borrow::ToOwned::to_owned(x_4); __value.extend_from_slice(&_x_174); __value }; { let _x_176 = publicationLinkageCollectRowsAcc(&(x_1), &(x_2), _x_171, &(_x_175), n_75)?; _x_176 } } } } },
     } } } } },
-    } },
+    } } },
+    })
+}
+
+pub fn publicationLinkageCollectServiceChunks(items: &[crate::PublicationServicesChunk], records: &crate::PublicationRecords, fuel: u64) -> Result<Option<alloc::vec::Vec<u64>>, crate::ComputeError> {
+    Ok({ let _x_14 = 0; { let _x_18 = publicationLinkageCollectServiceChunksAcc(&(items), &(records), _x_14, &(alloc::vec::Vec::new()), fuel)?; match _x_18 {
+        crate::PublicationIndexBatch { indices: indices_19, valid: valid_20 } => match valid_20 {
+        false => None,
+        true => { let _x_32 = Some(indices_19); _x_32 },
+    },
+    } } })
+}
+
+pub fn publicationLinkageCollectServiceChunksAcc(x_1: &[crate::PublicationServicesChunk], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    Ok(match x_5 {
+        0 => { let _x_110 = (x_1).len() as u64; { let _x_111 = (_x_110 == x_3); match _x_111 {
+        false => { let _x_118 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_111 }; _x_118 },
+        true => { let _x_120 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_111 }; _x_120 },
+    } } },
+        _ => { let n_80 = (x_5).saturating_sub(1); { let _x_149 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_149 {
+        None => { let _x_154 = true; { let _x_155 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_154 }; _x_155 } },
+        Some(val_152) => { let _x_171 = (val_152).entries; { let _x_172 = 0; { let _x_174 = 256; { let _x_175 = publicationLinkageCollectServiceRowsAcc(&(_x_171), &(x_2), _x_172, &(alloc::vec::Vec::new()), _x_174)?; match _x_175 {
+        crate::PublicationIndexBatch { indices: indices_176, valid: valid_177 } => match valid_177 {
+        false => { let _x_195 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: valid_177 }; _x_195 },
+        true => { let _x_196 = 1; { let _x_197 = core::convert::identity::<u64>(x_3).checked_add(_x_196).ok_or(crate::ComputeError::AddOverflow)?; { let _x_199 = { let mut __value = alloc::borrow::ToOwned::to_owned(x_4); __value.extend_from_slice(&indices_176); __value }; { let _x_200 = publicationLinkageCollectServiceChunksAcc(&(x_1), &(x_2), _x_197, &(_x_199), n_80)?; _x_200 } } } },
+    },
+    } } } } },
+    } } },
+    })
+}
+
+pub fn publicationLinkageCollectServiceRowsAcc(x_1: &[crate::PublicationService], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    Ok(match x_5 {
+        0 => { let _x_111 = (x_1).len() as u64; { let _x_112 = (_x_111 == x_3); match _x_112 {
+        false => { let _x_119 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_112 }; _x_119 },
+        true => { let _x_121 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_112 }; _x_121 },
+    } } },
+        _ => { let n_81 = (x_5).saturating_sub(1); { let _x_151 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_151 {
+        None => { let _x_156 = true; { let _x_157 = crate::PublicationIndexBatch { indices: alloc::borrow::ToOwned::to_owned(x_4), valid: _x_156 }; _x_157 } },
+        Some(val_154) => { let _x_173 = (val_154).components; { let _x_174 = (_x_173).chunks; { let _x_175 = 0; { let _x_177 = 256; { let _x_178 = publicationLinkageCollectIdChunksAcc(&(_x_174), &(x_2), _x_175, &(alloc::vec::Vec::new()), _x_177)?; match _x_178 {
+        crate::PublicationIndexBatch { indices: indices_179, valid: valid_180 } => match valid_180 {
+        false => { let _x_198 = crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: valid_180 }; _x_198 },
+        true => { let _x_199 = 1; { let _x_200 = core::convert::identity::<u64>(x_3).checked_add(_x_199).ok_or(crate::ComputeError::AddOverflow)?; { let _x_202 = { let mut __value = alloc::borrow::ToOwned::to_owned(x_4); __value.extend_from_slice(&indices_179); __value }; { let _x_203 = publicationLinkageCollectServiceRowsAcc(&(x_1), &(x_2), _x_200, &(_x_202), n_81)?; _x_203 } } } },
+    },
+    } } } } } },
+    } } },
     })
 }
 
@@ -11630,22 +11691,6 @@ pub fn publicationLinkageManifestScan(x_1: &crate::PublicationFiles, x_2: &[u8],
     } } },
     } } } } },
     }; }
-}
-
-pub fn publicationLinkageMark(marks: alloc::vec::Vec<u8>, offset: u64) -> Result<Option<alloc::vec::Vec<u8>>, crate::ComputeError> {
-    Ok({ let _x_69 = 1; { let _x_72 = { let __start = usize::try_from(offset).ok(); let __count = usize::try_from(_x_69).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (marks).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_72.clone() {
-        None => _x_72.clone(),
-        Some(val_75) => { let _x_148 = core::convert::AsRef::<[u8]>::as_ref(&(val_75)) == &[0]; match _x_148 {
-        false => None,
-        true => { let _x_178 = 0; { let _x_179 = { let __start = usize::try_from(_x_178).ok(); let __count = usize::try_from(offset).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (marks).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_179.clone() {
-        None => _x_179.clone(),
-        Some(val_181) => { let _x_196 = 1; { let _x_197 = core::convert::identity::<u64>(offset).checked_add(_x_196).ok_or(crate::ComputeError::AddOverflow)?; { let _x_200 = (marks).len() as u64; { let _x_201 = core::convert::identity::<u64>(_x_200).saturating_sub(_x_197); { let _x_202 = { let __start = usize::try_from(_x_197).ok(); let __count = usize::try_from(_x_201).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (marks).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_202.clone() {
-        None => _x_202.clone(),
-        Some(val_204) => { let _x_214 = { let mut __value = val_181; __value.extend_from_slice(&alloc::vec![1]); __value }; { let _x_215 = { let mut __value = _x_214; __value.extend_from_slice(&val_204); __value }; { let _x_216 = Some(_x_215); _x_216 } } },
-    } } } } } },
-    } } },
-    } },
-    } } })
 }
 
 pub fn publicationLinkageMemberEqual(left: &crate::PublicationMember, right: &crate::PublicationMember) -> bool {
@@ -12434,7 +12479,7 @@ pub fn publicationLinkageServicesPartition(services: &crate::PublicationServices
         false => _x_32,
         true => { let _x_52 = &(services).chunks; { let _x_53 = 256; { let _x_54 = publicationLinkageCollectServiceChunks(&(_x_52), &(records), _x_53)?; match _x_54 {
         None => { let _x_56 = false; _x_56 },
-        Some(val_57) => { let _x_59 = 0; { let _x_60 = publicationLinkagePublicationRecordsCount(&(records))?; { let _x_61 = 256; { let _x_62 = publicationLinkageBuckets(&(val_57), _x_59, _x_60, _x_61)?; _x_62 } } } },
+        Some(val_57) => { let _x_59 = 0; { let _x_60 = publicationLinkagePublicationRecordsCount(&(records))?; { let _x_61 = 256; { let _x_62 = publicationLinkageBitBuckets(&(val_57), _x_59, _x_60, _x_61)?; _x_62 } } } },
     } } } },
     } } } } })
 }
@@ -12572,13 +12617,6 @@ pub fn publicationLinkageValidate(closure: &crate::PublicationClosure, capture: 
     } })
 }
 
-pub fn publicationLinkageZeroMarks(x_1: u64) -> alloc::vec::Vec<u8> {
-    match x_1 {
-        0 => alloc::vec![0],
-        _ => { let n_18 = (x_1).saturating_sub(1); { let _x_36 = publicationLinkageZeroMarks(n_18); { let _x_37 = { let mut __value = _x_36; __value.extend_from_within(..); __value }; _x_37 } } },
-    }
-}
-
 pub fn dispatchPublicationLinkage(input: &crate::PublicationWireInput) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
     Ok({ let _x_111 = 0; { let _x_114 = 4; { let _x_117 = publicationWireReadArray(&(input), _x_111, _x_114)?; match _x_117 {
         Err(a_118) => { let _x_143 = Err(a_118); _x_143 },
@@ -12629,49 +12667,63 @@ pub fn publicationLinkageFinish(input: &crate::PublicationWireInput, cursor: u64
     } }
 }
 
+pub fn publicationLinkagePayloadHead(size: u64, major: u64, maximum: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_36 = (size <= maximum); match _x_36 {
+        false => { let _x_55 = crate::PUnit {  }; { let _x_38 = { let prod_local_0 = _x_55; { let _x_1 = crate::CborError::ValueLimit; { let _x_2 = Err(_x_1); _x_2 } } }; _x_38 } },
+        true => { let _x_60 = cborHeadWidth(size); { let _x_61 = core::convert::identity::<u64>(size).checked_add(_x_60).ok_or(crate::ComputeError::AddOverflow)?; { let _x_62 = publicationLinkageWireLimits(); { let _x_63 = (_x_62).maximumOutput; { let _x_64 = (_x_61 <= _x_63); match _x_64 {
+        false => { let _x_65 = crate::PUnit {  }; { let _x_66 = { let prod_local_1 = _x_65; { let prod_local_2 = crate::CborError::ValueLimit; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_66 } },
+        true => { let _x_69 = publicationLinkageWireLimits(); { let _x_70 = cborWriteHead(size, major, _x_69)?; _x_70 } },
+    } } } } } },
+    } })
+}
+
+pub fn publicationLinkagePayloadInto(acc: Result<alloc::vec::Vec<u8>, crate::CborError>, payload: alloc::vec::Vec<u8>, major: u64, maximum: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_2 = (payload).len() as u64; { let _x_3 = publicationLinkagePayloadHead(_x_2, major, maximum)?; { let _x_4 = publicationLinkageWireJoin(acc, _x_3)?; { let _x_5 = Ok(payload); { let _x_6 = publicationLinkageWireJoin(_x_4, _x_5)?; _x_6 } } } } })
+}
+
 pub fn publicationLinkageResponse(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
-    Ok({ let _x_242 = publicationLinkageValidate(&(closure), &(capture))?; match _x_242 {
-        None => { let _x_424 = &(closure).declaration; { let _x_425 = publicationDeclarationPreimage(&(_x_424))?; { let _x_426 = publicationWireOutput(_x_425); match _x_426 {
-        crate::PublicationWireOutput { value: value_427, cause: cause_428 } => match cause_428 {
-        None => { let _x_624 = publicationLinkageservicesPreimage(&(closure), &(capture))?; { let _x_625 = publicationWireOutput(_x_624); match _x_625 {
-        crate::PublicationWireOutput { value: value_626, cause: cause_627 } => match cause_627 {
-        None => { let _x_801 = publicationLinkagecontrolsPreimage(&(closure), &(capture))?; { let _x_802 = publicationWireOutput(_x_801); match _x_802 {
-        crate::PublicationWireOutput { value: value_803, cause: cause_804 } => match cause_804 {
-        None => { let _x_956 = publicationLinkagedependenciesPreimage(&(capture))?; { let _x_957 = publicationWireOutput(_x_956); match _x_957 {
-        crate::PublicationWireOutput { value: value_958, cause: cause_959 } => match cause_959 {
-        None => { let _x_1089 = publicationLinkagecompilerPreimage(&(capture))?; { let _x_1090 = publicationWireOutput(_x_1089); match _x_1090 {
-        crate::PublicationWireOutput { value: value_1091, cause: cause_1092 } => match cause_1092 {
-        None => { let _x_1200 = publicationLinkageruntimePreimage(&(capture))?; { let _x_1201 = publicationWireOutput(_x_1200); match _x_1201 {
-        crate::PublicationWireOutput { value: value_1202, cause: cause_1203 } => match cause_1203 {
-        None => { let _x_1289 = publicationLinkageoraclesPreimage(&(closure), &(capture))?; { let _x_1290 = publicationWireOutput(_x_1289); match _x_1290 {
-        crate::PublicationWireOutput { value: value_1291, cause: cause_1292 } => match cause_1292 {
-        None => { let _x_1334 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_1335 = 9; { let _x_1336 = publicationLinkageWireLimits(); { let _x_1337 = writeCborArrayHead(_x_1335, _x_1336)?; { let _x_1338 = publicationLinkageWireJoin(_x_1334, _x_1337)?; { let _x_1339 = 1; { let _x_1340 = writePublicationWireNat(_x_1339)?; { let _x_1341 = publicationLinkageWireJoin(_x_1338, _x_1340)?; { let _x_1342 = 0; { let _x_1343 = writePublicationWireNat(_x_1342)?; { let _x_1344 = publicationLinkageWireJoin(_x_1341, _x_1343)?; { let _x_1345 = 2; { let _x_1346 = 67108864; { let _x_1347 = cborWritePayload(value_427, _x_1345, _x_1346, _x_1336)?; { let _x_1348 = publicationLinkageWireJoin(_x_1344, _x_1347)?; { let _x_1349 = cborWritePayload(value_626, _x_1345, _x_1346, _x_1336)?; { let _x_1350 = publicationLinkageWireJoin(_x_1348, _x_1349)?; { let _x_1351 = cborWritePayload(value_803, _x_1345, _x_1346, _x_1336)?; { let _x_1352 = publicationLinkageWireJoin(_x_1350, _x_1351)?; { let _x_1353 = cborWritePayload(value_958, _x_1345, _x_1346, _x_1336)?; { let _x_1354 = publicationLinkageWireJoin(_x_1352, _x_1353)?; { let _x_1355 = cborWritePayload(value_1091, _x_1345, _x_1346, _x_1336)?; { let _x_1356 = publicationLinkageWireJoin(_x_1354, _x_1355)?; { let _x_1357 = cborWritePayload(value_1202, _x_1345, _x_1346, _x_1336)?; { let _x_1358 = publicationLinkageWireJoin(_x_1356, _x_1357)?; { let _x_1359 = cborWritePayload(value_1291, _x_1345, _x_1346, _x_1336)?; { let _x_1360 = publicationLinkageWireJoin(_x_1358, _x_1359)?; _x_1360 } } } } } } } } } } } } } } } } } } } } } } } } } } },
-        Some(val_1328) => { let _x_1329 = Err(val_1328); _x_1329 },
+    Ok({ let _x_235 = publicationLinkageValidate(&(closure), &(capture))?; match _x_235 {
+        None => { let _x_410 = &(closure).declaration; { let _x_411 = publicationDeclarationPreimage(&(_x_410))?; { let _x_412 = publicationWireOutput(_x_411); match _x_412 {
+        crate::PublicationWireOutput { value: value_413, cause: cause_414 } => match cause_414 {
+        None => { let _x_596 = publicationLinkageservicesPreimage(&(closure), &(capture))?; { let _x_597 = publicationWireOutput(_x_596); match _x_597 {
+        crate::PublicationWireOutput { value: value_598, cause: cause_599 } => match cause_599 {
+        None => { let _x_759 = publicationLinkagecontrolsPreimage(&(closure), &(capture))?; { let _x_760 = publicationWireOutput(_x_759); match _x_760 {
+        crate::PublicationWireOutput { value: value_761, cause: cause_762 } => match cause_762 {
+        None => { let _x_900 = publicationLinkagedependenciesPreimage(&(capture))?; { let _x_901 = publicationWireOutput(_x_900); match _x_901 {
+        crate::PublicationWireOutput { value: value_902, cause: cause_903 } => match cause_903 {
+        None => { let _x_1019 = publicationLinkagecompilerPreimage(&(capture))?; { let _x_1020 = publicationWireOutput(_x_1019); match _x_1020 {
+        crate::PublicationWireOutput { value: value_1021, cause: cause_1022 } => match cause_1022 {
+        None => { let _x_1116 = publicationLinkageruntimePreimage(&(capture))?; { let _x_1117 = publicationWireOutput(_x_1116); match _x_1117 {
+        crate::PublicationWireOutput { value: value_1118, cause: cause_1119 } => match cause_1119 {
+        None => { let _x_1191 = publicationLinkageoraclesPreimage(&(closure), &(capture))?; { let _x_1192 = publicationWireOutput(_x_1191); match _x_1192 {
+        crate::PublicationWireOutput { value: value_1193, cause: cause_1194 } => match cause_1194 {
+        None => { let _x_1229 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_1230 = 9; { let _x_1231 = publicationLinkageWireLimits(); { let _x_1232 = writeCborArrayHead(_x_1230, _x_1231)?; { let _x_1233 = publicationLinkageWireJoin(_x_1229, _x_1232)?; { let _x_1234 = 1; { let _x_1235 = writePublicationWireNat(_x_1234)?; { let _x_1236 = publicationLinkageWireJoin(_x_1233, _x_1235)?; { let _x_1237 = 0; { let _x_1238 = writePublicationWireNat(_x_1237)?; { let _x_1239 = publicationLinkageWireJoin(_x_1236, _x_1238)?; { let _x_1240 = 2; { let _x_1241 = 67108864; { let _x_1242 = publicationLinkagePayloadInto(_x_1239, value_413, _x_1240, _x_1241)?; { let _x_1243 = publicationLinkagePayloadInto(_x_1242, value_598, _x_1240, _x_1241)?; { let _x_1244 = publicationLinkagePayloadInto(_x_1243, value_761, _x_1240, _x_1241)?; { let _x_1245 = publicationLinkagePayloadInto(_x_1244, value_902, _x_1240, _x_1241)?; { let _x_1246 = publicationLinkagePayloadInto(_x_1245, value_1021, _x_1240, _x_1241)?; { let _x_1247 = publicationLinkagePayloadInto(_x_1246, value_1118, _x_1240, _x_1241)?; { let _x_1248 = publicationLinkagePayloadInto(_x_1247, value_1193, _x_1240, _x_1241)?; _x_1248 } } } } } } } } } } } } } } } } } } } },
+        Some(val_1223) => { let _x_1224 = Err(val_1223); _x_1224 },
     },
     } } },
-        Some(val_1250) => { let _x_1251 = Err(val_1250); _x_1251 },
+        Some(val_1159) => { let _x_1160 = Err(val_1159); _x_1160 },
     },
     } } },
-        Some(val_1150) => { let _x_1151 = Err(val_1150); _x_1151 },
+        Some(val_1073) => { let _x_1074 = Err(val_1073); _x_1074 },
     },
     } } },
-        Some(val_1028) => { let _x_1029 = Err(val_1028); _x_1029 },
+        Some(val_965) => { let _x_966 = Err(val_965); _x_966 },
     },
     } } },
-        Some(val_884) => { let _x_885 = Err(val_884); _x_885 },
+        Some(val_835) => { let _x_836 = Err(val_835); _x_836 },
     },
     } } },
-        Some(val_718) => { let _x_719 = Err(val_718); _x_719 },
+        Some(val_683) => { let _x_684 = Err(val_683); _x_684 },
     },
     } } },
-        Some(val_530) => { let _x_531 = Err(val_530); _x_531 },
+        Some(val_509) => { let _x_510 = Err(val_509); _x_510 },
     },
     } } } },
-        Some(val_245) => match val_245 {
-        crate::PublicationLinkageError::InvalidMetadata => { let _x_1445 = Ok(alloc::vec![131, 1, 1, 0]); _x_1445 },
-        crate::PublicationLinkageError::SourceMismatch => { let _x_1458 = Ok(alloc::vec![131, 1, 1, 1]); _x_1458 },
-        crate::PublicationLinkageError::InventoryMismatch => { let _x_1473 = Ok(alloc::vec![131, 1, 1, 2]); _x_1473 },
-        crate::PublicationLinkageError::RequirementMismatch => { let _x_1488 = Ok(alloc::vec![131, 1, 1, 3]); _x_1488 },
+        Some(val_238) => match val_238 {
+        crate::PublicationLinkageError::InvalidMetadata => { let _x_1333 = Ok(alloc::vec![131, 1, 1, 0]); _x_1333 },
+        crate::PublicationLinkageError::SourceMismatch => { let _x_1346 = Ok(alloc::vec![131, 1, 1, 1]); _x_1346 },
+        crate::PublicationLinkageError::InventoryMismatch => { let _x_1361 = Ok(alloc::vec![131, 1, 1, 2]); _x_1361 },
+        crate::PublicationLinkageError::RequirementMismatch => { let _x_1376 = Ok(alloc::vec![131, 1, 1, 3]); _x_1376 },
     },
     } })
 }
@@ -13554,11 +13606,11 @@ pub fn writePublicationLinkagePublicationFilesRowsAcc(x_1: &[crate::PublicationF
     Ok(match x_3 {
         0 => match x_1 {
         [] => x_2,
-        [head_70, tail_71 @ ..] => { let _x_73 = crate::CborError::ValueLimit; { let _x_74 = Err(_x_73); { let _x_75 = publicationLinkageWireJoin(x_2, _x_74)?; _x_75 } } },
+        [head_69, tail_70 @ ..] => { let _x_72 = crate::CborError::ValueLimit; { let _x_73 = Err(_x_72); { let _x_74 = publicationLinkageWireJoin(x_2, _x_73)?; _x_74 } } },
     },
-        _ => { let n_54 = (x_3).saturating_sub(1); match x_1 {
+        _ => { let n_53 = (x_3).saturating_sub(1); match x_1 {
         [] => x_2,
-        [head_92, tail_93 @ ..] => { let _x_95 = 2; { let _x_96 = publicationLinkageWireLimits(); { let _x_97 = writeCborArrayHead(_x_95, _x_96)?; { let _x_98 = publicationLinkageWireJoin(x_2, _x_97)?; { let _x_99 = &(head_92).path; { let _x_100 = (alloc::borrow::ToOwned::to_owned(_x_99)).into_bytes(); { let _x_101 = 3; { let _x_102 = 2048; { let _x_103 = cborWritePayload(_x_100, _x_101, _x_102, _x_96)?; { let _x_104 = publicationLinkageWireJoin(_x_98, _x_103)?; { let _x_105 = &(head_92).digest; { let _x_106 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_105))?; { let _x_107 = publicationLinkageWireJoin(_x_104, _x_106)?; { let _x_108 = writePublicationLinkagePublicationFilesRowsAcc(&(tail_93), _x_107, n_54)?; _x_108 } } } } } } } } } } } } } },
+        [head_90, tail_91 @ ..] => { let _x_93 = 2; { let _x_94 = publicationLinkageWireLimits(); { let _x_95 = writeCborArrayHead(_x_93, _x_94)?; { let _x_96 = publicationLinkageWireJoin(x_2, _x_95)?; { let _x_97 = &(head_90).path; { let _x_98 = (alloc::borrow::ToOwned::to_owned(_x_97)).into_bytes(); { let _x_99 = 3; { let _x_100 = 2048; { let _x_101 = publicationLinkagePayloadInto(_x_96, _x_98, _x_99, _x_100)?; { let _x_102 = &(head_90).digest; { let _x_103 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_102))?; { let _x_104 = publicationLinkageWireJoin(_x_101, _x_103)?; { let _x_105 = writePublicationLinkagePublicationFilesRowsAcc(&(tail_91), _x_104, n_53)?; _x_105 } } } } } } } } } } } } },
     } },
     })
 }

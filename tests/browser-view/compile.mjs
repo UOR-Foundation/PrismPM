@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
+import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readdirSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -134,6 +134,37 @@ export function run(program,args,cwd,env={}) {
   compilerEnvironment(env);
   if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
   return execute(program,args,cwd,env);
+}
+
+// Closed long-running owner: a fresh source-built Rust test performs actual
+// application compilation, external oracle execution and source-free OCI replay.
+// This is not a general timeout or environment override for compiler commands.
+export function runPublicationCapture(executable, cwd, output) {
+  const environment = compilerEnvironment({});
+  if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
+  assert.equal(realpathSync(cwd), cwd, 'unaliased private capture owner');
+  const owner = lstatSync(cwd);
+  assert.ok(owner.isDirectory() && owner.uid === process.getuid() && (owner.mode & 0o077) === 0);
+  assert.equal(executable, join(cwd, 'publication-capture-execution'), 'exact private capture executable');
+  assert.equal(output, join(cwd, 'capture'), 'exact private capture output');
+  assert.equal(realpathSync(output), output, 'unaliased capture output');
+  const target = lstatSync(output);
+  assert.ok(target.isDirectory() && target.uid === process.getuid() && (target.mode & 0o077) === 0);
+  assert.deepEqual(readdirSync(output), [], 'fresh empty capture output required');
+  assert.equal(process.env.PRISMPM_OC10_CAPTURE_OUTPUT, undefined, 'ambient capture output refused');
+  const arguments_ = ['--exact', 'oci::publication_context::capture_tests::actual_source_free_capture_constructs_complete_conditional_context', '--nocapture'];
+  const result = spawnSync('/usr/bin/timeout',
+    ['--signal=TERM', '--kill-after=5s', '2400s', executable, ...arguments_],
+    {cwd, detached:true, encoding:'utf8', timeout:2410000, killSignal:'SIGKILL',
+      maxBuffer:32*1024*1024, env:{...environment, PRISMPM_OC10_CAPTURE_OUTPUT:output}});
+  terminateOwnedGroup(result.pid);
+  for (const [name, text] of [['stdout', result.stdout], ['stderr', result.stderr]])
+    writeFileSync(join(cwd, 'capture.' + name), text ?? '', {flag:'wx', mode:0o444});
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, 'actual publication capture failed\n' + result.stdout + '\n' + result.stderr);
+  assert.match(result.stdout, /test result: ok\. 1 passed; 0 failed; 0 ignored;/);
+  assert.ok(result.stdout.includes('PASS complete actual conditional publication capture: ' + output));
+  return result.stdout;
 }
 export function createPrivateDriverTarget(work) {
   assert.equal(realpathSync(work), resolve(work), 'aliased driver parent refused');

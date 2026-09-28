@@ -133,7 +133,9 @@ impl StdlibExports {
                 _ => return Err(invalid()),
             };
             let namespace = match row.rust_name.as_str() {
-                "publicationLinkageWireBytes" | "publicationWireBytes" | "publicationContextFieldsPreimage" => "Production",
+                "publicationLinkageWireBytes"
+                | "publicationWireBytes"
+                | "publicationContextFieldsPreimage" => "Production",
                 _ => "Foundation",
             };
             if row.lean_name != format!("PrismPM.{namespace}.{module}.{}", row.rust_name)

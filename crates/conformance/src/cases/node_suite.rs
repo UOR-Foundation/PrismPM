@@ -140,6 +140,28 @@ fn file_completions(stdout: &str, files: &[PathBuf], total: usize) {
 }
 
 pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize, timeout: &str) {
+    verify_inner(root, id, files, minimum_tests, timeout, None);
+}
+
+pub(super) fn verify_exact(root: &Path, id: &str, files: &[(&str, usize)], timeout: &str) {
+    let paths = files.iter().map(|(path, _)| *path).collect::<Vec<_>>();
+    let counts = files.iter().map(|(_, count)| *count).collect::<Vec<_>>();
+    assert!(counts.iter().all(|count| *count > 0));
+    let total = counts
+        .iter()
+        .try_fold(0usize, |sum, count| sum.checked_add(*count))
+        .expect("bounded exact owning test inventory");
+    verify_inner(root, id, &paths, total, timeout, Some(&counts));
+}
+
+fn verify_inner(
+    root: &Path,
+    id: &str,
+    files: &[&str],
+    minimum_tests: usize,
+    timeout: &str,
+    exact: Option<&[usize]>,
+) {
     // Validate all selected paths before dispatch. The installed SDK separately
     // binds immutable source bytes; this preflight is not a filesystem race lock.
     let selected = selected_files(root, files);
@@ -185,11 +207,37 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
         );
     }
     file_completions(&stdout, &selected, count("tests"));
+    if let Some(expected) = exact {
+        assert_eq!(
+            count("tests"),
+            minimum_tests,
+            "{id}: exact complete owning test inventory"
+        );
+        let rows = stdout
+            .lines()
+            .filter_map(|line| line.strip_prefix(FILE_PREFIX))
+            .map(|line| serde_json::from_str::<FileCompletion>(line).unwrap())
+            .collect::<Vec<_>>();
+        for (path, expected) in selected.iter().zip(expected) {
+            let row = rows
+                .iter()
+                .find(|row| Path::new(&row.file) == path)
+                .unwrap();
+            assert_eq!(
+                row.tests,
+                *expected as u64,
+                "{id}: exact tests in {}",
+                path.display()
+            );
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{file_completions, selected_files, verify, FileCompletion, FILE_PREFIX};
+    use super::{
+        file_completions, selected_files, verify, verify_exact, FileCompletion, FILE_PREFIX,
+    };
     use std::path::PathBuf;
 
     #[test]
@@ -336,5 +384,45 @@ mod tests {
             std::panic::catch_unwind(|| verify(root.path(), "test", &["test.mjs"], 1, "5000"))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn exact_owner_inventory_rejects_an_actual_removed_capture_test() {
+        let root = tempfile::tempdir().unwrap();
+        let capture = "await t.test('actual capture',()=>{});";
+        let witnesses = "await t.test('semantic witnesses',()=>{});";
+        let owner = format!("import{{test}}from'node:test';test('owner',async t=>{{await t.test('component',()=>{{}});{witnesses}{capture}}});");
+        let path = root.path().join("owner.mjs");
+        std::fs::write(&path, &owner).unwrap();
+        std::fs::write(
+            root.path().join("guards.mjs"),
+            "import{test}from'node:test';test('guard one',()=>{});test('guard two',()=>{});",
+        )
+        .unwrap();
+        let files = [("owner.mjs", 4), ("guards.mjs", 2)];
+        verify_exact(root.path(), "exact-owner-fixture", &files, "5000");
+        for changed in [
+            owner.replace(capture, ""),
+            owner.replace(witnesses, ""),
+            format!("{owner}\ntest('extra test',()=>{{}});"),
+        ] {
+            std::fs::write(&path, changed).unwrap();
+            let refusal = std::panic::catch_unwind(|| {
+                verify_exact(root.path(), "exact-owner-fixture", &files, "5000")
+            });
+            std::fs::write(&path, &owner).unwrap();
+            let error = refusal.expect_err("removed/extra actual test must fail exact owning gate");
+            let text = error
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| error.downcast_ref::<&str>().copied())
+                .unwrap_or("");
+            assert!(
+                text.contains("incomplete test suite")
+                    || text.contains("exact complete owning test inventory"),
+                "{text}"
+            );
+            verify_exact(root.path(), "exact-owner-fixture", &files, "5000");
+        }
     }
 }

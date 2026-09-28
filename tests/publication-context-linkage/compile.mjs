@@ -19,6 +19,7 @@ export const modules = Object.freeze(['Fixture', 'Production.PublicationAdmissio
   'Foundation.Codec.Cbor.V1.Primitive'].sort());
 const modulePath = name => (name === 'Fixture' ? 'tests/publication-context-linkage' : 'stdlib')
   + '/src/' + name.replaceAll('.', '/') + '.lex.tex';
+const witnesses = Object.freeze(['collector', 'partition', 'payload', 'bitset'].map(name => name + '_witnesses.rs'));
 
 const capturedInputs = new WeakSet();
 function read(path) {
@@ -32,15 +33,15 @@ function read(path) {
 export function frozenInputs() {
   pins();
   const files = new Set([...modules.map(modulePath),
-    ...['compile.mjs', 'checks.mjs', 'corpus.mjs', 'maximum-fixtures.mjs', 'mutations.mjs',
+    ...['compile.mjs', 'checks.mjs', 'capture-owner.mjs', 'capture-oracle.mjs', 'capture-guard.test.mjs', 'capture.test.mjs', 'owner.test.mjs', 'corpus.mjs', 'maximum-fixtures.mjs', 'mutations.mjs',
       'component.test.mjs', 'resources.test.mjs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs',
-      'runner.rs', 'context-fields-runner.rs', 'context-fields-corpus.mjs', 'execute.mjs', 'CONTRACT.md', 'CONTRACT.cddl'].map(path => 'tests/publication-context-linkage/' + path),
+      'runner.rs', ...witnesses, 'context-fields-runner.rs', 'context-fields-corpus.mjs', 'execute.mjs', 'CONTRACT.md', 'CONTRACT.cddl'].map(path => 'tests/publication-context-linkage/' + path),
     'tests/publication-admission/corpus.mjs',
     ...['compile.mjs', 'driver-cache.mjs', 'prerequisites.mjs', 'generated-package.mjs',
       'generated-wasm.mjs'].map(path => 'tests/browser-view/' + path),
     'tests/fixtures/library/native-library/project/lexlean.toml', 'model/authorities.toml',
     'SPEC.md', 'model/ids.toml', 'features/suites/oci.feature',
-    'crates/conformance/src/cases/mod.rs', 'crates/conformance/tests/conformance.rs',
+    'crates/conformance/src/cases/mod.rs', 'crates/conformance/src/cases/node_suite.rs', 'crates/conformance/tests/conformance.rs',
     'model/dependencies.toml', 'rust-toolchain.toml', 'lean-toolchain', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
     'scripts/owning-node-reporter.mjs',
@@ -55,7 +56,7 @@ export function frozenInputs() {
   // Vendor manifests bind their complete tool trees; those trees contain test
   // modules that this owner never executes. Parse the actual owning ESM roots.
   const capturedModules = localModuleInputs(repository,
-    ['tests/publication-context-linkage/component.test.mjs', 'tests/publication-context-linkage/resources.test.mjs',
+    ['tests/publication-context-linkage/owner.test.mjs', 'tests/publication-context-linkage/component.test.mjs', 'tests/publication-context-linkage/resources.test.mjs',
       'scripts/owning-node-reporter.mjs'], read);
   for (const path of capturedModules.keys()) files.add(path);
   const inputs = Object.fromEntries([...files].sort().map(path => [path, sha(read(path))]));
@@ -165,10 +166,15 @@ function prepareStage(compilerOwner, mutation, baseline, inputs) {
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "publication_linkage_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
     const exported = join(work, 'export');
-    const roots = ['PrismPM.Production.PublicationAdmission.LinkageV1Wire.publicationContextFieldsWireBytes',
+    // Three existing source wrappers are private witness roots: production
+    // traversals call their accumulator workers directly. SDK exports stay 57.
+    const roots = ['PrismPM.Production.PublicationAdmission.LinkageV1.publicationLinkageCollectRows',
+      'PrismPM.Production.PublicationAdmission.LinkageV1.publicationLinkageCollectIdChunks',
+      'PrismPM.Production.PublicationAdmission.LinkageV1.publicationLinkageCollectServiceRows',
+      'PrismPM.Production.PublicationAdmission.LinkageV1Wire.publicationContextFieldsWireBytes',
       'PrismPM.Production.PublicationAdmission.LinkageV1Wire.publicationLinkageWireBytes',
       'PrismPM.Production.PublicationAdmission.V1Wire.publicationContextFieldsPreimage',
-      'PrismPM.Production.PublicationAdmission.V1Wire.publicationWireBytes'];
+      'PrismPM.Production.PublicationAdmission.V1Wire.publicationWireBytes'].sort();
     compiler.runExporter(['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),
       '--ir-module', 'PublicationContextLinkage', '--out', exported], join(lean, '.lake/build/lib/lean'));
     const generated = join(work, 'generated'), ir = join(exported, 'kernel.ir');
@@ -179,6 +185,8 @@ function prepareStage(compilerOwner, mutation, baseline, inputs) {
     const wasmArtifacts = new Map();
     const runner = join(work, 'runner'); mkdirSync(join(runner, 'src'), {recursive: true});
     writeFileSync(join(runner, 'src/main.rs'), capturedInput('tests/publication-context-linkage/runner.rs', inputs), {flag: 'wx'});
+    for (const path of witnesses)
+      writeFileSync(join(runner, 'src', path), capturedInput('tests/publication-context-linkage/' + path, inputs), {flag:'wx'});
     writeFileSync(join(runner, 'Cargo.lock'), 'version = 4\n[[package]]\nname = "publication-context-linkage-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "publication-context-linkage-runner"\nversion = "0.1.0"\ndependencies = ["publication-context-linkage-core-probe"]\n', {flag: 'wx'});
     const contextRunner = join(work, 'context-fields-runner'); mkdirSync(join(contextRunner, 'src'), {recursive: true});
     writeFileSync(join(contextRunner, 'src/main.rs'), capturedInput('tests/publication-context-linkage/context-fields-runner.rs', inputs), {flag: 'wx'});
@@ -197,6 +205,8 @@ function prepareStage(compilerOwner, mutation, baseline, inputs) {
       for (const record of nativeBinaries.values()) checkedNative(record);
       for (const owner of wasmArtifacts.values()) owner.verify();
       assert.equal(sha(readFileSync(join(runner, 'src/main.rs'))), inputs['tests/publication-context-linkage/runner.rs'], 'exact staged native observer');
+      for (const path of witnesses)
+        assert.equal(sha(readFileSync(join(runner, 'src', path))), inputs['tests/publication-context-linkage/' + path], 'exact staged semantic witness ' + path);
       assert.equal(sha(readFileSync(join(contextRunner, 'src/main.rs'))), inputs['tests/publication-context-linkage/context-fields-runner.rs'], 'exact staged typed context observer');
       assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), manifestBytes);
@@ -228,7 +238,10 @@ function prepareStage(compilerOwner, mutation, baseline, inputs) {
     function nativeEvidence() {
       return Object.fromEntries([...nativeBinaries].map(([mode, record]) => {checkedNative(record); return [mode, record.sha256];}));
     }
-    const roles = ['wasm', 'context-fields-wasm', 'admission-wasm'];
+    // The baseline owns all roles. A mutant rebuilds only the affected roles;
+    // each still has two independent generated packages, never a cached guest.
+    const roles = mutation === null ? ['wasm', 'context-fields-wasm', 'admission-wasm']
+      : mutation.startsWith('context-') ? ['context-fields-wasm', 'admission-wasm'] : ['wasm'];
     for (const mode of roles) for (const suffix of ['', '-repro']) {
       const label = mode + suffix, guest = join(work, 'guest-' + label);
       assert.deepEqual(JSON.parse(compiler.runDriver([mode, ir, guest, licenses], work)), generation);

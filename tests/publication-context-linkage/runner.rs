@@ -1,6 +1,11 @@
 use publication_context_linkage_core_probe::publicationLinkageWireBytes;
 use std::{error::Error, fs};
 
+mod bitset_witnesses;
+mod collector_witnesses;
+mod partition_witnesses;
+mod payload_witnesses;
+
 fn unhex(text: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     if text.len() % 2 != 0 {
         return Err("odd hex".into());
@@ -12,6 +17,14 @@ fn unhex(text: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.as_slice() == ["--semantic-witnesses"] {
+        collector_witnesses::verify();
+        bitset_witnesses::verify();
+        partition_witnesses::verify();
+        payload_witnesses::verify();
+        println!("PASS four complete independent semantic witness groups");
+        return Ok(());
+    }
     if args.len() == 3 && args[0] == "--binary" {
         let input = fs::read(&args[1])?;
         let expected = fs::read(&args[2])?;
