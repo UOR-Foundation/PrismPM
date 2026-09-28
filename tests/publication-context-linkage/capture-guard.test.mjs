@@ -1,13 +1,36 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {dirname, join} from 'node:path';
 import test from 'node:test';
 import {decodeCaptureCbor, decodeCaptureJson, projectCapturedSource} from './capture-oracle.mjs';
 import {encode} from './corpus.mjs';
-import {repository} from './compile.mjs';
+import {frozenInputs, repository} from './compile.mjs';
 import {requireCaptureCompletion} from './capture-owner.mjs';
+import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 
-test('independent capture decoder requires canonical complete bounded framing', () => {
+test('independent capture decoder and owning source closure are complete and canonical', t => {
+  const entry = 'tests/publication-context-linkage/owner.test.mjs', inputs = frozenInputs();
+  assert.ok(inputs[entry] && inputs['tests/publication-context-linkage/checks.mjs']);
+  const closure = localModuleInputs(repository, [entry], path => readFileSync(join(repository, path)));
+  const original = closure.get(entry), staticImport = "import {verifyCompletePublicationLinkage} from './checks.mjs';";
+  assert.equal(original.toString('utf8').split(staticImport).length, 2);
+  const work = mkdtempSync(join(tmpdir(), 'prismpm-oc10-entry-closure-'));
+  for (const kind of ['baseline', 'dynamic']) {
+    const root = join(work, kind);
+    for (const [path, bytes] of closure) {
+      const target = join(root, path); mkdirSync(dirname(target), {recursive:true});
+      const value = kind === 'dynamic' && path === entry
+        ? Buffer.from(bytes.toString('utf8').replace(staticImport,
+          "const {verifyCompletePublicationLinkage} = await im" + "port('./checks.mjs');")) : bytes;
+      writeFileSync(target, value, {flag:'wx', mode:0o400});
+    }
+    const capture = () => localModuleInputs(root, [entry], path => readFileSync(join(root, path)));
+    if (kind === 'baseline') assert.deepEqual(capture(), closure);
+    else assert.throws(capture, /dynamic imports require a separately registered owning closure/);
+  }
+  assert.deepEqual(readFileSync(join(repository, entry)), original);
+  t.diagnostic('Retained actual owning-entry closure counterexample: ' + work);
   for (const [format, bytes] of [['prismpm', '{"a":1}'], ['lexlean-snapshot', '{"a":1}\n']]) {
     assert.deepEqual(decodeCaptureJson(Buffer.from(bytes), format), {a:1});
     for (const changed of [bytes + '\n', ' ' + bytes, bytes.replace('1', ' 1'),

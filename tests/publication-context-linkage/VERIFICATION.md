@@ -148,3 +148,13 @@ package bytes. The crate archive and release metadata remain unchanged. Prior
 failed owners and their successful underlying phases are retained. The complete
 registered owner still requires the accepted compiler closure; the successful
 conditional compiler diagnostics cannot repin or substitute for it.
+
+The first exact pinned registered-gate attempt stopped before compiler execution:
+the owning entrypoint used a dynamic import forbidden by its static closure.
+Receipt `af152e6b65eeb7586501db095ea53a9e7e5f702c5aa7b6f70b0e77fa996a92b7`
+is retained at `/tmp/prismpm-oc10-pinned-gate-jMXBFt/result.json` in the compatible
+capture container. This was an owner defect, not an upstream compiler refusal.
+The entry now imports statically. Both guards pass, including parsing a fresh
+private copy of the complete actual ESM closure and rejecting a real dynamic-import
+mutation; the registered 65+2 inventory and deadlines are unchanged. A fresh exact
+pinned owner remains required.
