@@ -1,5 +1,13 @@
 Feature: sdk
 
+  @DK-32 @build
+  Scenario: Private source-owned signed contexts bind exact expected statements and keys to actual cryptographic verification and opaque captured evidence through complete generated and browser oracles without granting account, mailbox, organization or freshness authority.
+    Given canonical source-owned envelopes and an exact independently selected expected context and public key
+    When complete native, no_std, Wasm, original cryptographic oracles and browser owners verify the captured bytes
+    Then only actual successful signature verification creates private instance-bound statement evidence
+    And context substitution, forged handles, asynchronous mutation and source or host guard defects fail their exact checks
+    And account identity, verified email, organization permissions, freshness and public application acceptance remain separate obligations
+
   @DK-33 @build
   Scenario: Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority.
     Given a source-owned immutable account genesis with a stable namespace and initial public key

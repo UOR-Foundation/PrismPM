@@ -889,6 +889,12 @@ level = "build"
 statement = "Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority."
 
 [[id]]
+id = "DK-32"
+suite = "sdk"
+level = "build"
+statement = "Private source-owned signed contexts bind exact expected statements and keys to actual cryptographic verification and opaque captured evidence through complete generated and browser oracles without granting account, mailbox, organization or freshness authority."
+
+[[id]]
 id = "DK-33"
 suite = "sdk"
 level = "build"

@@ -14,7 +14,7 @@ export const sourceRoots=Object.freeze([
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
- 'tests/browser-session','tests/browser-account-genesis','tests/browser-p256',
+ 'tests/browser-session','tests/browser-signed-context','tests/browser-account-genesis','tests/browser-p256',
  'tests/browser-budget','tests/browser-contextual-effects','tests/browser-semantic-presentation','tests/browser-dynamic-choice',
  'tests/browser-session-journal','tests/browser-session-journal-retention','tests/browser-session-journal-recovery',
  'tests/browser-session-payloads','tests/browser-session-recovery-frames','tests/publication-context-linkage',
@@ -36,7 +36,7 @@ export const sourceRoots=Object.freeze([
 export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
  'presentation-wire','presentation-dom','semantic-presentation-wire','semantic-presentation-style',
- 'credential-custody','operation-journal','account-genesis','account-genesis-binding']);
+ 'credential-custody','operation-journal','account-genesis','account-genesis-binding','signed-context']);
 export const hostArtifacts=Object.freeze(['account-genesis.wasm']);
 export const suites=Object.freeze([
  {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
@@ -57,12 +57,13 @@ export const suites=Object.freeze([
  {id:'DK-26',minimum:39,files:['session-model-test.mjs','tests/browser-session/wire.test.mjs','tests/browser-session/provenance.test.mjs']},
  {id:'DK-27',minimum:13,files:['budget-model-test.mjs']},
  {id:'DK-31',minimum:8,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','dynamic-choice.test.mjs']},
+ {id:'DK-32',minimum:17,files:['tests/browser-signed-context/corpus.test.mjs','tests/browser-signed-context/bridge.test.mjs','tests/browser-signed-context/wpt.test.mjs','tests/browser-signed-context/aggregate.test.mjs','signed-context-test.mjs']},
  {id:'DK-33',minimum:17,files:['tests/browser-account-genesis/corpus.test.mjs','tests/browser-account-genesis/bridge.test.mjs','tests/browser-account-genesis/owner.test.mjs']},
  {id:'DK-34',minimum:18,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
  {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
