@@ -551,7 +551,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-semantic-presentation/dom.test.mjs",
                 "sdk/browser/semantic-presentation.test.mjs",
             ],
-            21,
+            29,
         ),
         _ => unreachable!("closed browser host capability"),
     };
