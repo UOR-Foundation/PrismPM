@@ -12,6 +12,7 @@ export const mutations = Object.freeze([
   {id: 'namespace-width', module: model, definition: 'validateAccountGenesis', probe: 'FieldWidth1_31'},
   {id: 'nonce-width', module: model, definition: 'validateAccountGenesis', probe: 'FieldWidth2_31'},
   {id: 'key-prefix', module: model, definition: 'validateAccountGenesis', probe: 'KeyPrefix0'},
+  {id: 'curve-membership', module: model, definition: 'validateAccountGenesis', probe: 'InitialKeyByte1'},
   {id: 'namespace-match', module: model, definition: 'matchAccountGenesisNamespace', probe: 'NamespaceMismatch0'},
   {id: 'identity-domain', module: model, definition: 'accountGenesisDomain', probe: 'Projection1'},
   {id: 'trailing-input', module: wire, definition: 'finishAccountGenesis', probe: 'Trailing'},
@@ -30,7 +31,19 @@ export function mutateAccountGenesisSource(sources, id) {
   const yes = {kind: 'bool', value: true};
   if (id === 'namespace-width') {declaration.body.scrutinee = yes; count++;}
   else if (id === 'nonce-width') {declaration.body.branches[1].body.scrutinee = yes; count++;}
-  else if (id === 'key-prefix') {declaration.body.branches[1].body.branches[1].body.scrutinee = yes; count++;}
+  else if (id === 'key-prefix') {
+    const guard = declaration.body.branches[1].body.branches[1].body;
+    guard.scrutinee = {kind: 'or', left: guard.scrutinee, right: yes}; count++;
+  }
+  else if (id === 'curve-membership') {
+    const guard = declaration.body.branches[1].body.branches[1].body;
+    assert.equal(guard.scrutinee.function.name, 'p256PublicKeyValid');
+    guard.scrutinee = {kind: 'or', left: guard.scrutinee, right: {kind: 'call', function: {module: 'Foundation.Browser.Application.V1.Effects', name: 'effectSigningGrantValid'},
+      arguments: [{kind: 'record', type: {module: 'Foundation.Browser.Application.V1.Effects', name: 'EffectSigningGrant'}, fields: [
+        {field: 'publicKey', value: {kind: 'project', value: {kind: 'var', name: 'value'}, field: 'initialKey'}},
+        {field: 'context', value: {kind: 'string', value: 'prismpm/account-genesis/1'}},
+      ]}]}}; count++;
+  }
   else if (id === 'identity-domain') {declaration.body.hex = declaration.body.hex.slice(0, -2); count++;}
   else if (id === 'frame-limit') {declaration.body.scrutinee = yes; count++;}
   else {

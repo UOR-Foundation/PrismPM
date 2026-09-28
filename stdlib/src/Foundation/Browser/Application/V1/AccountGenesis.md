@@ -4,7 +4,10 @@ DK-33 prerequisite; not an account service or application acceptance.
 
 `AccountGenesis` binds an immutable namespace reference (32 bytes), fresh
 creation nonce (32 bytes), and initial uncompressed P-256 public key (65 bytes).
-The source owns shape validation and canonical encoding. The namespace is a
+The source owns format, coordinate-range and curve-equation validation through
+`Foundation.Crypto.P256.Model.p256PublicKeyValid`, plus canonical encoding.
+The complete SEC 1 P-256 predicate runs before namespace admission or projection;
+browser import alone is not sufficient validation. The namespace is a
 stable installation/network namespace, not a current release, origin, account
 name, email, organization name, key fingerprint or mutable configuration.
 Declaring a namespace does not prove ownership of it.
@@ -25,7 +28,7 @@ are independently authenticated state, not mutable genesis fields. Arbitrarily
 changing genesis allocates a different declaration, never transfers ownership.
 
 The private host captures exact options before awaiting, executes the bound
-generated projection, performs real curve import and SHA-256, and returns copied
+generated admission/projection, performs real key import and SHA-256, and returns copied
 facts through an opaque handle tied to its exact verifier instance and artifact.
 Only a completed factory can produce that handle. A matching module self-hash
 does not establish source provenance; composition must select the artifact from
@@ -43,7 +46,8 @@ platform administrator. This internal frame is not DID, VC, JOSE or COSE.
 
 The owning gate requires fresh source/kernel/native std/no_std/two-Wasm parity,
 all canonical truncations and malformed boundaries, exact maximum and one-over
-frames, independently calculated digests, real source mutants and three-engine
+frames, the complete applicable NIST CAVP/ACVP point corpus, independently
+calculated digests, real source mutants and three-engine
 capture/curve/hash/opaque-handle adversaries. `PP2011` remains enforced.
 
 The closed grammar is `AccountGenesis.cddl`: valid genesis is exactly 137 bytes,

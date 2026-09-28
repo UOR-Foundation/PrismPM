@@ -54,6 +54,7 @@ function run(module, input) {
     const value = canonical(new Uint8Array(memory.buffer, start, length).slice());
     if (!Array.isArray(value) || value.length !== 3 || value[0] !== 1)
       throw fail('invalid-generated-output');
+    if (value[1] === 1 && value[2] === 2) throw fail('invalid-key');
     if (value[1] === 1 || value[1] === 2) throw fail('model-rejected');
     if (value[1] !== 0) throw fail('invalid-generated-output');
     return value[2];

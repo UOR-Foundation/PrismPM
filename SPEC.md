@@ -1618,8 +1618,11 @@ separate requirements; `PP2011` remains mandatory.
 
 DK-33 defines an immutable account declaration containing a stable namespace,
 creation nonce and initial uncompressed P-256 public key. Generated source owns
-canonical encoding, exact expected-namespace admission and the domain-separated
-identity preimage. The browser performs actual point import and SHA-256; only
+canonical encoding, complete P-256 point admission, exact expected-namespace
+admission and the domain-separated identity preimage. Source admission checks
+SEC 1 uncompressed format, coordinate range and curve equation using the fixed
+SEC 2 secp256r1 parameters; its cofactor-one subgroup implication applies only
+to that curve. The browser performs actual key import and SHA-256; only
 its factory returns opaque captured facts. The resulting reference identifies
 this declaration, not a human, mailbox owner, organization role or current
 credential. Application updates and authorized credential rotation preserve the
@@ -1635,7 +1638,8 @@ source/package provenance; a self-consistent module digest alone does not.
 
 Acceptance requires full generated kernel/native std/no_std/two-Wasm parity,
 canonical and malformed boundaries, actual maximum and one-over frames,
-independent digest calculations, compiled source defects and three-engine
+all applicable original NIST CAVP/ACVP point cases, independent digest
+calculations, compiled source defects and three-engine
 capture/curve/hash/opaque-handle adversaries with exact native transcript replay.
 Account allocation, proof of initial key possession, authenticated succession,
 mailbox verification, recovery, currentness and organization authority remain

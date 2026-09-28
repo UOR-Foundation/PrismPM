@@ -41,6 +41,8 @@ export function frozenInputs() {
   for (const path of ['tests/browser-view/compiler-owner.test.mjs', 'tests/browser-view/compiler-artifact.test.mjs',
     'tests/browser-view/compiler-artifact-mutations.test.mjs', 'tests/browser-view/generated-package.test.mjs',
     'sdk/browser/account-genesis.mjs',
+    'tests/browser-p256/oracles/PKV.rsp.base64',
+    'tests/browser-p256/oracles/ACVP-KeyVer-FIPS186-5.json.base64',
     'tests/fixtures/library/native-library/project/lexlean.toml', 'model/dependencies.toml',
     'model/authorities.toml', 'lean-toolchain', 'rust-toolchain.toml', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json', 'vendor/lean4-prod/lean.tar']) files.add(path);

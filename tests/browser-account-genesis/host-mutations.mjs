@@ -7,8 +7,8 @@ import {sha} from '../browser-view/compile.mjs';
 import {domain, encode} from './corpus.mjs';
 
 const mutations = Object.freeze([
-  {id: 'curve-import', from: 'keyIdentity = await identityPrincipal(publicKey);',
-    to: 'keyIdentity = await digestBytes(publicKey);'},
+  {id: 'key-identity', from: 'keyIdentity = await identityPrincipal(publicKey);',
+    to: 'keyIdentity = await digestBytes(material);'},
   {id: 'identity-domain', from: 'const digest = await digestBytes(material);',
     to: 'const digest = await digestBytes(genesis);'},
   {id: 'captured-input', from: 'const genesis = copy(fields.genesis, FRAME), expected = copy(fields.expectedNamespace, 32);',
@@ -32,7 +32,7 @@ export function verifySemanticCounterexample(error, id) {
   const hash = bytes => createHash('sha256').update(bytes).digest('hex');
   const identity = hash(Buffer.concat([domain, genesis]));
   const expected = {
-    'curve-import': {journey: 'invalid-point', check: 'curve-import', expected: 'invalid-key', actual: 'accepted'},
+    'key-identity': {journey: 'declaration', check: 'key-identity', expected: 'sha256:' + hash(key), actual: 'sha256:' + identity},
     'identity-domain': {journey: 'declaration', check: 'identity-digest', expected: identity, actual: hash(genesis)},
     'captured-input': {journey: 'captured-inputs', check: 'captured-before-await', expected: evidence.genesis,
       actual: '00'.repeat(genesis.length)},
@@ -50,14 +50,14 @@ export async function verifyHostMutations(build, engine) {
   const positive = await browserFixture(build, engine);
   assert.equal(positive.journeys.length, 12);
   const counterfeit = Object.assign(new Error('actual account-genesis semantic counterexample'),
-    {journey: 'invalid-point', check: 'curve-import', expected: 'invalid-key', actual: 'accepted'});
-  assert.throws(() => verifySemanticCounterexample(counterfeit, 'curve-import'), /privately branded/);
+    {journey: 'declaration', check: 'key-identity', expected: 'sha256:' + '00'.repeat(32), actual: 'sha256:' + '01'.repeat(32)});
+  assert.throws(() => verifySemanticCounterexample(counterfeit, 'key-identity'), /privately branded/);
   const factory = 'export async function openAccountGenesis(options) {';
   assert.equal(original.split(factory).length, 2);
-  const unavailable = original.replace(factory, factory + '\nthrow Error("planted ordinary SDK failure: curve-import");');
+  const unavailable = original.replace(factory, factory + '\nthrow Error("planted ordinary SDK failure: key-identity");');
   await assert.rejects(browserFixture(build, engine, unavailable), error => {
     assert.match(error.message, /planted ordinary SDK failure/);
-    assert.throws(() => verifySemanticCounterexample(error, 'curve-import'), /privately branded/); return true;
+    assert.throws(() => verifySemanticCounterexample(error, 'key-identity'), /privately branded/); return true;
   });
   const results = [];
   for (const mutation of mutations) {
@@ -67,7 +67,7 @@ export async function verifyHostMutations(build, engine) {
     let evidence;
     await assert.rejects(browserFixture(build, engine, changed), error => {
       evidence = verifySemanticCounterexample(error, mutation.id);
-      const wrong = mutation.id === 'curve-import' ? 'identity-domain' : 'curve-import';
+      const wrong = mutation.id === 'key-identity' ? 'identity-domain' : 'key-identity';
       assert.throws(() => verifySemanticCounterexample(error, wrong), /exact independently calculated host counterexample/);
       return true;
     });
@@ -77,7 +77,7 @@ export async function verifyHostMutations(build, engine) {
   // A no-op is never a killed mutation, even with a plausible expected check.
   await assert.rejects(async () => {
     await assert.rejects(browserFixture(build, engine, original), error => {
-      verifySemanticCounterexample(error, 'curve-import'); return true;
+      verifySemanticCounterexample(error, 'key-identity'); return true;
     });
   }, error => error.code === 'ERR_ASSERTION' && error.message.includes('Missing expected rejection'));
   assert.equal(results.length, 4); return results;

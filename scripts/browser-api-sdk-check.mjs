@@ -14,7 +14,7 @@ export const sourceRoots=Object.freeze([
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
  'tests/browser-session','tests/browser-budget','tests/browser-contextual-effects',
- 'tests/browser-semantic-presentation','tests/browser-dynamic-choice','tests/browser-account-genesis','SPEC.md','features/suites/sdk.feature',
+ 'tests/browser-semantic-presentation','tests/browser-dynamic-choice','tests/browser-account-genesis','tests/browser-p256','SPEC.md','features/suites/sdk.feature',
  'tests/browser-session-journal/wasm-artifact-checks.mjs',
  'sdk/oracles/package.json','sdk/oracles/package-lock.json',
  'tests/fixtures/library/native-library/project',

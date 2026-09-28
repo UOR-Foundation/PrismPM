@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {openAccountGenesis} from '../../sdk/browser/account-genesis.mjs';
@@ -6,7 +7,7 @@ import {corpus, encode} from './corpus.mjs';
 import {canonical, mutations, mutateAccountGenesisSource} from './mutations.mjs';
 import {journeyNames, verifyObservations} from './browser.mjs';
 import {verifySemanticCounterexample} from './host-mutations.mjs';
-import {verifyNativeInventory} from './checks.mjs';
+import {executeRequiredSubtest, verifyNativeInventory} from './checks.mjs';
 
 test('private account factory captures closed data options and refuses shape-only artifacts', async () => {
   for (const value of [null, {}, {wire: new Uint8Array()}, {wire: [], wireDigest: []}])
@@ -48,8 +49,8 @@ test('canonical source and every canonical mutant bind one changed module and a 
   }
 });
 
-test('observation contract requires exact operation tags and native inventory', () => {
-  const operations = [[2, 1], [2, 1], [2], [2, 1], [2, 1], [], [], [2, 1], [], [], [], [2]];
+test('observation contract requires exact operation tags, native inventory and executed checks', async () => {
+  const operations = [[2, 1], [2, 1], [2], [2], [2, 1], [], [], [2, 1], [], [], [], [2]];
   const calls = [], journeys = journeyNames.map((id, index) => {
     const start = calls.length;
     for (const operation of operations[index]) calls.push({request: encode([1, operation]).toString('hex')});
@@ -65,12 +66,35 @@ test('observation contract requires exact operation tags and native inventory', 
   const runner = readFileSync(new URL('./runner.rs', import.meta.url), 'utf8');
   assert.ok(runner.includes('println!("PASS {count} account-genesis vectors twice");'));
   assert.ok(runner.includes('println!("PASS binary account-genesis twice");'));
+  await assert.rejects(executeRequiredSubtest({test: async () => {}}, 'omitted', () => true),
+    /required account-genesis subtest body was not executed/);
+  for (const failure of [undefined, null, false, 0, '']) {
+    let rejected = false;
+    try {
+      await executeRequiredSubtest({test: async (_name, body) => {
+        try {await body();} catch {}
+      }}, 'falsy failure', () => {throw failure;});
+    } catch (error) {rejected = true; assert.equal(error, failure);}
+    assert.ok(rejected, 'even a falsy thrown value must prevent completion');
+  }
+  const helper = new URL('./checks.mjs', import.meta.url).href;
+  const source = `import test from 'node:test'; import {executeRequiredSubtest} from ${JSON.stringify(helper)};
+    test('actual required owner',async t=>{
+      await executeRequiredSubtest(t,'actual failed child',()=>{throw 0});
+      console.log('INCORRECT_OWNER_ACCEPTANCE');
+    });`;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', source],
+    {encoding: 'utf8', timeout: 10000});
+  assert.equal(child.error, undefined); assert.equal(child.signal, null);
+  assert.equal(child.status, 1, child.stderr);
+  assert.match(child.stdout, /actual failed child/);
+  assert.doesNotMatch(child.stdout, /INCORRECT_OWNER_ACCEPTANCE/);
 });
 
 test('counterfeit semantic error labels and fields never establish assertion provenance', () => {
-  const record = {journey: 'invalid-point', check: 'curve-import', expected: 'invalid-key', actual: 'accepted'};
+  const record = {journey: 'declaration', check: 'key-identity', expected: 'sha256:' + '00'.repeat(32), actual: 'sha256:' + '01'.repeat(32)};
   for (const error of [record, Object.freeze({...record}),
     Object.assign(Error('actual account-genesis semantic counterexample'), record),
-    Error('planted ordinary SDK failure: curve-import')])
-    assert.throws(() => verifySemanticCounterexample(error, 'curve-import'), /privately branded/);
+    Error('planted ordinary SDK failure: key-identity')])
+    assert.throws(() => verifySemanticCounterexample(error, 'key-identity'), /privately branded/);
 });

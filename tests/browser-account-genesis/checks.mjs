@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync, linkSync, readFileSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {frozenInputs, prepareAccountGenesis, sha} from './compile.mjs';
-import {corpus} from './corpus.mjs';
+import {CORPUS_CASES, corpus} from './corpus.mjs';
 import {mutations} from './mutations.mjs';
 import {createCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {verifyCompilerOwnerSubstitutions} from '../browser-view/compiler-owner-checks.mjs';
@@ -19,7 +19,7 @@ export function verifyNativeInventory(output, rows) {
 }
 export function verifyComponents(compiler) {
   const build = prepareAccountGenesis(compiler), rows = corpus();
-  assert.equal(rows.length, 390); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
+  assert.equal(rows.length, CORPUS_CASES); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
   const library = join(build.work, 'generated/src/lib.rs'), manifest = join(build.work, 'generated/generation-manifest.json');
   const original = readFileSync(library), originalManifest = readFileSync(manifest);
   for (const mode of ['source', 'source-and-manifest', 'extra-file', 'hard-link']) {
@@ -79,13 +79,23 @@ export function verifyCompiledMutation(mutation, baseline) {
   console.log(JSON.stringify({mutation: mutation.id, work: build.work, status: 'actual compiled defect detected'}));
   return evidence;
 }
+export async function executeRequiredSubtest(t, name, body) {
+  let entered = false, completed = false, failed = false, failure;
+  await t.test(name, async () => {
+    entered = true;
+    try {await body(); completed = true;}
+    catch (error) {failed = true; failure = error; throw error;}
+  });
+  assert.ok(entered, 'required account-genesis subtest body was not executed');
+  if (failed) throw failure;
+  assert.ok(completed, 'required account-genesis subtest body did not complete');
+}
+
 export async function verifyAccountGenesis(t) {
   const inputs = frozenInputs(), compiler = createCompilerOwner('account-genesis', inputs);
   let build, evidence;
-  const step = async (name, body) => {let failure; await t.test(name, async () => {
-    try {await body();} catch (error) {failure = error; throw error;}
-  }); if (failure) throw failure;};
-  await step('complete generated source/kernel/native/std/no_std/two-Wasm and all390 vectors', () => {
+  const step = (name, body) => executeRequiredSubtest(t, name, body);
+  await step('complete generated source/kernel/native/std/no_std/two-Wasm and all' + CORPUS_CASES + ' vectors', () => {
     ({build, evidence} = verifyComponents(compiler));
   });
   await step('actual package/compiler/native/Wasm capture substitutions are refused', () => {
@@ -105,9 +115,9 @@ export async function verifyAccountGenesis(t) {
     const hostMutations = await verifyHostMutations(build, engine);
     evidence.browser.push({result, replay, hostMutations}); build.unchanged();
   });
-  await step('all10 actual compiled source defects produce semantic counterexamples', () => {
+  await step('all11 actual compiled source defects produce semantic counterexamples', () => {
     evidence.sourceMutations = mutations.map(mutation => verifyCompiledMutation(mutation, build));
-    assert.equal(evidence.sourceMutations.length, 10); build.unchanged();
+    assert.equal(evidence.sourceMutations.length, 11); build.unchanged();
   });
   await step('complete original input and generated artifact closure remains unchanged', () => {
     assert.deepEqual(frozenInputs(), inputs); build.unchanged();

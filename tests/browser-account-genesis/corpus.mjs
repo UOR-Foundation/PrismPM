@@ -1,5 +1,7 @@
 // Independent finite protocol examples and canonical encoder; not a runtime.
 import assert from 'node:assert/strict';
+import {createECDH, ECDH} from 'node:crypto';
+import {oraclePoints} from '../browser-p256/oracles.mjs';
 
 export function encode(value) {
   const head = (major, value) => {
@@ -21,6 +23,14 @@ export function encode(value) {
 export const domain = Buffer.from('prismpm/account-genesis/1\0', 'ascii');
 export const bytes = (length, fill = 1) => Buffer.alloc(length, fill);
 export const publicKey = () => Buffer.from('046b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5', 'hex');
+// Public, deterministic test fixtures only; never production account keys.
+export function validPublicKey(index) {
+  assert.ok(Number.isInteger(index) && index >= 1 && index <= 65);
+  const scalar = Buffer.alloc(32); scalar.writeUInt32BE(index, 28);
+  const oracle = createECDH('prime256v1'); oracle.setPrivateKey(scalar);
+  return oracle.getPublicKey(undefined, 'uncompressed');
+}
+export const CORPUS_CASES = 529;
 export const genesis = () => [1, bytes(32, 1), bytes(32, 2), publicKey()];
 export const projection = value => [value[1], value[3], encode(value), Buffer.concat([domain, encode(value)])];
 const success = value => [1, 0, value], rejected = code => [1, 1, code], malformed = code => [1, 2, code];
@@ -46,8 +56,38 @@ export function corpus() {
   }
   for (let index = 1; index < 65; index++) {
     const value = genesis(); value[3][index] ^= 1;
-    // Shape-only source projection; the host must still import the actual point.
-    add('InitialKeyByte' + index, [1, 1, value], success(projection(value)));
+    assert.throws(() => ECDH.convertKey(value[3], 'prime256v1', undefined, undefined, 'uncompressed'));
+    add('InitialKeyByte' + index, [1, 1, value], rejected(2));
+    const valid = genesis(); valid[3] = validPublicKey(index + 1);
+    add('InitialValidKey' + index, [1, 1, valid], success(projection(valid)));
+  }
+  const fieldMaximum = Buffer.from('ffffffff00000001000000000000000000000000ffffffffffffffffffffffff', 'hex');
+  const above = Buffer.from(fieldMaximum); above.writeUInt32BE(0x00000001, 12);
+  const invalidPoints = [['ZeroPoint', Buffer.concat([Buffer.from([4]), bytes(64, 0)])],
+    ['Infinity', Buffer.from([0])], ['Compressed', ECDH.convertKey(publicKey(), 'prime256v1', undefined, undefined, 'compressed')],
+    ['Hybrid', Buffer.concat([Buffer.from([6]), publicKey().subarray(1)])]];
+  for (const [name, coordinate] of [['EqualsP', fieldMaximum], ['AboveP', above], ['Maximum', bytes(32, 255)]]) {
+    for (const [axis, offset] of [['X', 1], ['Y', 33]]) {
+      const key = publicKey(); coordinate.copy(key, offset);
+      assert.throws(() => ECDH.convertKey(key, 'prime256v1', undefined, undefined, 'uncompressed'));
+      invalidPoints.push(['Coordinate' + axis + name, key]);
+    }
+  }
+  assert.equal(invalidPoints.length, 10);
+  for (const [id, key] of invalidPoints) for (const operation of [0, 1, 2]) {
+    const value = genesis(); value[3] = key;
+    add(id + '_' + operation, operation === 2 ? [1, operation, value[1], value] : [1, operation, value], rejected(2));
+  }
+  // Every P-256 case from both complete pinned supplier files reaches every
+  // source operation. Oversized original coordinates are never truncated.
+  const supplied = oraclePoints(); assert.equal(supplied.length, 15);
+  for (const point of supplied) for (const operation of [0, 1, 2]) {
+    const value = genesis(); value[3] = point.key;
+    const response = point.valid
+      ? success(operation === 0 ? value : operation === 1 ? projection(value) : true)
+      : point.key.length > 65 ? malformed(6) : rejected(2);
+    add('Oracle_' + point.source + '_' + point.id + '_' + operation,
+      operation === 2 ? [1, operation, value[1], value] : [1, operation, value], response);
   }
   for (const field of [1, 2, 3]) for (const length of [0, field === 3 ? 64 : 31, field === 3 ? 66 : 33]) {
     const value = genesis(); value[field] = bytes(length); if (field === 3 && length) value[field][0] = 4;
@@ -87,5 +127,6 @@ export function corpus() {
   assert.equal(projection(base)[3].length, 163);
   assert.equal(encode(success(projection(base))).length, 409);
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
+  assert.equal(rows.length, CORPUS_CASES);
   return rows;
 }

@@ -5,9 +5,9 @@ credential succession, mailbox fact, accepted SDK or application deployment.
 
 The registered and installed owners require six construction checks and eight
 complete-owner checks. The latter must freshly verify source/kernel/native
-std/no_std/two-Wasm parity for all 390 vectors, three browser engines with exact
-12-call native-replayed transcripts, four actual host mutations per engine and
-ten separately compiled source mutations. Missing engines, setup errors,
+std/no_std/two-Wasm parity for all 529 vectors, three browser engines with exact
+11-call native-replayed transcripts, four actual host mutations per engine and
+eleven separately compiled source mutations. Missing engines, setup errors,
 unrelated exceptions and invented mutation labels cannot satisfy the owner.
 
 Current checks: six construction tests pass; all 30 SDK-boundary tests pass;
@@ -19,6 +19,27 @@ The ten compiled source mutations were not reached. A source-owned, independentl
 verified full P-256 point predicate must guard admission; a zero-point blacklist
 or browser-import assumption cannot fix this. No accepted SDK or account service
 is inferred. Checks run in pinned devcontainers.
+
+The correction moves curve admission into the shared LexLean P-256 predicate.
+The stronger corpus preserves all 64 altered-point probes as failures, adds 64
+distinct valid points and ten format/range cases across all three operations,
+and executes every P-256 case from both pinned NIST suppliers across all three
+operations. Two hash-checked historical native runners fail the new altered-point
+regression as expected; this diagnostic is not fresh owner acceptance. The
+corrected complete owner and shared P-256 component remain unaccepted pending
+fresh execution. The host key-identity substitution mutant replaces the now
+redundant import-omission mutant; source curve-guard removal is a separate
+compiled defect, never inferred from a host label.
+
+The corrected eight-module, 265-declaration kernel check passes with exact
+observed axiom policies (attestation
+`ab96f04d3946b9be4630a9c28c8d0061792a537669b7076973506d5fc4c99531`).
+Full runtime verification is blocked by the pinned compiler's rejection of
+scalar literal bindings preceding constant list constructors, reproduced by the
+independent P-256 owner. No source workaround, vendor edit or accepted receipt
+substitutes for its upstream correction. Required subtests also reject omitted
+bodies and every falsy thrown value; an actual child Node test confirms failure
+cannot reach the owning completion path.
 
 The source frame ceiling is 512 bytes. The verification module's input allocator
 allows 1024 bytes so malformed frame 513 reaches the actual source refusal;

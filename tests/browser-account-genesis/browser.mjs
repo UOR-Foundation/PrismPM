@@ -91,7 +91,8 @@ export async function browserFixture(build, engine, changedHost = null) {
           await journey('declaration', async () => {
             handle = await verifier.declare(options()); facts = structuredClone(verifier.readFacts(handle));
             same(facts.genesis, genesis, 'canonical-genesis'); same(facts.namespace, namespace, 'namespace');
-            same(facts.publicKey, key.publicKey, 'initial-key'); check(facts.keyIdentity === key.principal, 'key-identity');
+            same(facts.publicKey, key.publicKey, 'initial-key');
+            check(facts.keyIdentity === key.principal, 'key-identity', key.principal, facts.keyIdentity);
             const prefix = new TextEncoder().encode('prismpm/account-genesis/1\0');
             const material = new Uint8Array(prefix.length + genesis.length); material.set(prefix); material.set(genesis, prefix.length);
             same(facts.material, material, 'complete-domain'); same(facts.identity, await hash(material), 'identity-digest');
@@ -100,7 +101,7 @@ export async function browserFixture(build, engine, changedHost = null) {
           await journey('namespace', async () => {const input = options(); input.expectedNamespace[0] ^= 1;
             await rejects(() => verifier.declare(input), 'model-rejected', 'wrong-namespace');});
           await journey('invalid-point', async () => {const point = new Uint8Array(65); point[0] = 4;
-            await rejects(() => verifier.declare({genesis: encode([1, namespace, nonce, point]), expectedNamespace: namespace}), 'invalid-key', 'curve-import');});
+            await rejects(() => verifier.declare({genesis: encode([1, namespace, nonce, point]), expectedNamespace: namespace}), 'invalid-key', 'modeled-curve-admission');});
           await journey('captured-inputs', async () => {const input = options(), pending = verifier.declare(input);
             input.genesis.fill(0); input.expectedNamespace.fill(0);
             same(verifier.readFacts(await pending).genesis, genesis, 'captured-before-await');});
@@ -157,7 +158,7 @@ export async function browserFixture(build, engine, changedHost = null) {
 
 export function verifyObservations(value) {
   assert.deepEqual(value.journeys.map(row => row.id), journeyNames);
-  const tags = [[2, 1], [2, 1], [2], [2, 1], [2, 1], [], [], [2, 1], [], [], [], [2]];
+  const tags = [[2, 1], [2, 1], [2], [2], [2, 1], [], [], [2, 1], [], [], [], [2]];
   let next = 0;
   value.journeys.forEach((row, i) => {
     assert.equal(row.start, next); next += tags[i].length; assert.equal(row.end, next);
@@ -167,5 +168,5 @@ export function verifyObservations(value) {
       return frame[1];
     }), tags[i], 'exact source operation tags for ' + row.id);
   });
-  assert.equal(value.calls.length, 12); assert.equal(next, 12);
+  assert.equal(value.calls.length, 11); assert.equal(next, 11);
 }
