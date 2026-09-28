@@ -458,6 +458,19 @@ pub fn run_at(root: &Path, id: &str) {
             "3600000",
         ),
         "OC-07" => verify_browser_export(root),
+        "DK-32" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-signed-context/corpus.test.mjs",
+                "tests/browser-signed-context/bridge.test.mjs",
+                "tests/browser-signed-context/wpt.test.mjs",
+                "tests/browser-signed-context/aggregate.test.mjs",
+                "sdk/browser/signed-context-test.mjs",
+            ],
+            17,
+            "3600000",
+        ),
         "OC-08" => browser_publication::verify(root),
         "OC-09" => verify_node_suite(
             root,

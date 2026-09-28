@@ -1614,6 +1614,37 @@ does not establish useful accessible naming or human-centered design. Foundry
 journeys, organization authority and public application acceptance remain
 separate requirements; `PP2011` remains mandatory.
 
+#### 12.11.2 Private signed contexts
+
+DK-32 binds the unchanged six-reference `SourceSessionBinding`, origin,
+source-owned purpose, subject, scope, state, request, credential epoch and
+challenge to an exact expected context/key and canonical unsigned statement.
+`SignedContext.cddl` fixes the internal versioned frame. References are 32 bytes,
+epoch is uint32, the raw uncompressed P-256 key is 65 bytes and its P1363
+signature is 64 bytes. Source owns canonical parsing, exact matching and signing
+projection; the SDK supplies actual key import, hashing and signature verification
+through the existing domain-separated Web Cryptography profile. The largest
+valid match request is 1037 bytes within a 2048-byte frame; malformed and
+one-over frames are rejected without reducing any application frame domain.
+
+Evidence is factory-only, bound to one verifier and captured artifact, and
+returns copies of captured statement facts. The private bootstrap must select
+the semantic artifact from independently verified source/package provenance;
+matching a caller-selected module's hash is not that provenance. Key possession,
+statement identity and release/session binding are not stable account identity,
+email ownership, organization permission, credential succession or freshness.
+Randomized/malleable signatures never define accounts or distinct approvals.
+Every consumer must derive expected context and resolve current credentials
+through its own admitted model; no verification boolean is an authority grant.
+
+Acceptance requires full generated source/kernel/native/std/no_std/two-Wasm
+parity, complete finite framing and actual bounds, real source and host mutants,
+three-engine captured-input/opaque-evidence journeys with native transcript
+replay, the complete pinned original WPT ECDSA entry in Window and
+DedicatedWorker, and independent native cryptographic verification. This
+selected suite is not whole Web Cryptography, DID/VC/JOSE/COSE, identity,
+application or installed-SDK acceptance. `PP2011` remains closed.
+
 ### 12.12 Private durable operation journal
 
 DK-24 owns source-generated local operation admission, canonical records and
@@ -2285,6 +2316,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `DK-29` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `DK-31` | `sdk` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. | §12 |
+| `DK-32` | `sdk` | Private source-owned signed contexts bind exact expected statements and keys to actual cryptographic verification and opaque captured evidence through complete generated and browser oracles without granting account, mailbox, organization or freshness authority. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

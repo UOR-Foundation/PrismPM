@@ -9,6 +9,8 @@ import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from 
 import {captureCompilerArtifact} from './compiler-artifact.mjs';
 
 const families = Object.freeze({
+  'signed-context': Object.freeze({directory: 'browser-signed-context',
+    executable: 'browser-signed-context-driver'}),
   'session-retention': Object.freeze({directory: 'browser-session-journal-retention',
     executable: 'browser-session-journal-retention-driver'}),
 });

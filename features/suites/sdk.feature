@@ -1,5 +1,13 @@
 Feature: sdk
 
+  @DK-32 @build
+  Scenario: Private source-owned signed contexts bind exact expected statements and keys to actual cryptographic verification and opaque captured evidence through complete generated and browser oracles without granting account, mailbox, organization or freshness authority.
+    Given canonical source-owned envelopes and an exact independently selected expected context and public key
+    When complete native, no_std, Wasm, original cryptographic oracles and browser owners verify the captured bytes
+    Then only actual successful signature verification creates private instance-bound statement evidence
+    And context substitution, forged handles, asynchronous mutation and source or host guard defects fail their exact checks
+    And account identity, verified email, organization permissions, freshness and public application acceptance remain separate obligations
+
   @DK-31 @build
   Scenario: Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority.
     Given source-generated text choices alongside unchanged catalogue-based choices
