@@ -23,6 +23,25 @@ realized_by = ["HO-14"]
 # SHA-256 values, never dates or mutable names, determine locked identity.
 
 [[authority]]
+id = "IETF-RFC-7636"
+name = "Proof Key for Code Exchange by OAuth Public Clients"
+issuer = "IETF"
+canonical_identifier = "RFC 7636"
+edition = "September 2015"
+source_role = "normative"
+immutable_url = "https://www.rfc-editor.org/rfc/rfc7636.txt"
+revision = "RFC7636-2015"
+acquired_sha256 = "1972e5d81cbaba7066cfd46374207bc2b4546b085ed5dd9b034e79e023e0ca31"
+signature = "not-published-or-not-relied-upon"
+media_type = "text/plain"
+license = "LicenseRef-IETF-Trust-2015"
+redistribution = "redistributable"
+retrieval_date = "2026-09-28"
+supersession_policy = "explicit-lock-update-only"
+statement = "Sections 4.1-4.2 and Appendix B define the ST-17 S256 client primitive and imported example, not complete OAuth or mailbox authentication."
+realized_by = ["ST-17"]
+
+[[authority]]
 id = "LEAN-REL-4-32-1"
 name = "Lean 4.32.1 source release"
 issuer = "Lean FRO"

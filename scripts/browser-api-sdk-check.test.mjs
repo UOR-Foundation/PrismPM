@@ -14,6 +14,7 @@ const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'querie
  'session-retention-wire','session-storage','session-payloads','session-operation-capture'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const additionalOwners = [
+ {id:'ST-17',minimum:19,deadline:3600000,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
  {id:'DK-27',minimum:13,deadline:3600000,files:['sdk/browser/budget-model-test.mjs']},
  {id:'DK-37',minimum:24,deadline:3600000,files:['sdk/browser/contextual-effects.test.mjs']},
  {id:'DK-31',minimum:8,deadline:3600000,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','sdk/browser/dynamic-choice.test.mjs']},

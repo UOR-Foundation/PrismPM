@@ -70,6 +70,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "ST-14"
             | "ST-15"
             | "ST-16"
+            | "ST-17"
             | "SY-08"
     )
     .then(compiler_slot)
@@ -123,6 +124,7 @@ mod tests {
                 "ST-14".to_owned(),
                 "ST-15".to_owned(),
                 "ST-16".to_owned(),
+                "ST-17".to_owned(),
                 "SY-08".to_owned(),
             ])
             .collect::<Vec<_>>();
