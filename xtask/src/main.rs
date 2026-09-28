@@ -215,6 +215,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-vv-check.test.mjs",
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
+            "scripts/browser-environment-preflight.test.mjs",
+            "scripts/qualify-debian-browser-inputs.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
             "tests/browser-view/generated-wasm.test.mjs",
             "tests/browser-view/generated-wasm-mutations.test.mjs",
