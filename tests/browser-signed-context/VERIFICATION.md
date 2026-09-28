@@ -48,10 +48,31 @@ owning closure. Normal model writer/readback and specification bijection pass
 (186 IDs, 86 error codes). Earlier authored-format owner: 5/5 (4.53 s).
 These are not a fresh complete component or installed-image receipt.
 
+The complete aggregate attempt at source commit `d135287` finished in 1,865.991 s:
+13/17 tests passed, four failed, none skipped or cancelled. Generated 1,220-case
+parity, artifact substitution checks and final closure passed. Chromium and
+Firefox each passed 29 SDK journeys, exact native replay and six host mutants.
+All 23 source mutants ran: 21 produced genuine compiled counterexamples;
+`ContextValidity` and `KeyValidity` failed strict `LLV7006` unused-parameter
+warnings, not behavioral verification. Their constant-body fixtures need correction.
+
+The original raw WPT failures remain unchanged. WebKit's pristine SDK journey
+also failed: its invalid-point verification returned `signature-rejected`, not
+the required invalid-point error. A separately labeled historical-artifact
+diagnostic reproduced that exact branded counterexample; it did not authenticate
+the invalid key. WebKit host-mutant acceptance was correctly refused without a
+passing pristine baseline. Generated point admission remains required.
+
+Attempt receipt: `fc165e27ec33946b7730561aa0aea3a00a8576a7b8ea3998806816bfd18c732d`;
+all 846 original input files were independently rehashed afterward. Compiler
+caches retired normally, and no successful owner receipt was written. Logs:
+`/tmp/dk32-owner-report-VODIOl`; artifacts:
+`/tmp/prismpm-signed-context-qtdZY7` in `prismpm-signed-context-owner`.
+
 Remaining: authoritative edition/profile clarification for the raw provider
-oracle, generated curve-point validation, full fresh three-engine owner,
-all 23 compiled source mutants, all host mutants, final closure and installed
-SDK acceptance. The normative original-WPT requirement is unchanged.
+oracle, generated curve-point validation, corrected mutation fixtures, fresh
+complete three-engine/source/host verification and installed SDK acceptance.
+The normative original-WPT requirement is unchanged.
 
 Local diagnostic logs are retained in `prismpm-signed-context-owner` at
 `/tmp/dk32-owner-report-SSdk6q`; the source/artifact component is retained at
