@@ -12,7 +12,9 @@ export function verifyCompilerOwnerSubstitutions(owner, inputs) {
   assert.throws(() => {owner.evidence.inputs['lean-toolchain'] = '0'.repeat(64);}, TypeError);
   assert.throws(() => {owner.runDriver = () => '';}, TypeError);
   const work = owner.evidence.work, observed = ['cloned-handle', 'changed-input-map', 'immutable-owner'];
-  const driverDirectory = 'tests/browser-session-journal-retention/driver';
+  const directories = {'session-retention': 'browser-session-journal-retention', 'p256': 'browser-p256'};
+  assert.ok(Object.hasOwn(directories, owner.evidence.family), 'registered compiler owner source family');
+  const driverDirectory = 'tests/' + directories[owner.evidence.family] + '/driver';
   const library = Object.keys(owner.evidence.exporterRuntime).find(path => path.endsWith('.olean'));
   assert.ok(library, 'actual compiled exporter runtime library required');
   const files = [
