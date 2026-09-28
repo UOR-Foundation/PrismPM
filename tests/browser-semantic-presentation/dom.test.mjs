@@ -7,19 +7,33 @@ import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
-import {journey, verifyMutants} from './browser.mjs';
+import {engines, journey, journeyNames, verifyMutants} from './browser.mjs';
 
 test('actual semantic DOM component and imported accessibility oracle', async t => {
-  const result = await journey(t);
-  assert.equal(result.modelChecked, false);
-  assert.equal(result.cases.length, 7);
-  assert.deepEqual(result.calls, []);
+  for (const engine of engines) {
+    const result = await journey(t, null, {}, engine);
+    assert.equal(result.engine, engine);
+    assert.equal(result.modelChecked, false);
+    assert.deepEqual(result.cases, journeyNames);
+    assert.deepEqual(result.calls, []);
+    assert.deepEqual(result.palettes.map(row=>[row.colorScheme,row.disabled,row.disabledCount]),
+      [['light',false,0],['light',true,5],['dark',false,0],['dark',true,5]],
+      'complete enabled/pending observations retain distinct lifecycle and control-count fields');
+  }
+  const planted = counterexampleGate(t, ({browser, replace}) => replace(browser,
+    'active.palettes.push({...palette, colorScheme, disabled, oracle:forced});',
+    'active.palettes.push({...palette, colorScheme, disabled:palette.disabledCount, oracle:forced});'));
+  assert.match(planted.error, /exact phase-bound palette observation inventory/,
+    'the actual prior count-overwrite defect fails the component before compilation or mutant evidence');
 });
 
 test('actual semantic DOM mutants fail complete component journeys', async t => {
-  const evidence = await verifyMutants(t);
-  assert.deepEqual(evidence.map(row => row.check), ['email-autocomplete', 'email-type',
-    'error-associations', 'main-landmark', 'catalogue-preflight-0', 'wide-layout-columns']);
+  for (const engine of engines) {
+    const evidence = await verifyMutants(t, null, engine);
+    assert.deepEqual(evidence.map(row => row.check), ['email-autocomplete', 'email-type',
+      'error-associations', 'main-landmark', 'catalogue-preflight-0', 'wide-layout-columns',
+      'forced-system-palette', 'forced-authored-disabled-background']);
+  }
 });
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));

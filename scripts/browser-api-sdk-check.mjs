@@ -53,7 +53,7 @@ export const suites=Object.freeze([
  {id:'DK-26',minimum:34,files:['session-model-test.mjs','tests/browser-session/wire.test.mjs']},
  {id:'DK-27',minimum:13,files:['budget-model-test.mjs']},
  {id:'DK-28',minimum:24,files:['contextual-effects.test.mjs']},
- {id:'DK-29',minimum:21,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
+ {id:'DK-29',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
  {id:'DK-31',minimum:8,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','dynamic-choice.test.mjs']},
 ].map(row=>Object.freeze({...row,
  deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28','DK-29','DK-31'].includes(row.id)?3600000:1500000,

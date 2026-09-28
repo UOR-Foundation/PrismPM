@@ -11,7 +11,77 @@ import {captureDesignCatalogue, decodeSemanticPresentation, encodeSemanticPresen
   semanticCatalogueFits, semanticMainNode, semanticProgressFits} from '../../sdk/browser/semantic-presentation-wire.mjs';
 import {corpus, fixture, designs, light} from './corpus.mjs';
 import {semanticStyle} from '../../sdk/browser/semantic-presentation-style.mjs';
-import {verifyNativeInventory} from './checks.mjs';
+import {assertBrowserJourneyInventory, assertPaletteInventory, captureBrowserEvidence, completeEvidence, replayBrowser, verifyNativeInventory} from './checks.mjs';
+import {journeyCallInventory, journeyNames} from './browser.mjs';
+
+test('retained browser and mutant observations are detached and deeply immutable', () => {
+  const original = {cases:['journey'], palettes:[{checks:[{foreground:'system'}]}],
+    mutants:[{actual:{retained:true}}]};
+  const captured = captureBrowserEvidence(original);
+  original.cases[0] = 'substituted'; original.palettes[0].checks[0].foreground = 'changed';
+  original.mutants[0].actual.retained = false;
+  assert.deepEqual(captured, {cases:['journey'], palettes:[{checks:[{foreground:'system'}]}],
+    mutants:[{actual:{retained:true}}]});
+  assert.throws(() => {captured.cases[0] = 'changed';}, TypeError);
+  assert.throws(() => {captured.palettes[0].checks[0].foreground = 'changed';}, TypeError);
+  assert.throws(() => {captured.mutants[0].actual.retained = false;}, TypeError);
+  assert.throws(() => {captured.palettes.push({});}, TypeError);
+});
+
+test('completion binds exact journey names and every case-owned generated call', () => {
+  assert.equal(journeyNames.length, 7); assert.equal(journeyCallInventory.length, 39);
+  assertBrowserJourneyInventory(journeyNames, journeyCallInventory);
+  const changed = [...journeyNames]; changed[2] = 'substituted journey';
+  const duplicate = [...journeyNames]; duplicate[2] = duplicate[1];
+  const permutations = [changed, duplicate, journeyNames.slice(1), [...journeyNames].reverse()];
+  for (const names of permutations) {
+    assert.throws(() => assertBrowserJourneyInventory(names, journeyCallInventory), /exact ordered semantic journey inventory/);
+    assert.throws(() => completeEvidence({
+      mutationEvidence:['purpose','main','trailing','design','catalogue'].map(kind=>({kind})),
+      browserEvidence:['chromium','firefox','webkit'].map(engine=>({engine,cases:names,callInventory:journeyCallInventory})),
+      browserMutationEvidence:['chromium','firefox','webkit'].map(engine=>({engine})),
+    }), /exact ordered semantic journey inventory/);
+  }
+  const duplicateCall = [...journeyCallInventory]; duplicateCall[5] = duplicateCall[0];
+  for (const calls of [[], journeyCallInventory.slice(1), [...journeyCallInventory].reverse(), duplicateCall])
+    assert.throws(() => assertBrowserJourneyInventory(journeyNames, calls), /exact case-bound generated browser call inventory/);
+  const palettes = [['light',false,0],['light',true,5],['dark',false,0],['dark',true,5]]
+    .map(([colorScheme,disabled,disabledCount])=>({colorScheme,disabled,disabledCount}));
+  assertPaletteInventory(palettes);
+  for (const changed of [palettes.slice(1), [...palettes].reverse(),
+    palettes.map(row=>({...row,disabled:row.disabledCount})),
+    palettes.map(({disabledCount,...row})=>row),
+    palettes.map(row=>({...row,disabledCount:row.disabled?0:5}))]) {
+    assert.throws(() => assertPaletteInventory(changed), /exact phase-bound palette observation inventory/);
+    assert.throws(() => replayBrowser({browserEvidence:[]}, {engine:'chromium',modelChecked:true,
+      cases:journeyNames,calls:journeyCallInventory,palettes:changed}), /exact phase-bound palette observation inventory/);
+  }
+});
+
+test('browser transcript engine is closed and cannot overwrite an earlier replay', () => {
+  const result = {modelChecked:true, calls:[{}]};
+  for (const engine of ['unknown', '../webkit', 'WebKit', undefined])
+    assert.throws(() => replayBrowser({browserEvidence:[]}, {...result, engine}), /closed browser transcript engine/);
+  for (const [completed, engine] of [[[], 'firefox'], [['chromium'], 'chromium'],
+    [['chromium','firefox'], 'firefox'], [['chromium','firefox','webkit'], 'webkit']]) {
+    assert.throws(() => replayBrowser({browserEvidence:completed.map(engine=>({engine}))}, {...result, engine}),
+      /each required engine is replayed exactly once in order/);
+  }
+});
+
+test('owner completion refuses omitted duplicate or reordered browser and mutant inventories', () => {
+  const names = ['chromium','firefox','webkit'];
+  const mutationEvidence = ['purpose','main','trailing','design','catalogue'].map(kind=>({kind}));
+  for (const inventory of [[], ['chromium'], ['chromium','firefox'],
+    ['chromium','chromium','webkit'], ['webkit','firefox','chromium']]) {
+    assert.throws(() => completeEvidence({mutationEvidence,
+      browserEvidence:inventory.map(engine=>({engine})), browserMutationEvidence:names.map(engine=>({engine}))}),
+    /complete required browser transcript inventory/);
+    assert.throws(() => completeEvidence({mutationEvidence,
+      browserEvidence:names.map(engine=>({engine})), browserMutationEvidence:inventory.map(engine=>({engine}))}),
+    /complete required browser mutation inventory/);
+  }
+});
 
 test('whole-owner closure binds every source, compiler input and exact mutation baseline', () => {
   const inputs = frozenInputs(), sources = new Map();
