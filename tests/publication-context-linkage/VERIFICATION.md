@@ -158,3 +158,27 @@ The entry now imports statically. Both guards pass, including parsing a fresh
 private copy of the complete actual ESM closure and rejecting a real dynamic-import
 mutation; the registered 65+2 inventory and deadlines are unchanged. A fresh exact
 pinned owner remains required.
+
+The corrected exact registered gate at `e83351b` failed in 500.83 seconds against
+unchanged compiler revision `6272da01ea2045906f5f844988b6265d6c867f39`.
+Both guards and all five preceding prerequisites passed: compiler/artifact
+substitutions, all 119 vectors, 135,754 semantic witnesses in each native mode,
+and six-field/opcode-four parity. The first resource case, `servicesExact`,
+trapped in actual generated Wasm at the unchanged 1,073,741,824-byte limit.
+The remaining maxima, mutants and mandatory actual capture did not execute;
+the complete gate is RED, not accepted or replaced by conditional diagnostics.
+
+Receipt in the compatible capture container:
+`/tmp/prismpm-oc10-pinned-gate-0UYrs3/result.json`, SHA-256
+`bd883b98aaa37d641cc56b25762952791625b1f7a3033bb03ed8712cd0af0b18`.
+The freshly compiled registered test executable is
+`d1c935ef0d51f9c06d8e34bac914d0d3e96d61f70507420ca7c014fa2e1feafb`;
+all 198 raw dependency files, 3,071 resolved inputs and target-generated inputs
+were retained before normal Cargo-cache cleanup. A bookkeeping-only refusal of
+relative dependency paths preceded launch; resolving them against the actual
+Cargo working directory preserved the same executable and frozen source.
+Generated evidence remains at `/tmp/prismpm-publication-linkage-ZDn4Y8`.
+Its seven-root IR exactly matches the conditional receipt above; pinned Wasm is
+`d2048df6000095905cc2920850fba71c513fd37fdc9a38178f8eb9e2138de531`.
+Upstream compiler integration and a fresh complete owner remain required;
+no compiler pin, domain limit, public admission or SDK acceptance changed.
