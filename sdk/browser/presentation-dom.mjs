@@ -85,7 +85,7 @@ function open(options, semantic) {
     while (document.querySelector(`[id^="${scope}-"],[data-semantic-presentation="${scope}"]`));
   }
   let closed = false, frame, captured, nodes = new Map(), forms = new Map();
-  let actionNodes = new Map(), active = null, diagnostic, context = {};
+  let actionNodes = new Map(), active = null, diagnostic, status, context = {};
   const ownership = {};
   roots.set(root, ownership);
   const element = (tag, text) => {
@@ -242,6 +242,13 @@ function open(options, semantic) {
     const fragment = document.createDocumentFragment(), nextNodes = new Map(), nextForms = new Map();
     const nextActions = new Map();
     try {
+      // Allocate after preflight, then retain the live region across paints.
+      // A prepopulated replacement may never announce its initial message.
+      if (!status) {
+        status = element('p');
+        status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
+        status.dataset.presentationStatus = '';
+      }
       // Clear even detached/replaced controls retained by other DOM references.
       // A ready same-context revision may retain only its live password value.
       for (const record of nodes.values()) if (record.tag === 10) {
@@ -259,9 +266,8 @@ function open(options, semantic) {
           skip.dataset.presentationSkip = ''; fragment.append(skip);
         }
       }
-      const status = element('p', next[3] ? label(next[3] - 1) : '');
-      status.setAttribute('role', 'status'); status.setAttribute('aria-live', ['off', 'polite', 'assertive'][next[4]]);
-      status.dataset.presentationStatus = ''; fragment.append(status);
+      const statusPosition = document.createComment('presentation status');
+      fragment.append(statusPosition);
       for (let index = 0; index < next[6].length; index++) {
         const id = index + 1, [parent, content] = next[6][index], tag = content[0];
         const previous = nodes.get(id), retained = previous?.tag === tag ? previous : undefined;
@@ -361,7 +367,20 @@ function open(options, semantic) {
       diagnostic = element('p'); diagnostic.setAttribute('role', 'alert');
       diagnostic.dataset.presentationDiagnostic = ''; fragment.append(diagnostic);
       if (semantic) root.dataset.semanticPresentation = scope;
-      root.replaceChildren(fragment); root.setAttribute('aria-busy', String(next[2] === 1));
+      if (status.parentNode === root) {
+        for (const child of [...root.childNodes]) if (child !== status) child.remove();
+        let afterStatus = false;
+        for (const child of [...fragment.childNodes]) {
+          if (child === statusPosition) { afterStatus = true; continue; }
+          if (afterStatus) root.append(child); else root.insertBefore(child, status);
+        }
+      } else {
+        root.replaceChildren(fragment); statusPosition.replaceWith(status);
+      }
+      root.setAttribute('aria-busy', String(next[2] === 1));
+      status.setAttribute('aria-live', ['off', 'polite', 'assertive'][next[4]]);
+      const message = next[3] ? label(next[3] - 1) : '';
+      if (status.textContent !== message) status.textContent = message;
       frame = next; captured = bytes; nodes = nextNodes; forms = nextForms; actionNodes = nextActions; context = {};
       if (record && record.live) { record.frame = next; record.context = context; }
       const surviving = focused && nodes.get(focused.id);

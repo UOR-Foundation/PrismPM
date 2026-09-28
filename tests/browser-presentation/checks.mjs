@@ -131,13 +131,18 @@ export async function verifyWire(t) {
   return build;
 }
 
-export function replayBrowser(build, result, stem = 'observed-browser') {
-  assert.ok(['observed-browser', 'maximum-progress-browser'].includes(stem));
+export function captureBrowserTranscript(work, result, stem) {
+  assert.ok(['observed-chromium', 'observed-firefox', 'observed-webkit', 'maximum-progress-browser'].includes(stem));
   const roles = {fixture: 'BrowserFixture', labels: 'BrowserLabels', wire: 'BrowserWire',
     secret: 'BrowserSecret', route: 'BrowserRoute', sink: 'BrowserSink', progress: 'BrowserProgress'};
   const rows = result.calls.map((row, index) => ({id: (assert.ok(roles[row.role]), roles[row.role]) + index,
     request: Buffer.from(row.request, 'hex'), response: Buffer.from(row.response, 'hex')}));
-  const path = join(build.work, stem + '.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
+  const path = join(work, stem + '.tsv'); writeFileSync(path, tsv(rows), {flag: 'wx'});
+  return {rows, path};
+}
+
+export function replayBrowser(build, result, stem) {
+  const {rows, path} = captureBrowserTranscript(build.work, result, stem);
   for (const standard of [true, false]) {
     const binary = build.compileNative(standard), output = run(binary, [path], build.runner);
     assert.match(output, new RegExp('PASS ' + rows.length + ' complete presentation vectors twice'));
