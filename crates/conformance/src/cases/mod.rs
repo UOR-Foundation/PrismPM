@@ -466,6 +466,13 @@ pub fn run_at(root: &Path, id: &str) {
             12,
             "3600000",
         ),
+        "OC-10" => verify_node_suite(
+            root,
+            id,
+            &["tests/publication-context-linkage/owner.test.mjs"],
+            1,
+            "3600000",
+        ),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
         "LC-01" | "LC-02" | "LC-03" | "LC-04" | "LC-05" | "LC-06" => verify_lifecycle(root, id),
         "DP-01" | "DP-02" | "DP-03" | "DP-04" | "DP-05" | "DP-06" => verify_deployment(id),

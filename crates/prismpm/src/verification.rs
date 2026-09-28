@@ -80,11 +80,36 @@ fn package_export_roots(source: &str, runtime: &RuntimeRoots) -> Result<Vec<Stri
     if register.spec != "prismpm/stdlib-exports/1"
         || register.lean_module != runtime.lean_module
         || register.ir_module != runtime.ir_module
-        || names.len() != 54
+        || names.len() != 57
         || names.windows(2).any(|pair| pair[0] >= pair[1])
         || symbols.len() != names.len()
+        || [
+            "publicationLinkageWireBytes",
+            "publicationContextFieldsPreimage",
+            "publicationWireBytes",
+        ]
+        .iter()
+        .any(|symbol| !symbols.contains(symbol))
         || register.export.iter().any(|row| {
-            !row.lean_name.starts_with("PrismPM.Foundation.")
+            let production_export = match row.rust_name.as_str() {
+                "publicationLinkageWireBytes" => Some((
+                    "PrismPM.Production.PublicationAdmission.LinkageV1Wire.publicationLinkageWireBytes",
+                    "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
+                )),
+                "publicationWireBytes" => Some((
+                    "PrismPM.Production.PublicationAdmission.V1Wire.publicationWireBytes",
+                    "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
+                )),
+                "publicationContextFieldsPreimage" => Some((
+                    "PrismPM.Production.PublicationAdmission.V1Wire.publicationContextFieldsPreimage",
+                    "fn(&PublicationDeclaration, Vec<u8>, &PublicationSubject, Vec<u8>, Vec<u8>, String) -> Result<Result<Vec<u8>, CborError>, ComputeError>",
+                )),
+                _ => None,
+            };
+            production_export.map_or_else(
+                || !row.lean_name.starts_with("PrismPM.Foundation."),
+                |(name, signature)| row.lean_name != name || row.rust_signature != signature,
+            )
                 || row.lean_name.rsplit('.').next() != Some(row.rust_name.as_str())
                 || row.rust_name.is_empty()
                 || !row
@@ -3032,7 +3057,7 @@ mod tests {
     fn package_exports_are_closed_and_do_not_change_runtime_accounting() {
         let (runtime, corpus, _) = corpus();
         let package = package_export_roots(STDLIB_EXPORTS_SOURCE, &runtime).unwrap();
-        assert_eq!(package.len(), 54);
+        assert_eq!(package.len(), 57);
         let union = runtime
             .roots
             .iter()
@@ -3041,7 +3066,7 @@ mod tests {
         assert_eq!(union.len(), runtime.roots.len() + package.len());
         assert_eq!(corpus.case_count, 597);
         assert_eq!(corpus.control_coverage.case_count, 54);
-        for mutation in 0..6 {
+        for mutation in 0..11 {
             let mut value: toml::Value = toml::from_str(STDLIB_EXPORTS_SOURCE).unwrap();
             match mutation {
                 0 => {
@@ -3062,6 +3087,28 @@ mod tests {
                         .insert("extra".into(), true.into());
                 }
                 5 => value["export"][0]["rust_name"] = "wrongSymbol".into(),
+                6 => {
+                    value["export"][54]["lean_name"] =
+                        "PrismPM.Foundation.PublicationAdmission.LinkageV1Wire.publicationLinkageWireBytes".into();
+                }
+                7 => value["export"][55]["rust_signature"] = "fn() -> Vec<u8>".into(),
+                8 => {
+                    value["export"][56]["lean_name"] =
+                        "PrismPM.Production.Other.publicationWireBytes".into();
+                }
+                9 => {
+                    value["export"][56]["lean_name"] =
+                        "PrismPM.Production.PublicationAdmission.V1Wire.unregistered".into();
+                    value["export"][56]["rust_name"] = "unregistered".into();
+                }
+                10 => {
+                    value["export"][56]["lean_name"] = "PrismPM.Foundation.Z.unregistered".into();
+                    value["export"][56]["rust_name"] = "unregistered".into();
+                    value["export"]
+                        .as_array_mut()
+                        .unwrap()
+                        .sort_by_key(|row| row["lean_name"].as_str().unwrap().to_owned());
+                }
                 _ => unreachable!(),
             }
             assert_eq!(

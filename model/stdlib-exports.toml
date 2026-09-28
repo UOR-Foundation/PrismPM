@@ -276,3 +276,18 @@ rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
 lean_name = "PrismPM.Foundation.View.Workspace.V1.Interaction.workspacePresentationBytes"
 rust_name = "workspacePresentationBytes"
 rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Production.PublicationAdmission.LinkageV1Wire.publicationLinkageWireBytes"
+rust_name = "publicationLinkageWireBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Production.PublicationAdmission.V1Wire.publicationContextFieldsPreimage"
+rust_name = "publicationContextFieldsPreimage"
+rust_signature = "fn(&PublicationDeclaration, Vec<u8>, &PublicationSubject, Vec<u8>, Vec<u8>, String) -> Result<Result<Vec<u8>, CborError>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Production.PublicationAdmission.V1Wire.publicationWireBytes"
+rust_name = "publicationWireBytes"
+rust_signature = "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>"

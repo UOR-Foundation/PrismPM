@@ -931,6 +931,12 @@ level = "build"
 statement = "A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment."
 
 [[id]]
+id = "OC-10"
+suite = "oci"
+level = "build"
+statement = "Private publication context linkage projects a unique source-owned declaration and binds generated canonical preimages to the complete captured release and tool closure without inventing absent identities, authenticating caller facts, or authorizing deployment."
+
+[[id]]
 id = "LC-01"
 suite = "lifecycle"
 level = "build"
