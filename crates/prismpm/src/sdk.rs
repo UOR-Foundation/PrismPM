@@ -14,6 +14,9 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::path::{Component, Path};
 
+mod executable_file;
+pub(crate) use executable_file::ExecutableFile;
+
 const STDLIB_SOURCES: &[u8] = include_bytes!("../sdk/stdlib-sources.tar");
 const RELEASED_INVENTORY: &str = "/opt/prismpm/share/inventory.json";
 const SDK_INVENTORY_MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -79,12 +82,13 @@ fn executable_inventory() -> Result<serde_json::Value, PrismError> {
                     continue;
                 }
             }
-            let bytes = std::fs::read(&resolved)
+            let digest = ExecutableFile::open(&resolved)
+                .and_then(|mut file| file.sha256())
                 .map_err(|error| PrismError::new("PP5401", error.to_string()))?;
             commands.push(json!({
                 "command": command,
                 "executable": resolved.to_string_lossy(),
-                "sha256": format!("{:x}", Sha256::digest(bytes))
+                "sha256": digest
             }));
             seen.insert(command);
         }
@@ -190,13 +194,9 @@ pub fn executable(command: &str) -> Result<PathBuf, PrismError> {
             .ok_or_else(|| {
                 PrismError::new("PP5401", format!("SDK command {command} is undeclared"))
             })?;
-        let observed_sha = format!(
-            "{:x}",
-            Sha256::digest(
-                std::fs::read(&resolved)
-                    .map_err(|error| PrismError::new("PP5401", error.to_string()))?
-            )
-        );
+        let observed_sha = ExecutableFile::open(&resolved)
+            .and_then(|mut file| file.sha256())
+            .map_err(|error| PrismError::new("PP5401", error.to_string()))?;
         if expected["executable"] != resolved.to_string_lossy().as_ref()
             || expected["sha256"] != observed_sha
         {
@@ -856,6 +856,33 @@ pub(crate) fn execution_binding_regression(
 mod tests {
     use serde_json::{json, Value};
     use sha2::{Digest, Sha256};
+
+    #[test]
+    fn current_sdk_command_preserves_the_verified_selected_alias() {
+        let verification = super::verify_environment().unwrap();
+        let selected = super::executable("cargo").unwrap();
+        let expected = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+            .map(|directory| directory.join("cargo"))
+            .find(|path| path.is_file())
+            .unwrap();
+        assert_eq!(selected, expected);
+        let canonical = selected.canonicalize().unwrap();
+        let mut captured = super::ExecutableFile::open(&canonical).unwrap();
+        assert_eq!(captured.sha256().unwrap().len(), 64);
+        captured.verify_reference(&selected).unwrap();
+        let output = std::process::Command::new(&selected)
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert!(output.stdout.starts_with(b"cargo "));
+        eprintln!(
+            "SDK command alias: selected={}, canonical={}, installed={}",
+            selected.display(),
+            canonical.display(),
+            verification.is_some()
+        );
+    }
 
     #[cfg(unix)]
     #[test]
