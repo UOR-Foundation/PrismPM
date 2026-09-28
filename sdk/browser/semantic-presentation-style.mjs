@@ -42,6 +42,14 @@ ${root} table{border-collapse:collapse;max-width:100%}
 ${root} :is(th,td){padding:.5em;border:1px solid var(--sp-border);text-align:start;vertical-align:top}
 @media(forced-colors:active){${root}{background:Canvas;color:CanvasText}
 ${root} :is(input,textarea,select,button,a){forced-color-adjust:auto}
+${root} :is(input,textarea,select){background:Field;color:FieldText;border-color:FieldText}
+${root} button{background:Canvas;color:CanvasText;border-color:CanvasText}
+${root} button:disabled{background:Canvas}
+${root} :is(input,textarea,select,button):disabled{color:GrayText;border-color:GrayText}
+${root} a{color:LinkText}
+${root} a:visited{color:VisitedText}
+${root} :is(th,td){border-color:CanvasText}
+${root} [data-presentation-error]{color:CanvasText}
 ${root} :focus-visible{outline-color:Highlight}}
 `;
   if (appearance === 1) return base + theme(pair[0]) + `${root}{color-scheme:light}`;

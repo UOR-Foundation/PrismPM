@@ -6,11 +6,24 @@ import {corpus, predicates, fixture, labels, designs} from './corpus.mjs';
 import {maximumCorpus} from './maximum-fixtures.mjs';
 import {encodeWire} from '../../sdk/browser/presentation-wire.mjs';
 import {executeWasm} from '../browser-presentation/checks.mjs';
-export {executeWasm};
+import {assertPaletteInventory, engines, journeyCallInventory, journeyNames} from './browser.mjs';
+export {assertPaletteInventory, executeWasm};
 
 const tsv = rows => rows.map(row => row.id + '\t' + Buffer.from(row.request).toString('hex')
   + '\t' + Buffer.from(row.response).toString('hex') + '\n').join('');
 export const closure = frozenInputs;
+
+export function captureBrowserEvidence(value) {
+  const snapshot = structuredClone(value);
+  const freeze = item => {
+    if (item !== null && typeof item === 'object') {
+      for (const child of Object.values(item)) freeze(child);
+      Object.freeze(item);
+    }
+    return item;
+  };
+  return freeze(snapshot);
+}
 
 export function verifyNativeInventory(output, rows) {
   assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
@@ -111,6 +124,8 @@ export function verifyWire(t) {
   build.evidenceDirectory = mkdtempSync(join(directory, 'run-'));
   build.positiveArchive = archive(build, build.evidenceDirectory, 'positive-artifacts', ['all-vectors.tsv']);
   build.mutationEvidence = [];
+  build.browserEvidence = [];
+  build.browserMutationEvidence = [];
   assert.deepEqual(closure(), before);
   t.diagnostic(JSON.stringify({scope: 'semantic-component-only', source: build.verified.source_id,
     attestation: build.verified.attestation_id, ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes),
@@ -123,13 +138,28 @@ export function verifyWire(t) {
 
 export function replayBrowser(build, result) {
   assert.equal(result.modelChecked, true); assert.ok(result.calls.length > 0);
+  assert.ok(engines.includes(result.engine), 'closed browser transcript engine');
+  assert.equal(result.engine, engines[build.browserEvidence.length], 'each required engine is replayed exactly once in order');
+  assertBrowserJourneyInventory(result.cases, result.calls.map(({case:caseName, role})=>({case:caseName, role})));
+  assertPaletteInventory(result.palettes);
   const roles = {wire: 'Wire', fixture: 'Fixture', labels: 'Labels', designs: 'Designs'};
   const rows = result.calls.map((row, index) => ({id: (assert.ok(roles[row.role]), roles[row.role]) + index,
     request: Buffer.from(row.request, 'hex'), response: Buffer.from(row.response, 'hex')}));
-  nativeReplay(build, rows, 'observed-browser');
+  const observed = 'observed-browser-' + result.engine, counterexample = 'changed-browser-' + result.engine;
+  nativeReplay(build, rows, observed);
   const changed = rows.map(row => ({...row, response: Buffer.from(row.response)}));
   changed[0].response[0] ^= 1;
-  assert.throws(() => nativeReplay(build, changed, 'changed-browser'), /native output mismatch/);
+  assert.throws(() => nativeReplay(build, changed, counterexample), /native output mismatch/);
+  build.browserEvidence.push(captureBrowserEvidence({engine:result.engine, cases:result.cases,
+    callInventory:result.calls.map(({case:caseName, role})=>({case:caseName, role})),
+    palettes:result.palettes, calls:rows.length,
+    observed:{file:observed + '.tsv', sha256:sha(readFileSync(join(build.work, observed + '.tsv')))},
+    counterexample:{file:counterexample + '.tsv', sha256:sha(readFileSync(join(build.work, counterexample + '.tsv')))}}));
+}
+
+export function assertBrowserJourneyInventory(names, calls) {
+  assert.deepEqual(names, journeyNames, 'exact ordered semantic journey inventory');
+  assert.deepEqual(calls, journeyCallInventory, 'exact case-bound generated browser call inventory');
 }
 
 export function verifyMutation(kind, baseline) {
@@ -165,14 +195,26 @@ export function verifyMutation(kind, baseline) {
 
 export function completeEvidence(build) {
   assert.deepEqual(build.mutationEvidence.map(row => row.kind), ['purpose', 'main', 'trailing', 'design', 'catalogue']);
+  assert.deepEqual(build.browserEvidence.map(row => row.engine), engines, 'complete required browser transcript inventory');
+  assert.deepEqual(build.browserMutationEvidence.map(row => row.engine), engines, 'complete required browser mutation inventory');
+  for (const row of build.browserEvidence) {
+    assertBrowserJourneyInventory(row.cases, row.callInventory);
+    assertPaletteInventory(row.palettes);
+    for (const transcript of [row.observed, row.counterexample])
+      assert.equal(sha(readFileSync(join(build.work, transcript.file))), transcript.sha256, 'immutable replayed browser transcript');
+  }
+  for (const row of build.browserMutationEvidence) assert.deepEqual(row.mutants.map(value => value.check),
+    ['email-autocomplete', 'email-type', 'error-associations', 'main-landmark',
+      'catalogue-preflight-0', 'wide-layout-columns', 'forced-system-palette', 'forced-authored-disabled-background']);
   build.unchanged();
   const receipt = {scope: 'private-semantic-component-only', publicApplicationAccepted: false,
     source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), native: build.nativeEvidence(),
     generatedPackages: build.generatedPackages, inputs: build.inputs, maxima: build.maxima,
-    mutations: build.mutationEvidence, archive: build.positiveArchive,
+    mutations: build.mutationEvidence, browsers:build.browserEvidence,
+    browserMutations:build.browserMutationEvidence, archive: build.positiveArchive,
     finalArchive: archive(build, build.evidenceDirectory, 'completed-artifacts',
-      ['all-vectors.tsv', 'observed-browser.tsv', 'changed-browser.tsv'])};
+      ['all-vectors.tsv', ...build.browserEvidence.flatMap(row => [row.observed.file, row.counterexample.file])])};
   writeFileSync(join(build.evidenceDirectory, 'owner.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
   build.complete = true; return build.evidenceDirectory;
 }

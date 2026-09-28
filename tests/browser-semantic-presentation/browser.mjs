@@ -15,7 +15,9 @@ const test = (name, run) => cases.push({name, run});
 const DOM_CASE = 'actual DOM exposes names, purposes, descriptions, validation and skip target';
 const LAYOUT_CASE = 'actual source-bound layout reflows, changes appearance and retains forced-color focus';
 const PREFLIGHT_CASE = 'complete metadata preflight is atomic and changed equal revision cannot replace context';
+const ORACLE_CASE = 'actual imported axe oracle audits rendered component and detects broken contrast and labels';
 const semanticFailures = new WeakMap();
+export const engines = Object.freeze(['chromium', 'firefox', 'webkit']);
 let active;
 function semanticEqual(check, actual, expected) {
   try { assert.deepEqual(actual, expected); }
@@ -30,10 +32,10 @@ async function withBrowser(callback) {
     const result = await callback(context);
     for (const page of context.browser.contexts().flatMap(context => context.pages())) {
       const calls = await page.evaluate(() => globalThis.semanticTest?.observed ?? []);
-      active.calls.push(...calls);
+      active.calls.push(...calls.map(row => ({...row, case:active.currentCase})));
     }
     return result;
-  });
+  }, {engine: active.engine});
 }
 
 async function setup(page, baseURL, frame = fixture()) {
@@ -241,7 +243,7 @@ test('complete semantic progress binds metadata, revision and the actual one-use
   });
 });
 
-test('actual imported axe oracle audits rendered component and detects broken contrast and labels', async t => {
+test(ORACLE_CASE, async t => {
   // Both source development and the installed SDK execute the exact pinned
   // engine bytes, never an ambient unversioned accessibility implementation.
   const pins = JSON.parse(readFileSync(new URL('../../model/browser-semantic-presentation-oracles.json', import.meta.url)));
@@ -265,6 +267,118 @@ test('actual imported axe oracle audits rendered component and detects broken co
     assert.deepEqual(valid.incomplete, [], 'the actual component oracle must finish every selected check');
     assert.ok(valid.passes.includes('label') && valid.passes.includes('color-contrast'));
     t.diagnostic(JSON.stringify({scope: pins.scope, oracle: 'axe-core/4.13.0', sha256: pins.engine.sha256, ...valid}));
+    async function checkPalette(colorScheme, disabled) {
+      const palette = await page.evaluate(() => {
+        const root = semanticTest.root;
+        const system = name => {
+          const probe = document.createElement('span'); probe.style.color = name; root.append(probe);
+          const value = getComputedStyle(probe).color; probe.remove(); return value;
+        };
+        const buttonText = system('CanvasText'), buttonFace = system('Canvas');
+        const fieldText = system('FieldText'), field = system('Field'), link = system('LinkText');
+        const adjustmentSupport = {auto:CSS.supports('forced-color-adjust', 'auto'),
+          none:CSS.supports('forced-color-adjust', 'none')};
+        const adjustment = style => style.getPropertyValue('forced-color-adjust');
+        const checks = [...root.querySelectorAll('button,input,textarea,select,a')].map(node => {
+          const style = getComputedStyle(node), isButton = node.tagName === 'BUTTON', isLink = node.tagName === 'A';
+          const foreground = node.disabled ? system('GrayText') : isButton ? buttonText : isLink ? link : fieldText;
+          const background = isButton ? buttonFace : isLink ? undefined : field;
+          return {tag:node.tagName, disabled:Boolean(node.disabled), foreground:style.color,
+            fill:style.getPropertyValue('-webkit-text-fill-color'), actualBackground:style.backgroundColor,
+            actualBorder:style.borderTopColor, actualAdjustment:adjustment(style),
+            text:style.color === foreground && style.getPropertyValue('-webkit-text-fill-color') === foreground,
+            background:background === undefined || style.backgroundColor === background,
+            border:!isButton || (style.borderTopColor === foreground && style.borderTopStyle !== 'none'
+              && Number.parseFloat(style.borderTopWidth) >= 1),
+            adjustment:adjustment(style) === (adjustmentSupport.auto ? 'auto' : '')};
+        });
+        const borders = [...root.querySelectorAll('th,td')].map(node => getComputedStyle(node).borderTopColor);
+        const errors = [...root.querySelectorAll('[data-presentation-error]')].map(node => getComputedStyle(node).color);
+        // Observe the authored cascade with a deliberately unequal surface.
+        // Only engines supporting adjustment can additionally isolate forced
+        // repainting. All engines must detect the real rule-removal mutant.
+        const before = root.innerHTML, originalControls = [...root.querySelectorAll('button,input,textarea,select,a')];
+        const clone = root.querySelector('button').cloneNode(true); clone.removeAttribute('id'); clone.disabled = true;
+        const sentinel = buttonFace === 'rgb(1, 2, 3)' ? 'rgb(4, 5, 6)' : 'rgb(1, 2, 3)';
+        clone.style.setProperty('--sp-surface', sentinel); clone.style.forcedColorAdjust = 'none';
+        let authoredBackground, cloneAdjustment, cloneSentinel;
+        try {
+          root.append(clone); const style = getComputedStyle(clone);
+          cloneAdjustment = adjustment(style); cloneSentinel = style.getPropertyValue('--sp-surface') === sentinel;
+          authoredBackground = style.backgroundColor === buttonFace;
+        } finally {clone.remove();}
+        const retained = [...root.querySelectorAll('button,input,textarea,select,a')];
+        return {checks, adjustmentSupport, cloneAdjustment, cloneSentinel,
+          text:checks.every(row=>row.text), background:checks.every(row=>row.background),
+          buttonBorder:checks.every(row=>row.border),
+          adjustment:checks.every(row=>row.adjustment)
+            && retained.every((node,index)=>adjustment(getComputedStyle(node))===checks[index].actualAdjustment), controls:checks.length,
+          disabledCount:root.querySelectorAll(':is(button,input,textarea,select):disabled').length,
+          tags:[...root.querySelectorAll('button,input,textarea,select,a')].map(node=>node.tagName).sort(),
+          borders, errors, canvasText:system('CanvasText'), authoredBackground,
+          cloneRemoved:root.innerHTML === before && retained.length === originalControls.length
+            && retained.every((node,index)=>node===originalControls[index])};
+      });
+      assert.equal(palette.controls, 6, 'all supported native form controls and local skip link observed');
+      assert.deepEqual(palette.tags, ['A','BUTTON','INPUT','INPUT','SELECT','TEXTAREA']);
+      assert.equal(palette.disabledCount, disabled ? 5 : 0, 'actual enabled and pending-disabled branches observed');
+      semanticEqual('forced-system-palette', palette.text && palette.background && palette.buttonBorder, true);
+      assert.equal(palette.adjustmentSupport.auto, palette.adjustmentSupport.none);
+      assert.equal(palette.cloneAdjustment, palette.adjustmentSupport.none ? 'none' : '');
+      assert.equal(palette.cloneSentinel, true); assert.equal(palette.cloneRemoved, true);
+      semanticEqual('forced-authored-disabled-background', palette.authoredBackground, true);
+      assert.equal(palette.background, true); assert.equal(palette.adjustment, true); assert.equal(palette.buttonBorder, true);
+      assert.equal(palette.borders.length, 4); assert.ok(palette.borders.every(color=>color===palette.canvasText));
+      assert.deepEqual(palette.errors, [palette.canvasText]);
+      const forced = await run(); assert.deepEqual(forced.violations, []); assert.deepEqual(forced.incomplete, []);
+      active.palettes.push({...palette, colorScheme, disabled, oracle:forced});
+    }
+    for (const [index, colorScheme] of ['light', 'dark'].entries()) {
+      await page.emulateMedia({forcedColors:'active', colorScheme});
+      await page.waitForFunction(() => matchMedia('(forced-colors:active)').matches);
+      await page.evaluate(revision => {
+        const t = semanticTest, frame = structuredClone(t.frame); frame[1][1] = revision;
+        frame[1][6][3][1][5] = 'person@example.invalid'; frame[5][2][3] = 5;
+        frame[1][6].push([3,[6,5,true,true,128,'Additional details',0]],
+          [3,[7,0,true,false,1,[[1,0],[2,5]],0]],
+          [1,[9,5,[2,7],[['Example mailbox','Example recovery']]]]);
+        frame[5].push([7,0,0,0,0,0], [8,0,0,0,0,0]);
+        t.view.render(t.wire.encodeWire(frame)); t.paletteFrame = frame;
+        if (t.observed.length) {
+          const row = t.observed.at(-1);
+          if (row.role !== 'wire' || row.request !== row.response) throw Error('source must admit complete palette frame');
+        }
+      }, 2 + index * 3);
+      await checkPalette(colorScheme, false);
+      await page.getByLabel('Email', {exact:true}).focus();
+      assert.equal(await page.getByLabel('Email', {exact:true}).evaluate(node => getComputedStyle(node).outlineStyle), 'solid');
+      await page.getByRole('button', {name:'Continue', exact:true}).click();
+      await page.waitForFunction(count => semanticTest.calls.length === count, index + 1);
+      await page.evaluate(() => {
+        const t = semanticTest, pending = structuredClone(t.paletteFrame); pending[1][1]++; pending[1][2] = 1;
+        for (const index of [3,4,6,7]) pending[1][6][index][1][2] = false;
+        pending[1][6][5][1][3] = false;
+        t.dom.progressPresentation(t.originalView, t.calls.at(-1).token, t.observe(t.wire.encodeWire(pending)));
+        if (t.observed.length) {
+          const row = t.observed.at(-1);
+          if (row.role !== 'wire' || row.request !== row.response) throw Error('source must admit pending palette frame');
+        }
+      });
+      await checkPalette(colorScheme, true);
+      await page.evaluate(() => {
+        const t = semanticTest, settled = structuredClone(t.paletteFrame); settled[1][1] += 2;
+        t.settle(t.observe(t.wire.encodeWire(settled)));
+      });
+      await page.waitForFunction(() => !semanticTest.root.querySelector('button').disabled);
+    }
+    // The closed adapter exposes only a local skip link, not arbitrary URLs.
+    // Its observable LinkText is covered; this does not claim visited-history evidence.
+    await page.emulateMedia({forcedColors:'none', colorScheme:'light'});
+    await page.evaluate(() => {
+      const t = semanticTest, restored = structuredClone(t.frame); restored[1][1] = 8;
+      t.view.render(t.wire.encodeWire(restored));
+    });
+    const restored = await run(); assert.deepEqual(restored, valid, 'normal modeled palette and oracle coverage are restored');
     await page.evaluate(() => {
       const {root} = semanticTest;
       root.querySelector('h1').style.color = '#eeeeee';
@@ -279,23 +393,44 @@ test('actual imported axe oracle audits rendered component and detects broken co
   });
 });
 
-export async function journey(t, build = null, replacements = {}) {
+export const journeyNames = Object.freeze([
+  'semantic entry rejects accessor catalogues and open option extensions', DOM_CASE, LAYOUT_CASE,
+  'ordinary email and ephemeral recovery bytes survive native keyboard capture exactly', PREFLIGHT_CASE,
+  'complete semantic progress binds metadata, revision and the actual one-use dispatcher', ORACLE_CASE,
+]);
+// Each browser journey executes one source fixture/labels/designs prefix.
+// Exact wire calls: initial renders; six refused/changed preflight candidates;
+// two progress/final frames; and seven forced-palette/restoration frames.
+export const journeyCallInventory = Object.freeze([0,1,1,1,7,3,8].flatMap((count, index) => count === 0 ? []
+  : ['fixture','labels','designs', ...Array(count).fill('wire')]
+    .map(role => Object.freeze({case:journeyNames[index], role}))));
+
+export function assertPaletteInventory(palettes) {
+  assert.deepEqual(palettes.map(({colorScheme, disabled, disabledCount})=>[colorScheme, disabled, disabledCount]),
+    [['light',false,0],['light',true,5],['dark',false,0],['dark',true,5]],
+    'exact phase-bound palette observation inventory');
+}
+
+export async function journey(t, build = null, replacements = {}, engine = 'chromium') {
   assert.equal(active, undefined, 'private oracle execution is nonreentrant');
+  assert.ok(engines.includes(engine), 'closed pinned semantic oracle engine');
+  assert.deepEqual(cases.map(row=>row.name), journeyNames, 'exact registered semantic journeys');
   if (build) for (const key of ['wasmBytes', 'fixtureBytes', 'labelsBytes', 'designsBytes']) assert.ok(build[key]?.length, key);
-  active = {build, calls: [], replacements};
+  active = {build, calls: [], replacements, engine, palettes:[]};
   const completed = [];
   try {
     for (const {name, run} of cases) {
       active.currentCase = name;
       await run(t); completed.push(name);
     }
-    return {modelChecked: Boolean(build), cases: completed, calls: active.calls};
+    assertPaletteInventory(active.palettes);
+    return {engine, modelChecked: Boolean(build), cases: completed, calls: active.calls, palettes:active.palettes};
   } finally { active = undefined; }
 }
 
-export async function verifyMutants(t, build = null) {
+export async function verifyMutants(t, build = null, engine = 'chromium') {
   // A missing oracle or broken environment must fail before any kill is counted.
-  const baseline = await journey(t, build);
+  const baseline = await journey(t, build, {}, engine);
   assert.equal(baseline.cases.length, 7);
   assert.deepEqual(baseline.cases, cases.map(row => row.name));
   const file = new URL('../../sdk/browser/presentation-dom.mjs', import.meta.url), original = readFileSync(file, 'utf8');
@@ -311,7 +446,7 @@ export async function verifyMutants(t, build = null) {
   const evidence = [];
   async function reject(name, caseName, check, observed, replacements) {
     let failure;
-    try { await journey(t, build, replacements); }
+    try { await journey(t, build, replacements, engine); }
     catch (error) {
       failure = semanticFailures.get(error);
       if (!failure) throw new Error('unrelated failure cannot kill semantic ' + name, {cause:error});
@@ -331,8 +466,16 @@ export async function verifyMutants(t, build = null) {
   assert.equal(style.split('@media(max-width:').length, 2);
   await reject('reflow', LAYOUT_CASE, 'wide-layout-columns', 1,
     {'semantic-presentation-style.mjs': style.replace('@media(max-width:', '@media(min-width:')});
+  const systemButton = '${root} button{background:Canvas;color:CanvasText;border-color:CanvasText}';
+  assert.equal(style.split(systemButton).length, 2);
+  await reject('forced system palette', ORACLE_CASE, 'forced-system-palette', false,
+    {'semantic-presentation-style.mjs': style.replace(systemButton, '')});
+  const disabledBackground = '${root} button:disabled{background:Canvas}';
+  assert.equal(style.split(disabledBackground).length, 2);
+  await reject('forced disabled authored background', ORACLE_CASE, 'forced-authored-disabled-background', false,
+    {'semantic-presentation-style.mjs': style.replace(disabledBackground, '')});
   assert.equal(readFileSync(file, 'utf8'), original); assert.equal(readFileSync(styleFile, 'utf8'), style);
-  assert.equal(evidence.length, 6);
+  assert.equal(evidence.length, 8);
   return Object.freeze(evidence);
 }
 

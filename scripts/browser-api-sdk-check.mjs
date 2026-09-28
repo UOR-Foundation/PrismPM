@@ -60,7 +60,7 @@ export const suites=Object.freeze([
  {id:'DK-33',minimum:17,files:['tests/browser-account-genesis/corpus.test.mjs','tests/browser-account-genesis/bridge.test.mjs','tests/browser-account-genesis/owner.test.mjs']},
  {id:'DK-34',minimum:18,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
- {id:'DK-38',minimum:21,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
+ {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
 ].map(row=>Object.freeze({...row,
  deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));

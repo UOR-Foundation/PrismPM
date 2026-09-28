@@ -126,7 +126,7 @@ test('new installed Node suites retain exact complete owning files and deadlines
  assert.equal(custody?.minimum, 11); assert.equal(custody?.deadline, 3600000);
  const semantic = suites.find(row => row.id === 'DK-38');
  assert.deepEqual(semantic?.files, ['tests/browser-semantic-presentation/wire.test.mjs', 'tests/browser-semantic-presentation/dom.test.mjs', 'sdk/browser/semantic-presentation.test.mjs']);
- assert.equal(semantic?.minimum, 21); assert.equal(semantic?.deadline, 3600000);
+ assert.equal(semantic?.minimum, 29); assert.equal(semantic?.deadline, 3600000);
  const journal = suites.find(row => row.id === 'DK-24');
  assert.deepEqual(journal?.files, ['sdk/browser/operation-journal.test.mjs']);
  assert.equal(journal?.minimum, 28); assert.equal(journal?.deadline, 3600000);
@@ -158,7 +158,7 @@ test('installed session kernel preserves its exact registered owner, complete so
 
 test('semantic owner registration preserves actual Rust files, minimum and deadline', () => {
  const semantic = suites.find(row => row.id === 'DK-38');
- assert.ok(semantic); assert.equal(semantic.minimum, 21); assert.equal(semantic.deadline, 3600000);
+ assert.ok(semantic); assert.equal(semantic.minimum, 29); assert.equal(semantic.deadline, 3600000);
  const source = sdkSource('crates/conformance/src/cases/mod.rs');
  const owner = /"DK-38"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(source);
  assert.ok(owner); assert.equal(Number(owner[2]), semantic.minimum);
@@ -336,7 +336,7 @@ test('semantic suite refuses missing or empty siblings even with surplus real pa
 test('semantic registry regression kills owner, minimum and deadline substitutions', t => {
  const original = sdkSource('scripts/browser-api-sdk-check.mjs');
  const row = original.split('\n').find(line => line.includes("{id:'DK-38'")); assert.ok(row);
- const changes = [row.replace('minimum:21', 'minimum:20'),
+ const changes = [row.replace('minimum:29', 'minimum:28'),
   row.replace('wire.test.mjs', 'substitute.test.mjs')];
  const mutated = changes.map(changed => original.replace(row, changed));
  const deadline = "deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000";
@@ -358,17 +358,28 @@ test('installed semantic gate rejects omission of each false-evidence safeguard'
  const root = temporary(t); testFixtures(root);
  const semantic = suites.find(row => row.id === 'DK-38');
  const safeguards = ['missing oracle', 'launcher failure', 'closed page', 'no-op mutation', 'wrong semantic check'];
- const dom = omitted => "import {test} from 'node:test';\n" +
-  ['positive journeys', 'six actual mutants', ...safeguards].filter(name => name !== omitted)
-   .map(name => `test(${JSON.stringify(name)},()=>{});\n`).join('');
- put(root, semantic.files[0], testSource(5));
- put(root, semantic.files[1], dom());
- put(root, semantic.files[2], testSource(9));
+ const observations = ['immutable observations', 'exact journey and call inventory',
+  'closed transcript engine', 'complete browser and mutant inventories'];
+ const engineChecks = ['firefox generated journey', 'webkit generated journey',
+  'firefox adapter mutants', 'webkit adapter mutants'];
+ const fixtures = [
+  [...observations, 'source closure', 'wire corpus', 'catalogue authority', 'immutable designs', 'aggregate bound'],
+  ['positive journeys', 'eight actual mutants per engine', ...safeguards],
+  ['owning parent', 'chromium generated journey', ...engineChecks.slice(0,2), '64 MiB maximum',
+   'chromium adapter mutants', ...engineChecks.slice(2), 'purpose mutant', 'main mutant',
+   'trailing mutant', 'design mutant', 'catalogue mutant'],
+ ];
+ const write = (index, omitted) => put(root, semantic.files[index], "import {test} from 'node:test';\n"
+  + fixtures[index].filter(name => name !== omitted).map(name => `test(${JSON.stringify(name)},()=>{});\n`).join(''));
+ fixtures.forEach((_, index) => write(index));
  assert.deepEqual(runSuites(root, spawnSync, () => {}).find(row => row.id === 'DK-38'),
-  {id: 'DK-38', tests: 21});
- for (const omitted of safeguards) {
-  put(root, semantic.files[1], dom(omitted));
-  assert.throws(() => runSuites(root, spawnSync, () => {}), /incomplete test suite/, omitted);
+  {id: 'DK-38', tests: 29});
+ for (const [index, required] of [[0, observations], [1, safeguards], [2, engineChecks]]) {
+  for (const omitted of required) {
+   write(index, omitted);
+   assert.throws(() => runSuites(root, spawnSync, () => {}), /incomplete test suite/, omitted);
+   write(index);
+  }
  }
 });
 
