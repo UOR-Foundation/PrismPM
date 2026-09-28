@@ -1,5 +1,24 @@
 # PrismPM falsifiability and verification record
 
+## Native golden source preflight
+
+Native SDK platforms now reject stale shared source paths, bytes or descriptors
+before proof generation. The normative development writer still regenerates the
+baseline; complete generation, native-record validation and comparison remain
+mandatory. This changes refusal timing, not golden acceptance.
+
+All 41 xtask unit tests and three integration tests passed in the pinned
+development container, including five new preflight tests. Reversing the actual
+platform condition failed four of those tests. All-target/all-feature Clippy
+and formatting passed. The actual CLI on Ubuntu 24.04 rejected a renamed-source
+fixture in 4.95 ms without writing or starting generation.
+
+Restored test log SHA-256:
+`fb4bd566b96b9c672e8e8b38ee63506622a1eef05a85de6f1316c61a3f043987`.
+Negative CLI receipt `target/preflight-cli-evidence.json`, SHA-256:
+`93996d62b42ee5c6bb3353d9f6336c8f52db5552de526a6f79f3a8eeb303b837`.
+This is a preflight checkpoint, not full V&V, SDK or Foundry acceptance.
+
 ## Recovered private session kernel (DK-26)
 
 The complete registered owner passed in the pinned development container:
