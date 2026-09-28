@@ -100,6 +100,10 @@ const HARNESSES: &[(&str, &str)] = &[
         "tests/holo-codec-oracle/src/main.rs",
     ),
     (
+        "tests/holo-primary-component/driver/Cargo.toml",
+        "tests/holo-primary-component/driver/src/main.rs",
+    ),
+    (
         "tests/holo-browser-codec/Cargo.toml",
         "tests/holo-browser-wire-generated.rs",
     ),
@@ -129,6 +133,8 @@ const SOURCES: &[&str] = &[
     "tests/browser-budget/runner.rs",
     "tests/hologram-oracle/src/main.rs",
     "tests/hologram-oracle/tests/browser_surface.rs",
+    "tests/holo-primary-component/runner.rs",
+    "tests/holo-primary-component/oracle.rs",
 ];
 // The workspace integration target includes this authored module. Its name
 // describes the code it tests, not code generated into this file.
