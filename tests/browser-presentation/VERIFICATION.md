@@ -35,6 +35,14 @@ This closes this component's custody gap, not combined SDK, installed release,
 complete accessibility or Foundry deployment acceptance. Those gates remain
 required; no publication refusal is weakened.
 
+Normal golden generation and a fresh non-writing readback both pass all 374
+reviewed files. Independent review verified all 97 source copies and 373 linked
+file records. Fifteen source copies were missing from the inherited composition
+snapshot; three existing copies were stale. Generated Lean, IR, native build and
+compiler-semantics bytes are unchanged. Attestation linkage records the actual
+caller `51803a35113b1dbbe0688fc99bce2aa658bc601175370f5d60f936b17c318f1b`;
+no evidence was hand-resealed. Complete current-revision CI remains required.
+
 ## Status-region correction — 28 September 2026
 
 The real-browser regression first failed because the status message was
