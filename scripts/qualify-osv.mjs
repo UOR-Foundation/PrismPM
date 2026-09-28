@@ -11,10 +11,10 @@ import {ecosystems, metadataUrl, validateManifest} from './refresh-osv.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const output=join(root,'.prism/cache/osv-candidate');
 const proposalPath=join(root,'.prism/cache/osv-refresh.json');
-const changedPaths=['model/authorities.toml','model/osv-databases.json','standards.lock'];
+const changedPaths=['model/authorities.toml','model/osv-databases.json','standards.lock','CONFORMANCE.md'];
 const sourcePaths=['.github/workflows/osv-input-qualification.yml','scripts/qualify-osv.mjs',
   'scripts/qualify-osv.test.mjs','scripts/refresh-osv.mjs','scripts/refresh-osv.test.mjs',
-  'Cargo.lock','model/authorities.toml','model/osv-databases.json','standards.lock'];
+  'Cargo.lock','model/authorities.toml','model/osv-databases.json','standards.lock','CONFORMANCE.md'];
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const now=()=>Math.floor(Date.now()/1000);
 
@@ -85,6 +85,18 @@ export function checkChangedPaths(text,expected) {
   assert.deepEqual(actual,[...expected].sort(),'candidate changes only intended authority inputs');
 }
 
+export function checkGeneratedConformance(actual,previous,oldManifest,manifest) {
+  validateManifest(oldManifest);validateManifest(manifest);
+  const row=value=>`| \`${value.id}\` | \`gcs-generation-${value.generation}\` | ${value.url} | \`${value.sha256}\` | \`AU-05\`, \`SC-04\` |`;
+  let expected=previous;
+  for(let index=0;index<ecosystems.length;index++) {
+    const old=row(oldManifest.databases[index]),next=row(manifest.databases[index]);
+    assert.equal(expected.split(old).length,2,'exactly one original OSV citation row');
+    expected=expected.replace(old,next);
+  }
+  assert.equal(actual,expected,'generated conformance changes only the five acquired OSV citations');
+}
+
 async function acquireCandidate() {
   run('git',['diff','--exit-code','HEAD']);
   const source=await sourceIdentity();
@@ -139,6 +151,8 @@ async function finishCandidate() {
   const results=[];
   for(const [tool,args] of commands)results.push({tool,args,stdout:run(tool==='prismpm'?cli:writer,args,{env,timeout:5*60000})});
   run(process.execPath,['--test','scripts/refresh-osv.test.mjs','scripts/qualify-osv.test.mjs']);
+  checkGeneratedConformance(await readFile(join(root,'CONFORMANCE.md'),'utf8'),run('git',['show','HEAD:CONFORMANCE.md']),
+    JSON.parse(run('git',['show','HEAD:model/osv-databases.json'])),manifest);
   checkChangedPaths(run('git',['diff','--name-only','HEAD']),changedPaths);
   for(const row of manifest.databases)await checkCachedObject(join(root,'.prism/cache/authorities/sha256',row.sha256),row);
   checkFreshProposal(manifest,now());

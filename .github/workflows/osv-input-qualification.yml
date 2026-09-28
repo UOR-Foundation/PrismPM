@@ -35,6 +35,16 @@ jobs:
         run: node --test scripts/refresh-osv.test.mjs scripts/qualify-osv.test.mjs
       - name: Acquire, independently review and construct disposable candidate
         run: node scripts/qualify-osv.mjs acquire
+      - name: Retain acquisition facts independently of candidate generation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: osv-acquisition-only-${{ github.sha }}
+          path: |
+            .prism/cache/osv-candidate/proposal.json
+            .prism/cache/osv-candidate/review.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
       - name: Resolve and read back with source-built tools in the devcontainer
         uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6
         with:

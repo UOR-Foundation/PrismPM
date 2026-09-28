@@ -4,7 +4,7 @@ import {mkdtemp,readFile,rm,symlink,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
-import {checkCachedObject,checkChangedPaths,checkFreshProposal,checkOfficialMetadata} from './qualify-osv.mjs';
+import {checkCachedObject,checkChangedPaths,checkFreshProposal,checkGeneratedConformance,checkOfficialMetadata} from './qualify-osv.mjs';
 
 const manifest=async()=>JSON.parse(await readFile(new URL('../model/osv-databases.json',import.meta.url),'utf8'));
 test('independent official metadata binds every acquired identity field',async()=>{
@@ -40,10 +40,28 @@ test('candidate freshness retains all five inputs and exact oldest-source expiry
   }
 });
 test('candidate diff cannot omit an intended input or add unrelated changes',()=>{
-  const expected=['model/authorities.toml','model/osv-databases.json','standards.lock'];
+  const expected=['model/authorities.toml','model/osv-databases.json','standards.lock','CONFORMANCE.md'];
   checkChangedPaths(expected.join('\n')+'\n',expected);
   for(const paths of [expected.slice(0,2),[...expected,'SPEC.md'],[...expected,expected[0]],[]])
     assert.throws(()=>checkChangedPaths(paths.join('\n'),expected));
+});
+test('normal generated conformance permits only the complete five OSV citation substitutions',async()=>{
+  const before=await manifest(),after=structuredClone(before);
+  const original=await readFile(new URL('../CONFORMANCE.md',import.meta.url),'utf8');
+  let generated=original;
+  for(const row of after.databases) {
+    const oldId=row.id;row.generation=String(BigInt(row.generation)+1n);
+    row.id=row.id.replace(/[0-9]{16}$/u,row.generation);
+    row.url=row.url.replace(/[0-9]{16}$/u,row.generation);
+    row.metadata_url=row.metadata_url.replace(/[0-9]{16}$/u,row.generation);
+    const line=generated.split('\n').find(value=>value.startsWith(`| \`${oldId}\` |`));
+    assert.ok(line);generated=generated.replace(line,line.replaceAll(before.databases.find(value=>value.ecosystem===row.ecosystem).generation,row.generation));
+  }
+  checkGeneratedConformance(generated,original,before,after);
+  for(const changed of [original,generated+'unrelated prose\n',generated.replace('`AU-05`, `SC-04`','`AU-05`')])
+    assert.throws(()=>checkGeneratedConformance(changed,original,before,after));
+  const first=before.databases[0].id;
+  assert.throws(()=>checkGeneratedConformance(generated,original.replace(first,'absent'),before,after));
 });
 test('workflow uploads only small review artifacts without write or signing permissions',async()=>{
   const workflow=await readFile(new URL('../.github/workflows/osv-input-qualification.yml',import.meta.url),'utf8');
@@ -52,6 +70,6 @@ test('workflow uploads only small review artifacts without write or signing perm
   assert.match(workflow,/branches: \['chore\/osv-inputs-\*'\]/u);assert.doesNotMatch(workflow,/pull_request:/u);
   assert.doesNotMatch(workflow,/secrets\.|write-all|contents: write|pull_request_target|id-token:|packages:/u);
   for(const action of workflow.matchAll(/uses: ([^\s]+)/gu))assert.match(action[1],/@[0-9a-f]{40}$/u);
-  const paths=workflow.split('          path: |\n')[1].split('          include-hidden-files:')[0].trim().split('\n').map(value=>value.trim());
-  assert.deepEqual(paths,['proposal.json','review.json','receipt.json','candidate.patch'].map(name=>`.prism/cache/osv-candidate/${name}`));
+  const paths=workflow.split('          path: |\n').slice(1).map(block=>block.split('          include-hidden-files:')[0].trim().split('\n').map(value=>value.trim()));
+  assert.deepEqual(paths,[['proposal.json','review.json'],['proposal.json','review.json','receipt.json','candidate.patch']].map(names=>names.map(name=>`.prism/cache/osv-candidate/${name}`)));
 });
