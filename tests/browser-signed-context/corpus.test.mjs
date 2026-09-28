@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
-import {corpus, context, envelope, publicKey, encode} from './corpus.mjs';
+import {corpus, context, envelope, publicKey, encode, rejected} from './corpus.mjs';
 import {mutations, mutateSignedContextSource} from './mutations.mjs';
 
 test('independent signed-context exact wire bounds and complete finite inventory', () => {
@@ -53,4 +53,32 @@ test('envelope reader binds version separately from context key and signature', 
   check(values[0]);
   const shifted = structuredClone(values[0]); shifted.fields[0].value.value.name = 'field0';
   assert.throws(() => check(shifted));
+});
+
+test('validity mutants retain parameter use and exact semantic counterexamples', () => {
+  const name = 'Foundation.Browser.Application.V1.SignedContext';
+  const original = readFileSync(new URL('../../stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex', import.meta.url));
+  const rows = corpus();
+  for (const [id, declarationName, probe, request, response] of [
+    ['ContextValidity', 'signedContextValid', 'ContextRange2', [1, 0, envelope(context(4))], rejected(0)],
+    ['KeyValidity', 'signedContextKeyValid', 'KeyPrefix0', [1, 0, envelope(context(), Uint8Array.from([0, ...publicKey().slice(1)]))], rejected(1)],
+  ]) {
+    const sources = new Map([[name, original]]);
+    mutateSignedContextSource(sources, id);
+    const data = JSON.parse(/\\semanticdata\{(.*)\}/.exec(sources.get(name).toString())[1]);
+    const declaration = data.declarations.find(row => row.name === declarationName);
+    const uses = new Set();
+    function visit(node) {
+      if (!node || typeof node !== 'object') return;
+      if (node.kind === 'var') uses.add(node.name);
+      for (const value of Object.values(node)) Array.isArray(value) ? value.forEach(visit) : visit(value);
+    }
+    visit(declaration.body);
+    for (const parameter of declaration.parameters)
+      assert.ok(uses.has(parameter.name), id + ' must reach behavior, not LLV7006: ' + parameter.name);
+    const row = rows.find(row => row.id === probe);
+    assert.deepEqual(row.request, encode(request));
+    assert.deepEqual(row.response, encode(response));
+    assert.equal(mutations.find(row => row.id === id).probe, probe);
+  }
 });

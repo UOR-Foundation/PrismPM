@@ -23,10 +23,18 @@ Historical component identities:
 A fixture-only correction serves immutable original WPT scripts through actual
 loopback HTTP, including worker imports. A separate diagnostic collected all
 1,944 cases: Chromium 151.0.7922.34 passes 324 per realm; Firefox 153.0 and
-WebKit 26.5 each fail 24 per realm. Every failure remains a failure. Exact raw
+WebKit 26.5 each fail 24 per realm (48 per browser, 96 total). Both Window and
+DedicatedWorker complete all 324 cases with harness status zero. Every failure
+remains a failure. Exact raw
 results SHA-256: `95bfef514cb5629a9a19ff6275cb3e0bc1a345fb36c45aae000aeae5e3603011`.
 
-The transfer cases observe two algorithm-name getter reads in Firefox/WebKit.
+The pinned WPT revision is `986e75d7897742148c16253c08c50c8ba0e7b0f7`.
+Its `signature.js` transfers the signature/data buffer unconditionally on each
+algorithm-name getter read. The raw minimal reproduction observes one read in
+Chromium and two in Firefox/WebKit; the second transfer throws on the detached
+buffer (`TypeError`, including WebKit's `Receiver is detached`). This is a
+provider/oracle normalization disagreement, not the corrected HTTP/worker
+harness issue or evidence that either browser is categorically unsupported.
 The unresolved normative clarification is [WebCrypto issue 563](https://github.com/w3c/webcrypto/issues/563).
 The original source is not patched and upstream failure metadata is not an
 exemption. SDK captured-byte behavior is a distinct, narrower API; its separate
@@ -54,7 +62,18 @@ parity, artifact substitution checks and final closure passed. Chromium and
 Firefox each passed 29 SDK journeys, exact native replay and six host mutants.
 All 23 source mutants ran: 21 produced genuine compiled counterexamples;
 `ContextValidity` and `KeyValidity` failed strict `LLV7006` unused-parameter
-warnings, not behavioral verification. Their constant-body fixtures need correction.
+warnings, not behavioral verification. Their constant-body fixtures were invalid.
+
+The corrected fixtures preserve parameter use and target the exact existing
+purpose-range/key-prefix counterexamples. Their construction regression fails
+on the former fixtures. A fresh source-only diagnostic now passes the unchanged
+1,220-case baseline and detects all 23 actual compiled mutants in native
+std/no_std and Wasm. Final frozen-input checks and compiler-cache retirement
+pass. Diagnostic SHA-256:
+`531cb5704a72661f6ad65a96b331da3cdd6e0664a2945c1eb6fa74edcd9da00f`;
+retained at `prismpm-signed-context-mutants:/tmp/prismpm-signed-context-N4wZEG/`
+and workspace `PrismPM/target/signed-context-mutants-zPvPCb/`. This separate
+diagnostic does not execute WPT or establish complete owner acceptance.
 
 The original raw WPT failures remain unchanged. WebKit's pristine SDK journey
 also failed: its invalid-point verification returned `signature-rejected`, not
@@ -69,8 +88,9 @@ caches retired normally, and no successful owner receipt was written. Logs:
 `/tmp/dk32-owner-report-VODIOl`; artifacts:
 `/tmp/prismpm-signed-context-qtdZY7` in `prismpm-signed-context-owner`.
 
-Remaining: authoritative edition/profile clarification for the raw provider
-oracle, generated curve-point validation, corrected mutation fixtures, fresh
+Remaining: authoritative clarification and reviewed oracle/provider update
+for the unchanged raw-provider checks; accepted DK-34 generated curve-point
+admission before provider import/key facts; fresh
 complete three-engine/source/host verification and installed SDK acceptance.
 The normative original-WPT requirement is unchanged.
 
