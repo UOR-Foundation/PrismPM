@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-33 @build
+  Scenario: Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority.
+    Given a source-owned immutable account genesis with a stable namespace and initial public key
+    When generated native, no_std and Wasm execution checks the complete canonical codec and digest projection
+    Then every malformed or substituted input rejects or changes its independently computed identifier and real source mutations fail
+    And actual browser hashing and curve validation establish only a content-addressed account declaration, not possession, mailbox verification, credential succession or organization permission
+
   @DK-31 @build
   Scenario: Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority.
     Given source-generated text choices alongside unchanged catalogue-based choices

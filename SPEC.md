@@ -1614,6 +1614,34 @@ does not establish useful accessible naming or human-centered design. Foundry
 journeys, organization authority and public application acceptance remain
 separate requirements; `PP2011` remains mandatory.
 
+#### 12.11.3 Private stable account genesis
+
+DK-33 defines an immutable account declaration containing a stable namespace,
+creation nonce and initial uncompressed P-256 public key. Generated source owns
+canonical encoding, exact expected-namespace admission and the domain-separated
+identity preimage. The browser performs actual point import and SHA-256; only
+its factory returns opaque captured facts. The resulting reference identifies
+this declaration, not a human, mailbox owner, organization role or current
+credential. Application updates and authorized credential rotation preserve the
+original genesis. Changing its namespace or any other field creates a different
+declaration, never transfers authority.
+
+`AccountGenesis.cddl` fixes the internal definite-CBOR frame: genesis 137 bytes,
+identity material 163, largest valid request 174 and response 409, with a 512-byte
+complete frame ceiling. Parsing consumes every byte. No caller hash, callback,
+verification flag or public constructor replaces generated admission or actual
+cryptography. The private bootstrap must bind the selected artifact to verified
+source/package provenance; a self-consistent module digest alone does not.
+
+Acceptance requires full generated kernel/native std/no_std/two-Wasm parity,
+canonical and malformed boundaries, actual maximum and one-over frames,
+independent digest calculations, compiled source defects and three-engine
+capture/curve/hash/opaque-handle adversaries with exact native transcript replay.
+Account allocation, proof of initial key possession, authenticated succession,
+mailbox verification, recovery, currentness and organization authority remain
+separate required integrations. This private component is not DID, VC, JOSE,
+COSE or application acceptance. `PP2011` remains closed.
+
 ### 12.12 Private durable operation journal
 
 DK-24 owns source-generated local operation admission, canonical records and
@@ -2285,6 +2313,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `DK-29` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `DK-31` | `sdk` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. | §12 |
+| `DK-33` | `sdk` | Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
