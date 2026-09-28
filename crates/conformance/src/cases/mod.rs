@@ -467,6 +467,18 @@ pub fn run_at(root: &Path, id: &str) {
             8,
             "3600000",
         ),
+        "DK-35" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-session-operation/boundary.test.mjs",
+                "tests/browser-view/kernel-provenance.test.mjs",
+                "tests/browser-view/local-module-inputs.test.mjs",
+                "tests/browser-session-operation/owner.test.mjs",
+            ],
+            90,
+            "7200000",
+        ),
         "OC-07" => verify_browser_export(root),
         "OC-08" => browser_publication::verify(root),
         "OC-09" => verify_node_suite(

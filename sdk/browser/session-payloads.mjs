@@ -58,12 +58,8 @@ async function generated(bytes, expected) {
   };
 }
 
-class SessionPayloads {
-  #store; #wire; #partition; #closed = false; #busy = false; #uncertain = false;
-  constructor(store, wire, partition) {this.#store = store; this.#wire = wire; this.#partition = partition;}
-  #check() {if (this.#closed) throw fail('payload-closed');}
-  #plan(bytes) {
-    const plan = this.#partition(bytes);
+function partitionPlan(partition, bytes) {
+    const plan = partition(bytes);
     if (!Array.isArray(plan) || plan.length < 1 || plan.length > 64) throw fail('invalid-generated-output');
     let offset = 0;
     for (const row of plan) {
@@ -74,9 +70,9 @@ class SessionPayloads {
     }
     if (offset !== bytes.length) throw fail('invalid-generated-output');
     return plan;
-  }
-  #descriptor(bytes) {
-    const value = canonical(bytes), admitted = this.#wire(encode([1, 6, value]));
+}
+function admittedDescriptor(wire, bytes) {
+    const value = canonical(bytes), admitted = wire(encode([1, 6, value]));
     if (!same(bytes, encode(admitted))) throw fail('payload-invalid');
     if (!Array.isArray(admitted) || admitted.length !== 3) throw fail('invalid-generated-output');
     const [digest, length, chunks] = admitted;
@@ -84,7 +80,51 @@ class SessionPayloads {
       || length < 1 || length > FRAME || !Array.isArray(chunks) || chunks.length !== Math.ceil(length / CHUNK)
       || chunks.some(chunk => !(chunk instanceof Uint8Array) || chunk.length !== 32)) throw fail('payload-invalid');
     return admitted;
+}
+
+// SDK-private byte description only. Digest agreement is not SDK/artifact
+// authority, authenticated state, storage acknowledgement or a publication.
+const descriptorOwners = new WeakMap();
+export async function createSessionPayloadDescriptor(value) {
+  if (arguments.length !== 1) throw fail('invalid-input');
+  value = exact(value, ['wire', 'wireDigest', 'partition', 'partitionDigest']);
+  inspectEffectArtifactBudget(value.wire, [value.partition]);
+  const wireBytes = bytesCopy(value.wire, FRAME), partitionBytes = bytesCopy(value.partition, FRAME);
+  const wireDigest = bytesCopy(value.wireDigest, 32), partitionDigest = bytesCopy(value.partitionDigest, 32);
+  const wire = await generated(wireBytes, wireDigest), partition = await generated(partitionBytes, partitionDigest);
+  const owner = Object.freeze({
+    partition(value) {
+      if (arguments.length !== 1) throw fail('invalid-input');
+      return partitionPlan(partition, bytesCopy(value, FRAME));
+    },
+    admit(value) {
+      if (arguments.length !== 1) throw fail('invalid-input');
+      return admittedDescriptor(wire, bytesCopy(value, METADATA));
+    },
+    async describe(value) {
+      if (arguments.length !== 1) throw fail('invalid-input');
+      const bytes = bytesCopy(value, FRAME), plan = partitionPlan(partition, bytes), chunks = [];
+      for (const [at, length] of plan) chunks.push(await hash(bytes.subarray(at, at + length)));
+      const descriptor = encode([await hash(bytes), bytes.length, chunks]);
+      admittedDescriptor(wire, descriptor);
+      return Object.freeze({descriptor, marker: await hash(descriptor)});
+    },
+  });
+  descriptorOwners.set(owner, Object.freeze({wire, partition}));
+  return owner;
+}
+
+class SessionPayloads {
+  #store; #codec; #closed = false; #busy = false; #uncertain = false;
+  constructor(store, codec) {
+    this.#store = store; this.#codec = descriptorOwners.get(codec);
+    if (!this.#codec) throw fail('invalid-input');
   }
+  #check() {if (this.#closed) throw fail('payload-closed');}
+  // Stage/load already own their complete frame snapshots. Preserve the old
+  // maximum-memory behavior instead of making another public-boundary copy.
+  #plan(bytes) {return partitionPlan(this.#codec.partition, bytes);}
+  #descriptor(bytes) {return admittedDescriptor(this.#codec.wire, bytes);}
   async #load(descriptor) {
     const [digest, length, chunks] = this.#descriptor(descriptor), bytes = new Uint8Array(length);
     let offset = 0;
@@ -165,9 +205,7 @@ export async function openSessionPayloads(value) {
   if (arguments.length !== 1) throw fail('invalid-input');
   value = exact(value, ['storage', 'wire', 'wireDigest', 'partition', 'partitionDigest']);
   const storage = sessionStorageAccess(value.storage);
-  inspectEffectArtifactBudget(value.wire, [value.partition]);
-  const wireBytes = bytesCopy(value.wire, FRAME), partitionBytes = bytesCopy(value.partition, FRAME);
-  const wireDigest = bytesCopy(value.wireDigest, 32), partitionDigest = bytesCopy(value.partitionDigest, 32);
-  const wire = await generated(wireBytes, wireDigest), partition = await generated(partitionBytes, partitionDigest);
-  return new SessionPayloads(storage, wire, partition);
+  const codec = await createSessionPayloadDescriptor({wire: value.wire, wireDigest: value.wireDigest,
+    partition: value.partition, partitionDigest: value.partitionDigest});
+  return new SessionPayloads(storage, codec);
 }

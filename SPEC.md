@@ -1747,6 +1747,26 @@ history, effect acknowledgments, safe checkpoint/segment rotation, rollback
 witnesses and private secret-to-nonsecret evidence composition remain separately
 required SessionJournal/runtime obligations. `PP2011` and Holo/1 are unchanged.
 
+#### 12.14.1 Private operation capture
+
+DK-35 captures one exact operation before any asynchronous work. The actual
+generated predecessor, session, observation, partition and descriptor kernels
+derive complete frames and ordered content hashes. A source error never mints
+a successful handle. Factory-only handles reject fabrication, cross-owner use
+and use after close; reads return defensive copies. Every existing frame and
+combined-domain bound remains mandatory.
+
+Matching captured artifact bytes to caller digests is not artifact authority.
+SDK assembly must supply independently accepted artifacts. Neither a derived
+predecessor nor a generated successor observation is authenticated current or
+committed state. This component signs nothing, releases no effects and does not
+complete the DK-30 session host or bypass `PP2011`.
+
+Acceptance requires fresh kernel/native/no_std/paired-Wasm verification,
+kernel-manifest/generated-Lean linkage, original/private artifact custody,
+complete independent operations and all 27 combined maxima in each pinned
+browser, actual source/host mutations and the unchanged full payload owner.
+
 ### Private contextual effect staging
 
 DK-28 extends only private SDK composition over DK-18's existing generated
@@ -2310,6 +2330,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `DK-29` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `DK-31` | `sdk` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. | §12 |
+| `DK-35` | `sdk` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
