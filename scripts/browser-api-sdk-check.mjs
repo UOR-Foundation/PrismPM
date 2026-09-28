@@ -14,7 +14,9 @@ export const sourceRoots=Object.freeze([
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
  'tests/browser-session','tests/browser-budget','tests/browser-contextual-effects',
- 'tests/browser-semantic-presentation','tests/browser-dynamic-choice','SPEC.md','features/suites/sdk.feature',
+ 'tests/browser-semantic-presentation','tests/browser-dynamic-choice','tests/browser-pkce',
+ 'tests/browser-session-journal/wasm-artifact-checks.mjs','SPEC.md','features/suites/sdk.feature','features/suites/stdlib.feature',
+ 'crates/conformance/src/cases/node_suite.rs','crates/conformance/src/cases/scheduling.rs',
  'sdk/oracles/package.json','sdk/oracles/package-lock.json',
  'tests/fixtures/library/native-library/project',
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
@@ -33,7 +35,7 @@ export const sourceRoots=Object.freeze([
 export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
  'presentation-wire','presentation-dom','semantic-presentation-wire','semantic-presentation-style',
- 'credential-custody','operation-journal']);
+ 'credential-custody','operation-journal','pkce']);
 export const suites=Object.freeze([
  {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
  {id:'DK-08',minimum:14,files:['store.test.mjs','boundary.test.mjs']},
@@ -55,8 +57,9 @@ export const suites=Object.freeze([
  {id:'DK-28',minimum:24,files:['contextual-effects.test.mjs']},
  {id:'DK-29',minimum:21,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
  {id:'DK-31',minimum:8,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','dynamic-choice.test.mjs']},
+ {id:'ST-17',minimum:19,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28','DK-29','DK-31'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-28','DK-29','DK-31','ST-17'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};

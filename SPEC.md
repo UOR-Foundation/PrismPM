@@ -420,6 +420,21 @@ audits all selected declarations and rejects planted behavioral defects.
 Cryptographic verification, challenge issuance, atomic durable admission,
 provider integration and browser/deployment acceptance remain distinct gates.
 
+### 5.3a Private PKCE S256 prerequisite
+
+ST-17 owns the bounded RFC 7636 client primitive in
+`Foundation.Sec.V1.Pkce`, its private browser adapter and the exact imported
+Appendix B oracle. The source admits the complete 43–128 ASCII-unreserved
+verifier domain and encodes exact 32-byte entropy and SHA-256 values without
+padding. The adapter uses fresh browser randomness and actual SHA-256; it
+never falls back to plain. Native std/no_std, bounded Wasm, all three browsers,
+source/host defects and copied-input/revocation checks are mandatory.
+`stdlib/src/Foundation/Sec/V1/Pkce.md` defines the closed internal byte grammar.
+PKCE material is not an authenticated assertion or a transaction. Provider
+authority, client registration, state/nonce binding, token admission, mailbox
+control and durable account recovery remain separate requirements. ST-17 does
+not open PP2011 or authorize an application release.
+
 ### 5.4 Internal candidate browser-bootstrap prerequisite
 
 ST-14 owns `Foundation.Network.V1.BrowserBootstrap`, an internal finite
@@ -2246,6 +2261,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-14` | `stdlib` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. | §5 |
 | `ST-15` | `stdlib` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. | §5 |
 | `ST-16` | `stdlib` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. | §5 |
+| `ST-17` | `stdlib` | The private PKCE S256 primitive generates and validates source-owned verifier bytes and encodes actual browser SHA-256 challenges against RFC 7636 vectors without authenticating an account or mailbox. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |
