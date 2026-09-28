@@ -1,0 +1,53 @@
+name: Qualify current OSV inputs
+
+on:
+  push:
+    branches: ['chore/osv-inputs-*']
+    paths:
+      - .github/workflows/osv-input-qualification.yml
+      - scripts/qualify-osv.mjs
+      - scripts/qualify-osv.test.mjs
+      - scripts/refresh-osv.mjs
+      - scripts/refresh-osv.test.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: osv-inputs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Check closed maintenance rules
+        run: node --test scripts/refresh-osv.test.mjs scripts/qualify-osv.test.mjs
+      - name: Acquire, independently review and construct disposable candidate
+        run: node scripts/qualify-osv.mjs acquire
+      - name: Resolve and read back with source-built tools in the devcontainer
+        uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6
+        with:
+          push: never
+          runCmd: node scripts/qualify-osv.mjs finish
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: osv-input-candidate-${{ github.sha }}
+          path: |
+            .prism/cache/osv-candidate/proposal.json
+            .prism/cache/osv-candidate/review.json
+            .prism/cache/osv-candidate/receipt.json
+            .prism/cache/osv-candidate/candidate.patch
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
