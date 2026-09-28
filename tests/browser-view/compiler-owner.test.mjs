@@ -12,9 +12,9 @@ test('compiler owner refuses forged handles and unregistered tool families', () 
 test('compiler owner refuses malformed or incomplete input closures before building', () => {
   let called = false;
   const accessor = {get malicious() {called = true; return '0'.repeat(64);}};
-  for (const inputs of [null, [], accessor, {'../escape': '0'.repeat(64)},
+  for (const family of ['presentation', 'session-retention']) for (const inputs of [null, [], accessor, {'../escape': '0'.repeat(64)},
     {'vendor/lexlean/MANIFEST.sha256': 'invalid'}, {'a': null}, {'a': 42}, {}])
-    assert.throws(() => createCompilerOwner('session-retention', inputs),
+    assert.throws(() => createCompilerOwner(family, inputs),
       /compiler input (map|path|digest|closure)/);
   assert.equal(called, false, 'input accessors cannot run before immutable capture');
 });
