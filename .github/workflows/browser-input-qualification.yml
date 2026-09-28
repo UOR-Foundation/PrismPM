@@ -6,7 +6,6 @@ on:
       - .github/workflows/browser-input-qualification.yml
       - scripts/qualify-debian-browser-inputs.mjs
       - scripts/qualify-debian-browser-inputs.test.mjs
-      - .devcontainer/Dockerfile
   workflow_dispatch:
 
 permissions:
