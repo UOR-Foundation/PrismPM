@@ -29,7 +29,8 @@ test('browser transcript rejects unknown engines, paths and call roles before cr
   t.after(() => rmSync(work, {recursive: true, force: true}));
   for (const stem of [undefined, 'observed-browser', 'observed-safari', '../observed-chromium', '/tmp/observed-chromium'])
     assert.throws(() => captureBrowserTranscript(work, {calls: []}, stem), assert.AssertionError);
-  assert.throws(() => captureBrowserTranscript(work,
-    {calls: [{role: 'unknown', request: '00', response: 'f4'}]}, 'observed-chromium'), assert.AssertionError);
+  for (const role of ['unknown', '__proto__', 'constructor', 'toString'])
+    assert.throws(() => captureBrowserTranscript(work,
+      {calls: [{role, request: '00', response: 'f4'}]}, 'observed-chromium'), assert.AssertionError);
   assert.deepEqual(readdirSync(work), []);
 });

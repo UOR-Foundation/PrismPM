@@ -1,5 +1,40 @@
 # DK-23 component verification
 
+## Complete tool and artifact custody — 28 September 2026
+
+All five registered owner files passed 37 checks in 1,925.05 seconds in the
+pinned SDK container; no failures, skips or unfinished cases. Installed and
+Rust registrations require the same five files and 37-check minimum. All
+30 installed-inventory boundary tests also passed, including omitted checks.
+
+One freshly built private compiler owner serves the positive build and five
+fresh source mutants. The frozen closure covers 880 source/tool/harness inputs.
+Canonical kernel manifests and attestations bind every original and staged
+generated Lean module before export. Complete generated packages, original and
+private native/Wasm binaries, executable identity and exposed execution buffers
+are checked. Actual substitutions, same-byte executable replacement, forged
+compiler handles/receipts and mutable nested-record attacks are rejected.
+Seven clearly synthetic provenance tests supplement, not replace, the fresh
+kernel build. Completed compiler caches retire only after the complete owner
+passes; incomplete runs retain diagnostics.
+
+All preceding journeys, browser/native replays, 28 adapter mutants, five source
+mutants and structural/secret/progress maxima remain required and passed.
+Source, IR and wire-Wasm identities match the preceding receipt. The new
+attestation records the actual newly built driver, not a normalized executable.
+Peak generated-Wasm memory remains 757,661,696 bytes under the unchanged 1 GiB
+ceiling. Separate package/compiler/replay, DOM/wire and semantic-oracle checks
+passed; model readback and formatting passed.
+
+- Attestation: `520742bebe944181f6ba588de51cea643e04f115e2cde789f2d243fa3cb6a39f`
+- Compiler owner: `ed91d221677ee956af78aa130d6bb9766590bfb0709f96cb51c5848cb6a4bba5`
+- Retained owner log: `006a5ed6a27bb57d1a127597d8cf2168c175a6af4251118f0cbbf4f793fa9bd4`
+- Retained source/runtime archive: `81d6bcfe3e14a8eef4710b97dc19489e36f1f6ad5901ce915bf99fd3c0d6231f`
+
+This closes this component's custody gap, not combined SDK, installed release,
+complete accessibility or Foundry deployment acceptance. Those gates remain
+required; no publication refusal is weakened.
+
 ## Status-region correction — 28 September 2026
 
 The real-browser regression first failed because the status message was
@@ -37,9 +72,9 @@ independent source review passed.
 - Wire Wasm: `77c7cba7449ed9add9b5adf1cf11cf0ebbf1acd06d1c4c25937c90df43034e38`
 - Each browser transcript: `9d820cbf4da6b230f273628f861f3bfae7bc956e9fb52aded1be0b2ea0f14a15`
 
-This is private component evidence. Stronger complete generated-package and
-observer capture, combined SDK gates, installed SDK and Foundry integration
-remain required. DOM tests do not measure screen-reader speech or establish
+This is private component evidence. The later receipt above adds complete
+generated-package and observer capture; combined SDK gates, installed SDK and
+Foundry integration remain required. DOM tests do not measure screen-reader speech or establish
 complete accessibility, application or deployment acceptance.
 
 ## Earlier component receipt

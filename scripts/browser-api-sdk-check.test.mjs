@@ -104,8 +104,8 @@ test('new installed Node suites retain exact complete owning files and deadlines
  const effects = suites.find(row => row.id === 'DK-20'), view = suites.find(row => row.id === 'DK-23');
  assert.deepEqual(effects?.files, ['sdk/browser/effects-wire.test.mjs', 'sdk/browser/effects-module.test.mjs', 'sdk/browser/effects-test.mjs']);
  assert.equal(effects?.minimum, 18);
- assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'tests/browser-presentation/replay.test.mjs', 'sdk/browser/presentation.test.mjs']);
- assert.equal(view?.minimum, 30);
+ assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'tests/browser-presentation/replay.test.mjs', 'tests/browser-presentation/provenance.test.mjs', 'sdk/browser/presentation.test.mjs']);
+ assert.equal(view?.minimum, 37);
  const owning = /"DK-23"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(sdkSource('crates/conformance/src/cases/mod.rs'));
  assert.ok(owning, 'actual registered Rust owning suite exists');
  assert.equal(Number(owning[2]), view.minimum, 'installed and source-owning minimum agree');
@@ -315,10 +315,10 @@ test('installed semantic gate rejects omission of each false-evidence safeguard'
 test('installed DK23 gate rejects an incomplete owning suite in every selected file', t => {
  const root = temporary(t); testFixtures(root);
  const view = suites.find(row => row.id === 'DK-23');
- assert.equal(view.files.length, 4);
+ assert.equal(view.files.length, 5);
  // These are real Node executions of harness fixtures, not product evidence.
  // Each selected file remains nonempty when one of its checks is omitted.
- const counts = [5, 5, 2, 18];
+ const counts = [5, 5, 2, 7, 18];
  for (const [index, count] of counts.entries()) put(root, view.files[index], testSource(count));
  for (const [index, count] of counts.entries()) {
   put(root, view.files[index], testSource(count - 1));
@@ -326,7 +326,7 @@ test('installed DK23 gate rejects an incomplete owning suite in every selected f
   put(root, view.files[index], testSource(count));
  }
  const accepted = runSuites(root, spawnSync, () => {}).find(row => row.id === 'DK-23');
- assert.deepEqual(accepted, {id: 'DK-23', tests: 30});
+ assert.deepEqual(accepted, {id: 'DK-23', tests: 37});
 });
 
 test('installed DK26 rejects an incomplete owner or empty wire file despite passing siblings', t => {

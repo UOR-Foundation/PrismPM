@@ -48,7 +48,8 @@ export const expectedCases = [
 ];
 
 export async function journey(build, replacements = {}, engine = 'chromium') {
-  return withBrowser(async ({browser, baseURL}) => {
+  if (build) build.unchanged();
+  try {return await withBrowser(async ({browser, baseURL}) => {
     const page = await browser.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     for (const name of names) await page.route('**/' + name, route => route.fulfill({status: 200,
@@ -84,7 +85,7 @@ export async function journey(build, replacements = {}, engine = 'chromium') {
         return result;
       })(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('presentation browser journey deadline')), 90000); })]);
     } finally { clearTimeout(timer); }
-  }, {engine});
+  }, {engine});} finally {if (build) build.unchanged();}
 }
 
 export async function verifyJourneys(t, build, engine = 'chromium') {
@@ -101,6 +102,7 @@ export async function verifyJourneys(t, build, engine = 'chromium') {
 
 export async function verifyMaximum(t, build) {
   assert.ok(build?.wasmBytes, 'generated codec is mandatory for maximum acceptance');
+  build.unchanged();
   const before = closure();
   const results = await withBrowser(async ({browser, baseURL}) => {
     const observed = [];
@@ -152,10 +154,12 @@ export async function verifyMaximum(t, build) {
   t?.diagnostic(JSON.stringify(secret));
   build.progressMaximumBrowser = await verifyProgressMaximum(t, build);
   assert.deepEqual(closure(), before);
+  build.unchanged();
   return results;
 }
 
 export async function verifyProgressMaximum(t, build) {
+  build.unchanged();
   const before = closure();
   const progress = await withBrowser(async ({browser, baseURL}) => {
     const page = await browser.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -183,6 +187,7 @@ export async function verifyProgressMaximum(t, build) {
   assert.equal(progress.calls.length, 5);
   t?.diagnostic(JSON.stringify({...progress, calls: progress.calls.length}));
   assert.deepEqual(closure(), before);
+  build.unchanged();
   return progress;
 }
 

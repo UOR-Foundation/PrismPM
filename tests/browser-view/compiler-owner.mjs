@@ -9,6 +9,8 @@ import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from 
 import {captureCompilerArtifact} from './compiler-artifact.mjs';
 
 const families = Object.freeze({
+  presentation: Object.freeze({directory: 'browser-presentation',
+    executable: 'browser-presentation-driver'}),
   'session-retention': Object.freeze({directory: 'browser-session-journal-retention',
     executable: 'browser-session-journal-retention-driver'}),
 });
@@ -130,16 +132,25 @@ export function createCompilerOwner(family, selectedInputs) {
         writeFileSync(join(work, 'compiler-owner-retirement.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
         return receipt;
       }});
-    owners.set(owner, {inputs}); verify(); constructed = true;
+    owners.set(owner, {inputs, family}); verify(); constructed = true;
     return owner;
   } finally {
     if (!constructed) process.stderr.write('Retained failed compiler owner ' + work + '\n');
   }
 }
 
-export function requireCompilerOwner(owner, selectedInputs) {
+export function requireCompilerOwner(owner, selectedInputs, family = undefined) {
   const state = owners.get(owner);
   assert.ok(state, 'actual fresh compiler owner required');
+  if (family !== undefined) {
+    assert.ok(typeof family === 'string' && Object.hasOwn(families, family), 'registered compiler family required');
+    assert.equal(state.family, family, 'same registered compiler family required');
+  }
   assert.deepEqual(inputMap(selectedInputs), state.inputs, 'same complete compiler owner input closure required');
   owner.verify(); return owner;
+}
+
+export function compilerOwnerDriverDirectory(owner, selectedInputs) {
+  requireCompilerOwner(owner, selectedInputs);
+  return 'tests/' + families[owners.get(owner).family].directory + '/driver';
 }

@@ -22,5 +22,11 @@ test('DK-23 actual generated closed presentation and private browser execution',
   });
   await prerequisite(t, 'actual unsafe DOM, stale/draft and closed-lifecycle guard mutations fail', child => verifyMutants(child, build));
   await prerequisite(t, 'closed diagnostic registry', verifyInventory);
-  for (const kind of ['binding', 'trailing', 'secretbound', 'secretroute', 'progress']) await prerequisite(t, 'actual LexLean ' + kind + ' mutant fails native/no_std/Wasm', () => verifyModelMutation(kind));
+  for (const kind of ['binding', 'trailing', 'secretbound', 'secretroute', 'progress']) await prerequisite(t, 'actual LexLean ' + kind + ' mutant fails native/no_std/Wasm', () => verifyModelMutation(kind, build));
+  build.unchanged();
+  t.diagnostic(JSON.stringify({scope: 'private-presentation-tool-custody', native: build.nativeEvidence(),
+    provenance: build.provenance,
+    generatedPackages: build.generatedPackages, generatedWasm: Object.fromEntries(Object.entries(build.wasmArtifacts).map(([name, artifact]) => [name, artifact.evidence])),
+    retirement: build.compilerOwner.close()}));
+  build.complete = true;
 });
