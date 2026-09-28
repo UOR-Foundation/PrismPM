@@ -22,6 +22,13 @@ Feature: sdk
     When generated native, no_std, Wasm and all pinned browser engines execute canonical decoding, field arithmetic and point validation
     Then malformed encodings, out-of-range coordinates and off-curve points reject independently of provider import behavior
     And actual arithmetic and source mutations plus altered browser transcripts fail without replacing signature, possession, currentness or account authorization checks
+
+  @DK-35 @build
+  Scenario: Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application.
+    Given exact captured generated predecessor, session, observation, partition and descriptor artifacts
+    When fresh kernel, native, no_std, Wasm and every pinned browser execute complete independent operations and all existing combined maxima
+    Then source errors, substituted inputs or artifacts, fabricated or foreign handles and closed owners cannot yield successful captures
+    And actual source and host mutants fail while authenticated current history, signed durable publication and public runtime acceptance remain separate requirements
   @DK-31 @build
   Scenario: Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority.
     Given source-generated text choices alongside unchanged catalogue-based choices
