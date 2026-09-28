@@ -457,6 +457,18 @@ pub fn run_at(root: &Path, id: &str) {
             8,
             "3600000",
         ),
+        "DK-34" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-p256/oracles.test.mjs",
+                "tests/browser-p256/corpus.test.mjs",
+                "tests/browser-p256/bridge.test.mjs",
+                "tests/browser-p256/owner.test.mjs",
+            ],
+            15,
+            "3600000",
+        ),
         "OC-07" => verify_browser_export(root),
         "DK-32" => verify_node_suite(
             root,

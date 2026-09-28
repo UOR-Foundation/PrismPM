@@ -6,7 +6,14 @@ Feature: sdk
     When complete native, no_std, Wasm, original cryptographic oracles and browser owners verify the captured bytes
     Then only actual successful signature verification creates private instance-bound statement evidence
     And context substitution, forged handles, asynchronous mutation and source or host guard defects fail their exact checks
+    And every signer and expected key passes the shared complete P-256 source predicate before provider import, with key-before-signature error precedence
     And account identity, verified email, organization permissions, freshness and public application acceptance remain separate obligations
+  @DK-34 @build
+  Scenario: Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification.
+    Given the exact SEC1 and SEC2 P-256 domain and complete imported authoritative P-256 public-key-validation sections
+    When generated native, no_std, Wasm and all pinned browser engines execute canonical decoding, field arithmetic and point validation
+    Then malformed encodings, out-of-range coordinates and off-curve points reject independently of provider import behavior
+    And actual arithmetic and source mutations plus altered browser transcripts fail without replacing signature, possession, currentness or account authorization checks
 
   @DK-31 @build
   Scenario: Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority.

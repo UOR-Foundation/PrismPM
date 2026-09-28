@@ -9,11 +9,11 @@ import {requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
-import {mutateSignedContextSource} from './mutations.mjs';
+import {mutateP256Source} from './mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
-const projection = 'Foundation.Browser.Application.V1.SignedContextWire';
+const projection = 'Foundation.Crypto.P256.Wire';
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
 const capturedInputs = new WeakSet();
 function read(path) {
@@ -35,25 +35,16 @@ export function sourceClosure() {
 export function frozenInputs() {
   const files = new Set([...sourceClosure().keys()].map(modulePath));
   for (const path of ['compile.mjs', 'checks.mjs', 'corpus.mjs', 'corpus.test.mjs', 'bridge.test.mjs',
-    'mutations.mjs', 'wpt.mjs', 'wpt.test.mjs', 'aggregate.test.mjs', 'browser.mjs', 'owner.test.mjs',
+    'mutations.mjs', 'browser.mjs', 'owner.test.mjs', 'oracles.test.mjs',
+    'oracles/PKV.rsp.base64', 'oracles/ACVP-KeyVer-FIPS186-5.json.base64',
     'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
-    files.add('tests/browser-signed-context/' + path);
+    files.add('tests/browser-p256/' + path);
   for (const path of ['tests/browser-view/compiler-owner.test.mjs', 'tests/browser-view/compiler-artifact.test.mjs',
     'tests/browser-view/compiler-artifact-mutations.test.mjs', 'tests/browser-view/generated-package.test.mjs',
-    'sdk/browser/signed-context.mjs', 'sdk/browser/signed-context-test.mjs',
+    'stdlib/src/Foundation/Crypto/P256/Model.md', 'stdlib/src/Foundation/Crypto/P256/Wire.cddl',
     'tests/fixtures/library/native-library/project/lexlean.toml', 'model/dependencies.toml',
     'model/authorities.toml', 'lean-toolchain', 'rust-toolchain.toml', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json', 'vendor/lean4-prod/lean.tar']) files.add(path);
-  const wpt = 'sdk/browser/oracles/wpt-ecdsa/';
-  // Imported authoritative point sources are data, not static JS import edges.
-  for (const path of ['PKV.rsp.base64', 'ACVP-KeyVer-FIPS186-5.json.base64'])
-    files.add('tests/browser-p256/oracles/' + path);
-  files.add(wpt + 'source.json');
-  for (const row of JSON.parse(read(wpt + 'source.json')).files) {
-    assert.ok(typeof row.path === 'string' && /^[A-Za-z0-9_./-]+$/.test(row.path)
-      && !row.path.split('/').some(part => part === '' || part === '.' || part === '..'));
-    assert.equal(sha(read(wpt + row.path)), row.sha256); files.add(wpt + row.path);
-  }
   const capturedModules = localModuleInputs(repository, [...files].filter(path => path.endsWith('.mjs')), read);
   for (const path of capturedModules.keys()) files.add(path);
   const dependencies = read('model/dependencies.toml').toString('utf8').split('[[dependency.artifact]]').slice(1);
@@ -76,30 +67,30 @@ export function frozenInputs() {
   Object.freeze(inputs); capturedInputs.add(inputs); return inputs;
 }
 export function verifyFrozenInputs(inputs) {
-  assert.ok(capturedInputs.has(inputs), 'actual complete captured signed-context inputs required');
+  assert.ok(capturedInputs.has(inputs), 'actual complete captured p256 inputs required');
   // The complete static graph was parsed during capture. Every original file
   // remains checked on every use: changed import edges necessarily change one
   // of these bytes. Do not reparse an identical graph in child Node processes.
   for (const [path, digest] of Object.entries(inputs))
-    assert.equal(sha(read(path)), digest, 'immutable captured signed-context input ' + path);
+    assert.equal(sha(read(path)), digest, 'immutable captured p256 input ' + path);
 }
-export function assertCapturedSignedContextSources(inputs, sources) {
+export function assertCapturedP256Sources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
     Object.keys(inputs).filter(path => path.endsWith('.lex.tex')).sort(),
     'complete captured source module inventory');
   for (const [name, bytes] of sources) assert.equal(sha(bytes), inputs[modulePath(name)],
     'actual captured source must match original snapshot ' + name);
 }
-export function prepareSignedContext(compilerOwner, mutationId = null, expectedInputs = null) {
+export function prepareP256(compilerOwner, mutationId = null, expectedInputs = null) {
   const startedAt = performance.now();
-  for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_SIGNED_CONTEXT_'), 'no owner bypass');
+  for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_P256_'), 'no owner bypass');
   const inputs = frozenInputs(), sources = sourceClosure();
   if (expectedInputs) assert.deepEqual(inputs, expectedInputs, 'one immutable complete owner closure');
   const compiler = requireCompilerOwner(compilerOwner, inputs);
-  assertCapturedSignedContextSources(inputs, sources);
-  const mutation = mutationId === null ? null : mutateSignedContextSource(sources, mutationId);
+  assertCapturedP256Sources(inputs, sources);
+  const mutation = mutationId === null ? null : mutateP256Source(sources, mutationId);
   const captured = path => { const bytes = read(path); assert.equal(sha(bytes), inputs[path], 'frozen input ' + path); return bytes; };
-  const work = mkdtempSync(join(tmpdir(), 'prismpm-signed-context-'));
+  const work = mkdtempSync(join(tmpdir(), 'prismpm-p256-'));
   const staged = new Map();
   function stage(path, bytes) {
     const destination = join(work, path); mkdirSync(dirname(destination), {recursive: true});
@@ -113,11 +104,11 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
     for (const [name, bytes] of sources) stage('project/src/' + name.replaceAll('.', '/') + '.lex.tex', bytes);
     const project = join(work, 'project');
     stage('project/lexlean.toml', captured('tests/fixtures/library/native-library/project/lexlean.toml').toString('utf8')
-      .replace('name = "library-probe"', 'name = "signed-context-conformance"')
+      .replace('name = "library-probe"', 'name = "p256-conformance"')
       .replace('module_prefix = "LibraryProbe"', 'module_prefix = "PrismPM"')
       .replace('src/Probe.lex.tex', 'src/' + projection.replaceAll('.', '/') + '.lex.tex'));
     stage('project/lean-toolchain', captured('lean-toolchain'));
-    stage('project/lakefile.toml', 'name = "signed_context_conformance"\nversion = "0.1.0"\n');
+    stage('project/lakefile.toml', 'name = "p256_conformance"\nversion = "0.1.0"\n');
     run('lake', ['update'], project);
     const verified = JSON.parse(compiler.runDriver(['verify', join(project, 'lexlean.toml')], work));
     assert.deepEqual(verified.modules, [...sources.keys()]);
@@ -143,12 +134,12 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
     }
     const lean = join(work, 'lean');
     stage('lean/lean-toolchain', captured('lean-toolchain'));
-    stage('lean/lakefile.toml', 'name = "signed_context"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['
+    stage('lean/lakefile.toml', 'name = "p256"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['
       + [...sources.keys()].map(name => '"PrismPM.' + name + '"').join(',') + ']\n');
     run('lake', ['build', 'PrismGenerated'], lean);
-    const exported = join(work, 'export'), roots = ['PrismPM.' + projection + '.signedContextWireBytes'];
+    const exported = join(work, 'export'), roots = ['PrismPM.' + projection + '.p256WireBytes'];
     compiler.runExporter(['--module', 'PrismPM.' + projection, ...roots.flatMap(name => ['--root', name]),
-      '--ir-module', 'SignedContext', '--out', exported], join(lean, '.lake/build/lib/lean'));
+      '--ir-module', 'P256', '--out', exported], join(lean, '.lake/build/lib/lean'));
     const ir = join(exported, 'kernel.ir'), generated = join(work, 'generated');
     for (const name of ['LICENSE-MIT', 'LICENSE-APACHE']) stage('licenses/' + name, captured(name));
     const licenses = join(work, 'licenses');
@@ -156,7 +147,7 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
     const nativePackage = captureGeneratedPackage(generated, {kind: 'native', inputIrSha256: generation.ir_sha256});
     const packages = new Map([['native', nativePackage]]);
     const wasm = {}, wasmOwners = {}, wasmArtifacts = {};
-    for (const entry of ['signed-context']) {
+    for (const entry of ['p256']) {
       const guests = [];
       for (const label of ['a', 'b']) {
         const output = join(work, entry + '-' + label);
@@ -167,7 +158,7 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
         try {run('cargo', ['build', '--locked', '--offline', '--release'], output, {CARGO_TARGET_DIR: target});}
         finally {package_.verify();}
         const artifact = captureGeneratedWasm(work,
-          join(target, 'wasm32-unknown-unknown/release/browser_signed_context_wire_probe.wasm'), entry + '-' + label + '-execution');
+          join(target, 'wasm32-unknown-unknown/release/browser_p256_wire_probe.wasm'), entry + '-' + label + '-execution');
         wasmArtifacts[entry + '-' + label] = artifact; guests.push(artifact);
       }
       assert.deepEqual(guests[0].bytes, guests[1].bytes, 'two independent complete generated ' + entry + ' packages');
@@ -187,14 +178,14 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
       nativePackage.verify();
       if (nativePrograms.has(standard)) return checkedNative(nativePrograms.get(standard));
       const name = standard ? 'std' : 'no-std', runner = join(work, 'runner-' + name);
-      stage('runner-' + name + '/src/main.rs', captured('tests/browser-signed-context/runner.rs'));
-      stage('runner-' + name + '/Cargo.toml', '[package]\nname = "browser-signed-context-runner"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n[workspace]\n[dependencies]\nbrowser-signed-context-core-probe = {path = "../generated", default-features = ' + standard + '}\n');
-      stage('runner-' + name + '/Cargo.lock', 'version = 4\n[[package]]\nname = "browser-signed-context-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-signed-context-runner"\nversion = "0.1.0"\ndependencies = ["browser-signed-context-core-probe"]\n');
+      stage('runner-' + name + '/src/main.rs', captured('tests/browser-p256/runner.rs'));
+      stage('runner-' + name + '/Cargo.toml', '[package]\nname = "browser-p256-runner"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n[workspace]\n[dependencies]\nbrowser-p256-core-probe = {path = "../generated", default-features = ' + standard + '}\n');
+      stage('runner-' + name + '/Cargo.lock', 'version = 4\n[[package]]\nname = "browser-p256-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-p256-runner"\nversion = "0.1.0"\ndependencies = ["browser-p256-core-probe"]\n');
       run('cargo', ['build', '--locked', '--offline', '--release'], runner, {CARGO_TARGET_DIR: join(runner, 'target')});
       nativePackage.verify();
       // Cargo links its output to a dependency artifact. Capture the just-built
       // bytes into a distinct private executable, not a mutable Cargo alias.
-      const binary = stage('native-' + name + '-runner', readFileSync(join(runner, 'target/release/browser-signed-context-runner')));
+      const binary = stage('native-' + name + '-runner', readFileSync(join(runner, 'target/release/browser-p256-runner')));
       chmodSync(binary, 0o700);
       const record = {binary, sha256: sha(readFileSync(binary))};
       nativePrograms.set(standard, record); return checkedNative(record);
@@ -221,13 +212,13 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
       assert.equal(sha(readFileSync(ir)), generation.ir_sha256);
     }
     unchanged();
-    complete = true;
     const generatedPackages = Object.freeze(Object.fromEntries([...packages].map(([name, package_]) => {
       assert.ok(Object.isFrozen(package_.files), 'immutable captured package file map');
       return [name, package_.files];
     })));
+    complete = true;
     return Object.freeze({work, sources, verified, generation, wasm, wasmOwners, wasmArtifacts, generatedWasm,
       compileNative, runNative, nativeEvidence, unchanged, inputs, mutation, generatedPackages,
       compilerOwner: compiler, compilerTools: compiler.evidence, preparationMs: performance.now() - startedAt});
-  } finally { if (!complete) process.stderr.write('Retained incomplete signed-context diagnostic build ' + work + '\n'); }
+  } finally { if (!complete) process.stderr.write('Retained incomplete p256 diagnostic build ' + work + '\n'); }
 }

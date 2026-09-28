@@ -1,5 +1,7 @@
 // Independent finite protocol examples and canonical encoder; not a runtime.
 import assert from 'node:assert/strict';
+import {oraclePoints} from '../browser-p256/oracles.mjs';
+import {parameters} from '../browser-p256/parameters.mjs';
 
 export function encode(value) {
   const head = (major, value) => {
@@ -22,7 +24,31 @@ export const domains = Object.freeze(['prismpm/account-binding/1', 'prismpm/acco
 export const bytes = (length, value = 1) => new Uint8Array(length).fill(value);
 export const context = (purpose = 0, epoch = 0xffffffff) => [Array.from({length: 6}, (_, i) => bytes(32, i)),
   bytes(32, 7), purpose, bytes(32, 8), bytes(32, 9), bytes(32, 10), bytes(32, 11), epoch, bytes(32, 12)];
-export const publicKey = () => Uint8Array.from([4, ...bytes(64, 17)]);
+export const publicKey = () => Uint8Array.from(Buffer.from(parameters.generator, 'hex'));
+export const otherPublicKey = () => {
+  const key = Buffer.from(parameters.generator, 'hex');
+  const y = BigInt('0x' + key.subarray(33).toString('hex'));
+  Buffer.from((BigInt('0x' + parameters.p) - y).toString(16).padStart(64, '0'), 'hex').copy(key, 33);
+  return Uint8Array.from(key);
+};
+export function pointCases() {
+  const rows = oraclePoints().map(row => ({id: row.source + row.id, key: row.key, valid: row.valid}));
+  rows.push({id: 'OppositeGenerator', key: otherPublicKey(), valid: true});
+  rows.push({id: 'FormerShapeOnlyFixture', key: Uint8Array.from([4, ...bytes(64, 17)]), valid: false});
+  rows.push({id: 'ZeroCoordinates', key: Uint8Array.from([4, ...bytes(64, 0)]), valid: false});
+  for (const value of [BigInt('0x' + parameters.p), BigInt('0x' + parameters.p) + 1n, (1n << 256n) - 1n])
+    for (const axis of [1, 33]) {
+      const key = Buffer.from(publicKey());
+      Buffer.from(value.toString(16).padStart(64, '0'), 'hex').copy(key, axis);
+      rows.push({id: 'Coordinate' + axis + '_' + value.toString(16), key, valid: false});
+    }
+  for (let at = 1; at <= 64; at++) {
+    const key = publicKey(); key[at] ^= 1;
+    rows.push({id: 'OffCurveBit' + at, key, valid: false});
+  }
+  assert.equal(rows.length, 88);
+  return rows;
+}
 export const envelope = (value = context(), key = publicKey(), signature = bytes(64, 18)) => [1, value, key, signature];
 export const success = value => [1, 0, value];
 export const rejected = code => [1, 1, code];
@@ -80,13 +106,23 @@ export function corpus() {
   }
   for (const length of [0, 63, 65]) add(`SignatureWidth${length}`,
     [1, 0, envelope(context(), publicKey(), bytes(length))], rejected(2));
-  const value = envelope(), changedKey = publicKey(); changedKey[1] ^= 1;
+  for (const row of pointCases()) {
+    const value = envelope(context(), row.key);
+    add('PointRoundtrip' + row.id, [1, 0, value], row.valid ? success(value) : rejected(1));
+    add('PointProjection' + row.id, [1, 1, value], row.valid ? success(projection(value)) : rejected(1));
+    add('PointMatch' + row.id, [1, 2, value[1], row.key, value], row.valid ? success(true) : rejected(1));
+    add('PointExpected' + row.id, [1, 2, value[1], row.key, envelope()],
+      row.valid ? Buffer.from(row.key).equals(Buffer.from(publicKey())) ? success(true) : rejected(4) : rejected(1));
+  }
+  const value = envelope(), changedKey = otherPublicKey();
   add('KeyMismatch', [1, 2, value[1], changedKey, value], rejected(4));
   add('ExpectedKeyShape', [1, 2, value[1], bytes(65), value], rejected(1));
   const badBoth = envelope(); badBoth[1][2] = 4; badBoth[2][0] = 0; badBoth[3] = bytes(0);
   add('ContextErrorPrecedence', [1, 0, badBoth], rejected(0));
   badBoth[1][2] = 0; add('KeyErrorPrecedence', [1, 0, badBoth], rejected(1));
   badBoth[2][0] = 4; add('SignatureErrorPrecedence', [1, 0, badBoth], rejected(2));
+  badBoth[2] = Uint8Array.from([4, ...bytes(64, 17)]);
+  add('PointErrorBeforeSignature', [1, 0, badBoth], rejected(1));
   add('Operation', [1, 3, value], rejected(5));
   add('Version', [2, 0, value], malformed(3));
   const envelopeVersion = envelope(); envelopeVersion[0] = 2;

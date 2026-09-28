@@ -21,7 +21,7 @@ export function verifyNativeInventory(output, rows) {
 }
 export function verifyComponents(compiler) {
   const build = prepareSignedContext(compiler), rows = corpus();
-  assert.equal(rows.length, 1220); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
+  assert.equal(rows.length, 1573); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
   const library = join(build.work, 'generated/src/lib.rs'), manifest = join(build.work, 'generated/generation-manifest.json');
   const original = readFileSync(library), originalManifest = readFileSync(manifest);
   for (const mode of ['source', 'source-and-manifest', 'extra-file', 'hard-link']) {
@@ -88,7 +88,7 @@ export async function verifySignedContext(t) {
     const outcome = await required.check(id, () => executeRequiredSubtest(t, name, body));
     if (fatal && !outcome.ok) throw outcome.error;
   };
-  await step('generated', 'complete generated source/kernel/native/std/no_std/two-Wasm and all1220 vectors', () => {
+  await step('generated', 'complete generated source/kernel/native/std/no_std/two-Wasm and all1573 vectors', () => {
     ({build, evidence} = verifyComponents(compiler));
   }, true);
   await step('artifact-custody', 'actual package/compiler/native/Wasm capture substitutions are refused', () => {
@@ -123,8 +123,8 @@ export async function verifySignedContext(t) {
     row.checks = checks.report(); evidence.browser.push(row);
     build.unchanged(); checks.finish();
   });
-  await step('source-mutants', 'all23 actual compiled source defects produce semantic counterexamples', async () => {
-    assert.equal(mutations.length, 23);
+  await step('source-mutants', 'all24 actual compiled source defects produce semantic counterexamples', async () => {
+    assert.equal(mutations.length, 24);
     const checks = createRequiredChecks(mutations.map(mutation => mutation.id));
     evidence.sourceMutations = [];
     for (const mutation of mutations) {
@@ -136,7 +136,7 @@ export async function verifySignedContext(t) {
       });
     }
     evidence.sourceMutationChecks = checks.report(); build.unchanged(); checks.finish();
-    assert.equal(evidence.sourceMutations.length, 23);
+    assert.equal(evidence.sourceMutations.length, 24);
   });
   await step('final-closure', 'complete original input and generated artifact closure remains unchanged', () => {
     assert.deepEqual(frozenInputs(), inputs); build.unchanged(); wpt.unchanged();

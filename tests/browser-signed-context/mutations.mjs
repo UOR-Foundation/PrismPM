@@ -14,8 +14,19 @@ const rules = [
     .map(([name, index]) => [name + 'Match', 'ContextMismatch' + index, model, 'signedContextEqual', node => byteEquality(node, name), truth]),
   ...[['purpose', 2], ['credentialEpoch', 7]]
     .map(([name, index]) => [name + 'Match', 'ContextMismatch' + index, model, 'signedContextEqual', node => scalarEquality(node, name), truth]),
-  ['ContextValidity', 'ContextRange2', model, 'signedContextValid', () => true, truth, 1, true],
-  ['KeyValidity', 'KeyPrefix0', model, 'signedContextKeyValid', () => true, truth, 1, true],
+  // Retain live parameters and actual imported axiom dependencies so the
+  // counterexample reaches behavior rather than source-policy rejection.
+  ['ContextValidity', 'ContextRange2', model, 'signedContextValid', node => node.kind === 'ble'
+    && field(node.left, 'purpose') && node.right.kind === 'nat' && node.right.value === '3',
+    node => ({...node, right: {kind: 'nat', value: '4'}})],
+  ['KeyValidity', 'KeyPrefix0', model, 'signedContextKeyValid', () => true,
+    node => ({kind: 'or', left: node, right: {kind: 'and',
+      left: {kind: 'beq', left: {kind: 'primitive', operation: 'length',
+        arguments: [{kind: 'var', name: 'key'}], result: {kind: 'nat'}}, right: {kind: 'nat', value: '65'}},
+      right: {kind: 'ble', left: {kind: 'var', name: 'purpose'}, right: {kind: 'nat', value: '3'}}}}), 1, true],
+  ['CurveMembership', 'PointMatchFormerShapeOnlyFixture', model, 'signedContextKeyValid',
+    node => node.kind === 'and' && call(node.right, 'p256PublicKeyValid'),
+    node => ({...node, kind: 'or'})],
   ['SignatureWidth', 'SignatureWidth63', model, 'matchSignedContext', node => node.kind === 'beq'
     && node.left.kind === 'primitive' && node.left.operation === 'length' && field(node.left.arguments[0], 'signature'), truth],
   ['ExpectedKey', 'KeyMismatch', model, 'matchSignedContext', node => node.kind === 'primitive'

@@ -11,6 +11,7 @@ import {captureCompilerArtifact} from './compiler-artifact.mjs';
 const families = Object.freeze({
   'signed-context': Object.freeze({directory: 'browser-signed-context',
     executable: 'browser-signed-context-driver'}),
+  'p256': Object.freeze({directory: 'browser-p256', executable: 'browser-p256-driver'}),
   'session-retention': Object.freeze({directory: 'browser-session-journal-retention',
     executable: 'browser-session-journal-retention-driver'}),
 });

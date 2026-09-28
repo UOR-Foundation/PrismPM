@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
-import {corpus, context, envelope, publicKey, encode} from './corpus.mjs';
+import {corpus, context, envelope, publicKey, otherPublicKey, pointCases, encode, rejected} from './corpus.mjs';
+import {oraclePoints} from '../browser-p256/oracles.mjs';
+import {nativePointValid} from '../browser-p256/corpus.mjs';
+import {parameters} from '../browser-p256/parameters.mjs';
 import {mutations, mutateSignedContextSource} from './mutations.mjs';
 
 test('independent signed-context exact wire bounds and complete finite inventory', () => {
@@ -53,4 +56,64 @@ test('envelope reader binds version separately from context key and signature', 
   check(values[0]);
   const shifted = structuredClone(values[0]); shifted.fields[0].value.value.name = 'field0';
   assert.throws(() => check(shifted));
+});
+
+test('signed-context admits complete source-validated points rather than provider key shape', () => {
+  const source = readFileSync(new URL('../../stdlib/src/Foundation/Browser/Application/V1/SignedContext.lex.tex', import.meta.url), 'utf8');
+  assert.match(source, /\\importmodule\{Foundation\.Crypto\.P256\.Model\}/);
+  const model = JSON.parse(/\\semanticdata\{(.*)\}/.exec(source)[1]);
+  const key = model.declarations.find(row => row.name === 'signedContextKeyValid');
+  assert.equal(key.body.kind, 'and');
+  assert.equal(key.body.left.function.name, 'effectSigningGrantValid');
+  assert.deepEqual(key.body.right, {arguments: [{kind: 'var', name: 'key'}],
+    function: {module: 'Foundation.Crypto.P256.Model', name: 'p256PublicKeyValid'}, kind: 'call'});
+  const p = BigInt('0x' + parameters.p), b = BigInt('0x' + parameters.b);
+  const independent = key => {
+    if (key.length !== 65 || key[0] !== 4) return false;
+    const x = BigInt('0x' + Buffer.from(key.subarray(1, 33)).toString('hex'));
+    const y = BigInt('0x' + Buffer.from(key.subarray(33)).toString('hex'));
+    return x < p && y < p && (y * y - x * x * x + 3n * x - b) % p === 0n;
+  };
+  for (const key of [publicKey(), otherPublicKey()]) assert.equal(independent(key), true);
+  assert.notDeepEqual(publicKey(), otherPublicKey());
+  const points = pointCases(), rows = corpus();
+  assert.equal(rows.length, 1573);
+  assert.equal(points.length, 88);
+  for (const row of points) {
+    assert.equal(independent(row.key), row.valid, row.id);
+    assert.equal(nativePointValid(row.key), row.valid, row.id);
+    for (const operation of ['Roundtrip', 'Projection', 'Match', 'Expected'])
+      assert.ok(rows.some(value => value.id === 'Point' + operation + row.id));
+  }
+  assert.deepEqual(points.slice(0, 15).map(row => row.id), oraclePoints().map(row => row.source + row.id));
+});
+
+test('validity mutants retain parameter use and exact semantic counterexamples', () => {
+  const name = 'Foundation.Browser.Application.V1.SignedContext';
+  const original = readFileSync(new URL('../../stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex', import.meta.url));
+  const rows = corpus();
+  for (const [id, declarationName, probe, request, response] of [
+    ['ContextValidity', 'signedContextValid', 'ContextRange2', [1, 0, envelope(context(4))], rejected(0)],
+    ['KeyValidity', 'signedContextKeyValid', 'KeyPrefix0', [1, 0, envelope(context(), Uint8Array.from([0, ...publicKey().slice(1)]))], rejected(1)],
+  ]) {
+    const sources = new Map([[name, original]]);
+    mutateSignedContextSource(sources, id);
+    const data = JSON.parse(/\\semanticdata\{(.*)\}/.exec(sources.get(name).toString())[1]);
+    const declaration = data.declarations.find(row => row.name === declarationName);
+    const uses = new Set(), calls = new Set();
+    function visit(node) {
+      if (!node || typeof node !== 'object') return;
+      if (node.kind === 'var') uses.add(node.name);
+      if (node.kind === 'call') calls.add(node.function.name);
+      for (const value of Object.values(node)) Array.isArray(value) ? value.forEach(visit) : visit(value);
+    }
+    visit(declaration.body);
+    for (const parameter of declaration.parameters)
+      assert.ok(uses.has(parameter.name), id + ' must reach behavior, not LLV7006: ' + parameter.name);
+    if (id === 'KeyValidity') assert.ok(calls.has('p256PublicKeyValid'), 'retain exact imported axiom dependencies');
+    const row = rows.find(row => row.id === probe);
+    assert.deepEqual(row.request, encode(request));
+    assert.deepEqual(row.response, encode(response));
+    assert.equal(mutations.find(row => row.id === id).probe, probe);
+  }
 });
