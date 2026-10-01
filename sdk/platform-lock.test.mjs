@@ -194,10 +194,17 @@ function captureRunner(directory, reference, index, mutation = '') {
   const run = args => {
     calls.push(args);
     if (args[0] === 'container') {
+      if (mutation === 'daemon' && calls.some(call => call[0] === 'create')) throw new Error('synthetic unavailable daemon');
+      if (args[1] === 'inspect') {
+        assert.deepEqual(args.slice(0, 4), ['container', 'inspect', '--format', '{{.Id}} {{index .Config.Labels "org.prismpm.sdk-capture"}}']);
+        const name = args[4], architecture = allocated.get(name);
+        assert.ok(architecture);
+        if (architecture === 'foreign') return Buffer.from(`${'f'.repeat(64)} unrelated-owner`);
+        return Buffer.from(`${[...containers].find(([, arch]) => arch === architecture)[0]} ${name}`);
+      }
       assert.deepEqual(args.slice(0, 5), ['container', 'ls', '--all', '--quiet', '--filter']);
       const name = args[5].slice(7, -1);
       assert.match(name, /^prismpm-sdk-capture-[a-z0-9-]+-(amd64|arm64)$/);
-      if (mutation === 'daemon' && calls.some(call => call[0] === 'create')) throw new Error('synthetic unavailable daemon');
       return Buffer.from(allocated.has(name) ? 'allocated-container-id' : '');
     }
     if (args[0] === 'buildx') {
@@ -218,9 +225,12 @@ function captureRunner(directory, reference, index, mutation = '') {
       return encode(inspected);
     }
     if (args[0] === 'create') {
-      const child = children.find(child => child.reference === args[7]);
+      const child = children.find(child => child.reference === args[9]);
       const name = args[2];
-      assert.deepEqual(args.slice(0, 7), ['create', '--name', name, '--network', 'none', '--platform', `linux/${child.architecture}`]);
+      assert.deepEqual(args.slice(0, 9), ['create', '--name', name, '--label', `org.prismpm.sdk-capture=${name}`, '--network', 'none', '--platform', `linux/${child.architecture}`]);
+      if (mutation === 'occupied-after-preflight') {
+        allocated.set(name, 'foreign'); throw new Error('synthetic name conflict');
+      }
       allocated.set(name, child.architecture);
       if (mutation === 'create-timeout') throw new Error('synthetic timeout after daemon creation');
       if (mutation === 'create-output') return Buffer.from('truncated output');
@@ -238,10 +248,11 @@ function captureRunner(directory, reference, index, mutation = '') {
       return Buffer.alloc(0);
     }
     assert.deepEqual(args.slice(0, 3), ['rm', '--force', '--volumes']);
-    assert.ok(allocated.has(args[3]));
-    assert.notEqual(args[3], 'unrelated');
+    const owner = [...allocated].find(([, architecture]) => architecture === containers.get(args[3]));
+    assert.ok(owner);
+    assert.notEqual(owner[0], 'unrelated');
     if (['remove', 'daemon'].includes(mutation)) throw new Error('synthetic failed removal');
-    allocated.delete(args[3]);
+    allocated.delete(owner[0]);
     return Buffer.alloc(0);
   };
   return {run, calls, destinations, allocated};
@@ -256,7 +267,7 @@ test('update captures both exact images without running foreign code and cleans 
       const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
       const proposed = await capturePlatformLock(reference, sha(standards), run);
       assert.deepEqual(proposed, await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
-      assert.equal(capture.calls.length, 17);
+      assert.equal(capture.calls.length, 19);
       assert.equal(capture.calls.filter(args => args[0] === 'rm').length, 2);
       assert.ok(capture.calls.every(args => args[0] !== 'run' && args[0] !== 'start' && args[0] !== 'exec'));
       assert.ok(capture.destinations.every(file => !existsSync(file)));
@@ -269,15 +280,15 @@ test('update rejects index/digest/architecture/copy/standards/symlink failures a
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-update-test-'));
   try {
     const {reference, index} = await fixture(directory);
-    for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards', 'create-timeout', 'create-output', 'remove', 'daemon']) {
+    for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards', 'create-timeout', 'create-output', 'remove', 'daemon', 'occupied-after-preflight']) {
       const capture = captureRunner(directory, reference, index, mutation);
       const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
       await assert.rejects(capturePlatformLock(reference, mutation === 'standards' ? sha('wrong standards') : sha(standards), run));
       const creates = capture.calls.filter(args => args[0] === 'create').length;
-      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, creates, mutation);
+      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, ['daemon', 'occupied-after-preflight'].includes(mutation) ? 0 : creates, mutation);
       assert.ok(capture.destinations.every(file => !existsSync(file)), mutation);
       assert.equal(capture.allocated.get('unrelated'), 'external');
-      if (!['remove', 'daemon'].includes(mutation)) assert.deepEqual([...capture.allocated], [['unrelated', 'external']]);
+      if (!['remove', 'daemon', 'occupied-after-preflight'].includes(mutation)) assert.deepEqual([...capture.allocated], [['unrelated', 'external']]);
     }
   } finally { await rm(directory, {recursive: true, force: true}); }
 });
@@ -292,7 +303,7 @@ test('capture uses parent-owned staging and refuses occupied names without remov
     await capturePlatformLock(reference, sha(standards), capture.run, owned);
     assert.ok(!existsSync(owned.directory));
     assert.ok(existsSync(join(directory, 'index.json')), 'parent and source inputs remain');
-    assert.deepEqual(capture.calls.filter(args => args[0] === 'rm').map(args => args[3]), owned.names);
+    assert.deepEqual(capture.calls.filter(args => args[0] === 'rm').map(args => args[3]), ['a'.repeat(64), 'b'.repeat(64)]);
     const calls = [];
     await assert.rejects(capturePlatformLock(reference, sha(standards), args => {
       calls.push(args); return Buffer.from('pre-existing-container');

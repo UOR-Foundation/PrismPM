@@ -12,6 +12,8 @@ const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}
 const digest = /^sha256:[0-9a-f]{64}$/;
 const image = /^[a-z0-9.-]+(?::[0-9]{1,5})?\/[a-z0-9./_-]+@sha256:[0-9a-f]{64}$/;
 const architectures = ['amd64', 'arm64'];
+const ownershipLabel = 'org.prismpm.sdk-capture';
+const ownershipFormat = `{{.Id}} {{index .Config.Labels "${ownershipLabel}"}}`;
 const kinds = ['adapter', 'base-image', 'binary', 'crate', 'dependency-lock', 'image',
   'oracle', 'schema', 'test-corpus', 'trust-root', 'workflow'];
 const canonical = value => Array.isArray(value) ? value.map(canonical)
@@ -142,6 +144,18 @@ export async function capturePlatformLock(reference, standardsDigest, run, owned
     const rows = await run(['container', 'ls', '--all', '--quiet', '--filter', `name=^/${name}$`]);
     assert.equal(rows.toString().trim(), '', `SDK capture cleanup unconfirmed for ${name}`);
   };
+  const cleanup = async name => {
+    let observed;
+    try {
+      observed = (await run(['container', 'inspect', '--format', ownershipFormat, name])).toString().trim().split(/\s+/);
+    } catch (_) { await absent(name); return; }
+    assert.ok(observed.length === 2 && /^[0-9a-f]{64}$/.test(observed[0]) && observed[1] === name,
+      `SDK capture ownership unconfirmed for ${name}; nothing removed`);
+    // Remove the inspected ID, never a name that another container can acquire
+    // between inspection and removal. Image labels cannot override --label.
+    try { await run(['rm', '--force', '--volumes', observed[0]]); } catch (_) { /* establish absence below */ }
+    await absent(name);
+  };
   // Refuse pre-existing names before acquiring ownership or removing anything.
   for (const name of names) await absent(name);
   const directory = owned?.directory ?? await mkdtemp(join(tmpdir(), 'prismpm-sdk-update-'));
@@ -160,7 +174,7 @@ export async function capturePlatformLock(reference, standardsDigest, run, owned
       const name = names[architectures.indexOf(child.architecture)];
       try {
         try {
-          const container = (await run(['create', '--name', name, '--network', 'none', '--platform', `linux/${child.architecture}`, child.reference])).toString().trim();
+          const container = (await run(['create', '--name', name, '--label', `${ownershipLabel}=${name}`, '--network', 'none', '--platform', `linux/${child.architecture}`, child.reference])).toString().trim();
           assert.match(container, /^[0-9a-f]{64}$/, 'Docker did not return one exact created container ID');
         } catch (error) {
           throw new Error(`SDK capture creation outcome unconfirmed for ${name}`, {cause: error});
@@ -169,8 +183,7 @@ export async function capturePlatformLock(reference, standardsDigest, run, owned
         await run(['cp', `${name}:/opt/prismpm/share/standards.lock`, `${childDirectory}/standards.lock`]);
       } finally {
         // Creation may have succeeded daemon-side even if its CLI failed.
-        try { await run(['rm', '--force', '--volumes', name]); } catch (_) { /* establish absence below */ }
-        try { await absent(name); } catch (error) {
+        try { await cleanup(name); } catch (error) {
           throw new Error(`SDK capture cleanup unconfirmed for ${name}`, {cause: error});
         }
       }

@@ -888,18 +888,45 @@ fn capture_listing(name: &str) -> Vec<String> {
         .collect()
 }
 
+fn capture_ownership(name: &str) -> Vec<String> {
+    [
+        "container",
+        "inspect",
+        "--format",
+        "{{.Id}} {{index .Config.Labels \"org.prismpm.sdk-capture\"}}",
+        name,
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
 fn cleanup_capture_containers(
     names: &[String],
     mut run: impl FnMut(&[String]) -> Result<String, PrismError>,
 ) -> Result<(), PrismError> {
     let mut uncertain = Vec::new();
     for name in names {
-        let _ = run(&[
-            "rm".into(),
-            "--force".into(),
-            "--volumes".into(),
-            name.clone(),
-        ]);
+        if let Ok(observed) = run(&capture_ownership(name)) {
+            let fields = observed.split_whitespace().collect::<Vec<_>>();
+            if fields.len() != 2
+                || fields[1] != name
+                || fields[0].len() != 64
+                || !fields[0]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                uncertain.push(name.as_str());
+                continue;
+            }
+            // An ID cannot be reassigned when its name is reused between calls.
+            let _ = run(&[
+                "rm".into(),
+                "--force".into(),
+                "--volumes".into(),
+                fields[0].to_owned(),
+            ]);
+        }
         match run(&capture_listing(name)) {
             Ok(output) if output.trim().is_empty() => {}
             _ => uncertain.push(name.as_str()),
@@ -909,7 +936,7 @@ fn cleanup_capture_containers(
         return Err(PrismError::new(
             "PP5401",
             format!(
-                "SDK capture cleanup unconfirmed; inspect exact containers: {}",
+                "SDK capture ownership or cleanup unconfirmed; inspect exact containers: {}",
                 uncertain.join(", ")
             ),
         ));
@@ -1208,14 +1235,29 @@ mod tests {
                 // successful exact-name query can establish its absence.
                 if args[0] == "rm" || unavailable {
                     Err(super::PrismError::new("PP5401", "test daemon response"))
+                } else if args[1] == "inspect" {
+                    let name = args.last().unwrap();
+                    let id = if name == &names[0] { "a" } else { "b" }.repeat(64);
+                    Ok(format!("{id} {name}"))
                 } else {
                     Ok(String::new())
                 }
             });
-            assert_eq!(calls.len(), 4);
+            let stride = if unavailable { 2 } else { 3 };
+            assert_eq!(calls.len(), stride * 2);
             for (index, name) in names.iter().enumerate() {
-                assert_eq!(calls[index * 2], vec!["rm", "--force", "--volumes", name]);
-                assert_eq!(calls[index * 2 + 1], super::capture_listing(name));
+                assert_eq!(calls[index * stride], super::capture_ownership(name));
+                if !unavailable {
+                    let id = if index == 0 { "a" } else { "b" }.repeat(64);
+                    assert_eq!(
+                        calls[index * stride + 1],
+                        vec!["rm", "--force", "--volumes", &id]
+                    );
+                }
+                assert_eq!(
+                    calls[index * stride + stride - 1],
+                    super::capture_listing(name)
+                );
             }
             if unavailable {
                 let error = result.unwrap_err();
@@ -1227,6 +1269,32 @@ mod tests {
             }
         }
         assert!(super::cleanup_capture_containers(&names, |_| Ok("still-present".into())).is_err());
+    }
+
+    #[test]
+    fn failed_capture_never_removes_a_name_acquired_by_another_owner() {
+        let names = [
+            "prismpm-sdk-capture-conflict-amd64".into(),
+            "prismpm-sdk-capture-conflict-arm64".into(),
+        ];
+        let mut calls = Vec::new();
+        let result = super::finish_capture(
+            Err(super::PrismError::new(
+                "PP5401",
+                "create name conflict after preflight",
+            )),
+            &names,
+            |args| {
+                calls.push(args.to_vec());
+                Ok(format!("{} foreign-owner", "f".repeat(64)))
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(calls.len(), 2);
+        assert!(calls
+            .iter()
+            .all(|args| args[0] == "container" && args[1] == "inspect"));
+        assert!(result.unwrap_err().message.contains("ownership"));
     }
 
     #[cfg(unix)]
@@ -1252,10 +1320,14 @@ mod tests {
         let mut calls = Vec::new();
         let error = super::finish_capture(result, &names, |args| {
             calls.push(args.to_vec());
-            Ok(String::new())
+            if args[1] == "inspect" {
+                Ok(format!("{} {}", "a".repeat(64), args.last().unwrap()))
+            } else {
+                Ok(String::new())
+            }
         })
         .unwrap_err();
-        assert_eq!(calls.len(), 4);
+        assert_eq!(calls.len(), 6);
         for name in &names {
             assert!(error.message.contains(name));
         }
