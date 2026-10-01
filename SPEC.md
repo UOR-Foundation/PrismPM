@@ -926,7 +926,16 @@ temporary, never-started containers. Both standards files must match the
 requested digest. Copied evidence must be bounded regular files before parsing,
 and subprocess output is bounded; Docker owns image pull/extraction resources.
 Temporary containers and files are cleaned up, while the normal Docker image
-cache may retain pulled images. This is fresh target-image evidence, not a
+cache may retain pulled images. The updater allocates exact random-scoped
+container names before capture and confines evidence to its own staging
+directory. The helper protects cleanup before issuing create; the surviving
+Rust parent attempts exact-name volume/container removal after success or
+failure and positively checks absence. Cleanup calls are bounded to 20 seconds
+and 64 KiB each. Daemon failure is unconfirmed cleanup, never success. A failed
+capture reports its exact recovery names because an interrupted create can
+still be in flight; abrupt parent death or an unavailable daemon cannot promise
+automatic recovery. No unrelated resources or image caches are pruned.
+This is fresh target-image evidence, not a
 comparison with the updating process's older native inventory and not a
 digest-only patch retaining stale hashes. The closed
 `prismpm/sdk-lock-update/2` proposal includes every changed platform, index,

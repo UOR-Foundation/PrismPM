@@ -774,7 +774,9 @@ fn capture_platform_update(
     sdk_image: &str,
     standards_lock: &str,
 ) -> Result<CanonicalDocument, PrismError> {
-    let directory = tempfile::tempdir()
+    let directory = tempfile::Builder::new()
+        .prefix("prismpm-sdk-capture-")
+        .tempdir()
         .map_err(|error| PrismError::new("PP5401", format!("SDK update staging: {error}")))?;
     let helper = directory.path().join("platform-lock.mjs");
     std::fs::write(&helper, include_bytes!("../sdk/platform-lock.mjs"))
@@ -793,6 +795,39 @@ fn capture_platform_update(
             environment.insert(name.to_owned(), value.to_string_lossy().into_owned());
         }
     }
+    let token = format!(
+        "{:x}",
+        Sha256::digest(directory.path().to_string_lossy().as_bytes())
+    );
+    let names = ["amd64", "arm64"]
+        .map(|architecture| format!("prismpm-sdk-capture-{token}-{architecture}"));
+    std::fs::write(
+        directory.path().join("capture-ownership.json"),
+        serde_json::to_vec(&names).map_err(|error| PrismError::new("PP5401", error.to_string()))?,
+    )
+    .map_err(|error| PrismError::new("PP5401", format!("SDK capture recovery names: {error}")))?;
+    let run_docker = |args: &[String]| {
+        crate::verification::run_process_limited(
+            "sdk-capture-cleanup",
+            &docker,
+            args,
+            directory.path(),
+            &environment,
+            &[],
+            "PP5401",
+            "20s",
+            65_536,
+        )
+        .map(|record| record.stdout)
+    };
+    for name in &names {
+        if !run_docker(&capture_listing(name))?.trim().is_empty() {
+            return Err(PrismError::new(
+                "PP5401",
+                format!("SDK capture name already exists: {name}; nothing removed"),
+            ));
+        }
+    }
     let result = crate::verification::run_process_limited(
         "sdk-platform-update",
         &node,
@@ -802,6 +837,13 @@ fn capture_platform_update(
             sdk_image.to_owned(),
             standards_lock.to_owned(),
             docker.to_string_lossy().into_owned(),
+            directory
+                .path()
+                .join("evidence")
+                .to_string_lossy()
+                .into_owned(),
+            names[0].clone(),
+            names[1].clone(),
         ],
         directory.path(),
         &environment,
@@ -809,7 +851,10 @@ fn capture_platform_update(
         "PP5401",
         "600s",
         SDK_CAPTURE_MAX_BYTES,
-    )?;
+    );
+    // The helper may be terminated during create or copy. Its finally cannot
+    // guarantee daemon-side cleanup; the surviving parent owns exact names.
+    let result = finish_capture(result, &names, run_docker)?;
     let proposed = parse_lock(result.stdout.as_bytes())?;
     if proposed.schema() != "prismpm/sdk-lock/2"
         || proposed.value()["sdk_image"] != sdk_image
@@ -821,6 +866,55 @@ fn capture_platform_update(
         ));
     }
     Ok(proposed)
+}
+
+fn finish_capture(
+    result: Result<crate::verification::ProcessRecord, PrismError>,
+    names: &[String],
+    run: impl FnMut(&[String]) -> Result<String, PrismError>,
+) -> Result<crate::verification::ProcessRecord, PrismError> {
+    cleanup_capture_containers(names, run)?;
+    result.map_err(|error| PrismError::new("PP5401", format!(
+        "{}; cleanup attempted for {}; failed capture may leave in-flight creation, recheck these exact names",
+        error.message, names.join(", ")
+    )))
+}
+
+fn capture_listing(name: &str) -> Vec<String> {
+    ["container", "ls", "--all", "--quiet", "--filter"]
+        .into_iter()
+        .map(str::to_owned)
+        .chain(std::iter::once(format!("name=^/{name}$")))
+        .collect()
+}
+
+fn cleanup_capture_containers(
+    names: &[String],
+    mut run: impl FnMut(&[String]) -> Result<String, PrismError>,
+) -> Result<(), PrismError> {
+    let mut uncertain = Vec::new();
+    for name in names {
+        let _ = run(&[
+            "rm".into(),
+            "--force".into(),
+            "--volumes".into(),
+            name.clone(),
+        ]);
+        match run(&capture_listing(name)) {
+            Ok(output) if output.trim().is_empty() => {}
+            _ => uncertain.push(name.as_str()),
+        }
+    }
+    if !uncertain.is_empty() {
+        return Err(PrismError::new(
+            "PP5401",
+            format!(
+                "SDK capture cleanup unconfirmed; inspect exact containers: {}",
+                uncertain.join(", ")
+            ),
+        ));
+    }
+    Ok(())
 }
 
 fn platform_update_proposal(
@@ -1098,6 +1192,74 @@ mod tests {
             "sdk_image":format!("example.invalid/test-sdk@sha256:{}","a".repeat(64)),
             "standards_lock":format!("sha256:{}","b".repeat(64)),
             "inventory":[{"id":"sdk-manifest","kind":"image","version":"0.3.0","digest":format!("sha256:{}","a".repeat(64))}]})
+    }
+
+    #[test]
+    fn capture_cleanup_requires_daemon_confirmation_and_attempts_both_exact_names() {
+        let names = [
+            "prismpm-sdk-capture-test-amd64".into(),
+            "prismpm-sdk-capture-test-arm64".into(),
+        ];
+        for unavailable in [false, true] {
+            let mut calls = Vec::new();
+            let result = super::cleanup_capture_containers(&names, |args| {
+                calls.push(args.to_vec());
+                // An already-removed container makes rm fail, but only a
+                // successful exact-name query can establish its absence.
+                if args[0] == "rm" || unavailable {
+                    Err(super::PrismError::new("PP5401", "test daemon response"))
+                } else {
+                    Ok(String::new())
+                }
+            });
+            assert_eq!(calls.len(), 4);
+            for (index, name) in names.iter().enumerate() {
+                assert_eq!(calls[index * 2], vec!["rm", "--force", "--volumes", name]);
+                assert_eq!(calls[index * 2 + 1], super::capture_listing(name));
+            }
+            if unavailable {
+                let error = result.unwrap_err();
+                for name in &names {
+                    assert!(error.message.contains(name));
+                }
+            } else {
+                result.unwrap();
+            }
+        }
+        assert!(super::cleanup_capture_containers(&names, |_| Ok("still-present".into())).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn killed_capture_worker_still_enters_parent_cleanup_and_reports_uncertainty() {
+        let root = tempfile::tempdir().unwrap();
+        let result = crate::verification::run_process_limited(
+            "capture-kill-regression",
+            std::path::Path::new("/bin/sh"),
+            &["-c".into(), "kill -KILL $$".into()],
+            root.path(),
+            &std::collections::BTreeMap::new(),
+            &[],
+            "PP5401",
+            "5s",
+            4096,
+        );
+        assert!(result.is_err());
+        let names = [
+            "prismpm-sdk-capture-killed-amd64".into(),
+            "prismpm-sdk-capture-killed-arm64".into(),
+        ];
+        let mut calls = Vec::new();
+        let error = super::finish_capture(result, &names, |args| {
+            calls.push(args.to_vec());
+            Ok(String::new())
+        })
+        .unwrap_err();
+        assert_eq!(calls.len(), 4);
+        for name in &names {
+            assert!(error.message.contains(name));
+        }
+        assert!(error.message.contains("in-flight creation"));
     }
 
     #[test]
