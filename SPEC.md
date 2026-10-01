@@ -939,6 +939,21 @@ synthetic two-architecture images and the isolated source-built CLI; those
 fixtures do not claim to be released SDKs. The separate shipped-SDK runtime
 gate retains its exact native inventory checks. Legacy
 locks retain their existing `prismpm/sdk-lock-update/1` proposal behavior.
+That legacy digest-only proposal is not an executable SDK upgrade and does not
+refresh target inventory. Explicit `lock migrate --sdk-image <digest-ref>
+--standards-lock <digest>` instead captures a v2 target through the same exact
+two-platform image capture. Only this operation reads the canonical regular v1
+lock as historical evidence without comparing it to the updater's native
+inventory. The updater still verifies its own environment; ordinary project
+execution retains all inventory checks. The source lock must remain unchanged
+through capture. The closed `prismpm/sdk-lock-migration/1` proposal contains an
+ordered root `test` of the complete old lock followed by a root `replace` with
+the complete validated v2 lock, preserving every structural addition/removal
+without an implicit format promotion. It never writes the project. Compatibility,
+generated-output and security reviews remain required; capture and a valid
+proposal are not SDK qualification or release acceptance. Existing v2 projects
+use `lock update`, not migration. Proposal limits are 192 MiB and 262,144 items;
+each embedded lock independently retains its existing closed schema and bounds.
 `fetch --locked`
 materializes all content required for subsequent check, build, test, package,
 verify and release assembly with networking disabled. Native Linux archives

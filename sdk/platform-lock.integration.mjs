@@ -155,7 +155,21 @@ try {
   args[args.length - 1] = sha('wrong requested standards');
   await assert.rejects(run(cli, args), error => error.stderr.includes('PP5401') || error.stdout.includes('PP5401'));
   assert.equal(await readFile(join(project, 'prismpm.lock'), 'utf8'), committed);
-  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture capture; Docker-list rejection; exact OCI registry blobs/manifests; current CLI review proposal; standards mismatch rejection; no lock adoption');
+  const legacy = {schema: 'prismpm/sdk-lock/1', sdk_version: '0.3.0', sdk_image: captures[0].sdk_image,
+    standards_lock: captures[0].standards_lock,
+    inventory: [...captures[0].platforms[0].inventory, {id: 'sdk-manifest', kind: 'image', version: '0.3.0', digest: captures[0].sdk_image.split('@')[1]}].sort((a,b) => a.id.localeCompare(b.id))};
+  const historical = JSON.stringify(canonical(legacy));
+  await writeFile(join(project, 'prismpm.lock'), historical);
+  const migrate = ['--json', '--project', project, 'lock', 'migrate', '--sdk-image', captures[1].sdk_image,
+    '--standards-lock', captures[1].standards_lock];
+  const migration = JSON.parse(await run(cli, migrate));
+  assert.equal(migration.schema, 'prismpm/sdk-lock-migration/1');
+  assert.deepEqual(migration.patch, [{op:'test',path:'',value:legacy},{op:'replace',path:'',value:captures[1]}]);
+  assert.equal(await readFile(join(project, 'prismpm.lock'), 'utf8'), historical);
+  migrate[migrate.length - 1] = sha('wrong migration standards');
+  await assert.rejects(run(cli, migrate), error => error.stderr.includes('PP5401') || error.stdout.includes('PP5401'));
+  assert.equal(await readFile(join(project, 'prismpm.lock'), 'utf8'), historical);
+  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture capture; Docker-list rejection; exact OCI registry blobs/manifests; current CLI update/migration proposals; standards mismatch rejection; no lock adoption');
 } finally {
   for (const socket of connections) socket.destroy();
   if (proxy) await new Promise(resolveClose => proxy.close(resolveClose));
