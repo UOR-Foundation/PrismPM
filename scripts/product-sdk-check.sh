@@ -48,9 +48,9 @@ docker container cp "$container:/usr/local/bin/prismpm-devcontainer-init" "$sdk_
 cmp "$root/sdk/devcontainer-init.sh" "$sdk_work/entrypoint.sh"
 docker container rm "$container" >/dev/null
 container=''
-# The existing capture verifies real index bytes, both image inventories and
-# standards locks using never-started foreign-platform containers.
-node "$helper" lock "$image" "$evidence/standards.lock" "$(command -v docker)" > "$evidence/prismpm.lock"
+# Bound metadata acquisition to the indexed terminal layers; never pull a
+# second complete platform image merely to obtain its inventory.
+node "$helper" lock "$image" "$evidence/standards.lock" > "$evidence/prismpm.lock"
 mkdir "$sdk_work/inputs"
 cp "$evidence/prismpm.lock" "$sdk_work/inputs/prismpm.lock"
 project_volume=$(docker volume create)

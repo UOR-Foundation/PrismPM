@@ -2,10 +2,8 @@
 // actual digest-selected images; this does not grant release acceptance.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { lstat, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { lstat, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -128,41 +126,19 @@ export async function createPlatformLock(directory, reference, nativeInventoryBy
   return lock;
 }
 
-// The injected runner is solely a test seam; the CLI always uses the verified
-// Docker executable supplied by PrismPM. Never run either target image.
-export async function capturePlatformLock(reference, standardsDigest, run) {
-  assert.match(reference, image);
-  assert.match(standardsDigest, digest);
-  const directory = await mkdtemp(join(tmpdir(), 'prismpm-sdk-update-'));
-  try {
-    const index = await run(['buildx', 'imagetools', 'inspect', '--raw', reference]);
-    const children = parseSdkIndex(index, reference);
-    await writeFile(`${directory}/index.json`, index);
-    for (const child of children) {
-      const childDirectory = `${directory}/${child.architecture}`;
-      await mkdir(childDirectory);
-      await run(['pull', '--platform', `linux/${child.architecture}`, child.reference]);
-      const inspected = await run(['image', 'inspect', '--format', '{{json .}}', child.reference]);
-      await writeFile(`${childDirectory}/image.json`, inspected);
-      const container = (await run(['create', '--network', 'none', '--platform', `linux/${child.architecture}`, child.reference])).toString().trim();
-      assert.match(container, /^[0-9a-f]{64}$/, 'Docker did not return one exact created container ID');
-      try {
-        await run(['cp', `${container}:/opt/prismpm/share/inventory.json`, `${childDirectory}/inventory.json`]);
-        await run(['cp', `${container}:/opt/prismpm/share/standards.lock`, `${childDirectory}/standards.lock`]);
-      } finally {
-        await run(['rm', '--volumes', container]);
-      }
-    }
-    const standards = await boundedFile(`${directory}/amd64/standards.lock`, 16 * 1024 * 1024);
-    assert.equal(sha(standards), standardsDigest, 'target SDK standards digest differs from requested update');
-    return await validatePlatformBundle(directory, reference, standards);
-  } finally {
-    await rm(directory, {recursive: true, force: true});
-  }
+// The transport seam is used only by acquisition-negative tests. Production
+// reads exact OCI graph bytes, never pulls images or starts foreign containers.
+export async function capturePlatformLock(reference, standardsDigest, transport) {
+  const {captureMetadataLock} = await import('./metadata-capture.mjs');
+  if (transport !== undefined) return captureMetadataLock(reference, standardsDigest, transport);
+  const {captureSdkMetadata, verifiedCommands} = await import('./metadata-cli.mjs');
+  const inventory = '/opt/prismpm/share/inventory.json';
+  const commands = existsSync(inventory) ? verifiedCommands(inventory) : [];
+  return JSON.parse(await captureSdkMetadata(reference, standardsDigest, commands));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [command, reference, standardsDigest, docker] = process.argv.slice(2);
+  const [command, reference, standardsDigest] = process.argv.slice(2);
   if (command === 'index') {
     assert.equal(process.argv.length, 4);
     for (const child of parseSdkIndex(await readFile('/dev/stdin'), reference)) {
@@ -170,12 +146,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
   } else {
     assert.equal(command, 'capture');
-    assert.equal(process.argv.length, 6);
-    assert.ok(docker.startsWith('/'), 'Docker must be an SDK-resolved absolute executable');
-    const lock = await capturePlatformLock(reference, standardsDigest, args => execFileSync(docker, args,
-      {timeout: 120_000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']}));
+    assert.equal(process.argv.length, 5);
     // SDK lock files are exact canonical JSON; unlike inventory files, they
     // do not permit a trailing newline outside the canonical value.
-    process.stdout.write(JSON.stringify(canonical(lock)));
+    capturePlatformLock(reference, standardsDigest).then(lock => process.stdout.write(JSON.stringify(canonical(lock))))
+      .catch(error => {process.stderr.write(String(error) + '\n'); process.exitCode = 1;});
   }
 }

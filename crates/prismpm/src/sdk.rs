@@ -632,8 +632,8 @@ pub fn inspect_lock(root: &Path) -> Result<serde_json::Value, PrismError> {
 
 /// Produce an RFC 6902-style review object for an explicit SDK-lock update.
 /// Project files are read-only; applying the patch remains a normal reviewed
-/// source change. Platform updates pull into the Docker image cache and use
-/// temporary, never-started containers to capture immutable target inventories.
+/// source change. Platform updates read a bounded terminal metadata layer from
+/// each immutable target manifest without pulling or executing target images.
 pub fn propose_lock_update(
     root: &Path,
     sdk_image: &str,
@@ -686,18 +686,65 @@ fn capture_platform_update(
 ) -> Result<CanonicalDocument, PrismError> {
     let directory = tempfile::tempdir()
         .map_err(|error| PrismError::new("PP5401", format!("SDK update staging: {error}")))?;
-    let helper = directory.path().join("platform-lock.mjs");
-    std::fs::write(&helper, include_bytes!("../sdk/platform-lock.mjs"))
-        .map_err(|error| PrismError::new("PP5401", format!("SDK update helper: {error}")))?;
+    let helper = directory.path().join("metadata-cli.mjs");
+    for (name, bytes) in [
+        (
+            "platform-lock.mjs",
+            include_bytes!("../sdk/platform-lock.mjs").as_slice(),
+        ),
+        (
+            "metadata-cli.mjs",
+            include_bytes!("../sdk/metadata-cli.mjs").as_slice(),
+        ),
+        (
+            "metadata-capture.mjs",
+            include_bytes!("../sdk/metadata-capture.mjs").as_slice(),
+        ),
+        (
+            "metadata-layer.mjs",
+            include_bytes!("../sdk/metadata-layer.mjs").as_slice(),
+        ),
+        (
+            "metadata-transport.mjs",
+            include_bytes!("../sdk/metadata-transport.mjs").as_slice(),
+        ),
+        (
+            "metadata-credentials.mjs",
+            include_bytes!("../sdk/metadata-credentials.mjs").as_slice(),
+        ),
+        (
+            "metadata-helper.mjs",
+            include_bytes!("../sdk/metadata-helper.mjs").as_slice(),
+        ),
+        (
+            "metadata-helper-supervisor.py",
+            include_bytes!("../sdk/metadata-helper-supervisor.py").as_slice(),
+        ),
+    ] {
+        std::fs::write(directory.path().join(name), bytes)
+            .map_err(|error| PrismError::new("PP5401", format!("SDK update helper: {error}")))?;
+    }
     let node = executable("node")?;
-    let docker = executable("docker")?;
+    // Node resolution verifies the installed SDK environment first. Pass its
+    // exact command inventory, never helper names resolved from user config.
+    let commands = match inventory_path() {
+        Some(path) => std::fs::read(path).map_err(|error| {
+            PrismError::new("PP5401", format!("SDK command inventory: {error}"))
+        })?,
+        None => encode_value(&executable_inventory()?)?,
+    };
+    let command_inventory = directory.path().join("commands.json");
+    std::fs::write(&command_inventory, commands)
+        .map_err(|error| PrismError::new("PP5401", format!("SDK command inventory: {error}")))?;
     let mut environment = BTreeMap::new();
     for name in [
         "DOCKER_CONFIG",
-        "DOCKER_HOST",
-        "DOCKER_CONTEXT",
-        "DOCKER_TLS_VERIFY",
-        "DOCKER_CERT_PATH",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "DISPLAY",
+        "XDG_RUNTIME_DIR",
+        "GNUPGHOME",
+        "PASSWORD_STORE_DIR",
+        "GPG_TTY",
     ] {
         if let Some(value) = std::env::var_os(name) {
             environment.insert(name.to_owned(), value.to_string_lossy().into_owned());
@@ -708,16 +755,15 @@ fn capture_platform_update(
         &node,
         &[
             helper.to_string_lossy().into_owned(),
-            "capture".to_owned(),
             sdk_image.to_owned(),
             standards_lock.to_owned(),
-            docker.to_string_lossy().into_owned(),
+            command_inventory.to_string_lossy().into_owned(),
         ],
         directory.path(),
         &environment,
         &[],
         "PP5401",
-        "600s",
+        "210s",
         SDK_CAPTURE_MAX_BYTES,
     )?;
     let proposed = parse_lock(result.stdout.as_bytes())?;
@@ -1031,10 +1077,21 @@ mod tests {
     #[test]
     fn legacy_update_remains_a_read_only_v1_proposal() {
         let root = tempfile::tempdir().unwrap();
-        let current = json!({"schema":"prismpm/sdk-lock/1","sdk_version":"0.3.0",
+        let mut current = json!({"schema":"prismpm/sdk-lock/1","sdk_version":"0.3.0",
             "sdk_image":format!("example.invalid/test-sdk@sha256:{}","a".repeat(64)),
             "standards_lock":format!("sha256:{}","b".repeat(64)),
             "inventory":[{"id":"prismpm","kind":"binary","version":"0.3.0","digest":format!("sha256:{}","c".repeat(64))}]});
+        // Installed SDK runs must exercise the same runtime binding as users;
+        // the synthetic bootstrap inventory is deliberately not an SDK claim.
+        if let Some(path) = super::inventory_path() {
+            let installed: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            let mut artifacts = installed["artifacts"].as_array().unwrap().clone();
+            artifacts.push(json!({"id":"sdk-manifest","kind":"image","version":"0.3.0",
+                "digest":format!("sha256:{}", "a".repeat(64))}));
+            artifacts.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+            current["inventory"] = json!(artifacts);
+        }
         let bytes = serde_json::to_vec(&current).unwrap();
         std::fs::write(root.path().join("prismpm.lock"), &bytes).unwrap();
         let result = super::propose_lock_update(

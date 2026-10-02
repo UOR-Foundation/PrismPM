@@ -294,7 +294,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  else if(mode==='capture'&&args.length===2)console.log(canonical(capture(...args)));
  else if(mode==='verify'&&args.length===2)verifySource(args[0],json(args[1]));
  else if(mode==='image'&&args.length===3)verifyImage(JSON.parse(readFileSync(0)),...args);
- else if(mode==='lock'&&args.length===3){assert.match(args[0],imagePattern);const lock=await capturePlatformLock(args[0],sha(bytes(args[1])),async argv=>Buffer.from((await command(args[2],argv,{timeout:120000,maximum:8*1024*1024})).stdout));process.stdout.write(canonical(lock));}
+ else if(mode==='lock'&&args.length===2){assert.match(args[0],imagePattern);const lock=await capturePlatformLock(args[0],sha(bytes(args[1])));process.stdout.write(canonical(lock));}
  else if(mode==='acquire'&&args.length===0)console.log(canonical(await acquire()));
  else if(mode==='build'&&args.length===0)console.log(canonical(await buildProducts()));
  else if(mode==='receive'&&args.length===0)console.log(canonical(await receive()));

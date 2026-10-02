@@ -853,6 +853,12 @@ level = "build"
 statement = "Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds."
 
 [[id]]
+id = "DK-28"
+suite = "sdk"
+level = "build"
+statement = "SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

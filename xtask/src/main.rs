@@ -198,11 +198,6 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
-            "sdk/metadata-layer.test.mjs",
-            "sdk/metadata-capture.test.mjs",
-            "sdk/metadata-transport.test.mjs",
-            "sdk/metadata-transport-tls.test.mjs",
-            "sdk/metadata-credentials.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",
             "scripts/release-gate-evidence.test.mjs",
@@ -546,6 +541,11 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         ],
     )?;
     let update_cli = driver.prismpm_binary();
+    command(
+        root,
+        "node",
+        &["sdk/metadata-materialization.integration.mjs"],
+    )?;
     command(
         root,
         "node",
