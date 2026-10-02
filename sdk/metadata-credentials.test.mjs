@@ -85,10 +85,14 @@ test('Docker Hub legacy auth configuration is recognized without other-registry 
   const provider = dockerCredentialProvider({directory});
   assert.deepEqual(await provider('https://registry-1.docker.io', signal()), {kind:'basic', username:'fixture', secret:'synthetic'});
   assert.equal(await provider(origin, signal()), null);
+  assert.equal(await provider('https://registry-1.docker.io:8443', signal()), null);
   const helper = dockerCredentialProvider({directory:fixture(t, {credsStore:'fixture'}), runHelper:async (command, server) => {
     assert.equal(command, 'docker-credential-fixture');
     return server === 'https://index.docker.io/v1/' ? {Username:'fixture', Secret:'synthetic'} : null;
   }});
   for (const host of ['docker.io','registry-1.docker.io'])
     assert.deepEqual(await helper('https://' + host, signal()), {kind:'basic', username:'fixture', secret:'synthetic'});
+  assert.equal(await helper('https://registry-1.docker.io:8443',signal()),null);
+  const canonical = dockerCredentialProvider({directory:fixture(t,{auths:{'docker.io':{auth:auth('fixture','synthetic')}}})});
+  assert.deepEqual(await canonical('https://registry-1.docker.io',signal()),{kind:'basic',username:'fixture',secret:'synthetic'});
 });

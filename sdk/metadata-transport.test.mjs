@@ -179,6 +179,11 @@ test('malformed or contradictory token responses do not expose token bytes in di
 });
 
 test('default registry ports normalize to the same origin without changing pinned references', () => {
+  for (const repository of ['docker.io/library/sdk','docker.io:443/library/sdk']) {
+    const parsed = registryReference(repository + '@' + sha('test'));
+    assert.equal(parsed.origin,'https://registry-1.docker.io'); assert.equal(parsed.repository,repository);
+  }
+  assert.equal(registryReference('docker.io:8443/library/sdk@' + sha('test')).origin,'https://docker.io:8443');
   const digest = sha('reference');
   for (const [a, b] of [['example.com:443','example.com'],['localhost:80','localhost'],['127.0.0.1:80','127.0.0.1']]) {
     const first = registryReference(a + '/sdk@' + digest), second = registryReference(b + '/sdk@' + digest);

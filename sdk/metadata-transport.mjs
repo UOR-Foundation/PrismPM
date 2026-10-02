@@ -10,7 +10,10 @@ export function registryReference(reference) {
   const [host, port] = authority.split(':');
   assert(port === undefined || (Number(port) > 0 && Number(port) <= 65535), 'invalid OCI registry port');
   const scheme = host === '127.0.0.1' || host === 'localhost' ? 'http:' : 'https:';
-  return {repository, path:parts.join('/'), digest, origin:new URL(scheme + '//' + authority).origin};
+  // Docker 28.4 registry/config.go distinguishes the reference namespace from
+  // its V2 transport host. Nondefault ports are independent registry origins.
+  const endpoint = host === 'docker.io' && (port === undefined || Number(port) === 443) ? 'registry-1.docker.io' : authority;
+  return {repository, path:parts.join('/'), digest, origin:new URL(scheme + '//' + endpoint).origin};
 }
 
 function secureUrl(value, origin) {
@@ -142,7 +145,7 @@ export function createRegistryTransport(reference, credentials = async () => nul
           assert(credential && ['basic','refresh'].includes(credential.kind), 'unsupported OCI credential kind');
           assert(typeof credential.secret === 'string' && credential.secret.length > 0 && credential.secret.length <= 16384,
             'bounded OCI credential required');
-          assert(realm.origin === registry.origin || (new URL(registry.origin).hostname === 'registry-1.docker.io'
+          assert(realm.origin === registry.origin || (registry.origin === 'https://registry-1.docker.io'
             && realm.origin === 'https://auth.docker.io'), 'registry credentials cannot cross an unapproved origin');
           if (credential.kind === 'basic') {
             tokenHeaders.Authorization = basic(credential);

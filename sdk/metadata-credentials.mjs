@@ -64,8 +64,11 @@ export function dockerCredentialProvider({directory, runHelper} = {}) {
     let config;
     try {config = parseJson(bytes);} catch {throw new Error('invalid registry configuration JSON');}
     caseKeys(config, ['auths','credsStore','credHelpers']);
+    const hub = url.protocol === 'https:' && url.port === '' && ['docker.io','registry-1.docker.io'].includes(url.hostname);
     const keys = [url.host, origin, origin + '/'];
-    if (['docker.io','registry-1.docker.io'].includes(url.hostname)) keys.push('https://index.docker.io/v1/');
+    if (hub) for (const key of ['docker.io','https://docker.io','https://docker.io/',
+      'registry-1.docker.io','https://registry-1.docker.io','https://registry-1.docker.io/','https://index.docker.io/v1/'])
+      if (!keys.includes(key)) keys.push(key);
     const matching = map => {
       assert(map && typeof map === 'object' && !Array.isArray(map), 'registry configuration map required');
       const values = keys.filter(key => Object.hasOwn(map, key)).map(key => [key, map[key]]);
@@ -78,7 +81,7 @@ export function dockerCredentialProvider({directory, runHelper} = {}) {
     if (store !== undefined && store !== '') {
       assert(typeof store === 'string' && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(store), 'invalid registry credential helper');
       assert.equal(typeof runHelper, 'function', 'SDK-verified credential helper runner required');
-      const defaultServer = ['docker.io','registry-1.docker.io'].includes(url.hostname) ? 'https://index.docker.io/v1/' : url.host;
+      const defaultServer = hub ? 'https://index.docker.io/v1/' : url.host;
       const result = await runHelper('docker-credential-' + store, helper?.[0] ?? defaultServer, signal);
       signal.throwIfAborted();
       if (result === null) return null; // exact helper not-found outcome only
