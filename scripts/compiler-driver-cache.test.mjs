@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chmodSync, copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {chmodSync, chownSync, copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
@@ -37,7 +37,7 @@ for (const linked of [false, true]) {
   test(`pinned exporter is genuinely compiled without adopting ${linked ? 'linked' : 'regular'} shared cache`, t => {
     const f = exporterFixture(t), bytes = readFileSync(f.executable);
     if (linked) { renameSync(f.cache, f.cache + '-retained'); symlinkSync(f.cache + '-retained', f.cache); }
-    const work = join(f.repo, 'private'); mkdirSync(work);
+    const work = join(f.repo, 'private'); mkdirSync(work, {mode:0o700});
     const result = ensureProdExport(f.repo, work);
     const probe = spawnSync(result.bin, ['--module'], {cwd:result.dir, encoding:'utf8', timeout:30000});
     assert.ifError(probe.error);
@@ -75,12 +75,39 @@ for (const [name, mutate, reason] of [
 test('private exporter destination and aliased parent cannot be adopted or overwritten', t => {
   const f = exporterFixture(t), work = join(f.repo, 'private');
   assert.throws(() => ensureProdExport(f.repo), /owned exporter workspace required/);
-  mkdirSync(join(work, 'exporter'), {recursive:true});
+  mkdirSync(work, {mode:0o700});
+  mkdirSync(join(work, 'exporter'));
   const retained = join(work, 'exporter/evidence'); writeFileSync(retained, 'preserve');
   assert.throws(() => ensureProdExport(f.repo, work), /EEXIST/);
   assert.equal(readFileSync(retained, 'utf8'), 'preserve');
   const alias = join(f.repo, 'alias'); symlinkSync(work, alias);
   assert.throws(() => ensureProdExport(f.repo, alias), /aliased exporter parent/);
+  assert(!existsSync(f.marker));
+});
+
+test('exporter refuses nonprivate parents before creating or compiling anything', t => {
+  const f = exporterFixture(t), work = join(f.repo, 'private');
+  mkdirSync(work, {mode:0o700});
+  for (const mode of [0o701, 0o710, 0o720, 0o740, 0o755, 0o777]) {
+    chmodSync(work, mode);
+    assert.throws(() => ensureProdExport(f.repo, work), /exporter parent must be an owned private directory/);
+    assert(!existsSync(join(work, 'exporter')), 'rejection precedes source staging');
+    assert(!existsSync(f.marker));
+  }
+});
+
+test('exporter refuses a private directory belonging to another user', t => {
+  const f = exporterFixture(t), work = join(f.repo, 'foreign');
+  if (process.getuid() === 0) {
+    mkdirSync(work, {mode:0o700});
+    chownSync(work, 65534, 65534);
+    assert.throws(() => ensureProdExport(f.repo, work), /exporter parent must be an owned private directory/);
+    assert(!existsSync(join(work, 'exporter')));
+  } else {
+    // Root-owned, readable directory: a non-root caller must not accept it
+    // merely because mkdir would later fail. No writes may be attempted here.
+    assert.throws(() => ensureProdExport(f.repo, '/usr'), /exporter parent must be an owned private directory/);
+  }
   assert(!existsSync(f.marker));
 });
 

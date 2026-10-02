@@ -621,7 +621,9 @@ The private browser exporter harness builds `prod-export` from captured, pinned
 compiler source in a fresh private directory. It never adopts, executes or
 overwrites a previous shared exporter cache. Source and toolchain identities
 are checked before and after construction; aliased or multiply linked source
-files and pre-existing private destinations are refused. Every caller supplies
+files and pre-existing private destinations are refused. The exporter parent
+must belong to the invoking user and grant no group or other permissions;
+these checks precede source staging and compiler execution. Every caller supplies
 its owned diagnostic workspace so existing cleanup or explicit failure retention
 also owns the exporter; there is no implicit standalone temporary cache. An executable's
 existence or a Lake fingerprint is not compiler-source provenance. This fresh

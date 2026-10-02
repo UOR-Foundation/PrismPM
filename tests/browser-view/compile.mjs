@@ -158,7 +158,9 @@ export function ensureProdExport(repo = repository, work = null) {
   // source provenance. Never adopt, overwrite or execute the shared cache.
   assert.ok(typeof work === 'string', 'owned exporter workspace required');
   assert.equal(realpathSync(work), resolve(work), 'aliased exporter parent refused');
-  assert.ok(lstatSync(work).isDirectory(), 'exporter parent must be a directory');
+  const parent = lstatSync(work);
+  assert.ok(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o077) === 0,
+    'exporter parent must be an owned private directory');
   const dir = join(work, 'exporter');
   mkdirSync(dir, {mode:0o700});
   const archive = join(dir, '.source-lean.tar');
