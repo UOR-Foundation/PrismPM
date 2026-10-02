@@ -55,8 +55,10 @@ jobs:
           push: never
           runCmd: |
             set -euo pipefail
+            bash scripts/vv.sh --with-sdk bash -euo pipefail <<'PRISMPM_VV'
             node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 1
             node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 2
+            PRISMPM_VV
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

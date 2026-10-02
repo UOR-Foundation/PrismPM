@@ -671,6 +671,15 @@ invocations remain mandatory. Diagnostics upload runs even after gate failure
 when the runner is reachable; runner loss can prevent upload and never implies
 acceptance or a diagnosed resource cause.
 
+Consecutive source gates share one exact-source, digest-addressed test SDK
+session and its invocation-owned temporary registry. Both unchanged `just vv`
+commands execute sequentially in the same workspace with separate evidence;
+only SDK preparation is shared, never verification results. Failure stops the
+sequence. Cleanup checks container identity, volume ownership and image identity;
+errors fail an otherwise successful session without replacing a verification
+failure. Uncertain publication reports possibly retained resources instead of
+deleting an unverified name.
+
 The accepted 0.2.0 bootstrap remains the exact published AMD64 archive and
 binary. A shared hash-verifying runner executes it directly on native Linux
 AMD64 and through the pinned native QEMU user emulator and complete AMD64

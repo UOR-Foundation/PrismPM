@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import {sessionFixture} from './vv-sdk-session-fixture.mjs';
 import { assetNames, imageVerificationArguments, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
@@ -55,8 +56,8 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
-  assert.equal(sourceGate, 'set -euo pipefail\n' + [1, 2].map(run =>
-    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join(''));
+  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail <<'PRISMPM_VV'\n" + [1, 2].map(run =>
+    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n');
   const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
   assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');
@@ -307,17 +308,20 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
   } finally { rmSync(directory, {recursive: true, force: true}); }
 });
 
-test('the release twice-VV shell must fail on either invocation, including first-run-only failure', () => {
+test('the release twice-VV shell must fail on either invocation, including first-run-only failure', t => {
   // This checks the actual shell sequence's failure propagation. The helper's
   // fixed just-vv command and real process capture have separate owning tests.
   const bodies = [workflow().jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd];
   const verify = body => {
     for (const [first, second] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const script = `count=0; node() { count=$((count+1)); test "$1" = scripts/release-gate-evidence.mjs && test "$2" = source-run && test "\${10}" = "$count" || return 99; printf 'call:%s\\n' "$count"; if [ "$count" = 1 ]; then return ${first}; else return ${second}; fi; };\n${body}`;
+      const root = mkdtempSync(join(tmpdir(), 'prismpm-release-session-'));
+      t.after(() => rmSync(root, {recursive: true, force: true}));
+      const env = sessionFixture(root, process.env, {first, second, release: true,
+        image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
       if (first === 0 && second === 0) {
-        assert.equal(execFileSync('bash', ['-c', script], {encoding: 'utf8'}), 'call:1\ncall:2\n');
+        assert.equal(execFileSync('bash', ['-c', body], {cwd: root, env, encoding: 'utf8', timeout: 15_000}), 'call:1\ncall:2\n');
       } else {
-        assert.throws(() => execFileSync('bash', ['-c', script], {encoding: 'utf8'}), error => {
+        assert.throws(() => execFileSync('bash', ['-c', body], {cwd: root, env, encoding: 'utf8', timeout: 15_000}), error => {
           assert.equal(error.status, 1);
           assert.equal(error.stdout, first === 0 ? 'call:1\ncall:2\n' : 'call:1\n');
           return true;
@@ -327,7 +331,7 @@ test('the release twice-VV shell must fail on either invocation, including first
   };
   for (const body of bodies) {
     verify(body);
-    assert.throws(() => verify(body.replace('set -euo pipefail\n', '')));
+    assert.throws(() => verify(body.replace('--with-sdk bash -euo pipefail', '--with-sdk bash')));
   }
 });
 
