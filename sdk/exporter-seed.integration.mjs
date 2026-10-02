@@ -4,7 +4,8 @@ import {createHash} from 'node:crypto';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
-import {buildSeed, readSmall} from './exporter-seed.mjs';
+import {buildSeed, readSmall, snapshotFile} from './exporter-seed.mjs';
+import {exporterArtifactBindings} from './inventory-metadata.mjs';
 
 const source = resolve(process.argv[2]), other = resolve(process.argv[3]);
 assert.notEqual(source, other, 'two source roots required');
@@ -24,6 +25,10 @@ try {
   const secondManifest = readFileSync(join(output, 'second/manifest.json'));
   assert(firstManifest.equals(secondManifest),
     'independent cold construction must yield an identical seed manifest without rewriting traces');
+  const manifest = JSON.parse(firstManifest);
+  const bindings = exporterArtifactBindings(firstManifest, manifest.compiler_revision, manifest.platform,
+    snapshotFile(join(output, 'first/.lake/build/bin/prod-export')));
+  assert.equal(bindings[1].digest, `sha256:${first.manifest_sha256}`);
   const before = readdirSync(tmpdir()).filter(name => name.startsWith('prismpm-exporter-construction')).sort();
   mkdirSync(join(temporary, 'model')); mkdirSync(join(temporary, 'vendor/lean4-prod'), {recursive: true});
   const invalid = Buffer.alloc(1024); // A real empty archive cannot build an exporter.

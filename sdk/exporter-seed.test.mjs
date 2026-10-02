@@ -4,6 +4,7 @@ import {chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symli
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, readSmall, runConstruction, runtimePaths, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
+import {encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
 
 function fixture(t, parent = tmpdir()) {
   const root = mkdtempSync(join(parent, 'prismpm-seed-snapshot-'));
@@ -30,6 +31,8 @@ test('snapshot binds every file, directory, byte and mode without accepting a se
   const second = snapshotTree(root); chmodSync(join(root, '.lake', 'trace'), 0o600);
   assert.notDeepEqual(snapshotTree(root), second);
   writeFileSync(join(root, 'extra'), 'x'); assert.equal(snapshotTree(root).length, 3);
+  chmodSync(join(root, 'extra'), 0o4755);
+  assert.throws(() => snapshotTree(root), /special compiler file permissions/);
 });
 
 test('seed snapshots reject file/directory aliases and hard links', t => {
@@ -108,4 +111,30 @@ test('fixed construction path refuses existing state without adopting or deletin
   symlinkSync(stage.path, join(other, 'prismpm-exporter-construction'));
   assert.throws(() => createConstructionStage(other), /EEXIST/);
   assert.equal(readFileSync(join(stage.path, 'sentinel'), 'utf8'), 'retain');
+});
+
+test('inventory distinguishes actual exporter identity from its native seed manifest', () => {
+  // Explicit metadata fixture, not an SDK image or executable acceptance.
+  const revision = 'a'.repeat(40), digest = 'b'.repeat(64);
+  const value = {schema: 'prismpm/exporter-seed/1', compiler_revision: revision, platform: 'linux/amd64',
+    files: [{path: '.lake/build/bin/prod-export', kind: 'file', mode: 0o755, byte_length: 12, sha256: digest}]};
+  const capture = item => Buffer.from(encodeInventory(item));
+  const measured = {byte_length: 12, mode: 0o755, sha256: digest};
+  const rows = exporterArtifactBindings(capture(value), revision, 'linux/amd64', measured);
+  assert.deepEqual(rows[0], {id: 'lean4-prod-exporter', kind: 'binary', version: revision, digest: `sha256:${digest}`});
+  assert.equal(rows[1].id, 'lean4-prod-exporter-seed'); assert.equal(rows[1].kind, 'dependency-lock');
+  assert.notEqual(rows[1].digest, rows[0].digest);
+  for (const mutate of [
+    item => { item.platform = 'linux/arm64'; }, item => { item.compiler_revision = 'c'.repeat(40); },
+    item => { item.files = []; }, item => { item.files.push({...item.files[0]}); },
+    item => { item.files[0].mode = 0o644; }, item => { item.files[0].kind = 'symlink'; },
+    item => { item.files[0].byte_length = 0; }, item => { item.files[0].sha256 = 'invalid'; },
+  ]) {
+    const altered = structuredClone(value); mutate(altered);
+    assert.throws(() => exporterArtifactBindings(capture(altered), revision, 'linux/amd64', measured));
+  }
+  assert.throws(() => exporterArtifactBindings(Buffer.from(JSON.stringify(value)), revision, 'linux/amd64', measured));
+  for (const change of [{mode: 0o644}, {byte_length: 11}, {sha256: 'c'.repeat(64)}]) {
+    assert.throws(() => exporterArtifactBindings(capture(value), revision, 'linux/amd64', {...measured, ...change}));
+  }
 });

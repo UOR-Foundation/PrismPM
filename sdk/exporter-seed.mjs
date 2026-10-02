@@ -26,6 +26,7 @@ export function snapshotFile(path, maximum = limit.file) {
   const before = lstatSync(path, {bigint: true});
   assert(before.isFile() && before.nlink === 1n && before.size <= BigInt(maximum),
     'bounded singly-linked compiler file required');
+  assert.equal(before.mode & 0o7000n, 0n, 'special compiler file permissions refused');
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     unchanged(before, fstatSync(fd, {bigint: true}));
@@ -90,6 +91,7 @@ export function snapshotTree(root, {toolchainAliases = false, bounds = limit} = 
   function visit(directory, prefix) {
     const before = lstatSync(directory, {bigint: true});
     assert(before.isDirectory() && !before.isSymbolicLink(), 'regular compiler directory required');
+    assert.equal(before.mode & 0o7000n, 0n, 'special compiler directory permissions refused');
     assert.equal(realpathSync(directory), directory, 'compiler ancestor is aliased');
     for (const name of readdirSync(directory).sort(order)) {
       assert(/^[A-Za-z0-9_.+-]+$/.test(name), 'noncanonical compiler entry');

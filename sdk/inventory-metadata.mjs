@@ -1,4 +1,34 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+
+// Bind the produced executable separately from its complete seed manifest.
+// These measurements are not a claim that a consumer or oracle executed it.
+export function exporterArtifactBindings(bytes, revision, platform, observedExecutable) {
+  assert(bytes.length <= 8 * 1024 * 1024, 'bounded exporter manifest required');
+  const text = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
+  const manifest = JSON.parse(text);
+  assert.equal(encodeInventory(manifest), text, 'canonical exporter manifest required');
+  assert.equal(manifest.schema, 'prismpm/exporter-seed/1');
+  assert.equal(manifest.compiler_revision, revision);
+  assert.match(revision, /^[0-9a-f]{40}$/);
+  assert(['linux/amd64', 'linux/arm64'].includes(platform));
+  assert.equal(manifest.platform, platform, 'exporter must be built in its native runtime');
+  assert(Array.isArray(manifest.files) && manifest.files.length <= 4096);
+  const executable = manifest.files.filter(row => row.path === '.lake/build/bin/prod-export');
+  assert.equal(executable.length, 1, 'exact native exporter artifact required');
+  const [row] = executable;
+  assert.equal(row.kind, 'file');
+  assert(Number.isSafeInteger(row.mode) && row.mode >= 0 && row.mode <= 0o777 && (row.mode & 0o111));
+  assert(Number.isSafeInteger(row.byte_length) && row.byte_length > 0 && row.byte_length <= 256 * 1024 * 1024);
+  assert.match(row.sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(observedExecutable, {byte_length: row.byte_length, mode: row.mode, sha256: row.sha256},
+    'actual native exporter differs from the seed manifest');
+  return [
+    {id: 'lean4-prod-exporter', kind: 'binary', version: revision, digest: `sha256:${row.sha256}`},
+    {id: 'lean4-prod-exporter-seed', kind: 'dependency-lock', version: '1',
+      digest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`},
+  ];
+}
 
 export function encodeInventory(value) {
   const canonical = item => Array.isArray(item) ? item.map(canonical)
