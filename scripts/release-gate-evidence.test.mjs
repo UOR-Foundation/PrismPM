@@ -227,8 +227,8 @@ test('original files reject symbolic links, hardlinks and parent aliases before 
 function workflowContract(value) {
   const source = value.jobs.gate.steps.find(step => step.with?.runCmd);
   assert.equal(source.if, undefined); assert.equal(source['continue-on-error'], undefined);
-  assert.equal(source.with.runCmd, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail <<'PRISMPM_VV'\n" + [1, 2].map(run =>
-    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n');
+  assert.equal(source.with.runCmd, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
+    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');
   const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
   assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');

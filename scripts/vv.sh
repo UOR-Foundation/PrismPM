@@ -6,6 +6,11 @@ if test "${1:-}" = --with-sdk && test "$#" -lt 2; then
   printf '%s\n' '--with-sdk requires a command' >&2
   exit 64
 fi
+if test "${1:-}" = --with-sdk; then
+  # Preparation must not consume a here-document intended for the command.
+  exec {sdk_command_input}<&0
+  exec </dev/null
+fi
 node --test scripts/devcontainer-init.test.mjs
 bash scripts/bootstrap-verify.sh --check-source
 
@@ -205,7 +210,7 @@ if test "${1:-}" = --with-sdk; then
   # Keep this exact image and its owned registry alive for the command. Nested
   # unchanged `just vv` invocations inherit the digest, never acceptance data.
   shift
-  "$@"
+  "$@" <&"$sdk_command_input"
 elif test "$#" -gt 0; then
   cargo xtask "$@"
 else

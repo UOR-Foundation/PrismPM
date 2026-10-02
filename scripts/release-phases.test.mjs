@@ -56,8 +56,8 @@ function validateWorkflow(value) {
   assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
   assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
   const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
-  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail <<'PRISMPM_VV'\n" + [1, 2].map(run =>
-    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n');
+  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
+    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');
   const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
   assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');

@@ -14,7 +14,7 @@ export function sessionFixture(root, environment = process.env, options = {}) {
   };
   const preamble = `const fs=require('node:fs');const args=process.argv.slice(2);const record=(kind)=>fs.appendFileSync('session.jsonl',JSON.stringify({kind,args,image:process.env.PRISMPM_TEST_SDK_IMAGE??null})+'\\n');`;
   executable('node', preamble + `
-    if(args[0]==='--test' && args[1]==='scripts/devcontainer-init.test.mjs'){record('init');process.exit(0);}
+    if(args[0]==='--test' && args[1]==='scripts/devcontainer-init.test.mjs'){record('init');if(${!!options.readDuringPreparation})fs.appendFileSync('preparation-stdin',fs.readFileSync(0));process.exit(0);}
     if(args[0]==='scripts/registry-smoke.mjs'){record('registry-ready');process.exit(${options.registryFailure ?? 0});}
     if(args[0]==='scripts/sdk-image-inputs.mjs'){record('build');if(${!!options.buildFailureAfterLoad})fs.writeFileSync('loaded-tag',args.at(-1));process.exit(${options.buildFailureAfterLoad ? 43 : options.buildFailure ?? 0});}
     if(${!!options.release} && args[0]==='scripts/release-gate-evidence.mjs'){

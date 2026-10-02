@@ -351,7 +351,7 @@ test('actual normative twice-VV workflow propagates first/second failures and re
   const check = candidate => {
     for (const [first, second] of [[0, 0], [19, 0], [0, 23], [19, 23]]) {
       const {root, env: baseEnv} = fixture(t);
-      const env = sessionFixture(root, baseEnv, {image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
+      const env = sessionFixture(root, baseEnv, {readDuringPreparation: true, image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
       copyFileSync(script, join(root, 'scripts/ci-observe.mjs'));
       const just = join(root, 'bin/just');
       writeFileSync(just, `#!${process.execPath}\nconst fs=require('node:fs');const assert=require('node:assert/strict');assert.deepEqual(process.argv.slice(2),['vv']);const path='count';const count=fs.existsSync(path)?Number(fs.readFileSync(path))+1:1;fs.writeFileSync(path,String(count));process.stdout.write('call:'+count+'\\n');process.exit(count===1?${first}:${second});\n`);

@@ -25,10 +25,11 @@ jobs:
           # The second run is the regression test for stale ignored evidence.
           runCmd: |
             set -euo pipefail
-            bash scripts/vv.sh --with-sdk bash -euo pipefail <<'PRISMPM_VV'
+            bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
             node scripts/ci-observe.mjs run target/ci-diagnostics/vv-first -- just vv
             node scripts/ci-observe.mjs run target/ci-diagnostics/vv-second -- just vv
             PRISMPM_VV
+            )"
       - name: Stop host resource diagnostics
         if: always()
         run: node scripts/ci-observe.mjs stop target/ci-diagnostics/host

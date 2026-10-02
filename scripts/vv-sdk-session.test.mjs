@@ -10,7 +10,7 @@ function run(t, options = {}, args = ['--with-sdk', 'bash', '-euo', 'pipefail', 
   const root = mkdtempSync(join(tmpdir(), 'prismpm-vv-session-'));
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const env = sessionFixture(root, process.env, options);
-  const result = spawnSync('bash', ['scripts/vv.sh', ...args], {cwd: root, env, encoding: 'utf8', timeout: 15_000});
+  const result = spawnSync('bash', ['scripts/vv.sh', ...args], {cwd: root, env, input: options.input, encoding: 'utf8', timeout: 15_000});
   assert.ifError(result.error);
   const path = join(root, 'session.jsonl');
   return {...result, root, rows: existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').map(JSON.parse) : []};
@@ -121,4 +121,19 @@ test('lost image-tag response reconciles the loaded image identity without runni
   assert.deepEqual(cleanup.map(row => row.args[0]), ['container', 'volume', 'image', 'image']);
   assert.equal(cleanup[2].args.at(-1), tag);
   assert.equal(result.rows.filter(row => row.kind === 'cargo').length, 0);
+});
+test('preparation cannot consume the two-run command here-document', t => {
+  const result = run(t, {readDuringPreparation: true, input: 'just vv\njust vv\n'},
+    ['--with-sdk', 'bash', '-euo', 'pipefail', '-c', 'exec bash -euo pipefail -c "$(cat)"']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.rows.filter(row => row.kind === 'cargo').length, 2);
+  assert.equal(readFileSync(join(result.root, 'preparation-stdin')).length, 0);
+});
+test('session command receives its original binary stdin untouched', t => {
+  const input = Buffer.from([0, 10, 255, 65]);
+  const result = run(t, {readDuringPreparation: true, input},
+    ['--with-sdk', 'node', '-e', 'process.stdout.write(require("node:fs").readFileSync(0).toString("hex"))']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, input.toString('hex'));
+  assert.equal(readFileSync(join(result.root, 'preparation-stdin')).length, 0);
 });
