@@ -628,6 +628,13 @@ existence or a Lake fingerprint is not compiler-source provenance. This fresh
 construction boundary does not qualify future compiler-seed reuse or establish
 application acceptance by itself.
 
+Browser verification drivers likewise use absent targets beneath owned private
+workspaces. They do not adopt executables from a shared Cargo target, even when
+its source fingerprints appear current. Cargo initializes the target and its
+cache tag; private compiler-driver builds use one job, no incremental state and
+no development debug symbols to bound temporary storage. Generated program
+builds, kernel checks, native/Wasm execution and oracle cases are unchanged.
+
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
 `prismpm/golden-comparison/1` regression-only comparison profile. Before

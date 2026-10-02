@@ -136,6 +136,17 @@ export function run(program,args,cwd,env={}) {
   if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
   return execute(program,args,cwd,env);
 }
+export function createPrivateDriverTarget(work) {
+  assert.equal(realpathSync(work), resolve(work), 'aliased driver parent refused');
+  const parent = lstatSync(work);
+  assert.ok(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o077) === 0,
+    'driver parent must be an owned private directory');
+  const target = join(work, 'driver-target');
+  // Cargo must initialize its own CACHEDIR.TAG. A private owning parent guards
+  // this absent destination; an existing fingerprint cannot authenticate code.
+  assert.equal(lstatSync(target, {throwIfNoEntry:false}), undefined, 'private driver target already exists');
+  return target;
+}
 export function ensureProdExport(repo = repository, work = null) {
   const captured = verifyPins(repo);
   for (const name of ['lean-toolchain', 'rust-toolchain.toml']) {
@@ -183,8 +194,8 @@ export function prepare(mutation=null){
     for(const [name,bytes]of sources){const path=join(project,'src',...name.split('.'))+'.lex.tex';mkdirSync(dirname(path),{recursive:true});writeFileSync(path,bytes,{flag:'wx'});}
     for(const file of ['lexlean.toml','lakefile.toml','lean-toolchain'])copyFileSync(join(draft,file),join(project,file));
     copyFileSync(join(repository,'rust-toolchain.toml'),join(work,'rust-toolchain.toml'));
-    const driverTarget=resolve(repository,'target/browser-test-drivers');
-    run('cargo',['build','--locked','--offline','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+    const driverTarget=createPrivateDriverTarget(work);
+    run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
     const driver=join(driverTarget,'debug/browser-workspace-view-driver');
     run('lake',['update'],project);
     const verified=JSON.parse(run(driver,['verify',join(project,'lexlean.toml')],repository));

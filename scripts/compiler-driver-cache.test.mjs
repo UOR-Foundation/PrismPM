@@ -6,7 +6,7 @@ import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import {retireCompletedCompilerCaches} from '../tests/browser-view/driver-cache.mjs';
-import {ensureProdExport, repository, run, sha} from '../tests/browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from '../tests/browser-view/compile.mjs';
 
 // Reuse the actual pinned exporter configuration; do not substitute a Lake
 // manifest format which none of these compiler fixtures executes.
@@ -95,8 +95,9 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   writeFileSync(manifest, '[package]\nname="' + executable + '"\nversion="0.1.0"\nedition="2021"\npublish=false\n[workspace]\n');
   writeFileSync(join(dirname(manifest), 'src/main.rs'), 'fn main() {}\n');
   writeFileSync(join(dirname(manifest), 'Cargo.lock'), 'version = 4\n[[package]]\nname="' + executable + '"\nversion="0.1.0"\n');
-  const target = join(work, 'driver-target');
-  run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',manifest], work, {CARGO_TARGET_DIR:target});
+  const target = createPrivateDriverTarget(work);
+  assert(!existsSync(target), 'Cargo initializes the fresh destination');
+  run('cargo', ['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',manifest], work, {CARGO_TARGET_DIR:target});
   const exporter = join(work, 'exporter');
   mkdirSync(join(exporter, '.lake/build/bin'), {recursive:true});
   writeFileSync(join(exporter, 'lakefile.lean'), exporterManifest);
@@ -106,6 +107,57 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   for (const [name, bytes] of preserved) writeFileSync(join(work,name), bytes);
   return {work, target, manifest, exporter, preserved, executable};
 }
+
+test('driver targets refuse prior files, directories, dangling links and aliased or nonprivate parents', t => {
+  const work = mkdtempSync(join(tmpdir(), 'prismpm-driver-parent-'));
+  t.after(() => rmSync(work, {recursive:true, force:true}));
+  const target = createPrivateDriverTarget(work);
+  writeFileSync(target, 'preserve');
+  assert.throws(() => createPrivateDriverTarget(work), /already exists/);
+  assert.equal(readFileSync(target, 'utf8'), 'preserve'); rmSync(target);
+  mkdirSync(target); assert.throws(() => createPrivateDriverTarget(work), /already exists/); rmSync(target, {recursive:true});
+  symlinkSync(join(work, 'absent'), target); assert.throws(() => createPrivateDriverTarget(work), /already exists/); rmSync(target);
+  const real = join(work, 'real'), alias = join(work, 'alias'); mkdirSync(real, {mode:0o700}); symlinkSync(real, alias);
+  assert.throws(() => createPrivateDriverTarget(alias), /aliased driver parent/);
+  chmodSync(real, 0o755); assert.throws(() => createPrivateDriverTarget(real), /owned private directory/);
+  assert(!existsSync(join(real, 'driver-target')));
+});
+
+test('actual Cargo initializes the private cache and never adopts a previous executable', t => {
+  const f = fixture(t);
+  assert.match(readFileSync(join(f.target, 'CACHEDIR.TAG'), 'utf8'), /^Signature: 8a477f597d28d172789f06886806bc55/);
+  const original = readFileSync(join(f.target, 'debug', f.executable));
+  writeFileSync(join(f.target, 'debug', f.executable), 'planted stale compiler');
+  assert.throws(() => createPrivateDriverTarget(f.work), /already exists/);
+  assert.equal(readFileSync(join(f.target, 'debug', f.executable), 'utf8'), 'planted stale compiler');
+  assert(original.length > 0);
+});
+
+test('all private driver callers retain locked offline builds and bounded resource options', () => {
+  // Source regression guard, not a replacement for each complete real owning
+  // component run. Mutations demonstrate that dropping any option is detected.
+  const callers = ['view', 'command', 'query', 'journal', 'custody', 'effects', 'presentation', 'operation-journal']
+    .map(name => `tests/browser-${name}/compile.mjs`)
+    .concat(['sdk/browser/workspace-model-test.mjs', 'sdk/browser/envelope-model-test.mjs']);
+  const check = source => {
+    assert.match(source, /const driverTarget\s*=\s*createPrivateDriverTarget\(work\)/);
+    const calls = [...source.matchAll(/run\('cargo',\s*\[([^;]*?)\],\s*(?:repository|work),\s*\{CARGO_TARGET_DIR:\s*driverTarget\}\)/g)];
+    assert.equal(calls.length, 1, 'one actual driver build call');
+    const args = calls[0][1];
+    assert.match(args, /^'build'/);
+    for (const option of ['--locked', '--offline']) assert(args.includes(`'${option}'`), option);
+    for (const [option, value] of [['--jobs', '1'], ['--config', 'profile.dev.debug=0'], ['--config', 'build.incremental=false']]) {
+      assert(new RegExp(`'${option}',\\s*'${value.replaceAll('.', '\\.')}'`).test(args), value);
+    }
+  };
+  for (const caller of callers) {
+    const source = readFileSync(join(repository, caller), 'utf8'); check(source);
+    for (const text of ['--locked', '--offline', '--jobs', 'profile.dev.debug=0', 'build.incremental=false']) {
+      const changed = source.replace(text, 'REMOVED'); assert.notEqual(changed, source);
+      assert.throws(() => check(changed), caller + ': ' + text);
+    }
+  }
+});
 
 test('completed effects and custody tool caches retire under their exact owning paths', t => {
   for (const owner of ['effects', 'custody']) {

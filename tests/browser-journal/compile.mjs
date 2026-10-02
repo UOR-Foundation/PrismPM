@@ -8,8 +8,8 @@ import {fileURLToPath} from 'node:url';
 export const draft=dirname(fileURLToPath(import.meta.url));
 export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
-export {ensureProdExport} from '../browser-view/compile.mjs';
-import {ensureProdExport} from '../browser-view/compile.mjs';
+export {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
 function verifyPins(){
   const artifacts=readFileSync(join(repository,'model/dependencies.toml'),'utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
     const text=section.split('[[dependency]]')[0];return {path:/^path = "([^"]+)"$/m.exec(text)?.[1],hash:/^sha256 = "([0-9a-f]{64})"$/m.exec(text)?.[1],tree:/^tree_root = "([^"]+)"$/m.exec(text)?.[1]};
@@ -139,8 +139,8 @@ export function prepare(){
   for(const [name,bytes]of sources)writeFileSync(join(sourceRoot,name+'.lex.tex'),bytes,{flag:'wx'});
   for(const file of ['lexlean.toml','lakefile.toml','lean-toolchain'])copyFileSync(join(draft,file),join(project,file));
   copyFileSync(join(repository,'rust-toolchain.toml'),join(work,'rust-toolchain.toml'));
-  const driverTarget=resolve(repository,'target/browser-test-drivers');
-  run('cargo',['build','--locked','--offline','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+  const driverTarget=createPrivateDriverTarget(work);
+  run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
   const driver=join(driverTarget,'debug/browser-workspace-journal-driver');
   run('lake',['update'],project);
   const verified=JSON.parse(run(driver,['verify',join(project,'lexlean.toml')],repository));

@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
-import {ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -131,9 +131,9 @@ function prepareStage(mutation, sourceOnly) {
     writeFileSync(join(project, 'lakefile.toml'), 'name = "presentation_conformance"\nversion = "0.1.0"\n', {flag: 'wx'});
     copyFileSync(join(repository, 'lean-toolchain'), join(project, 'lean-toolchain'));
     copyFileSync(join(repository, 'rust-toolchain.toml'), join(work, 'rust-toolchain.toml'));
-    const driverTarget = resolve(repository, 'target/browser-test-drivers');
+    const driverTarget = createPrivateDriverTarget(work);
     const compiler = stageCompiler(work);
-    run('cargo', ['build', '--locked', '--offline', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
+    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
     const driver = join(driverTarget, 'debug/browser-presentation-driver');
     const checked = JSON.parse(run(driver, ['check', join(project, 'lexlean.toml')], repository));
     assert.deepEqual(checked.modules, modules);

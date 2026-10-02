@@ -9,7 +9,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
-import {ensureProdExport} from '../../tests/browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport} from '../../tests/browser-view/compile.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const moduleName = 'Foundation.Browser.V1.Workspace';
@@ -276,8 +276,8 @@ max_diagnostics = 256
 max_child_output_bytes = 16777216
 child_timeout_ms = 300000
 `, {flag: 'wx'});
-  const driverTarget = resolve(repository, 'target/browser-test-drivers');
-  run('cargo', ['build', '--locked', '--offline', '--manifest-path',
+  const driverTarget = createPrivateDriverTarget(work);
+  run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--manifest-path',
     join(repository, 'tests/browser-workspace/Cargo.toml')], repository, {CARGO_TARGET_DIR: driverTarget});
   const driver = join(driverTarget, 'debug/browser-workspace-model-driver');
   run('lake', ['update'], project);

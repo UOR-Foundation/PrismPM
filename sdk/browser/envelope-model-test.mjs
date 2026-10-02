@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {run} from '../../tests/browser-journal/compile.mjs';
-import {ensureProdExport} from '../../tests/browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport} from '../../tests/browser-view/compile.mjs';
 import {
   copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
   realpathSync, rmSync, writeFileSync,
@@ -169,8 +169,8 @@ test('fresh generated envelope codec and actual browser crypto interoperability'
   mkdirSync(sourceRoot, {recursive: true});
   for (const [file, bytes] of sources) writeFileSync(join(sourceRoot, file), bytes, {flag: 'wx'});
   for (const file of ['lexlean.toml', 'lakefile.toml', 'lean-toolchain']) copyFileSync(join(fixture, file), join(project, file));
-  const driverTarget = resolve(repository, 'target/browser-test-drivers');
-  run('cargo', ['build', '--locked', '--offline', '--manifest-path', join(fixture, 'driver/Cargo.toml')], repository, {CARGO_TARGET_DIR: driverTarget});
+  const driverTarget = createPrivateDriverTarget(work);
+  run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--manifest-path', join(fixture, 'driver/Cargo.toml')], repository, {CARGO_TARGET_DIR: driverTarget});
   const driver = join(driverTarget, 'debug/browser-workspace-envelope-driver');
   run('lake', ['update'], project);
   const verified = JSON.parse(run(driver, ['verify', join(project, 'lexlean.toml')], repository));
