@@ -4,7 +4,28 @@ import {chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symli
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, readSmall, runConstruction, runtimePaths, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
-import {encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
+import {decodeExporterSeed, encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
+
+// Metadata-only fixture. Real construction and executable measurements are
+// tested separately by exporter-seed.integration.mjs inside the pinned SDK.
+function manifestFixture() {
+  const directory = path => ({path, kind: 'directory', mode: 0o755});
+  const file = path => ({path, kind: 'file', mode: 0o755, byte_length: 12, sha256: 'b'.repeat(64)});
+  const toolchain = 'leanprover/lean4:v4.30.0';
+  return {schema: 'prismpm/exporter-seed/1', compiler_revision: 'a'.repeat(40), platform: 'linux/amd64',
+    archive_sha256: 'c'.repeat(64), toolchain,
+    configuration: {argv: ['build', 'prod-export'], construction_root: '/tmp/prismpm-exporter-construction',
+      temporary_directory: 'private-bounded-tmpfs', environment: {
+        PATH: '/usr/local/elan/toolchains/leanprover--lean4---v4.30.0/bin:/usr/bin:/bin',
+        LANG: 'C', LC_ALL: 'C', ELAN_HOME: '/usr/local/elan', ELAN_TOOLCHAIN: toolchain, SOURCE_DATE_EPOCH: '0',
+      }},
+    source_files: [directory('Prod'), file('Prod/Export.lean')],
+    toolchain_files: [directory('bin'), file('bin/lake'), file('bin/lean')],
+    runtime_files: [{selected: '/lib/libc.so.6', path: '/usr/lib/libc.so.6', mode: 0o755,
+      byte_length: 12, sha256: 'd'.repeat(64)}],
+    files: [directory('.lake'), directory('.lake/build'), directory('.lake/build/bin'), file('.lake/build/bin/prod-export')],
+  };
+}
 
 function fixture(t, parent = tmpdir()) {
   const root = mkdtempSync(join(parent, 'prismpm-seed-snapshot-'));
@@ -51,6 +72,9 @@ test('toolchain aliases are explicit, relative, file-only, and confined', t => {
   writeFileSync(join(root, 'lib.so.1'), 'fixture');
   symlinkSync('lib.so.1', join(root, 'lib.so'));
   assert.equal(snapshotTree(root, {toolchainAliases: true}).find(row => row.path === 'lib.so').target, 'lib.so.1');
+  symlinkSync('lib.so', join(root, 'lib-alias.so'));
+  assert.equal(snapshotTree(root, {toolchainAliases: true}).find(row => row.path === 'lib-alias.so').target, 'lib.so');
+  rmSync(join(root, 'lib-alias.so'));
   rmSync(join(root, 'lib.so')); symlinkSync('../outside', join(root, 'lib.so'));
   assert.throws(() => snapshotTree(root, {toolchainAliases: true}), /unconfined/);
   rmSync(join(root, 'lib.so')); mkdirSync(join(root, 'directory')); symlinkSync('directory', join(root, 'lib.so'));
@@ -116,8 +140,7 @@ test('fixed construction path refuses existing state without adopting or deletin
 test('inventory distinguishes actual exporter identity from its native seed manifest', () => {
   // Explicit metadata fixture, not an SDK image or executable acceptance.
   const revision = 'a'.repeat(40), digest = 'b'.repeat(64);
-  const value = {schema: 'prismpm/exporter-seed/1', compiler_revision: revision, platform: 'linux/amd64',
-    files: [{path: '.lake/build/bin/prod-export', kind: 'file', mode: 0o755, byte_length: 12, sha256: digest}]};
+  const value = manifestFixture();
   const capture = item => Buffer.from(encodeInventory(item));
   const measured = {byte_length: 12, mode: 0o755, sha256: digest};
   const rows = exporterArtifactBindings(capture(value), revision, 'linux/amd64', measured);
@@ -127,8 +150,8 @@ test('inventory distinguishes actual exporter identity from its native seed mani
   for (const mutate of [
     item => { item.platform = 'linux/arm64'; }, item => { item.compiler_revision = 'c'.repeat(40); },
     item => { item.files = []; }, item => { item.files.push({...item.files[0]}); },
-    item => { item.files[0].mode = 0o644; }, item => { item.files[0].kind = 'symlink'; },
-    item => { item.files[0].byte_length = 0; }, item => { item.files[0].sha256 = 'invalid'; },
+    item => { item.files.at(-1).mode = 0o644; }, item => { item.files.at(-1).kind = 'symlink'; },
+    item => { item.files.at(-1).byte_length = 0; }, item => { item.files.at(-1).sha256 = 'invalid'; },
   ]) {
     const altered = structuredClone(value); mutate(altered);
     assert.throws(() => exporterArtifactBindings(capture(altered), revision, 'linux/amd64', measured));
@@ -137,4 +160,61 @@ test('inventory distinguishes actual exporter identity from its native seed mani
   for (const change of [{mode: 0o644}, {byte_length: 11}, {sha256: 'c'.repeat(64)}]) {
     assert.throws(() => exporterArtifactBindings(capture(value), revision, 'linux/amd64', {...measured, ...change}));
   }
+});
+
+test('seed wire reader closes every field, path, configuration and resource bound', () => {
+  const decode = value => decodeExporterSeed(Buffer.from(encodeInventory(value)));
+  const value = manifestFixture(); assert.deepEqual(decode(value), value);
+  const changes = [
+    item => { item.extra = true; }, item => { delete item.archive_sha256; },
+    item => { item.configuration.environment.EXTRA = 'untrusted'; },
+    item => { item.configuration.construction_root = '/caller/cache'; },
+    item => { item.configuration.argv.push('--no-build'); },
+    item => { item.archive_sha256 = 'A'.repeat(64); },
+    item => { item.platform = 'linux/386'; }, item => { item.toolchain = '../toolchain'; },
+    item => { item.source_files[0].extra = true; },
+    item => { item.source_files[1].path = 'Prod/../Export.lean'; },
+    item => { item.source_files[1].path = '/Prod/Export.lean'; },
+    item => { item.source_files.shift(); },
+    item => { item.source_files[1].byte_length = 16 * 1024 ** 2 + 1; },
+    item => { item.files.reverse(); }, item => { item.files.push({...item.files.at(-1)}); },
+    item => { item.files.at(-1).mode = 0o4755; },
+    item => { item.files.at(-1).sha256 = null; },
+    item => { item.files.at(-1).byte_length = 256 * 1024 ** 2 + 1; },
+    item => { item.files.at(-1).byte_length = -1; },
+    item => { item.files.at(-1).byte_length = 0.5; },
+    item => { item.files.push({path: 'outside', kind: 'directory', mode: 0o755}); },
+    item => { item.toolchain_files[1] = {path: 'bin/lake', kind: 'symlink', mode: 0o777, target: 'absent'}; },
+    item => { item.toolchain_files[1].extra = false; },
+    item => { item.toolchain_files[1].mode = 0o644; },
+    item => { item.toolchain_files[2].byte_length = 0; },
+    item => { item.runtime_files = []; },
+    item => { item.runtime_files[0].extra = true; },
+    item => { item.runtime_files[0].selected = 'lib/libc.so.6'; },
+    item => { item.runtime_files[0].path = '/usr/../lib/libc.so.6'; },
+    item => { item.runtime_files.push({...item.runtime_files[0]}); },
+  ];
+  for (const [index, change] of changes.entries()) {
+    const altered = structuredClone(value); change(altered);
+    assert.throws(() => decode(altered), `mutation ${index} must fail closed`);
+  }
+  const alias = structuredClone(value);
+  alias.toolchain_files.push({path: 'lean-alias', kind: 'symlink', mode: 0o777, target: 'bin/lean'});
+  assert.deepEqual(decode(alias), alias);
+  alias.toolchain_files.push({path: 'lean-indirect', kind: 'symlink', mode: 0o777, target: 'lean-alias'});
+  assert.deepEqual(decode(alias), alias);
+  alias.toolchain_files.at(-2).target = 'lean-indirect'; assert.throws(() => decode(alias), /cyclic/);
+  alias.toolchain_files.at(-2).target = 'bin/lean';
+  alias.toolchain_files.at(-1).target = '../bin/lean'; assert.throws(() => decode(alias));
+  const runtime = structuredClone(value);
+  runtime.runtime_files.push({...runtime.runtime_files[0], selected: '/usr/lib/libc.so.6'});
+  assert.deepEqual(decode(runtime), runtime);
+  for (const change of [{sha256: 'f'.repeat(64)}, {mode: 0o644}, {byte_length: 13}]) {
+    const altered = structuredClone(runtime); Object.assign(altered.runtime_files[1], change);
+    assert.throws(() => decode(altered), /runtime aliases disagree/);
+  }
+  const duplicate = encodeInventory(value).replace('"schema":', '"schema":"discarded","schema":');
+  assert.throws(() => decodeExporterSeed(Buffer.from(duplicate)), /canonical/);
+  assert.throws(() => decodeExporterSeed(Buffer.from([0xff])));
+  assert.throws(() => decodeExporterSeed(Buffer.alloc(8 * 1024 ** 2 + 1)), /bounded/);
 });
