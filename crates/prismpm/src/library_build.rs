@@ -8,10 +8,8 @@ use prod_codegen::{generate_cargo_package, CargoPackageSpec};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Cursor;
 use std::path::{Component, Path};
 
-const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
 // The pinned generator escapes type/field names but emits function names
 // literally. Reject unsupported target spellings instead of guessing an alias.
 const FUNCTION_KEYWORDS: &[&str] = &[
@@ -191,11 +189,7 @@ pub(crate) fn generate_recorded(
         .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
     let workspace = work.path();
     let lean_package = workspace.join("lean4-prod");
-    std::fs::create_dir(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
-    tar::Archive::new(Cursor::new(LEAN4_PROD_ARCHIVE))
-        .unpack(&lean_package)
-        .map_err(|error| PrismError::new("PP5008", format!("pinned lean4-prod: {error}")))?;
+    crate::exporter::acquire(&lean_package)?;
 
     let manifest: Value = serde_json::from_slice(lex_manifest_bytes)
         .map_err(|error| PrismError::new("PP4004", format!("LexLean manifest: {error}")))?;

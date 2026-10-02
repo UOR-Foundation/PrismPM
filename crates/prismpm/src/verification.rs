@@ -2609,27 +2609,9 @@ pub(crate) fn run(
         .tempdir_in(&staging_parent)
         .map_err(|error| PrismError::new("PP4002", format!("verification work: {error}")))?;
     let workspace = work.path();
-    let lean_archive = controller.root.join("vendor/lean4-prod/lean.tar");
-    if !lean_archive.is_file() {
-        return Err(PrismError::new(
-            "PP5008",
-            "pinned lean4-prod package archive is missing",
-        ));
-    }
+    crate::exporter::verify_source(&controller.root)?;
     let lean_package = workspace.join("lean4-prod");
-    std::fs::create_dir(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package staging: {error}")))?;
-    let archive_file = File::open(&lean_archive)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package archive: {error}")))?;
-    tar::Archive::new(archive_file)
-        .unpack(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package extraction: {error}")))?;
-    if !lean_package.join("Prod/Export.lean").is_file() {
-        return Err(PrismError::new(
-            "PP5008",
-            "pinned lean4-prod package is missing",
-        ));
-    }
+    crate::exporter::acquire(&lean_package)?;
     let replacements = [
         (workspace, "$STAGING"),
         (controller.root.as_path(), "$PROJECT"),

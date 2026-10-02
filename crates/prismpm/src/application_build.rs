@@ -21,7 +21,6 @@ use std::path::{Component, Path, PathBuf};
 
 const HOLOGRAM_LIVE_COMMIT: &str = "d8208266d8abdc2445b7bbc0cef412a566adfaf1";
 const UOR_HOLOGRAM_COMMIT: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
-const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
 const DEPENDENCY_REGISTER: &str = include_str!("../model/dependencies.toml");
 const STDLIB_RELEASE_SOURCE: &str = include_str!("../stdlib/release.json");
 const STDLIB_CRATE: &[u8] = include_bytes!("../stdlib/generated/prism-stdlib-0.2.0.crate");
@@ -653,11 +652,7 @@ pub(crate) fn generate(
         .map_err(|error| PrismError::new("PP4002", format!("application work: {error}")))?;
     let workspace = work.path();
     let lean_package = workspace.join("lean4-prod");
-    std::fs::create_dir(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package: {error}")))?;
-    tar::Archive::new(Cursor::new(LEAN4_PROD_ARCHIVE))
-        .unpack(&lean_package)
-        .map_err(|error| PrismError::new("PP5008", format!("vendored lean4-prod: {error}")))?;
+    crate::exporter::acquire(&lean_package)?;
 
     let lex_manifest: Value = serde_json::from_slice(lex_manifest_bytes)
         .map_err(|error| PrismError::new("PP4004", format!("LexLean manifest: {error}")))?;
