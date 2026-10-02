@@ -199,6 +199,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/browser-prerequisites.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
             "sdk/metadata-layer.test.mjs",
+            "sdk/metadata-capture.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",
             "scripts/release-gate-evidence.test.mjs",

@@ -54,7 +54,7 @@ export function parseJson(bytes) {
   return JSON.parse(text);
 }
 
-function caseKeys(value, names) {
+export function caseKeys(value, names) {
   assert(object(value), 'OCI JSON object required');
   const fold = key => key.toUpperCase().toLowerCase();
   const expected = new Map(names.map(name => [fold(name), name]));
