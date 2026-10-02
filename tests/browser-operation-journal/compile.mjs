@@ -157,7 +157,7 @@ export function prepare(mutation = null, sourceOnly = false) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "operation_journal_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const {dir: exporter, bin: prodExport} = ensureProdExport();
+    const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.Browser.Application.V1.OperationJournalWire.journalWireBytes', 'PrismPM.Foundation.Browser.Application.V1.OperationJournalWire.journalPartitionBytes', 'PrismPM.Foundation.Browser.Application.V1.EffectsWire.effectWireBytes', 'PrismPM.Fixture.fixtureEchoBytes'].sort();
     run(prodExport, ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),

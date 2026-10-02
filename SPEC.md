@@ -617,6 +617,17 @@ binds the exact full Git commit.
 Formatting checks a closed inventory of authored test manifests and Rust inputs.
 Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
 
+The private browser exporter harness builds `prod-export` from captured, pinned
+compiler source in a fresh private directory. It never adopts, executes or
+overwrites a previous shared exporter cache. Source and toolchain identities
+are checked before and after construction; aliased or multiply linked source
+files and pre-existing private destinations are refused. Every caller supplies
+its owned diagnostic workspace so existing cleanup or explicit failure retention
+also owns the exporter; there is no implicit standalone temporary cache. An executable's
+existence or a Lake fingerprint is not compiler-source provenance. This fresh
+construction boundary does not qualify future compiler-seed reuse or establish
+application acceptance by itself.
+
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
 `prismpm/golden-comparison/1` regression-only comparison profile. Before

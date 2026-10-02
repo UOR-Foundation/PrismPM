@@ -171,7 +171,7 @@ function prepareStage(mutation, sourceOnly) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "presentation_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const {dir: exporter, bin: prodExport} = ensureProdExport();
+    const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.View.Browser.V1.Wire.viewWireBytes', ...[
       'fixturePresentationBytes', 'fixtureLabelsBytes', 'fixtureIntentFitsBytes',

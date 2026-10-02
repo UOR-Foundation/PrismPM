@@ -1,16 +1,88 @@
 import assert from 'node:assert/strict';
-import {existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {chmodSync, copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import {retireCompletedCompilerCaches} from '../tests/browser-view/driver-cache.mjs';
-import {run, sha} from '../tests/browser-view/compile.mjs';
+import {ensureProdExport, repository, run, sha} from '../tests/browser-view/compile.mjs';
 
 // Reuse the actual pinned exporter configuration; do not substitute a Lake
 // manifest format which none of these compiler fixtures executes.
 const archive = fileURLToPath(new URL('../vendor/lean4-prod/lean.tar', import.meta.url));
 const exporterManifest = Buffer.from(run('tar', ['-xOf', archive, 'lakefile.lean'], dirname(archive)));
+
+function exporterFixture(t) {
+  const repo = mkdtempSync(join(tmpdir(), 'prismpm-exporter-adversary-'));
+  t.after(() => rmSync(repo, {recursive:true, force:true}));
+  for (const path of ['model/dependencies.toml', 'lean-toolchain', 'rust-toolchain.toml', 'vendor/lean4-prod/lean.tar']) {
+    mkdirSync(dirname(join(repo, path)), {recursive:true});
+    copyFileSync(join(repository, path), join(repo, path));
+  }
+  for (const path of ['vendor/lexlean', 'vendor/lean4-prod/rust']) {
+    cpSync(join(repository, path), join(repo, path), {recursive:true});
+  }
+  const cache = join(repo, 'target/lean4-prod-export');
+  const executable = join(cache, '.lake/build/bin/prod-export');
+  const marker = join(repo, 'planted-executable-ran');
+  mkdirSync(dirname(executable), {recursive:true});
+  // Adversarial fixture, never an accepted exporter or simulated build result.
+  writeFileSync(executable, '#!/bin/sh\nprintf planted > "' + marker + '"\nexit 0\n');
+  chmodSync(executable, 0o700);
+  return {repo, cache, executable, marker};
+}
+
+for (const linked of [false, true]) {
+  test(`pinned exporter is genuinely compiled without adopting ${linked ? 'linked' : 'regular'} shared cache`, t => {
+    const f = exporterFixture(t), bytes = readFileSync(f.executable);
+    if (linked) { renameSync(f.cache, f.cache + '-retained'); symlinkSync(f.cache + '-retained', f.cache); }
+    const work = join(f.repo, 'private'); mkdirSync(work);
+    const result = ensureProdExport(f.repo, work);
+    const probe = spawnSync(result.bin, ['--module'], {cwd:result.dir, encoding:'utf8', timeout:30000});
+    assert.ifError(probe.error);
+    assert(!existsSync(f.marker), 'unproved cached executable must never run');
+    assert.equal(result.dir, join(work, 'exporter'));
+    assert.notEqual(probe.status, 0);
+    assert.match(probe.stderr, /prod-export: unknown or incomplete named-export argument `--module`/);
+    assert.deepEqual(readFileSync(f.executable), bytes, 'unowned shared cache remains untouched');
+  });
+}
+
+for (const [name, mutate, reason] of [
+  ['changed archive', f => writeFileSync(join(f.repo, 'vendor/lean4-prod/lean.tar'), 'changed'), /lean.tar/],
+  ['coherently resealed archive', f => {
+    const path = join(f.repo, 'vendor/lean4-prod/lean.tar'), original = sha(readFileSync(path));
+    writeFileSync(path, 'changed');
+    const manifest = join(f.repo, 'model/dependencies.toml');
+    writeFileSync(manifest, readFileSync(manifest, 'utf8').replace(original, sha(Buffer.from('changed'))));
+  }, /dependency authority/],
+  ['aliased archive', f => {
+    const path = join(f.repo, 'vendor/lean4-prod/lean.tar'); renameSync(path, path + '-retained'); symlinkSync(path + '-retained', path);
+  }, /aliased/],
+  ['multiply linked archive', f => {
+    const path = join(f.repo, 'vendor/lean4-prod/lean.tar'); linkSync(path, path + '-linked');
+  }, /singly owned regular/],
+  ['changed toolchain', f => writeFileSync(join(f.repo, 'lean-toolchain'), 'leanprover/lean4:nightly\n'), /verified SDK toolchain/],
+]) {
+  test(`exporter refuses ${name} despite a planted cache`, t => {
+    const f = exporterFixture(t); mutate(f);
+    assert.throws(() => ensureProdExport(f.repo), reason);
+    assert(!existsSync(f.marker));
+  });
+}
+
+test('private exporter destination and aliased parent cannot be adopted or overwritten', t => {
+  const f = exporterFixture(t), work = join(f.repo, 'private');
+  assert.throws(() => ensureProdExport(f.repo), /owned exporter workspace required/);
+  mkdirSync(join(work, 'exporter'), {recursive:true});
+  const retained = join(work, 'exporter/evidence'); writeFileSync(retained, 'preserve');
+  assert.throws(() => ensureProdExport(f.repo, work), /EEXIST/);
+  assert.equal(readFileSync(retained, 'utf8'), 'preserve');
+  const alias = join(f.repo, 'alias'); symlinkSync(work, alias);
+  assert.throws(() => ensureProdExport(f.repo, alias), /aliased exporter parent/);
+  assert(!existsSync(f.marker));
+});
 
 function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   const work = mkdtempSync(join(tmpdir(), prefix));

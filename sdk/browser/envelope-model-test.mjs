@@ -185,7 +185,7 @@ test('fresh generated envelope codec and actual browser crypto interoperability'
   copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
   writeFileSync(join(lean, 'lakefile.toml'), 'name = "workspace_envelope_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ["PrismPM.' + workspaceModule + '", "PrismPM.' + moduleName + '", "PrismPM.' + moduleName + 'Corpus"]\n', {flag: 'wx'});
   run('lake', ['build', 'PrismGenerated'], lean);
-  const {dir: exporter, bin: prodExport} = ensureProdExport(repository);
+  const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
   const exported = join(work, 'export');
   run(prodExport, ['--module', 'PrismPM.' + moduleName, '--root', 'PrismPM.' + moduleName + '.workspaceEnvelopeBytes',
     '--ir-module', 'BrowserWorkspaceEnvelope', '--out', exported], exporter, {LEAN_PATH: join(lean, '.lake/build/lib/lean')});
