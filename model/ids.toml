@@ -859,6 +859,12 @@ level = "build"
 statement = "SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance."
 
 [[id]]
+id = "DK-29"
+suite = "sdk"
+level = "build"
+statement = "Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

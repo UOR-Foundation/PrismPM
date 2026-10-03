@@ -249,6 +249,8 @@ pub(crate) struct ProcessRecord {
     pub(crate) exit_code: i32,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) exporter: Option<crate::exporter::ExporterExecution>,
 }
 
 pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
@@ -473,7 +475,12 @@ fn stable_success_output(tool: &str, value: String) -> String {
     }
     if !matches!(
         tool,
-        "lake-build-generated" | "lean4-prod-build" | "prod-export"
+        "lake-build-generated"
+            | "lean4-prod-build"
+            | "prod-export"
+            | "application-lean"
+            | "application-exporter"
+            | "application-export"
     ) {
         return value;
     }
@@ -535,7 +542,7 @@ fn run_hologram_oracle(
     holo_path: &Path,
     model_path: &Path,
     wasm_path: &Path,
-) -> Result<Vec<ProcessRecord>, PrismError> {
+) -> Result<[ProcessRecord; 3], PrismError> {
     let _lock = HOLOGRAM_ORACLE_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -551,10 +558,7 @@ fn run_hologram_oracle(
         application.request_maximum(),
         application.response_maximum(),
     )?;
-    if let crate::holo::model_document::Application::Browser(_) = application {
-        crate::holo::browser_application::require_runtime(application)?;
-        return Ok(Vec::new());
-    }
+    crate::holo::browser_application::require_runtime(application)?;
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
         return Err(PrismError::new(
             "PP5301",
@@ -653,7 +657,7 @@ fn run_hologram_oracle(
     )
     .map_err(|error| PrismError::new("PP5301", error.to_string()))?;
     validate_hologram_oracle_report(&report, application, &identities)?;
-    Ok(vec![node_version, build, run])
+    Ok([node_version, build, run])
 }
 
 // These are the pinned hologram-view-surface transport limits, not a new model
@@ -813,6 +817,48 @@ pub(crate) fn validate_hologram_oracle_report(
 #[cfg(test)]
 mod portable_oracle_tests {
     use super::*;
+
+    #[test]
+    fn browser_oracle_cannot_verify_without_execution_or_runtime() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut document: crate::holo::model_document::ModelDocument = serde_json::from_slice(
+            &std::fs::read(root.join("tests/golden/stdlib/build/model.prism.json")).unwrap(),
+        )
+        .unwrap();
+        let declaration =
+            std::fs::read(root.join("tests/data/browser-application-declaration.json")).unwrap();
+        let work = tempfile::tempdir().unwrap();
+        let controller = Controller::load(work.path()).unwrap();
+        let model_path = work.path().join("model.prism.json");
+        for label in [
+            "Ready",
+            "Runtime unavailable",
+            "Verified production service",
+        ] {
+            let mut browser: crate::holo::browser_application::BrowserApplication =
+                serde_json::from_slice(&declaration).unwrap();
+            browser.view.labels[0].text = label.to_owned();
+            crate::holo::browser_application::validate(&browser).unwrap();
+            document.application = Some(crate::holo::model_document::Application::Browser(
+                Box::new(browser),
+            ));
+            std::fs::write(&model_path, serde_json::to_vec(&document).unwrap()).unwrap();
+            let result = run_hologram_oracle(
+                &controller,
+                work.path(),
+                &work.path().join("not-produced.holo"),
+                &model_path,
+                &work.path().join("not-produced.wasm"),
+            );
+            assert_eq!(
+                result
+                    .expect_err("an unexecuted browser oracle cannot return verified processes")
+                    .code,
+                "PP2011",
+                "display text cannot authorize runtime or oracle acceptance: {label}"
+            );
+        }
+    }
 
     #[test]
     fn oracle_compile_policy_survives_environment_isolation() {
@@ -1064,6 +1110,10 @@ pub(crate) fn run_process_limited_allowed(
     for (key, value) in extra_env {
         command.env(key, value);
     }
+    // Lean's default pool follows the host logical CPU count, not Docker's
+    // CPU quota. Pin the pool for Lake and any nested Lean process; keep every
+    // build/export/kernel check and its existing deadline unchanged.
+    command.env("LEAN_NUM_THREADS", "2");
     let mut child = command
         .spawn()
         .map_err(|error| PrismError::new("PP5008", format!("start {tool}: {error}")))?;
@@ -1118,6 +1168,7 @@ pub(crate) fn run_process_limited_allowed(
         exit_code,
         stdout,
         stderr,
+        exporter: None,
     })
 }
 
@@ -2080,6 +2131,35 @@ pub(crate) fn verify_application_build_closure(
     Ok(())
 }
 
+fn verify_regenerated_artifacts(
+    build_root: &Path,
+    expected: &BTreeSet<String>,
+    artifacts: &[(String, Vec<u8>)],
+) -> Result<(), PrismError> {
+    let actual = artifacts
+        .iter()
+        .map(|(path, _)| path.clone())
+        .collect::<BTreeSet<_>>();
+    if &actual != expected || actual.len() != artifacts.len() {
+        return Err(PrismError::new(
+            "PP5004",
+            "application regeneration artifact closure differs",
+        ));
+    }
+    for (path, bytes) in artifacts {
+        if std::fs::read(build_root.join(path))
+            .map_err(|error| PrismError::new("PP4002", error.to_string()))?
+            != *bytes
+        {
+            return Err(PrismError::new(
+                "PP5004",
+                format!("application regeneration differs: {path}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn copy_application_package(build_root: &Path, destination: &Path) -> Result<(), PrismError> {
     let source = build_root.join("cargo/package");
     for entry in walkdir::WalkDir::new(&source).min_depth(1) {
@@ -2334,6 +2414,60 @@ fn run_application(
         ));
     }
 
+    // A distinct generation from the attested application Lean closure. Its
+    // truthful acquisition records describe this regeneration, not the earlier
+    // controller build. Every generated artifact byte and path must agree.
+    let application_lex = build_root.join("application/lexlean-build");
+    let application_manifest =
+        std::fs::read(build_root.join("application/lexlean-build-manifest.json"))
+            .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
+    let mut replay = crate::application_build::generate_recorded(
+        &controller.root,
+        &model,
+        &model_bytes,
+        &application_lex,
+        &application_manifest,
+    )?;
+    let expected_artifacts = build_manifest["files"]
+        .as_array()
+        .ok_or_else(|| PrismError::new("PP4004", "application artifact closure is absent"))?
+        .iter()
+        .filter_map(|row| row["path"].as_str())
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    // Retain only separately attested inputs, not any generated product files.
+    // Recompute containing-system projections just as the original build did.
+    for path in &expected_artifacts {
+        if path.starts_with("lexlean/")
+            || path.starts_with("application/lexlean-build/")
+            || matches!(
+                path.as_str(),
+                "model.prism.json"
+                    | "application/lexlean-snapshot.json"
+                    | "application/lexlean-build-manifest.json"
+            )
+        {
+            replay.artifacts.push((
+                path.clone(),
+                std::fs::read(build_root.join(path))
+                    .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
+            ));
+        }
+    }
+    if expected_artifacts.contains("system.prism.json") {
+        let bytes = std::fs::read(build_root.join("system.prism.json"))
+            .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
+        let system = crate::system::parse(&bytes)?;
+        replay
+            .artifacts
+            .push(("system.prism.json".to_owned(), bytes));
+        for projection in crate::system::projections(&system, &replay.artifacts)? {
+            replay.artifacts.push((projection.path, projection.bytes));
+        }
+    }
+    verify_regenerated_artifacts(build_root, &expected_artifacts, &replay.artifacts)?;
+    processes.extend(replay.exporter_processes);
+
     let identities: Value = serde_json::from_slice(
         &std::fs::read(build_root.join("application/holo-identities.json"))
             .map_err(|error| PrismError::new("PP3014", format!("Holo identities: {error}")))?,
@@ -2352,6 +2486,7 @@ fn run_application(
         "hologram_oracle": "verified",
         "lexlean_attestation_id": lex_attestation_id,
         "modeled_vectors": application.acceptance_vectors().len(),
+        "regeneration": "byte-identical",
         "schema": "prismpm/application-acceptance/1",
         "source_id": build.source_id,
         "status": "verified"
@@ -2609,27 +2744,9 @@ pub(crate) fn run(
         .tempdir_in(&staging_parent)
         .map_err(|error| PrismError::new("PP4002", format!("verification work: {error}")))?;
     let workspace = work.path();
-    let lean_archive = controller.root.join("vendor/lean4-prod/lean.tar");
-    if !lean_archive.is_file() {
-        return Err(PrismError::new(
-            "PP5008",
-            "pinned lean4-prod package archive is missing",
-        ));
-    }
+    crate::exporter::verify_source(&controller.root)?;
     let lean_package = workspace.join("lean4-prod");
-    std::fs::create_dir(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package staging: {error}")))?;
-    let archive_file = File::open(&lean_archive)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package archive: {error}")))?;
-    tar::Archive::new(archive_file)
-        .unpack(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package extraction: {error}")))?;
-    if !lean_package.join("Prod/Export.lean").is_file() {
-        return Err(PrismError::new(
-            "PP5008",
-            "pinned lean4-prod package is missing",
-        ));
-    }
+    let exporter_acquisition = crate::exporter::acquire_for(&controller.root, &lean_package)?;
     let replacements = [
         (workspace, "$STAGING"),
         (controller.root.as_path(), "$PROJECT"),
@@ -2746,7 +2863,7 @@ pub(crate) fn run(
                 "--out".to_owned(),
                 out.to_string_lossy().into_owned(),
             ]);
-            processes.push(run_process(
+            processes.push(crate::exporter::run_export(
                 "prod-export",
                 &lake,
                 &args,
@@ -2754,6 +2871,7 @@ pub(crate) fn run(
                 &export_env,
                 &replacements,
                 "PP5004",
+                &exporter_acquisition,
             )?);
             Ok(out)
         };
@@ -2990,6 +3108,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn application_regeneration_requires_every_identical_artifact() {
+        let root = tempfile::tempdir().unwrap();
+        let artifacts = vec![
+            ("first".to_owned(), b"actual first".to_vec()),
+            ("second".to_owned(), b"actual second".to_vec()),
+        ];
+        for (path, bytes) in &artifacts {
+            std::fs::write(root.path().join(path), bytes).unwrap();
+        }
+        let paths = artifacts
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect::<BTreeSet<_>>();
+        verify_regenerated_artifacts(root.path(), &paths, &artifacts).unwrap();
+        for mode in ["missing", "extra", "changed", "duplicate"] {
+            let mut changed = artifacts.clone();
+            match mode {
+                "missing" => {
+                    changed.pop();
+                }
+                "extra" => changed.push(("unbound".to_owned(), vec![1])),
+                "changed" => changed[0].1.push(0),
+                "duplicate" => changed.push(changed[0].clone()),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                verify_regenerated_artifacts(root.path(), &paths, &changed)
+                    .unwrap_err()
+                    .code,
+                "PP5004",
+                "{mode}"
+            );
+        }
+    }
+
+    #[test]
     fn package_exports_are_closed_and_do_not_change_runtime_accounting() {
         let (runtime, corpus, _) = corpus();
         let package = package_export_roots(STDLIB_EXPORTS_SOURCE, &runtime).unwrap();
@@ -3106,6 +3260,30 @@ mod tests {
         let error = limited("sleep", &["2"], "0.05", 16);
         assert_eq!(error.code, "PP5007");
         assert_eq!(error.message, "test-child timed out");
+    }
+
+    #[test]
+    fn child_lean_thread_policy_cannot_be_overridden_by_extra_environment() {
+        let root = tempfile::tempdir().unwrap();
+        for environment in [
+            BTreeMap::new(),
+            BTreeMap::from([("LEAN_NUM_THREADS".to_owned(), "9999".to_owned())]),
+        ] {
+            let result = run_process_limited(
+                "test-lean-thread-policy",
+                &executable("printenv").unwrap(),
+                &["LEAN_NUM_THREADS".to_owned()],
+                root.path(),
+                &environment,
+                &[],
+                "PP5001",
+                "5",
+                64,
+            )
+            .unwrap();
+            assert_eq!(result.stdout, "2\n");
+            assert_eq!(result.exit_code, 0);
+        }
     }
 
     #[test]

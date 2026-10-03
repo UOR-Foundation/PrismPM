@@ -814,6 +814,12 @@ fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError>
             if row.get("module").is_some() {
                 fields.push("module");
             }
+        } else if row["argv"].as_array().is_some_and(|args| {
+            args.first().and_then(Value::as_str) == Some("exe")
+                && args.get(1).and_then(Value::as_str) == Some("prod-export")
+        }) {
+            fields.push("exporter");
+            validate_exporter_execution(&row["exporter"])?;
         }
         keys(row, &fields).map_err(|error| invalid(format!("process: {}", error.message)))?;
         ensure(
@@ -841,6 +847,79 @@ fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError>
         }
     }
     Ok(rows)
+}
+
+fn validate_exporter_execution(value: &Value) -> Result<(), PrismError> {
+    keys(
+        value,
+        &[
+            "schema",
+            "source_archive_sha256",
+            "executable",
+            "acquisition",
+        ],
+    )?;
+    ensure(
+        value["schema"] == "prismpm/exporter-execution/1",
+        "exporter evidence schema differs",
+    )?;
+    validate_exporter_measurement(value)?;
+    crate::exporter::validate_acquisition(
+        &value["acquisition"],
+        string(&value["executable"]["sha256"])?,
+    )
+    .map_err(|error| invalid(error.message))
+}
+
+fn validate_exporter_measurement(value: &Value) -> Result<(), PrismError> {
+    ensure(
+        digest(&value["source_archive_sha256"])?
+            == hex(include_bytes!("../vendor/lean4-prod/lean.tar")),
+        "exporter source archive differs from the compiled authority",
+    )?;
+    let executable = &value["executable"];
+    keys(executable, &["byte_length", "mode", "sha256"])?;
+    digest(&executable["sha256"])?;
+    ensure(
+        executable["byte_length"]
+            .as_u64()
+            .is_some_and(|size| size > 0 && size <= 256 * 1024 * 1024)
+            && executable["mode"]
+                .as_u64()
+                .is_some_and(|mode| mode <= 0o777 && mode & 0o111 != 0),
+        "bounded actual exporter executable measurement required",
+    )
+}
+
+/// OCI release admission supplies the independently retained SDK lock; the
+/// source-free structural replay above deliberately does not authenticate it.
+pub(crate) fn validate_exporter_authority(
+    _build_files: &BTreeMap<String, Vec<u8>>,
+    verification_files: &BTreeMap<String, Vec<u8>>,
+    sdk_lock: &Value,
+) -> Result<(), PrismError> {
+    let manifest = canonical_json(file(verification_files, "manifest.json")?, false)?;
+    let processes = process_records(&manifest["processes"], false)?;
+    let platform = process_platform(processes)?;
+    let executions: Vec<Value> = processes
+        .iter()
+        .filter_map(|row| row.get("exporter").cloned())
+        .collect();
+    for execution in executions {
+        validate_exporter_execution(&execution)?;
+        ensure(
+            execution["acquisition"]["mode"] == "cold"
+                || execution["acquisition"]["platform"] == platform,
+            "exporter acquisition platform differs from retained native execution",
+        )?;
+        crate::exporter::validate_acquisition_authority(
+            &execution["acquisition"],
+            string(&execution["executable"]["sha256"])?,
+            sdk_lock,
+        )
+        .map_err(|error| invalid(error.message))?;
+    }
+    Ok(())
 }
 
 fn lexlean_processes(lex: &Value, modules: &BTreeSet<String>) -> Result<(), PrismError> {
@@ -981,7 +1060,23 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
                 .all(|(row, tool)| row["tool"] == *tool),
         "verification process closure or order differs",
     )?;
-    for row in rows.iter().take(PREFLIGHT.len()) {
+    process_platform(rows).map(|_| ())
+}
+
+// Retained execution determines the platform, not the reader's current host
+// and not a receipt's self-selected SDK inventory row.
+fn process_platform(rows: &[Value]) -> Result<&'static str, PrismError> {
+    let preflight = rows
+        .get(..PREFLIGHT.len())
+        .ok_or_else(|| invalid("verification native preflight is incomplete"))?;
+    ensure(
+        preflight
+            .iter()
+            .zip(PREFLIGHT)
+            .all(|(row, tool)| row["tool"] == tool),
+        "verification native preflight order differs",
+    )?;
+    for row in preflight {
         let expected = if row["tool"] == "rustc-version" {
             json!(["--version", "--verbose"])
         } else {
@@ -994,7 +1089,7 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
             "verification preflight process differs",
         )?;
     }
-    let host = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"].into_iter().find(|host| rows[0]["stdout"] == format!("Lean (version 4.32.1, {host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n")).ok_or_else(|| invalid("verification process Lean version differs"))?;
+    let (host, platform) = [("x86_64-unknown-linux-gnu", "linux/amd64"), ("aarch64-unknown-linux-gnu", "linux/arm64")].into_iter().find(|(host, _)| rows[0]["stdout"] == format!("Lean (version 4.32.1, {host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n")).ok_or_else(|| invalid("verification process Lean version differs"))?;
     ensure(
         rows[1]["stdout"] == "Lake version 5.0.0-src+f054605 (Lean version 4.32.1)\n"
             && rows[2]["stdout"] == "rustfmt 1.9.0-stable (8bab26f4f6 2026-07-14)\n",
@@ -1018,7 +1113,7 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
             .any(|version| timeout.starts_with(&format!("timeout (GNU coreutils) {version}\n"))),
         "verification process timeout version differs",
     )?;
-    Ok(())
+    Ok(platform)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1080,7 +1175,7 @@ fn application_binding(
                     "build_id":build_id, "cargo_package":{"name":application.cargo_name(),"sha256":hex(file(build_files, &crate_name)?),"version":application.cargo_version()},
                     "core_wasm":{"sha256":hex(guest),"status":"verified"}, "holo":identities,
                     "hologram_oracle":"verified", "lexlean_attestation_id":lex["attestation_id"],
-                    "modeled_vectors":application.acceptance_vectors().len(), "schema":"prismpm/application-acceptance/1",
+                    "modeled_vectors":application.acceptance_vectors().len(), "regeneration":"byte-identical", "schema":"prismpm/application-acceptance/1",
             "source_id":lex["source_id"], "status":"verified"
                 }),
         "application acceptance differs from actual model or artifacts",
@@ -1096,8 +1191,43 @@ fn application_binding(
         "application-package-no-std",
         "application-consumer-lock",
         "application-generated-rust-corpus",
+        "application-lean",
+        "application-exporter",
+        "application-export",
     ]);
     process_order(processes, &expected)?;
+    let identity = canonical_json(
+        file(build_files, "application/exporter-identity.json")?,
+        false,
+    )?;
+    let execution = &processes
+        .last()
+        .ok_or_else(|| invalid("application regeneration export is absent"))?["exporter"];
+    let application_manifest = canonical_json(
+        file(build_files, "application/lexlean-build-manifest.json")?,
+        true,
+    )?;
+    let modules = lexlean_modules(&application_manifest)?;
+    let arguments = crate::application_build::application_export_arguments(
+        &modules,
+        application,
+        std::path::Path::new("$APPLICATION_WORK/export"),
+    );
+    ensure(
+        processes.last().unwrap()["argv"] == json!(arguments),
+        "application regeneration export process arguments differ",
+    )?;
+    ensure(
+        identity["executable"] == execution["executable"]
+            && identity["source_archive_sha256"] == execution["source_archive_sha256"],
+        "application regeneration exporter identity differs",
+    )?;
+    for row in &processes[14..] {
+        ensure(
+            row["executable_sha256"] == processes[1]["executable_sha256"],
+            "application regeneration Lake identity differs",
+        )?;
+    }
     ensure(
         processes[5]["stdout"] == "v22.23.2\n" && processes[5]["stderr"] == "",
         "application oracle Node identity differs",
@@ -1140,6 +1270,8 @@ fn application_binding(
             "application-generated-rust-corpus",
             vec!["run", "--locked", "--offline"],
         ),
+        ("application-lean", vec!["build", "PrismGenerated"]),
+        ("application-exporter", vec!["build", "prod-export"]),
     ] {
         let row = processes
             .iter()
@@ -1300,6 +1432,16 @@ fn application_archive(
         )?;
     }
     let lcnf = canonical_json(file(files, "application/lcnf-manifest.json")?, false)?;
+    let identity = canonical_json(file(files, "application/exporter-identity.json")?, false)?;
+    keys(
+        &identity,
+        &["schema", "source_archive_sha256", "executable"],
+    )?;
+    ensure(
+        identity["schema"] == "prismpm/exporter-identity/1",
+        "application exporter identity schema differs",
+    )?;
+    validate_exporter_measurement(&identity)?;
     ensure(
         lcnf == json!({"coverage_sha256":hex(file(files,"cargo/coverage.json")?),"kernel_ir_sha256":hex(file(files,"cargo/kernel.ir")?),"roots_sha256":hex(file(files,"cargo/roots.json")?),"schema":"prismpm/lcnf-manifest/1"}),
         "application LCNF evidence differs",

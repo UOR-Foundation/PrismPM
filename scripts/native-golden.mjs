@@ -290,6 +290,8 @@ export function validateWorkflow(text) {
       + `          name: ${name}-\${{ matrix.arch }}-\${{ github.event.pull_request.head.sha }}\n`
       + `          path: \${{ runner.temp }}/${path}/\n`), 'each native review artifact must upload on failure');
   }
+  assert.match(text, /path: \$\{\{ runner\.temp \}\}\/native-golden\/\n          if-no-files-found: error\n          compression-level: 6\n/,
+    'compress the complete raw evidence without filtering files');
   assert(!/setup-qemu|docker\/login-action|sdk-candidate.mjs|sdk-image-inputs.mjs/.test(text));
 }
 

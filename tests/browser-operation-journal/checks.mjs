@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepare, repository, draft, run, sha} from './compile.mjs';
+import {createCompilerOwner, requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
+import {verifyCompilerOwnerSubstitutions} from '../browser-view/compiler-owner-checks.mjs';
 import {corpus, historyCorpus, maximumCorpus, partitionCorpus} from './corpus.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
 import {executeWasm, tsv} from '../browser-effects/checks.mjs';
@@ -66,11 +68,12 @@ function sourceClosure() {
     .map(([name, file]) => [name, sha(readFileSync(file))]));
 }
 
-export async function verifyWire(t) {
+export async function verifyWire(t, compilerOwner = null) {
   const before = sourceClosure(), bounds = verifyInventory(), vectors = [...corpus(), ...historyCorpus()];
   assert.equal(corpus().length, 68); assert.equal(historyCorpus().length, 1024);
   const maximum = maximumCorpus(), partitions = partitionCorpus(); assert.equal(maximum.length, 4); assert.equal(partitions.length, 7);
-  const build = prepare(), file = join(build.work, 'vectors.tsv'); writeFileSync(file, tsv(vectors), {flag: 'wx'});
+  const build = prepare(null, false, compilerOwner), file = join(build.work, 'vectors.tsv'); writeFileSync(file, tsv(vectors), {flag: 'wx'});
+  t.diagnostic(JSON.stringify({compilerOwner: build.compilerOwner, preparationMs: build.preparationMs}));
   const binaries = [...maximum, ...partitions].map(row => {
     const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
     writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
@@ -95,31 +98,42 @@ export async function verifyWire(t) {
   t.diagnostic(JSON.stringify(evidence)); return build;
 }
 
-export function verifyModelMutation(kind) {
+export function verifyModelMutation(kind, compilerOwner = null) {
   const selected = {binding: 'TerminalMismatch3', trailing: 'WireTrailing', reservation: 'ReserveTerminalSlot',
     payload: 'PayloadMissing', partition: 'Partition1048576'}[kind];
   const vector = (kind === 'partition' ? partitionCorpus() : corpus()).find(row => row.id === selected); assert.ok(vector);
-  const build = prepare(kind); let passed = false;
+  const build = prepare(kind, false, compilerOwner); let passed = false;
   try {
     const file = join(build.work, 'mutation.tsv'); writeFileSync(file, tsv([vector]), {flag: 'wx'});
     for (const standard of [true, false]) assert.throws(() => run(build.compileNative(standard), [file], build.runner), /native output mismatch/, kind + ' native mutant');
     assert.throws(() => executeWasm(kind === 'partition' ? build.partitionBytes : build.journalBytes, [vector]),
       /generated Wasm output mismatch/, kind + ' actual Wasm mutant');
     passed = true;
+    return {kind, compilerOwner: build.compilerOwner, preparationMs: build.preparationMs};
   } finally { if (passed) rmSync(build.work, {recursive: true, force: true}); }
 }
 
 export async function verifyOperationJournal(t) {
   let build, custody, passed = false;
   try {
+    const owner = createCompilerOwner('operation-journal');
+    const substitutions = verifyCompilerOwnerSubstitutions(owner);
     await prerequisite(t, 'registered errors and complete closed structural byte budgets', () => verifyInventory());
-    await prerequisite(t, 'genuine source, kernel and generated operation-journal closure', async child => { build = await verifyWire(child); });
+    await prerequisite(t, 'genuine source, kernel and generated operation-journal closure', async child => {
+      build = await verifyWire(child, owner); assert.equal(build.compilerOwner, owner.identity);
+    });
     await prerequisite(t, 'genuine independent source-owned custody dependency', async child => {
       const {verifyWire} = await import('../browser-custody/checks.mjs'); custody = await verifyWire(child);
     });
     await prerequisite(t, 'actual durable browser journal and authenticated native transcript replay', child => verifyBrowser(child, build, custody));
     await verifyHostMutations(t, build, custody);
-    for (const kind of ['binding', 'trailing', 'reservation', 'payload', 'partition']) await prerequisite(t, 'actual source/kernel journal mutation ' + kind, () => verifyModelMutation(kind));
+    for (const kind of ['binding', 'trailing', 'reservation', 'payload', 'partition']) await prerequisite(t, 'actual source/kernel journal mutation ' + kind, () => {
+      const result = verifyModelMutation(kind, owner); assert.equal(result.compilerOwner, owner.identity); t.diagnostic(JSON.stringify(result));
+    });
+    const retirement = owner.close();
+    assert.throws(() => requireCompilerOwner(owner, 'operation-journal'), /compiler owner closed/);
+    assert.throws(() => owner.close(), /compiler owner closed/);
+    t.diagnostic(JSON.stringify({compiler: owner.evidence, substitutions, retirement}));
     const evidence = {wire: sha(readFileSync(join(build.work, 'operation-journal-wire-evidence.json'))),
       browser: sha(readFileSync(join(build.work, 'operation-journal-browser-evidence.json'))),
       custody: sha(readFileSync(join(custody.work, 'custody-wire-evidence.json'))), source: sourceClosure(),

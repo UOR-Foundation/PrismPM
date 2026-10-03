@@ -10,6 +10,7 @@ export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 export {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
 import {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
+import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 function verifyPins(){
   const artifacts=readFileSync(join(repository,'model/dependencies.toml'),'utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
     const text=section.split('[[dependency]]')[0];return {path:/^path = "([^"]+)"$/m.exec(text)?.[1],hash:/^sha256 = "([0-9a-f]{64})"$/m.exec(text)?.[1],tree:/^tree_root = "([^"]+)"$/m.exec(text)?.[1]};
@@ -59,7 +60,7 @@ function compilerEnvironment(extra) {
       && !/[:\r\n\0]/.test(value), 'confined compiler path required: '+key);
   }
   return {...process.env, PATH:'/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin',
-    CARGO_NET_OFFLINE:'true', RUSTUP_TOOLCHAIN:rust+'-'+triple, ELAN_TOOLCHAIN:lean, ...extra};
+    CARGO_NET_OFFLINE:'true', RUSTUP_TOOLCHAIN:rust+'-'+triple, ELAN_TOOLCHAIN:lean, ...extra, LEAN_NUM_THREADS:'2'};
 }
 function terminateOwnedGroup(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 1) return;
@@ -160,7 +161,8 @@ export function prepare(){
   const guest=join(work,'guest');assert.deepEqual(JSON.parse(run(driver,['generate-wasm',join(exported,'kernel.ir'),guest,repository],repository)),generation);run('cargo',['build','--locked','--offline','--release'],guest,{CARGO_TARGET_DIR:join(guest,'target')});
   const wasmBytes=readFileSync(join(guest,'target/wasm32-unknown-unknown/release/browser_workspace_journal_wasm_probe.wasm'));
   verifyPins();assert.equal(generation.ir_sha256,sha(readFileSync(join(exported,'kernel.ir'))));
+  const cacheRetirement=retireCompletedCompilerCaches(work,'journal');
   completed=true;
-  return {work,sources,verified,generation,compileNative,runner,wasmBytes};
+  return {work,sources,verified,generation,compileNative,runner,cacheRetirement,wasmBytes};
   } finally { if(!completed)rmSync(work,{recursive:true,force:true}); }
 }

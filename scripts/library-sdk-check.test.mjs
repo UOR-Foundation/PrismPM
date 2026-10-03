@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync} from 'node:fs';
+import {cpSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,verifySource,sourceRoots,sourceAliases,cli,checkAccepted,mutateModule,tree,verifyImage,verifyResult,testOutput} from './library-sdk-check.mjs';
+import {capture,verifySource,sourceRoots,sourceAliases,cli,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock} from './library-sdk-check.mjs';
+import {lockFixture,resultFixture,sourceAuthorityFixture} from './library-sdk-fixture.mjs';
+const checkAccepted=(project,receipt)=>checkAcceptedWithAuthority(project,receipt,'3'.repeat(64));
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-library-gate-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
@@ -89,10 +91,53 @@ test('library evidence cannot be accepted without genuinely published closed art
 });
 
 test('outer acceptance refuses absent or partial run results and incomplete or skipped test suites',()=>{
- const value={scope:'installed-native-library-only',build_id:'d'.repeat(64),checks:['read-only-check','std','no_std','exact-package-replay','two-root-reproduction','product-refusal','missing-root','wrong-result-root','parameterized-root','nominal-impostor','false-generated-acceptance','restored-acceptance'],unclaimed:['application','browser','holo','production-release','deployment']};verifyResult(value);
- for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.build_id='mutable']){const bad=structuredClone(value);change(bad);assert.throws(()=>verifyResult(bad));}
- const tap='TAP version 13\n'+Array.from({length:15},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
- testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 15','# tests 14')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const fixture=lockFixture(),binding=fixture.binding('amd64'),value=resultFixture(binding);
+ const verify=(value,authority=binding)=>verifyResult(value,authority,sourceAuthorityFixture);verify(value);
+ for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.build_id='mutable',
+  v=>v.runs.pop(),v=>v.runs.reverse(),v=>v.runs[2].acquisition='cold',v=>v.runs[3].root=v.runs[2].root,
+  v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64)]){
+  const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
+ }
+ for(const mutate of [m=>m.processes.pop(),m=>m.processes[7].exporter.acquisition.mode='cold',
+  m=>m.processes[7].exporter.acquisition.platform='linux/arm64',m=>m.processes[7].exporter.executable.sha256='f'.repeat(64),
+  m=>m.processes[6].exit_code=1,m=>m.processes[7].exporter.acquisition.compiler_revision='b'.repeat(40),
+  m=>m.processes[7].argv=[],m=>m.processes[7].exporter.executable.mode=-1,
+  m=>m.processes[7].exporter.acquisition.toolchain='not-a-toolchain',m=>m.artifacts=[{arbitrary:'not-the-cold-build'}],
+  m=>m.artifacts[0].sha256='a'.repeat(64),m=>m.artifacts[0].byte_length=-1]){
+  const bad=structuredClone(value),manifest=JSON.parse(bad.runs[2].manifest);mutate(manifest);
+  bad.runs[2].manifest=fixture.encode(manifest);bad.runs[2].manifest_sha256=fixture.hash(bad.runs[2].manifest);
+  assert.throws(()=>verify(bad));
+ }
+ const resealed=structuredClone(value);
+ for(const row of resealed.runs){const manifest=JSON.parse(row.manifest);manifest.processes[7].exporter.source_archive_sha256='a'.repeat(64);if(row.acquisition==='sdk-seed')manifest.processes[7].exporter.acquisition.archive_sha256='a'.repeat(64);row.manifest=fixture.encode(manifest);row.manifest_sha256=fixture.hash(row.manifest);}
+ assert.throws(()=>verify(resealed));assert.throws(()=>verifyResult(value));assert.throws(()=>verify(value,fixture.binding('arm64')));
+ assert.throws(()=>verifyResult(value,binding));
+ const tap='TAP version 13\n'+Array.from({length:18},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..18\n# tests 18\n# suites 0\n# pass 18\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
+ testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 18','# tests 17')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+});
+
+test('captured seed lock requires both exact platforms and independently selected native bytes',()=>{
+ const fixture=lockFixture(),{bytes,image,standards,lock,encode,hash}=fixture;
+ for(const architecture of ['amd64','arm64']){
+  const inventory=Buffer.from(lock.platforms.find(row=>row.platform==='linux/'+architecture).inventory_document);
+  assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
+  for(const bad of [Buffer.concat([bytes,Buffer.from('\n')]),Buffer.from([255]),Buffer.alloc(64*1024*1024+1)])
+   assert.throws(()=>validateCapturedLock(bad,image,architecture,standards,inventory));
+  assert.throws(()=>validateCapturedLock(bytes,image,architecture,Buffer.from('changed'),inventory));
+  assert.throws(()=>validateCapturedLock(bytes,image,architecture,standards,Buffer.from('changed')));
+  for(const mutate of [v=>v.platforms.reverse(),v=>v.platforms.pop(),v=>v.schema='prismpm/sdk-lock/1',
+   v=>v.sdk_image=image.replace('example.invalid','other.invalid'),v=>v.platforms[0].manifest_digest='sha256:'+'a'.repeat(64),
+   v=>v.platforms[1].inventory_digest='sha256:'+'a'.repeat(64)]){
+   const changed=structuredClone(lock);mutate(changed);
+   assert.throws(()=>validateCapturedLock(Buffer.from(encode(changed)),image,architecture,standards,inventory));
+  }
+  const changed=structuredClone(lock);
+  for(const row of changed.platforms){
+   const document=JSON.parse(row.inventory_document);document.artifacts=document.artifacts.filter(item=>item.id!=='lean4-prod-exporter-seed');
+   row.inventory=document.artifacts;row.inventory_document=encode(document);row.inventory_digest='sha256:'+hash(row.inventory_document);
+  }
+  assert.throws(()=>validateCapturedLock(Buffer.from(encode(changed)),image,architecture,standards,inventory),/seed required/);
+ }
 });
 
 // Synthetic parser fixtures exercise resealed malformed evidence. These bytes
@@ -105,6 +150,7 @@ function parserFixture(root,change=()=>{}){
  const paths=['coverage.json','kernel.ir','model-binding.json','package/Cargo.lock','package/Cargo.toml','package/LICENSE-APACHE','package/LICENSE-MIT','package/README.md','package/generation-manifest.json','package/src/lib.rs','prism-library-probe-0.1.0.crate','roots.json'];
  const acceptance={build_id:'',executions:['std','no_std'].map(mode=>({mode,roots:[acceptanceRoot],status:'passed'})),export_roots:roots,lexlean_attestation_id:lexId,model_id:'',profile:'prismpm/native-library/1',regeneration:'byte-identical',schema:'prismpm/library-acceptance/1',scope:'native-library-only',status:'passed',unclaimed:['application','browser','holo','production-release','deployment']};
  const processes=['lean-version','lake-version','rustfmt-version','rustc-version','timeout-version','lake-build-generated','lean4-prod-build','prod-export','native-library-package','native-library-std-lock','native-library-std-acceptance','native-library-no_std-lock','native-library-no_std-acceptance'].map(tool=>({tool,argv:[],executable_sha256:'2'.repeat(64),exit_code:0,stdout:tool.endsWith('-acceptance')?encode({roots:[acceptanceRoot],status:'passed'}):'',stderr:''}));
+ Object.assign(processes.find(row=>row.tool==='prod-export'),{argv:['exe','prod-export'],exporter:{schema:'prismpm/exporter-execution/1',source_archive_sha256:'3'.repeat(64),acquisition:{schema:'prismpm/exporter-acquisition/1',mode:'cold'},executable:{sha256:'4'.repeat(64),byte_length:1234,mode:0o755}}});
  const manifest={acceptance_sha256:'',artifacts:[],build_id:'',lexlean_attestation_sha256:'',model_sha256:'',processes,schema:'prismpm/library-verification-manifest/1',scope:'native-library-only'};
  const modules=[{lean_module:'LibraryProbe.Foundation.Library.V1.Model',declarations:[{lean_name:'NativeLibrary',axiom_policy:{kind:'none',axioms:[]}}]},{lean_module:'LibraryProbe.Probe',declarations:['acceptance','identity','probeLibrary'].map(lean_name=>({lean_name,axiom_policy:{kind:'none',axioms:[]}}))}];
  const lex={attestation_id:lexId,build_id:'3'.repeat(64),source_id:model.provenance.source_id,semantic_id:model.provenance.semantic_id,spec:'lexlean/attestation/1',status:'verified',declarations:modules.flatMap(module=>module.declarations.map(row=>({name:module.lean_module+'.'+row.lean_name,observed:[],policy:row.axiom_policy,result:'ok'})))};
@@ -129,6 +175,16 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
   ({manifest})=>{manifest.processes[0].extra=true;},({manifest})=>{delete manifest.processes[0].argv;},
   ({manifest})=>{manifest.processes[0].argv=[42];},({manifest})=>{manifest.processes.pop();},
   ({manifest})=>{manifest.processes[10].stdout='{}';},({manifest})=>{manifest.processes[0].executable_sha256='invalid';},
+  ({manifest})=>{delete manifest.processes[7].exporter;},
+  ({manifest})=>{manifest.processes[7].exporter.extra=true;},
+  ({manifest})=>{delete manifest.processes[7].exporter.acquisition;},
+  ({manifest})=>{manifest.processes[7].exporter.acquisition.mode='sdk-seed';},
+  ({manifest})=>{manifest.processes[7].exporter.executable.mode=0o644;},
+  ({manifest})=>{manifest.processes[7].exporter.executable.byte_length=0;},
+  ({manifest})=>{manifest.processes[7].exporter.executable.sha256='invalid';},
+  ({manifest})=>{manifest.processes[7].exporter.source_archive_sha256='invalid';},
+  ({manifest})=>{manifest.processes[7].exporter.source_archive_sha256='5'.repeat(64);},
+  ({manifest})=>{manifest.processes[7].argv=['build','prod-export'];},
   ({acceptance})=>{acceptance.extra=true;},({acceptance})=>{acceptance.executions.pop();},
   ({acceptance})=>{acceptance.lexlean_attestation_id=createHash('sha256').update(JSON.stringify({attestation_id:'b'.repeat(64)})).digest('hex');},
   ({model})=>{model.extra=true;},({model})=>{model.application=null;},({model})=>{model.provenance.extra=true;},
@@ -144,6 +200,37 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
   (root,receipt)=>put(root,'.prism/build/'+receipt.build_id+'/unexpected','extra output'),
  ]){const root=temporary(t),receipt=parserFixture(root);change(root,receipt);assert.throws(()=>checkAccepted(root,receipt));}
  put(valid,'.prism/build/'+receipt.build_id+'/library/package/src/lib.rs','tampered actual bytes');assert.throws(()=>checkAccepted(valid,receipt));
+ const compiler={revision:'6'.repeat(40),toolchain:'leanprover/lean4:v4.32.1',platform:'linux/amd64'};
+ const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+ const encode=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]])):v);
+ for(const mutation of [null,'inventory','manifest','child','source','revision','toolchain','platform','seed-kind','seed-version','child-kind','unknown','index','missing-authority']) {
+  const root=temporary(t);
+  const artifacts=[
+   ...['adapter','base-image','binary','crate','dependency-lock','oracle','schema','test-corpus','trust-root','workflow'].map(kind=>({id:kind,kind,version:'1',digest:'sha256:'+'7'.repeat(64)})),
+   {id:'lean4-prod-exporter',kind:'binary',version:compiler.revision,digest:'sha256:'+'4'.repeat(64)},
+   {id:'lean4-prod-exporter-seed',kind:'dependency-lock',version:'1',digest:'sha256:'+'8'.repeat(64)},
+  ].sort((a,b)=>a.id.localeCompare(b.id));
+  if(mutation==='seed-kind')artifacts.find(row=>row.id==='lean4-prod-exporter-seed').kind='binary';
+  if(mutation==='seed-version')artifacts.find(row=>row.id==='lean4-prod-exporter-seed').version='2';
+  if(mutation==='child-kind')artifacts.find(row=>row.id==='lean4-prod-exporter').kind='crate';
+  const doc=encode({schema:'prismpm/sdk-inventory/1',artifacts,commands:['cargo','devcontainer','docker','just','prismpm'].map(command=>({command,executable:'/usr/local/bin/'+command,sha256:'9'.repeat(64)}))});
+  const manifests=['amd64','arm64'].map((architecture,index)=>({mediaType:'application/vnd.oci.image.manifest.v1+json',digest:'sha256:'+String(index+1).repeat(64),size:100,platform:{os:'linux',architecture}}));
+  const index=encode({schemaVersion:2,mediaType:'application/vnd.oci.image.index.v1+json',manifests});
+  const lock={schema:'prismpm/sdk-lock/2',sdk_version:'0.3.0',sdk_image:'example.invalid/fixture@sha256:'+digest(index),sdk_index:index,standards_lock:'sha256:'+'a'.repeat(64),
+   platforms:['amd64','arm64'].map((architecture,index)=>({platform:'linux/'+architecture,manifest_digest:manifests[index].digest,inventory_digest:'sha256:'+digest(doc),inventory_document:doc,inventory:artifacts}))};
+  if(mutation==='index')lock.sdk_image='example.invalid/fixture@sha256:'+'f'.repeat(64);
+  put(root,'prismpm.lock',encode(lock));
+  const warm=parserFixture(root,({manifest})=>{
+   const acquisition={schema:'prismpm/exporter-acquisition/1',mode:'sdk-seed',compiler_revision:compiler.revision,toolchain:compiler.toolchain,platform:compiler.platform,
+    inventory_sha256:digest(doc),manifest_sha256:'8'.repeat(64),executable_sha256:'4'.repeat(64),archive_sha256:'3'.repeat(64)};
+   const fields={inventory:'inventory_sha256',manifest:'manifest_sha256',child:'executable_sha256',source:'archive_sha256',revision:'compiler_revision',toolchain:'toolchain',platform:'platform'};
+   if(fields[mutation])acquisition[fields[mutation]]=mutation==='toolchain'?'leanprover/lean4:v1.2.3':mutation==='platform'?'linux/arm64':'f'.repeat(64);
+   if(mutation==='unknown')acquisition.extra=true;
+   manifest.processes[7].exporter.acquisition=acquisition;
+  });
+  const verify=()=>checkAcceptedWithAuthority(root,warm,'3'.repeat(64),mutation==='missing-authority'?undefined:compiler,'sdk-seed');
+  if(mutation===null)verify();else assert.throws(verify,mutation);
+ }
 });
 
 test('release job keeps both native library and browser gates mandatory for each SDK architecture',()=>{
@@ -154,13 +241,18 @@ test('release job keeps both native library and browser gates mandatory for each
  assert.match(workflow,/os: ubuntu-24.04-arm/);assert.match(workflow,/name: library-sdk-\$\{\{ matrix.name \}\}/);
  const wrapper=readFileSync(new URL('./library-sdk-check.sh',import.meta.url),'utf8');
  for(const required of ['--user 1000:1000 --read-only --network none','--cap-drop ALL','--security-opt no-new-privileges','--tmpfs /tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','node scripts/library-sdk-check.mjs run'])assert.ok(wrapper.includes(required),required);
- assert.ok(!wrapper.includes('--volume')&&!wrapper.includes('--mount'));
+ const execution=wrapper.slice(wrapper.indexOf('# Execution has no network'));
+ assert.ok(!execution.includes('--volume')&&!execution.includes('--mount'));
+ const recipe=readFileSync(new URL('../sdk/Dockerfile',import.meta.url),'utf8');
+ assert.match(recipe,/elan toolchain install leanprover\/lean4:v4\.32\.1 \\\n\s+&& chmod -R a\+rX,go-w \/usr\/local\/elan\/toolchains\/leanprover--lean4---v4\.32\.1/);
 });
 
 test('owning CLI test kills a removed process-exit guard',t=>{
  const root=temporary(t),module=readFileSync(new URL('./library-sdk-check.mjs',import.meta.url),'utf8');
  const guard='assert.equal(output.status,expected.code ? exits[expected.code] : 0, "CLI exit class");';assert.equal(module.split(guard).length,2);
- put(root,'library-sdk-check.mjs',module.replace(guard,''));put(root,'browser-api-sdk-check.mjs',readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url)));put(root,'library-sdk-check.test.mjs',readFileSync(new URL('./library-sdk-check.test.mjs',import.meta.url)));
+ put(root,'scripts/library-sdk-check.mjs',module.replace(guard,''));put(root,'scripts/browser-api-sdk-check.mjs',readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url)));put(root,'scripts/library-sdk-check.test.mjs',readFileSync(new URL('./library-sdk-check.test.mjs',import.meta.url)));
+ put(root,'scripts/library-sdk-fixture.mjs',readFileSync(new URL('./library-sdk-fixture.mjs',import.meta.url)));
+ cpSync(new URL('../sdk',import.meta.url),join(root,'sdk'),{recursive:true});
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
- const output=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=CLI transport invokes',join(root,'library-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});assert.equal(output.error,undefined);assert.equal(output.status,1);assert.match(output.stdout,/Missing expected exception/);
+ const output=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=CLI transport invokes',join(root,'scripts/library-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});assert.equal(output.error,undefined);assert.equal(output.status,1);assert.match(output.stdout,/Missing expected exception/);
 });

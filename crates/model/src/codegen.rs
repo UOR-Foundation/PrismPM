@@ -281,6 +281,16 @@ pub fn render_contracts(model: &Model) -> String {
             "| `{}` | `{}` | `{}` | `{}` |",
             row.name, row.mutates, row.requires_digest, row.result_schema
         );
+        for (command, schemas) in &row.subcommand_results {
+            let _ = writeln!(
+                w,
+                "| `{} {command}` | `{}` | `{}` | `{}` |",
+                row.name,
+                row.mutates,
+                row.requires_digest,
+                schemas.join("`, `")
+            );
+        }
     }
     out
 }

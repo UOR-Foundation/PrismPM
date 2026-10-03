@@ -19,6 +19,7 @@ pub mod controller;
 pub mod deployment;
 pub mod diagnostics;
 pub mod error;
+mod exporter;
 pub mod holo;
 mod library_build;
 mod library_verification;

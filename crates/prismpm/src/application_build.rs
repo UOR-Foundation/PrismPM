@@ -21,7 +21,6 @@ use std::path::{Component, Path, PathBuf};
 
 const HOLOGRAM_LIVE_COMMIT: &str = "d8208266d8abdc2445b7bbc0cef412a566adfaf1";
 const UOR_HOLOGRAM_COMMIT: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
-const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
 const DEPENDENCY_REGISTER: &str = include_str!("../model/dependencies.toml");
 const STDLIB_RELEASE_SOURCE: &str = include_str!("../stdlib/release.json");
 const STDLIB_CRATE: &[u8] = include_bytes!("../stdlib/generated/prism-stdlib-0.2.0.crate");
@@ -59,6 +58,11 @@ struct DependencyArtifact {
 
 /// One application artifact prepared in memory before atomic publication.
 pub(crate) type ApplicationArtifact = (String, Vec<u8>);
+
+pub(crate) struct GeneratedApplication {
+    pub(crate) artifacts: Vec<ApplicationArtifact>,
+    pub(crate) exporter_processes: Vec<crate::verification::ProcessRecord>,
+}
 
 fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -574,7 +578,7 @@ fn run(
     run_process(name, program, &args, cwd, env, replacements, failure).map(|_| ())
 }
 
-fn application_export_arguments(
+pub(crate) fn application_export_arguments(
     modules: &BTreeSet<String>,
     application: &Application,
     export: &Path,
@@ -613,6 +617,23 @@ pub(crate) fn generate(
     lex_root: &Path,
     lex_manifest_bytes: &[u8],
 ) -> Result<Vec<ApplicationArtifact>, PrismError> {
+    generate_recorded(
+        repository_root,
+        model,
+        model_bytes,
+        lex_root,
+        lex_manifest_bytes,
+    )
+    .map(|generated| generated.artifacts)
+}
+
+pub(crate) fn generate_recorded(
+    repository_root: &Path,
+    model: &ModelDocument,
+    model_bytes: &[u8],
+    lex_root: &Path,
+    lex_manifest_bytes: &[u8],
+) -> Result<GeneratedApplication, PrismError> {
     let application = model.application.as_ref().ok_or_else(|| {
         PrismError::new(
             "PP9001",
@@ -653,11 +674,7 @@ pub(crate) fn generate(
         .map_err(|error| PrismError::new("PP4002", format!("application work: {error}")))?;
     let workspace = work.path();
     let lean_package = workspace.join("lean4-prod");
-    std::fs::create_dir(&lean_package)
-        .map_err(|error| PrismError::new("PP4002", format!("Lean package: {error}")))?;
-    tar::Archive::new(Cursor::new(LEAN4_PROD_ARCHIVE))
-        .unpack(&lean_package)
-        .map_err(|error| PrismError::new("PP5008", format!("vendored lean4-prod: {error}")))?;
+    let exporter_acquisition = crate::exporter::acquire_for(repository_root, &lean_package)?;
 
     let lex_manifest: Value = serde_json::from_slice(lex_manifest_bytes)
         .map_err(|error| PrismError::new("PP4004", format!("LexLean manifest: {error}")))?;
@@ -722,19 +739,19 @@ pub(crate) fn generate(
         (lean_package.as_path(), "$LEAN4_PROD"),
     ];
     let no_env = BTreeMap::new();
-    run(
+    let generated_process = run_process(
         "application-lean",
         &lake,
-        &["build", "PrismGenerated"],
+        &["build".to_owned(), "PrismGenerated".to_owned()],
         workspace,
         &no_env,
         &replacements,
         "PP5001",
     )?;
-    run(
+    let build_process = run_process(
         "application-exporter",
         &lake,
-        &["build", "prod-export"],
+        &["build".to_owned(), "prod-export".to_owned()],
         &lean_package,
         &no_env,
         &replacements,
@@ -750,7 +767,7 @@ pub(crate) fn generate(
             .to_string_lossy()
             .into_owned(),
     );
-    run_process(
+    let exporter_process = crate::exporter::run_export(
         "application-export",
         &lake,
         &export_args,
@@ -758,6 +775,7 @@ pub(crate) fn generate(
         &export_env,
         &replacements,
         "PP5004",
+        &exporter_acquisition,
     )?;
     let kernel_bytes = std::fs::read(export.join("kernel.ir"))
         .map_err(|error| PrismError::new("PP5004", format!("kernel.ir: {error}")))?;
@@ -1048,6 +1066,19 @@ pub(crate) fn generate(
     })?;
 
     let mut artifacts = vec![
+        (
+            "application/exporter-identity.json".to_owned(),
+            encode_value(&{
+                let execution = exporter_process.exporter.as_ref().ok_or_else(|| {
+                    PrismError::new(
+                        "PP9001",
+                        "actual application exporter measurement is absent",
+                    )
+                })?;
+                json!({"schema":"prismpm/exporter-identity/1","source_archive_sha256":execution.source_archive_sha256,
+                    "executable":execution.executable})
+            })?,
+        ),
         (format!("{}.holo", application.name()), holo.bytes),
         (
             "application/application-manifest.bin".to_owned(),
@@ -1141,7 +1172,10 @@ pub(crate) fn generate(
             "application generator produced duplicate paths",
         ));
     }
-    Ok(artifacts)
+    Ok(GeneratedApplication {
+        artifacts,
+        exporter_processes: vec![generated_process, build_process, exporter_process],
+    })
 }
 
 #[cfg(test)]

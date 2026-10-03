@@ -1,5 +1,13 @@
 Feature: sdk
 
+  @DK-29 @build
+  Scenario: Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance.
+    Given pinned compiler sources and a complete independently locked native SDK seed manifest
+    When bounded exclusive staging checks every source, toolchain, runtime and seed file identity
+    Then changed, missing, aliased, oversized or coherently rehashed inputs fail closed
+    And the actual Lake build and exports remain required in each fresh application verification
+    And installed native release qualification independently reconstructs both seeds and retains all cold/relocated kernel checks and exports
+
   @DK-28 @build
   Scenario: SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance.
     Given digest-pinned platform manifests with exact configuration, terminal metadata and inventory bindings
@@ -45,6 +53,7 @@ Feature: sdk
     Given independently checked declarations in the exact standard-library namespace
     When source projections and schema mutations exercise every closed boundary
     Then declarations remain distinct from portable profiles and build refuses the unavailable runtime
+    And changing display labels never confers runtime acceptance
 
   @DK-20 @build
   Scenario: The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance.

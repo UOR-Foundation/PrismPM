@@ -6,7 +6,7 @@ import {spawn} from 'node:child_process';
 import {chmodSync,closeSync,constants,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,openSync,readFileSync,readSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {tree,sourceRoots as libraryRoots,sourceAliases,verifyImage} from './library-sdk-check.mjs';
+import {tree,sourceRoots as libraryRoots,sourceAliases,verifyImage,validateCapturedLock,verifyExporterProcess} from './library-sdk-check.mjs';
 import {verifyTap} from './browser-api-sdk-check.mjs';
 import {capturePlatformLock,validateInventory} from '../sdk/platform-lock.mjs';
 
@@ -182,6 +182,32 @@ async function generatedPackage(project,build){
 }
 function scans(project,lock){return ['amd64','arm64'].map(arch=>json(join(project,'.prism/cache/advisory-scans/sha256',lock.sdk_image.split('@sha256:')[1],'linux-'+arch+'.json')));}
 
+// Additional installed-SDK acquisition evidence; the public source-free reader
+// still owns complete semantic, execution and oracle validation of the proof.
+export function validateSeededApplication(original,buildId,modelDigest,binding,sourceAuthority){
+ assert(Buffer.isBuffer(original)&&original.length>0&&original.length<=16*1024*1024);
+ const text=new TextDecoder('utf-8',{fatal:true}).decode(original),manifest=JSON.parse(text);
+ assert.equal(canonical(manifest),text);hex(buildId);assert.match(modelDigest,digestPattern);
+ keys(manifest,['acceptance_sha256','build_id','lexlean_attestation_sha256','model_sha256','processes','schema']);
+ assert.equal(manifest.schema,'prismpm/application-verification-manifest/1');assert.equal(manifest.build_id,buildId);
+ assert.equal('sha256:'+manifest.model_sha256,modelDigest);
+ hex(manifest.acceptance_sha256);hex(manifest.lexlean_attestation_sha256);
+ assert(Array.isArray(manifest.processes)&&manifest.processes.length>0);
+ for(const row of manifest.processes)assert.equal(row.exit_code,0);
+ const exporters=manifest.processes.filter(row=>row.tool==='application-export'||Object.hasOwn(row,'exporter'));
+ assert.equal(exporters.length,1,'one actual application regeneration exporter required');
+ verifyExporterProcess(exporters[0],'application-export','sdk-seed',binding,sourceAuthority);
+ return {manifest:text,manifest_sha256:sha(original)};
+}
+function seededProof(project,proof,result,buildId,lock){
+ const selected=proof.layers.filter(row=>row.annotations?.['org.opencontainers.image.title']==='runtime/manifest.json');
+ assert.equal(selected.length,1,'one original runtime manifest required');
+ const binding=validateCapturedLock(Buffer.from(canonical(lock)),lock.sdk_image,{x64:'amd64',arm64:'arm64'}[process.arch],
+  bytes(shared+'/standards.lock'),bytes(shared+'/inventory.json'));
+ return validateSeededApplication(verifiedBlob(project,selected[0]),buildId,result.model_digest,binding,
+  {archive_sha256:sha(bytes(join(installed,'vendor/lean4-prod/lean.tar'))).slice(7),toolchain:bytes(join(installed,'lean-toolchain')).toString().trim()});
+}
+
 export async function acquire(){
  const lock=json(join(inputs,'prismpm.lock')),inventory=imageEnvironment(lock);assert(!existsSync(work));mkdirSync(work);
  const first=join(work,'first');await projectSource(first);
@@ -208,6 +234,7 @@ function boundRelease(project,result,lock){
  const system=json(join(project,'.prism/build',buildId,'system.prism.json'));assert.equal(system.schema,'prismpm/system-model/2');
  assert.equal(system.application_profile.contract,'prismpm/browser-resident-application/1');assert.equal(system.application_profile.application_model_digest,result.model_digest);
  const proof=referrer(project,result.release_digest,proofType);assert(proof.layers.length>0);
+ const exporter_manifest=seededProof(project,proof,result,buildId,lock);
  const sbom=evidence(project,result.release_digest,spdxType),policy=evidence(project,result.release_digest,policyType);
  assert.equal(policy.value.release_digest,result.release_digest);assert.equal(policy.value.spdx.digest,sbom.descriptor.digest);
  assert.equal(policy.value.spdx.closure_matches_oci,true);assert.equal(policy.value.promotion.eligible,false);
@@ -216,7 +243,7 @@ function boundRelease(project,result,lock){
  equal(policy.value.vulnerability_result.image_scans.map(row=>row.platform).sort(),['linux/amd64','linux/arm64']);
  for(const scan of policy.value.vulnerability_result.image_scans){assert.equal(scan.reference,lock.sdk_image);assert(scan.package_count>0);assert.equal(scan.rejected_count,0);}
  assert(Array.isArray(sbom.value['@graph'])&&sbom.value['@graph'].length>0);
- return{result,build_id:buildId,build_files:tree(join(project,'.prism/build',buildId)),proof,spdx_sha256:sbom.descriptor.digest,policy_sha256:policy.descriptor.digest};
+ return{result,build_id:buildId,build_files:tree(join(project,'.prism/build',buildId)),proof,exporter_manifest,spdx_sha256:sbom.descriptor.digest,policy_sha256:policy.descriptor.digest};
 }
 export async function buildProducts(){
  const lock=json(join(inputs,'prismpm.lock'));imageEnvironment(lock);const rows=[];
@@ -256,7 +283,11 @@ export async function receive(){
   const files=tree(join(receiver,output)).filter(item=>item.kind==='file');assert.equal(files.length,6,'exact six-file browser closure');
   equal(files.map(item=>item.path),result.files.map(item=>item.path));assert.equal(sha(canonical(result.files)),result.tree_digest);
   for(const item of result.files){const actual=files.find(candidate=>candidate.path===item.path);assert(actual);assert.equal(actual.size,item.size);assert.equal('sha256:'+actual.sha256,item.digest);}
-  const proof=referrer(receiver,row.result.release_digest,proofType);const victim=proof.layers.find(item=>item.annotations?.['org.opencontainers.image.title']?.startsWith('runtime/'));assert(victim);
+  const proof=referrer(receiver,row.result.release_digest,proofType);
+  const release=rootBlob(receiver,row.result.release_digest),locks=release.layers.filter(item=>item.annotations?.['org.prismpm.role']==='sdk-lock');assert.equal(locks.length,1);
+  const lock=JSON.parse(verifiedBlob(receiver,locks[0]));assert.equal(lock.sdk_image,build.sdk_image);
+  equal(seededProof(receiver,proof,row.result,row.build_id,lock),row.exporter_manifest);
+  const victim=proof.layers.find(item=>item.annotations?.['org.opencontainers.image.title']?.startsWith('runtime/'));assert(victim);
   const path=join(receiver,'.prism/oci/blobs/sha256',victim.digest.slice(7)),original=bytes(path);
   for(const [name,change] of [['missing-proof',()=>rmSync(path)],['changed-proof',()=>writeFileSync(path,Buffer.concat([original,Buffer.from([0])]))]]){
    change();try{await cli(receiver,['export-browser',pinned,'--output',output+'-'+name],{code:'PP6101',exit:5});assert(!existsSync(join(receiver,output+'-'+name)));}finally{writeFileSync(path,original);}
@@ -285,7 +316,7 @@ export function verifyResult(value,image){
 
 export function testOutput(output){
  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);
- assert.equal(verifyTap(output.stdout,18),18,'complete owning product gate test count');
+ assert.equal(verifyTap(output.stdout,19),19,'complete owning product gate test count');
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){

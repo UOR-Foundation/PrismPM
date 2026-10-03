@@ -290,6 +290,7 @@ test('PR workflow has no publication policy bypass and keeps exact native genera
     raw.replace('          - os: ubuntu-24.04-arm\n            arch: arm64\n', ''),
     raw.replace('arch: amd64', 'arch: arm64'),
     raw.replace('fail-fast: false', 'fail-fast: true'),
+    raw.replace('compression-level: 6', 'compression-level: 0'),
     raw.replace('runs-on: ${{ matrix.os }}', 'runs-on: ubuntu-24.04-arm'),
     raw.replace('native-golden-review-${{ matrix.arch }}', 'native-golden-review-arm64'),
   ]) { assert.notEqual(changed, raw); assert.throws(() => validateWorkflow(changed)); }

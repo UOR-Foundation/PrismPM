@@ -2004,6 +2004,40 @@ Owning log: `target/cbor-integrated-complete-owning.log`, SHA-256
 This verifies the finite primitive profile, not a browser application,
 installed SDK release, complete CBOR/CDDL implementation or deployment.
 
+### Bounded octet lookup candidate
+
+The clean candidate based on reviewed infrastructure `6848308` passed the
+complete ST-16 gate in 855.01 seconds: 194 roots in generated std/no_std,
+342 exact declaration audits, and 274 invocations across the two actual Wasm
+modules, including all 71 independent byte vectors. Maximum observed memory
+was 963 pages under the unchanged 1,024-page cap; maximum payload was
+4,202,612 bytes. All five source mutants failed their expected runtime
+roots and every restoration reproduced the original identities. The new
+lookup oracle covers all 256 octets and nine above-bound values.
+
+| Identity | SHA-256 |
+| --- | --- |
+| Primitive source | `5ef08de8a662fe90ea43b360f89f4fd3bf071bf799bf8652414bd2a8036d4bd5` |
+| Corpus source | `4d96b97be51aa4206bab09e5179ea796a84e73111867fb675022c3c26d69fa2f` |
+| Build | `8228897ed5452e20f0a05b4b9188712a5b1b7d79ebfce2755279cfa843356e3a` |
+| Attestation | `a305e1a154249a135cdd4ea73cdeedd1a0af460ecbda15ef77b1ad54e512d74b` |
+| Regenerated source archive | `6d52ea3f1a45c85033ce3c8dd0d53d3617d901ddb55a06f65eb63348164d7195` |
+
+Independent readback matched all 143 archive entries against source;
+only the primitive, corpus and corpus inventory changed. Five receipt/guard
+tests, three source tests, pinned formatting and model validation passed
+(181 IDs, 86 codes). This is codec evidence, not acceptance of an installed
+SDK, application or deployment; the separate publication worktree is not
+part of this candidate.
+
+Current-infrastructure integration (2026-10-03) passed complete ST-16 in
+991.54 seconds with the same counts, bounds, five rejected mutants and all
+restorations. Build `a2b69f4aac9fbeb2d94102538ceadc96a86aa79e08dffe44cb7fadfc45f6a4bc`;
+attestation `63fac26a24b85e281d2c6116cb1becbae951cdb649fe8510ea97c13e6bb0d24f`.
+Original execution and resource records: `target/pr51-current-st16-diagnostics/`.
+Historical golden records were not adopted: current exporter measurements
+require fresh generation with the integrated compiler.
+
 ### Earlier diagnostic checkpoint
 
 Pre-integration execution uses LexLean `9c1456d` and lean4-prod `6272da0`.
@@ -2307,6 +2341,14 @@ baseline nor the source audit establishes a current installed SDK or deployment.
 
 ## Original release-gate retention
 
+Native records were subsequently adopted byte-for-byte from run `37120266595`
+at source `8bb318c565dc6144d620aeb319338a0de2e374c7`. Both native lanes
+generated and replayed all 357 files. Independent review checked the artifact
+digests, original process receipts, exporter measurements and all 356 composed
+file descriptors against the portable tree. Local golden composition tests
+passed 8/8 after adoption. This is reviewed source evidence at that commit,
+not current-HEAD execution, installed-SDK acceptance or hardware attestation.
+
 Source VV now retains both original runs, separate stdout/stderr and status,
 VV receipts and fresh bootstrap outputs. Installed SDK execution retains each
 run's four original bootstrap files. Native/SDK comparisons retain all four
@@ -2380,6 +2422,69 @@ Original log `target/oc09-frozen-owner-UMWgsp/owning.stdout`, SHA-256
 Receipt `/tmp/prismpm-publication-RI5Ngo/publication-acceptance.json`, SHA-256
 `0514ce3653fb7b0993e36bf3f0c8215ecca9cd2dd45d362434c119e90a144f07`.
 This verifies conditional source admission only, not SDK or deployment acceptance.
+
+## Browser-runtime admission regression — 27 September 2026
+
+The actual private oracle invocation initially returned `Ok([])` for a browser
+declaration labeled `Ready`. Its new owning regression failed on that result.
+Restoring unconditional `PP2011` for the unsupported browser profile makes the
+regression pass for `Ready`, `Runtime unavailable` and `Verified production
+service`; display text is not execution evidence. Successful oracle invocation
+now has exactly three process records by type, produced only after pinned Node
+identity, Hologram Live build/execution and complete report validation.
+
+The registered DK-21 owner reprojects all three changed LexLean declarations,
+then exercises public check/build/verify and requires no generated output.
+Its source/projection owner and public integration test pass. All four private
+oracle guards, upstream source-pin and report-mutation tests, the complete
+189-test infrastructure audit, model/spec accounting (181 IDs, 86 codes),
+five authored-formatting tests and scoped warnings-denied Clippy pass in the
+devcontainer. Original logs remain in `target/audit-27sep26/`; the complete
+DK-21 log is SHA-256
+`e068a4917a3ae25673a2c6f992cb3e7256a090b866dbe504de2b2eba83873084`,
+and the audit log is
+`1d2b800c39d2b30560d9e58d80309f3400ae321f1109c83efbf4776970dadda1`.
+
+The selected Calculator fixture's actual source projection reported its new
+model digest, `sha256:b9c4dda152fea5e238249c1e460c1ba2c0436ef62bb29f0bf6de92dfbddcfd42`.
+All four modeled references were updated through the documented source-review
+procedure; the complete source-selection/negative owner passes. This restores
+an existing refusal boundary, not the missing browser runtime, public Foundry
+service, SDK release or deployment.
+
+The complete DK-22 compiler owner also passes. Normal golden regeneration and
+fresh readback verify all 357 files for build
+`c61f76a5280d23d717d738d10ae2e7965f4dc938caf8674ed16b84b12628e81c`.
+The five changed JSON files contain only emitter/model/build provenance,
+the actual verifier executable/attestation identities and the review reason;
+generated Lean, runtime artifacts and execution evidence are unchanged.
+Log SHA-256 values in `target/audit-27sep26/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `dk22-compiler-owner.log` | `16c443c6d622b3f153a1a47b00198a2cf38dde317f56ca595fe20e2561ec2393` |
+| `golden-write-stable.log` | `9cf24b9cc0a27edccd78bc3d2bacddbeed77dc672c06c05b3d28e372b6975a84` |
+| `golden-readback.log` | `69fcac92c78c90c0d9a58d077d2ff5e37f2dfdb9ab1bd440bfeaf15871794766` |
+
+An earlier write failed when another build replaced its running verifier
+executable; it produced no reviewed golden update. The successful write and
+readback above used the same stable executable. This development-platform
+evidence does not establish full V&V, installed-SDK or other-platform acceptance.
+
+## Automatic full CI ownership — 27 September 2026
+
+The workflow-policy regression first failed because pull requests omitted the
+normative gate. Both PR and main events now execute the unchanged two complete
+`just vv` passes in one checkout. Duplicate partial/bootstrap/honesty/repro
+workflows remain manual diagnostics; native amd64/arm64 review is unchanged.
+The complete 21-case observer suite passes, including actual first/second
+command failures and mutants for omitted/filtered triggers, skipped/weakened
+gates, duplicate automatic owners and cancellation of non-PR verification.
+Actionlint 1.7.8 accepts every workflow after removing decorative backticks from
+the candidate summary's literal format string (SC2016); no lint is suppressed.
+Full `cargo xtask validate` also passes all 190 infrastructure cases. These
+infrastructure tests do not establish successful execution of the two full V&V
+passes or publication.
 
 ## Release criterion
 

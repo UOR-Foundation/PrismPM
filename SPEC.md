@@ -649,6 +649,15 @@ and artifact descriptor remains significant. These projections are not
 verification or release evidence. Actual verification and same-executable
 two-root reproducibility continue to bind and compare complete raw evidence.
 
+Historical six-field process records remain inspectable, but cannot satisfy
+current-caller or selected native-profile checks. Current goldens require both
+actual exporter invocations, closed child measurements, the compiled archive
+identity and identical cold-acquisition provenance. These source-review trees
+have no independent SDK lock and cannot admit warm receipts. Native review may
+vary the child executable size and hash, not its mode, source, schema or
+acquisition semantics; ordinary comparison retains all measurement bytes.
+Baseline migration requires genuine regeneration, never metadata backfilling.
+
 Golden execution profiles distinguish Debian 12 AMD64 development from Ubuntu
 24.04 AMD64 and ARM64 SDK processes. The actual OS release and compiled process
 architecture select the profile; unknown or missing profiles fail closed.
@@ -714,6 +723,19 @@ execute one at a time within a conformance process. Nested requests reuse the
 owning slot; a failed owner releases it without suppressing subsequent tests.
 Scheduling changes neither checks nor deadlines. Cached failures retain their
 structured diagnostics, and failed prerequisites stop dependent browser checks.
+
+Browser compiler fixtures never accept the existence of a cached executable as
+compiler evidence. The shared exporter helper captures and verifies the selected
+repository's pinned source, refuses aliases, and builds with the verified SDK
+toolchain in a new private directory; existing shared caches are untouched.
+All browser fixture drivers compile into new private targets; Cargo fingerprint
+freshness does not authenticate a previously emitted executable.
+Effects and Custody compile captured driver sources into these private targets.
+Retained fixtures retire completed tool caches after the final compiler invocation,
+recording exact original tool identities and preserving source and execution evidence.
+Older fixtures may read only their registered repository manifests for Cargo cleanup;
+every removed path remains private owned work. Workspace and envelope fixtures keep
+exporters inside their existing test-owned cleanup scope. No shared cache is adopted.
 
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
@@ -907,6 +929,50 @@ not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
 
+`DK-29` uses one fresh exporter acquisition boundary for library, browser,
+application and verification pipelines. Only a validated native
+`prismpm/sdk-lock/2` inventory digest may authorize the fixed installed SDK
+seed. Legacy or unlocked source bootstrap remains cold; local fingerprints,
+caller caches and a digest recomputed from the installed inventory are not
+independent authority. An advertised seed that is absent or malformed fails
+closed; it does not fall back to cold construction.
+
+The closed `prismpm/exporter-seed/1` manifest binds the registered compiler
+revision/archive, native platform, exact build configuration, complete source,
+toolchain and runtime closure, and every seed path, mode, length and hash.
+Seed construction and PrismPM verification children use the fixed Lean task
+pool setting `LEAN_NUM_THREADS=2`, including nested Lake compiler processes.
+Caller environment overrides cannot change it. This limits compiler contention;
+it is not a replacement for process memory limits or a hard thread-count bound.
+All generated-module builds, exports, kernel checks and deadlines are retained.
+Seed files are bounded to 4,096 entries, 256 MiB per file and 512 MiB total.
+Root-owned immutable SDK paths are checked before and after bounded copying;
+custody supplements rather than replaces the independent inventory binding.
+Only the new exporter's `.lake` may be published, from a private sibling stage
+through atomic no-overwrite rename. Generated application workspaces, user
+caches and acceptance evidence are never seeded. Temporary stages are owned
+by their invocation and removed on failure.
+
+Each actual `lake exe prod-export` invocation records a closed
+`prismpm/exporter-execution/1` child executable measurement and
+`prismpm/exporter-acquisition/1` cold/seed provenance. Seed receipts bind their
+inventory and manifest to the consumer lock, and the actual child to its
+locked binary. Their native platform must match the retained, validated
+Lean/Rust preflight, not the admission reader's host or a self-selected foreign
+SDK row. Release admission checks this context independently of
+structural transcript replay. Application build artifacts contain only the
+stable `prismpm/exporter-identity/1` sidecar; acquisition and process receipts
+belong to the distinct verification regeneration, bound to the unchanged build
+identity. Its complete generated artifact set must match byte-for-byte, without
+field rewriting or omitted generated files. This does not change the
+authoritative `.holo` format. Real `lake build prod-export`,
+generated-module/kernel builds, axiom audits, independent exports, two-root
+reproducibility, native/Wasm executions and imported oracles remain mandatory.
+Neither seed validity nor faster acquisition establishes SDK or application
+acceptance. SDK qualification requires measured cold/seeded equivalence on
+both native platforms with genuine relocated traces, without trace rewriting,
+deadline inflation or reuse of acceptance results.
+
 The PrismPM 0.3 SDK consists of the CLI/library, LexLean, exact Lean and
 lean4-prod tools, prism-stdlib, schemas, standard bindings, redistributable
 oracles, adapters, and conformance tooling. Its canonical inventory maps every
@@ -1004,6 +1070,21 @@ synthetic two-architecture images and the isolated source-built CLI; those
 fixtures do not claim to be released SDKs. The separate shipped-SDK runtime
 gate retains its exact native inventory checks. Legacy
 locks retain their existing `prismpm/sdk-lock-update/1` proposal behavior.
+That legacy digest-only proposal is not an executable SDK upgrade and does not
+refresh target inventory. Explicit `lock migrate --sdk-image <digest-ref>
+--standards-lock <digest>` instead captures a v2 target through the same exact
+two-platform bounded metadata capture. Only this operation reads the canonical regular v1
+lock as historical evidence without comparing it to the updater's native
+inventory. The updater still verifies its own environment; ordinary project
+execution retains all inventory checks. The source lock must remain unchanged
+through capture. The closed `prismpm/sdk-lock-migration/1` proposal contains an
+ordered root `test` of the complete old lock followed by a root `replace` with
+the complete validated v2 lock, preserving every structural addition/removal
+without an implicit format promotion. It never writes the project. Compatibility,
+generated-output and security reviews remain required; capture and a valid
+proposal are not SDK qualification or release acceptance. Existing v2 projects
+use `lock update`, not migration. Proposal limits are 192 MiB and 262,144 items;
+each embedded lock independently retains its existing closed schema and bounds.
 `fetch --locked`
 materializes all content required for subsequent check, build, test, package,
 verify and release assembly with networking disabled. Native Linux archives
@@ -1432,6 +1513,22 @@ browser profile, `.holo`, or deployed service. Product-release construction and
 source-free product-release replay reject library evidence with `PP6101`.
 The library may supply modeled code to an application, whose own complete
 application and deployment acceptance remains mandatory.
+
+The installed native-library SDK gate acquires the complete two-platform lock
+through the source-bound SDK metadata transport before offline execution. Its
+native inventory must equal the independently selected immutable image's bytes.
+Registry credentials are read-only inputs to acquisition only; library execution
+has no network, credentials or host implementation mounts. Two fresh cold roots
+and two fresh seeded roots must reproduce every build artifact byte, execute
+both consumers and retain original process manifests. Seeded records must bind
+the captured native inventory, seed and exporter; cold fallback is a failure.
+The same native gate requires two fresh exporter constructions to match the
+captured installed seed manifest, then reuses the first seed for two-root
+cold/relocated kernel checks and eight exact exports. Original manifests,
+process records, export bytes and timings are retained. Construction is non-root
+with a bounded sub-1-GiB temporary filesystem; root-only custody adversaries
+use a separate disposable fixture mount. Neither phase replaces consumer tests.
+This gate remains native-library evidence, not full SDK or deployment acceptance.
 
 ### 12.7 Internal browser effect protocol
 
@@ -2218,6 +2315,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
+| `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

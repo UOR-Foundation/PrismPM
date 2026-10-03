@@ -439,6 +439,7 @@ pub fn run_at(root: &Path, id: &str) {
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
+        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 14, "120000"),
         "DK-28" => verify_node_suite(
             root,
             id,
@@ -453,7 +454,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "sdk/metadata-cli.test.mjs",
                 "sdk/metadata-publisher.test.mjs",
             ],
-            53,
+            54,
             "120000",
         ),
         "OC-07" => verify_browser_export(root),
@@ -498,7 +499,15 @@ fn verify_browser_host(root: &Path, id: &str) {
         "DK-12" => (&["sdk/browser/journal-model-test.mjs"], 13),
         "DK-13" => (&["sdk/browser/command-model-test.mjs"], 12),
         "DK-14" => (&["sdk/browser/query-model-test.mjs"], 11),
-        "DK-15" => (&["sdk/browser/view-model-test.mjs"], 7),
+        "DK-15" => (
+            &[
+                "sdk/browser/view-model-test.mjs",
+                "tests/browser-view/compiler-artifact.test.mjs",
+                "tests/browser-view/compiler-artifact-mutations.test.mjs",
+                "tests/browser-view/compiler-owner.test.mjs",
+            ],
+            19,
+        ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (
             &[
@@ -521,7 +530,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-presentation/dom.test.mjs",
                 "sdk/browser/presentation.test.mjs",
             ],
-            9,
+            24,
         ),
         "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 28),
         "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
@@ -1097,6 +1106,29 @@ fn verify_sdk(id: &str) {
                 value.clone(),
             )
             .unwrap();
+            let migration = serde_json::json!({"schema":"prismpm/sdk-lock-migration/1",
+                "patch":[{"op":"test","path":"","value":lock.value()},
+                    {"op":"replace","path":"","value":value}],
+                "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});
+            prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock-migration/1",
+                migration.clone(),
+            )
+            .unwrap();
+            for mutation in 0..4 {
+                let mut rejected = migration.clone();
+                match mutation {
+                    0 => rejected["patch"][0]["value"] = serde_json::json!({}),
+                    1 => rejected["patch"][1]["value"] = serde_json::json!({}),
+                    2 => rejected["patch"].as_array_mut().unwrap().reverse(),
+                    _ => rejected["patch"][1]["path"] = serde_json::json!("/sdk_image"),
+                }
+                assert!(prismpm::contracts::CanonicalDocument::from_value(
+                    "prismpm/sdk-lock-migration/1",
+                    rejected,
+                )
+                .is_err());
+            }
             let proposal = serde_json::json!({"schema":"prismpm/sdk-lock-update/2",
                 "changes":[], "proposed_lock":value,
                 "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});

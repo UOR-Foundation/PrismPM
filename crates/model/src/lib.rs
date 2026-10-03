@@ -144,8 +144,19 @@ impl Model {
             .commands
             .command
             .iter()
-            .filter(|row| !registered.contains(row.result_schema.as_str()))
-            .map(|row| format!("{} -> {}", row.name, row.result_schema))
+            .flat_map(|row| {
+                std::iter::once((row.name.clone(), row.result_schema.as_str())).chain(
+                    row.subcommand_results
+                        .iter()
+                        .flat_map(move |(command, schemas)| {
+                            schemas.iter().map(move |schema| {
+                                (format!("{} {command}", row.name), schema.as_str())
+                            })
+                        }),
+                )
+            })
+            .filter(|(_, schema)| !registered.contains(schema))
+            .map(|(name, schema)| format!("{name} -> {schema}"))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
             return Err(ModelError::Inconsistent(format!(
@@ -555,7 +566,7 @@ mod tests {
             .contracts
             .check(&root)
             .expect("all public data contracts must be registered");
-        assert_eq!(model.contracts.contract.len(), 56);
+        assert_eq!(model.contracts.contract.len(), 57);
         for (schema, path) in [
             (
                 "prismpm/system-model/2",

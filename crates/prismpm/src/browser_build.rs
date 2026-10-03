@@ -19,10 +19,7 @@ use prod_codegen::{
 };
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Cursor;
 use std::path::Path;
-
-const LEAN_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
 
 // The sole future integration entry point remains private while PP2011 blocks
 // every public build. Its complete source/compiler owning tests call it directly.
@@ -272,10 +269,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         &workspace.join("rust-toolchain.toml"),
         toolchain::RUST_TOOLCHAIN_FILE,
     )?;
-    std::fs::create_dir(&exporter).map_err(|e| invalid(e.to_string()))?;
-    tar::Archive::new(Cursor::new(LEAN_ARCHIVE))
-        .unpack(&exporter)
-        .map_err(|e| invalid(e.to_string()))?;
+    let exporter_acquisition = crate::exporter::acquire_for(project, &exporter)?;
     let replacements = [(workspace, "$BROWSER_COMPILER"), (project, "$PROJECT")];
     let lake = executable("lake")?;
     let cargo = &tools.cargo;
@@ -325,7 +319,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
             .to_string_lossy()
             .into_owned(),
     );
-    processes.push(run_process(
+    processes.push(crate::exporter::run_export(
         "browser-export",
         &lake,
         &args,
@@ -333,6 +327,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         &export_env,
         &replacements,
         "PP5004",
+        &exporter_acquisition,
     )?);
     let mut export = BTreeMap::new();
     for name in ["kernel.ir", "coverage.json", "roots.json"] {

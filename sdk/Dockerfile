@@ -86,6 +86,7 @@ RUN case "$TARGETARCH" in \
     && tar --extract --gzip --file /tmp/elan.tar.gz --directory /tmp/elan \
     && /tmp/elan/elan-init -y --no-modify-path --default-toolchain none \
     && elan toolchain install leanprover/lean4:v4.32.1 \
+    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
     && rm /tmp/elan.tar.gz \
     && rm /tmp/elan/elan-init \
     && rmdir /tmp/elan
@@ -257,6 +258,7 @@ COPY --from=source_inputs --chmod=0755 /prepared/source/sdk/devcontainer-init.sh
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/profile.sh /etc/profile.d/prismpm-sdk.sh
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/exporter-seed.mjs /opt/prismpm/exporter-seed.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/platform-lock.mjs /opt/prismpm/platform-lock.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/metadata-cli.mjs /prepared/source/sdk/metadata-capture.mjs /prepared/source/sdk/metadata-layer.mjs /prepared/source/sdk/metadata-transport.mjs /prepared/source/sdk/metadata-credentials.mjs /prepared/source/sdk/metadata-helper.mjs /prepared/source/sdk/metadata-helper-supervisor.py /opt/prismpm/
 
@@ -353,7 +355,9 @@ ENV CARGO_HOME=/home/vscode/.cargo \
     PRISMPM_SDK_INVENTORY=/opt/prismpm/share/inventory.json \
     PATH=/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin
 
-RUN PRISMPM_ARTIFACT_INVENTORY=/opt/prismpm/artifact-inventory.json \
+RUN --network=none --mount=type=tmpfs,target=/tmp,size=805306368 \
+    node /opt/prismpm/exporter-seed.mjs /opt/prismpm/share/conformance-root /opt/prismpm/share/exporter-seed \
+    && PRISMPM_ARTIFACT_INVENTORY=/opt/prismpm/artifact-inventory.json \
       node /opt/prismpm/generate-inventory.mjs /opt/prismpm/share/inventory.json \
     && sha256sum /opt/prismpm/share/inventory.json > /opt/prismpm/share/inventory.sha256 \
     && chmod 0444 /opt/prismpm/share/inventory.json /opt/prismpm/share/inventory.sha256 \

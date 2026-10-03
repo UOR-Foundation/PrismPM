@@ -30,6 +30,8 @@ function exporterFixture(t) {
   // Adversarial fixture, never an accepted exporter or simulated build result.
   writeFileSync(executable, '#!/bin/sh\nprintf planted > "' + marker + '"\nexit 0\n');
   chmodSync(executable, 0o700);
+  mkdirSync(join(cache, 'Prod'));
+  writeFileSync(join(cache, 'Prod/Emit.lean'), 'untrusted cached source\n');
   return {repo, cache, executable, marker};
 }
 
@@ -46,6 +48,7 @@ for (const linked of [false, true]) {
     assert.notEqual(probe.status, 0);
     assert.match(probe.stderr, /prod-export: unknown or incomplete named-export argument `--module`/);
     assert.deepEqual(readFileSync(f.executable), bytes, 'unowned shared cache remains untouched');
+    assert.equal(readFileSync(join(f.cache, 'Prod/Emit.lean'), 'utf8'), 'untrusted cached source\n');
   });
 }
 
@@ -114,9 +117,11 @@ test('exporter refuses a private directory belonging to another user', t => {
 function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   const work = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(work, {recursive:true, force:true}));
-  const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody'}[owner];
+  const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody',
+    'operation-journal':'browser-operation-journal', presentation:'browser-presentation',
+    view:'browser-view', journal:'browser-journal', query:'browser-query', command:'browser-command'}[owner];
   assert.ok(directory);
-  const executable = directory + '-driver';
+  const executable = (['view','journal','query','command'].includes(owner) ? 'browser-workspace-' + owner : directory) + '-driver';
   const manifest = join(work, 'tests', directory, 'driver/Cargo.toml');
   mkdirSync(join(dirname(manifest), 'src'), {recursive:true});
   writeFileSync(manifest, '[package]\nname="' + executable + '"\nversion="0.1.0"\nedition="2021"\npublish=false\n[workspace]\n');
@@ -154,10 +159,21 @@ test('actual Cargo initializes the private cache and never adopts a previous exe
   const f = fixture(t);
   assert.match(readFileSync(join(f.target, 'CACHEDIR.TAG'), 'utf8'), /^Signature: 8a477f597d28d172789f06886806bc55/);
   const original = readFileSync(join(f.target, 'debug', f.executable));
-  writeFileSync(join(f.target, 'debug', f.executable), 'planted stale compiler');
+  const poison = '#!/bin/sh\nprintf planted-driver\n';
+  writeFileSync(join(f.target, 'debug', f.executable), poison);
+  const build = ['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',f.manifest];
+  run('cargo', build, f.work, {CARGO_TARGET_DIR:f.target});
+  assert.equal(run(join(f.target, 'debug', f.executable), [], f.work), 'planted-driver',
+    'Cargo freshness alone does not authenticate an existing executable');
   assert.throws(() => createPrivateDriverTarget(f.work), /already exists/);
-  assert.equal(readFileSync(join(f.target, 'debug', f.executable), 'utf8'), 'planted stale compiler');
+  assert.equal(readFileSync(join(f.target, 'debug', f.executable), 'utf8'), poison);
   assert(original.length > 0);
+  const fresh = mkdtempSync(join(tmpdir(), 'prismpm-driver-fresh-'));
+  t.after(() => rmSync(fresh, {recursive:true, force:true}));
+  const target = createPrivateDriverTarget(fresh);
+  run('cargo', build, f.work, {CARGO_TARGET_DIR:target});
+  assert.equal(run(join(target, 'debug', f.executable), [], f.work), '');
+  assert.throws(() => createPrivateDriverTarget(fresh), /already exists/);
 });
 
 test('all private driver callers retain locked offline builds and bounded resource options', () => {
@@ -198,6 +214,28 @@ test('completed effects and custody tool caches retire under their exact owning 
     assert(existsSync(f.manifest));
     for (const [name, preserved] of f.preserved) assert.deepEqual(readFileSync(join(f.work, name)), preserved);
     assert.throws(() => retireCompletedCompilerCaches(f.work, owner));
+  }
+});
+
+test('all remaining retained browser fixtures retire only their exact tool caches', t => {
+  for (const owner of ['operation-journal','presentation','view','journal','query','command']) {
+    const f = fixture(t, 'prismpm-' + owner + '-', owner);
+    const source = join(repository, 'tests/browser-' + owner + '/driver/Cargo.toml');
+    const original = readFileSync(source);
+    const binary = readFileSync(join(f.target, 'debug', f.executable));
+    const result = retireCompletedCompilerCaches(f.work, owner);
+    assert.equal(result.owner, owner);
+    const external = ['view','journal','query','command'].includes(owner);
+    assert.deepEqual(result.records[0], {path:external ? 'repository/tests/browser-' + owner + '/driver/Cargo.toml'
+      : 'tests/browser-' + owner + '/driver/Cargo.toml',
+    byte_length:external ? original.length : readFileSync(f.manifest).length,
+    sha256:sha(external ? original : readFileSync(f.manifest))});
+    assert.deepEqual(result.records[1], {path:'driver-target/debug/' + f.executable,
+      byte_length:binary.length, sha256:sha(binary)});
+    assert.deepEqual(readFileSync(source), original, 'source manifest must never be modified by retirement');
+    assert(!existsSync(join(f.target, 'debug', f.executable)) && !existsSync(join(f.exporter, '.lake/build')));
+    for (const [name, bytes] of f.preserved) assert.deepEqual(readFileSync(join(f.work, name)), bytes);
+    assert.throws(() => retireCompletedCompilerCaches(f.work, owner), /overwrite/);
   }
 });
 
