@@ -8,6 +8,27 @@ use std::process::Command;
 const REPORTER: &[u8] = include_bytes!("../../../../scripts/owning-node-reporter.mjs");
 const FILE_PREFIX: &str = "# prismpm-owning-file ";
 
+fn failure_diagnostics(id: &str, reason: &str, stdout: &[u8], stderr: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut bytes = Vec::new();
+    writeln!(bytes, "\n{id}: owning Node execution failed; diagnostic excerpt only (stdout {} bytes, stderr {} bytes)", stdout.len(), stderr.len()).unwrap();
+    bytes.extend_from_slice(b"assertion: ");
+    bytes.extend_from_slice(&reason.as_bytes()[..reason.len().min(4096)]);
+    bytes.push(b'\n');
+    for (name, stream) in [("stdout", stdout), ("stderr", stderr)] {
+        writeln!(bytes, "{name}:").unwrap();
+        if stream.len() <= 65536 {
+            bytes.extend_from_slice(stream);
+        } else {
+            bytes.extend_from_slice(&stream[..32768]);
+            bytes.extend_from_slice(b"\n[diagnostic excerpt truncated; no acceptance inferred]\n");
+            bytes.extend_from_slice(&stream[stream.len() - 32768..]);
+        }
+        bytes.push(b'\n');
+    }
+    bytes
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct FileCompletion {
@@ -156,41 +177,171 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
         .current_dir(root)
         .output()
         .expect("execute complete owning Node suite in the devcontainer");
-    let stdout = String::from_utf8(output.stdout).expect("UTF-8 TAP output");
-    assert!(
-        output.status.success(),
-        "{id}: {stdout}\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let count = |name: &str| {
-        let prefix = format!("# {name} ");
-        let values = stdout
-            .lines()
-            .filter_map(|line| line.strip_prefix(&prefix))
-            .map(|value| value.parse::<usize>().expect("numeric TAP summary"))
-            .collect::<Vec<_>>();
-        assert_eq!(values.len(), 1, "{id}: missing or duplicate {name} summary");
-        values[0]
-    };
-    assert!(
-        count("tests") >= minimum_tests,
-        "{id}: incomplete test suite"
-    );
-    assert_eq!(count("tests"), count("pass"), "{id}: incomplete pass set");
-    for outcome in ["fail", "cancelled", "skipped", "todo"] {
-        assert_eq!(
-            count(outcome),
-            0,
-            "{id}: {outcome} tests cannot satisfy acceptance"
+    let validation = std::panic::catch_unwind(|| {
+        let stdout = std::str::from_utf8(&output.stdout).expect("UTF-8 TAP output");
+        assert!(
+            output.status.success(),
+            "{id}: {stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
         );
+        let count = |name: &str| {
+            let prefix = format!("# {name} ");
+            let values = stdout
+                .lines()
+                .filter_map(|line| line.strip_prefix(&prefix))
+                .map(|value| value.parse::<usize>().expect("numeric TAP summary"))
+                .collect::<Vec<_>>();
+            assert_eq!(values.len(), 1, "{id}: missing or duplicate {name} summary");
+            values[0]
+        };
+        assert!(
+            count("tests") >= minimum_tests,
+            "{id}: incomplete test suite"
+        );
+        assert_eq!(count("tests"), count("pass"), "{id}: incomplete pass set");
+        for outcome in ["fail", "cancelled", "skipped", "todo"] {
+            assert_eq!(
+                count(outcome),
+                0,
+                "{id}: {outcome} tests cannot satisfy acceptance"
+            );
+        }
+        file_completions(stdout, &selected, count("tests"));
+    });
+    if let Err(failure) = validation {
+        // Direct Write bypasses libtest's per-test print capture. ci-observe
+        // retains process AND transcript failures before another long test
+        // can be cancelled ahead of libtest's final failure report.
+        use std::io::Write;
+        let mut stderr = std::io::stderr().lock();
+        let reason = failure
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| failure.downcast_ref::<&str>().copied())
+            .unwrap_or("non-string assertion payload");
+        // A closed diagnostic pipe must not replace the owning failure.
+        let _ = stderr.write_all(&failure_diagnostics(
+            id,
+            reason,
+            &output.stdout,
+            &output.stderr,
+        ));
+        let _ = stderr.flush();
+        std::panic::resume_unwind(failure);
     }
-    file_completions(&stdout, &selected, count("tests"));
 }
 
 #[cfg(test)]
 mod tests {
     use super::{file_completions, selected_files, verify, FileCompletion, FILE_PREFIX};
     use std::path::PathBuf;
+
+    #[test]
+    fn failure_excerpts_are_bounded_and_preserve_both_stream_ends() {
+        let small = super::failure_diagnostics(
+            "DK-09",
+            "missing summary",
+            b"actual failure",
+            b"actual error",
+        );
+        let text = std::str::from_utf8(&small).unwrap();
+        assert!(
+            text.contains("DK-09")
+                && text.contains("actual failure")
+                && text.contains("actual error")
+                && text.contains("assertion: missing summary")
+        );
+        let mut large = vec![b'x'; 1024 * 1024];
+        large[..5].copy_from_slice(b"FIRST");
+        let end = large.len();
+        large[end - 4..].copy_from_slice(b"LAST");
+        let bounded = super::failure_diagnostics("DK-09", &"r".repeat(1024 * 1024), &large, &large);
+        assert!(bounded.len() < 137000);
+        let text = std::str::from_utf8(&bounded).unwrap();
+        assert_eq!(text.matches("FIRST").count(), 2);
+        assert_eq!(text.matches("LAST").count(), 2);
+        assert_eq!(text.matches("truncated; no acceptance inferred").count(), 2);
+        assert!(text.contains("1048576 bytes"));
+    }
+
+    #[test]
+    fn diagnostics_precede_libtest_summary() {
+        use std::io::{BufRead, Read, Write};
+        use std::process::{Command, Stdio};
+        const CHILD: &str = "PRISMPM_NODE_DIAGNOSTICS_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let temporary = tempfile::tempdir().unwrap();
+            std::fs::write(
+                temporary.path().join("one.mjs"),
+                "import{test}from'node:test';test('one',()=>{});",
+            )
+            .unwrap();
+            let failure = std::panic::catch_unwind(|| {
+                verify(
+                    temporary.path(),
+                    "diagnostic-probe",
+                    &["one.mjs"],
+                    2,
+                    "10000",
+                )
+            })
+            .unwrap_err();
+            assert!(failure
+                .downcast_ref::<String>()
+                .unwrap()
+                .contains("incomplete test suite"));
+            std::io::stderr()
+                .write_all(b"PRISMPM_DIAGNOSTICS_READY\n")
+                .unwrap();
+            // Parent observes diagnostics while this test is still running.
+            std::io::stdin().read_exact(&mut [0u8; 1]).unwrap();
+            return;
+        }
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "cases::node_suite::tests::diagnostics_precede_libtest_summary",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            let mut observed = String::new();
+            for line in std::io::BufReader::new(stderr).lines() {
+                let line = line.unwrap();
+                observed.push_str(&line);
+                observed.push('\n');
+                if line == "PRISMPM_DIAGNOSTICS_READY" {
+                    sender.send(observed).unwrap();
+                    break;
+                }
+            }
+        });
+        let observed = receiver.recv_timeout(std::time::Duration::from_secs(30));
+        if observed.is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let observed = observed.expect("immediate diagnostics before child test completion");
+        assert!(child.try_wait().unwrap().is_none());
+        child.stdin.take().unwrap().write_all(b"x").unwrap();
+        let output = child.wait_with_output().unwrap();
+        reader.join().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(observed.contains("assertion: diagnostic-probe: incomplete test suite"));
+        assert!(observed.contains("# pass 1"));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+    }
 
     #[test]
     fn selected_paths_reject_aliases_nonregular_and_omitted_files_before_execution() {
