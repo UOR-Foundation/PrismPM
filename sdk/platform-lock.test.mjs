@@ -30,6 +30,12 @@ test('test-image conversion changes only the supported descriptor labels and ret
   assert.deepEqual(JSON.parse(bytes), expected);
   const exactOci = Buffer.from(`${JSON.stringify(expected, null, 2)}\n`);
   assert.deepEqual(ociFixtureManifest(exactOci), exactOci);
+  const uncompressed = structuredClone(original);
+  uncompressed.layers[0].mediaType = 'application/vnd.docker.image.rootfs.diff.tar';
+  const expectedUncompressed = structuredClone(expected);
+  expectedUncompressed.layers[0].mediaType = 'application/vnd.oci.image.layer.v1.tar';
+  assert.deepEqual(JSON.parse(ociFixtureManifest(encode(uncompressed))), expectedUncompressed);
+  assert.deepEqual(ociFixtureManifest(encode(expectedUncompressed)), encode(expectedUncompressed));
   for (const mutation of ['schema', 'manifest-list', 'config', 'layer', 'zstd', 'empty-layers', 'digest', 'size']) {
     const changed = structuredClone(original);
     if (mutation === 'schema') changed.schemaVersion = 1;

@@ -9,33 +9,84 @@ import {decodeMetadataLayer, label, limits, parseConfig, parseManifest, paths, p
 import {ociFixtureManifest} from './oci-test-fixture.mjs';
 
 const work = mkdtempSync(join(tmpdir(), 'prismpm-metadata-materialization-'));
-const nonce = process.argv[2] ?? randomUUID(), tags = new Set(), containers = new Set();
+const nonce = process.argv[2] ?? randomUUID(), tags = new Map(), containers = new Map();
 assert.match(nonce,/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
 const failAfter = process.argv[3];
-assert(failAfter === undefined || ['build','create'].includes(failAfter));
+assert(failAfter === undefined || ['build','create','bootstrap-killed'].includes(failAfter));
 const ownership = 'org.prismpm.test.owner';
+const inheritedBuilder = process.argv[4];
+assert(inheritedBuilder === undefined || /^prismpm-metadata-[0-9a-f-]{36}$/.test(inheritedBuilder));
+const builder = inheritedBuilder ?? 'prismpm-metadata-' + nonce;
+const builderContainer = 'buildx_buildkit_' + builder + '0';
+const builderVolume = builderContainer + '_state';
+const buildkit = JSON.parse(readFileSync(new URL('./vv-runtime.lock.json', import.meta.url))).images.buildkit.reference;
+const builderConfig = inheritedBuilder ? process.env.BUILDX_CONFIG : join(work, 'buildx');
+assert(builderConfig);
+if (!inheritedBuilder) mkdirSync(builderConfig);
+let builderCreated = false;
+const childBuilders = new Map();
 const media = 'application/vnd.oci.image.';
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, {timeout:60000, maxBuffer:4 * 1024 * 1024, ...options});
   assert.ifError(result.error); assert.equal(result.status, 0, command + ': ' + result.stderr.toString());
   return result.stdout;
 };
-const docker = (...args) => run('/usr/local/bin/docker', args);
+const docker = (...args) => run('/usr/local/bin/docker', args,
+  {env:{...process.env, BUILDX_CONFIG:builderConfig}});
 const describe = (bytes, mediaType) => ({mediaType, size:bytes.length, digest:sha(bytes)});
 const safeArchivePath = path => assert(typeof path === 'string' && /^[A-Za-z0-9_./-]+$/.test(path)
   && !path.startsWith('/') && !path.split('/').some(part => !part || part === '.' || part === '..'), 'unsafe Docker archive member');
-const inspectOwned = (kind, name) => {
+const inspectOwned = (kind, name, owner = nonce) => {
   const result = spawnSync('/usr/local/bin/docker', [kind,'inspect','--format','{{json .}}',name], {timeout:15000, maxBuffer:1024 * 1024});
   assert.ifError(result.error);
   if (result.status !== 0 && /No such (?:image|container|object):/i.test(result.stderr.toString())) return null;
   assert.equal(result.status, 0, 'cannot reconcile owned ' + kind + ': ' + result.stderr.toString());
   const value = JSON.parse(result.stdout);
-  assert.equal(value.Config.Labels[ownership], nonce, 'refusing cleanup of unowned resource');
+  assert.equal(value.Config.Labels[ownership], owner, 'refusing cleanup of unowned resource');
   if (kind === 'container') assert.equal(value.Name, '/' + name, 'container identity changed');
   return value;
 };
+const inspectBuilderResource = (kind, name) => {
+  const result = spawnSync('/usr/local/bin/docker',[kind,'inspect',name],{timeout:15000,maxBuffer:1024*1024});
+  assert.ifError(result.error);
+  if (result.status !== 0 && /no such (?:container|object|volume)/i.test(result.stderr.toString())) return null;
+  assert.equal(result.status,0,result.stderr.toString());
+  const values = JSON.parse(result.stdout); assert.equal(values.length,1); return values[0];
+};
+const cleanupBuilder = (selectedBuilder = builder, owner = nonce) => {
+  const builderContainer = 'buildx_buildkit_' + selectedBuilder + '0';
+  const builderVolume = builderContainer + '_state';
+  const volume = inspectBuilderResource('volume',builderVolume);
+  if (volume) assert.equal(volume.Labels?.[ownership],owner,'unowned builder volume');
+  const container = inspectBuilderResource('container',builderContainer);
+  if (container) {
+    assert(volume,'builder custody volume missing');
+    assert.equal(container.Name,'/' + builderContainer);
+    assert.equal(container.Config.Image,buildkit);
+    assert(container.Mounts.some(row => row.Name === builderVolume && row.Destination === '/var/lib/buildkit'));
+    docker('rm','--force',container.Id);
+  }
+  if (volume) docker('volume','rm',builderVolume);
+  assert.equal(inspectBuilderResource('container',builderContainer),null);
+  assert.equal(inspectBuilderResource('volume',builderVolume),null);
+  return Boolean(container && volume);
+};
 let failure;
 try {
+  // The classic daemon's embedded builder can lack MergeOp and silently
+  // downgrade COPY --link to a filesystem copy. Construct independent layers
+  // with the pinned standalone builder, then test the actual daemon's import
+  // and materialization. Never flatten the fixture with docker import.
+  if (!inheritedBuilder) {
+    docker('image','inspect',buildkit);
+    assert.equal(inspectBuilderResource('container',builderContainer),null);
+    assert.equal(inspectBuilderResource('volume',builderVolume),null);
+    builderCreated = true;
+    docker('volume','create','--label',ownership + '=' + nonce,builderVolume);
+    docker('buildx','create','--name',builder,'--driver','docker-container','--driver-opt','image=' + buildkit);
+    docker('buildx','inspect','--bootstrap',builder);
+    if (failAfter === 'bootstrap-killed') process.kill(process.pid,'SIGKILL');
+  }
   for (const architecture of ['amd64', 'arm64']) for (const hostile of ['opt-link','opt-file','prismpm-link','share-link']) {
     const context = join(work, architecture + '-' + hostile);
     mkdirSync(context); const base = join(context, 'base'), metadata = join(context, 'metadata');
@@ -61,9 +112,21 @@ try {
     writeFileSync(join(context, 'Dockerfile'), 'FROM scratch AS base\nCOPY base/ /\nFROM scratch AS metadata\nCOPY metadata/ /\n' +
       'FROM base AS final\nCOPY --link --from=metadata / /\nLABEL ' + label + '="' + profile + '"\nCMD ["/never-executed"]\n');
     const tag = 'prismpm-metadata-test-' + nonce + ':' + architecture + '-' + hostile;
-    tags.add(tag);
-    docker('build', '--network', 'none', '--provenance=false', '--platform', 'linux/' + architecture,
-      '--output', 'type=image,oci-mediatypes=true', '--label', ownership + '=' + nonce, '--tag', tag, context);
+    tags.set(tag,nonce);
+    const producedArchive = join(context, 'produced.tar');
+    docker('buildx','build','--builder',builder, '--network', 'none', '--provenance=false', '--platform', 'linux/' + architecture,
+      '--output', 'type=docker,compression=uncompressed,force-compression=true,dest=' + producedArchive,
+      '--label', ownership + '=' + nonce, '--tag', tag, context);
+    const produced = readFileSync(producedArchive);
+    const producedMember = path => {safeArchivePath(path); return run('/usr/bin/tar',['-xOf','-',path],{input:produced});};
+    const producedRecords = JSON.parse(producedMember('manifest.json'));
+    assert.equal(producedRecords.length,1);
+    const producedRecord = producedRecords[0];
+    const producedConfigBytes = producedMember(producedRecord.Config);
+    const producedConfig = JSON.parse(producedConfigBytes);
+    assert.equal(producedRecord.Layers.length,2,'hostile base and metadata must remain separate layers');
+    assert.deepEqual(producedRecord.Layers.map(path => sha(producedMember(path))),producedConfig.rootfs.diff_ids);
+    run('/usr/local/bin/docker',['image','load'],{input:produced});
     if (failAfter === 'build') throw new Error('deliberate loss of completed build response');
     const inspected = JSON.parse(docker('image','inspect','--format','{{json .}}',tag));
     assert.equal(inspected.Os, 'linux'); assert.equal(inspected.Architecture, architecture);
@@ -72,6 +135,7 @@ try {
     const saved = JSON.parse(member('manifest.json'));
     assert.equal(saved.length, 1); const record = saved[0];
     const configBytes = member(record.Config), config = JSON.parse(configBytes);
+    assert.deepEqual(configBytes,producedConfigBytes,'daemon import must preserve the exact produced configuration');
     assert.deepEqual(config.rootfs.diff_ids, inspected.RootFS.Layers);
     assert.equal(record.Layers.length, config.rootfs.diff_ids.length);
     let manifestBytes, terminal;
@@ -101,7 +165,7 @@ try {
     assert(terminal.length <= limits.expanded);
     assert.deepEqual(decodeMetadataLayer(terminal, admitted, parsed), {inventory, standards});
     const name = 'prismpm-metadata-test-' + nonce + '-' + architecture + '-' + hostile;
-    containers.add(name);
+    containers.set(name,nonce);
     const container = docker('create','--name',name,'--label',ownership + '=' + nonce,
       '--network','none','--read-only','--platform','linux/' + architecture,tag).toString().trim();
     if (failAfter === 'create') throw new Error('deliberate loss of completed create response');
@@ -123,28 +187,45 @@ try {
   console.log('PASS 8 actual two-platform hostile-ancestor materializations; 14 pinned official OCI schema tests; no foreign code execution');
   for (const operation of ['build','create']) {
     const selected = randomUUID();
-    const result = spawnSync(process.execPath,[resolve('sdk/metadata-materialization.integration.mjs'),selected,operation],
-      {timeout:90000,maxBuffer:1024*1024});
+    const childTag = 'prismpm-metadata-test-' + selected + ':amd64-opt-link';
+    const childContainer = 'prismpm-metadata-test-' + selected + '-amd64-opt-link';
+    tags.set(childTag,selected); containers.set(childContainer,selected);
+    const result = spawnSync(process.execPath,[resolve('sdk/metadata-materialization.integration.mjs'),selected,operation,builder],
+      {timeout:90000,maxBuffer:1024*1024,env:{...process.env,BUILDX_CONFIG:builderConfig,TMPDIR:work}});
     assert.ifError(result.error); assert.equal(result.status,1);
     assert(result.stderr.toString().includes('deliberate loss of completed ' + operation + ' response'));
     for (const [kind,name] of [
       ['image','prismpm-metadata-test-' + selected + ':amd64-opt-link'],
       ['container','prismpm-metadata-test-' + selected + '-amd64-opt-link'],
-    ]) assert.equal(inspectOwned(kind,name),null,'uncertain successful creation must be reconciled and cleaned');
+    ]) assert.equal(inspectOwned(kind,name,selected),null,'uncertain successful creation must be reconciled and cleaned');
   }
   console.log('PASS exact owned-resource cleanup after lost build and create responses');
+  const selected = randomUUID(), killedBuilder = 'prismpm-metadata-' + selected;
+  childBuilders.set(killedBuilder,selected);
+  const killed = spawnSync(process.execPath,[resolve('sdk/metadata-materialization.integration.mjs'),selected,'bootstrap-killed'],
+    {timeout:90000,maxBuffer:1024*1024,env:{...process.env,TMPDIR:work}});
+  // Reconcile even if the outer deadline, not the deliberate signal, killed
+  // the child. No reliance on the child's finally block or buildx registry.
+  const observedBootstrap = cleanupBuilder(killedBuilder,selected); childBuilders.delete(killedBuilder);
+  assert.ifError(killed.error); assert.equal(killed.signal,'SIGKILL');
+  assert(observedBootstrap,'killed child must have created the owned builder container and volume');
+  console.log('PASS parent reconciliation after killed builder bootstrap response');
 } catch (error) {
   failure = error;
 } finally {
   // Exact per-invocation IDs/tags only. Never prune shared Docker resources.
   const failures = failure ? [failure] : [];
-  for (const name of containers) try {
-    const owned = inspectOwned('container',name);
+  for (const [name,owner] of containers) try {
+    const owned = inspectOwned('container',name,owner);
     if (owned) docker('rm','--volumes',owned.Id);
   } catch (error) {failures.push(error);}
-  for (const tag of tags) try {
-    if (inspectOwned('image',tag)) docker('image','rm',tag);
+  for (const [tag,owner] of tags) try {
+    if (inspectOwned('image',tag,owner)) docker('image','rm',tag);
   } catch (error) {failures.push(error);}
+  if (builderCreated) {
+    try {cleanupBuilder();} catch (error) {failures.push(error);}
+  }
+  for (const [selectedBuilder,owner] of childBuilders) try {cleanupBuilder(selectedBuilder,owner);} catch (error) {failures.push(error);}
   rmSync(work, {recursive:true, force:true});
   if (failures.length) throw new AggregateError(failures, 'materialization or owned cleanup failed');
 }
