@@ -53,12 +53,26 @@ test('changed, writable, absent and duplicate SDK helper identities refuse execu
 });
 
 test('sealed helper execution rejects self-modification and strips interpreter override variables', async t => {
-  const fixture = helper(t, `import os, sys, json, errno
+  const fixture = helper(t, `import os, sys, json, errno, fcntl
+descriptor = int(sys.argv[0].rsplit('/', 1)[1])
+required = fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE
+assert fcntl.fcntl(descriptor, fcntl.F_GET_SEALS) & required == required
+before = os.pread(descriptor, 65536, 0)
+for mutation in [lambda: os.write(descriptor, b'replacement'),
+                 lambda: os.ftruncate(descriptor, 0),
+                 lambda: os.ftruncate(descriptor, len(before) + 1)]:
+    try:
+        mutation()
+        sys.exit(9)
+    except OSError as error:
+        assert error.errno == errno.EPERM
 try:
     with open(sys.argv[0], 'wb') as stream: stream.write(b'replacement')
     sys.exit(9)
 except OSError as error:
-    assert error.errno == errno.EPERM
+    # Non-root callers hit mode 0500 before seals; root reaches the seal.
+    assert error.errno in [errno.EACCES, errno.EPERM]
+assert os.pread(descriptor, 65536, 0) == before
 assert not any(key in os.environ for key in ['NODE_OPTIONS','LD_PRELOAD','PYTHONPATH'])
 print(json.dumps({'Username':'sealed','Secret':'synthetic'}))`);
   const saved = Object.fromEntries(['NODE_OPTIONS','LD_PRELOAD','PYTHONPATH'].map(key => [key,process.env[key]]));
