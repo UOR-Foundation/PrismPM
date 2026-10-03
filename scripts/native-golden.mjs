@@ -226,7 +226,7 @@ export async function runReview({source, revision, destination}, transport = exe
       'dependency acquisition ownership differs');
     await run(['exec', acquisition, 'node', '/workspace/scripts/native-golden.mjs', 'seed-download-cache']);
     const dependencyTests = JSON.parse(await run(['exec', acquisition, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.test.py']));
-    assert.deepEqual(dependencyTests, {tests: 17, status: 'passed'}, 'complete dependency test inventory required');
+    assert.deepEqual(dependencyTests, {tests: 18, status: 'passed'}, 'complete dependency test inventory required');
     await run(['exec', acquisition, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.py', 'prepare'], {timeout: 660000});
     await run(['rm', '--force', '--volumes', acquisition]); acquisitionCreated = false;
     if (interrupted) throw interrupted;
