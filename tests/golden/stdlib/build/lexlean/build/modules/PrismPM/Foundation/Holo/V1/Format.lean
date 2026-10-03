@@ -27,6 +27,6 @@ public structure SectionTableEntry where
 
 @[expose] public def canonicalFlags : UInt16 := (0 : UInt16)
 
-@[expose] public def magic : ByteArray := ByteArray.mk #[72, 79, 76, 79]
+@[expose] public def magic : ByteArray := ByteArray.mk #[UInt8.ofNat (nat_lit 72), UInt8.ofNat (nat_lit 79), UInt8.ofNat (nat_lit 76), UInt8.ofNat (nat_lit 79)]
 
 end PrismPM.Foundation.Holo.V1.Format
