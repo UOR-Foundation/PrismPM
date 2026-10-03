@@ -66,3 +66,11 @@ closure and cold default. Its complete owner and compiler adversaries passed
 25 tests in 535.344 seconds: all 179 vectors, 25 maxima, one-over checks and
 seven fresh compiled mutants remain required. This is component verification,
 not measured overall speedup or installed-SDK acceptance.
+
+Custody now uses the same closed owner without changing its cold default or
+Journal's independently built custody dependency. Its complete owner and
+compiler adversaries passed 23 tests in 386.078 seconds: 90 vectors, 10 maxima,
+35 browser journeys, 173 replayed calls, eight host defects and three fresh
+compiled mutants. Successful mutant source/proof/generated products are retained;
+timing stays diagnostic-only. Original evidence archive SHA-256:
+`999c5cdd97e2d27c5a8eb9aaa9b9df6738e9952fa2ce45439f6ca43d93462cca`.
