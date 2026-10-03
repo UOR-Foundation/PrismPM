@@ -196,7 +196,7 @@ export function buildSeed(source, destination) {
   const toolchain = '/usr/local/elan/toolchains/' + toolchainName.replace('/', '--').replace(':', '---');
   const toolsBefore = snapshotTree(toolchain, {toolchainAliases: true});
   const environment = {PATH: `${toolchain}/bin:/usr/bin:/bin`, LANG: 'C', LC_ALL: 'C',
-    ELAN_HOME: '/usr/local/elan', ELAN_TOOLCHAIN: toolchainName, SOURCE_DATE_EPOCH: '0'};
+    ELAN_HOME: '/usr/local/elan', ELAN_TOOLCHAIN: toolchainName, LEAN_NUM_THREADS: '2', SOURCE_DATE_EPOCH: '0'};
   // Lake records absolute compiler paths in its traces. A fixed private path
   // inside each isolated SDK build makes those genuine traces reproducible.
   // Exclusive creation rejects collisions; existing state is never reused.

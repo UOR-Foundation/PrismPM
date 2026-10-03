@@ -1071,6 +1071,10 @@ pub(crate) fn run_process_limited_allowed(
     for (key, value) in extra_env {
         command.env(key, value);
     }
+    // Lean's default pool follows the host logical CPU count, not Docker's
+    // CPU quota. Pin the pool for Lake and any nested Lean process; keep every
+    // build/export/kernel check and its existing deadline unchanged.
+    command.env("LEAN_NUM_THREADS", "2");
     let mut child = command
         .spawn()
         .map_err(|error| PrismError::new("PP5008", format!("start {tool}: {error}")))?;
@@ -3217,6 +3221,30 @@ mod tests {
         let error = limited("sleep", &["2"], "0.05", 16);
         assert_eq!(error.code, "PP5007");
         assert_eq!(error.message, "test-child timed out");
+    }
+
+    #[test]
+    fn child_lean_thread_policy_cannot_be_overridden_by_extra_environment() {
+        let root = tempfile::tempdir().unwrap();
+        for environment in [
+            BTreeMap::new(),
+            BTreeMap::from([("LEAN_NUM_THREADS".to_owned(), "9999".to_owned())]),
+        ] {
+            let result = run_process_limited(
+                "test-lean-thread-policy",
+                &executable("printenv").unwrap(),
+                &["LEAN_NUM_THREADS".to_owned()],
+                root.path(),
+                &environment,
+                &[],
+                "PP5001",
+                "5",
+                64,
+            )
+            .unwrap();
+            assert_eq!(result.stdout, "2\n");
+            assert_eq!(result.exit_code, 0);
+        }
     }
 
     #[test]

@@ -75,7 +75,7 @@ export function decodeExporterSeed(bytes) {
     argv: ['build', 'prod-export'], construction_root: '/tmp/prismpm-exporter-construction',
     temporary_directory: 'private-bounded-tmpfs', environment: {
       PATH: `${toolchain}/bin:/usr/bin:/bin`, LANG: 'C', LC_ALL: 'C', ELAN_HOME: '/usr/local/elan',
-      ELAN_TOOLCHAIN: value.toolchain, SOURCE_DATE_EPOCH: '0',
+      ELAN_TOOLCHAIN: value.toolchain, LEAN_NUM_THREADS: '2', SOURCE_DATE_EPOCH: '0',
     },
   }, 'closed pinned exporter construction required');
   const sources = tree(value.source_files, 16 * 1024 ** 2, 16 * 1024 ** 2, 4096);

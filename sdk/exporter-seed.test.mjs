@@ -19,7 +19,7 @@ function manifestFixture() {
     configuration: {argv: ['build', 'prod-export'], construction_root: '/tmp/prismpm-exporter-construction',
       temporary_directory: 'private-bounded-tmpfs', environment: {
         PATH: '/usr/local/elan/toolchains/leanprover--lean4---v4.30.0/bin:/usr/bin:/bin',
-        LANG: 'C', LC_ALL: 'C', ELAN_HOME: '/usr/local/elan', ELAN_TOOLCHAIN: toolchain, SOURCE_DATE_EPOCH: '0',
+        LANG: 'C', LC_ALL: 'C', ELAN_HOME: '/usr/local/elan', ELAN_TOOLCHAIN: toolchain, LEAN_NUM_THREADS: '2', SOURCE_DATE_EPOCH: '0',
       }},
     source_files: [directory('Prod'), file('Prod/Export.lean')],
     toolchain_files: [directory('bin'), file('bin/lake'), file('bin/lean')],
@@ -170,6 +170,8 @@ test('seed wire reader closes every field, path, configuration and resource boun
   const changes = [
     item => { item.extra = true; }, item => { delete item.archive_sha256; },
     item => { item.configuration.environment.EXTRA = 'untrusted'; },
+    item => { delete item.configuration.environment.LEAN_NUM_THREADS; },
+    item => { item.configuration.environment.LEAN_NUM_THREADS = '9999'; },
     item => { item.configuration.construction_root = '/caller/cache'; },
     item => { item.configuration.argv.push('--no-build'); },
     item => { item.archive_sha256 = 'A'.repeat(64); },
