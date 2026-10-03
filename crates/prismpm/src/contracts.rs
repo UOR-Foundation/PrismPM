@@ -12,7 +12,13 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 56] = [
+const CONTRACTS: [Contract; 57] = [
+    Contract {
+        id: "prismpm/sdk-lock-migration/1",
+        maximum_bytes: 201_326_592,
+        maximum_items: 262_144,
+        schema: include_bytes!("../schemas/sdk-lock-migration.schema.json"),
+    },
     Contract {
         id: "prismpm/model-document/4",
         maximum_bytes: 16_777_216,
@@ -561,6 +567,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if id == "prismpm/sdk-lock/2" {
         crate::sdk::validate_platform_lock(value)?;
+    }
+    if id == "prismpm/sdk-lock-migration/1" {
+        CanonicalDocument::from_value("prismpm/sdk-lock/1", value["patch"][0]["value"].clone())?;
+        CanonicalDocument::from_value("prismpm/sdk-lock/2", value["patch"][1]["value"].clone())?;
     }
     if id == "prismpm/sdk-lock-update/2" {
         crate::sdk::validate_platform_lock(&value["proposed_lock"])?;

@@ -332,6 +332,15 @@ impl PromotionDestination {
 pub enum LockCommands {
     /// Verify the committed lock and print its canonical value.
     Check,
+    /// Propose an explicit legacy-to-platform lock migration without adoption.
+    Migrate {
+        /// Immutable target SDK manifest-list reference.
+        #[arg(long)]
+        sdk_image: String,
+        /// Exact target standards.lock digest.
+        #[arg(long)]
+        standards_lock: String,
+    },
     /// Propose, but do not apply, an exact SDK and standards-lock update.
     Update {
         /// Immutable SDK manifest-list reference.
@@ -477,10 +486,30 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
     let root = context
         .or(cli.project.as_deref())
         .unwrap_or_else(|| Path::new("."));
+    // Migration reads the old lock as historical evidence, not permission to
+    // execute that project's model under this SDK. Environment verification
+    // above still applies; all ordinary commands retain Controller admission.
+    if let Commands::Lock {
+        command:
+            LockCommands::Migrate {
+                sdk_image,
+                standards_lock,
+            },
+    } = &cli.command
+    {
+        let result = crate::sdk::propose_lock_migration(root, sdk_image, standards_lock)?;
+        return Ok((
+            result,
+            "reviewable SDK-lock migration generated; not adopted".to_owned(),
+        ));
+    }
     let controller = Controller::load(root)?;
     match &cli.command {
         Commands::Completion { .. } => unreachable!("completion returns before project loading"),
         Commands::Lock { command } => match command {
+            LockCommands::Migrate { .. } => {
+                unreachable!("migration returns before project loading")
+            }
             LockCommands::Check => {
                 let result = crate::sdk::inspect_lock(&controller.root)?;
                 Ok((result, "SDK lock is canonical and valid".to_owned()))

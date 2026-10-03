@@ -783,6 +783,67 @@ pub fn propose_lock_update(
     }))
 }
 
+/// Capture an explicit legacy-to-platform migration without modifying a project.
+/// The old lock is historical evidence only; it does not admit project execution.
+pub fn propose_lock_migration(
+    root: &Path,
+    sdk_image: &str,
+    standards_lock: &str,
+) -> Result<serde_json::Value, PrismError> {
+    verify_environment()?;
+    crate::oci::validate_reference(sdk_image, true)?;
+    if !standards_lock
+        .strip_prefix("sha256:")
+        .is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+    {
+        return Err(PrismError::new(
+            "PP5401",
+            "standards-lock digest is malformed",
+        ));
+    }
+    let current = historical_migration_lock(root)?;
+    let proposed = capture_platform_update(sdk_image, standards_lock)?;
+    if historical_migration_lock(root)?.bytes() != current.bytes() {
+        return Err(PrismError::new(
+            "PP5401",
+            "historical SDK lock changed during capture",
+        ));
+    }
+    migration_proposal(current.value(), proposed.value())
+}
+
+fn historical_migration_lock(root: &Path) -> Result<CanonicalDocument, PrismError> {
+    let bytes = read_metadata(&root.join("prismpm.lock"), SDK_CAPTURE_MAX_BYTES, "PP5401")?;
+    let lock = parse_lock(&bytes)?;
+    if lock.schema() != "prismpm/sdk-lock/1" {
+        return Err(PrismError::new(
+            "PP5401",
+            "migration requires a legacy SDK lock; use lock update for v2",
+        ));
+    }
+    Ok(lock)
+}
+
+fn migration_proposal(
+    current: &serde_json::Value,
+    proposed: &serde_json::Value,
+) -> Result<serde_json::Value, PrismError> {
+    let proposal = CanonicalDocument::from_value(
+        "prismpm/sdk-lock-migration/1",
+        json!({
+            "schema":"prismpm/sdk-lock-migration/1",
+            "patch":[{"op":"test","path":"","value":current},{"op":"replace","path":"","value":proposed}],
+            "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"
+        }),
+    )?;
+    Ok(proposal.value().clone())
+}
+
 fn capture_platform_update(
     sdk_image: &str,
     standards_lock: &str,
@@ -1217,6 +1278,158 @@ mod tests {
         }
         let unchanged = super::platform_update_proposal(&current, &current).unwrap();
         assert_eq!(unchanged["changes"], json!([]));
+    }
+
+    fn legacy_migration_fixture() -> Value {
+        json!({"schema":"prismpm/sdk-lock/1","sdk_version":"0.3.0",
+            "sdk_image":format!("example.invalid/test-sdk@sha256:{}","a".repeat(64)),
+            "standards_lock":format!("sha256:{}","b".repeat(64)),
+            "inventory":[{"id":"sdk-manifest","kind":"image","version":"0.3.0","digest":format!("sha256:{}","a".repeat(64))}]})
+    }
+
+    #[test]
+    fn migration_proposal_reconstructs_the_complete_target_after_testing_the_source() {
+        let source = legacy_migration_fixture();
+        let target = platform_fixture("migrated");
+        let proposal = super::migration_proposal(&source, &target).unwrap();
+        let patch = proposal["patch"].as_array().unwrap();
+        assert_eq!(patch.len(), 2);
+        assert_eq!(patch[0], json!({"op":"test","path":"","value":source}));
+        assert_eq!(patch[1], json!({"op":"replace","path":"","value":target}));
+        for row in target["platforms"].as_array().unwrap() {
+            let admitted = super::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/2",
+                patch[1]["value"].clone(),
+            )
+            .unwrap();
+            super::validate_running_inventory(
+                &admitted,
+                row["platform"].as_str().unwrap(),
+                row["inventory_document"].as_str().unwrap().as_bytes(),
+            )
+            .unwrap();
+            let wrong = platform_fixture("other");
+            assert!(super::validate_running_inventory(
+                &admitted,
+                row["platform"].as_str().unwrap(),
+                wrong["platforms"][0]["inventory_document"]
+                    .as_str()
+                    .unwrap()
+                    .as_bytes()
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn migration_proposal_rejects_incomplete_unreviewed_or_tampered_evidence() {
+        let valid =
+            super::migration_proposal(&legacy_migration_fixture(), &platform_fixture("migrated"))
+                .unwrap();
+        for mutation in 0..12 {
+            let mut invalid = valid.clone();
+            match mutation {
+                0 => {
+                    invalid["patch"].as_array_mut().unwrap().remove(0);
+                }
+                1 => invalid["patch"].as_array_mut().unwrap().reverse(),
+                2 => invalid["patch"][0]["path"] = json!("/sdk_image"),
+                3 => invalid["patch"][1]["value"]["platforms"]
+                    .as_array_mut()
+                    .unwrap()
+                    .clear(),
+                4 => invalid["patch"][1]["value"]["sdk_index"] = json!("substituted"),
+                5 => {
+                    invalid["patch"][1]["value"]["platforms"][1]["inventory_document"] = json!("{}")
+                }
+                6 => invalid["patch"][0]["value"]["extra"] = json!(true),
+                7 => invalid["security_review"] = json!("passed"),
+                8 => {
+                    invalid["patch"][1]["value"]["platforms"][1]["platform"] = json!("linux/amd64")
+                }
+                9 => {
+                    invalid["patch"][1]["value"]["platforms"][0]["manifest_digest"] =
+                        json!(format!("sha256:{}", "0".repeat(64)))
+                }
+                10 => invalid["patch"][0]["value"] = invalid["patch"][1]["value"].clone(),
+                _ => invalid["patch"][1]["value"]["inventory"] = json!([]),
+            }
+            assert!(
+                super::CanonicalDocument::from_value("prismpm/sdk-lock-migration/1", invalid)
+                    .is_err(),
+                "mutation {mutation}"
+            );
+        }
+    }
+
+    #[test]
+    fn historical_migration_read_is_canonical_read_only_and_not_execution_admission() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("prismpm.lock");
+        let source =
+            super::CanonicalDocument::from_value("prismpm/sdk-lock/1", legacy_migration_fixture())
+                .unwrap();
+        std::fs::write(&path, source.bytes()).unwrap();
+        assert_eq!(
+            super::historical_migration_lock(root.path())
+                .unwrap()
+                .bytes(),
+            source.bytes()
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), source.bytes());
+        let target = platform_fixture("other");
+        assert!(super::validate_running_inventory(
+            &source,
+            "linux/amd64",
+            target["platforms"][0]["inventory_document"]
+                .as_str()
+                .unwrap()
+                .as_bytes()
+        )
+        .is_err());
+        std::fs::write(&path, serde_json::to_string_pretty(source.value()).unwrap()).unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::write(&path, b"not json").unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::write(
+            &path,
+            super::CanonicalDocument::from_value("prismpm/sdk-lock/2", target)
+                .unwrap()
+                .bytes(),
+        )
+        .unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::remove_file(&path).unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::create_dir(&path).unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn historical_migration_rejects_aliases_and_oversized_files() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("target");
+        let path = root.path().join("prismpm.lock");
+        let source =
+            super::CanonicalDocument::from_value("prismpm/sdk-lock/1", legacy_migration_fixture())
+                .unwrap();
+        std::fs::write(&target, source.bytes()).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::remove_file(&target).unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&target, source.bytes()).unwrap();
+        std::fs::hard_link(&target, &path).unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_file(&target).unwrap();
+        std::fs::File::create(&path)
+            .unwrap()
+            .set_len(super::SDK_CAPTURE_MAX_BYTES as u64 + 1)
+            .unwrap();
+        assert!(super::historical_migration_lock(root.path()).is_err());
     }
 
     #[test]
