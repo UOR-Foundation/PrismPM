@@ -10,7 +10,7 @@ pub use crate::supply_chain::{
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::path::PathBuf;
 use std::path::{Component, Path};
 
@@ -22,6 +22,80 @@ const SDK_INDEX_MAX_BYTES: usize = 1024 * 1024;
 // their artifact rows also appear separately. Allow the bounded index and
 // envelope too; the per-document limits are still enforced independently.
 const SDK_CAPTURE_MAX_BYTES: usize = 64 * 1024 * 1024;
+
+// Apply wire limits before allocation as well as during reading. Metadata is
+// never executable: aliases, hard links and replacements cannot supply it.
+fn read_metadata(
+    path: &Path,
+    limit: usize,
+    limit_code: &'static str,
+) -> Result<Vec<u8>, PrismError> {
+    let invalid = || PrismError::new("PP5401", "SDK metadata must be an unchanged regular file");
+    let oversized = || {
+        PrismError::new(
+            limit_code,
+            format!("SDK metadata exceeds its {limit} byte limit"),
+        )
+    };
+    let before = std::fs::symlink_metadata(path).map_err(|_| invalid())?;
+    if !before.is_file() {
+        return Err(invalid());
+    }
+    if before.len() > limit as u64 {
+        return Err(oversized());
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+        if before.nlink() != 1 {
+            return Err(invalid());
+        }
+        options.custom_flags(
+            (rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK).bits() as i32,
+        );
+    }
+    let same = |after: &std::fs::Metadata| {
+        let common = after.is_file()
+            && after.len() == before.len()
+            && after.modified().ok() == before.modified().ok();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            common
+                && after.dev() == before.dev()
+                && after.ino() == before.ino()
+                && after.nlink() == 1
+                && after.mode() == before.mode()
+                && after.ctime() == before.ctime()
+                && after.ctime_nsec() == before.ctime_nsec()
+        }
+        #[cfg(not(unix))]
+        {
+            common
+        }
+    };
+    let mut file = options.open(path).map_err(|_| invalid())?;
+    if !same(&file.metadata().map_err(|_| invalid())?) {
+        return Err(invalid());
+    }
+    let mut bytes = Vec::new();
+    (&mut file)
+        .take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| invalid())?;
+    if bytes.len() > limit {
+        return Err(oversized());
+    }
+    if bytes.len() as u64 != before.len()
+        || !same(&file.metadata().map_err(|_| invalid())?)
+        || !same(&std::fs::symlink_metadata(path).map_err(|_| invalid())?)
+    {
+        return Err(invalid());
+    }
+    Ok(bytes)
+}
 
 fn select_inventory_path(
     released: &Path,
@@ -102,8 +176,7 @@ pub fn verify_environment() -> Result<Option<serde_json::Value>, PrismError> {
     let Some(path) = inventory_path() else {
         return Ok(None);
     };
-    let bytes = std::fs::read(&path)
-        .map_err(|error| PrismError::new("PP5401", format!("SDK inventory: {error}")))?;
+    let bytes = read_metadata(&path, SDK_INVENTORY_MAX_BYTES, "PP5401")?;
     let value: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|error| PrismError::new("PP5401", format!("SDK inventory: {error}")))?;
     let mut canonical = encode_value(&value)?;
@@ -176,10 +249,11 @@ pub fn executable(command: &str) -> Result<PathBuf, PrismError> {
         .canonicalize()
         .map_err(|error| PrismError::new("PP5401", format!("SDK command {command}: {error}")))?;
     if inventory.is_some() {
-        let bytes = std::fs::read(
-            inventory_path.ok_or_else(|| PrismError::new("PP5401", "SDK inventory is absent"))?,
-        )
-        .map_err(|error| PrismError::new("PP5401", error.to_string()))?;
+        let bytes = read_metadata(
+            &inventory_path.ok_or_else(|| PrismError::new("PP5401", "SDK inventory is absent"))?,
+            SDK_INVENTORY_MAX_BYTES,
+            "PP5401",
+        )?;
         let value: serde_json::Value = serde_json::from_slice(&bytes)
             .map_err(|error| PrismError::new("PP5401", error.to_string()))?;
         let expected = value["commands"]
@@ -635,8 +709,7 @@ pub(crate) fn execution_lock(root: &Path) -> Result<CanonicalDocument, PrismErro
     if !lock_is_present(root)? {
         return Err(PrismError::new("PP5401", "prismpm.lock is absent"));
     }
-    let bytes = std::fs::read(root.join("prismpm.lock"))
-        .map_err(|_| PrismError::new("PP5401", "prismpm.lock is absent"))?;
+    let bytes = read_metadata(&root.join("prismpm.lock"), SDK_CAPTURE_MAX_BYTES, "PP7601")?;
     let lock = parse_lock(&bytes)?;
     if let Some(path) = inventory_path() {
         let architecture = match std::env::consts::ARCH {
@@ -644,8 +717,7 @@ pub(crate) fn execution_lock(root: &Path) -> Result<CanonicalDocument, PrismErro
             "aarch64" => "arm64",
             value => value,
         };
-        let inventory = std::fs::read(path)
-            .map_err(|_| PrismError::new("PP5401", "running SDK inventory is absent"))?;
+        let inventory = read_metadata(&path, SDK_INVENTORY_MAX_BYTES, "PP5401")?;
         validate_running_inventory(
             &lock,
             &format!("{}/{architecture}", std::env::consts::OS),
@@ -759,9 +831,7 @@ fn capture_platform_update(
     // Node resolution verifies the installed SDK environment first. Pass its
     // exact command inventory, never helper names resolved from user config.
     let commands = match inventory_path() {
-        Some(path) => std::fs::read(path).map_err(|error| {
-            PrismError::new("PP5401", format!("SDK command inventory: {error}"))
-        })?,
+        Some(path) => read_metadata(&path, SDK_INVENTORY_MAX_BYTES, "PP5401")?,
         None => encode_value(&executable_inventory()?)?,
     };
     let command_inventory = directory.path().join("commands.json");
@@ -933,6 +1003,75 @@ pub(crate) fn execution_binding_regression(
 mod tests {
     use serde_json::{json, Value};
     use sha2::{Digest, Sha256};
+
+    #[test]
+    fn metadata_reader_bounds_before_allocation_and_at_the_exact_limit() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("inventory.json");
+        std::fs::write(&path, b"1234").unwrap();
+        assert_eq!(super::read_metadata(&path, 4, "PP5401").unwrap(), b"1234");
+        assert_eq!(
+            super::read_metadata(&path, 3, "PP5401").unwrap_err().code,
+            "PP5401"
+        );
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(8 * 1024 * 1024 * 1024)
+            .unwrap();
+        let error =
+            super::read_metadata(&path, super::SDK_INVENTORY_MAX_BYTES, "PP5401").unwrap_err();
+        assert_eq!(error.code, "PP5401");
+        assert!(error.message.contains("8388608 byte limit"));
+    }
+
+    #[test]
+    fn execution_lock_rejects_sparse_oversized_input_before_parsing() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("prismpm.lock");
+        std::fs::File::create(&path)
+            .unwrap()
+            .set_len(8 * 1024 * 1024 * 1024)
+            .unwrap();
+        for error in [
+            super::inspect_lock(root.path()).unwrap_err(),
+            super::check_existing_lock(root.path()).unwrap_err(),
+        ] {
+            assert_eq!(error.code, "PP7601");
+            assert!(error.message.contains("67108864 byte limit"));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn metadata_reader_refuses_aliases_hard_links_and_nonregular_nodes() {
+        use std::os::unix::{fs::symlink, net::UnixListener};
+        let root = tempfile::tempdir().unwrap();
+        let original = root.path().join("original");
+        std::fs::write(&original, b"{}").unwrap();
+        let alias = root.path().join("alias");
+        symlink(&original, &alias).unwrap();
+        assert_eq!(
+            super::read_metadata(&alias, 8, "PP5401").unwrap_err().code,
+            "PP5401"
+        );
+        std::fs::hard_link(&original, root.path().join("hard-link")).unwrap();
+        assert_eq!(
+            super::read_metadata(&original, 8, "PP5401")
+                .unwrap_err()
+                .code,
+            "PP5401"
+        );
+        let socket = root.path().join("socket");
+        let _listener = UnixListener::bind(&socket).unwrap();
+        for path in [root.path(), socket.as_path()] {
+            assert_eq!(
+                super::read_metadata(path, 8, "PP5401").unwrap_err().code,
+                "PP5401"
+            );
+        }
+    }
 
     #[cfg(unix)]
     #[test]

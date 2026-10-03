@@ -962,6 +962,11 @@ The complete lock is bounded to 64 MiB, including JSON-escaped document strings,
 repeated artifact rows and the 1 MiB index. A review proposal is bounded to
 192 MiB for its old/new field evidence and complete proposed lock. The tighter
 per-document bounds remain independently enforced.
+Execution reads enforce the 64 MiB lock and 8 MiB inventory limits before
+allocation and while streaming. Metadata inputs must be regular, non-symlink,
+singly linked files with unchanged descriptor and pathname identities throughout
+the read; oversized locks report PP7601, and invalid inventory or file custody
+reports PP5401. A sparse file cannot bypass these limits.
 The two platforms have the same
 artifact identities and versions, but native binary digests may differ. Lock
 generation extracts both inventories from those exact images without executing
