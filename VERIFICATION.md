@@ -2519,6 +2519,22 @@ Full `cargo xtask validate` also passes all 190 infrastructure cases. These
 infrastructure tests do not establish successful execution of the two full V&V
 passes or publication.
 
+## Native source dependency acquisition — 3 October 2026
+
+Native source review retains its exact development image and two offline golden
+passes. A separate read-only-source, resource-bounded container acquires locked
+Cargo registry data and is destroyed before the verifier starts. The handoff
+contains no downloaded source trees, executables, configuration or build output.
+Archive bytes are independently checked against the committed lock; sparse-index
+metadata is trusted Cargo HTTPS acquisition data, with locked identities checked
+and exact bytes retained in the preparation receipt. Workspace inheritance,
+path dependencies, configuration and toolchain selection are captured.
+
+Seventeen real-file tests reject corruption, aliases, extra files, source drift,
+cache conflicts and excessive index sizes. The twelve orchestration tests retain
+both offline passes and test failed acquisition, omitted tests and cleanup.
+These checks qualify source-review infrastructure, not SDK or release acceptance.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced
