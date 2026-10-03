@@ -2381,6 +2381,69 @@ Receipt `/tmp/prismpm-publication-RI5Ngo/publication-acceptance.json`, SHA-256
 `0514ce3653fb7b0993e36bf3f0c8215ecca9cd2dd45d362434c119e90a144f07`.
 This verifies conditional source admission only, not SDK or deployment acceptance.
 
+## Browser-runtime admission regression — 27 September 2026
+
+The actual private oracle invocation initially returned `Ok([])` for a browser
+declaration labeled `Ready`. Its new owning regression failed on that result.
+Restoring unconditional `PP2011` for the unsupported browser profile makes the
+regression pass for `Ready`, `Runtime unavailable` and `Verified production
+service`; display text is not execution evidence. Successful oracle invocation
+now has exactly three process records by type, produced only after pinned Node
+identity, Hologram Live build/execution and complete report validation.
+
+The registered DK-21 owner reprojects all three changed LexLean declarations,
+then exercises public check/build/verify and requires no generated output.
+Its source/projection owner and public integration test pass. All four private
+oracle guards, upstream source-pin and report-mutation tests, the complete
+189-test infrastructure audit, model/spec accounting (181 IDs, 86 codes),
+five authored-formatting tests and scoped warnings-denied Clippy pass in the
+devcontainer. Original logs remain in `target/audit-27sep26/`; the complete
+DK-21 log is SHA-256
+`e068a4917a3ae25673a2c6f992cb3e7256a090b866dbe504de2b2eba83873084`,
+and the audit log is
+`1d2b800c39d2b30560d9e58d80309f3400ae321f1109c83efbf4776970dadda1`.
+
+The selected Calculator fixture's actual source projection reported its new
+model digest, `sha256:b9c4dda152fea5e238249c1e460c1ba2c0436ef62bb29f0bf6de92dfbddcfd42`.
+All four modeled references were updated through the documented source-review
+procedure; the complete source-selection/negative owner passes. This restores
+an existing refusal boundary, not the missing browser runtime, public Foundry
+service, SDK release or deployment.
+
+The complete DK-22 compiler owner also passes. Normal golden regeneration and
+fresh readback verify all 357 files for build
+`c61f76a5280d23d717d738d10ae2e7965f4dc938caf8674ed16b84b12628e81c`.
+The five changed JSON files contain only emitter/model/build provenance,
+the actual verifier executable/attestation identities and the review reason;
+generated Lean, runtime artifacts and execution evidence are unchanged.
+Log SHA-256 values in `target/audit-27sep26/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `dk22-compiler-owner.log` | `16c443c6d622b3f153a1a47b00198a2cf38dde317f56ca595fe20e2561ec2393` |
+| `golden-write-stable.log` | `9cf24b9cc0a27edccd78bc3d2bacddbeed77dc672c06c05b3d28e372b6975a84` |
+| `golden-readback.log` | `69fcac92c78c90c0d9a58d077d2ff5e37f2dfdb9ab1bd440bfeaf15871794766` |
+
+An earlier write failed when another build replaced its running verifier
+executable; it produced no reviewed golden update. The successful write and
+readback above used the same stable executable. This development-platform
+evidence does not establish full V&V, installed-SDK or other-platform acceptance.
+
+## Automatic full CI ownership — 27 September 2026
+
+The workflow-policy regression first failed because pull requests omitted the
+normative gate. Both PR and main events now execute the unchanged two complete
+`just vv` passes in one checkout. Duplicate partial/bootstrap/honesty/repro
+workflows remain manual diagnostics; native amd64/arm64 review is unchanged.
+The complete 21-case observer suite passes, including actual first/second
+command failures and mutants for omitted/filtered triggers, skipped/weakened
+gates, duplicate automatic owners and cancellation of non-PR verification.
+Actionlint 1.7.8 accepts every workflow after removing decorative backticks from
+the candidate summary's literal format string (SC2016); no lint is suppressed.
+Full `cargo xtask validate` also passes all 190 infrastructure cases. These
+infrastructure tests do not establish successful execution of the two full V&V
+passes or publication.
+
 ## Release criterion
 
 Only a clean, annotated `v0.3.0` tag whose exact commit has produced

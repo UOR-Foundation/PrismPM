@@ -542,7 +542,7 @@ fn run_hologram_oracle(
     holo_path: &Path,
     model_path: &Path,
     wasm_path: &Path,
-) -> Result<Vec<ProcessRecord>, PrismError> {
+) -> Result<[ProcessRecord; 3], PrismError> {
     let _lock = HOLOGRAM_ORACLE_MUTEX
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -558,10 +558,7 @@ fn run_hologram_oracle(
         application.request_maximum(),
         application.response_maximum(),
     )?;
-    if let crate::holo::model_document::Application::Browser(_) = application {
-        crate::holo::browser_application::require_runtime(application)?;
-        return Ok(Vec::new());
-    }
+    crate::holo::browser_application::require_runtime(application)?;
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
         return Err(PrismError::new(
             "PP5301",
@@ -660,7 +657,7 @@ fn run_hologram_oracle(
     )
     .map_err(|error| PrismError::new("PP5301", error.to_string()))?;
     validate_hologram_oracle_report(&report, application, &identities)?;
-    Ok(vec![node_version, build, run])
+    Ok([node_version, build, run])
 }
 
 // These are the pinned hologram-view-surface transport limits, not a new model
@@ -820,6 +817,48 @@ pub(crate) fn validate_hologram_oracle_report(
 #[cfg(test)]
 mod portable_oracle_tests {
     use super::*;
+
+    #[test]
+    fn browser_oracle_cannot_verify_without_execution_or_runtime() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut document: crate::holo::model_document::ModelDocument = serde_json::from_slice(
+            &std::fs::read(root.join("tests/golden/stdlib/build/model.prism.json")).unwrap(),
+        )
+        .unwrap();
+        let declaration =
+            std::fs::read(root.join("tests/data/browser-application-declaration.json")).unwrap();
+        let work = tempfile::tempdir().unwrap();
+        let controller = Controller::load(work.path()).unwrap();
+        let model_path = work.path().join("model.prism.json");
+        for label in [
+            "Ready",
+            "Runtime unavailable",
+            "Verified production service",
+        ] {
+            let mut browser: crate::holo::browser_application::BrowserApplication =
+                serde_json::from_slice(&declaration).unwrap();
+            browser.view.labels[0].text = label.to_owned();
+            crate::holo::browser_application::validate(&browser).unwrap();
+            document.application = Some(crate::holo::model_document::Application::Browser(
+                Box::new(browser),
+            ));
+            std::fs::write(&model_path, serde_json::to_vec(&document).unwrap()).unwrap();
+            let result = run_hologram_oracle(
+                &controller,
+                work.path(),
+                &work.path().join("not-produced.holo"),
+                &model_path,
+                &work.path().join("not-produced.wasm"),
+            );
+            assert_eq!(
+                result
+                    .expect_err("an unexecuted browser oracle cannot return verified processes")
+                    .code,
+                "PP2011",
+                "display text cannot authorize runtime or oracle acceptance: {label}"
+            );
+        }
+    }
 
     #[test]
     fn oracle_compile_policy_survives_environment_isolation() {
