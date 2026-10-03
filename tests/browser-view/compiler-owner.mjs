@@ -11,6 +11,8 @@ import {captureCompilerArtifact} from './compiler-artifact.mjs';
 const families = Object.freeze({
   view: Object.freeze({directory: 'browser-view', executable: 'browser-workspace-view-driver'}),
   effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),
+  presentation: Object.freeze({directory: 'browser-presentation', executable: 'browser-presentation-driver'}),
+  'operation-journal': Object.freeze({directory: 'browser-operation-journal', executable: 'browser-operation-journal-driver'}),
 });
 const owners = new WeakMap();
 function family(name) {

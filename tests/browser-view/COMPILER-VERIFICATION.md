@@ -53,3 +53,10 @@ cold DK-16 path. The 18 compiler-cache regressions and 30 owner/SDK-registration
 infrastructure tests also passed. Independent review compared all 1,584 captured
 input hashes with the source tree and checked both retirement records. These
 are source-component results, not installed-SDK or full V&V acceptance.
+
+Presentation and Operation Journal use the same closed owner mechanism without
+changing their cold defaults. Their complete owners and compiler adversaries
+passed 56 tests in 1875.969 seconds; eight Presentation host tests also passed.
+The Presentation source/installed minimum is now its complete 24-test count.
+Both owners retain all five source mutants; Journal still constructs its
+independent custody dependency cold. Model timings remain diagnostic only.
