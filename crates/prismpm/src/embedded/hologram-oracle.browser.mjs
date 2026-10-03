@@ -86,27 +86,81 @@ const valid = app.acceptance_vectors.map((vector, index) => ({vector, index})).f
 assert.ok(valid.length > 0, 'no modeled request can exercise the actual View');
 const recovery = valid[0].vector;
 async function submit(vector, target = page, keyboard = false) {
-  await fill(vector, target);
-  let bodyBuffer = null;
-  const response = target.waitForResponse(async reply => {
-    if (reply.url() === `${origin}/_hologram/intent`) {
-      try { bodyBuffer = await reply.body(); } catch (_) {}
-      return true;
-    }
-    return false;
-  });
-  if (keyboard) {
-    if (text) await target.locator('#request').press('Control+Enter');
-    else await target.locator('#right').press('Enter');
-  } else await target.locator('#submit').click();
-  const reply = await response;
-  assert.equal(reply.status(), 200);
-  assert.deepEqual(reply.request().postDataJSON(), {version: 1, name: 'application.invoke',
-    payload: decode.decode(Uint8Array.from(vector.request))});
-  const replyBody = bodyBuffer ?? await reply.body();
-  const envelope = JSON.parse(replyBody.toString('utf-8'));
-  assert.deepEqual(envelope, {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
-  await shows(displayed(vector), target);
+  const ready = () => {
+    const button = document.querySelector('#submit');
+    const form = document.querySelector('#application-form');
+    return button !== null && form !== null && !button.disabled && !form.hasAttribute('aria-busy');
+  };
+  const expectedRequest = {version: 1, name: 'application.invoke',
+    payload: decode.decode(Uint8Array.from(vector.request))};
+  const events = [];
+  const record = event => { if (events.length < 32) events.push(event); };
+  let invocation;
+  let invocationCount = 0;
+  let navigated = false;
+  let phase = 'initial-readiness';
+  const onRequest = request => {
+    if (request.url() !== `${origin}/_hologram/intent`) return;
+    invocationCount++;
+    record({event: 'request', method: request.method(), navigation: request.isNavigationRequest()});
+    if (request.method() !== 'POST') return;
+    try {
+      assert.deepEqual(request.postDataJSON(), expectedRequest);
+      invocation ??= request;
+    } catch { /* A mismatched request cannot satisfy response acceptance. */ }
+  };
+  const onNavigation = frame => {
+    if (frame !== target.mainFrame()) return;
+    navigated = true;
+    record({event: 'main-frame-navigation'});
+  };
+  const onFailure = request => record({event: 'request-failed',
+    invocation: request === invocation, error: request.failure()?.errorText?.slice(0, 256)});
+  target.on('request', onRequest);
+  target.on('framenavigated', onNavigation);
+  target.on('requestfailed', onFailure);
+  try {
+    await target.waitForFunction(ready);
+    phase = 'fill';
+    await fill(vector, target);
+    phase = 'submission';
+    // Match the request object observed after arming this submission, rather
+    // than accepting any response that happens to share the endpoint URL.
+    const response = target.waitForResponse(reply => reply.request() === invocation).then(async reply => {
+      phase = 'response-body';
+      record({event: 'response', status: reply.status(), serviceWorker: reply.fromServiceWorker()});
+      // Capture immediately when the correlated response arrives, without
+      // waiting for the initiating keyboard/click operation to settle.
+      const replyBody = await reply.body();
+      record({event: 'body', bytes: replyBody.length});
+      return {reply, replyBody};
+    });
+    const trigger = keyboard
+      ? target.locator(text ? '#request' : '#right').press(text ? 'Control+Enter' : 'Enter')
+      : target.locator('#submit').click();
+    const [{reply, replyBody}] = await Promise.all([response, trigger]);
+    assert.equal(reply.status(), 200);
+    assert.deepEqual(reply.request().postDataJSON(), expectedRequest);
+    assert.equal(reply.request().isNavigationRequest(), false);
+    // A missing body is a failed oracle execution. Preserve the first error;
+    // never swallow it and retry the same vanished response.
+    const envelope = JSON.parse(replyBody.toString('utf-8'));
+    assert.deepEqual(envelope, {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
+    phase = 'rendered-result';
+    await shows(displayed(vector), target);
+    phase = 'completed-readiness';
+    await target.waitForFunction(ready);
+    assert.equal(invocationCount, 1, 'submission must issue exactly one invocation');
+    assert.equal(navigated, false, 'submission must not navigate the main frame');
+  } catch (error) {
+    console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
+      phase, keyboard, events, invocationCount, navigated}));
+    throw error;
+  } finally {
+    target.off('request', onRequest);
+    target.off('framenavigated', onNavigation);
+    target.off('requestfailed', onFailure);
+  }
 }
 async function journey(name, work) {
   await work();

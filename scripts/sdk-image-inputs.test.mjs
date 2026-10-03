@@ -407,8 +407,16 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
   const release = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
   const candidate = readFileSync(new URL('../.github/workflows/sdk-candidate.yml', import.meta.url), 'utf8');
   const vv = readFileSync(new URL('./vv.sh', import.meta.url), 'utf8').replace(/\\\n\s*/g, ' ');
-  const local = vv.split('\n').find(line => line.trimStart().startsWith('node scripts/sdk-image-inputs.mjs build '));
-  assert(local, 'local full VV image construction must use the common wrapper');
+  const localBuild = vv.split('\n').find(line => line.trimStart().startsWith('node scripts/sdk-image-inputs.mjs build '));
+  assert(localBuild, 'local full VV image construction must use the common wrapper');
+  // Execute the actual per-session tag definitions too. Extracting only the
+  // build line would omit its shell inputs, not test the real local caller.
+  const assignments = ['nonce', 'local_sdk_tag'].map(name => {
+    const matches = vv.split('\n').filter(line => line.trimStart().startsWith(`${name}=`));
+    assert.equal(matches.length, 1, `one local SDK ${name} assignment`);
+    return matches[0];
+  });
+  const local = [...assignments, localBuild].join('\n');
   const native = runBlock(release.slice(release.indexOf('  native:')), '      - shell: bash')
     .split('\n  archive=')[0].split('\narchive=')[0];
   const rows = [
@@ -426,7 +434,18 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     assert.equal(args[args.indexOf('--build-arg') + 1], `SDK_SOURCE_REVISION=${f.revision}`);
     assert.equal(args.at(-1), f.source);
     if (outputPrefix) assert(args[args.indexOf('--output') + 1].startsWith(outputPrefix));
-    if (name === 'local-vv') assert(args.includes('--load'));
+    if (name === 'local-vv') {
+      assert(args.includes('--load'));
+      const firstTag = args[args.indexOf('--tag') + 1];
+      assert.match(firstTag, /^prismpm-vv-sdk:gate-[0-9]+-[0-9]+$/);
+      rmSync(transport.record);
+      const again = transport.run(command);
+      assert.equal(again.status, 0, again.stderr);
+      const second = records(transport.record); assert.equal(second.length, 1);
+      const secondTag = second[0].args[second[0].args.indexOf('--tag') + 1];
+      assert.match(secondTag, /^prismpm-vv-sdk:gate-[0-9]+-[0-9]+$/);
+      assert.notEqual(secondTag, firstTag, 'separate sessions must not share a mutable SDK tag');
+    }
     if (name === 'release') assert.equal(readFileSync(transport.output, 'utf8'), `digest=sha256:${'a'.repeat(64)}\n`);
     rmSync(transport.record);
     // A successful skipped command is not a successful test of the caller.

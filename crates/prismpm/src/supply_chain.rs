@@ -34,6 +34,10 @@ const COSIGN_AMD64_SHA256: &str =
     "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
 const COSIGN_ARM64_SHA256: &str =
     "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a";
+// sigstore/cosign v3.1.3 release 365912930, assets 503286005/503286299;
+// published asset SHA-256 values equal the independently retained signed checksums.
+const COSIGN_AMD64_BYTES: usize = 141_178_250;
+const COSIGN_ARM64_BYTES: usize = 132_747_403;
 
 fn sha(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
@@ -2131,6 +2135,21 @@ fn bundle_certificate_claims(bundle: &Value) -> Result<BTreeMap<String, String>,
 }
 
 fn checked_cosign() -> Result<PathBuf, PrismError> {
+    captured_cosign().map(|(path, _)| path)
+}
+
+fn cosign_pin(size: u64) -> Result<(usize, &'static str), PrismError> {
+    match size {
+        size if size == COSIGN_AMD64_BYTES as u64 => Ok((COSIGN_AMD64_BYTES, COSIGN_AMD64_SHA256)),
+        size if size == COSIGN_ARM64_BYTES as u64 => Ok((COSIGN_ARM64_BYTES, COSIGN_ARM64_SHA256)),
+        _ => Err(PrismError::new(
+            "PP7401",
+            "SDK Cosign executable size is not the pinned 3.1.3 release",
+        )),
+    }
+}
+
+fn captured_cosign() -> Result<(PathBuf, Vec<u8>), PrismError> {
     let executable = crate::sdk::executable("cosign").map_err(|error| {
         PrismError::new(
             "PP7401",
@@ -2140,19 +2159,18 @@ fn checked_cosign() -> Result<PathBuf, PrismError> {
     let resolved = executable
         .canonicalize()
         .map_err(|error| PrismError::new("PP7401", format!("resolve Cosign 3.1.3: {error}")))?;
-    let digest = format!(
-        "{:x}",
-        Sha256::digest(std::fs::read(&resolved).map_err(|error| {
-            PrismError::new("PP7401", format!("read Cosign 3.1.3: {error}"))
-        })?)
-    );
-    if !matches!(digest.as_str(), COSIGN_AMD64_SHA256 | COSIGN_ARM64_SHA256) {
+    let failure = |error| PrismError::new("PP7401", format!("read Cosign 3.1.3: {error}"));
+    let mut file = crate::sdk::ExecutableFile::open(&resolved).map_err(failure)?;
+    let (length, expected) = cosign_pin(file.len())?;
+    let bytes = file.read_exact_bytes(length).map_err(failure)?;
+    if format!("{:x}", Sha256::digest(&bytes)) != expected {
         return Err(PrismError::new(
             "PP7401",
             "SDK Cosign executable is not the pinned 3.1.3 release",
         ));
     }
-    Ok(executable)
+    file.verify_reference(&executable).map_err(failure)?;
+    Ok((executable, bytes))
 }
 
 fn verification_arguments(
@@ -4152,6 +4170,97 @@ pub(crate) fn attach_build_evidence(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn current_cosign_capture_is_pinned_or_explicitly_unavailable() {
+        let installed = crate::sdk::inventory_path().is_some();
+        if let Err(error) = crate::sdk::executable("cosign") {
+            assert!(
+                !installed,
+                "an installed SDK cannot omit its pinned verifier"
+            );
+            assert_eq!(error.code, "PP5401");
+            assert!(error.message.contains("SDK command cosign is absent"));
+            let refusal = super::captured_cosign().unwrap_err();
+            assert_eq!(refusal.code, "PP7401");
+            assert!(refusal.message.contains("SDK command cosign is absent"));
+            eprintln!("source-bootstrap Cosign absence refused; cryptography was not executed");
+            return;
+        }
+        let (executable, bytes) = super::captured_cosign().unwrap();
+        let (size, expected) = super::cosign_pin(bytes.len() as u64).unwrap();
+        assert_eq!(size, bytes.len());
+        assert_eq!(super::sha(&bytes), format!("sha256:{expected}"));
+        let root = tempfile::tempdir().unwrap();
+        let subject = root.path().join("subject");
+        let bundle = root.path().join("bundle");
+        let trusted = root.path().join("root");
+        std::fs::write(
+            &subject,
+            include_bytes!("../standards/corpora/cosign-3.1.3/cosign_checksums.txt"),
+        )
+        .unwrap();
+        std::fs::write(
+            &bundle,
+            include_bytes!("../standards/corpora/cosign-3.1.3/cosign_checksums.txt.sigstore.json"),
+        )
+        .unwrap();
+        std::fs::write(&trusted, super::SIGSTORE_TRUSTED_ROOT).unwrap();
+        // Genuine upstream signature evidence tests this verifier capture only;
+        // it is neither Prism producer evidence nor publication authorization.
+        let arguments = vec![
+            "verify-blob".to_owned(),
+            "--offline".to_owned(),
+            "--bundle".to_owned(),
+            bundle.display().to_string(),
+            "--trusted-root".to_owned(),
+            trusted.display().to_string(),
+            "--certificate-identity".to_owned(),
+            "keyless@projectsigstore.iam.gserviceaccount.com".to_owned(),
+            "--certificate-oidc-issuer".to_owned(),
+            "https://accounts.google.com".to_owned(),
+            subject.display().to_string(),
+        ];
+        let run = || {
+            crate::verification::run_process_limited(
+                "cosign-3.1.3-bounded-capture-test",
+                &executable,
+                &arguments,
+                root.path(),
+                &std::collections::BTreeMap::new(),
+                &[],
+                "PP7401",
+                "300",
+                1_048_576,
+            )
+        };
+        let verified = run().unwrap();
+        assert_eq!(verified.exit_code, 0);
+        assert_eq!(verified.executable_sha256, expected);
+        std::fs::write(&subject, b"changed signed subject").unwrap();
+        assert_eq!(run().unwrap_err().code, "PP7401");
+        eprintln!("pinned Cosign capture and real offline signature/changed-subject checks passed; installed={installed}");
+    }
+
+    #[test]
+    fn cosign_asset_lengths_bind_existing_signed_architecture_checksums() {
+        let checksums = include_str!("../standards/corpora/cosign-3.1.3/cosign_checksums.txt");
+        for (size, architecture, expected) in [
+            (141_178_250u64, "amd64", super::COSIGN_AMD64_SHA256),
+            (132_747_403u64, "arm64", super::COSIGN_ARM64_SHA256),
+        ] {
+            assert_eq!(super::cosign_pin(size).unwrap(), (size as usize, expected));
+            assert!(checksums
+                .lines()
+                .any(|line| line == format!("{expected}  cosign-linux-{architecture}")));
+            for invalid in [size - 1, size + 1] {
+                assert_eq!(super::cosign_pin(invalid).unwrap_err().code, "PP7401");
+            }
+        }
+        for invalid in [0, 128 * 1024 * 1024, u64::MAX] {
+            assert_eq!(super::cosign_pin(invalid).unwrap_err().code, "PP7401");
+        }
+    }
+
     fn osv_policy_fixture() -> (tempfile::TempDir, serde_json::Value, serde_json::Value) {
         let root = tempfile::tempdir().unwrap();
         crate::authority::resolve(root.path(), false).unwrap();
