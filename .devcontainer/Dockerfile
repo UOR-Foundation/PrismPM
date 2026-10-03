@@ -1,3 +1,12 @@
+# syntax=docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25
+# Keep this source-independent stage identical in both image recipes.
+FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust_oracle_tools
+ENV SOURCE_DATE_EPOCH=0
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasm-bindgen-cli --version 0.2.122
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasm-tools --version 1.258.0
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasmtime-cli --version 48.0.1
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools cargo-local-registry --version 0.2.12
+
 FROM docker.io/library/docker:28.4.0-cli@sha256:6a73c9433f2ba4279815be1e60f5739288b939dda1e48151d8c393537802de37 AS docker_cli
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS browser_oracle
 FROM docker.io/library/golang:1.19.7-alpine3.17@sha256:04065e607052705ede1ac6308ce56aec4715b0fafb1f0c2f4c2333aab9d84442 AS upstream_oracles
@@ -77,10 +86,7 @@ COPY sdk/oracles/package.json sdk/oracles/package-lock.json /opt/prismpm/oracles
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
     && node -e 'if(require("/opt/prismpm/oracles/node_modules/playwright/package.json").version!=="1.62.1")process.exit(1)'
 
-RUN cargo install --locked wasm-bindgen-cli --version 0.2.122 \
-    && cargo install --locked wasm-tools --version 1.258.0 \
-    && cargo install --locked wasmtime-cli --version 48.0.1 \
-    && cargo install --locked cargo-local-registry --version 0.2.12
+COPY --from=rust_oracle_tools /opt/prismpm/rust-oracle-tools/bin/ /usr/local/cargo/bin/
 
 RUN curl -sSfL https://github.com/leanprover/elan/releases/download/v4.2.3/elan-x86_64-unknown-linux-gnu.tar.gz -o elan.tar.gz \
     && echo "df0b2b3a439961ffcbb3985214365ffe40f49bc871df04dff268c7d8e21ca8b2  elan.tar.gz" | sha256sum -c - \
