@@ -38,6 +38,7 @@ Feature: sdk
     Given independently checked declarations in the exact standard-library namespace
     When source projections and schema mutations exercise every closed boundary
     Then declarations remain distinct from portable profiles and build refuses the unavailable runtime
+    And changing display labels never confers runtime acceptance
 
   @DK-20 @build
   Scenario: The internal bounded effect wire codec executes actual modeled transitions in generated native and Core-Wasm code, while a private browser host binds real guest, cryptography and storage effects without accepting caller completions or claiming application acceptance.

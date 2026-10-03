@@ -5,6 +5,7 @@ import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,w
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {retireCompletedCompilerCaches} from './driver-cache.mjs';
 export const draft=dirname(fileURLToPath(import.meta.url));
 export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -227,6 +228,7 @@ export function prepare(mutation=null){
     assert.deepEqual(wasm[0],wasm[1],'two freshly generated and compiled guests');
     verifyPins();assert.equal(generation.ir_sha256,sha(readFileSync(join(exported,'kernel.ir'))));
     for(const [name,bytes]of originalSources)assert.deepEqual(bytes,readFileSync(sourcePath(name)),'source remained frozen '+name);
-    completed=true;return {work,sources,verified,generation,compileNative,runner,wasmBytes:wasm[0]};
+    const cacheRetirement=retireCompletedCompilerCaches(work,'view');
+    completed=true;return {work,sources,verified,generation,compileNative,runner,cacheRetirement,wasmBytes:wasm[0]};
   } finally {if(!completed)process.stderr.write('Retained incomplete View diagnostic build '+work+'\n');}
 }
