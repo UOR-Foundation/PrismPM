@@ -14,6 +14,9 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::path::{Component, Path};
 
+mod executable_file;
+pub(crate) use executable_file::ExecutableFile;
+
 const STDLIB_SOURCES: &[u8] = include_bytes!("../sdk/stdlib-sources.tar");
 const RELEASED_INVENTORY: &str = "/opt/prismpm/share/inventory.json";
 const SDK_INVENTORY_MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -42,6 +45,13 @@ pub(crate) fn inventory_path() -> Option<PathBuf> {
         Path::new("/etc/profile.d/prismpm-sdk.sh"),
         std::env::var_os("PRISMPM_SDK_INVENTORY").map(PathBuf::from),
     )
+}
+
+fn executable_digest(selected: &Path, resolved: &Path) -> std::io::Result<String> {
+    let mut file = ExecutableFile::open(resolved)?;
+    let digest = file.sha256()?;
+    file.verify_reference(selected)?;
+    Ok(digest)
 }
 
 fn executable_inventory() -> Result<serde_json::Value, PrismError> {
@@ -79,12 +89,12 @@ fn executable_inventory() -> Result<serde_json::Value, PrismError> {
                     continue;
                 }
             }
-            let bytes = std::fs::read(&resolved)
+            let digest = executable_digest(&entry.path(), &resolved)
                 .map_err(|error| PrismError::new("PP5401", error.to_string()))?;
             commands.push(json!({
                 "command": command,
                 "executable": resolved.to_string_lossy(),
-                "sha256": format!("{:x}", Sha256::digest(bytes))
+                "sha256": digest
             }));
             seen.insert(command);
         }
@@ -190,13 +200,8 @@ pub fn executable(command: &str) -> Result<PathBuf, PrismError> {
             .ok_or_else(|| {
                 PrismError::new("PP5401", format!("SDK command {command} is undeclared"))
             })?;
-        let observed_sha = format!(
-            "{:x}",
-            Sha256::digest(
-                std::fs::read(&resolved)
-                    .map_err(|error| PrismError::new("PP5401", error.to_string()))?
-            )
-        );
+        let observed_sha = executable_digest(&candidate, &resolved)
+            .map_err(|error| PrismError::new("PP5401", error.to_string()))?;
         if expected["executable"] != resolved.to_string_lossy().as_ref()
             || expected["sha256"] != observed_sha
         {
@@ -902,6 +907,62 @@ pub(crate) fn execution_binding_regression(
 mod tests {
     use serde_json::{json, Value};
     use sha2::{Digest, Sha256};
+
+    #[cfg(unix)]
+    #[test]
+    fn sdk_digest_rejects_retargeted_selection_even_when_target_bytes_match() {
+        let root = tempfile::tempdir().unwrap();
+        let original = root.path().join("original");
+        let replacement = root.path().join("replacement");
+        let selected = root.path().join("selected");
+        std::fs::write(&original, b"identical executable bytes").unwrap();
+        std::fs::write(&replacement, b"identical executable bytes").unwrap();
+        std::os::unix::fs::symlink(&original, &selected).unwrap();
+        let resolved = selected.canonicalize().unwrap();
+        let expected = format!("{:x}", Sha256::digest(b"identical executable bytes"));
+        assert_eq!(
+            super::executable_digest(&selected, &resolved).unwrap(),
+            expected
+        );
+        std::fs::remove_file(&selected).unwrap();
+        std::os::unix::fs::symlink(&replacement, &selected).unwrap();
+        assert!(super::executable_digest(&selected, &resolved)
+            .unwrap_err()
+            .to_string()
+            .contains("selection changed"));
+        // A fresh selection may name the replacement; no global alias ban.
+        assert_eq!(
+            super::executable_digest(&selected, &selected.canonicalize().unwrap()).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn current_sdk_command_preserves_the_verified_selected_alias() {
+        let verification = super::verify_environment().unwrap();
+        let selected = super::executable("cargo").unwrap();
+        let expected = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+            .map(|directory| directory.join("cargo"))
+            .find(|path| path.is_file())
+            .unwrap();
+        assert_eq!(selected, expected);
+        let canonical = selected.canonicalize().unwrap();
+        let mut captured = super::ExecutableFile::open(&canonical).unwrap();
+        assert_eq!(captured.sha256().unwrap().len(), 64);
+        captured.verify_reference(&selected).unwrap();
+        let output = std::process::Command::new(&selected)
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert!(output.stdout.starts_with(b"cargo "));
+        eprintln!(
+            "SDK command alias: selected={}, canonical={}, installed={}",
+            selected.display(),
+            canonical.display(),
+            verification.is_some()
+        );
+    }
 
     #[cfg(unix)]
     #[test]
