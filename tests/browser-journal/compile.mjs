@@ -8,8 +8,8 @@ import {fileURLToPath} from 'node:url';
 export const draft=dirname(fileURLToPath(import.meta.url));
 export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
-export {ensureProdExport} from '../browser-view/compile.mjs';
-import {ensureProdExport} from '../browser-view/compile.mjs';
+export {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport} from '../browser-view/compile.mjs';
 function verifyPins(){
   const artifacts=readFileSync(join(repository,'model/dependencies.toml'),'utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
     const text=section.split('[[dependency]]')[0];return {path:/^path = "([^"]+)"$/m.exec(text)?.[1],hash:/^sha256 = "([0-9a-f]{64})"$/m.exec(text)?.[1],tree:/^tree_root = "([^"]+)"$/m.exec(text)?.[1]};
@@ -139,8 +139,8 @@ export function prepare(){
   for(const [name,bytes]of sources)writeFileSync(join(sourceRoot,name+'.lex.tex'),bytes,{flag:'wx'});
   for(const file of ['lexlean.toml','lakefile.toml','lean-toolchain'])copyFileSync(join(draft,file),join(project,file));
   copyFileSync(join(repository,'rust-toolchain.toml'),join(work,'rust-toolchain.toml'));
-  const driverTarget=resolve(repository,'target/browser-test-drivers');
-  run('cargo',['build','--locked','--offline','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+  const driverTarget=createPrivateDriverTarget(work);
+  run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
   const driver=join(driverTarget,'debug/browser-workspace-journal-driver');
   run('lake',['update'],project);
   const verified=JSON.parse(run(driver,['verify',join(project,'lexlean.toml')],repository));
@@ -150,7 +150,7 @@ export function prepare(){
   copyFileSync(join(repository,'lean-toolchain'),join(lean,'lean-toolchain'));
   writeFileSync(join(lean,'lakefile.toml'),'name = "workspace_journal_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['+files.map(n=>'"PrismPM.Foundation.Browser.V1.'+n+'"').join(',')+']\n',{flag:'wx'});
   run('lake',['build','PrismGenerated'],lean);
-  const {dir: exporter, bin: prodExport} = ensureProdExport();
+  const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
   const exported=join(work,'export');run(prodExport,['--module','PrismPM.Foundation.Browser.V1.WorkspaceJournal','--root','PrismPM.Foundation.Browser.V1.WorkspaceJournal.workspaceJournalBytes','--ir-module','BrowserWorkspaceJournal','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
   const generated=join(work,'generated');const generation=JSON.parse(run(driver,['generate',join(exported,'kernel.ir'),generated,repository],repository));
   const runner=join(work,'runner');mkdirSync(join(runner,'src'),{recursive:true});copyFileSync(join(draft,'runner.rs'),join(runner,'src/main.rs'));

@@ -18,7 +18,7 @@ function verifyPins(){
   }
 }
 export {ensureProdExport, run} from '../browser-journal/compile.mjs';
-import {ensureProdExport, run} from '../browser-journal/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport, run} from '../browser-journal/compile.mjs';
 export function prepare(){
   verifyPins();
   const work=mkdtempSync(join(tmpdir(),'prismpm-query-'));
@@ -33,8 +33,8 @@ export function prepare(){
   for(const [name,bytes]of sources)writeFileSync(join(sourceRoot,name+'.lex.tex'),bytes,{flag:'wx'});
   for(const file of ['lexlean.toml','lakefile.toml','lean-toolchain'])copyFileSync(join(draft,file),join(project,file));
   copyFileSync(join(repository,'rust-toolchain.toml'),join(work,'rust-toolchain.toml'));
-  const driverTarget=resolve(repository,'target/browser-test-drivers');
-  run('cargo',['build','--locked','--offline','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+  const driverTarget=createPrivateDriverTarget(work);
+  run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
   const driver=join(driverTarget,'debug/browser-workspace-query-driver');
   run('lake',['update'],project);
   const verified=JSON.parse(run(driver,['verify',join(project,'lexlean.toml')],repository));
@@ -44,7 +44,7 @@ export function prepare(){
   copyFileSync(join(repository,'lean-toolchain'),join(lean,'lean-toolchain'));
   writeFileSync(join(lean,'lakefile.toml'),'name = "workspace_query_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = ['+files.map(n=>'"PrismPM.Foundation.Browser.V1.'+n+'"').join(',')+']\n',{flag:'wx'});
   run('lake',['build','PrismGenerated'],lean);
-  const {dir: exporter, bin: prodExport} = ensureProdExport();
+  const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
   const exported=join(work,'export');run(prodExport,['--module','PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus','--root','PrismPM.Foundation.Browser.V1.WorkspaceJournal.workspaceJournalBytes','--root','PrismPM.Foundation.Browser.V1.WorkspaceQuery.workspaceQueryBytes','--root','PrismPM.Foundation.Browser.V1.WorkspaceQueryCorpus.queryDecodeProbeBytes','--ir-module','BrowserWorkspaceQuery','--out',exported],exporter,{LEAN_PATH:join(lean,'.lake/build/lib/lean')});
   const generated=join(work,'generated');const generation=JSON.parse(run(driver,['generate',join(exported,'kernel.ir'),generated,repository],repository));
   const runner=join(work,'runner');mkdirSync(join(runner,'src'),{recursive:true});copyFileSync(join(draft,'runner.rs'),join(runner,'src/main.rs'));

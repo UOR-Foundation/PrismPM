@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
-import {ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -123,9 +123,9 @@ export function prepare(mutation = null, sourceOnly = false) {
     writeFileSync(join(project, 'lakefile.toml'), 'name = "operation_journal_conformance"\nversion = "0.1.0"\n', {flag: 'wx'});
     copyFileSync(join(repository, 'lean-toolchain'), join(project, 'lean-toolchain'));
     copyFileSync(join(repository, 'rust-toolchain.toml'), join(work, 'rust-toolchain.toml'));
-    const driverTarget = resolve(repository, 'target/browser-test-drivers');
+    const driverTarget = createPrivateDriverTarget(work);
     const compiler = stageCompiler(work);
-    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'profile.dev.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
+    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
     const driver = join(driverTarget, 'debug/browser-operation-journal-driver');
     if (sourceOnly) { const checked = JSON.parse(run(driver, ['check', join(project, 'lexlean.toml')], repository)); assert.deepEqual(checked.modules, modules); completed = true; return {work, checked}; }
     run('lake', ['update'], project);
@@ -157,7 +157,7 @@ export function prepare(mutation = null, sourceOnly = false) {
     copyFileSync(join(repository, 'lean-toolchain'), join(lean, 'lean-toolchain'));
     writeFileSync(join(lean, 'lakefile.toml'), 'name = "operation_journal_probe"\nversion = "0.1.0"\n[[lean_lib]]\nname = "PrismGenerated"\nroots = [' + modules.map(name => '"PrismPM.' + name + '"').join(',') + ']\n', {flag: 'wx'});
     run('lake', ['build', 'PrismGenerated'], lean);
-    const {dir: exporter, bin: prodExport} = ensureProdExport();
+    const {dir: exporter, bin: prodExport} = ensureProdExport(repository, work);
     const exported = join(work, 'export');
     const roots = ['PrismPM.Foundation.Browser.Application.V1.OperationJournalWire.journalWireBytes', 'PrismPM.Foundation.Browser.Application.V1.OperationJournalWire.journalPartitionBytes', 'PrismPM.Foundation.Browser.Application.V1.EffectsWire.effectWireBytes', 'PrismPM.Fixture.fixtureEchoBytes'].sort();
     run(prodExport, ['--module', 'PrismPM.Fixture', ...roots.flatMap(root => ['--root', root]),

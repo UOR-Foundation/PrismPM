@@ -617,6 +617,26 @@ binds the exact full Git commit.
 Formatting checks a closed inventory of authored test manifests and Rust inputs.
 Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
 
+The private browser exporter harness builds `prod-export` from captured, pinned
+compiler source in a fresh private directory. It never adopts, executes or
+overwrites a previous shared exporter cache. Source and toolchain identities
+are checked before and after construction; aliased or multiply linked source
+files and pre-existing private destinations are refused. The exporter parent
+must belong to the invoking user and grant no group or other permissions;
+these checks precede source staging and compiler execution. Every caller supplies
+its owned diagnostic workspace so existing cleanup or explicit failure retention
+also owns the exporter; there is no implicit standalone temporary cache. An executable's
+existence or a Lake fingerprint is not compiler-source provenance. This fresh
+construction boundary does not qualify future compiler-seed reuse or establish
+application acceptance by itself.
+
+Browser verification drivers likewise use absent targets beneath owned private
+workspaces. They do not adopt executables from a shared Cargo target, even when
+its source fingerprints appear current. Cargo initializes the target and its
+cache tag; private compiler-driver builds use one job, no incremental state and
+no development debug symbols to bound temporary storage. Generated program
+builds, kernel checks, native/Wasm execution and oracle cases are unchanged.
+
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
 `prismpm/golden-comparison/1` regression-only comparison profile. Before
@@ -670,6 +690,15 @@ command exit status and stop only their own observers; both consecutive V&V
 invocations remain mandatory. Diagnostics upload runs even after gate failure
 when the runner is reachable; runner loss can prevent upload and never implies
 acceptance or a diagnosed resource cause.
+
+Consecutive source gates share one exact-source, digest-addressed test SDK
+session and its invocation-owned temporary registry. Both unchanged `just vv`
+commands execute sequentially in the same workspace with separate evidence;
+only SDK preparation is shared, never verification results. Failure stops the
+sequence. Cleanup checks container identity, volume ownership and image identity;
+errors fail an otherwise successful session without replacing a verification
+failure. Uncertain publication reports possibly retained resources instead of
+deleting an unverified name.
 
 The accepted 0.2.0 bootstrap remains the exact published AMD64 archive and
 binary. A shared hash-verifying runner executes it directly on native Linux
