@@ -59,7 +59,7 @@ function compilerEnvironment(extra) {
       && !/[:\r\n\0]/.test(value), 'confined compiler path required: '+key);
   }
   return {...process.env, PATH:'/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin',
-    CARGO_NET_OFFLINE:'true', RUSTUP_TOOLCHAIN:rust+'-'+triple, ELAN_TOOLCHAIN:lean, ...extra};
+    CARGO_NET_OFFLINE:'true', RUSTUP_TOOLCHAIN:rust+'-'+triple, ELAN_TOOLCHAIN:lean, ...extra, LEAN_NUM_THREADS:'2'};
 }
 function terminateOwnedGroup(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 1) return;
