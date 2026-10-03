@@ -6,11 +6,13 @@ const docker = {
   manifest: 'application/vnd.docker.distribution.manifest.v2+json',
   config: 'application/vnd.docker.container.image.v1+json',
   layer: 'application/vnd.docker.image.rootfs.diff.tar.gzip',
+  uncompressed: 'application/vnd.docker.image.rootfs.diff.tar',
 };
 const oci = {
   manifest: 'application/vnd.oci.image.manifest.v1+json',
   config: 'application/vnd.oci.image.config.v1+json',
   layer: 'application/vnd.oci.image.layer.v1.tar+gzip',
+  uncompressed: 'application/vnd.oci.image.layer.v1.tar',
 };
 
 export function ociFixtureManifest(bytes) {
@@ -26,10 +28,13 @@ export function ociFixtureManifest(bytes) {
   };
   descriptor(manifest.config, types.config);
   assert.ok(Array.isArray(manifest.layers) && manifest.layers.length > 0);
-  for (const layer of manifest.layers) descriptor(layer, types.layer);
+  for (const layer of manifest.layers) {
+    assert.ok([types.layer, types.uncompressed].includes(layer.mediaType), 'unsupported fixture layer');
+    descriptor(layer, layer.mediaType);
+  }
   if (types === oci) return bytes;
   manifest.mediaType = oci.manifest;
   manifest.config.mediaType = oci.config;
-  for (const layer of manifest.layers) layer.mediaType = oci.layer;
+  for (const layer of manifest.layers) layer.mediaType = layer.mediaType === docker.layer ? oci.layer : oci.uncompressed;
   return Buffer.from(JSON.stringify(manifest));
 }
