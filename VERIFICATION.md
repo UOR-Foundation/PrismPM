@@ -2341,6 +2341,14 @@ baseline nor the source audit establishes a current installed SDK or deployment.
 
 ## Original release-gate retention
 
+Native records were subsequently adopted byte-for-byte from run `37120266595`
+at source `8bb318c565dc6144d620aeb319338a0de2e374c7`. Both native lanes
+generated and replayed all 357 files. Independent review checked the artifact
+digests, original process receipts, exporter measurements and all 356 composed
+file descriptors against the portable tree. Local golden composition tests
+passed 8/8 after adoption. This is reviewed source evidence at that commit,
+not current-HEAD execution, installed-SDK acceptance or hardware attestation.
+
 Source VV now retains both original runs, separate stdout/stderr and status,
 VV receipts and fresh bootstrap outputs. Installed SDK execution retains each
 run's four original bootstrap files. Native/SDK comparisons retain all four
