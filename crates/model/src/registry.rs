@@ -465,7 +465,7 @@ pub struct ContractRow {
 impl Contracts {
     /// Validate public contract registry invariants.
     pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
-        if self.spec != "prismpm/contracts/1" || self.contract.len() != 56 {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 57 {
             return Err(ModelError::Inconsistent(
                 "public contract registry is incomplete".to_owned(),
             ));
@@ -554,6 +554,9 @@ pub struct CommandRow {
     pub requires_digest: bool,
     /// Canonical machine result schema.
     pub result_schema: String,
+    /// Version-dependent results for explicitly registered subcommands.
+    #[serde(default)]
+    pub subcommand_results: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 impl Commands {
@@ -600,6 +603,28 @@ impl Commands {
             || names != EXPECTED
             || self.command.iter().any(|row| {
                 row.mutates.is_empty()
+                    || if row.name == "lock" {
+                        row.subcommand_results
+                            != std::collections::BTreeMap::from([
+                                (
+                                    "check".into(),
+                                    vec!["prismpm/sdk-lock/1".into(), "prismpm/sdk-lock/2".into()],
+                                ),
+                                (
+                                    "migrate".into(),
+                                    vec!["prismpm/sdk-lock-migration/1".into()],
+                                ),
+                                (
+                                    "update".into(),
+                                    vec![
+                                        "prismpm/sdk-lock-update/1".into(),
+                                        "prismpm/sdk-lock-update/2".into(),
+                                    ],
+                                ),
+                            ])
+                    } else {
+                        !row.subcommand_results.is_empty()
+                    }
                     || !row.result_schema.starts_with("prismpm/")
                     || if row.name == "lock" {
                         row.result_schema != "prismpm/sdk-lock-update/2"

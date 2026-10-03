@@ -4,11 +4,42 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createRequire } from 'node:module';
 import { fixture as metadataFixture } from './metadata-test-fixture.mjs';
 import { capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
 import { ociFixtureManifest } from './oci-test-fixture.mjs';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+test('published migration schema admits complete evidence and rejects empty or wrong-major locks', async () => {
+  const require = createRequire('/opt/prismpm/oracles/package.json');
+  assert.equal(require('ajv/package.json').version, '8.20.0');
+  const Ajv = require('ajv/dist/2020').default;
+  const schema = JSON.parse(await readFile(new URL('../schemas/sdk-lock-migration.schema.json', import.meta.url)));
+  const validate = new Ajv({strict: false, allErrors: true}).compile(schema);
+  const directory = await mkdtemp(join(tmpdir(), 'prismpm-migration-schema-'));
+  try {
+    const {reference, inventories} = await fixture(directory);
+    const target = await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64');
+    const legacy = {schema: 'prismpm/sdk-lock/1', sdk_version: '0.3.0', sdk_image: reference,
+      standards_lock: sha(standards), inventory: [{id: 'sdk-manifest', kind: 'image', version: '0.3.0', digest: reference.split('@')[1]}]};
+    const proposal = {schema: 'prismpm/sdk-lock-migration/1', compatibility_review: 'required',
+      generated_output_diff: 'required', security_review: 'required',
+      patch: [{op: 'test', path: '', value: legacy}, {op: 'replace', path: '', value: target}]};
+    assert.equal(validate(proposal), true, JSON.stringify(validate.errors));
+    for (const mutation of ['empty-source', 'empty-target', 'wrong-source', 'wrong-target', 'extra-source', 'extra-target', 'missing-test', 'partial-path']) {
+      const invalid = structuredClone(proposal);
+      if (mutation === 'empty-source') invalid.patch[0].value = {};
+      if (mutation === 'empty-target') invalid.patch[1].value = {};
+      if (mutation === 'wrong-source') invalid.patch[0].value = target;
+      if (mutation === 'wrong-target') invalid.patch[1].value = legacy;
+      if (mutation === 'extra-source') invalid.patch[0].value.extra = true;
+      if (mutation === 'extra-target') invalid.patch[1].value.extra = true;
+      if (mutation === 'missing-test') invalid.patch.shift();
+      if (mutation === 'partial-path') invalid.patch[1].path = '/sdk_image';
+      assert.equal(validate(invalid), false, mutation);
+    }
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const encode = value => Buffer.from(JSON.stringify(canonical(value)));

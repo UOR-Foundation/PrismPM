@@ -453,7 +453,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "sdk/metadata-cli.test.mjs",
                 "sdk/metadata-publisher.test.mjs",
             ],
-            53,
+            54,
             "120000",
         ),
         "OC-07" => verify_browser_export(root),
@@ -1097,6 +1097,29 @@ fn verify_sdk(id: &str) {
                 value.clone(),
             )
             .unwrap();
+            let migration = serde_json::json!({"schema":"prismpm/sdk-lock-migration/1",
+                "patch":[{"op":"test","path":"","value":lock.value()},
+                    {"op":"replace","path":"","value":value}],
+                "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});
+            prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/sdk-lock-migration/1",
+                migration.clone(),
+            )
+            .unwrap();
+            for mutation in 0..4 {
+                let mut rejected = migration.clone();
+                match mutation {
+                    0 => rejected["patch"][0]["value"] = serde_json::json!({}),
+                    1 => rejected["patch"][1]["value"] = serde_json::json!({}),
+                    2 => rejected["patch"].as_array_mut().unwrap().reverse(),
+                    _ => rejected["patch"][1]["path"] = serde_json::json!("/sdk_image"),
+                }
+                assert!(prismpm::contracts::CanonicalDocument::from_value(
+                    "prismpm/sdk-lock-migration/1",
+                    rejected,
+                )
+                .is_err());
+            }
             let proposal = serde_json::json!({"schema":"prismpm/sdk-lock-update/2",
                 "changes":[], "proposed_lock":value,
                 "compatibility_review":"required", "generated_output_diff":"required", "security_review":"required"});
