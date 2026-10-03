@@ -1,5 +1,19 @@
 # PrismPM falsifiability and verification record
 
+## Typed-byte compiler integration candidate
+
+LexLean `d2c2aa184f9941598e713b0fcde4b60e42eea57d` is an integration
+backport, not a completed upstream release. Its independently reviewed Cargo
+archive and all 887 members match the imported bytes; the tree manifest also
+binds the archive. This import includes intervening language-1.2, CLI, linker,
+and lock-v2 support, not only the byte-rendering optimization. The stdlib
+project remains language 1.1 and was explicitly relocked.
+
+Model and specification audits pass (183 capabilities, 86 diagnostics).
+The targeted compiler tests and a fresh 53-module compilation diagnostic do
+not establish complete SDK, stdlib, native, Wasm, or release acceptance.
+Fresh stdlib generation and complete integration verification remain required.
+
 ## Merged upstream compiler qualification (in progress)
 
 Compiler source is imported from auser/lean4-prod main commit
