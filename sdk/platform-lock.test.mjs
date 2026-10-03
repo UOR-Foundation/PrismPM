@@ -5,14 +5,38 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { copyFileSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
-import { capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
+import { capturePlatformLock, createPlatformLock, parseSdkIndex, runCaptureCommand, validateInventory } from './platform-lock.mjs';
 import { ociFixtureManifest } from './oci-test-fixture.mjs';
+import { createRequire } from 'node:module';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const encode = value => Buffer.from(JSON.stringify(canonical(value)));
 const standards = Buffer.from('synthetic test standards, not a published lock');
+
+test('Docker capture runner applies the normative cleanup bounds without widening ordinary calls', () => {
+  for (const cleanup of [false, true]) {
+    const args = cleanup ? ['rm', '--force', '--volumes', 'a'.repeat(64)] : ['pull', 'test-fixture'];
+    const output = Buffer.from('unchanged process output');
+    assert.equal(runCaptureCommand('/verified/docker', args, cleanup, (command, actualArgs, options) => {
+      assert.equal(command, '/verified/docker');
+      assert.equal(actualArgs, args);
+      assert.deepEqual(options, {timeout: cleanup ? 20_000 : 120_000,
+        maxBuffer: cleanup ? 65_536 : 8_388_608, stdio: ['ignore', 'pipe', 'pipe']});
+      return output;
+    }), output);
+    const failure = new Error('actual runner failure');
+    assert.throws(() => runCaptureCommand('/verified/docker', args, cleanup, () => { throw failure; }),
+      error => error === failure);
+  }
+});
+
+test('cleanup output exceeding 64 KiB is rejected by the actual child runner', () => {
+  const args = ['-e', 'process.stdout.write(Buffer.alloc(65537, 120))'];
+  assert.throws(() => runCaptureCommand(process.execPath, args, true), {code: 'ENOBUFS'});
+  assert.equal(runCaptureCommand(process.execPath, args).length, 65_537);
+});
 
 test('test-image conversion changes only the supported descriptor labels and retains all blob identities', () => {
   const original = {
@@ -86,6 +110,37 @@ async function fixture(directory) {
   return {reference: `example.invalid/test-sdk@${sha(index)}`, inventories, index};
 }
 
+test('published migration schema admits complete evidence and rejects empty or wrong-major locks', async () => {
+  const require = createRequire('/opt/prismpm/oracles/package.json');
+  assert.equal(require('ajv/package.json').version, '8.20.0');
+  const Ajv = require('ajv/dist/2020').default;
+  const schema = JSON.parse(await readFile(new URL('../schemas/sdk-lock-migration.schema.json', import.meta.url)));
+  const validate = new Ajv({strict: false, allErrors: true}).compile(schema);
+  const directory = await mkdtemp(join(tmpdir(), 'prismpm-migration-schema-'));
+  try {
+    const {reference, inventories} = await fixture(directory);
+    const target = await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64');
+    const legacy = {schema: 'prismpm/sdk-lock/1', sdk_version: '0.3.0', sdk_image: reference,
+      standards_lock: sha(standards), inventory: [{id: 'sdk-manifest', kind: 'image', version: '0.3.0', digest: reference.split('@')[1]}]};
+    const proposal = {schema: 'prismpm/sdk-lock-migration/1', compatibility_review: 'required',
+      generated_output_diff: 'required', security_review: 'required',
+      patch: [{op: 'test', path: '', value: legacy}, {op: 'replace', path: '', value: target}]};
+    assert.equal(validate(proposal), true, JSON.stringify(validate.errors));
+    for (const mutation of ['empty-source', 'empty-target', 'wrong-source', 'wrong-target', 'extra-source', 'extra-target', 'missing-test', 'partial-path']) {
+      const invalid = structuredClone(proposal);
+      if (mutation === 'empty-source') invalid.patch[0].value = {};
+      if (mutation === 'empty-target') invalid.patch[1].value = {};
+      if (mutation === 'wrong-source') invalid.patch[0].value = target;
+      if (mutation === 'wrong-target') invalid.patch[1].value = legacy;
+      if (mutation === 'extra-source') invalid.patch[0].value.extra = true;
+      if (mutation === 'extra-target') invalid.patch[1].value.extra = true;
+      if (mutation === 'missing-test') invalid.patch.shift();
+      if (mutation === 'partial-path') invalid.patch[1].path = '/sdk_image';
+      assert.equal(validate(invalid), false, mutation);
+    }
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
 test('one exact index yields the same complete platform lock from either native architecture', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-lock-'));
   try {
@@ -156,10 +211,27 @@ test('wrong architecture, swapped inventories, missing files, changed standards 
 // are deliberately not represented as real released SDK inventory evidence.
 function captureRunner(directory, reference, index, mutation = '') {
   const calls = [], destinations = [];
+  const allocated = new Map([['unrelated', 'external']]);
   const children = parseSdkIndex(index, reference);
   const containers = new Map(children.map((child, i) => [(i ? 'b' : 'a').repeat(64), child.architecture]));
-  const run = args => {
+  const run = (args, cleanup = false) => {
+    assert.equal(cleanup, args[0] === 'container' || args[0] === 'rm',
+      'every ownership/absence/removal command uses the cleanup bound');
     calls.push(args);
+    if (args[0] === 'container') {
+      if (mutation === 'daemon' && calls.some(call => call[0] === 'create')) throw new Error('synthetic unavailable daemon');
+      if (args[1] === 'inspect') {
+        assert.deepEqual(args.slice(0, 4), ['container', 'inspect', '--format', '{{.Id}} {{index .Config.Labels "org.prismpm.sdk-capture"}}']);
+        const name = args[4], architecture = allocated.get(name);
+        assert.ok(architecture);
+        if (architecture === 'foreign') return Buffer.from(`${'f'.repeat(64)} unrelated-owner`);
+        return Buffer.from(`${[...containers].find(([, arch]) => arch === architecture)[0]} ${name}`);
+      }
+      assert.deepEqual(args.slice(0, 5), ['container', 'ls', '--all', '--quiet', '--filter']);
+      const name = args[5].slice(7, -1);
+      assert.match(name, /^prismpm-sdk-capture-[a-z0-9-]+-(amd64|arm64)$/);
+      return Buffer.from(allocated.has(name) ? 'allocated-container-id' : '');
+    }
     if (args[0] === 'buildx') {
       assert.deepEqual(args, ['buildx', 'imagetools', 'inspect', '--raw', reference]);
       return mutation === 'index' ? Buffer.concat([index, Buffer.from('\n')]) : index;
@@ -178,26 +250,37 @@ function captureRunner(directory, reference, index, mutation = '') {
       return encode(inspected);
     }
     if (args[0] === 'create') {
-      const child = children.find(child => child.reference === args[5]);
-      assert.deepEqual(args.slice(0, 5), ['create', '--network', 'none', '--platform', `linux/${child.architecture}`]);
+      const child = children.find(child => child.reference === args[9]);
+      const name = args[2];
+      assert.deepEqual(args.slice(0, 9), ['create', '--name', name, '--label', `org.prismpm.sdk-capture=${name}`, '--network', 'none', '--platform', `linux/${child.architecture}`]);
+      if (mutation === 'occupied-after-preflight') {
+        allocated.set(name, 'foreign'); throw new Error('synthetic name conflict');
+      }
+      allocated.set(name, child.architecture);
+      if (mutation === 'create-timeout') throw new Error('synthetic timeout after daemon creation');
+      if (mutation === 'create-output') return Buffer.from('truncated output');
       return Buffer.from([...containers].find(([, architecture]) => architecture === child.architecture)[0]);
     }
     if (args[0] === 'cp') {
       const [container, source] = args[1].split(':');
-      assert.ok(containers.has(container));
+      assert.ok(allocated.has(container));
       assert.ok(['/opt/prismpm/share/inventory.json', '/opt/prismpm/share/standards.lock'].includes(source));
       if (mutation === 'copy') throw new Error('synthetic copy failure');
       destinations.push(args[2]);
-      const input = `${directory}/${containers.get(container)}/${source.split('/').at(-1)}`;
+      const input = `${directory}/${allocated.get(container)}/${source.split('/').at(-1)}`;
       if (mutation === 'symlink') symlinkSync(input, args[2]);
       else copyFileSync(input, args[2]);
       return Buffer.alloc(0);
     }
-    assert.deepEqual(args.slice(0, 2), ['rm', '--volumes']);
-    assert.ok(containers.has(args[2]));
+    assert.deepEqual(args.slice(0, 3), ['rm', '--force', '--volumes']);
+    const owner = [...allocated].find(([, architecture]) => architecture === containers.get(args[3]));
+    assert.ok(owner);
+    assert.notEqual(owner[0], 'unrelated');
+    if (['remove', 'daemon'].includes(mutation)) throw new Error('synthetic failed removal');
+    allocated.delete(owner[0]);
     return Buffer.alloc(0);
   };
-  return {run, calls, destinations};
+  return {run, calls, destinations, allocated};
 }
 
 test('update captures both exact images without running foreign code and cleans its temporary inputs', async () => {
@@ -206,13 +289,14 @@ test('update captures both exact images without running foreign code and cleans 
     const {reference, inventories, index} = await fixture(directory);
     for (const asynchronous of [false, true]) {
       const capture = captureRunner(directory, reference, index);
-      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
+      const run = asynchronous ? async (...args) => { await new Promise(resolve => setImmediate(resolve)); return capture.run(...args); } : capture.run;
       const proposed = await capturePlatformLock(reference, sha(standards), run);
       assert.deepEqual(proposed, await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
-      assert.equal(capture.calls.length, 13);
+      assert.equal(capture.calls.length, 19);
       assert.equal(capture.calls.filter(args => args[0] === 'rm').length, 2);
       assert.ok(capture.calls.every(args => args[0] !== 'run' && args[0] !== 'start' && args[0] !== 'exec'));
       assert.ok(capture.destinations.every(file => !existsSync(file)));
+      assert.deepEqual([...capture.allocated], [['unrelated', 'external']]);
     }
   } finally { await rm(directory, {recursive: true, force: true}); }
 });
@@ -221,13 +305,36 @@ test('update rejects index/digest/architecture/copy/standards/symlink failures a
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-update-test-'));
   try {
     const {reference, index} = await fixture(directory);
-    for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards']) {
+    for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards', 'create-timeout', 'create-output', 'remove', 'daemon', 'occupied-after-preflight']) {
       const capture = captureRunner(directory, reference, index, mutation);
-      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
+      const run = asynchronous ? async (...args) => { await new Promise(resolve => setImmediate(resolve)); return capture.run(...args); } : capture.run;
       await assert.rejects(capturePlatformLock(reference, mutation === 'standards' ? sha('wrong standards') : sha(standards), run));
       const creates = capture.calls.filter(args => args[0] === 'create').length;
-      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, creates, mutation);
+      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, ['daemon', 'occupied-after-preflight'].includes(mutation) ? 0 : creates, mutation);
       assert.ok(capture.destinations.every(file => !existsSync(file)), mutation);
+      assert.equal(capture.allocated.get('unrelated'), 'external');
+      if (!['remove', 'daemon', 'occupied-after-preflight'].includes(mutation)) assert.deepEqual([...capture.allocated], [['unrelated', 'external']]);
     }
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
+test('capture uses parent-owned staging and refuses occupied names without removal', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-owned-test-'));
+  try {
+    const {reference, index} = await fixture(directory);
+    const owned = {directory: join(directory, 'evidence'), names: [
+      'prismpm-sdk-capture-owned-test-amd64', 'prismpm-sdk-capture-owned-test-arm64']};
+    const capture = captureRunner(directory, reference, index);
+    await capturePlatformLock(reference, sha(standards), capture.run, owned);
+    assert.ok(!existsSync(owned.directory));
+    assert.ok(existsSync(join(directory, 'index.json')), 'parent and source inputs remain');
+    assert.deepEqual(capture.calls.filter(args => args[0] === 'rm').map(args => args[3]), ['a'.repeat(64), 'b'.repeat(64)]);
+    const calls = [];
+    await assert.rejects(capturePlatformLock(reference, sha(standards), args => {
+      calls.push(args); return Buffer.from('pre-existing-container');
+    }, owned));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], 'container');
+    assert.ok(!existsSync(owned.directory));
   } finally { await rm(directory, {recursive: true, force: true}); }
 });
