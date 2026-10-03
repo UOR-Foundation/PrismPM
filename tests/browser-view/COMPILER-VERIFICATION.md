@@ -32,3 +32,24 @@
 Complete affected browser owners, combined installed-SDK execution and full
 release gates remain required. Cache-integrity tests do not establish application
 or deployment acceptance. Original logs: `target/audit-27sep26/`.
+
+## Fresh source-owner tools
+
+DK-15 and DK-20 each construct one private, source-bound compiler pair per
+owning test. Opaque in-memory handles bind the closed family, complete registered
+compiler inputs, exporter runtime and original/private executables. No existing
+target, filesystem receipt or caller executable can create an owner.
+
+Each model and mutant still receives fresh LexLean, kernel, IR, native and Wasm
+builds. Tool checks bracket every invocation; completed tools retire only after
+the entire owner finishes. Failure retains diagnostics. This is process-local
+test infrastructure, not installed-SDK seed admission, cached acceptance, or
+isolation from hostile processes with the same user identity. Construction and
+model timings must be measured before claiming a speedup.
+
+2026-10-03, pinned development container: the combined DK-15/DK-16/DK-20
+components passed all 47 tests in 1805.031 seconds, including the unchanged
+cold DK-16 path. The 18 compiler-cache regressions and 30 owner/SDK-registration
+infrastructure tests also passed. Independent review compared all 1,584 captured
+input hashes with the source tree and checked both retirement records. These
+are source-component results, not installed-SDK or full V&V acceptance.

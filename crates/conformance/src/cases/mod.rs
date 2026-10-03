@@ -499,7 +499,15 @@ fn verify_browser_host(root: &Path, id: &str) {
         "DK-12" => (&["sdk/browser/journal-model-test.mjs"], 13),
         "DK-13" => (&["sdk/browser/command-model-test.mjs"], 12),
         "DK-14" => (&["sdk/browser/query-model-test.mjs"], 11),
-        "DK-15" => (&["sdk/browser/view-model-test.mjs"], 7),
+        "DK-15" => (
+            &[
+                "sdk/browser/view-model-test.mjs",
+                "tests/browser-view/compiler-artifact.test.mjs",
+                "tests/browser-view/compiler-artifact-mutations.test.mjs",
+                "tests/browser-view/compiler-owner.test.mjs",
+            ],
+            19,
+        ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (
             &[
