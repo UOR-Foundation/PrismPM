@@ -899,12 +899,19 @@ pub(crate) fn validate_exporter_authority(
     sdk_lock: &Value,
 ) -> Result<(), PrismError> {
     let manifest = canonical_json(file(verification_files, "manifest.json")?, false)?;
-    let executions: Vec<Value> = array(&manifest["processes"])?
+    let processes = process_records(&manifest["processes"], false)?;
+    let platform = process_platform(processes)?;
+    let executions: Vec<Value> = processes
         .iter()
         .filter_map(|row| row.get("exporter").cloned())
         .collect();
     for execution in executions {
         validate_exporter_execution(&execution)?;
+        ensure(
+            execution["acquisition"]["mode"] == "cold"
+                || execution["acquisition"]["platform"] == platform,
+            "exporter acquisition platform differs from retained native execution",
+        )?;
         crate::exporter::validate_acquisition_authority(
             &execution["acquisition"],
             string(&execution["executable"]["sha256"])?,
@@ -1053,7 +1060,23 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
                 .all(|(row, tool)| row["tool"] == *tool),
         "verification process closure or order differs",
     )?;
-    for row in rows.iter().take(PREFLIGHT.len()) {
+    process_platform(rows).map(|_| ())
+}
+
+// Retained execution determines the platform, not the reader's current host
+// and not a receipt's self-selected SDK inventory row.
+fn process_platform(rows: &[Value]) -> Result<&'static str, PrismError> {
+    let preflight = rows
+        .get(..PREFLIGHT.len())
+        .ok_or_else(|| invalid("verification native preflight is incomplete"))?;
+    ensure(
+        preflight
+            .iter()
+            .zip(PREFLIGHT)
+            .all(|(row, tool)| row["tool"] == tool),
+        "verification native preflight order differs",
+    )?;
+    for row in preflight {
         let expected = if row["tool"] == "rustc-version" {
             json!(["--version", "--verbose"])
         } else {
@@ -1066,7 +1089,7 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
             "verification preflight process differs",
         )?;
     }
-    let host = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"].into_iter().find(|host| rows[0]["stdout"] == format!("Lean (version 4.32.1, {host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n")).ok_or_else(|| invalid("verification process Lean version differs"))?;
+    let (host, platform) = [("x86_64-unknown-linux-gnu", "linux/amd64"), ("aarch64-unknown-linux-gnu", "linux/arm64")].into_iter().find(|(host, _)| rows[0]["stdout"] == format!("Lean (version 4.32.1, {host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n")).ok_or_else(|| invalid("verification process Lean version differs"))?;
     ensure(
         rows[1]["stdout"] == "Lake version 5.0.0-src+f054605 (Lean version 4.32.1)\n"
             && rows[2]["stdout"] == "rustfmt 1.9.0-stable (8bab26f4f6 2026-07-14)\n",
@@ -1090,7 +1113,7 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
             .any(|version| timeout.starts_with(&format!("timeout (GNU coreutils) {version}\n"))),
         "verification process timeout version differs",
     )?;
-    Ok(())
+    Ok(platform)
 }
 
 #[allow(clippy::too_many_arguments)]

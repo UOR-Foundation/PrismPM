@@ -944,7 +944,9 @@ Each actual `lake exe prod-export` invocation records a closed
 `prismpm/exporter-execution/1` child executable measurement and
 `prismpm/exporter-acquisition/1` cold/seed provenance. Seed receipts bind their
 inventory and manifest to the consumer lock, and the actual child to its
-locked binary. Release admission checks this context independently of
+locked binary. Their native platform must match the retained, validated
+Lean/Rust preflight, not the admission reader's host or a self-selected foreign
+SDK row. Release admission checks this context independently of
 structural transcript replay. Application build artifacts contain only the
 stable `prismpm/exporter-identity/1` sidecar; acquisition and process receipts
 belong to the distinct verification regeneration, bound to the unchanged build
