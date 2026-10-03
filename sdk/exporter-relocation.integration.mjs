@@ -5,19 +5,17 @@ import assert from 'node:assert/strict';
 import {mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {performance} from 'node:perf_hooks';
 import {isDeepStrictEqual} from 'node:util';
 import {buildSeed, constructionEnvironment, readSmall, runConstruction, snapshotTree} from './exporter-seed.mjs';
 import {decodeExporterSeed} from './inventory-metadata.mjs';
 import {stageSeedFiles} from './exporter-seed-admission.mjs';
 
-assert.equal(process.argv.length, 4, 'usage: exporter-relocation.integration.mjs SOURCE OUTPUT_PARENT');
-const source = resolve(process.argv[2]);
-const output = mkdtempSync(join(resolve(process.argv[3]), 'exporter-relocation-check-'));
+export function measureRelocation(source, parent, seed, construction) {
+const output = mkdtempSync(join(parent, 'exporter-relocation-check-'));
 const temporary = mkdtempSync(join(tmpdir(), 'exporter-relocation-'));
 try {
-  const seed = join(output, 'seed');
-  const construction = buildSeed(source, seed);
   const manifest = decodeExporterSeed(Buffer.from(readSmall(join(seed, 'manifest.json'), 8 * 1024 ** 2)));
   const environment = constructionEnvironment(manifest.configuration.environment, temporary);
   const lake = environment.PATH.split(':')[0] + '/lake';
@@ -48,6 +46,8 @@ try {
       const changedBuildFiles = [...new Set([...previous.keys(), ...current.keys()])].sort()
         .filter(path => !isDeepStrictEqual(previous.get(path), current.get(path)))
         .map(path => ({path, change: !previous.has(path) ? 'added' : !current.has(path) ? 'removed' : 'changed'}));
+      if (acquisition === 'relocated') assert.deepEqual(changedBuildFiles, [],
+        'relocated Lake build must reuse the unchanged seed, without trace rewriting');
       // This upstream fixture is LexLean-generated. No handwritten Lean driver
       // or replacement source is introduced by the relocation measurement.
       const module = runConstruction(lake, ['build', 'Conformance.LexLean11'], root, environment);
@@ -61,7 +61,7 @@ try {
           [name, readFileSync(join(destination, name), 'utf8')]));
         if (expected === undefined) expected = artifacts;
         else assert.deepEqual(artifacts, expected, 'cold and relocated named exports must agree at both roots and both replays');
-        exports.push(record);
+        exports.push({process: record, artifacts});
       }
       observations.push({root, acquisition, invocation_milliseconds: buildMilliseconds, changed_build_files: changedBuildFiles,
         extraction, build, module, kernel, exports});
@@ -69,9 +69,20 @@ try {
       rmSync(root, {recursive: true});
     }
   }
-  process.stdout.write(JSON.stringify({scope: 'compiler-relocation-measurement-only',
-    manifest_sha256: construction.manifest_sha256, construction, observations}) + '\n');
+  return {scope: 'compiler-relocation-measurement-only',
+    manifest_sha256: construction.manifest_sha256, construction, observations};
 } finally {
   rmSync(output, {recursive: true});
   rmSync(temporary, {recursive: true});
+}
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  assert.equal(process.argv.length, 4, 'usage: exporter-relocation.integration.mjs SOURCE OUTPUT_PARENT');
+  const source = resolve(process.argv[2]), parent = resolve(process.argv[3]);
+  const work = mkdtempSync(join(parent, 'exporter-relocation-seed-'));
+  try {
+    const seed = join(work, 'seed'), construction = buildSeed(source, seed);
+    process.stdout.write(JSON.stringify(measureRelocation(source, parent, seed, construction)) + '\n');
+  } finally { rmSync(work, {recursive: true}); }
 }

@@ -12,6 +12,12 @@ crate in std and no_std modes. Read-only checks, missing/wrong-typed roots,
 nominal impostors, a false modeled acceptance and product-release refusal are
 required. Restoring the source must restore successful verification.
 
+DK-29 additionally binds two fresh native compiler constructions to the
+captured image inventory. The first seed is reused for cold/relocated kernel
+checks at two roots and eight exact exports. Original records and bytes are
+retained. Construction runs non-root in bounded temporary filesystems; a
+separate root-only fixture checks filesystem custody. No extra image is built.
+
 `node scripts/library-sdk-check.mjs tests` runs the complete owning boundary
 and recording-Docker shell tests; omissions and skips fail. These tests do not
 establish installed-image acceptance. Source-free release

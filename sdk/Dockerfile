@@ -86,6 +86,7 @@ RUN case "$TARGETARCH" in \
     && tar --extract --gzip --file /tmp/elan.tar.gz --directory /tmp/elan \
     && /tmp/elan/elan-init -y --no-modify-path --default-toolchain none \
     && elan toolchain install leanprover/lean4:v4.32.1 \
+    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
     && rm /tmp/elan.tar.gz \
     && rm /tmp/elan/elan-init \
     && rmdir /tmp/elan

@@ -4,12 +4,12 @@ import {createHash} from 'node:crypto';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {buildSeed, readSmall, snapshotFile} from './exporter-seed.mjs';
 import {exporterArtifactBindings} from './inventory-metadata.mjs';
 
-const source = resolve(process.argv[2]), other = resolve(process.argv[3]);
+export function constructSeeds(source, other, output) {
 assert.notEqual(source, other, 'two source roots required');
-const output = mkdtempSync(join(resolve(process.argv[4]), 'exporter-construction-check-'));
 const temporary = mkdtempSync(join(tmpdir(), 'exporter-invalid-source-'));
 try {
   const first = buildSeed(source, join(output, 'first'));
@@ -42,9 +42,16 @@ try {
   assert.deepEqual(readdirSync(tmpdir()).filter(name => name.startsWith('prismpm-exporter-construction')).sort(), before,
     'failed real construction must remove only its owned staging');
   assert.deepEqual(readdirSync(output).sort(), ['first', 'second']);
-  process.stdout.write(JSON.stringify({scope: 'exporter-construction-only', manifest_sha256: first.manifest_sha256,
-    files: first.files, raw_construction: [first.construction, second.construction]}) + '\n');
+  return {scope: 'exporter-construction-only', manifest_sha256: first.manifest_sha256,
+    files: first.files, raw_construction: [first.construction, second.construction]};
 } finally {
-  rmSync(output, {recursive: true});
   rmSync(temporary, {recursive: true});
+}
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  assert.equal(process.argv.length, 5, 'usage: exporter-seed.integration.mjs SOURCE OTHER OUTPUT_PARENT');
+  const output = mkdtempSync(join(resolve(process.argv[4]), 'exporter-construction-check-'));
+  try { process.stdout.write(JSON.stringify(constructSeeds(resolve(process.argv[2]), resolve(process.argv[3]), output)) + '\n'); }
+  finally { rmSync(output, {recursive: true}); }
 }

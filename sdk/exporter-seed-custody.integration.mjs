@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {immutablePath} from './exporter-seed-admission.mjs';
 
 assert.equal(process.getuid(), 0, 'custody adversaries require a disposable root-owned container');
-const trusted = mkdtempSync('/opt/prismpm-custody-');
+const trusted = mkdtempSync('/opt/prismpm-custody/fixture-');
 const writable = mkdtempSync('/tmp/prismpm-custody-');
 try {
   const file = join(trusted, 'file'); writeFileSync(file, 'custody fixture', {mode: 0o444});

@@ -112,8 +112,8 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  for(const row of resealed.runs){const manifest=JSON.parse(row.manifest);manifest.processes[7].exporter.source_archive_sha256='a'.repeat(64);if(row.acquisition==='sdk-seed')manifest.processes[7].exporter.acquisition.archive_sha256='a'.repeat(64);row.manifest=fixture.encode(manifest);row.manifest_sha256=fixture.hash(row.manifest);}
  assert.throws(()=>verify(resealed));assert.throws(()=>verifyResult(value));assert.throws(()=>verify(value,fixture.binding('arm64')));
  assert.throws(()=>verifyResult(value,binding));
- const tap='TAP version 13\n'+Array.from({length:16},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..16\n# tests 16\n# suites 0\n# pass 16\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
- testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 16','# tests 15')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const tap='TAP version 13\n'+Array.from({length:18},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..18\n# tests 18\n# suites 0\n# pass 18\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
+ testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 18','# tests 17')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
 });
 
 test('captured seed lock requires both exact platforms and independently selected native bytes',()=>{
@@ -243,6 +243,8 @@ test('release job keeps both native library and browser gates mandatory for each
  for(const required of ['--user 1000:1000 --read-only --network none','--cap-drop ALL','--security-opt no-new-privileges','--tmpfs /tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','node scripts/library-sdk-check.mjs run'])assert.ok(wrapper.includes(required),required);
  const execution=wrapper.slice(wrapper.indexOf('# Execution has no network'));
  assert.ok(!execution.includes('--volume')&&!execution.includes('--mount'));
+ const recipe=readFileSync(new URL('../sdk/Dockerfile',import.meta.url),'utf8');
+ assert.match(recipe,/elan toolchain install leanprover\/lean4:v4\.32\.1 \\\n\s+&& chmod -R a\+rX,go-w \/usr\/local\/elan\/toolchains\/leanprover--lean4---v4\.32\.1/);
 });
 
 test('owning CLI test kills a removed process-exit guard',t=>{

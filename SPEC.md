@@ -1522,6 +1522,12 @@ has no network, credentials or host implementation mounts. Two fresh cold roots
 and two fresh seeded roots must reproduce every build artifact byte, execute
 both consumers and retain original process manifests. Seeded records must bind
 the captured native inventory, seed and exporter; cold fallback is a failure.
+The same native gate requires two fresh exporter constructions to match the
+captured installed seed manifest, then reuses the first seed for two-root
+cold/relocated kernel checks and eight exact exports. Original manifests,
+process records, export bytes and timings are retained. Construction is non-root
+with a bounded sub-1-GiB temporary filesystem; root-only custody adversaries
+use a separate disposable fixture mount. Neither phase replaces consumer tests.
 This gate remains native-library evidence, not full SDK or deployment acceptance.
 
 ### 12.7 Internal browser effect protocol

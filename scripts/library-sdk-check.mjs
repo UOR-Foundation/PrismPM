@@ -381,7 +381,7 @@ export function verifyResult(value,binding,sourceAuthority){
   verifyExporterProcess(manifest.processes[7],'prod-export',row.acquisition,binding,sourceAuthority);
  }
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,16),16,'complete owning gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,18),18,'complete owning gate test count');}
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
@@ -394,7 +394,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   {archive_sha256:hash(regularBytes(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),toolchain:regularBytes(new URL('../lean-toolchain',import.meta.url)).toString().trim()});
  else if(mode==='binding'&&args.length===5)console.log(JSON.stringify(validateCapturedLock(
   regularBytes(args[0]),args[1],args[2],regularBytes(args[3]),regularBytes(args[4]))));
- else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
+ else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','sdk/exporter-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
  else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0]));
  else if(mode==='run'&&args.length===1)console.log(JSON.stringify(run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
  else throw Error('closed installed native-library gate command');

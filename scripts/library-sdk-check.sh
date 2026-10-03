@@ -59,6 +59,31 @@ test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" =
 docker container rm "$container" >/dev/null
 container=''
 node "$helper" binding "$sdk_work/lock.json" "$image" "$architecture" "$root/standards.lock" "$sdk_work/inventory.json" > "$sdk_work/binding.json"
+# Native compiler construction uses a separate bounded tmpfs from retained
+# outputs. Reuse its first fresh seed for relocation; do not build a third.
+container=$(docker container create --interactive --entrypoint node --user 1000:1000 --read-only --network none --cap-drop ALL \
+  --security-opt no-new-privileges --memory 8g --pids-limit 256 \
+  --tmpfs /tmp:rw,exec,nosuid,nodev,size=768m --tmpfs /work:rw,exec,nosuid,nodev,size=2g,mode=1777 \
+  --workdir /opt/prismpm/share/conformance-root "$image" sdk/exporter-qualification.mjs run "$image")
+[[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
+docker container start --attach --interactive "$container" < "$sdk_work/lock.json" > "$sdk_work/compiler.json"
+test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" = 0
+node "$root/sdk/exporter-qualification.mjs" result "$sdk_work/compiler.json" "$sdk_work/lock.json" "$image" "$root" "$sdk_work/inventory.json"
+cat "$sdk_work/compiler.json"
+docker container rm "$container" >/dev/null
+container=''
+# Root is confined to disposable custody fixtures, never consumer execution.
+container=$(docker container create --entrypoint node --user 0:0 --read-only --network none --cap-drop ALL \
+  --security-opt no-new-privileges --memory 256m --pids-limit 64 \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m --tmpfs /opt/prismpm-custody:rw,noexec,nosuid,nodev,size=16m,mode=0700 \
+  --workdir /opt/prismpm/share/conformance-root "$image" sdk/exporter-seed-custody.integration.mjs)
+[[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
+docker container start --attach "$container" > "$sdk_work/custody.json"
+test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" = 0
+node --input-type=module -e 'import assert from "node:assert/strict"; import {readFileSync} from "node:fs"; assert.deepEqual(JSON.parse(readFileSync(process.argv[1])), {scope:"filesystem-custody-only",checks:6,status:"passed"});' "$sdk_work/custody.json"
+cat "$sdk_work/custody.json"
+docker container rm "$container" >/dev/null
+container=''
 # Execution has no network, credentials, host implementation, or writable mount.
 # The independently captured lock is the only explicit stdin data.
 container=$(docker container create --interactive --user 1000:1000 --read-only --network none --cap-drop ALL \
