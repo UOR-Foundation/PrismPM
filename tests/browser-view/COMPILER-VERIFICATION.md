@@ -60,3 +60,9 @@ passed 56 tests in 1875.969 seconds; eight Presentation host tests also passed.
 The Presentation source/installed minimum is now its complete 24-test count.
 Both owners retain all five source mutants; Journal still constructs its
 independent custody dependency cold. Model timings remain diagnostic only.
+
+Budget also uses one closed compiler owner while retaining its full frozen-input
+closure and cold default. Its complete owner and compiler adversaries passed
+25 tests in 535.344 seconds: all 179 vectors, 25 maxima, one-over checks and
+seven fresh compiled mutants remain required. This is component verification,
+not measured overall speedup or installed-SDK acceptance.

@@ -13,6 +13,7 @@ const families = Object.freeze({
   effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),
   presentation: Object.freeze({directory: 'browser-presentation', executable: 'browser-presentation-driver'}),
   'operation-journal': Object.freeze({directory: 'browser-operation-journal', executable: 'browser-operation-journal-driver'}),
+  budget: Object.freeze({directory: 'browser-budget', executable: 'browser-budget-driver'}),
 });
 const owners = new WeakMap();
 function family(name) {
