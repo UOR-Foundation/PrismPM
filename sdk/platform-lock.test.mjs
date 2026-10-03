@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { copyFileSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
-import { capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
+import { capturePlatformLock, createPlatformLock, parseSdkIndex, runCaptureCommand, validateInventory } from './platform-lock.mjs';
 import { ociFixtureManifest } from './oci-test-fixture.mjs';
 import { createRequire } from 'node:module';
 
@@ -14,6 +14,29 @@ const canonical = value => Array.isArray(value) ? value.map(canonical) : value &
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const encode = value => Buffer.from(JSON.stringify(canonical(value)));
 const standards = Buffer.from('synthetic test standards, not a published lock');
+
+test('Docker capture runner applies the normative cleanup bounds without widening ordinary calls', () => {
+  for (const cleanup of [false, true]) {
+    const args = cleanup ? ['rm', '--force', '--volumes', 'a'.repeat(64)] : ['pull', 'test-fixture'];
+    const output = Buffer.from('unchanged process output');
+    assert.equal(runCaptureCommand('/verified/docker', args, cleanup, (command, actualArgs, options) => {
+      assert.equal(command, '/verified/docker');
+      assert.equal(actualArgs, args);
+      assert.deepEqual(options, {timeout: cleanup ? 20_000 : 120_000,
+        maxBuffer: cleanup ? 65_536 : 8_388_608, stdio: ['ignore', 'pipe', 'pipe']});
+      return output;
+    }), output);
+    const failure = new Error('actual runner failure');
+    assert.throws(() => runCaptureCommand('/verified/docker', args, cleanup, () => { throw failure; }),
+      error => error === failure);
+  }
+});
+
+test('cleanup output exceeding 64 KiB is rejected by the actual child runner', () => {
+  const args = ['-e', 'process.stdout.write(Buffer.alloc(65537, 120))'];
+  assert.throws(() => runCaptureCommand(process.execPath, args, true), {code: 'ENOBUFS'});
+  assert.equal(runCaptureCommand(process.execPath, args).length, 65_537);
+});
 
 test('test-image conversion changes only the supported descriptor labels and retains all blob identities', () => {
   const original = {
@@ -191,7 +214,9 @@ function captureRunner(directory, reference, index, mutation = '') {
   const allocated = new Map([['unrelated', 'external']]);
   const children = parseSdkIndex(index, reference);
   const containers = new Map(children.map((child, i) => [(i ? 'b' : 'a').repeat(64), child.architecture]));
-  const run = args => {
+  const run = (args, cleanup = false) => {
+    assert.equal(cleanup, args[0] === 'container' || args[0] === 'rm',
+      'every ownership/absence/removal command uses the cleanup bound');
     calls.push(args);
     if (args[0] === 'container') {
       if (mutation === 'daemon' && calls.some(call => call[0] === 'create')) throw new Error('synthetic unavailable daemon');
@@ -264,7 +289,7 @@ test('update captures both exact images without running foreign code and cleans 
     const {reference, inventories, index} = await fixture(directory);
     for (const asynchronous of [false, true]) {
       const capture = captureRunner(directory, reference, index);
-      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
+      const run = asynchronous ? async (...args) => { await new Promise(resolve => setImmediate(resolve)); return capture.run(...args); } : capture.run;
       const proposed = await capturePlatformLock(reference, sha(standards), run);
       assert.deepEqual(proposed, await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
       assert.equal(capture.calls.length, 19);
@@ -282,7 +307,7 @@ test('update rejects index/digest/architecture/copy/standards/symlink failures a
     const {reference, index} = await fixture(directory);
     for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards', 'create-timeout', 'create-output', 'remove', 'daemon', 'occupied-after-preflight']) {
       const capture = captureRunner(directory, reference, index, mutation);
-      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
+      const run = asynchronous ? async (...args) => { await new Promise(resolve => setImmediate(resolve)); return capture.run(...args); } : capture.run;
       await assert.rejects(capturePlatformLock(reference, mutation === 'standards' ? sha('wrong standards') : sha(standards), run));
       const creates = capture.calls.filter(args => args[0] === 'create').length;
       assert.equal(capture.calls.filter(args => args[0] === 'rm').length, ['daemon', 'occupied-after-preflight'].includes(mutation) ? 0 : creates, mutation);

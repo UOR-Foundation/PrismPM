@@ -141,19 +141,19 @@ export async function capturePlatformLock(reference, standardsDigest, run, owned
   for (const [index, name] of names.entries()) assert.match(name,
     new RegExp(`^prismpm-sdk-capture-[a-z0-9-]+-${architectures[index]}$`));
   const absent = async name => {
-    const rows = await run(['container', 'ls', '--all', '--quiet', '--filter', `name=^/${name}$`]);
+    const rows = await run(['container', 'ls', '--all', '--quiet', '--filter', `name=^/${name}$`], true);
     assert.equal(rows.toString().trim(), '', `SDK capture cleanup unconfirmed for ${name}`);
   };
   const cleanup = async name => {
     let observed;
     try {
-      observed = (await run(['container', 'inspect', '--format', ownershipFormat, name])).toString().trim().split(/\s+/);
+      observed = (await run(['container', 'inspect', '--format', ownershipFormat, name], true)).toString().trim().split(/\s+/);
     } catch (_) { await absent(name); return; }
     assert.ok(observed.length === 2 && /^[0-9a-f]{64}$/.test(observed[0]) && observed[1] === name,
       `SDK capture ownership unconfirmed for ${name}; nothing removed`);
     // Remove the inspected ID, never a name that another container can acquire
     // between inspection and removal. Image labels cannot override --label.
-    try { await run(['rm', '--force', '--volumes', observed[0]]); } catch (_) { /* establish absence below */ }
+    try { await run(['rm', '--force', '--volumes', observed[0]], true); } catch (_) { /* establish absence below */ }
     await absent(name);
   };
   // Refuse pre-existing names before acquiring ownership or removing anything.
@@ -196,6 +196,11 @@ export async function capturePlatformLock(reference, standardsDigest, run, owned
   }
 }
 
+export function runCaptureCommand(docker, args, cleanup = false, execute = execFileSync) {
+  return execute(docker, args, {timeout: cleanup ? 20_000 : 120_000,
+    maxBuffer: cleanup ? 64 * 1024 : 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']});
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [command, reference, standardsDigest, docker, directory, amd64, arm64] = process.argv.slice(2);
   if (command === 'index') {
@@ -207,8 +212,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     assert.equal(command, 'capture');
     assert.ok([6, 9].includes(process.argv.length));
     assert.ok(docker.startsWith('/'), 'Docker must be an SDK-resolved absolute executable');
-    const lock = await capturePlatformLock(reference, standardsDigest, args => execFileSync(docker, args,
-      {timeout: 120_000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']}),
+    const lock = await capturePlatformLock(reference, standardsDigest,
+      (args, cleanup) => runCaptureCommand(docker, args, cleanup),
       directory ? {directory, names: [amd64, arm64]} : undefined);
     // SDK lock files are exact canonical JSON; unlike inventory files, they
     // do not permit a trailing newline outside the canonical value.
