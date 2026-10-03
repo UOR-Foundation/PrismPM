@@ -2004,6 +2004,32 @@ Owning log: `target/cbor-integrated-complete-owning.log`, SHA-256
 This verifies the finite primitive profile, not a browser application,
 installed SDK release, complete CBOR/CDDL implementation or deployment.
 
+### Bounded octet lookup candidate
+
+The clean candidate based on reviewed infrastructure `6848308` passed the
+complete ST-16 gate in 855.01 seconds: 194 roots in generated std/no_std,
+342 exact declaration audits, and 274 invocations of each actual Wasm
+module, including all 71 independent byte vectors. Maximum observed memory
+was 963 pages under the unchanged 1,024-page cap; maximum payload was
+4,202,612 bytes. All five source mutants failed their expected runtime
+roots and every restoration reproduced the original identities. The new
+lookup oracle covers all 256 octets and nine above-bound values.
+
+| Identity | SHA-256 |
+| --- | --- |
+| Primitive source | `5ef08de8a662fe90ea43b360f89f4fd3bf071bf799bf8652414bd2a8036d4bd5` |
+| Corpus source | `4d96b97be51aa4206bab09e5179ea796a84e73111867fb675022c3c26d69fa2f` |
+| Build | `8228897ed5452e20f0a05b4b9188712a5b1b7d79ebfce2755279cfa843356e3a` |
+| Attestation | `a305e1a154249a135cdd4ea73cdeedd1a0af460ecbda15ef77b1ad54e512d74b` |
+| Regenerated source archive | `6d52ea3f1a45c85033ce3c8dd0d53d3617d901ddb55a06f65eb63348164d7195` |
+
+Independent readback matched all 143 archive entries against source;
+only the primitive, corpus and corpus inventory changed. Five receipt/guard
+tests, three source tests, pinned formatting and model validation passed
+(181 IDs, 86 codes). This is codec evidence, not acceptance of an installed
+SDK, application or deployment; the separate publication worktree is not
+part of this candidate.
+
 ### Earlier diagnostic checkpoint
 
 Pre-integration execution uses LexLean `9c1456d` and lean4-prod `6272da0`.
