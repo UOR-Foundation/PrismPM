@@ -323,6 +323,33 @@ export function run(root,image,lockBytes){
  }finally{rmSync(work,{recursive:true,force:true});}
 }
 
+export function verifyExporterProcess(process,role,mode,binding,sourceAuthority){
+ assert(['prod-export','application-export'].includes(role));assert(['cold','sdk-seed'].includes(mode));
+ keys(sourceAuthority,['archive_sha256','toolchain']);hex(sourceAuthority.archive_sha256);
+ assert.match(sourceAuthority.toolchain,/^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/);
+ keys(process,['tool','argv','executable_sha256','exit_code','stdout','stderr','exporter']);
+ assert.equal(process.tool,role);assert.equal(process.exit_code,0);hex(process.executable_sha256);
+ assert(Array.isArray(process.argv)&&process.argv.every(argument=>typeof argument==='string'));
+ same(process.argv.slice(0,2),['exe','prod-export'],'retained Lake exporter invocation required');
+ assert.equal(typeof process.stdout,'string');assert.equal(typeof process.stderr,'string');
+ const exporter=process.exporter;assert.equal(exporter.acquisition.mode,mode);
+ keys(exporter,['schema','source_archive_sha256','executable','acquisition']);assert.equal(exporter.schema,'prismpm/exporter-execution/1');
+ assert.equal(exporter.source_archive_sha256,sourceAuthority.archive_sha256);
+ keys(exporter.executable,['byte_length','mode','sha256']);hex(exporter.executable.sha256);
+ assert(Number.isSafeInteger(exporter.executable.byte_length)&&exporter.executable.byte_length>0&&exporter.executable.byte_length<=256*1024*1024);
+ assert(Number.isSafeInteger(exporter.executable.mode)&&exporter.executable.mode>=0&&exporter.executable.mode<=0o777&&(exporter.executable.mode&0o111));
+ if(mode==='cold')same(exporter.acquisition,{schema:'prismpm/exporter-acquisition/1',mode:'cold'},'closed retained cold receipt');
+ else{
+  keys(exporter.acquisition,['schema','mode','inventory_sha256','manifest_sha256','executable_sha256','archive_sha256','compiler_revision','platform','toolchain']);
+  assert.equal(exporter.acquisition.schema,'prismpm/exporter-acquisition/1');
+  assert.equal(exporter.acquisition.archive_sha256,exporter.source_archive_sha256);
+  assert.equal(exporter.acquisition.toolchain,sourceAuthority.toolchain);
+  for(const [field,expected] of Object.entries({platform:binding.platform,inventory_sha256:binding.inventory_sha256,
+   manifest_sha256:binding.seed_manifest_sha256,executable_sha256:binding.exporter_sha256,compiler_revision:binding.compiler_revision}))assert.equal(exporter.acquisition[field],expected);
+  assert.equal(exporter.executable.sha256,binding.exporter_sha256);
+ }
+}
+
 export function verifyResult(value,binding,sourceAuthority){
  hex(value.build_id);assert(binding,'independent captured SDK binding required');
  keys(sourceAuthority,['archive_sha256','toolchain']);hex(sourceAuthority.archive_sha256);
@@ -351,23 +378,7 @@ export function verifyResult(value,binding,sourceAuthority){
    assert(Array.isArray(process.argv)&&process.argv.every(argument=>typeof argument==='string'));
    assert.equal(typeof process.stdout,'string');assert.equal(typeof process.stderr,'string');
   }
-  const exporter=manifest.processes[7].exporter;assert.equal(exporter.acquisition.mode,row.acquisition);
-  same(manifest.processes[7].argv.slice(0,2),['exe','prod-export'],'retained Lake exporter invocation required');
-  keys(exporter,['schema','source_archive_sha256','executable','acquisition']);assert.equal(exporter.schema,'prismpm/exporter-execution/1');hex(exporter.source_archive_sha256);
-  assert.equal(exporter.source_archive_sha256,sourceAuthority.archive_sha256);
-  keys(exporter.executable,['byte_length','mode','sha256']);hex(exporter.executable.sha256);
-  assert(Number.isSafeInteger(exporter.executable.byte_length)&&exporter.executable.byte_length>0&&exporter.executable.byte_length<=256*1024*1024);
-  assert(Number.isSafeInteger(exporter.executable.mode)&&exporter.executable.mode>=0&&exporter.executable.mode<=0o777&&(exporter.executable.mode&0o111));
-  if(row.acquisition==='cold')same(exporter.acquisition,{schema:'prismpm/exporter-acquisition/1',mode:'cold'},'closed retained cold receipt');
-  else{
-   keys(exporter.acquisition,['schema','mode','inventory_sha256','manifest_sha256','executable_sha256','archive_sha256','compiler_revision','platform','toolchain']);
-   assert.equal(exporter.acquisition.schema,'prismpm/exporter-acquisition/1');
-   assert.equal(exporter.acquisition.archive_sha256,exporter.source_archive_sha256);
-   assert.equal(exporter.acquisition.toolchain,sourceAuthority.toolchain);
-   for(const [field,expected] of Object.entries({platform:binding.platform,inventory_sha256:binding.inventory_sha256,
-    manifest_sha256:binding.seed_manifest_sha256,executable_sha256:binding.exporter_sha256,compiler_revision:binding.compiler_revision}))assert.equal(exporter.acquisition[field],expected);
-   assert.equal(exporter.executable.sha256,binding.exporter_sha256);
-  }
+  verifyExporterProcess(manifest.processes[7],'prod-export',row.acquisition,binding,sourceAuthority);
  }
 }
 export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,16),16,'complete owning gate test count');}
