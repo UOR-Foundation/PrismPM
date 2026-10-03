@@ -1486,6 +1486,16 @@ source-free product-release replay reject library evidence with `PP6101`.
 The library may supply modeled code to an application, whose own complete
 application and deployment acceptance remains mandatory.
 
+The installed native-library SDK gate acquires the complete two-platform lock
+through the source-bound SDK metadata transport before offline execution. Its
+native inventory must equal the independently selected immutable image's bytes.
+Registry credentials are read-only inputs to acquisition only; library execution
+has no network, credentials or host implementation mounts. Two fresh cold roots
+and two fresh seeded roots must reproduce every build artifact byte, execute
+both consumers and retain original process manifests. Seeded records must bind
+the captured native inventory, seed and exporter; cold fallback is a failure.
+This gate remains native-library evidence, not full SDK or deployment acceptance.
+
 ### 12.7 Internal browser effect protocol
 
 DK-18 owns `Foundation.Browser.Application.V1.Effects` and its closed contract
