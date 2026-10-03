@@ -745,7 +745,7 @@ pub(crate) fn generate(
             .to_string_lossy()
             .into_owned(),
     );
-    run_process(
+    let exporter_process = crate::exporter::run_export(
         "application-export",
         &lake,
         &export_args,
@@ -1043,6 +1043,18 @@ pub(crate) fn generate(
     })?;
 
     let mut artifacts = vec![
+        (
+            "application/exporter-execution.json".to_owned(),
+            encode_value(
+                &serde_json::to_value(exporter_process.exporter.as_ref().ok_or_else(|| {
+                    PrismError::new(
+                        "PP9001",
+                        "actual application exporter measurement is absent",
+                    )
+                })?)
+                .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+            )?,
+        ),
         (format!("{}.holo", application.name()), holo.bytes),
         (
             "application/application-manifest.bin".to_owned(),

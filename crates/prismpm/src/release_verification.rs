@@ -814,6 +814,12 @@ fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError>
             if row.get("module").is_some() {
                 fields.push("module");
             }
+        } else if row["argv"].as_array().is_some_and(|args| {
+            args.first().and_then(Value::as_str) == Some("exe")
+                && args.get(1).and_then(Value::as_str) == Some("prod-export")
+        }) {
+            fields.push("exporter");
+            validate_exporter_execution(&row["exporter"])?;
         }
         keys(row, &fields).map_err(|error| invalid(format!("process: {}", error.message)))?;
         ensure(
@@ -841,6 +847,31 @@ fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError>
         }
     }
     Ok(rows)
+}
+
+fn validate_exporter_execution(value: &Value) -> Result<(), PrismError> {
+    keys(value, &["schema", "source_archive_sha256", "executable"])?;
+    ensure(
+        value["schema"] == "prismpm/exporter-execution/1",
+        "exporter evidence schema differs",
+    )?;
+    ensure(
+        digest(&value["source_archive_sha256"])?
+            == hex(include_bytes!("../vendor/lean4-prod/lean.tar")),
+        "exporter source archive differs from the compiled authority",
+    )?;
+    let executable = &value["executable"];
+    keys(executable, &["byte_length", "mode", "sha256"])?;
+    digest(&executable["sha256"])?;
+    ensure(
+        executable["byte_length"]
+            .as_u64()
+            .is_some_and(|size| size > 0 && size <= 256 * 1024 * 1024)
+            && executable["mode"]
+                .as_u64()
+                .is_some_and(|mode| mode <= 0o777 && mode & 0o111 != 0),
+        "bounded actual exporter executable measurement required",
+    )
 }
 
 fn lexlean_processes(lex: &Value, modules: &BTreeSet<String>) -> Result<(), PrismError> {
@@ -1300,6 +1331,10 @@ fn application_archive(
         )?;
     }
     let lcnf = canonical_json(file(files, "application/lcnf-manifest.json")?, false)?;
+    validate_exporter_execution(&canonical_json(
+        file(files, "application/exporter-execution.json")?,
+        false,
+    )?)?;
     ensure(
         lcnf == json!({"coverage_sha256":hex(file(files,"cargo/coverage.json")?),"kernel_ir_sha256":hex(file(files,"cargo/kernel.ir")?),"roots_sha256":hex(file(files,"cargo/roots.json")?),"schema":"prismpm/lcnf-manifest/1"}),
         "application LCNF evidence differs",

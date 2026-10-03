@@ -249,6 +249,8 @@ pub(crate) struct ProcessRecord {
     pub(crate) exit_code: i32,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) exporter: Option<crate::exporter::ExporterExecution>,
 }
 
 pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
@@ -1118,6 +1120,7 @@ pub(crate) fn run_process_limited_allowed(
         exit_code,
         stdout,
         stderr,
+        exporter: None,
     })
 }
 
@@ -2728,7 +2731,7 @@ pub(crate) fn run(
                 "--out".to_owned(),
                 out.to_string_lossy().into_owned(),
             ]);
-            processes.push(run_process(
+            processes.push(crate::exporter::run_export(
                 "prod-export",
                 &lake,
                 &args,

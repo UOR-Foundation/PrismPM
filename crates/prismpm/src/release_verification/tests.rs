@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn exporter_process_evidence_requires_the_actual_child_and_pinned_archive() {
+    let exporter = json!({
+        "schema":"prismpm/exporter-execution/1",
+        "source_archive_sha256":hex(include_bytes!("../../vendor/lean4-prod/lean.tar")),
+        "executable":{"byte_length":1234,"mode":0o755,"sha256":"b".repeat(64)}
+    });
+    let record = json!({"tool":"prod-export","argv":["exe","prod-export"],
+        "executable_sha256":"a".repeat(64),"exit_code":0,"stdout":"","stderr":"", "exporter":exporter});
+    process_records(&json!([record.clone()]), false).unwrap();
+    for (pointer, value) in [
+        ("/exporter", Value::Null),
+        ("/exporter/source_archive_sha256", json!("c".repeat(64))),
+        ("/exporter/schema", json!("other")),
+        ("/exporter/executable/byte_length", json!(0)),
+        ("/exporter/executable/byte_length", json!(268435457_u64)),
+        ("/exporter/executable/mode", json!(0o644)),
+        ("/exporter/executable/mode", json!(0o4755)),
+        ("/exporter/executable/sha256", json!("invalid")),
+        ("/argv", json!(["build", "prod-export"])),
+    ] {
+        let mut changed = record.clone();
+        *changed.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            process_records(&json!([changed]), false).is_err(),
+            "accepted {pointer}"
+        );
+    }
+    let mut missing = record.clone();
+    missing.as_object_mut().unwrap().remove("exporter");
+    assert!(process_records(&json!([missing]), false).is_err());
+    let mut extra = record;
+    extra["exporter"]["extra"] = json!(true);
+    assert!(process_records(&json!([extra]), false).is_err());
+}
+
+#[test]
 fn evidence_paths_reject_aliases_and_escape() {
     for path in [
         "",

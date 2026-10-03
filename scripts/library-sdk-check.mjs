@@ -116,7 +116,8 @@ export function cli(project,args,expected,launch=spawnSync){
 }
 function document(path){const bytes=regularBytes(path),value=JSON.parse(bytes);assert.ok(bytes.equals(Buffer.from(canonical(value))),'canonical artifact bytes: '+path);return value;}
 function noVerification(project){const path=join(project,'.prism/verified');assert.ok(!existsSync(path)||readdirSync(path).length===0,'unaccepted source published verification');}
-export function checkAccepted(project,receipt){
+export function checkAccepted(project,receipt,exporterArchiveSha256){
+ hex(exporterArchiveSha256);
  keys(receipt,['schema','build_id','attestation_id','verified_root']);
  assert.equal(receipt.schema,'prismpm/verify-result/1');hex(receipt.build_id);hex(receipt.attestation_id);
  assert.equal(receipt.verified_root,'.prism/verified/'+receipt.attestation_id);
@@ -142,7 +143,17 @@ export function checkAccepted(project,receipt){
  same(acceptance,{build_id:receipt.build_id,executions:['std','no_std'].map(mode=>({mode,roots:[acceptanceRoot],status:'passed'})),export_roots:roots,lexlean_attestation_id:lexAttestation.attestation_id,model_id:hash(modelBytes),profile:'prismpm/native-library/1',regeneration:'byte-identical',schema:'prismpm/library-acceptance/1',scope:'native-library-only',status:'passed',unclaimed},'library acceptance scope or execution differs');
  assert.ok(Array.isArray(manifest.processes)&&manifest.processes.length>0);assert.ok(manifest.processes.every(row=>row.exit_code===0),'failed recorded execution');
  same(manifest.processes.map(row=>row.tool),['lean-version','lake-version','rustfmt-version','rustc-version','timeout-version','lake-build-generated','lean4-prod-build','prod-export','native-library-package','native-library-std-lock','native-library-std-acceptance','native-library-no_std-lock','native-library-no_std-acceptance'],'complete ordered native verification processes');
- for(const row of manifest.processes){keys(row,['tool','argv','executable_sha256','exit_code','stdout','stderr']);hex(row.executable_sha256);assert.ok(Array.isArray(row.argv)&&row.argv.every(arg=>typeof arg==='string'));assert.equal(typeof row.stdout,'string');assert.equal(typeof row.stderr,'string');}
+ for(const row of manifest.processes){
+  keys(row,['tool','argv','executable_sha256','exit_code','stdout','stderr',...(row.tool==='prod-export'?['exporter']:[])]);
+  hex(row.executable_sha256);assert.ok(Array.isArray(row.argv)&&row.argv.every(arg=>typeof arg==='string'));assert.equal(typeof row.stdout,'string');assert.equal(typeof row.stderr,'string');
+  if(row.tool==='prod-export'){
+   same(row.argv.slice(0,2),['exe','prod-export'],'actual Lake exporter invocation required');
+   keys(row.exporter,['schema','source_archive_sha256','executable']);assert.equal(row.exporter.schema,'prismpm/exporter-execution/1');assert.equal(row.exporter.source_archive_sha256,exporterArchiveSha256,'exporter source differs from independently captured SDK source');
+   const executable=row.exporter.executable;keys(executable,['byte_length','mode','sha256']);hex(executable.sha256);
+   assert(Number.isSafeInteger(executable.byte_length)&&executable.byte_length>0&&executable.byte_length<=256*1024*1024);
+   assert(Number.isSafeInteger(executable.mode)&&executable.mode>=0&&executable.mode<=0o777&&(executable.mode&0o111));
+  }
+ }
  for(const mode of ['std','no_std']){const rows=manifest.processes.filter(row=>row.tool==='native-library-'+mode+'-acceptance');assert.equal(rows.length,1);same(JSON.parse(rows[0].stdout),{roots:[acceptanceRoot],status:'passed'},'actual native execution transcript');}
  const artifacts=tree(build).filter(row=>row.kind==='file');assert.ok(artifacts.every(row=>!row.path.endsWith('.holo')&&!row.path.startsWith('application/')),'native library claims application artifacts');
  const buildManifest=document(join(build,'manifest.json'));keys(buildManifest,['files','inputs','schema']);assert.equal(buildManifest.schema,'prismpm/build-manifest/1');
@@ -178,6 +189,7 @@ const rootField=(module,name)=>{const rows=declaration(module,'probeLibrary').bo
 
 export function run(root){
  assert.equal(process.getuid(),1000,'native SDK gate must run non-root');
+ const exporterArchiveSha256=hash(regularBytes(join(root,'vendor/lean4-prod/lean.tar')));
  const work=mkdtempSync('/tmp/prismpm-library-sdk-'),source=join(root,'tests/fixtures/library/native-library/project');let sequence=0;
  function fixture(){
   const destination=join(work,'fixture-'+sequence++);cpSync(source,destination,{recursive:true,errorOnExist:true,force:false});
@@ -187,10 +199,10 @@ export function run(root){
  const positive=(project,args)=>cli(project,args,{schema:'prismpm/'+args[0]+'-result/1'});
  try{
   const first=fixture(),before=tree(first),checked=positive(first,['check']);same(tree(first),before,'check modified source');
-  const accepted=positive(first,['verify']),evidence=checkAccepted(first,accepted);assert.equal(checked.model_id,evidence.model_id);
+  const accepted=positive(first,['verify']),evidence=checkAccepted(first,accepted,exporterArchiveSha256);assert.equal(checked.model_id,evidence.model_id);
   const firstBuild=tree(evidence.build),second=fixture(),secondBuild=positive(second,['build']);assert.equal(secondBuild.build_id,accepted.build_id);
   same(tree(join(second,'.prism/build',secondBuild.build_id)),firstBuild,'complete build differs across fresh absolute roots');noVerification(second);
-  const secondVerify=positive(second,['verify']);assert.equal(secondVerify.build_id,accepted.build_id);checkAccepted(second,secondVerify);
+  const secondVerify=positive(second,['verify']);assert.equal(secondVerify.build_id,accepted.build_id);checkAccepted(second,secondVerify,exporterArchiveSha256);
   const beforeProduct=tree(first);cli(first,['build','--locked','-t','ghcr.io/uor-foundation/prismpm-library-probe:0.1.0'],{code:'PP6101',message:'native-library acceptance is not product-release or deployment acceptance'});same(tree(first),beforeProduct,'product refusal wrote outputs');
   const descriptor=regularBytes(join(source,'src/Foundation/Library/V1/Model.lex.tex')).toString('utf8');const descriptorRow=descriptor.split('\n').filter(line=>line.startsWith('\\semanticdata{'));assert.equal(descriptorRow.length,1);const nominal=JSON.parse(descriptorRow[0].slice('\\semanticdata{'.length,-1));
   const mutations=[
@@ -202,7 +214,7 @@ export function run(root){
   for(const [change,message] of mutations){const invalid=fixture();mutateModule(invalid,change);const before=tree(invalid);cli(invalid,['check'],{code:'PP2001',message});same(tree(invalid),before,'invalid check wrote outputs');noVerification(invalid);}
   const mutant=fixture(),original=mutateModule(mutant,module=>{declaration(module,'identity').body={kind:'add',left:{kind:'var',name:'value'},right:{kind:'nat',value:'1'}};});
   const changed=positive(mutant,['check']);assert.notEqual(changed.semantic_id,checked.semantic_id);cli(mutant,['verify'],{code:'PP5006'});noVerification(mutant);
-  writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored);
+  writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored,exporterArchiveSha256);
   return {scope:'installed-native-library-only',build_id:accepted.build_id,checks:completedChecks,unclaimed};
  }finally{rmSync(work,{recursive:true,force:true});}
 }

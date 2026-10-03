@@ -297,7 +297,7 @@ pub(crate) fn generate_recorded(
             .to_string_lossy()
             .into_owned(),
     )]);
-    processes.push(run_process(
+    processes.push(crate::exporter::run_export(
         "prod-export",
         &lake,
         &arguments,

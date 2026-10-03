@@ -319,7 +319,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
             .to_string_lossy()
             .into_owned(),
     );
-    processes.push(run_process(
+    processes.push(crate::exporter::run_export(
         "browser-export",
         &lake,
         &args,
