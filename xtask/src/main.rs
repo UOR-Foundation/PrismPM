@@ -207,6 +207,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-release-evidence.test.mjs",
             "scripts/release-gate-evidence.test.mjs",
             "scripts/refresh-osv.test.mjs",
+            "scripts/qualify-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
             "scripts/vv-sdk-session.test.mjs",
             "sdk/bootstrap/runner.test.mjs",
