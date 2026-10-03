@@ -649,6 +649,15 @@ and artifact descriptor remains significant. These projections are not
 verification or release evidence. Actual verification and same-executable
 two-root reproducibility continue to bind and compare complete raw evidence.
 
+Historical six-field process records remain inspectable, but cannot satisfy
+current-caller or selected native-profile checks. Current goldens require both
+actual exporter invocations, closed child measurements, the compiled archive
+identity and identical cold-acquisition provenance. These source-review trees
+have no independent SDK lock and cannot admit warm receipts. Native review may
+vary the child executable size and hash, not its mode, source, schema or
+acquisition semantics; ordinary comparison retains all measurement bytes.
+Baseline migration requires genuine regeneration, never metadata backfilling.
+
 Golden execution profiles distinguish Debian 12 AMD64 development from Ubuntu
 24.04 AMD64 and ARM64 SDK processes. The actual OS release and compiled process
 architecture select the profile; unknown or missing profiles fail closed.
