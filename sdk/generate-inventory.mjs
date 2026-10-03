@@ -59,6 +59,13 @@ async function treeDigest(root) {
 
 const definitions = [
   ['sdk-platform-lock', 'schema', '2', '/opt/prismpm/platform-lock.mjs'],
+  ['sdk-metadata-cli', 'schema', '1', '/opt/prismpm/metadata-cli.mjs'],
+  ['sdk-metadata-capture', 'schema', '1', '/opt/prismpm/metadata-capture.mjs'],
+  ['sdk-metadata-layer', 'schema', '1', '/opt/prismpm/metadata-layer.mjs'],
+  ['sdk-metadata-transport', 'schema', '1', '/opt/prismpm/metadata-transport.mjs'],
+  ['sdk-metadata-credentials', 'schema', '1', '/opt/prismpm/metadata-credentials.mjs'],
+  ['sdk-metadata-helper', 'schema', '1', '/opt/prismpm/metadata-helper.mjs'],
+  ['sdk-metadata-helper-supervisor', 'schema', '1', '/opt/prismpm/metadata-helper-supervisor.py'],
   ['action', 'workflow', '0.3.0', 'action', 'tree'],
   ['adapter-compose', 'adapter', 'compose-spec@fee041b381ffd4aad263410980bdce0cdf4beb7d', 'adapters/compose.json'],
   ['adapter-github-pages', 'adapter', 'github-pages-artifact@v4', 'adapters/github-pages.json'],

@@ -44,7 +44,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
         build-essential ca-certificates coreutils=9.1-1 curl git libgmp10 \
-        libssl-dev pkg-config ripgrep xz-utils \
+        libssl-dev pkg-config python3=3.11.2-1+b1 ripgrep xz-utils \
         libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libcairo2 \
         libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 \
         libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 \

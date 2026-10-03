@@ -4,13 +4,14 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {createHash, randomUUID} from 'node:crypto';
-import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
+import {chmod, mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {createServer, connect} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {ociFixtureManifest} from './oci-test-fixture.mjs';
 import {parseSdkIndex} from './platform-lock.mjs';
+import {label, profile} from './metadata-layer.mjs';
 
 const exec = promisify(execFile);
 const run = async (program, args) => (await exec(program, args, {timeout: 180_000, maxBuffer: 16 * 1024 * 1024})).stdout;
@@ -81,7 +82,11 @@ try {
       }
       await writeFile(join(context, 'inventory.json'), encode({schema: 'prismpm/sdk-inventory/1', artifacts, commands}));
       await writeFile(join(context, 'standards.lock'), standards);
-      await writeFile(join(context, 'Dockerfile'), 'FROM scratch\nCOPY facts /test-facts\nCOPY inventory.json standards.lock /opt/prismpm/share/\nCMD ["/never-executed-test-fixture"]\n');
+      await chmod(join(context, 'inventory.json'), 0o444);
+      await chmod(join(context, 'standards.lock'), 0o444);
+      await writeFile(join(context, 'Dockerfile'), 'FROM scratch AS metadata\nCOPY inventory.json standards.lock /opt/prismpm/share/\n'
+        + 'FROM scratch\nCOPY facts /test-facts\nCOPY --link --from=metadata / /\n'
+        + 'LABEL ' + label + '="' + profile + '"\nCMD ["/never-executed-test-fixture"]\n');
       const tag = `${endpoint}/test-sdk-${nonce}:${generation}-${architecture}`;
       imageReferences.add(tag);
       // This transport fixture has no release-attestation claims; the locked
@@ -130,7 +135,7 @@ try {
     const index = await docker('buildx', 'imagetools', 'inspect', '--raw', indexTag);
     const reference = `${endpoint}/test-sdk-${nonce}@${sha(index)}`;
     assert.deepEqual(parseSdkIndex(Buffer.from(index), reference).map(child => child.reference), children);
-    const lock = JSON.parse(await run(process.execPath, ['sdk/platform-lock.mjs', 'capture', reference, sha(standards), '/usr/local/bin/docker']));
+    const lock = JSON.parse(await run(process.execPath, ['sdk/platform-lock.mjs', 'capture', reference, sha(standards)]));
     assert.equal(lock.sdk_index, index);
     assert.equal(lock.standards_lock, sha(standards));
     for (const platform of lock.platforms) {

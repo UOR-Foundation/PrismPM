@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { copyFileSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
+import { fixture as metadataFixture } from './metadata-test-fixture.mjs';
 import { capturePlatformLock, createPlatformLock, parseSdkIndex, validateInventory } from './platform-lock.mjs';
 import { ociFixtureManifest } from './oci-test-fixture.mjs';
 
@@ -30,6 +30,12 @@ test('test-image conversion changes only the supported descriptor labels and ret
   assert.deepEqual(JSON.parse(bytes), expected);
   const exactOci = Buffer.from(`${JSON.stringify(expected, null, 2)}\n`);
   assert.deepEqual(ociFixtureManifest(exactOci), exactOci);
+  const uncompressed = structuredClone(original);
+  uncompressed.layers[0].mediaType = 'application/vnd.docker.image.rootfs.diff.tar';
+  const expectedUncompressed = structuredClone(expected);
+  expectedUncompressed.layers[0].mediaType = 'application/vnd.oci.image.layer.v1.tar';
+  assert.deepEqual(JSON.parse(ociFixtureManifest(encode(uncompressed))), expectedUncompressed);
+  assert.deepEqual(ociFixtureManifest(encode(expectedUncompressed)), encode(expectedUncompressed));
   for (const mutation of ['schema', 'manifest-list', 'config', 'layer', 'zstd', 'empty-layers', 'digest', 'size']) {
     const changed = structuredClone(original);
     if (mutation === 'schema') changed.schemaVersion = 1;
@@ -152,82 +158,19 @@ test('wrong architecture, swapped inventories, missing files, changed standards 
   } finally { await rm(directory, {recursive: true, force: true}); }
 });
 
-// Synthetic Docker-port fixtures exercise capture commands and cleanup; they
-// are deliberately not represented as real released SDK inventory evidence.
-function captureRunner(directory, reference, index, mutation = '') {
-  const calls = [], destinations = [];
-  const children = parseSdkIndex(index, reference);
-  const containers = new Map(children.map((child, i) => [(i ? 'b' : 'a').repeat(64), child.architecture]));
-  const run = args => {
-    calls.push(args);
-    if (args[0] === 'buildx') {
-      assert.deepEqual(args, ['buildx', 'imagetools', 'inspect', '--raw', reference]);
-      return mutation === 'index' ? Buffer.concat([index, Buffer.from('\n')]) : index;
-    }
-    if (args[0] === 'pull') {
-      assert.ok(children.some(child => child.reference === args[3] && args[2] === `linux/${child.architecture}`));
-      if (mutation === 'pull') throw new Error('synthetic pull failure');
-      return Buffer.alloc(0);
-    }
-    if (args[0] === 'image') {
-      const child = children.find(child => child.reference === args[4]);
-      assert.ok(child);
-      const inspected = JSON.parse(readFileSync(`${directory}/${child.architecture}/image.json`));
-      if (mutation === 'architecture') inspected.Architecture = 'riscv64';
-      if (mutation === 'digest') inspected.RepoDigests = [`example.invalid/test-sdk@${sha('wrong')}`];
-      return encode(inspected);
-    }
-    if (args[0] === 'create') {
-      const child = children.find(child => child.reference === args[5]);
-      assert.deepEqual(args.slice(0, 5), ['create', '--network', 'none', '--platform', `linux/${child.architecture}`]);
-      return Buffer.from([...containers].find(([, architecture]) => architecture === child.architecture)[0]);
-    }
-    if (args[0] === 'cp') {
-      const [container, source] = args[1].split(':');
-      assert.ok(containers.has(container));
-      assert.ok(['/opt/prismpm/share/inventory.json', '/opt/prismpm/share/standards.lock'].includes(source));
-      if (mutation === 'copy') throw new Error('synthetic copy failure');
-      destinations.push(args[2]);
-      const input = `${directory}/${containers.get(container)}/${source.split('/').at(-1)}`;
-      if (mutation === 'symlink') symlinkSync(input, args[2]);
-      else copyFileSync(input, args[2]);
-      return Buffer.alloc(0);
-    }
-    assert.deepEqual(args.slice(0, 2), ['rm', '--volumes']);
-    assert.ok(containers.has(args[2]));
-    return Buffer.alloc(0);
-  };
-  return {run, calls, destinations};
-}
-
-test('update captures both exact images without running foreign code and cleans its temporary inputs', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-update-test-'));
-  try {
-    const {reference, inventories, index} = await fixture(directory);
-    for (const asynchronous of [false, true]) {
-      const capture = captureRunner(directory, reference, index);
-      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
-      const proposed = await capturePlatformLock(reference, sha(standards), run);
-      assert.deepEqual(proposed, await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
-      assert.equal(capture.calls.length, 13);
-      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, 2);
-      assert.ok(capture.calls.every(args => args[0] !== 'run' && args[0] !== 'start' && args[0] !== 'exec'));
-      assert.ok(capture.destinations.every(file => !existsSync(file)));
-    }
-  } finally { await rm(directory, {recursive: true, force: true}); }
+test('public capture uses only the seven bounded OCI reads', async t => {
+  const f = metadataFixture(t);
+  const proposed = await capturePlatformLock(f.reference, sha(f.standards), f.transport);
+  assert.equal(proposed.schema, 'prismpm/sdk-lock/2');
+  assert.equal(proposed.sdk_index, f.index.toString());
+  assert.equal(f.calls.length, 7);
+  for (const row of proposed.platforms) assert.equal(row.inventory_document, f.inventories.get(row.platform.split('/')[1]).toString());
 });
 
-test('update rejects index/digest/architecture/copy/standards/symlink failures and removes only its own containers', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'prismpm-platform-update-test-'));
-  try {
-    const {reference, index} = await fixture(directory);
-    for (const asynchronous of [false, true]) for (const mutation of ['index', 'pull', 'architecture', 'digest', 'copy', 'symlink', 'standards']) {
-      const capture = captureRunner(directory, reference, index, mutation);
-      const run = asynchronous ? async args => { await new Promise(resolve => setImmediate(resolve)); return capture.run(args); } : capture.run;
-      await assert.rejects(capturePlatformLock(reference, mutation === 'standards' ? sha('wrong standards') : sha(standards), run));
-      const creates = capture.calls.filter(args => args[0] === 'create').length;
-      assert.equal(capture.calls.filter(args => args[0] === 'rm').length, creates, mutation);
-      assert.ok(capture.destinations.every(file => !existsSync(file)), mutation);
-    }
-  } finally { await rm(directory, {recursive: true, force: true}); }
+test('public capture refuses legacy and corrupted metadata without a full-image fallback', async t => {
+  for (const mutation of ['legacy','standards','platform','diffid','identities']) {
+    const f = metadataFixture(t, mutation);
+    await assert.rejects(capturePlatformLock(f.reference, sha(f.standards), f.transport));
+    assert(f.calls.length <= 7);
+  }
 });

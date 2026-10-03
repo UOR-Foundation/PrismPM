@@ -439,6 +439,23 @@ pub fn run_at(root: &Path, id: &str) {
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
+        "DK-28" => verify_node_suite(
+            root,
+            id,
+            &[
+                "sdk/platform-lock.test.mjs",
+                "sdk/metadata-layer.test.mjs",
+                "sdk/metadata-capture.test.mjs",
+                "sdk/metadata-transport.test.mjs",
+                "sdk/metadata-transport-tls.test.mjs",
+                "sdk/metadata-credentials.test.mjs",
+                "sdk/metadata-helper.test.mjs",
+                "sdk/metadata-cli.test.mjs",
+                "sdk/metadata-publisher.test.mjs",
+            ],
+            53,
+            "120000",
+        ),
         "OC-07" => verify_browser_export(root),
         "OC-08" => browser_publication::verify(root),
         "OC-09" => verify_node_suite(

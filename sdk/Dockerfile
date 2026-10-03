@@ -258,6 +258,7 @@ COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/profile.sh /etc/prof
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/generate-inventory.mjs /opt/prismpm/generate-inventory.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/inventory-metadata.mjs /opt/prismpm/inventory-metadata.mjs
 COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/platform-lock.mjs /opt/prismpm/platform-lock.mjs
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/metadata-cli.mjs /prepared/source/sdk/metadata-capture.mjs /prepared/source/sdk/metadata-layer.mjs /prepared/source/sdk/metadata-transport.mjs /prepared/source/sdk/metadata-credentials.mjs /prepared/source/sdk/metadata-helper.mjs /prepared/source/sdk/metadata-helper-supervisor.py /opt/prismpm/
 
 RUN set -eu; \
     PRISMPM_ARTIFACTS_ONLY=1 node sdk/generate-inventory.mjs /opt/prismpm/artifact-inventory.json
@@ -293,7 +294,7 @@ RUN set -eu; \
 FROM scratch AS cli-archive
 COPY --from=cli-archive-package /out/ /
 
-FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS runtime
+FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS runtime_base
 RUN chmod -R a-w /ms-playwright
 
 ARG SOURCE_DATE_EPOCH=0
@@ -372,6 +373,29 @@ RUN setpriv --reuid=1000 --regid=1000 --clear-groups \
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/prismpm-devcontainer-init"]
 CMD []
+
+# Publish exact installed metadata in a standalone terminal filesystem layer.
+# --link includes the complete directory ancestry even when earlier layers
+# already contain byte-identical files. No runtime files are added afterward.
+FROM runtime_base AS metadata_files
+RUN set -eu; \
+    test -f /opt/prismpm/share/inventory.json \
+    && test ! -L /opt/prismpm/share/inventory.json \
+    && test -f /opt/prismpm/share/standards.lock \
+    && test ! -L /opt/prismpm/share/standards.lock \
+    && test "$(stat -c %s /opt/prismpm/share/inventory.json)" -le 8388608 \
+    && test "$(stat -c %s /opt/prismpm/share/standards.lock)" -le 16777216 \
+    && install -d -m 0755 /sdk-metadata/opt/prismpm/share \
+    && install -m 0444 /opt/prismpm/share/inventory.json /sdk-metadata/opt/prismpm/share/inventory.json \
+    && install -m 0444 /opt/prismpm/share/standards.lock /sdk-metadata/opt/prismpm/share/standards.lock \
+    && cmp /opt/prismpm/share/inventory.json /sdk-metadata/opt/prismpm/share/inventory.json \
+    && cmp /opt/prismpm/share/standards.lock /sdk-metadata/opt/prismpm/share/standards.lock \
+    && touch -d @0 /sdk-metadata/opt /sdk-metadata/opt/prismpm /sdk-metadata/opt/prismpm/share \
+      /sdk-metadata/opt/prismpm/share/inventory.json /sdk-metadata/opt/prismpm/share/standards.lock
+
+FROM runtime_base AS runtime
+COPY --link --from=metadata_files /sdk-metadata/ /
+LABEL org.prismpm.sdk.metadata="prismpm/sdk-metadata/1"
 
 # Redistributable adapters and upstream-oracle runners are published as
 # independently addressable OCI packages.  They deliberately inherit the
