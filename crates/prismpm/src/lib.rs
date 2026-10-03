@@ -21,6 +21,7 @@ pub mod diagnostics;
 pub mod error;
 mod exporter;
 pub mod holo;
+mod lean_project;
 mod library_build;
 mod library_verification;
 pub mod lifecycle;

@@ -1,5 +1,24 @@
 # PrismPM falsifiability and verification record
 
+## Merged upstream compiler qualification (in progress)
+
+Compiler source is imported from auser/lean4-prod main commit
+`991956fe427bb646498fd0912c89b71be71e7beb`, including merged PRs #77–#91.
+Independent review matched all 86 Rust package files and all 59 Lean archive
+members to that commit. The existing normalized Rust workspace is retained;
+the root lock update adds only required compiler dependencies.
+
+The Lean archive is reproducible with
+`git archive --mtime=@1790795771 991956fe427bb646498fd0912c89b71be71e7beb:lean`;
+the timestamp is the upstream commit time. Compiler crates are actual Cargo
+package outputs, not hand-edited archives. Artifact pins are in
+`model/dependencies.toml`.
+
+This import is not accepted compiler, SDK or product qualification. Fresh
+upstream regressions, stdlib generation/readback, owning consumer gates,
+native architecture review and both complete V&V passes remain required.
+Earlier records below retain their original compiler identities.
+
 ## Integrated emitter source binding
 
 The complete audit rejected the stale emitter digest after metadata-alias

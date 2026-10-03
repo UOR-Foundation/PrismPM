@@ -1110,9 +1110,9 @@ pub(crate) fn run_process_limited_allowed(
     for (key, value) in extra_env {
         command.env(key, value);
     }
-    // Lean's default pool follows the host logical CPU count, not Docker's
-    // CPU quota. Pin the pool for Lake and any nested Lean process; keep every
-    // build/export/kernel check and its existing deadline unchanged.
+    // This bounds Lake's runtime pool, not Lean CLI children: those require
+    // the traced -j2 argument in lean_project's generated configuration.
+    // No build, export, kernel check or deadline is removed or extended.
     command.env("LEAN_NUM_THREADS", "2");
     let mut child = command
         .spawn()
@@ -2789,15 +2789,7 @@ pub(crate) fn run(
             "no generated Lean modules were staged",
         ));
     }
-    let roots_toml = modules
-        .iter()
-        .map(|module| serde_json::to_string(module).expect("module name serializes"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let lakefile = format!(
-        "name = \"prismpm_verify\"\nversion = \"0.1.0\"\n\n[[lean_lib]]\nname = \"PrismGenerated\"\nroots = [{}]\n",
-        roots_toml,
-    );
+    let lakefile = crate::lean_project::configuration("prismpm_verify", &modules);
     write(&workspace.join("lakefile.toml"), lakefile.as_bytes())?;
     write(
         &workspace.join("lean-toolchain"),
