@@ -107,6 +107,7 @@ pub(crate) struct ExporterExecution {
     pub(crate) schema: &'static str,
     pub(crate) source_archive_sha256: String,
     pub(crate) executable: ExecutableMeasurement,
+    pub(crate) acquisition: serde_json::Value,
 }
 
 /// Every invocation still goes through actual `lake exe prod-export` after the
@@ -120,6 +121,7 @@ pub(crate) fn run_export(
     environment: &std::collections::BTreeMap<String, String>,
     replacements: &[(&Path, &str)],
     failure_code: &'static str,
+    acquisition: &serde_json::Value,
 ) -> Result<crate::verification::ProcessRecord, PrismError> {
     if args.first().map(String::as_str) != Some("exe")
         || args.get(1).map(String::as_str) != Some("prod-export")
@@ -133,6 +135,7 @@ pub(crate) fn run_export(
     let identity_before = std::fs::symlink_metadata(&child)
         .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
     let before = measure_executable(&child)?;
+    validate_acquisition(acquisition, &before.sha256)?;
     let mut record = crate::verification::run_process(
         tool,
         program,
@@ -170,6 +173,7 @@ pub(crate) fn run_export(
         schema: "prismpm/exporter-execution/1",
         source_archive_sha256: format!("{:x}", Sha256::digest(ARCHIVE)),
         executable: before,
+        acquisition: acquisition.clone(),
     });
     Ok(record)
 }
@@ -190,6 +194,220 @@ pub(crate) fn acquire(destination: &Path) -> Result<(), PrismError> {
         ));
     }
     Ok(())
+}
+
+pub(crate) fn cold_acquisition() -> serde_json::Value {
+    serde_json::json!({"schema":"prismpm/exporter-acquisition/1","mode":"cold"})
+}
+
+pub(crate) fn validate_acquisition(
+    value: &serde_json::Value,
+    executable: &str,
+) -> Result<(), PrismError> {
+    let fail = || PrismError::new("PP5008", "exporter acquisition evidence is invalid");
+    if value == &cold_acquisition() {
+        return Ok(());
+    }
+    let fields = [
+        "archive_sha256",
+        "compiler_revision",
+        "executable_sha256",
+        "inventory_sha256",
+        "manifest_sha256",
+        "mode",
+        "platform",
+        "schema",
+        "toolchain",
+    ];
+    let object = value.as_object().ok_or_else(fail)?;
+    if object.keys().map(String::as_str).ne(fields)
+        || value["schema"] != "prismpm/exporter-acquisition/1"
+        || value["mode"] != "sdk-seed"
+        || value["archive_sha256"] != format!("{:x}", Sha256::digest(ARCHIVE))
+        || value["executable_sha256"] != executable
+    {
+        return Err(fail());
+    }
+    for field in ["inventory_sha256", "manifest_sha256", "executable_sha256"] {
+        let digest = value[field].as_str().ok_or_else(fail)?;
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(fail());
+        }
+    }
+    let (revision, toolchain) = compiler_identity()?;
+    if value["compiler_revision"] != revision
+        || value["toolchain"] != toolchain
+        || !matches!(
+            value["platform"].as_str(),
+            Some("linux/amd64" | "linux/arm64")
+        )
+    {
+        return Err(fail());
+    }
+    Ok(())
+}
+
+fn compiler_identity() -> Result<(String, String), PrismError> {
+    let register: toml::Value = toml::from_str(include_str!("../model/dependencies.toml"))
+        .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+    let row = register["dependency"]
+        .as_array()
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row["id"].as_str() == Some("lean4-prod"))
+        })
+        .ok_or_else(|| PrismError::new("PP9001", "compiler dependency is missing"))?;
+    Ok((
+        row["revision"]
+            .as_str()
+            .ok_or_else(|| PrismError::new("PP9001", "compiler revision is missing"))?
+            .to_owned(),
+        format!(
+            "leanprover/lean4:v{}",
+            row["lean_version"]
+                .as_str()
+                .ok_or_else(|| PrismError::new("PP9001", "compiler toolchain is missing"))?
+        ),
+    ))
+}
+
+/// Source-free receipts need the independently retained SDK lock as context;
+/// syntax-valid hashes in the receipt itself cannot authenticate a seed.
+pub(crate) fn validate_acquisition_authority(
+    value: &serde_json::Value,
+    executable: &str,
+    sdk_lock: &serde_json::Value,
+) -> Result<(), PrismError> {
+    validate_acquisition(value, executable)?;
+    if value == &cold_acquisition() {
+        return Ok(());
+    }
+    let fail = || {
+        PrismError::new(
+            "PP5008",
+            "exporter receipt differs from independent SDK authority",
+        )
+    };
+    let lock =
+        crate::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/2", sdk_lock.clone())?;
+    let row = lock.value()["platforms"]
+        .as_array()
+        .and_then(|rows| rows.iter().find(|row| row["platform"] == value["platform"]))
+        .ok_or_else(fail)?;
+    if row["inventory_digest"]
+        != format!(
+            "sha256:{}",
+            value["inventory_sha256"].as_str().ok_or_else(fail)?
+        )
+    {
+        return Err(fail());
+    }
+    let artifacts = row["inventory"].as_array().ok_or_else(fail)?;
+    for expected in [
+        serde_json::json!({"id":"lean4-prod-exporter-seed","kind":"dependency-lock","version":"1",
+            "digest":format!("sha256:{}",value["manifest_sha256"].as_str().ok_or_else(fail)?)}),
+        serde_json::json!({"id":"lean4-prod-exporter","kind":"binary","version":value["compiler_revision"],
+            "digest":format!("sha256:{executable}")}),
+    ] {
+        let matches: Vec<_> = artifacts
+            .iter()
+            .filter(|row| row["id"] == expected["id"])
+            .collect();
+        if matches.len() != 1 || matches[0] != &expected {
+            return Err(fail());
+        }
+    }
+    Ok(())
+}
+
+/// Only the independently bound installed SDK can seed a fresh exporter. A
+/// private same-filesystem stage is published atomically without overwriting.
+pub(crate) fn acquire_for(
+    project: &Path,
+    destination: &Path,
+) -> Result<serde_json::Value, PrismError> {
+    acquire(destination)?;
+    let Some(inventory) = crate::sdk::exporter_seed_inventory(project)? else {
+        return Ok(cold_acquisition());
+    };
+    let parent = destination
+        .parent()
+        .ok_or_else(|| PrismError::new("PP5008", "exporter parent is absent"))?;
+    let stage = tempfile::Builder::new()
+        .prefix(".exporter-seed-")
+        .tempdir_in(parent)
+        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    let helper = tempfile::Builder::new()
+        .prefix("prismpm-exporter-admission-")
+        .tempdir()
+        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    for (name, bytes) in [
+        (
+            "exporter-seed-admission.mjs",
+            include_bytes!("../sdk/exporter-seed-admission.mjs").as_slice(),
+        ),
+        (
+            "exporter-seed.mjs",
+            include_bytes!("../sdk/exporter-seed.mjs").as_slice(),
+        ),
+        (
+            "inventory-metadata.mjs",
+            include_bytes!("../sdk/inventory-metadata.mjs").as_slice(),
+        ),
+    ] {
+        std::fs::write(helper.path().join(name), bytes)
+            .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    }
+    let (revision, toolchain) = compiler_identity()?;
+    let result = crate::verification::run_process_limited(
+        "exporter-seed-admission",
+        &crate::sdk::executable("node")?,
+        &[
+            helper
+                .path()
+                .join("exporter-seed-admission.mjs")
+                .to_string_lossy()
+                .into_owned(),
+            destination.to_string_lossy().into_owned(),
+            stage.path().to_string_lossy().into_owned(),
+            inventory.clone(),
+            revision,
+            format!("{:x}", Sha256::digest(ARCHIVE)),
+            toolchain,
+        ],
+        helper.path(),
+        &std::collections::BTreeMap::new(),
+        &[],
+        "PP5008",
+        "180s",
+        64 * 1024,
+    )?;
+    let receipt: serde_json::Value = serde_json::from_str(&result.stdout)
+        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    if receipt == cold_acquisition() {
+        return Ok(receipt);
+    }
+    let child = measure_executable(&stage.path().join(".lake/build/bin/prod-export"))?;
+    validate_acquisition(&receipt, &child.sha256)?;
+    if receipt["inventory_sha256"] != inventory {
+        return Err(PrismError::new(
+            "PP5008",
+            "seed inventory authority changed",
+        ));
+    }
+    rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        stage.path().join(".lake"),
+        rustix::fs::CWD,
+        destination.join(".lake"),
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(|error| PrismError::new("PP5008", format!("exclusive seed publication: {error}")))?;
+    Ok(receipt)
 }
 
 /// A repository-backed verifier must use the same pinned source as builders.
@@ -265,6 +483,104 @@ pub(crate) fn verify_source(repository_root: &Path) -> Result<(), PrismError> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn unlocked_acquisition_is_fresh_and_cold() {
+        let root = tempfile::tempdir().unwrap();
+        let package = root.path().join("compiler");
+        assert_eq!(
+            acquire_for(root.path(), &package).unwrap(),
+            cold_acquisition()
+        );
+        assert!(!package.join(".lake").exists());
+        assert!(acquire_for(root.path(), &package).is_err());
+        assert!(package.join("Prod/Export.lean").is_file());
+    }
+
+    #[test]
+    fn warm_exporter_receipts_bind_the_independent_platform_inventory() {
+        use serde_json::json;
+        // Parser fixtures, never compiler execution or SDK acceptance.
+        let (revision, toolchain) = compiler_identity().unwrap();
+        let child = "a".repeat(64);
+        let artifacts = json!([
+            {"id":"lean4-prod-exporter","kind":"binary","version":revision,"digest":format!("sha256:{child}")},
+            {"id":"lean4-prod-exporter-seed","kind":"dependency-lock","version":"1","digest":format!("sha256:{}","b".repeat(64))}
+        ]);
+        let document = String::from_utf8(crate::holo::canonical::encode_value(&json!({
+            "schema":"prismpm/sdk-inventory/1","artifacts":artifacts,
+            "commands":[{"command":"lake","executable":"/usr/local/bin/lake","sha256":"c".repeat(64)}]
+        })).unwrap()).unwrap();
+        let inventory = format!("{:x}", Sha256::digest(document.as_bytes()));
+        let manifests: Vec<_> = ["amd64","arm64"].iter().enumerate().map(|(i, arch)| json!({
+            "digest":format!("sha256:{}",(i+1).to_string().repeat(64)),"size":100,
+            "mediaType":"application/vnd.oci.image.manifest.v1+json","platform":{"os":"linux","architecture":arch}
+        })).collect();
+        let index = String::from_utf8(crate::holo::canonical::encode_value(&json!({
+            "schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":manifests
+        })).unwrap()).unwrap();
+        let platforms: Vec<_> = ["amd64","arm64"].iter().enumerate().map(|(i,arch)|json!({
+            "platform":format!("linux/{arch}"),"manifest_digest":manifests[i]["digest"],
+            "inventory_digest":format!("sha256:{inventory}"),"inventory_document":document,"inventory":artifacts
+        })).collect();
+        let lock = json!({"schema":"prismpm/sdk-lock/2","sdk_version":"0.3.0",
+            "sdk_image":format!("example.invalid/fixture@sha256:{:x}",Sha256::digest(index.as_bytes())),
+            "sdk_index":index,"standards_lock":format!("sha256:{}","d".repeat(64)),"platforms":platforms});
+        let receipt = json!({"schema":"prismpm/exporter-acquisition/1","mode":"sdk-seed",
+            "compiler_revision":revision,"toolchain":toolchain,"platform":"linux/amd64",
+            "archive_sha256":format!("{:x}",Sha256::digest(ARCHIVE)),"inventory_sha256":inventory,
+            "manifest_sha256":"b".repeat(64),"executable_sha256":child});
+        validate_acquisition_authority(&receipt, &child, &lock).unwrap();
+        for key in [
+            "inventory_sha256",
+            "manifest_sha256",
+            "executable_sha256",
+            "archive_sha256",
+            "compiler_revision",
+            "toolchain",
+            "platform",
+            "mode",
+            "schema",
+        ] {
+            let mut changed = receipt.clone();
+            changed[key] = json!("e".repeat(64));
+            assert!(
+                validate_acquisition_authority(&changed, &child, &lock).is_err(),
+                "accepted {key}"
+            );
+        }
+        let mut changed = receipt.clone();
+        changed["extra"] = json!(true);
+        assert!(validate_acquisition_authority(&changed, &child, &lock).is_err());
+        assert!(validate_acquisition_authority(&receipt, &child, &json!({})).is_err());
+        for (index, key, value) in [
+            (0, "kind", "crate"),
+            (0, "version", "wrong"),
+            (1, "kind", "binary"),
+            (1, "version", "2"),
+        ] {
+            let mut changed = lock.clone();
+            for row in changed["platforms"].as_array_mut().unwrap() {
+                row["inventory"][index][key] = json!(value);
+                let mut doc: serde_json::Value =
+                    serde_json::from_str(row["inventory_document"].as_str().unwrap()).unwrap();
+                doc["artifacts"] = row["inventory"].clone();
+                let bytes = crate::holo::canonical::encode_value(&doc).unwrap();
+                row["inventory_digest"] = json!(format!("sha256:{:x}", Sha256::digest(&bytes)));
+                row["inventory_document"] = json!(String::from_utf8(bytes).unwrap());
+            }
+            let mut resealed = receipt.clone();
+            resealed["inventory_sha256"] = json!(changed["platforms"][0]["inventory_digest"]
+                .as_str()
+                .unwrap()
+                .strip_prefix("sha256:")
+                .unwrap());
+            assert!(
+                validate_acquisition_authority(&resealed, &child, &changed).is_err(),
+                "accepted resealed {index}/{key}"
+            );
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn invocation_guard_rejects_actual_child_mutation_and_same_bytes_replacement() {
@@ -286,6 +602,7 @@ mod tests {
                 &std::collections::BTreeMap::new(),
                 &[],
                 "PP5004",
+                &cold_acquisition(),
             )
         };
         std::fs::write(root.path().join("exe"), b"./.lake/build/bin/prod-export\n").unwrap();

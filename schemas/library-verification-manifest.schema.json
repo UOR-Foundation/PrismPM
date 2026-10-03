@@ -74,6 +74,25 @@
             "properties": {
               "schema": { "const": "prismpm/exporter-execution/1" },
               "source_archive_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "acquisition": {
+                "oneOf": [
+                  { "type": "object", "additionalProperties": false,
+                    "properties": { "schema": { "const": "prismpm/exporter-acquisition/1" }, "mode": { "const": "cold" } },
+                    "required": ["schema", "mode"] },
+                  { "type": "object", "additionalProperties": false,
+                    "properties": {
+                      "schema": { "const": "prismpm/exporter-acquisition/1" }, "mode": { "const": "sdk-seed" },
+                      "inventory_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                      "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                      "executable_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                      "archive_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                      "compiler_revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+                      "platform": { "enum": ["linux/amd64", "linux/arm64"] },
+                      "toolchain": { "type": "string", "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$" }
+                    },
+                    "required": ["schema", "mode", "inventory_sha256", "manifest_sha256", "executable_sha256", "archive_sha256", "compiler_revision", "platform", "toolchain"] }
+                ]
+              },
               "executable": {
                 "type": "object",
                 "additionalProperties": false,
@@ -86,7 +105,7 @@
                 "required": ["byte_length", "mode", "sha256"]
               }
             },
-            "required": ["schema", "source_archive_sha256", "executable"]
+            "required": ["schema", "source_archive_sha256", "executable", "acquisition"]
           },
           "exit_code": {
             "const": 0

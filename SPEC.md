@@ -907,6 +907,43 @@ not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
 
+`DK-29` uses one fresh exporter acquisition boundary for library, browser,
+application and verification pipelines. Only a validated native
+`prismpm/sdk-lock/2` inventory digest may authorize the fixed installed SDK
+seed. Legacy or unlocked source bootstrap remains cold; local fingerprints,
+caller caches and a digest recomputed from the installed inventory are not
+independent authority. An advertised seed that is absent or malformed fails
+closed; it does not fall back to cold construction.
+
+The closed `prismpm/exporter-seed/1` manifest binds the registered compiler
+revision/archive, native platform, exact build configuration, complete source,
+toolchain and runtime closure, and every seed path, mode, length and hash.
+Seed files are bounded to 4,096 entries, 256 MiB per file and 512 MiB total.
+Root-owned immutable SDK paths are checked before and after bounded copying;
+custody supplements rather than replaces the independent inventory binding.
+Only the new exporter's `.lake` may be published, from a private sibling stage
+through atomic no-overwrite rename. Generated application workspaces, user
+caches and acceptance evidence are never seeded. Temporary stages are owned
+by their invocation and removed on failure.
+
+Each actual `lake exe prod-export` invocation records a closed
+`prismpm/exporter-execution/1` child executable measurement and
+`prismpm/exporter-acquisition/1` cold/seed provenance. Seed receipts bind their
+inventory and manifest to the consumer lock, and the actual child to its
+locked binary. Release admission checks this context independently of
+structural transcript replay. Application build artifacts contain only the
+stable `prismpm/exporter-identity/1` sidecar; acquisition and process receipts
+belong to the distinct verification regeneration, bound to the unchanged build
+identity. Its complete generated artifact set must match byte-for-byte, without
+field rewriting or omitted generated files. This does not change the
+authoritative `.holo` format. Real `lake build prod-export`,
+generated-module/kernel builds, axiom audits, independent exports, two-root
+reproducibility, native/Wasm executions and imported oracles remain mandatory.
+Neither seed validity nor faster acquisition establishes SDK or application
+acceptance. SDK qualification requires measured cold/seeded equivalence on
+both native platforms with genuine relocated traces, without trace rewriting,
+deadline inflation or reuse of acceptance results.
+
 The PrismPM 0.3 SDK consists of the CLI/library, LexLean, exact Lean and
 lean4-prod tools, prism-stdlib, schemas, standard bindings, redistributable
 oracles, adapters, and conformance tooling. Its canonical inventory maps every
@@ -2213,6 +2250,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
+| `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

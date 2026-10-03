@@ -106,7 +106,7 @@ function parserFixture(root,change=()=>{}){
  const paths=['coverage.json','kernel.ir','model-binding.json','package/Cargo.lock','package/Cargo.toml','package/LICENSE-APACHE','package/LICENSE-MIT','package/README.md','package/generation-manifest.json','package/src/lib.rs','prism-library-probe-0.1.0.crate','roots.json'];
  const acceptance={build_id:'',executions:['std','no_std'].map(mode=>({mode,roots:[acceptanceRoot],status:'passed'})),export_roots:roots,lexlean_attestation_id:lexId,model_id:'',profile:'prismpm/native-library/1',regeneration:'byte-identical',schema:'prismpm/library-acceptance/1',scope:'native-library-only',status:'passed',unclaimed:['application','browser','holo','production-release','deployment']};
  const processes=['lean-version','lake-version','rustfmt-version','rustc-version','timeout-version','lake-build-generated','lean4-prod-build','prod-export','native-library-package','native-library-std-lock','native-library-std-acceptance','native-library-no_std-lock','native-library-no_std-acceptance'].map(tool=>({tool,argv:[],executable_sha256:'2'.repeat(64),exit_code:0,stdout:tool.endsWith('-acceptance')?encode({roots:[acceptanceRoot],status:'passed'}):'',stderr:''}));
- Object.assign(processes.find(row=>row.tool==='prod-export'),{argv:['exe','prod-export'],exporter:{schema:'prismpm/exporter-execution/1',source_archive_sha256:'3'.repeat(64),executable:{sha256:'4'.repeat(64),byte_length:1234,mode:0o755}}});
+ Object.assign(processes.find(row=>row.tool==='prod-export'),{argv:['exe','prod-export'],exporter:{schema:'prismpm/exporter-execution/1',source_archive_sha256:'3'.repeat(64),acquisition:{schema:'prismpm/exporter-acquisition/1',mode:'cold'},executable:{sha256:'4'.repeat(64),byte_length:1234,mode:0o755}}});
  const manifest={acceptance_sha256:'',artifacts:[],build_id:'',lexlean_attestation_sha256:'',model_sha256:'',processes,schema:'prismpm/library-verification-manifest/1',scope:'native-library-only'};
  const modules=[{lean_module:'LibraryProbe.Foundation.Library.V1.Model',declarations:[{lean_name:'NativeLibrary',axiom_policy:{kind:'none',axioms:[]}}]},{lean_module:'LibraryProbe.Probe',declarations:['acceptance','identity','probeLibrary'].map(lean_name=>({lean_name,axiom_policy:{kind:'none',axioms:[]}}))}];
  const lex={attestation_id:lexId,build_id:'3'.repeat(64),source_id:model.provenance.source_id,semantic_id:model.provenance.semantic_id,spec:'lexlean/attestation/1',status:'verified',declarations:modules.flatMap(module=>module.declarations.map(row=>({name:module.lean_module+'.'+row.lean_name,observed:[],policy:row.axiom_policy,result:'ok'})))};
@@ -133,6 +133,8 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
   ({manifest})=>{manifest.processes[10].stdout='{}';},({manifest})=>{manifest.processes[0].executable_sha256='invalid';},
   ({manifest})=>{delete manifest.processes[7].exporter;},
   ({manifest})=>{manifest.processes[7].exporter.extra=true;},
+  ({manifest})=>{delete manifest.processes[7].exporter.acquisition;},
+  ({manifest})=>{manifest.processes[7].exporter.acquisition.mode='sdk-seed';},
   ({manifest})=>{manifest.processes[7].exporter.executable.mode=0o644;},
   ({manifest})=>{manifest.processes[7].exporter.executable.byte_length=0;},
   ({manifest})=>{manifest.processes[7].exporter.executable.sha256='invalid';},
@@ -154,6 +156,37 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
   (root,receipt)=>put(root,'.prism/build/'+receipt.build_id+'/unexpected','extra output'),
  ]){const root=temporary(t),receipt=parserFixture(root);change(root,receipt);assert.throws(()=>checkAccepted(root,receipt));}
  put(valid,'.prism/build/'+receipt.build_id+'/library/package/src/lib.rs','tampered actual bytes');assert.throws(()=>checkAccepted(valid,receipt));
+ const compiler={revision:'6'.repeat(40),toolchain:'leanprover/lean4:v4.32.1',platform:'linux/amd64'};
+ const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+ const encode=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]])):v);
+ for(const mutation of [null,'inventory','manifest','child','source','revision','toolchain','platform','seed-kind','seed-version','child-kind','unknown','index','missing-authority']) {
+  const root=temporary(t);
+  const artifacts=[
+   ...['adapter','base-image','binary','crate','dependency-lock','oracle','schema','test-corpus','trust-root','workflow'].map(kind=>({id:kind,kind,version:'1',digest:'sha256:'+'7'.repeat(64)})),
+   {id:'lean4-prod-exporter',kind:'binary',version:compiler.revision,digest:'sha256:'+'4'.repeat(64)},
+   {id:'lean4-prod-exporter-seed',kind:'dependency-lock',version:'1',digest:'sha256:'+'8'.repeat(64)},
+  ].sort((a,b)=>a.id.localeCompare(b.id));
+  if(mutation==='seed-kind')artifacts.find(row=>row.id==='lean4-prod-exporter-seed').kind='binary';
+  if(mutation==='seed-version')artifacts.find(row=>row.id==='lean4-prod-exporter-seed').version='2';
+  if(mutation==='child-kind')artifacts.find(row=>row.id==='lean4-prod-exporter').kind='crate';
+  const doc=encode({schema:'prismpm/sdk-inventory/1',artifacts,commands:['cargo','devcontainer','docker','just','prismpm'].map(command=>({command,executable:'/usr/local/bin/'+command,sha256:'9'.repeat(64)}))});
+  const manifests=['amd64','arm64'].map((architecture,index)=>({mediaType:'application/vnd.oci.image.manifest.v1+json',digest:'sha256:'+String(index+1).repeat(64),size:100,platform:{os:'linux',architecture}}));
+  const index=encode({schemaVersion:2,mediaType:'application/vnd.oci.image.index.v1+json',manifests});
+  const lock={schema:'prismpm/sdk-lock/2',sdk_version:'0.3.0',sdk_image:'example.invalid/fixture@sha256:'+digest(index),sdk_index:index,standards_lock:'sha256:'+'a'.repeat(64),
+   platforms:['amd64','arm64'].map((architecture,index)=>({platform:'linux/'+architecture,manifest_digest:manifests[index].digest,inventory_digest:'sha256:'+digest(doc),inventory_document:doc,inventory:artifacts}))};
+  if(mutation==='index')lock.sdk_image='example.invalid/fixture@sha256:'+'f'.repeat(64);
+  put(root,'prismpm.lock',encode(lock));
+  const warm=parserFixture(root,({manifest})=>{
+   const acquisition={schema:'prismpm/exporter-acquisition/1',mode:'sdk-seed',compiler_revision:compiler.revision,toolchain:compiler.toolchain,platform:compiler.platform,
+    inventory_sha256:digest(doc),manifest_sha256:'8'.repeat(64),executable_sha256:'4'.repeat(64),archive_sha256:'3'.repeat(64)};
+   const fields={inventory:'inventory_sha256',manifest:'manifest_sha256',child:'executable_sha256',source:'archive_sha256',revision:'compiler_revision',toolchain:'toolchain',platform:'platform'};
+   if(fields[mutation])acquisition[fields[mutation]]=mutation==='toolchain'?'leanprover/lean4:v1.2.3':mutation==='platform'?'linux/arm64':'f'.repeat(64);
+   if(mutation==='unknown')acquisition.extra=true;
+   manifest.processes[7].exporter.acquisition=acquisition;
+  });
+  const verify=()=>checkAcceptedWithAuthority(root,warm,'3'.repeat(64),mutation==='missing-authority'?undefined:compiler);
+  if(mutation===null)verify();else assert.throws(verify,mutation);
+ }
 });
 
 test('release job keeps both native library and browser gates mandatory for each SDK architecture',()=>{
@@ -170,7 +203,8 @@ test('release job keeps both native library and browser gates mandatory for each
 test('owning CLI test kills a removed process-exit guard',t=>{
  const root=temporary(t),module=readFileSync(new URL('./library-sdk-check.mjs',import.meta.url),'utf8');
  const guard='assert.equal(output.status,expected.code ? exits[expected.code] : 0, "CLI exit class");';assert.equal(module.split(guard).length,2);
- put(root,'library-sdk-check.mjs',module.replace(guard,''));put(root,'browser-api-sdk-check.mjs',readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url)));put(root,'library-sdk-check.test.mjs',readFileSync(new URL('./library-sdk-check.test.mjs',import.meta.url)));
+ put(root,'scripts/library-sdk-check.mjs',module.replace(guard,''));put(root,'scripts/browser-api-sdk-check.mjs',readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url)));put(root,'scripts/library-sdk-check.test.mjs',readFileSync(new URL('./library-sdk-check.test.mjs',import.meta.url)));
+ for(const name of ['inventory-metadata.mjs','platform-lock.mjs'])put(root,'sdk/'+name,readFileSync(new URL('../sdk/'+name,import.meta.url)));
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
- const output=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=CLI transport invokes',join(root,'library-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});assert.equal(output.error,undefined);assert.equal(output.status,1);assert.match(output.stdout,/Missing expected exception/);
+ const output=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=CLI transport invokes',join(root,'scripts/library-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});assert.equal(output.error,undefined);assert.equal(output.status,1);assert.match(output.stdout,/Missing expected exception/);
 });

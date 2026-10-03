@@ -850,11 +850,28 @@ fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError>
 }
 
 fn validate_exporter_execution(value: &Value) -> Result<(), PrismError> {
-    keys(value, &["schema", "source_archive_sha256", "executable"])?;
+    keys(
+        value,
+        &[
+            "schema",
+            "source_archive_sha256",
+            "executable",
+            "acquisition",
+        ],
+    )?;
     ensure(
         value["schema"] == "prismpm/exporter-execution/1",
         "exporter evidence schema differs",
     )?;
+    validate_exporter_measurement(value)?;
+    crate::exporter::validate_acquisition(
+        &value["acquisition"],
+        string(&value["executable"]["sha256"])?,
+    )
+    .map_err(|error| invalid(error.message))
+}
+
+fn validate_exporter_measurement(value: &Value) -> Result<(), PrismError> {
     ensure(
         digest(&value["source_archive_sha256"])?
             == hex(include_bytes!("../vendor/lean4-prod/lean.tar")),
@@ -872,6 +889,30 @@ fn validate_exporter_execution(value: &Value) -> Result<(), PrismError> {
                 .is_some_and(|mode| mode <= 0o777 && mode & 0o111 != 0),
         "bounded actual exporter executable measurement required",
     )
+}
+
+/// OCI release admission supplies the independently retained SDK lock; the
+/// source-free structural replay above deliberately does not authenticate it.
+pub(crate) fn validate_exporter_authority(
+    _build_files: &BTreeMap<String, Vec<u8>>,
+    verification_files: &BTreeMap<String, Vec<u8>>,
+    sdk_lock: &Value,
+) -> Result<(), PrismError> {
+    let manifest = canonical_json(file(verification_files, "manifest.json")?, false)?;
+    let executions: Vec<Value> = array(&manifest["processes"])?
+        .iter()
+        .filter_map(|row| row.get("exporter").cloned())
+        .collect();
+    for execution in executions {
+        validate_exporter_execution(&execution)?;
+        crate::exporter::validate_acquisition_authority(
+            &execution["acquisition"],
+            string(&execution["executable"]["sha256"])?,
+            sdk_lock,
+        )
+        .map_err(|error| invalid(error.message))?;
+    }
+    Ok(())
 }
 
 fn lexlean_processes(lex: &Value, modules: &BTreeSet<String>) -> Result<(), PrismError> {
@@ -1111,7 +1152,7 @@ fn application_binding(
                     "build_id":build_id, "cargo_package":{"name":application.cargo_name(),"sha256":hex(file(build_files, &crate_name)?),"version":application.cargo_version()},
                     "core_wasm":{"sha256":hex(guest),"status":"verified"}, "holo":identities,
                     "hologram_oracle":"verified", "lexlean_attestation_id":lex["attestation_id"],
-                    "modeled_vectors":application.acceptance_vectors().len(), "schema":"prismpm/application-acceptance/1",
+                    "modeled_vectors":application.acceptance_vectors().len(), "regeneration":"byte-identical", "schema":"prismpm/application-acceptance/1",
             "source_id":lex["source_id"], "status":"verified"
                 }),
         "application acceptance differs from actual model or artifacts",
@@ -1127,8 +1168,43 @@ fn application_binding(
         "application-package-no-std",
         "application-consumer-lock",
         "application-generated-rust-corpus",
+        "application-lean",
+        "application-exporter",
+        "application-export",
     ]);
     process_order(processes, &expected)?;
+    let identity = canonical_json(
+        file(build_files, "application/exporter-identity.json")?,
+        false,
+    )?;
+    let execution = &processes
+        .last()
+        .ok_or_else(|| invalid("application regeneration export is absent"))?["exporter"];
+    let application_manifest = canonical_json(
+        file(build_files, "application/lexlean-build-manifest.json")?,
+        true,
+    )?;
+    let modules = lexlean_modules(&application_manifest)?;
+    let arguments = crate::application_build::application_export_arguments(
+        &modules,
+        application,
+        std::path::Path::new("$APPLICATION_WORK/export"),
+    );
+    ensure(
+        processes.last().unwrap()["argv"] == json!(arguments),
+        "application regeneration export process arguments differ",
+    )?;
+    ensure(
+        identity["executable"] == execution["executable"]
+            && identity["source_archive_sha256"] == execution["source_archive_sha256"],
+        "application regeneration exporter identity differs",
+    )?;
+    for row in &processes[14..] {
+        ensure(
+            row["executable_sha256"] == processes[1]["executable_sha256"],
+            "application regeneration Lake identity differs",
+        )?;
+    }
     ensure(
         processes[5]["stdout"] == "v22.23.2\n" && processes[5]["stderr"] == "",
         "application oracle Node identity differs",
@@ -1171,6 +1247,8 @@ fn application_binding(
             "application-generated-rust-corpus",
             vec!["run", "--locked", "--offline"],
         ),
+        ("application-lean", vec!["build", "PrismGenerated"]),
+        ("application-exporter", vec!["build", "prod-export"]),
     ] {
         let row = processes
             .iter()
@@ -1331,10 +1409,16 @@ fn application_archive(
         )?;
     }
     let lcnf = canonical_json(file(files, "application/lcnf-manifest.json")?, false)?;
-    validate_exporter_execution(&canonical_json(
-        file(files, "application/exporter-execution.json")?,
-        false,
-    )?)?;
+    let identity = canonical_json(file(files, "application/exporter-identity.json")?, false)?;
+    keys(
+        &identity,
+        &["schema", "source_archive_sha256", "executable"],
+    )?;
+    ensure(
+        identity["schema"] == "prismpm/exporter-identity/1",
+        "application exporter identity schema differs",
+    )?;
+    validate_exporter_measurement(&identity)?;
     ensure(
         lcnf == json!({"coverage_sha256":hex(file(files,"cargo/coverage.json")?),"kernel_ir_sha256":hex(file(files,"cargo/kernel.ir")?),"roots_sha256":hex(file(files,"cargo/roots.json")?),"schema":"prismpm/lcnf-manifest/1"}),
         "application LCNF evidence differs",

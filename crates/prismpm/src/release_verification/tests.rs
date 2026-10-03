@@ -5,6 +5,7 @@ fn exporter_process_evidence_requires_the_actual_child_and_pinned_archive() {
     let exporter = json!({
         "schema":"prismpm/exporter-execution/1",
         "source_archive_sha256":hex(include_bytes!("../../vendor/lean4-prod/lean.tar")),
+        "acquisition":crate::exporter::cold_acquisition(),
         "executable":{"byte_length":1234,"mode":0o755,"sha256":"b".repeat(64)}
     });
     let record = json!({"tool":"prod-export","argv":["exe","prod-export"],
@@ -14,6 +15,8 @@ fn exporter_process_evidence_requires_the_actual_child_and_pinned_archive() {
         ("/exporter", Value::Null),
         ("/exporter/source_archive_sha256", json!("c".repeat(64))),
         ("/exporter/schema", json!("other")),
+        ("/exporter/acquisition", Value::Null),
+        ("/exporter/acquisition/mode", json!("sdk-seed")),
         ("/exporter/executable/byte_length", json!(0)),
         ("/exporter/executable/byte_length", json!(268435457_u64)),
         ("/exporter/executable/mode", json!(0o644)),
@@ -259,6 +262,47 @@ pub(crate) fn reject_mutations(
     }
 
     let original = canonical_json(&verification_files["manifest.json"], false).unwrap();
+    if binding.family == "application" {
+        // Start from real regenerated evidence, not a fabricated success row.
+        let last = original["processes"].as_array().unwrap().len() - 1;
+        assert_eq!(original["processes"][last]["tool"], "application-export");
+        for mutation in ["order", "extra", "lake", "child", "archive", "acquisition"] {
+            let mut manifest = original.clone();
+            match mutation {
+                "order" => manifest["processes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .swap(last - 1, last - 2),
+                "extra" => {
+                    let duplicate = manifest["processes"][last].clone();
+                    manifest["processes"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(duplicate);
+                }
+                "lake" => manifest["processes"][last]["executable_sha256"] = json!("0".repeat(64)),
+                "child" => {
+                    manifest["processes"][last]["exporter"]["executable"]["sha256"] =
+                        json!("0".repeat(64))
+                }
+                "archive" => {
+                    manifest["processes"][last]["exporter"]["source_archive_sha256"] =
+                        json!("0".repeat(64))
+                }
+                "acquisition" => {
+                    manifest["processes"][last]["exporter"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("acquisition");
+                }
+                _ => unreachable!(),
+            }
+            let mut changed = verification_files.clone();
+            changed.insert("manifest.json".into(), encode_value(&manifest).unwrap());
+            let error = validate(build_manifest, build_files, &changed).unwrap_err();
+            assert_eq!(error.code, "PP6101", "{mutation}");
+        }
+    }
     for index in 0..original["processes"].as_array().unwrap().len() {
         let mut manifest = original.clone();
         manifest["processes"][index]["argv"] = json!(["--version"]);

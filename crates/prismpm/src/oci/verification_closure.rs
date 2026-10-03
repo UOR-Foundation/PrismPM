@@ -171,6 +171,9 @@ pub(super) fn capture(
         .ok_or_else(|| error("build manifest is absent"))?;
     let runtime = directory(root, &verified.verified_root)?;
     let binding = release_verification::validate(&manifest, &build_files, &runtime)?;
+    let sdk_bytes = confined_file(root, "prismpm.lock")?;
+    let sdk_lock = crate::sdk::parse_lock(&sdk_bytes)?;
+    release_verification::validate_exporter_authority(&build_files, &runtime, sdk_lock.value())?;
     if binding.build_id != build.build_id
         || binding.build_id != verified.build_id
         || binding.attestation_id != verified.attestation_id
@@ -452,6 +455,7 @@ pub(super) fn validate(
         }
     }
     let binding = release_verification::validate(build_manifest, build_files, &retained.runtime)?;
+    release_verification::validate_exporter_authority(build_files, &retained.runtime, sdk_lock)?;
     if binding_value(&binding)? != retained.config
         || release["model_digest"] != binding.model_digest
     {

@@ -189,7 +189,7 @@ pub(crate) fn generate_recorded(
         .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
     let workspace = work.path();
     let lean_package = workspace.join("lean4-prod");
-    crate::exporter::acquire(&lean_package)?;
+    let exporter_acquisition = crate::exporter::acquire_for(repository_root, &lean_package)?;
 
     let manifest: Value = serde_json::from_slice(lex_manifest_bytes)
         .map_err(|error| PrismError::new("PP4004", format!("LexLean manifest: {error}")))?;
@@ -305,6 +305,7 @@ pub(crate) fn generate_recorded(
         &export_env,
         &replacements,
         "PP5004",
+        &exporter_acquisition,
     )?);
     let mut artifacts = Vec::new();
     for name in ["coverage.json", "kernel.ir", "roots.json"] {

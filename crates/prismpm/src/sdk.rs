@@ -600,6 +600,37 @@ pub(crate) fn check_existing_lock(root: &Path) -> Result<(), PrismError> {
     Ok(())
 }
 
+/// Seed authority comes from the consumer's platform lock, never a digest
+/// recomputed from the installed inventory. Legacy/unlocked bootstrap is cold.
+pub(crate) fn exporter_seed_inventory(root: &Path) -> Result<Option<String>, PrismError> {
+    if !lock_is_present(root)? || inventory_path().as_deref() != Some(Path::new(RELEASED_INVENTORY))
+    {
+        return Ok(None);
+    }
+    let lock = execution_lock(root)?;
+    if lock.schema() != "prismpm/sdk-lock/2" {
+        return Ok(None);
+    }
+    let architecture = match std::env::consts::ARCH {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        _ => {
+            return Err(PrismError::new(
+                "PP5401",
+                "unsupported native exporter platform",
+            ))
+        }
+    };
+    let platform = format!("{}/{architecture}", std::env::consts::OS);
+    let digest = lock.value()["platforms"]
+        .as_array()
+        .and_then(|rows| rows.iter().find(|row| row["platform"] == platform))
+        .and_then(|row| row["inventory_digest"].as_str())
+        .and_then(|digest| digest.strip_prefix("sha256:"))
+        .ok_or_else(|| PrismError::new("PP5401", "native SDK inventory authority is missing"))?;
+    Ok(Some(digest.to_owned()))
+}
+
 pub(crate) fn execution_lock(root: &Path) -> Result<CanonicalDocument, PrismError> {
     if !lock_is_present(root)? {
         return Err(PrismError::new("PP5401", "prismpm.lock is absent"));

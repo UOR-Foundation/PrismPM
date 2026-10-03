@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-29 @build
+  Scenario: Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance.
+    Given pinned compiler sources and a complete independently locked native SDK seed manifest
+    When bounded exclusive staging checks every source, toolchain, runtime and seed file identity
+    Then changed, missing, aliased, oversized or coherently rehashed inputs fail closed
+    And the actual Lake build and exports remain required in each fresh application verification
+
   @DK-28 @build
   Scenario: SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance.
     Given digest-pinned platform manifests with exact configuration, terminal metadata and inventory bindings

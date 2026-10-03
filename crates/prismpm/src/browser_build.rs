@@ -269,7 +269,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         &workspace.join("rust-toolchain.toml"),
         toolchain::RUST_TOOLCHAIN_FILE,
     )?;
-    crate::exporter::acquire(&exporter)?;
+    let exporter_acquisition = crate::exporter::acquire_for(project, &exporter)?;
     let replacements = [(workspace, "$BROWSER_COMPILER"), (project, "$PROJECT")];
     let lake = executable("lake")?;
     let cargo = &tools.cargo;
@@ -327,6 +327,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         &export_env,
         &replacements,
         "PP5004",
+        &exporter_acquisition,
     )?);
     let mut export = BTreeMap::new();
     for name in ["kernel.ir", "coverage.json", "roots.json"] {
