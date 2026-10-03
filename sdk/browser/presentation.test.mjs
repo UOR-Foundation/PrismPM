@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {createCompilerOwner, requireCompilerOwner} from '../../tests/browser-view/compiler-owner.mjs';
+import {verifyCompilerOwnerSubstitutions} from '../../tests/browser-view/compiler-owner-checks.mjs';
 import {verifyWire, replayBrowser, verifyModelMutation, verifyInventory, prerequisite} from '../../tests/browser-presentation/checks.mjs';
 import {verifyJourneys, verifyMutants, verifyMaximum} from '../../tests/browser-presentation/browser.mjs';
 
 test('DK-23 actual generated closed presentation and private browser execution', {timeout: 3500000}, async t => {
-  const build = await verifyWire(t);
+  const owner = createCompilerOwner('presentation');
+  const substitutions = verifyCompilerOwnerSubstitutions(owner);
+  const build = await verifyWire(t, owner); assert.equal(build.compilerOwner, owner.identity);
   await prerequisite(t, 'actual generated source-owned presentation and exact observed std/no_std native transcripts', async child => {
     replayBrowser(build, await verifyJourneys(child, build));
   });
@@ -21,5 +25,11 @@ test('DK-23 actual generated closed presentation and private browser execution',
   });
   await prerequisite(t, 'actual unsafe DOM, stale/draft and closed-lifecycle guard mutations fail', child => verifyMutants(child, build));
   await prerequisite(t, 'closed diagnostic registry', verifyInventory);
-  for (const kind of ['binding', 'trailing', 'secretbound', 'secretroute', 'progress']) await prerequisite(t, 'actual LexLean ' + kind + ' mutant fails native/no_std/Wasm', () => verifyModelMutation(kind));
+  for (const kind of ['binding', 'trailing', 'secretbound', 'secretroute', 'progress']) await prerequisite(t, 'actual LexLean ' + kind + ' mutant fails native/no_std/Wasm', () => {
+    const result = verifyModelMutation(kind, owner); assert.equal(result.compilerOwner, owner.identity); t.diagnostic(JSON.stringify(result));
+  });
+  const retirement = owner.close();
+  assert.throws(() => requireCompilerOwner(owner, 'presentation'), /compiler owner closed/);
+  assert.throws(() => owner.close(), /compiler owner closed/);
+  t.diagnostic(JSON.stringify({compiler: owner.evidence, substitutions, retirement}));
 });
