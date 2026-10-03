@@ -978,6 +978,20 @@ mod tests {
     }
 
     #[test]
+    fn committed_native_profiles_preserve_the_shared_portable_outputs() {
+        // Inspect retained source-review records only. Reading another native
+        // profile does not execute that architecture or establish SDK acceptance.
+        let root = repo_model::repo_root();
+        let base = fixture();
+        for platform in [platform::Platform::SdkAmd64, platform::Platform::SdkArm64] {
+            let records = read(&root.join(platform.directory())).unwrap();
+            let composed = read_platform(&root, platform).unwrap();
+            assert_eq!(composed.len(), base.len());
+            assert_eq!(native_records(&base, &composed, platform).unwrap(), records);
+        }
+    }
+
+    #[test]
     fn missing_native_records_never_fall_back_to_development_records() {
         let work = tempfile::tempdir().unwrap();
         let base = fixture();
