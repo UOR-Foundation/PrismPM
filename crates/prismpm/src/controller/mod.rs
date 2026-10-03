@@ -789,6 +789,7 @@ impl Controller {
         let mut inputs = json!({
             "application_generator_sha256": format!("{:x}", Sha256::digest([
                 include_bytes!("../application_build.rs").as_slice(),
+                include_bytes!("../lean_project.rs").as_slice(),
                 include_bytes!("../holo/archive.rs").as_slice(),
                 include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
                 b"prismpm/build-artifacts/2".as_slice()
@@ -821,8 +822,13 @@ impl Controller {
         }
         if prepared.model.library.is_some() {
             inputs["library_artifacts_sha256"] = json!(content_id(&encode_value(&json!(rows))?));
-            inputs["library_generator_sha256"] =
-                json!(content_id(include_bytes!("../library_build.rs")));
+            inputs["library_generator_sha256"] = json!(content_id(
+                &[
+                    include_bytes!("../library_build.rs").as_slice(),
+                    include_bytes!("../lean_project.rs").as_slice(),
+                ]
+                .concat()
+            ));
             inputs["schema"] = json!("prismpm/build-inputs/3");
         }
         let build_id = content_id(&encode_value(&inputs)?);
