@@ -170,7 +170,7 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
       assert.deepEqual(args.slice(2, 5), ['/usr/bin/python3', '-I', '-B']);
       if (args[5].endsWith('.test.py')) {
         if (fault === 'python-suite-failure') return bad();
-        return ok({tests: fault === 'python-suite-omission' ? 16 : 17, status: 'passed'});
+        return ok({tests: fault === 'python-suite-omission' ? 17 : 18, status: 'passed'});
       }
       if (args[6] === 'prepare') {
         assert(created.endsWith('-dependencies'));

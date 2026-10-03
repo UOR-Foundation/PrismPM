@@ -1,4 +1,12 @@
 # syntax=docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25
+# Keep this source-independent stage identical in both image recipes.
+FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust_oracle_tools
+ENV SOURCE_DATE_EPOCH=0
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasm-bindgen-cli --version 0.2.122
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasm-tools --version 1.258.0
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasmtime-cli --version 48.0.1
+RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools cargo-local-registry --version 0.2.12
+
 FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS input_tools
 ARG TARGETARCH
 RUN case "$TARGETARCH" in \
@@ -91,10 +99,7 @@ RUN case "$TARGETARCH" in \
     && rm /tmp/elan/elan-init \
     && rmdir /tmp/elan
 
-RUN cargo install --locked wasm-bindgen-cli --version 0.2.122
-RUN cargo install --locked wasm-tools --version 1.258.0
-RUN cargo install --locked wasmtime-cli --version 48.0.1
-RUN cargo install --locked cargo-local-registry --version 0.2.12
+COPY --from=rust_oracle_tools /opt/prismpm/rust-oracle-tools/bin/ /usr/local/cargo/bin/
 RUN rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 RUN case "$TARGETARCH" in \

@@ -64,10 +64,12 @@ def inputs(source):
         normalized = Path(os.path.abspath(path))
         require(normalized.is_relative_to(source) and normalized.resolve() == normalized,
                 "aliased or escaping Cargo input")
+        relative = normalized.relative_to(source).as_posix()
+        require(relative in rows or len(rows) < 4096, "source manifest bound exceeded")
         data = regular(normalized, 8 * 1024 * 1024)
         total += len(data)
-        require(total <= 32 * 1024 * 1024 and len(rows) <= 4096, "source manifest bound exceeded")
-        rows[normalized.relative_to(source).as_posix()] = digest(data)
+        require(total <= 32 * 1024 * 1024, "source manifest bound exceeded")
+        rows[relative] = digest(data)
         return tomllib.loads(data.decode())
 
     # Follow the actual workspace/path-dependency graph, not unrelated oracle

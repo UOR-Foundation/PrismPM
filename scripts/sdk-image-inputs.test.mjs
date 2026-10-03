@@ -84,6 +84,34 @@ function imageStages(recipe) {
   return stages;
 }
 
+test('development and SDK recipes share the exact isolated pinned Rust tool construction', () => {
+  const sdk = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const dev = readFileSync(new URL('../.devcontainer/Dockerfile', import.meta.url), 'utf8');
+  const instructions = ['ENV SOURCE_DATE_EPOCH=0', ...[
+    ['wasm-bindgen-cli', '0.2.122'], ['wasm-tools', '1.258.0'],
+    ['wasmtime-cli', '48.0.1'], ['cargo-local-registry', '0.2.12'],
+  ].map(([name, version]) => `RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools ${name} --version ${version}`)];
+  const check = recipe => {
+    assert.equal(recipe.split('\n')[0], '# syntax=docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25');
+    assert.deepEqual(imageStages(recipe).get('rust_oracle_tools'), {
+      base: 'docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97',
+      instructions,
+    });
+    assert.equal((recipe.match(/cargo install /g) ?? []).length, 4, 'no duplicate tool construction');
+    assert.equal(recipe.split('\n').filter(line => line.includes('COPY --from=rust_oracle_tools')).join('\n'),
+      'COPY --from=rust_oracle_tools /opt/prismpm/rust-oracle-tools/bin/ /usr/local/cargo/bin/');
+  };
+  for (const recipe of [sdk, dev]) {
+    check(recipe);
+    for (const changed of [
+      recipe.replace('cargo install --locked', 'cargo install'),
+      recipe.replace('wasm-tools --version 1.258.0', 'wasm-tools --version 1.257.0'),
+      recipe.replace('ENV SOURCE_DATE_EPOCH=0', 'ENV SOURCE_DATE_EPOCH=0\nCOPY . /source'),
+      recipe.replace('/rust-oracle-tools/bin/ /usr/local/cargo/bin/', '/rust-oracle-tools/ /usr/local/cargo/bin/'),
+    ]) assert.throws(() => check(changed));
+  }
+});
+
 test('pinned tool layers exclude source inputs while the build retains both verified closure and policy', t => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
   const checkTopology = text => {

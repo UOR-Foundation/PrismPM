@@ -98,6 +98,17 @@ class SupplementTest(unittest.TestCase):
         self.assertIn(".cargo/config.toml", self.prepare()["inputs"])
         self.install()
 
+    def test_manifest_count_accepts_exact_bound_and_refuses_first_over(self):
+        (self.source / "Cargo.toml").write_text('[workspace]\nmembers = ["members/*"]\n')
+        for index in range(4094):
+            self.put(self.source / f"members/{index}/Cargo.toml",
+                     f'[package]\nname = "member-{index}"\nversion = "0.1.0"\n'.encode())
+        # Root manifest + root lock + 4094 member manifests: the actual limit.
+        self.assertEqual(len(deps.inputs(self.source)), 4096)
+        self.put(self.source / "rust-toolchain.toml", b'[toolchain]\nchannel="stable"\n')
+        with self.assertRaisesRegex(ValueError, "source manifest bound exceeded"):
+            deps.inputs(self.source)
+
     def test_index_checksum_disagreement_rejected(self):
         (self.fetched / self.index).write_bytes(self.index_bytes.replace(self.checksum.encode(), b"0" * 64))
         with self.assertRaisesRegex(ValueError, "index differs"):
@@ -186,8 +197,8 @@ class SupplementTest(unittest.TestCase):
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(SupplementTest)
-    deps.require(suite.countTestCases() == 17, "complete dependency test inventory required")
+    deps.require(suite.countTestCases() == 18, "complete dependency test inventory required")
     result = unittest.TextTestRunner().run(suite)
-    deps.require(result.wasSuccessful() and result.testsRun == 17 and not result.skipped,
+    deps.require(result.wasSuccessful() and result.testsRun == 18 and not result.skipped,
                  "complete dependency tests must pass without skips")
     print(json.dumps({"tests": result.testsRun, "status": "passed"}))
