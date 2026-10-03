@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-parallel-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-parallel-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint-and-policy:

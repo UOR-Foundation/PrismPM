@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
-import {chmodSync, copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
+import {chmodSync, chownSync, copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import {retireCompletedCompilerCaches} from '../tests/browser-view/driver-cache.mjs';
-import {ensureProdExport, repository, run, sha} from '../tests/browser-view/compile.mjs';
-import * as compiler from '../tests/browser-view/compile.mjs';
+import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from '../tests/browser-view/compile.mjs';
 
 // Reuse the actual pinned exporter configuration; do not substitute a Lake
 // manifest format which none of these compiler fixtures executes.
@@ -28,6 +27,7 @@ function exporterFixture(t) {
   const executable = join(cache, '.lake/build/bin/prod-export');
   const marker = join(repo, 'planted-executable-ran');
   mkdirSync(dirname(executable), {recursive:true});
+  // Adversarial fixture, never an accepted exporter or simulated build result.
   writeFileSync(executable, '#!/bin/sh\nprintf planted > "' + marker + '"\nexit 0\n');
   chmodSync(executable, 0o700);
   mkdirSync(join(cache, 'Prod'));
@@ -35,70 +35,83 @@ function exporterFixture(t) {
   return {repo, cache, executable, marker};
 }
 
-test('a planted executable and source cache cannot replace a freshly compiled pinned exporter', t => {
-  const f = exporterFixture(t), bytes = readFileSync(f.executable);
-  const result = ensureProdExport(f.repo);
-  t.after(() => { if (result.dir !== f.cache) rmSync(result.dir, {recursive:true, force:true}); });
-  const probe = spawnSync(result.bin, ['--module'], {cwd:result.dir, encoding:'utf8', timeout:30000});
-  assert.ifError(probe.error);
-  assert(!existsSync(f.marker), 'never execute an unproved cached binary');
-  assert.notEqual(result.dir, f.cache);
-  assert.notEqual(probe.status, 0, 'actual exporter rejects invalid arguments');
-  assert.match(probe.stderr, /prod-export: unknown or incomplete named-export argument `--module`/);
-  assert.deepEqual(readFileSync(f.executable), bytes, 'unowned old cache is not overwritten');
-  assert.equal(readFileSync(join(f.cache, 'Prod/Emit.lean'), 'utf8'), 'untrusted cached source\n');
-});
+for (const linked of [false, true]) {
+  test(`pinned exporter is genuinely compiled without adopting ${linked ? 'linked' : 'regular'} shared cache`, t => {
+    const f = exporterFixture(t), bytes = readFileSync(f.executable);
+    if (linked) { renameSync(f.cache, f.cache + '-retained'); symlinkSync(f.cache + '-retained', f.cache); }
+    const work = join(f.repo, 'private'); mkdirSync(work, {mode:0o700});
+    const result = ensureProdExport(f.repo, work);
+    const probe = spawnSync(result.bin, ['--module'], {cwd:result.dir, encoding:'utf8', timeout:30000});
+    assert.ifError(probe.error);
+    assert(!existsSync(f.marker), 'unproved cached executable must never run');
+    assert.equal(result.dir, join(work, 'exporter'));
+    assert.notEqual(probe.status, 0);
+    assert.match(probe.stderr, /prod-export: unknown or incomplete named-export argument `--module`/);
+    assert.deepEqual(readFileSync(f.executable), bytes, 'unowned shared cache remains untouched');
+    assert.equal(readFileSync(join(f.cache, 'Prod/Emit.lean'), 'utf8'), 'untrusted cached source\n');
+  });
+}
 
-test('a linked shared cache is neither executed nor overwritten', t => {
-  const f = exporterFixture(t), retained = f.cache + '-retained';
-  renameSync(f.cache, retained); symlinkSync(retained, f.cache);
-  const result = ensureProdExport(f.repo);
-  t.after(() => { if (result.dir !== f.cache) rmSync(result.dir, {recursive:true, force:true}); });
-  const probe = spawnSync(result.bin, ['--module'], {cwd:result.dir, encoding:'utf8', timeout:30000});
-  assert.ifError(probe.error);
-  assert(!existsSync(f.marker), 'never execute through an unproved cached link');
-  assert.notEqual(result.dir, f.cache);
-  assert.notEqual(probe.status, 0);
-  assert.match(probe.stderr, /prod-export: unknown or incomplete named-export argument `--module`/);
-  assert.equal(readFileSync(join(retained, 'Prod/Emit.lean'), 'utf8'), 'untrusted cached source\n');
-});
+for (const [name, mutate, reason] of [
+  ['changed archive', f => writeFileSync(join(f.repo, 'vendor/lean4-prod/lean.tar'), 'changed'), /lean.tar/],
+  ['coherently resealed archive', f => {
+    const path = join(f.repo, 'vendor/lean4-prod/lean.tar'), original = sha(readFileSync(path));
+    writeFileSync(path, 'changed');
+    const manifest = join(f.repo, 'model/dependencies.toml');
+    writeFileSync(manifest, readFileSync(manifest, 'utf8').replace(original, sha(Buffer.from('changed'))));
+  }, /dependency authority/],
+  ['aliased archive', f => {
+    const path = join(f.repo, 'vendor/lean4-prod/lean.tar'); renameSync(path, path + '-retained'); symlinkSync(path + '-retained', path);
+  }, /aliased/],
+  ['multiply linked archive', f => {
+    const path = join(f.repo, 'vendor/lean4-prod/lean.tar'); linkSync(path, path + '-linked');
+  }, /singly owned regular/],
+  ['changed toolchain', f => writeFileSync(join(f.repo, 'lean-toolchain'), 'leanprover/lean4:nightly\n'), /verified SDK toolchain/],
+]) {
+  test(`exporter refuses ${name} despite a planted cache`, t => {
+    const f = exporterFixture(t); mutate(f);
+    assert.throws(() => ensureProdExport(f.repo), reason);
+    assert(!existsSync(f.marker));
+  });
+}
 
-test('changed source pins reject even when a cached executable exists', t => {
-  const f = exporterFixture(t);
-  writeFileSync(join(f.repo, 'vendor/lean4-prod/lean.tar'), 'changed pinned source');
-  assert.throws(() => ensureProdExport(f.repo), /lean.tar/);
+test('private exporter destination and aliased parent cannot be adopted or overwritten', t => {
+  const f = exporterFixture(t), work = join(f.repo, 'private');
+  assert.throws(() => ensureProdExport(f.repo), /owned exporter workspace required/);
+  mkdirSync(work, {mode:0o700});
+  mkdirSync(join(work, 'exporter'));
+  const retained = join(work, 'exporter/evidence'); writeFileSync(retained, 'preserve');
+  assert.throws(() => ensureProdExport(f.repo, work), /EEXIST/);
+  assert.equal(readFileSync(retained, 'utf8'), 'preserve');
+  const alias = join(f.repo, 'alias'); symlinkSync(work, alias);
+  assert.throws(() => ensureProdExport(f.repo, alias), /aliased exporter parent/);
   assert(!existsSync(f.marker));
 });
 
-test('aliased pinned source rejects even when its bytes and an existing executable appear valid', t => {
-  const f = exporterFixture(t), source = join(f.repo, 'vendor/lean4-prod/lean.tar');
-  renameSync(source, source + '-retained'); symlinkSync(source + '-retained', source);
-  assert.throws(() => ensureProdExport(f.repo), /aliased/);
+test('exporter refuses nonprivate parents before creating or compiling anything', t => {
+  const f = exporterFixture(t), work = join(f.repo, 'private');
+  mkdirSync(work, {mode:0o700});
+  for (const mode of [0o701, 0o710, 0o720, 0o740, 0o755, 0o777]) {
+    chmodSync(work, mode);
+    assert.throws(() => ensureProdExport(f.repo, work), /exporter parent must be an owned private directory/);
+    assert(!existsSync(join(work, 'exporter')), 'rejection precedes source staging');
+    assert(!existsSync(f.marker));
+  }
+});
+
+test('exporter refuses a private directory belonging to another user', t => {
+  const f = exporterFixture(t), work = join(f.repo, 'foreign');
+  if (process.getuid() === 0) {
+    mkdirSync(work, {mode:0o700});
+    chownSync(work, 65534, 65534);
+    assert.throws(() => ensureProdExport(f.repo, work), /exporter parent must be an owned private directory/);
+    assert(!existsSync(join(work, 'exporter')));
+  } else {
+    // Root-owned, readable directory: a non-root caller must not accept it
+    // merely because mkdir would later fail. No writes may be attempted here.
+    assert.throws(() => ensureProdExport(f.repo, '/usr'), /exporter parent must be an owned private directory/);
+  }
   assert(!existsSync(f.marker));
-});
-
-test('multiply linked pinned source is not an immutable private input', t => {
-  const f = exporterFixture(t), source = join(f.repo, 'vendor/lean4-prod/lean.tar');
-  linkSync(source, source + '-linked');
-  assert.throws(() => ensureProdExport(f.repo), /singly owned regular compiler source/);
-  assert(!existsSync(f.marker));
-});
-
-test('a linked private driver parent rejects before creating a target', t => {
-  const parent = mkdtempSync(join(tmpdir(), 'prismpm-driver-parent-'));
-  t.after(() => rmSync(parent, {recursive:true, force:true}));
-  const work = join(parent, 'actual'), alias = join(parent, 'alias');
-  mkdirSync(work); symlinkSync(work, alias);
-  assert.throws(() => compiler.createPrivateDriverTarget(alias), /aliased driver parent/);
-  assert(!existsSync(join(work, 'driver-target')));
-});
-
-test('a private exporter destination cannot be adopted or overwritten', t => {
-  const f = exporterFixture(t), work = join(f.repo, 'private-work');
-  mkdirSync(join(work, 'exporter'), {recursive:true});
-  writeFileSync(join(work, 'exporter/evidence'), 'preserve');
-  assert.throws(() => ensureProdExport(f.repo, work), /exist|EEXIST/);
-  assert.equal(readFileSync(join(work, 'exporter/evidence'), 'utf8'), 'preserve');
 });
 
 function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
@@ -114,8 +127,9 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   writeFileSync(manifest, '[package]\nname="' + executable + '"\nversion="0.1.0"\nedition="2021"\npublish=false\n[workspace]\n');
   writeFileSync(join(dirname(manifest), 'src/main.rs'), 'fn main() {}\n');
   writeFileSync(join(dirname(manifest), 'Cargo.lock'), 'version = 4\n[[package]]\nname="' + executable + '"\nversion="0.1.0"\n');
-  const target = join(work, 'driver-target');
-  run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',manifest], work, {CARGO_TARGET_DIR:target});
+  const target = createPrivateDriverTarget(work);
+  assert(!existsSync(target), 'Cargo initializes the fresh destination');
+  run('cargo', ['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',manifest], work, {CARGO_TARGET_DIR:target});
   const exporter = join(work, 'exporter');
   mkdirSync(join(exporter, '.lake/build/bin'), {recursive:true});
   writeFileSync(join(exporter, 'lakefile.lean'), exporterManifest);
@@ -126,26 +140,66 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   return {work, target, manifest, exporter, preserved, executable};
 }
 
-test('Cargo fingerprints cannot authorize a planted driver executable or reuse its target', t => {
-  assert.equal(typeof compiler.createPrivateDriverTarget, 'function');
-  const f = fixture(t), driver = join(f.target, 'debug', f.executable);
+test('driver targets refuse prior files, directories, dangling links and aliased or nonprivate parents', t => {
+  const work = mkdtempSync(join(tmpdir(), 'prismpm-driver-parent-'));
+  t.after(() => rmSync(work, {recursive:true, force:true}));
+  const target = createPrivateDriverTarget(work);
+  writeFileSync(target, 'preserve');
+  assert.throws(() => createPrivateDriverTarget(work), /already exists/);
+  assert.equal(readFileSync(target, 'utf8'), 'preserve'); rmSync(target);
+  mkdirSync(target); assert.throws(() => createPrivateDriverTarget(work), /already exists/); rmSync(target, {recursive:true});
+  symlinkSync(join(work, 'absent'), target); assert.throws(() => createPrivateDriverTarget(work), /already exists/); rmSync(target);
+  const real = join(work, 'real'), alias = join(work, 'alias'); mkdirSync(real, {mode:0o700}); symlinkSync(real, alias);
+  assert.throws(() => createPrivateDriverTarget(alias), /aliased driver parent/);
+  chmodSync(real, 0o755); assert.throws(() => createPrivateDriverTarget(real), /owned private directory/);
+  assert(!existsSync(join(real, 'driver-target')));
+});
+
+test('actual Cargo initializes the private cache and never adopts a previous executable', t => {
+  const f = fixture(t);
+  assert.match(readFileSync(join(f.target, 'CACHEDIR.TAG'), 'utf8'), /^Signature: 8a477f597d28d172789f06886806bc55/);
+  const original = readFileSync(join(f.target, 'debug', f.executable));
   const poison = '#!/bin/sh\nprintf planted-driver\n';
-  writeFileSync(driver, poison);
-  // Real Cargo considers this source unchanged; it does not authenticate the
-  // replaced output. The owner must create a new target before compiling.
-  run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',f.manifest], f.work, {CARGO_TARGET_DIR:f.target});
-  assert.equal(run(driver, [], f.work), 'planted-driver');
-  assert.throws(() => compiler.createPrivateDriverTarget(f.work), /already exists/);
-  assert.equal(readFileSync(driver, 'utf8'), poison, 'rejection preserves unowned cache evidence');
+  writeFileSync(join(f.target, 'debug', f.executable), poison);
+  const build = ['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',f.manifest];
+  run('cargo', build, f.work, {CARGO_TARGET_DIR:f.target});
+  assert.equal(run(join(f.target, 'debug', f.executable), [], f.work), 'planted-driver',
+    'Cargo freshness alone does not authenticate an existing executable');
+  assert.throws(() => createPrivateDriverTarget(f.work), /already exists/);
+  assert.equal(readFileSync(join(f.target, 'debug', f.executable), 'utf8'), poison);
+  assert(original.length > 0);
   const fresh = mkdtempSync(join(tmpdir(), 'prismpm-driver-fresh-'));
   t.after(() => rmSync(fresh, {recursive:true, force:true}));
-  const target = compiler.createPrivateDriverTarget(fresh);
-  assert.equal(target, join(fresh, 'driver-target'));
-  run('cargo', ['build','--locked','--offline','--jobs','1','--manifest-path',f.manifest], f.work, {CARGO_TARGET_DIR:target});
-  assert.equal(readFileSync(join(target, 'CACHEDIR.TAG'), 'utf8').split('\n')[0],
-    'Signature: 8a477f597d28d172789f06886806bc55', 'Cargo must initialize its own private cache');
+  const target = createPrivateDriverTarget(fresh);
+  run('cargo', build, f.work, {CARGO_TARGET_DIR:target});
   assert.equal(run(join(target, 'debug', f.executable), [], f.work), '');
-  assert.throws(() => compiler.createPrivateDriverTarget(fresh), /already exists/);
+  assert.throws(() => createPrivateDriverTarget(fresh), /already exists/);
+});
+
+test('all private driver callers retain locked offline builds and bounded resource options', () => {
+  // Source regression guard, not a replacement for each complete real owning
+  // component run. Mutations demonstrate that dropping any option is detected.
+  const callers = ['view', 'command', 'query', 'journal', 'custody', 'effects', 'presentation', 'operation-journal']
+    .map(name => `tests/browser-${name}/compile.mjs`)
+    .concat(['sdk/browser/workspace-model-test.mjs', 'sdk/browser/envelope-model-test.mjs']);
+  const check = source => {
+    assert.match(source, /const driverTarget\s*=\s*createPrivateDriverTarget\(work\)/);
+    const calls = [...source.matchAll(/run\('cargo',\s*\[([^;]*?)\],\s*(?:repository|work),\s*\{CARGO_TARGET_DIR:\s*driverTarget\}\)/g)];
+    assert.equal(calls.length, 1, 'one actual driver build call');
+    const args = calls[0][1];
+    assert.match(args, /^'build'/);
+    for (const option of ['--locked', '--offline']) assert(args.includes(`'${option}'`), option);
+    for (const [option, value] of [['--jobs', '1'], ['--config', 'profile.dev.debug=0'], ['--config', 'build.incremental=false']]) {
+      assert(new RegExp(`'${option}',\\s*'${value.replaceAll('.', '\\.')}'`).test(args), value);
+    }
+  };
+  for (const caller of callers) {
+    const source = readFileSync(join(repository, caller), 'utf8'); check(source);
+    for (const text of ['--locked', '--offline', '--jobs', 'profile.dev.debug=0', 'build.incremental=false']) {
+      const changed = source.replace(text, 'REMOVED'); assert.notEqual(changed, source);
+      assert.throws(() => check(changed), caller + ': ' + text);
+    }
+  }
 });
 
 test('completed effects and custody tool caches retire under their exact owning paths', t => {

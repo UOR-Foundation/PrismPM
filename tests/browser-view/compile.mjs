@@ -12,14 +12,16 @@ export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 function sourceFile(repo, name) {
   const path = resolve(repo, name);
   assert.equal(realpathSync(path), path, 'aliased compiler source refused: '+name);
-  const stat = lstatSync(path);
-  assert.ok(stat.isFile() && stat.nlink === 1, 'singly owned regular compiler source required: '+name);
+  const metadata = lstatSync(path);
+  assert.ok(metadata.isFile() && metadata.nlink === 1, 'singly owned regular compiler source required: '+name);
   return readFileSync(path);
 }
 function verifyPins(repo = repository){
   const captured = new Map();
   const read = name => { const bytes=sourceFile(repo,name); captured.set(name,bytes); return bytes; };
-  const artifacts=read('model/dependencies.toml').toString('utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
+  const dependencies = read('model/dependencies.toml');
+  assert.deepEqual(dependencies, sourceFile(repository, 'model/dependencies.toml'), 'compiler dependency authority differs');
+  const artifacts=dependencies.toString('utf8').split('[[dependency.artifact]]').slice(1).map(section=>{
     const text=section.split('[[dependency]]')[0];return {path:/^path = "([^"]+)"$/m.exec(text)?.[1],hash:/^sha256 = "([0-9a-f]{64})"$/m.exec(text)?.[1],tree:/^tree_root = "([^"]+)"$/m.exec(text)?.[1]};
   });
   for(const name of ['vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust/MANIFEST.sha256','vendor/lexlean/MANIFEST.sha256']){
@@ -141,9 +143,8 @@ export function createPrivateDriverTarget(work) {
   assert.ok(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o077) === 0,
     'driver parent must be an owned private directory');
   const target = join(work, 'driver-target');
-  // Cargo fingerprints bind source freshness, not the bytes of a previously
-  // emitted executable. Never adopt even an apparently current target. Cargo
-  // must create the directory itself to initialize its actual CACHEDIR.TAG.
+  // Cargo must initialize its own CACHEDIR.TAG. A private owning parent guards
+  // this absent destination; an existing fingerprint cannot authenticate code.
   assert.equal(lstatSync(target, {throwIfNoEntry:false}), undefined, 'private driver target already exists');
   return target;
 }
@@ -154,19 +155,17 @@ export function ensureProdExport(repo = repository, work = null) {
     assert.deepEqual(bytes, sourceFile(repository, name), 'exporter uses the verified SDK toolchain');
     captured.set(name, bytes);
   }
-  // Existence, mtimes and Cargo/Lake fingerprints do not authenticate a cached
-  // executable. Build from captured pinned source in a new private directory.
-  // Never read, adopt, overwrite or execute the former shared target cache.
-  let dir;
-  if (work === null) dir = mkdtempSync(join(tmpdir(), 'prismpm-exporter-'));
-  else {
-    assert.equal(realpathSync(work), resolve(work), 'aliased exporter parent refused');
-    assert.ok(lstatSync(work).isDirectory(), 'exporter parent must be a directory');
-    dir = join(work, 'exporter');
-    mkdirSync(dir, {mode:0o700});
-  }
+  // A prior executable, Lake trace or caller-resealed receipt does not prove
+  // source provenance. Never adopt, overwrite or execute the shared cache.
+  assert.ok(typeof work === 'string', 'owned exporter workspace required');
+  assert.equal(realpathSync(work), resolve(work), 'aliased exporter parent refused');
+  const parent = lstatSync(work);
+  assert.ok(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o077) === 0,
+    'exporter parent must be an owned private directory');
+  const dir = join(work, 'exporter');
+  mkdirSync(dir, {mode:0o700});
   const archive = join(dir, '.source-lean.tar');
-  writeFileSync(archive, captured.get('vendor/lean4-prod/lean.tar'), {flag:'wx',mode:0o600});
+  writeFileSync(archive, captured.get('vendor/lean4-prod/lean.tar'), {flag:'wx', mode:0o600});
   run('tar', ['-xf', archive, '-C', dir], dir);
   run('lake', ['build', 'prod-export'], dir);
   const bin = join(dir, '.lake/build/bin/prod-export');
