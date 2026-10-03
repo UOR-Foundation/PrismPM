@@ -2,13 +2,14 @@
 // No Lake traces or process output are rewritten. Production consumers remain
 // cold until authenticated acquisition and complete equivalence are qualified.
 import assert from 'node:assert/strict';
-import {cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {performance} from 'node:perf_hooks';
 import {isDeepStrictEqual} from 'node:util';
 import {buildSeed, constructionEnvironment, readSmall, runConstruction, snapshotTree} from './exporter-seed.mjs';
 import {decodeExporterSeed} from './inventory-metadata.mjs';
+import {stageSeedFiles} from './exporter-seed-admission.mjs';
 
 assert.equal(process.argv.length, 4, 'usage: exporter-relocation.integration.mjs SOURCE OUTPUT_PARENT');
 const source = resolve(process.argv[2]);
@@ -30,8 +31,10 @@ try {
         ['--extract', '--file', join(source, 'vendor/lean4-prod/lean.tar'), '--directory', root], source, environment);
       assert.deepEqual(snapshotTree(root), manifest.source_files);
       if (acquisition === 'relocated') {
-        cpSync(join(seed, '.lake'), join(root, '.lake'), {recursive: true, errorOnExist: true,
-          force: false, preserveTimestamps: true});
+        const staging = mkdtempSync(join(output, 'private-copy-'));
+        stageSeedFiles(seed, staging, manifest);
+        renameSync(join(staging, '.lake'), join(root, '.lake'));
+        rmSync(staging, {recursive: true});
         assert.deepEqual(snapshotTree(root).filter(row => row.path === '.lake' || row.path.startsWith('.lake/')), manifest.files);
       }
       const start = performance.now();
