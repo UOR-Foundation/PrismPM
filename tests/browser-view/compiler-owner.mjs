@@ -14,6 +14,7 @@ const families = Object.freeze({
   presentation: Object.freeze({directory: 'browser-presentation', executable: 'browser-presentation-driver'}),
   'operation-journal': Object.freeze({directory: 'browser-operation-journal', executable: 'browser-operation-journal-driver'}),
   budget: Object.freeze({directory: 'browser-budget', executable: 'browser-budget-driver'}),
+  custody: Object.freeze({directory: 'browser-custody', executable: 'browser-custody-driver'}),
 });
 const owners = new WeakMap();
 function family(name) {
