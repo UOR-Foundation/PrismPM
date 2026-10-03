@@ -955,7 +955,18 @@ temporary, never-started containers. Both standards files must match the
 requested digest. Copied evidence must be bounded regular files before parsing,
 and subprocess output is bounded; Docker owns image pull/extraction resources.
 Temporary containers and files are cleaned up, while the normal Docker image
-cache may retain pulled images. This is fresh target-image evidence, not a
+cache may retain pulled images. The updater allocates exact random-scoped
+container names before capture and confines evidence to its own staging
+directory. The helper protects cleanup before issuing create; the surviving
+Rust parent attempts cleanup after success or failure and positively checks
+absence. Both verify the invocation ownership label and remove only the observed
+container ID, never an unrelated container that acquired the reserved name.
+Cleanup calls are bounded to 20 seconds
+and 64 KiB each. Daemon failure is unconfirmed cleanup, never success. A failed
+capture reports its exact recovery names because an interrupted create can
+still be in flight; abrupt parent death or an unavailable daemon cannot promise
+automatic recovery. No unrelated resources or image caches are pruned.
+This is fresh target-image evidence, not a
 comparison with the updating process's older native inventory and not a
 digest-only patch retaining stale hashes. The closed
 `prismpm/sdk-lock-update/2` proposal includes every changed platform, index,
@@ -968,6 +979,21 @@ synthetic two-architecture images and the isolated source-built CLI; those
 fixtures do not claim to be released SDKs. The separate shipped-SDK runtime
 gate retains its exact native inventory checks. Legacy
 locks retain their existing `prismpm/sdk-lock-update/1` proposal behavior.
+That legacy digest-only proposal is not an executable SDK upgrade and does not
+refresh target inventory. Explicit `lock migrate --sdk-image <digest-ref>
+--standards-lock <digest>` instead captures a v2 target through the same exact
+two-platform image capture. Only this operation reads the canonical regular v1
+lock as historical evidence without comparing it to the updater's native
+inventory. The updater still verifies its own environment; ordinary project
+execution retains all inventory checks. The source lock must remain unchanged
+through capture. The closed `prismpm/sdk-lock-migration/1` proposal contains an
+ordered root `test` of the complete old lock followed by a root `replace` with
+the complete validated v2 lock, preserving every structural addition/removal
+without an implicit format promotion. It never writes the project. Compatibility,
+generated-output and security reviews remain required; capture and a valid
+proposal are not SDK qualification or release acceptance. Existing v2 projects
+use `lock update`, not migration. Proposal limits are 192 MiB and 262,144 items;
+each embedded lock independently retains its existing closed schema and bounds.
 `fetch --locked`
 materializes all content required for subsequent check, build, test, package,
 verify and release assembly with networking disabled. Native Linux archives

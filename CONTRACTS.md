@@ -58,6 +58,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/restore-result/1` | `schemas/restore-result.schema.json` | `application/vnd.prismpm.restore-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/run-result/1` | `schemas/run-result.schema.json` | `application/vnd.prismpm.run-result.v1+json` | 16777216 bytes / 65536 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/sdk-lock-update/1` | `schemas/sdk-lock-update.schema.json` | `application/vnd.prismpm.sdk-lock-update.v1+json` | 4194304 bytes / 8192 items | `closed`; `exact-major-additive-minor` |
+| `prismpm/sdk-lock-migration/1` | `schemas/sdk-lock-migration.schema.json` | `application/vnd.prismpm.sdk-lock-migration.v1+json` | 201326592 bytes / 262144 items | `closed`; `exact-major` |
 | `prismpm/sdk-lock-update/2` | `schemas/sdk-lock-update-v2.schema.json` | `application/vnd.prismpm.sdk-lock-update.v2+json` | 201326592 bytes / 262144 items | `closed`; `exact-major` |
 | `prismpm/signature-result/1` | `schemas/signature-result.schema.json` | `application/vnd.prismpm.signature-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `prismpm/signature-closure-result/1` | `schemas/signature-closure-result.schema.json` | `application/vnd.prismpm.signature-closure-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
@@ -84,6 +85,9 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `finalize-contract` | `authorized-target-data-contract` | `true` | `prismpm/deployment-evidence/1` |
 | `inspect` | `never` | `true` | `prismpm/inspect-result/1` |
 | `lock` | `docker-image-cache-only` | `false` | `prismpm/sdk-lock-update/2` |
+| `lock check` | `docker-image-cache-only` | `false` | `prismpm/sdk-lock/1`, `prismpm/sdk-lock/2` |
+| `lock migrate` | `docker-image-cache-only` | `false` | `prismpm/sdk-lock-migration/1` |
+| `lock update` | `docker-image-cache-only` | `false` | `prismpm/sdk-lock-update/1`, `prismpm/sdk-lock-update/2` |
 | `plan` | `local-evidence` | `true` | `prismpm/deployment-plan/1` |
 | `prepare-promotion` | `owned-local-policy` | `true` | `prismpm/promotion-policy/1` |
 | `promote` | `signed-local-evidence` | `true` | `prismpm/promotion-result/1` |
