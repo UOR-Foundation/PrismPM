@@ -31,6 +31,8 @@ pub mod sdk;
 pub mod supply_chain;
 pub mod system;
 pub mod template;
+#[cfg(test)]
+mod test_compiler;
 pub mod upstream_conformance;
 mod verification;
 

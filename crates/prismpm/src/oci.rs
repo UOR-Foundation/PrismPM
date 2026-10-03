@@ -2905,7 +2905,7 @@ mod tests {
 
     fn fixture_evidence() -> &'static FixtureEvidence {
         static EVIDENCE: OnceLock<FixtureEvidence> = OnceLock::new();
-        EVIDENCE.get_or_init(|| {
+        crate::test_compiler::initialize(&EVIDENCE, || {
             let root = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .ancestors()
                 .nth(2)
