@@ -868,7 +868,7 @@ statement = "Native exporter acquisition binds bounded fresh compiler seeds to i
 id = "DK-30"
 suite = "sdk"
 level = "build"
-statement = "The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std and no_std execution without granting OS authority or claiming native application acceptance."
+statement = "The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance."
 
 [[id]]
 id = "OC-01"

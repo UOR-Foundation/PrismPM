@@ -962,6 +962,12 @@ not assert a universal soundness theorem or imported standards conformance.
 `DK-30` owns the internal conditional native-lane reducer in
 `Foundation.Native.Application.V1.Lease`. Its explicit corpus is mechanically
 bound to every generated LexLean probe and executes in standard and no_std Rust.
+The same verified IR also produces an import-free Core-Wasm guest executing all
+93 closed corpus probes in the pinned Node engine. The selector is source-modeled
+in LexLean, checked for exact one-to-one routing, and rejects invalid selectors.
+Misrouting/constant-result mutations and an actual wrong-expectation execution
+must fail. This is compiled corpus agreement, not general runtime-input or
+OS-effect qualification; no native checks are replaced.
 Pending operations have exactly the predecessor of the next sequence; immutable
 request bindings do not change during cancellation or unknown cleanup. Host-only
 terminal transitions require independently captured worker termination and
@@ -2367,7 +2373,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
-| `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std and no_std execution without granting OS authority or claiming native application acceptance. | §12 |
+| `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

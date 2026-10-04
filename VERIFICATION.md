@@ -1,5 +1,23 @@
 # PrismPM falsifiability and verification record
 
+## Native lease compiled Wasm agreement
+
+DK-30 now compiles the manifest-bound kernel IR into an import-free Core Wasm
+package and executes all 93 closed corpus probes in V8. Exact one-byte selectors
+are independently mapped to the modeled probes; 279 routing/result mutants and
+missing/reordered groups are rejected. Three invalid selectors and a real
+wrong-expected-output execution retain their required negative outcomes.
+Original std/no_std package execution and model mutants remain mandatory.
+
+The complete owner passes in 442.26 seconds with attestation
+`18bb95e59fe1471f04ea03f4814c22e4aaa8166d888660e3a812ab9082c73ab5`.
+All 51 conformance-library tests pass in 56.34 seconds; the source audit passes
+all 289 tests in 267.61 seconds without skips. Scoped formatting and Clippy pass;
+independent adversarial review is clear. Earlier forward-reference, lint-placement
+and scenario/register failures are retained but are not acceptance evidence.
+This proves compiled closed-probe agreement, not general runtime-input semantics,
+OS effects, complete native application acceptance, SDK qualification or full V&V.
+
 ## Mainline integration repair
 
 Mainline `09f8b916` contained committed conflict markers in 13 files. Integration
