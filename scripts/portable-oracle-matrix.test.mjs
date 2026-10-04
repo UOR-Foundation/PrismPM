@@ -4,10 +4,48 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
-import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl} from './portable-oracle-custody.mjs';
+import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('failed child diagnostics reach the retained gate stream with independent bounds and credential redaction', () => {
+  const result = spawnSync(process.execPath, ['-e', 'process.stdout.write("x".repeat(32765)+"private-credential"+"y".repeat(32768)); process.stderr.write("source bytes differ private-credential"); process.exitCode=19;'],
+    {encoding: 'utf8', timeout: 10000, maxBuffer: 131072});
+  assert.ifError(result.error);
+  assert.equal(result.status, 19);
+  const output = [];
+  reportChildFailure('source-comparison', result, 0, bytes => output.push(bytes), {GITHUB_TOKEN: 'private-credential'});
+  const diagnostic = Buffer.concat(output).toString();
+  assert(diagnostic.includes('exit=19'));
+  assert(diagnostic.includes('source bytes differ [REDACTED]'));
+  assert(!diagnostic.includes('private-credential'));
+  assert(!diagnostic.includes('pri'));
+  assert(diagnostic.includes('[diagnostic limit reached]'));
+  assert(Buffer.byteLength(diagnostic) < 66000);
+  reportChildFailure('expected-negative', result, 19, () => assert.fail('expected result is silent'));
+});
+
+test('actual V&V observer retains a failing oracle child diagnostic without changing its exit', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'portable-failure-log-'));
+  try {
+    const driver = join(directory, 'driver.mjs');
+    writeFileSync(driver, `import {spawnSync} from 'node:child_process';
+import {reportChildFailure} from ${JSON.stringify(new URL('./portable-oracle-custody.mjs', import.meta.url).href)};
+const result = spawnSync(process.execPath,['-e','process.stderr.write("actual-source-mismatch");process.exitCode=19;'],{encoding:'utf8',timeout:10000,maxBuffer:65536});
+reportChildFailure('source-comparison',result,0);
+process.exitCode=result.status;
+`);
+    const evidence = join(directory, 'evidence');
+    const result = spawnSync(process.execPath, [new URL('./ci-observe.mjs', import.meta.url).pathname, 'run', evidence, '--', process.execPath, driver],
+      {encoding: 'utf8', timeout: 20000, maxBuffer: 65536});
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 19, result.stderr);
+    assert.match(readFileSync(join(evidence, 'gate.log'), 'utf8'), /oracle stage source-comparison: exit=19[\s\S]*actual-source-mismatch/);
+    assert.equal(JSON.parse(readFileSync(join(evidence, 'gate-result.json'))).exitCode, 19);
+  } finally { rmSync(directory, {recursive: true}); }
+});
 
 test('pinned archive comparison retains complete content and mode custody without requiring root ownership', () => {
   const root = mkdtempSync(join(tmpdir(), 'portable-archive-test-'));
