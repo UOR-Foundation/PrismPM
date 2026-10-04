@@ -1,5 +1,30 @@
 # PrismPM falsifiability and verification record
 
+## Portable request failure context
+
+Hosted V&V `37205262762` fails in the complete portable View matrix: a text
+keyboard delayed-completion case observes its exact POST, HTTP 200, then a
+failed request and unavailable body. This does not establish a timeout, cleanup
+fault or successful submission. Its transport cause remains unproven.
+
+The browser diagnostic now includes the code-owned journey, modeled-vector
+index, request completion observation and a closed failure-reason category.
+Raw error text is never forwarded. The formatter test fails without the helper
+and against an actual raw-return mutant; the restored 15-test custody suite
+passes non-root. Independent review finds no changed acceptance, retry or
+deadline rule. The reviewed driver hash is
+`067bae66336173d12aae091236ae3f0d22a3e794ec73e6f182a0188acb74e201`.
+The first local integration attempt rejected its stale previous checksum and
+was stopped; it is not acceptance. The fresh complete integration run passes
+all three tests in 1,373.80 seconds, including all 78 matrix cases and four
+negative controls, without retries or filtered owners. Hosted V&V remains
+required. Diagnostic improvements alone do not fix the observed transport fault.
+The complete source audit passes all 281 tests without skips; model/spec checks,
+scoped formatting and all-target/all-feature workspace Clippy pass. An earlier
+local source audit failed five tests with host space near the mandatory reserve;
+it is not acceptance. The retained rerun follows removal of an owned incremental
+compiler cache and preserves every guard and test.
+
 ## Shared-octet compiler integration candidate
 
 LexLean `ff92e75ed0e7e8d6bdd53fc717db6f8ede8e1b49` shares repeated closed

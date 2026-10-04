@@ -4,10 +4,27 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
+import {runInNewContext} from 'node:vm';
 import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('browser request diagnostics expose only closed failure reasons, never raw private text', () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const start = source.indexOf('function requestFailureReason(value) {');
+  const end = source.indexOf('\nfunction failureKind(', start);
+  assert(start >= 0 && end > start, 'actual browser failure classifier required');
+  const classify = runInNewContext('(' + source.slice(start, end) + ')');
+  for (const code of ['ERR_ABORTED', 'ERR_FAILED', 'ERR_CONNECTION_RESET', 'ERR_CONNECTION_CLOSED',
+    'ERR_CONTENT_LENGTH_MISMATCH', 'ERR_INCOMPLETE_CHUNKED_ENCODING', 'ERR_INSUFFICIENT_RESOURCES',
+    'ERR_TIMED_OUT', 'ERR_BLOCKED_BY_CLIENT', 'ERR_BLOCKED_BY_RESPONSE']) {
+    assert.equal(classify('net::' + code), code);
+  }
+  assert.equal(classify(null), 'unavailable');
+  for (const value of [undefined, '', 'private-oracle-draft-71943', 'net::ERR_ABORTED private-oracle-draft-71943',
+    'net::ERR_PRIVATE_ORACLE_DRAFT_71943', '__proto__', {}, 1]) assert.equal(classify(value), 'other');
+});
 
 test('failed child diagnostics reach the retained gate stream with independent bounds and credential redaction', () => {
   const result = spawnSync(process.execPath, ['-e', 'process.stdout.write("x".repeat(32765)+"private-credential"+"y".repeat(32768)); process.stderr.write("source bytes differ private-credential"); process.exitCode=19;'],

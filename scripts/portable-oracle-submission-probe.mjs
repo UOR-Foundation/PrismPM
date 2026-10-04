@@ -215,6 +215,15 @@ try {
     } else {
     assert.equal(diagnostics.length, 1, 'require the actual submission diagnostic, not an unrelated crash');
     const diagnostic = diagnostics[0];
+    assert(fixture.journeys.includes(diagnostic.journey), 'failure must identify an actual owning journey');
+    assert(Number.isInteger(diagnostic.vectorIndex) && fixture.vector_indexes.includes(diagnostic.vectorIndex),
+      'failure must identify an actual modeled vector without disclosing its payload');
+    for (const event of diagnostic.events.filter(event => event.event === 'request-failed')) {
+      assert.deepEqual(Object.keys(event).sort(), ['event', 'invocation', 'reason']);
+      assert(['ERR_ABORTED', 'ERR_FAILED', 'ERR_CONNECTION_RESET', 'ERR_CONNECTION_CLOSED',
+        'ERR_CONTENT_LENGTH_MISMATCH', 'ERR_INCOMPLETE_CHUNKED_ENCODING', 'ERR_INSUFFICIENT_RESOURCES',
+        'ERR_TIMED_OUT', 'ERR_BLOCKED_BY_CLIENT', 'ERR_BLOCKED_BY_RESPONSE', 'unavailable', 'other'].includes(event.reason));
+    }
     requireBoundaryCheck(name, diagnostic);
     assert.equal(diagnostic.keyboard, trigger === 'keyboard');
     if (name === 'pretend-body-failure') {

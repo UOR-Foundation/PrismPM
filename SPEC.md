@@ -205,7 +205,10 @@ next case. Construction uses isolated Cargo configuration and fresh Git checkout
 from authenticated object downloads, with staged-source and toolchain custody.
 Delayed initialization uses the same correlated submission observer without
 refilling the retained draft. Payload-safe diagnostics preserve the first failure
-even when cleanup also fails. `HO-12` does not duplicate this integration run.
+even when cleanup also fails. They identify the owning journey and modeled-vector
+index, observed request completion, and only closed network-failure categories;
+arbitrary browser error text is not forwarded. These observations never replace
+the actual response-body or submission checks. `HO-12` does not duplicate this integration run.
 Readiness fault probes explicitly hold readiness after a real submission and
 release it only after actual result rendering. Body-loss probes close the actual
 target after correlated headers; method-rewrite probes separately retain the
