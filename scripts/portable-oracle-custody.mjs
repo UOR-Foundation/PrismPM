@@ -21,7 +21,21 @@ export function capture(selected) {
 export function requireBoundaryCheck(name, diagnostic) {
   const checks = {'wrong-response': 'response-envelope', 'delayed-wrong-response': 'response-envelope',
     duplicate: 'single-invocation', 'delayed-duplicate': 'single-invocation'};
-  if (Object.hasOwn(checks, name)) assert.equal(diagnostic.check, checks[name], 'unrelated assertion is not boundary evidence');
+  if (Object.hasOwn(checks, name) && diagnostic.check !== checks[name]) {
+    const error = new Error('unrelated assertion is not boundary evidence');
+    error.code = 'PORTABLE_WRONG_CHECK';
+    throw error;
+  }
+}
+
+export function applyNegativeControl(driver, source, injection, control) {
+  if (control === 'noop') return source;
+  if (control === 'wrong-status') {
+    assert.equal(driver.split(injection).length, 2, 'negative-control injection must be unique');
+    return driver.replace(injection, injection.replace('status: 200,', 'status: 503,'));
+  }
+  assert.equal(control, 'none');
+  return driver;
 }
 
 export function refuseCargoAncestorConfiguration(directory) {

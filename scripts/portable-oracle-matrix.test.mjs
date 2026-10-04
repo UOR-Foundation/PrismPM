@@ -4,10 +4,22 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
-import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads} from './portable-oracle-custody.mjs';
+import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl} from './portable-oracle-custody.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('wrong-status control changes only its injected route, not other successful journeys', () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  assert(source.includes('route.fulfill({status: 200,'));
+  const injection = 'uniqueProbe(route.fulfill({status: 200, body: "wrong-envelope"}));';
+  const driver = source + '\n' + injection;
+  assert.equal(applyNegativeControl(driver, source, injection, 'wrong-status'),
+    source + '\n' + injection.replace('status: 200,', 'status: 503,'));
+  assert.equal(applyNegativeControl(driver, source, injection, 'noop'), source);
+  assert.equal(applyNegativeControl(driver, source, injection, 'none'), driver);
+  assert.throws(() => applyNegativeControl(driver + injection, source, injection, 'wrong-status'), /must be unique/);
+});
 
 test('registry download sharing cannot import poisoned previously extracted sources', () => {
   const root = mkdtempSync(join(tmpdir(), 'portable-registry-test-'));
@@ -90,7 +102,7 @@ test('wrong-status and unrelated assertion cannot stand in for envelope or count
     const intended = name.includes('response') ? 'response-envelope' : 'single-invocation';
     requireBoundaryCheck(name, {check: intended});
     for (const check of [null, 'response-status', 'request-envelope', 'response-json'])
-      assert.throws(() => requireBoundaryCheck(name, {check}), /unrelated assertion/);
+      assert.throws(() => requireBoundaryCheck(name, {check}), {code: 'PORTABLE_WRONG_CHECK'});
   }
 });
 

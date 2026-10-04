@@ -6,7 +6,7 @@ import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {requireBoundaryCheck} from './portable-oracle-custody.mjs';
+import {requireBoundaryCheck, applyNegativeControl} from './portable-oracle-custody.mjs';
 
 const [oracle, artifactDirectory, browser, name, evidenceDirectory, trigger = 'click', control = 'none', ...extra] = process.argv.slice(2);
 assert.equal(extra.length, 0);
@@ -98,11 +98,7 @@ const evidence = resolve(evidenceDirectory);
 mkdirSync(evidence);
 const driver = join(evidence, 'driver.mjs');
 let driverBytes = name === 'positive' ? source : source.replace(marker, `${marker}\n    ${injections[name]}\n`);
-if (control === 'noop') driverBytes = source;
-if (control === 'wrong-status') {
-  assert.equal(driverBytes.split('route.fulfill({status: 200,').length, 2);
-  driverBytes = driverBytes.replace('route.fulfill({status: 200,', 'route.fulfill({status: 503,');
-}
+driverBytes = applyNegativeControl(driverBytes, source, injections['wrong-response'], control);
 if (name === 'setup-failure') {
   const setup = 'const input = createInterface';
   assert.equal(source.split(setup).length, 2);
@@ -163,6 +159,7 @@ const cleanupDiagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
 });
 let accepted = false;
 let failure;
+let failureCode;
 try {
   assert.equal(result.error, undefined, 'spawn, timeout or output-limit failure is not oracle evidence');
   assert.equal(result.signal, null, 'signal termination is not oracle evidence');
@@ -253,12 +250,15 @@ try {
     }
   }
   accepted = true;
-} catch (error) { failure = String(error); }
+} catch (error) {
+  failure = String(error);
+  failureCode = error.code === 'PORTABLE_WRONG_CHECK' ? error.code : 'PROBE_ASSERTION';
+}
 const receipt = {schema: 'prismpm/portable-oracle-probe/1', case: name, profile: fixture.profile, trigger, control,
   scope: matrix.infrastructure_cases.includes(name) ? 'infrastructure-fault' : 'interaction-boundary',
   ...before, node_version: process.version,
   exit_code: result.status, signal: result.signal, diagnostics, cleanup_diagnostics: cleanupDiagnostics,
-  probe_passed: accepted, product_acceptance: 'not-established', ...(failure ? {failure} : {})};
+  probe_passed: accepted, product_acceptance: 'not-established', ...(failure ? {failure, failure_code: failureCode} : {})};
 writeFileSync(join(evidence, 'result.json'), `${JSON.stringify(receipt)}\n`, {flag: 'wx'});
 console.log(JSON.stringify(receipt));
 if (!accepted) process.exitCode = 1;

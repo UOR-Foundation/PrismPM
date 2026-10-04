@@ -166,6 +166,7 @@ try {
         assert.equal(receipt.exit_code, 0, 'no-op must exercise a successful real application');
         assert.deepEqual(receipt.diagnostics, []);
       } else {
+        assert.equal(receipt.failure_code, 'PORTABLE_WRONG_CHECK');
         assert.equal(receipt.diagnostics.length, 1);
         assert.equal(receipt.diagnostics[0].check, 'response-status');
         assert.equal(receipt.diagnostics[0].failure, 'assertion');
