@@ -961,6 +961,12 @@ request bindings do not change during cancellation or unknown cleanup. Host-only
 terminal transitions require independently captured worker termination and
 handle cleanup. Matching model bytes do not prove those facts. The private host
 owns the session-relative monotonic nanosecond clock and all OS authority.
+The nine pure declarations have closed generated stdlib signatures in
+`model/stdlib-exports.toml`. Calling them on constructed values grants no host
+authority. Host-effect APIs must not accept caller-produced lane state,
+bindings, clocks, cancellation flags or cleanup evidence. The private binding
+retains its own state and fails closed on an outer generated `ComputeError`,
+which is not a modeled `NativeLeaseError` or evidence of cleanup.
 See `stdlib/src/Foundation/Native/Application/V1/Lease.md` for the complete
 conditional protocol. This kernel is not a filesystem binding, an executable
 native application profile, durable-effect idempotency or release acceptance.

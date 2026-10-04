@@ -144,6 +144,17 @@ pub struct ControlObligation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeLeaseBinding {
+    pub application: alloc::vec::Vec<u8>,
+    pub manifest: alloc::vec::Vec<u8>,
+    pub session: alloc::vec::Vec<u8>,
+    pub resource: alloc::vec::Vec<u8>,
+    pub operation: u64,
+    pub requestDigest: alloc::vec::Vec<u8>,
+    pub deadline: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Control {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
@@ -380,6 +391,18 @@ pub struct ResourceRequirements {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeLane {
+    pub application: alloc::vec::Vec<u8>,
+    pub manifest: alloc::vec::Vec<u8>,
+    pub session: alloc::vec::Vec<u8>,
+    pub resource: alloc::vec::Vec<u8>,
+    pub nextOperation: u64,
+    pub observed: u64,
+    pub closed: bool,
+    pub active: Option<crate::NativeLease>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemManifest {
     pub closure: crate::ValidationRelation,
     pub uniqueness: crate::ValidationRelation,
@@ -473,6 +496,22 @@ pub struct Migration {
     pub kind: alloc::string::String,
     pub value: alloc::string::String,
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum NativeLeaseError {
+    BadState = 0,
+    ClockRegression = 1,
+    Closed = 2,
+    Busy = 3,
+    Exhausted = 4,
+    BadRequest = 5,
+    Expired = 6,
+    NoPending = 7,
+    BadBinding = 8,
+    CancellationRequired = 9,
+    CleanupRequired = 10,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -727,6 +766,13 @@ pub struct WorkspaceState {
     pub messages: alloc::vec::Vec<u8>,
     pub messageCount: u64,
     pub seen: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeLease {
+    pub binding: crate::NativeLeaseBinding,
+    pub cancelled: bool,
+    pub uncertain: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -5458,6 +5504,351 @@ pub fn checkedNegateInt64(value: i64) -> Option<i64> {
 
 pub fn checkedSubtractInt64(left: i64, right: i64) -> Option<i64> {
     { let _x_1 = (left).checked_sub(right); _x_1 }
+}
+
+pub fn beginNativeLease(state: &crate::NativeLane, requestDigest: alloc::vec::Vec<u8>, now: u64, deadline: u64) -> Result<Result<crate::NativeLane, crate::NativeLeaseError>, crate::ComputeError> {
+    Ok({ let _x_174 = nativeLaneValid(&(state))?; match _x_174 {
+        false => { let _x_235 = crate::NativeLeaseError::BadState; { let _x_236 = Err(_x_235); _x_236 } },
+        true => { let _x_329 = (state).observed; { let _x_330 = (_x_329 <= now); match _x_330 {
+        false => { let _y_332 = _x_330; match _y_332 {
+        false => { let _x_340 = crate::NativeLeaseError::ClockRegression; { let _x_341 = Err(_x_340); _x_341 } },
+        true => { let _x_421 = (state).closed; match _x_421 {
+        false => { let _x_496 = &(state).active; match _x_496 {
+        None => { let _x_559 = (state).nextOperation; { let _x_560 = 18446744073709551615; { let _x_561 = (_x_559 == _x_560); match _x_561 {
+        false => { let _x_606 = (requestDigest).len() as u64; { let _x_607 = 32; { let _x_608 = (_x_606 == _x_607); match _x_608 {
+        false => { let _y_610 = _x_608; match _y_610 {
+        false => { let _x_618 = crate::NativeLeaseError::BadRequest; { let _x_619 = Err(_x_618); _x_619 } },
+        true => { let _x_638 = (deadline <= now); match _x_638 {
+        false => { let _x_677 = &(state).application; { let _x_678 = &(state).manifest; { let _x_679 = &(state).session; { let _x_680 = &(state).resource; { let _x_681 = (state).nextOperation; { let _x_682 = 1; { let _x_683 = core::convert::identity::<u64>(_x_681).checked_add(_x_682).ok_or(crate::ComputeError::AddOverflow)?; { let _x_684 = (state).closed; { let _x_685 = crate::NativeLeaseBinding { application: alloc::borrow::ToOwned::to_owned(_x_677), manifest: alloc::borrow::ToOwned::to_owned(_x_678), session: alloc::borrow::ToOwned::to_owned(_x_679), resource: alloc::borrow::ToOwned::to_owned(_x_680), operation: _x_681, requestDigest: requestDigest, deadline: deadline }; { let _x_686 = crate::NativeLease { binding: _x_685, cancelled: _x_561, uncertain: _x_561 }; { let _x_687 = Some(_x_686); { let _x_688 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_677), manifest: alloc::borrow::ToOwned::to_owned(_x_678), session: alloc::borrow::ToOwned::to_owned(_x_679), resource: alloc::borrow::ToOwned::to_owned(_x_680), nextOperation: _x_683, observed: now, closed: _x_684, active: _x_687 }; { let _x_689 = Ok(_x_688); _x_689 } } } } } } } } } } } } },
+        true => { let _x_690 = crate::NativeLeaseError::Expired; { let _x_691 = Err(_x_690); _x_691 } },
+    } },
+    } },
+        true => { let _x_665 = 18446744073709551615; { let _x_666 = (deadline <= _x_665); { let prod_local_0 = _x_666; match prod_local_0 {
+        false => { let prod_local_1 = crate::NativeLeaseError::BadRequest; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (deadline <= now); match prod_local_3 {
+        false => { let prod_local_4 = &(state).application; { let prod_local_5 = &(state).manifest; { let prod_local_6 = &(state).session; { let prod_local_7 = &(state).resource; { let prod_local_8 = (state).nextOperation; { let prod_local_9 = 1; { let prod_local_10 = core::convert::identity::<u64>(prod_local_8).checked_add(prod_local_9).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_11 = (state).closed; { let prod_local_12 = crate::NativeLeaseBinding { application: alloc::borrow::ToOwned::to_owned(prod_local_4), manifest: alloc::borrow::ToOwned::to_owned(prod_local_5), session: alloc::borrow::ToOwned::to_owned(prod_local_6), resource: alloc::borrow::ToOwned::to_owned(prod_local_7), operation: prod_local_8, requestDigest: requestDigest, deadline: deadline }; { let prod_local_13 = crate::NativeLease { binding: prod_local_12, cancelled: _x_561, uncertain: _x_561 }; { let prod_local_14 = Some(prod_local_13); { let prod_local_15 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_4), manifest: alloc::borrow::ToOwned::to_owned(prod_local_5), session: alloc::borrow::ToOwned::to_owned(prod_local_6), resource: alloc::borrow::ToOwned::to_owned(prod_local_7), nextOperation: prod_local_10, observed: now, closed: prod_local_11, active: prod_local_14 }; { let prod_local_16 = Ok(prod_local_15); prod_local_16 } } } } } } } } } } } } },
+        true => { let prod_local_17 = crate::NativeLeaseError::Expired; { let prod_local_18 = Err(prod_local_17); prod_local_18 } },
+    } },
+    } } } },
+    } } } },
+        true => { let _x_668 = crate::NativeLeaseError::Exhausted; { let _x_669 = Err(_x_668); _x_669 } },
+    } } } },
+        Some(val_499) => { let _x_670 = crate::NativeLeaseError::Busy; { let _x_671 = Err(_x_670); _x_671 } },
+    } },
+        true => { let _x_672 = crate::NativeLeaseError::Closed; { let _x_673 = Err(_x_672); _x_673 } },
+    } },
+    } },
+        true => { let _x_674 = 18446744073709551615; { let _x_675 = (now <= _x_674); { let prod_local_19 = _x_675; match prod_local_19 {
+        false => { let prod_local_20 = crate::NativeLeaseError::ClockRegression; { let prod_local_21 = Err(prod_local_20); prod_local_21 } },
+        true => { let prod_local_22 = (state).closed; match prod_local_22 {
+        false => { let prod_local_23 = &(state).active; match prod_local_23 {
+        None => { let prod_local_26 = (state).nextOperation; { let prod_local_27 = 18446744073709551615; { let prod_local_28 = (prod_local_26 == prod_local_27); match prod_local_28 {
+        false => { let prod_local_32 = (requestDigest).len() as u64; { let prod_local_33 = 32; { let prod_local_34 = (prod_local_32 == prod_local_33); match prod_local_34 {
+        false => { let prod_local_36 = prod_local_34; match prod_local_36 {
+        false => { let prod_local_37 = crate::NativeLeaseError::BadRequest; { let prod_local_38 = Err(prod_local_37); prod_local_38 } },
+        true => { let prod_local_39 = (deadline <= now); match prod_local_39 {
+        false => { let prod_local_40 = &(state).application; { let prod_local_41 = &(state).manifest; { let prod_local_42 = &(state).session; { let prod_local_43 = &(state).resource; { let prod_local_44 = (state).nextOperation; { let prod_local_45 = 1; { let prod_local_46 = core::convert::identity::<u64>(prod_local_44).checked_add(prod_local_45).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_47 = (state).closed; { let prod_local_48 = crate::NativeLeaseBinding { application: alloc::borrow::ToOwned::to_owned(prod_local_40), manifest: alloc::borrow::ToOwned::to_owned(prod_local_41), session: alloc::borrow::ToOwned::to_owned(prod_local_42), resource: alloc::borrow::ToOwned::to_owned(prod_local_43), operation: prod_local_44, requestDigest: requestDigest, deadline: deadline }; { let prod_local_49 = crate::NativeLease { binding: prod_local_48, cancelled: prod_local_28, uncertain: prod_local_28 }; { let prod_local_50 = Some(prod_local_49); { let prod_local_51 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_40), manifest: alloc::borrow::ToOwned::to_owned(prod_local_41), session: alloc::borrow::ToOwned::to_owned(prod_local_42), resource: alloc::borrow::ToOwned::to_owned(prod_local_43), nextOperation: prod_local_46, observed: now, closed: prod_local_47, active: prod_local_50 }; { let prod_local_52 = Ok(prod_local_51); prod_local_52 } } } } } } } } } } } } },
+        true => { let prod_local_53 = crate::NativeLeaseError::Expired; { let prod_local_54 = Err(prod_local_53); prod_local_54 } },
+    } },
+    } },
+        true => { let prod_local_55 = 18446744073709551615; { let prod_local_56 = (deadline <= prod_local_55); { let prod_local_57 = prod_local_56; match prod_local_57 {
+        false => { let prod_local_58 = crate::NativeLeaseError::BadRequest; { let prod_local_59 = Err(prod_local_58); prod_local_59 } },
+        true => { let prod_local_60 = (deadline <= now); match prod_local_60 {
+        false => { let prod_local_61 = &(state).application; { let prod_local_62 = &(state).manifest; { let prod_local_63 = &(state).session; { let prod_local_64 = &(state).resource; { let prod_local_65 = (state).nextOperation; { let prod_local_66 = 1; { let prod_local_67 = core::convert::identity::<u64>(prod_local_65).checked_add(prod_local_66).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_68 = (state).closed; { let prod_local_69 = crate::NativeLeaseBinding { application: alloc::borrow::ToOwned::to_owned(prod_local_61), manifest: alloc::borrow::ToOwned::to_owned(prod_local_62), session: alloc::borrow::ToOwned::to_owned(prod_local_63), resource: alloc::borrow::ToOwned::to_owned(prod_local_64), operation: prod_local_65, requestDigest: requestDigest, deadline: deadline }; { let prod_local_70 = crate::NativeLease { binding: prod_local_69, cancelled: prod_local_28, uncertain: prod_local_28 }; { let prod_local_71 = Some(prod_local_70); { let prod_local_72 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_61), manifest: alloc::borrow::ToOwned::to_owned(prod_local_62), session: alloc::borrow::ToOwned::to_owned(prod_local_63), resource: alloc::borrow::ToOwned::to_owned(prod_local_64), nextOperation: prod_local_67, observed: now, closed: prod_local_68, active: prod_local_71 }; { let prod_local_73 = Ok(prod_local_72); prod_local_73 } } } } } } } } } } } } },
+        true => { let prod_local_74 = crate::NativeLeaseError::Expired; { let prod_local_75 = Err(prod_local_74); prod_local_75 } },
+    } },
+    } } } },
+    } } } },
+        true => { let prod_local_76 = crate::NativeLeaseError::Exhausted; { let prod_local_77 = Err(prod_local_76); prod_local_77 } },
+    } } } },
+        Some(prod_local_78) => { let prod_local_79 = crate::NativeLeaseError::Busy; { let prod_local_80 = Err(prod_local_79); prod_local_80 } },
+    } },
+        true => { let prod_local_81 = crate::NativeLeaseError::Closed; { let prod_local_82 = Err(prod_local_81); prod_local_82 } },
+    } },
+    } } } },
+    } } },
+    } })
+}
+
+pub fn cancelNativeLease(state: &crate::NativeLane, now: u64) -> Result<Result<crate::NativeLane, crate::NativeLeaseError>, crate::ComputeError> {
+    Ok({ let _x_75 = nativeLaneValid(&(state))?; match _x_75 {
+        false => { let _x_97 = crate::NativeLeaseError::BadState; { let _x_98 = Err(_x_97); _x_98 } },
+        true => { let _x_129 = (state).observed; { let _x_130 = (_x_129 <= now); match _x_130 {
+        false => { let _y_132 = _x_130; match _y_132 {
+        false => { let _x_140 = crate::NativeLeaseError::ClockRegression; { let _x_141 = Err(_x_140); _x_141 } },
+        true => { let _x_159 = &(state).active; match _x_159 {
+        None => { let _x_164 = crate::NativeLeaseError::NoPending; { let _x_165 = Err(_x_164); _x_165 } },
+        Some(val_162) => { let _x_166 = &(state).application; { let _x_167 = &(state).manifest; { let _x_168 = &(state).session; { let _x_169 = &(state).resource; { let _x_170 = (state).nextOperation; { let _x_171 = (state).closed; { let _x_172 = &(val_162).binding; { let _x_174 = (val_162).uncertain; { let _x_175 = crate::NativeLease { binding: alloc::borrow::ToOwned::to_owned(_x_172), cancelled: _y_132, uncertain: _x_174 }; { let _x_176 = Some(_x_175); { let _x_177 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_166), manifest: alloc::borrow::ToOwned::to_owned(_x_167), session: alloc::borrow::ToOwned::to_owned(_x_168), resource: alloc::borrow::ToOwned::to_owned(_x_169), nextOperation: _x_170, observed: now, closed: _x_171, active: _x_176 }; { let _x_178 = Ok(_x_177); _x_178 } } } } } } } } } } } },
+    } },
+    } },
+        true => { let _x_179 = 18446744073709551615; { let _x_180 = (now <= _x_179); { let prod_local_0 = _x_180; match prod_local_0 {
+        false => { let prod_local_1 = crate::NativeLeaseError::ClockRegression; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = &(state).active; match prod_local_3 {
+        None => { let prod_local_4 = crate::NativeLeaseError::NoPending; { let prod_local_5 = Err(prod_local_4); prod_local_5 } },
+        Some(prod_local_6) => { let prod_local_7 = &(state).application; { let prod_local_8 = &(state).manifest; { let prod_local_9 = &(state).session; { let prod_local_10 = &(state).resource; { let prod_local_11 = (state).nextOperation; { let prod_local_12 = (state).closed; { let prod_local_13 = &(prod_local_6).binding; { let prod_local_14 = (prod_local_6).uncertain; { let prod_local_15 = crate::NativeLease { binding: alloc::borrow::ToOwned::to_owned(prod_local_13), cancelled: prod_local_0, uncertain: prod_local_14 }; { let prod_local_16 = Some(prod_local_15); { let prod_local_17 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_7), manifest: alloc::borrow::ToOwned::to_owned(prod_local_8), session: alloc::borrow::ToOwned::to_owned(prod_local_9), resource: alloc::borrow::ToOwned::to_owned(prod_local_10), nextOperation: prod_local_11, observed: now, closed: prod_local_12, active: prod_local_16 }; { let prod_local_18 = Ok(prod_local_17); prod_local_18 } } } } } } } } } } } },
+    } },
+    } } } },
+    } } },
+    } })
+}
+
+pub fn closeNativeLane(state: &crate::NativeLane, now: u64) -> Result<Result<crate::NativeLane, crate::NativeLeaseError>, crate::ComputeError> {
+    Ok({ let _x_80 = nativeLaneValid(&(state))?; match _x_80 {
+        false => { let _x_105 = crate::NativeLeaseError::BadState; { let _x_106 = Err(_x_105); _x_106 } },
+        true => { let _x_134 = (state).observed; { let _x_135 = (_x_134 <= now); match _x_135 {
+        false => { let _y_137 = _x_135; match _y_137 {
+        false => { let _x_145 = crate::NativeLeaseError::ClockRegression; { let _x_146 = Err(_x_145); _x_146 } },
+        true => { let _x_147 = &(state).application; { let _x_148 = &(state).manifest; { let _x_149 = &(state).session; { let _x_150 = &(state).resource; { let _x_151 = (state).nextOperation; { let _x_158 = &(state).active; match _x_158 {
+        None => { let _y_160 = _x_158; { let _x_161 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_147), manifest: alloc::borrow::ToOwned::to_owned(_x_148), session: alloc::borrow::ToOwned::to_owned(_x_149), resource: alloc::borrow::ToOwned::to_owned(_x_150), nextOperation: _x_151, observed: now, closed: _y_137, active: alloc::borrow::ToOwned::to_owned(_y_160) }; { let _x_162 = Ok(_x_161); _x_162 } } },
+        Some(val_164) => { let _x_166 = &(val_164).binding; { let _x_167 = (val_164).uncertain; { let _x_168 = crate::NativeLease { binding: alloc::borrow::ToOwned::to_owned(_x_166), cancelled: _y_137, uncertain: _x_167 }; { let _x_169 = Some(_x_168); { let prod_local_0 = _x_169; { let prod_local_1 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_147), manifest: alloc::borrow::ToOwned::to_owned(_x_148), session: alloc::borrow::ToOwned::to_owned(_x_149), resource: alloc::borrow::ToOwned::to_owned(_x_150), nextOperation: _x_151, observed: now, closed: _y_137, active: prod_local_0 }; { let prod_local_2 = Ok(prod_local_1); prod_local_2 } } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_170 = 18446744073709551615; { let _x_171 = (now <= _x_170); { let prod_local_3 = _x_171; match prod_local_3 {
+        false => { let prod_local_4 = crate::NativeLeaseError::ClockRegression; { let prod_local_5 = Err(prod_local_4); prod_local_5 } },
+        true => { let prod_local_6 = &(state).application; { let prod_local_7 = &(state).manifest; { let prod_local_8 = &(state).session; { let prod_local_9 = &(state).resource; { let prod_local_10 = (state).nextOperation; { let prod_local_11 = &(state).active; match prod_local_11 {
+        None => { let prod_local_13 = prod_local_11; { let prod_local_14 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_6), manifest: alloc::borrow::ToOwned::to_owned(prod_local_7), session: alloc::borrow::ToOwned::to_owned(prod_local_8), resource: alloc::borrow::ToOwned::to_owned(prod_local_9), nextOperation: prod_local_10, observed: now, closed: prod_local_3, active: alloc::borrow::ToOwned::to_owned(prod_local_13) }; { let prod_local_15 = Ok(prod_local_14); prod_local_15 } } },
+        Some(prod_local_16) => { let prod_local_17 = &(prod_local_16).binding; { let prod_local_18 = (prod_local_16).uncertain; { let prod_local_19 = crate::NativeLease { binding: alloc::borrow::ToOwned::to_owned(prod_local_17), cancelled: prod_local_3, uncertain: prod_local_18 }; { let prod_local_20 = Some(prod_local_19); { let prod_local_21 = prod_local_20; { let prod_local_22 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_6), manifest: alloc::borrow::ToOwned::to_owned(prod_local_7), session: alloc::borrow::ToOwned::to_owned(prod_local_8), resource: alloc::borrow::ToOwned::to_owned(prod_local_9), nextOperation: prod_local_10, observed: now, closed: prod_local_3, active: prod_local_21 }; { let prod_local_23 = Ok(prod_local_22); prod_local_23 } } } } } } },
+    } } } } } } },
+    } } } },
+    } } },
+    } })
+}
+
+pub fn completeNativeLease(state: &crate::NativeLane, completion: &crate::NativeLeaseBinding, now: u64) -> Result<Result<crate::NativeLane, crate::NativeLeaseError>, crate::ComputeError> {
+    Ok({ let _x_149 = nativeLaneValid(&(state))?; match _x_149 {
+        false => { let _x_191 = crate::NativeLeaseError::BadState; { let _x_192 = Err(_x_191); _x_192 } },
+        true => { let _x_267 = (state).observed; { let _x_268 = (_x_267 <= now); match _x_268 {
+        false => { let _y_270 = _x_268; match _y_270 {
+        false => { let _x_278 = crate::NativeLeaseError::ClockRegression; { let _x_279 = Err(_x_278); _x_279 } },
+        true => { let _x_341 = &(state).active; match _x_341 {
+        None => { let _x_346 = crate::NativeLeaseError::NoPending; { let _x_347 = Err(_x_346); _x_347 } },
+        Some(val_344) => { let _x_399 = &(val_344).binding; { let _x_400 = nativeBindingEqual(&(_x_399), &(completion)); match _x_400 {
+        false => { let _x_405 = crate::NativeLeaseError::BadBinding; { let _x_406 = Err(_x_405); _x_406 } },
+        true => { let _x_443 = (state).closed; match _x_443 {
+        false => { let _x_456 = (val_344).cancelled; match _x_456 {
+        false => { let _x_487 = (val_344).uncertain; match _x_487 {
+        false => { let _x_505 = &(val_344).binding; { let _x_506 = (_x_505).deadline; { let _x_507 = (_x_506 <= now); match _x_507 {
+        false => { let _x_512 = &(state).application; { let _x_513 = &(state).manifest; { let _x_514 = &(state).session; { let _x_515 = &(state).resource; { let _x_516 = (state).nextOperation; { let _x_517 = (state).closed; { let _x_519 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_512), manifest: alloc::borrow::ToOwned::to_owned(_x_513), session: alloc::borrow::ToOwned::to_owned(_x_514), resource: alloc::borrow::ToOwned::to_owned(_x_515), nextOperation: _x_516, observed: now, closed: _x_517, active: None }; { let _x_520 = Ok(_x_519); _x_520 } } } } } } } },
+        true => { let _x_521 = crate::NativeLeaseError::Expired; { let _x_522 = Err(_x_521); _x_522 } },
+    } } } },
+        true => { let _x_523 = crate::NativeLeaseError::CleanupRequired; { let _x_524 = Err(_x_523); _x_524 } },
+    } },
+        true => { let _x_454 = crate::NativeLeaseError::CancellationRequired; { let _x_455 = Err(_x_454); _x_455 } },
+    } },
+        true => { let prod_local_0 = crate::NativeLeaseError::CancellationRequired; { let prod_local_1 = Err(prod_local_0); prod_local_1 } },
+    } },
+    } } },
+    } },
+    } },
+        true => { let _x_460 = 18446744073709551615; { let _x_461 = (now <= _x_460); { let prod_local_2 = _x_461; match prod_local_2 {
+        false => { let prod_local_3 = crate::NativeLeaseError::ClockRegression; { let prod_local_4 = Err(prod_local_3); prod_local_4 } },
+        true => { let prod_local_5 = &(state).active; match prod_local_5 {
+        None => { let prod_local_6 = crate::NativeLeaseError::NoPending; { let prod_local_7 = Err(prod_local_6); prod_local_7 } },
+        Some(prod_local_8) => { let prod_local_9 = &(prod_local_8).binding; { let prod_local_10 = nativeBindingEqual(&(prod_local_9), &(completion)); match prod_local_10 {
+        false => { let prod_local_11 = crate::NativeLeaseError::BadBinding; { let prod_local_12 = Err(prod_local_11); prod_local_12 } },
+        true => { let prod_local_13 = (state).closed; match prod_local_13 {
+        false => { let prod_local_15 = (prod_local_8).cancelled; match prod_local_15 {
+        false => { let prod_local_16 = (prod_local_8).uncertain; match prod_local_16 {
+        false => { let prod_local_17 = &(prod_local_8).binding; { let prod_local_18 = (prod_local_17).deadline; { let prod_local_19 = (prod_local_18 <= now); match prod_local_19 {
+        false => { let prod_local_20 = &(state).application; { let prod_local_21 = &(state).manifest; { let prod_local_22 = &(state).session; { let prod_local_23 = &(state).resource; { let prod_local_24 = (state).nextOperation; { let prod_local_25 = (state).closed; { let prod_local_27 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_20), manifest: alloc::borrow::ToOwned::to_owned(prod_local_21), session: alloc::borrow::ToOwned::to_owned(prod_local_22), resource: alloc::borrow::ToOwned::to_owned(prod_local_23), nextOperation: prod_local_24, observed: now, closed: prod_local_25, active: None }; { let prod_local_28 = Ok(prod_local_27); prod_local_28 } } } } } } } },
+        true => { let prod_local_29 = crate::NativeLeaseError::Expired; { let prod_local_30 = Err(prod_local_29); prod_local_30 } },
+    } } } },
+        true => { let prod_local_31 = crate::NativeLeaseError::CleanupRequired; { let prod_local_32 = Err(prod_local_31); prod_local_32 } },
+    } },
+        true => { let prod_local_33 = crate::NativeLeaseError::CancellationRequired; { let prod_local_34 = Err(prod_local_33); prod_local_34 } },
+    } },
+        true => { let prod_local_35 = crate::NativeLeaseError::CancellationRequired; { let prod_local_36 = Err(prod_local_35); prod_local_36 } },
+    } },
+    } } },
+    } },
+    } } } },
+    } } },
+    } })
+}
+
+pub fn nativeBindingEqual(left: &crate::NativeLeaseBinding, right: &crate::NativeLeaseBinding) -> bool {
+    { let _x_82 = &(left).application; { let _x_83 = &(right).application; { let _x_84 = (_x_82 == _x_83); match _x_84 {
+        false => _x_84,
+        true => { let _x_154 = &(left).manifest; { let _x_155 = &(right).manifest; { let _x_156 = (_x_154 == _x_155); match _x_156 {
+        false => _x_156,
+        true => { let _x_193 = &(left).session; { let _x_194 = &(right).session; { let _x_195 = (_x_193 == _x_194); match _x_195 {
+        false => _x_195,
+        true => { let _x_224 = &(left).resource; { let _x_225 = &(right).resource; { let _x_226 = (_x_224 == _x_225); match _x_226 {
+        false => _x_226,
+        true => { let _x_247 = (left).operation; { let _x_248 = (right).operation; { let _x_249 = (_x_247 == _x_248); match _x_249 {
+        false => _x_249,
+        true => { let _x_261 = &(left).requestDigest; { let _x_262 = &(right).requestDigest; { let _x_263 = (_x_261 == _x_262); match _x_263 {
+        false => _x_263,
+        true => { let _x_269 = (left).deadline; { let _x_270 = (right).deadline; { let _x_271 = (_x_269 == _x_270); _x_271 } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn nativeLaneValid(state: &crate::NativeLane) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_302 = &(state).application; { let _x_303 = (_x_302).len() as u64; { let _x_304 = 32; { let _x_307 = (_x_303 == _x_304); match _x_307 {
+        false => _x_307,
+        true => { let _x_600 = &(state).manifest; { let _x_601 = (_x_600).len() as u64; { let _x_602 = 32; { let _x_603 = (_x_601 == _x_602); match _x_603 {
+        false => _x_603,
+        true => { let _x_764 = &(state).session; { let _x_765 = (_x_764).len() as u64; { let _x_766 = 32; { let _x_767 = (_x_765 == _x_766); match _x_767 {
+        false => _x_767,
+        true => { let _x_917 = &(state).resource; { let _x_918 = (_x_917).len() as u64; { let _x_919 = 32; { let _x_920 = (_x_918 == _x_919); match _x_920 {
+        false => _x_920,
+        true => { let _x_1060 = (state).nextOperation; { let _x_1061 = 18446744073709551615; { let _x_1062 = (_x_1060 <= _x_1061); match _x_1062 {
+        false => _x_1062,
+        true => { let _x_1195 = (state).observed; { let _x_1196 = 18446744073709551615; { let _x_1197 = (_x_1195 <= _x_1196); match _x_1197 {
+        false => _x_1197,
+        true => { let _x_1324 = &(state).active; match _x_1324 {
+        None => _x_1197,
+        Some(val_1327) => { let _x_1444 = &(state).application; { let _x_1445 = &(val_1327).binding; { let _x_1446 = &(_x_1445).application; { let _x_1447 = (_x_1444 == _x_1446); match _x_1447 {
+        false => _x_1447,
+        true => { let _x_1557 = &(state).manifest; { let _x_1558 = &(val_1327).binding; { let _x_1559 = &(_x_1558).manifest; { let _x_1560 = (_x_1557 == _x_1559); match _x_1560 {
+        false => _x_1560,
+        true => { let _x_1661 = &(state).session; { let _x_1662 = &(val_1327).binding; { let _x_1663 = &(_x_1662).session; { let _x_1664 = (_x_1661 == _x_1663); match _x_1664 {
+        false => _x_1664,
+        true => { let _x_1756 = &(state).resource; { let _x_1757 = &(val_1327).binding; { let _x_1758 = &(_x_1757).resource; { let _x_1759 = (_x_1756 == _x_1758); match _x_1759 {
+        false => _x_1759,
+        true => { let _x_1841 = &(val_1327).binding; { let _x_1842 = &(_x_1841).requestDigest; { let _x_1843 = (_x_1842).len() as u64; { let _x_1844 = 32; { let _x_1845 = (_x_1843 == _x_1844); match _x_1845 {
+        false => _x_1845,
+        true => { let _x_1908 = &(val_1327).binding; { let _x_1909 = (_x_1908).operation; { let _x_1910 = 18446744073709551615; { let _x_1911 = (_x_1909 == _x_1910); match _x_1911 {
+        false => { let _x_1925 = (state).nextOperation; { let _x_1926 = &(val_1327).binding; { let _x_1927 = (_x_1926).operation; { let _x_1928 = 1; { let _x_1929 = core::convert::identity::<u64>(_x_1927).checked_add(_x_1928).ok_or(crate::ComputeError::AddOverflow)?; { let _x_1930 = (_x_1925 == _x_1929); match _x_1930 {
+        false => _x_1930,
+        true => { let _x_1973 = &(val_1327).binding; { let _x_1974 = (_x_1973).operation; { let _x_1975 = 18446744073709551615; { let _x_1976 = (_x_1974 <= _x_1975); match _x_1976 {
+        false => _x_1976,
+        true => { let _x_2005 = &(val_1327).binding; { let _x_2006 = (_x_2005).deadline; { let _x_2007 = 0; { let _x_2008 = (_x_2006 == _x_2007); match _x_2008 {
+        false => { let _x_2059 = &(val_1327).binding; { let _x_2060 = (_x_2059).deadline; { let _x_2061 = 18446744073709551615; { let _x_2062 = (_x_2060 <= _x_2061); match _x_2062 {
+        false => _x_2062,
+        true => { let _x_2063 = (state).closed; match _x_2063 {
+        false => _x_2062,
+        true => { let _x_2064 = (val_1327).cancelled; _x_2064 },
+    } },
+    } } } } },
+        true => _x_1911,
+    } } } } },
+    } } } } },
+    } } } } } } },
+        true => { let _x_1922 = false; _x_1922 },
+    } } } } },
+    } } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } },
+    } } } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } })
+}
+
+pub fn openNativeLane(application: alloc::vec::Vec<u8>, manifest: alloc::vec::Vec<u8>, session: alloc::vec::Vec<u8>, resource: alloc::vec::Vec<u8>) -> Result<crate::NativeLane, crate::NativeLeaseError> {
+    { let _x_71 = (application).len() as u64; { let _x_72 = 32; { let _x_75 = (_x_71 == _x_72); match _x_75 {
+        false => { let _y_80 = _x_75; match _y_80 {
+        false => { let _x_116 = crate::NativeLeaseError::BadState; { let _x_117 = Err(_x_116); _x_117 } },
+        true => { let _x_118 = 0; { let _x_119 = false; { let _x_121 = crate::NativeLane { application: application, manifest: manifest, session: session, resource: resource, nextOperation: _x_118, observed: _x_118, closed: _x_119, active: None }; { let _x_122 = Ok(_x_121); _x_122 } } } },
+    } },
+        true => { let _x_144 = (manifest).len() as u64; { let _x_145 = 32; { let _x_146 = (_x_144 == _x_145); match _x_146 {
+        false => { let prod_local_0 = _x_146; match prod_local_0 {
+        false => { let prod_local_1 = crate::NativeLeaseError::BadState; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = 0; { let prod_local_4 = false; { let prod_local_6 = crate::NativeLane { application: application, manifest: manifest, session: session, resource: resource, nextOperation: prod_local_3, observed: prod_local_3, closed: prod_local_4, active: None }; { let prod_local_7 = Ok(prod_local_6); prod_local_7 } } } },
+    } },
+        true => { let _x_161 = (session).len() as u64; { let _x_162 = 32; { let _x_163 = (_x_161 == _x_162); match _x_163 {
+        false => { let prod_local_8 = _x_163; match prod_local_8 {
+        false => { let prod_local_9 = crate::NativeLeaseError::BadState; { let prod_local_10 = Err(prod_local_9); prod_local_10 } },
+        true => { let prod_local_11 = 0; { let prod_local_12 = false; { let prod_local_14 = crate::NativeLane { application: application, manifest: manifest, session: session, resource: resource, nextOperation: prod_local_11, observed: prod_local_11, closed: prod_local_12, active: None }; { let prod_local_15 = Ok(prod_local_14); prod_local_15 } } } },
+    } },
+        true => { let _x_170 = (resource).len() as u64; { let _x_171 = 32; { let _x_172 = (_x_170 == _x_171); { let prod_local_16 = _x_172; match prod_local_16 {
+        false => { let prod_local_17 = crate::NativeLeaseError::BadState; { let prod_local_18 = Err(prod_local_17); prod_local_18 } },
+        true => { let prod_local_19 = 0; { let prod_local_20 = false; { let prod_local_22 = crate::NativeLane { application: application, manifest: manifest, session: session, resource: resource, nextOperation: prod_local_19, observed: prod_local_19, closed: prod_local_20, active: None }; { let prod_local_23 = Ok(prod_local_22); prod_local_23 } } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn retainUnknownNativeCleanup(state: &crate::NativeLane, completion: &crate::NativeLeaseBinding, now: u64) -> Result<Result<crate::NativeLane, crate::NativeLeaseError>, crate::ComputeError> {
+    Ok({ let _x_88 = nativeLaneValid(&(state))?; match _x_88 {
+        false => { let _x_112 = crate::NativeLeaseError::BadState; { let _x_113 = Err(_x_112); _x_113 } },
+        true => { let _x_154 = (state).observed; { let _x_155 = (_x_154 <= now); match _x_155 {
+        false => { let _y_157 = _x_155; match _y_157 {
+        false => { let _x_165 = crate::NativeLeaseError::ClockRegression; { let _x_166 = Err(_x_165); _x_166 } },
+        true => { let _x_194 = &(state).active; match _x_194 {
+        None => { let _x_199 = crate::NativeLeaseError::NoPending; { let _x_200 = Err(_x_199); _x_200 } },
+        Some(val_197) => { let _x_218 = &(val_197).binding; { let _x_219 = nativeBindingEqual(&(_x_218), &(completion)); match _x_219 {
+        false => { let _x_224 = crate::NativeLeaseError::BadBinding; { let _x_225 = Err(_x_224); _x_225 } },
+        true => { let _x_226 = &(state).application; { let _x_227 = &(state).manifest; { let _x_228 = &(state).session; { let _x_229 = &(state).resource; { let _x_230 = (state).nextOperation; { let _x_231 = (state).closed; { let _x_232 = &(val_197).binding; { let _x_233 = (val_197).cancelled; { let _x_235 = crate::NativeLease { binding: alloc::borrow::ToOwned::to_owned(_x_232), cancelled: _x_233, uncertain: _x_219 }; { let _x_236 = Some(_x_235); { let _x_237 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_226), manifest: alloc::borrow::ToOwned::to_owned(_x_227), session: alloc::borrow::ToOwned::to_owned(_x_228), resource: alloc::borrow::ToOwned::to_owned(_x_229), nextOperation: _x_230, observed: now, closed: _x_231, active: _x_236 }; { let _x_238 = Ok(_x_237); _x_238 } } } } } } } } } } } },
+    } } },
+    } },
+    } },
+        true => { let _x_239 = 18446744073709551615; { let _x_240 = (now <= _x_239); { let prod_local_0 = _x_240; match prod_local_0 {
+        false => { let prod_local_1 = crate::NativeLeaseError::ClockRegression; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = &(state).active; match prod_local_3 {
+        None => { let prod_local_4 = crate::NativeLeaseError::NoPending; { let prod_local_5 = Err(prod_local_4); prod_local_5 } },
+        Some(prod_local_6) => { let prod_local_7 = &(prod_local_6).binding; { let prod_local_8 = nativeBindingEqual(&(prod_local_7), &(completion)); match prod_local_8 {
+        false => { let prod_local_9 = crate::NativeLeaseError::BadBinding; { let prod_local_10 = Err(prod_local_9); prod_local_10 } },
+        true => { let prod_local_11 = &(state).application; { let prod_local_12 = &(state).manifest; { let prod_local_13 = &(state).session; { let prod_local_14 = &(state).resource; { let prod_local_15 = (state).nextOperation; { let prod_local_16 = (state).closed; { let prod_local_17 = &(prod_local_6).binding; { let prod_local_18 = (prod_local_6).cancelled; { let prod_local_19 = crate::NativeLease { binding: alloc::borrow::ToOwned::to_owned(prod_local_17), cancelled: prod_local_18, uncertain: prod_local_8 }; { let prod_local_20 = Some(prod_local_19); { let prod_local_21 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_11), manifest: alloc::borrow::ToOwned::to_owned(prod_local_12), session: alloc::borrow::ToOwned::to_owned(prod_local_13), resource: alloc::borrow::ToOwned::to_owned(prod_local_14), nextOperation: prod_local_15, observed: now, closed: prod_local_16, active: prod_local_20 }; { let prod_local_22 = Ok(prod_local_21); prod_local_22 } } } } } } } } } } } },
+    } } },
+    } },
+    } } } },
+    } } },
+    } })
+}
+
+pub fn retireCancelledNativeLease(state: &crate::NativeLane, completion: &crate::NativeLeaseBinding, now: u64) -> Result<Result<crate::NativeLane, crate::NativeLeaseError>, crate::ComputeError> {
+    Ok({ let _x_143 = nativeLaneValid(&(state))?; match _x_143 {
+        false => { let _x_187 = crate::NativeLeaseError::BadState; { let _x_188 = Err(_x_187); _x_188 } },
+        true => { let _x_255 = (state).observed; { let _x_256 = (_x_255 <= now); match _x_256 {
+        false => { let _y_258 = _x_256; match _y_258 {
+        false => { let _x_266 = crate::NativeLeaseError::ClockRegression; { let _x_267 = Err(_x_266); _x_267 } },
+        true => { let _x_321 = &(state).active; match _x_321 {
+        None => { let _x_326 = crate::NativeLeaseError::NoPending; { let _x_327 = Err(_x_326); _x_327 } },
+        Some(val_324) => { let _x_371 = &(val_324).binding; { let _x_372 = nativeBindingEqual(&(_x_371), &(completion)); match _x_372 {
+        false => { let _x_377 = crate::NativeLeaseError::BadBinding; { let _x_378 = Err(_x_377); _x_378 } },
+        true => { let _x_407 = (state).closed; match _x_407 {
+        false => { let _x_437 = (val_324).cancelled; match _x_437 {
+        false => { let _x_446 = (val_324).uncertain; match _x_446 {
+        false => { let _x_450 = &(val_324).binding; { let _x_451 = (_x_450).deadline; { let _x_452 = (_x_451 <= now); match _x_452 {
+        false => { let _x_464 = crate::NativeLeaseError::CleanupRequired; { let _x_465 = Err(_x_464); _x_465 } },
+        true => { let _x_418 = &(state).application; { let _x_419 = &(state).manifest; { let _x_420 = &(state).session; { let _x_421 = &(state).resource; { let _x_422 = (state).nextOperation; { let _x_423 = (state).closed; { let _x_425 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(_x_418), manifest: alloc::borrow::ToOwned::to_owned(_x_419), session: alloc::borrow::ToOwned::to_owned(_x_420), resource: alloc::borrow::ToOwned::to_owned(_x_421), nextOperation: _x_422, observed: now, closed: _x_423, active: None }; { let _x_426 = Ok(_x_425); _x_426 } } } } } } } },
+    } } } },
+        true => { let prod_local_0 = &(state).application; { let prod_local_1 = &(state).manifest; { let prod_local_2 = &(state).session; { let prod_local_3 = &(state).resource; { let prod_local_4 = (state).nextOperation; { let prod_local_5 = (state).closed; { let prod_local_7 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_0), manifest: alloc::borrow::ToOwned::to_owned(prod_local_1), session: alloc::borrow::ToOwned::to_owned(prod_local_2), resource: alloc::borrow::ToOwned::to_owned(prod_local_3), nextOperation: prod_local_4, observed: now, closed: prod_local_5, active: None }; { let prod_local_8 = Ok(prod_local_7); prod_local_8 } } } } } } } },
+    } },
+        true => { let prod_local_9 = &(state).application; { let prod_local_10 = &(state).manifest; { let prod_local_11 = &(state).session; { let prod_local_12 = &(state).resource; { let prod_local_13 = (state).nextOperation; { let prod_local_14 = (state).closed; { let prod_local_16 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_9), manifest: alloc::borrow::ToOwned::to_owned(prod_local_10), session: alloc::borrow::ToOwned::to_owned(prod_local_11), resource: alloc::borrow::ToOwned::to_owned(prod_local_12), nextOperation: prod_local_13, observed: now, closed: prod_local_14, active: None }; { let prod_local_17 = Ok(prod_local_16); prod_local_17 } } } } } } } },
+    } },
+        true => { let prod_local_18 = &(state).application; { let prod_local_19 = &(state).manifest; { let prod_local_20 = &(state).session; { let prod_local_21 = &(state).resource; { let prod_local_22 = (state).nextOperation; { let prod_local_23 = (state).closed; { let prod_local_25 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_18), manifest: alloc::borrow::ToOwned::to_owned(prod_local_19), session: alloc::borrow::ToOwned::to_owned(prod_local_20), resource: alloc::borrow::ToOwned::to_owned(prod_local_21), nextOperation: prod_local_22, observed: now, closed: prod_local_23, active: None }; { let prod_local_26 = Ok(prod_local_25); prod_local_26 } } } } } } } },
+    } },
+    } } },
+    } },
+    } },
+        true => { let _x_458 = 18446744073709551615; { let _x_459 = (now <= _x_458); { let prod_local_27 = _x_459; match prod_local_27 {
+        false => { let prod_local_28 = crate::NativeLeaseError::ClockRegression; { let prod_local_29 = Err(prod_local_28); prod_local_29 } },
+        true => { let prod_local_30 = &(state).active; match prod_local_30 {
+        None => { let prod_local_31 = crate::NativeLeaseError::NoPending; { let prod_local_32 = Err(prod_local_31); prod_local_32 } },
+        Some(prod_local_33) => { let prod_local_34 = &(prod_local_33).binding; { let prod_local_35 = nativeBindingEqual(&(prod_local_34), &(completion)); match prod_local_35 {
+        false => { let prod_local_36 = crate::NativeLeaseError::BadBinding; { let prod_local_37 = Err(prod_local_36); prod_local_37 } },
+        true => { let prod_local_38 = (state).closed; match prod_local_38 {
+        false => { let prod_local_40 = (prod_local_33).cancelled; match prod_local_40 {
+        false => { let prod_local_41 = (prod_local_33).uncertain; match prod_local_41 {
+        false => { let prod_local_42 = &(prod_local_33).binding; { let prod_local_43 = (prod_local_42).deadline; { let prod_local_44 = (prod_local_43 <= now); match prod_local_44 {
+        false => { let prod_local_45 = crate::NativeLeaseError::CleanupRequired; { let prod_local_46 = Err(prod_local_45); prod_local_46 } },
+        true => { let prod_local_47 = &(state).application; { let prod_local_48 = &(state).manifest; { let prod_local_49 = &(state).session; { let prod_local_50 = &(state).resource; { let prod_local_51 = (state).nextOperation; { let prod_local_52 = (state).closed; { let prod_local_54 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_47), manifest: alloc::borrow::ToOwned::to_owned(prod_local_48), session: alloc::borrow::ToOwned::to_owned(prod_local_49), resource: alloc::borrow::ToOwned::to_owned(prod_local_50), nextOperation: prod_local_51, observed: now, closed: prod_local_52, active: None }; { let prod_local_55 = Ok(prod_local_54); prod_local_55 } } } } } } } },
+    } } } },
+        true => { let prod_local_56 = &(state).application; { let prod_local_57 = &(state).manifest; { let prod_local_58 = &(state).session; { let prod_local_59 = &(state).resource; { let prod_local_60 = (state).nextOperation; { let prod_local_61 = (state).closed; { let prod_local_63 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_56), manifest: alloc::borrow::ToOwned::to_owned(prod_local_57), session: alloc::borrow::ToOwned::to_owned(prod_local_58), resource: alloc::borrow::ToOwned::to_owned(prod_local_59), nextOperation: prod_local_60, observed: now, closed: prod_local_61, active: None }; { let prod_local_64 = Ok(prod_local_63); prod_local_64 } } } } } } } },
+    } },
+        true => { let prod_local_65 = &(state).application; { let prod_local_66 = &(state).manifest; { let prod_local_67 = &(state).session; { let prod_local_68 = &(state).resource; { let prod_local_69 = (state).nextOperation; { let prod_local_70 = (state).closed; { let prod_local_72 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_65), manifest: alloc::borrow::ToOwned::to_owned(prod_local_66), session: alloc::borrow::ToOwned::to_owned(prod_local_67), resource: alloc::borrow::ToOwned::to_owned(prod_local_68), nextOperation: prod_local_69, observed: now, closed: prod_local_70, active: None }; { let prod_local_73 = Ok(prod_local_72); prod_local_73 } } } } } } } },
+    } },
+        true => { let prod_local_74 = &(state).application; { let prod_local_75 = &(state).manifest; { let prod_local_76 = &(state).session; { let prod_local_77 = &(state).resource; { let prod_local_78 = (state).nextOperation; { let prod_local_79 = (state).closed; { let prod_local_81 = crate::NativeLane { application: alloc::borrow::ToOwned::to_owned(prod_local_74), manifest: alloc::borrow::ToOwned::to_owned(prod_local_75), session: alloc::borrow::ToOwned::to_owned(prod_local_76), resource: alloc::borrow::ToOwned::to_owned(prod_local_77), nextOperation: prod_local_78, observed: now, closed: prod_local_79, active: None }; { let prod_local_82 = Ok(prod_local_81); prod_local_82 } } } } } } } },
+    } },
+    } } },
+    } },
+    } } } },
+    } } },
+    } })
 }
 
 pub fn decode(value: alloc::vec::Vec<u8>) -> Option<alloc::string::String> {

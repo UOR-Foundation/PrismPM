@@ -47,7 +47,7 @@ struct RuntimeRoots {
     roots: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct StdlibExports {
     spec: String,
@@ -56,7 +56,7 @@ struct StdlibExports {
     export: Vec<StdlibExport>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct StdlibExport {
     lean_name: String,
@@ -67,6 +67,10 @@ struct StdlibExport {
 fn package_export_roots(source: &str, runtime: &RuntimeRoots) -> Result<Vec<String>, PrismError> {
     let register: StdlibExports = toml::from_str(source)
         .map_err(|error| PrismError::new("PP9001", format!("stdlib exports: {error}")))?;
+    // Bind every ABI field to this SDK's embedded, source-reviewed register.
+    // A syntactically valid replacement signature is not an admitted export.
+    let admitted: StdlibExports = toml::from_str(STDLIB_EXPORTS_SOURCE)
+        .map_err(|error| PrismError::new("PP9001", format!("embedded stdlib exports: {error}")))?;
     let names = register
         .export
         .iter()
@@ -77,10 +81,11 @@ fn package_export_roots(source: &str, runtime: &RuntimeRoots) -> Result<Vec<Stri
         .iter()
         .map(|row| row.rust_name.as_str())
         .collect::<BTreeSet<_>>();
-    if register.spec != "prismpm/stdlib-exports/1"
+    if register != admitted
+        || register.spec != "prismpm/stdlib-exports/1"
         || register.lean_module != runtime.lean_module
         || register.ir_module != runtime.ir_module
-        || names.len() != 54
+        || names.len() != 63
         || names.windows(2).any(|pair| pair[0] >= pair[1])
         || symbols.len() != names.len()
         || register.export.iter().any(|row| {
@@ -3139,7 +3144,7 @@ mod tests {
     fn package_exports_are_closed_and_do_not_change_runtime_accounting() {
         let (runtime, corpus, _) = corpus();
         let package = package_export_roots(STDLIB_EXPORTS_SOURCE, &runtime).unwrap();
-        assert_eq!(package.len(), 54);
+        assert_eq!(package.len(), 63);
         let union = runtime
             .roots
             .iter()
@@ -3148,6 +3153,28 @@ mod tests {
         assert_eq!(union.len(), runtime.roots.len() + package.len());
         assert_eq!(corpus.case_count, 597);
         assert_eq!(corpus.control_coverage.case_count, 54);
+        for index in 0..package.len() {
+            for field in ["rust_signature", "lean_name"] {
+                let mut value: toml::Value = toml::from_str(STDLIB_EXPORTS_SOURCE).unwrap();
+                let replacement = if field == "rust_signature" {
+                    "fn(Vec<u8>) -> bool".to_owned()
+                } else {
+                    format!(
+                        "PrismPM.Foundation.Other.{}",
+                        value["export"][index]["rust_name"].as_str().unwrap()
+                    )
+                };
+                assert_ne!(value["export"][index][field].as_str().unwrap(), replacement);
+                value["export"][index][field] = replacement.into();
+                assert_eq!(
+                    package_export_roots(&toml::to_string(&value).unwrap(), &runtime)
+                        .unwrap_err()
+                        .code,
+                    "PP9001",
+                    "substituted {field} at export {index}"
+                );
+            }
+        }
         for mutation in 0..6 {
             let mut value: toml::Value = toml::from_str(STDLIB_EXPORTS_SOURCE).unwrap();
             match mutation {
