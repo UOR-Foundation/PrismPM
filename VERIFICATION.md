@@ -1,5 +1,63 @@
 # PrismPM falsifiability and verification record
 
+## Conditional native operation lease qualification
+
+The DK-30 owner passes all 93 explicit cases in generated std and no_std Rust,
+with byte-identical regeneration and complete empty-axiom declaration audits.
+Its four actual model mutants fail at the expected generated probes: binding
+041, state 077, cancellation 026 and uncertainty 042. The complete owner takes
+457.55 seconds; attestation
+`87f9eb3a21c38ef7d7d690d8eaa3111dabe0ec393d2f3ee79e4dc2b60a26730f`.
+The canonical JSON/LexLean linkage also rejects changed and missing cases.
+Independent review required the exact predecessor invariant and explicit host
+clock/cleanup custody preconditions; both are now part of the contract.
+
+Earlier authoring checks rejected invalid phrase/primitive/canonical source,
+unordered fixture roots and a mutant's unused parameters. A subsequent owner
+rejected an incorrectly identified first failing probe. None is acceptance.
+The ordinary golden writer first required its explicit rewrite reason; a
+4-GiB retry then failed during WorkspaceQueryCorpus compilation with a Docker
+OOM event. Those failures are retained. A separate 6-GiB writer passes all
+359 golden files. Independent review rehashes the complete tree: exactly two
+captured source additions, unchanged generated modules, roots, declaration
+policies and runtime artifacts. The lease's execution acceptance belongs to
+DK-30, not the unchanged default kernel. A separate fresh readback matches all
+359 files. The full source audit passes 284 tests after removing an obsolete
+compiler build cache; the preceding run rejected three tests at its unchanged
+12-GiB disk reserve. Fresh ordinary package readback passes with attestation
+`6869577dc9a3a290b68bf6a81c4af6ed8ee4697e79ca099e4cbf910117e7751f`;
+generated package bytes, crate archive and release metadata are unchanged.
+Hosted run `37225492341` at `9ae4414066ccc908865aeb5da3942690e858aa5a`
+passes on AMD64 and ARM64. Independent review checks both complete 359-file
+compositions, exact source/image binding, unchanged roots and policies, all
+227 compiler-verification process records and 28 successful driver commands.
+The six genuine native records are imported unchanged. These source records
+capture the lease files; the separate DK-30 owner verifies their semantics.
+Full V&V and installed SDK qualification remain required.
+This internal reducer proves no OS fact and
+does not complete native effects, an application, an SDK release or issue #62.
+
+## Imported compiler hosted acceptance
+
+LexLean run `37207135528` passes its normative `just vv` and all four other
+native-platform jobs at exact imported source
+`ff92e75ed0e7e8d6bdd53fc717db6f8ede8e1b49`. Prism's complete two-pass V&V at
+`6f58f34e78d52189282ed87eb65630a8b4fe782a` fails in run `37218166204`: 251
+library tests pass and two browser-system owners reject a stale Calculator
+application-model binding with PP2101. The committed fixture still binds
+`2c1adf65faae1f1a417a25b756c7d520c6d4fc55b4973cdb7947bae8d0538e00`;
+the actual imported model is
+`1e9f66ae5672bdf3743f1b7b48e81564fea407e3f36f0a500d57f1272103f746`.
+Neither full V&V pass is accepted. That revision does not include the new
+native-lane component.
+
+After independent review, exactly four explicit source bindings are refreshed.
+All three actual browser-system owning tests pass in 575.39 seconds, including
+named A/B build/proof verification, the pinned SPDX oracle, source-free export,
+and stale/tampered rejection paths. The owning execution has no build-only
+debug or incremental overrides. Expected planted LLT4001 failures are retained.
+This component result does not establish full V&V or installed-SDK acceptance.
+
 ## Shared-octet native source records
 
 Hosted run `37214575335` at `5566e29ee6c66c5ea8ae8cce40a5ff40d18468fa`

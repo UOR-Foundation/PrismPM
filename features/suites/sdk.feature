@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-30 @build
+  Scenario: The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std and no_std execution without granting OS authority or claiming native application acceptance.
+    Given the complete explicit native lease corpus and host-only cleanup preconditions
+    When every modeled case executes in fresh generated standard and no_std Rust
+    Then cancellation, uncertainty, expiry, replay and exhaustion preserve the exact lane contract
+    And planted binding, sequencing and cleanup defects fail actual generated execution
+
   @DK-29 @build
   Scenario: Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance.
     Given pinned compiler sources and a complete independently locked native SDK seed manifest
