@@ -1,5 +1,43 @@
 # PrismPM falsifiability and verification record
 
+## Shared-octet compiler integration candidate
+
+LexLean `ff92e75ed0e7e8d6bdd53fc717db6f8ede8e1b49` shares repeated closed
+byte-literal octets and root-qualifies their Lean constants. Its Cargo archive
+was assembled from the clean committed source; packaging without verification
+is not package acceptance. All 887 package members and the archive are bound
+by the imported tree manifest. No literal bytes, model declarations, child
+deadlines or oracle inventories are reduced.
+
+The upstream complete SM-19 component check and six-example golden readback
+pass. A fresh 53-module Lean compilation diagnostic passed in 228.591 seconds;
+this is not exporter/native/Wasm/SDK acceptance.
+
+The downstream golden writer and a separate fresh readback pass for build
+`efacd8c2fc893c1ad64aaffdc9baddc5c21246f930c3c4420ad24ef2a2e492b6`.
+Independent review retains all 357 files, 80 modeled sources, 105 export roots,
+54 package roots, 51 runtime roots, 6,802 declaration/axiom records and the
+597 execution cases plus 54 control-coverage cases. IR and generated Rust
+change; the native validator bytes are identical. These runs establish fresh
+Lean/kernel replay, export and native validation, not no_std/Wasm or installed
+SDK acceptance.
+
+The ordinary stdlib writer passed with attestation
+`973591dc0730b98a933980471f3e95876b390ee7f105adcb95895526828d897c`.
+Two fresh isolated Cargo packaging and verification runs reproduced the compiler
+archives unchanged and the stdlib archive
+`88d148875957863092d5dfbe26ed9a6f9f61d5bd095c7887280ecab21bdc135c`.
+Its separate no_std compilation passed. The first packaging attempt failed
+because its staging directory inherited the enclosing workspace; its failed
+record is retained and is not acceptance. A separate verified package readback
+reproduces the same attestation, and all 19 unchanged fixture expectations pass.
+The complete source/model/spec audit (280 Node tests), authored formatting and
+all-target/all-feature workspace Clippy pass. Its first local audit attempt
+failed the real disk reserve, Git-index access and Docker-access prerequisites;
+the rerun preserved those guards and supplied adequate space and required mounts.
+Full upstream hosted CI, both complete V&V passes and installed consumer
+qualification remain required.
+
 ## Typed-byte compiler integration candidate
 
 LexLean `d2c2aa184f9941598e713b0fcde4b60e42eea57d` is an integration
