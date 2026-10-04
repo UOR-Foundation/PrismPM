@@ -865,6 +865,12 @@ level = "build"
 statement = "Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance."
 
 [[id]]
+id = "DK-30"
+suite = "sdk"
+level = "build"
+statement = "The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std and no_std execution without granting OS authority or claiming native application acceptance."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"

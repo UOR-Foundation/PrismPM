@@ -953,6 +953,18 @@ not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
 
+`DK-30` owns the internal conditional native-lane reducer in
+`Foundation.Native.Application.V1.Lease`. Its explicit corpus is mechanically
+bound to every generated LexLean probe and executes in standard and no_std Rust.
+Pending operations have exactly the predecessor of the next sequence; immutable
+request bindings do not change during cancellation or unknown cleanup. Host-only
+terminal transitions require independently captured worker termination and
+handle cleanup. Matching model bytes do not prove those facts. The private host
+owns the session-relative monotonic nanosecond clock and all OS authority.
+See `stdlib/src/Foundation/Native/Application/V1/Lease.md` for the complete
+conditional protocol. This kernel is not a filesystem binding, an executable
+native application profile, durable-effect idempotency or release acceptance.
+
 `DK-29` uses one fresh exporter acquisition boundary for library, browser,
 application and verification pipelines. Only a validated native
 `prismpm/sdk-lock/2` inventory digest may authorize the fixed installed SDK
@@ -2343,6 +2355,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
+| `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std and no_std execution without granting OS authority or claiming native application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
