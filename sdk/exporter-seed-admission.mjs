@@ -103,10 +103,16 @@ export function stageSeedFiles(seed, staging, manifest) {
     total += row.byte_length; assert(total <= 512 * 1024 ** 2, 'seed copy aggregate exceeded');
     const source = join(seed, row.path);
     const expected = {byte_length: row.byte_length, mode: row.mode, sha256: row.sha256};
+    const custody = lstatSync(source, {bigint: true});
+    const sameInput = after => {
+      for (const key of ['dev', 'ino', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs'])
+        assert.equal(after[key], custody[key], `seed input identity changed: ${key}`);
+    };
     assert.deepEqual(snapshotFile(source, row.byte_length), expected, 'seed file changed before copying');
     const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const before = fstatSync(input, {bigint: true});
+      sameInput(before);
       assert(before.isFile() && before.nlink === 1n && before.size === BigInt(row.byte_length));
       const output = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, row.mode);
       try {
@@ -123,8 +129,9 @@ export function stageSeedFiles(seed, staging, manifest) {
         }
         assert.equal(readSync(input, buffer, 0, 1, null), 0, 'seed file grew while copying');
         assert.equal(hash.digest('hex'), row.sha256, 'copied seed hash differs');
-        const after = fstatSync(input, {bigint: true});
-        for (const key of ['dev', 'ino', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs']) assert.equal(after[key], before[key]);
+        sameInput(fstatSync(input, {bigint: true}));
+        sameInput(lstatSync(source, {bigint: true}));
+        assert.equal(realpathSync(source), source, 'seed input ancestor changed');
         fchmodSync(output, row.mode);
         futimesSync(output, Number(before.atimeNs) / 1e9, Number(before.mtimeNs) / 1e9);
       } finally { closeSync(output); }

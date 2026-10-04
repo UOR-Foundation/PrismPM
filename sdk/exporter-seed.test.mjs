@@ -335,3 +335,46 @@ test('seed staging exclusively copies bounded declared bytes and refuses changed
   const publicStage = fixture(t); chmodSync(publicStage, 0o755);
   assert.throws(() => stageSeedFiles(seed, publicStage, manifest), /private/);
 });
+
+test('seed staging rejects same-byte input replacement before and during copying', t => {
+  for (const phase of ['open', 'read']) {
+    const seed = fixture(t), destination = fixture(t);
+    mkdirSync(join(seed, '.lake/build/bin'), {recursive: true});
+    const executable = join(seed, '.lake/build/bin/prod-export');
+    writeFileSync(executable, 'copy custody fixture', {mode: 0o755});
+    const manifest = manifestFixture(); manifest.files = snapshotTree(seed);
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import {syncBuiltinESMExports} from 'node:module';
+      const [seed, destination, path, phase, encoded, module] = process.argv.slice(1);
+      const open = fs.openSync, read = fs.readSync;
+      let opens = 0, input, mutated = false;
+      function replace() {
+        fs.writeFileSync(path + '.replacement', 'copy custody fixture', {mode: 0o755});
+        fs.renameSync(path + '.replacement', path); mutated = true;
+      }
+      fs.openSync = (...args) => {
+        if (args[0] === path && ++opens === 2) {
+          if (phase === 'open') replace();
+          input = open(...args); return input;
+        }
+        return open(...args);
+      };
+      fs.readSync = (...args) => {
+        const count = read(...args);
+        if (phase === 'read' && !mutated && args[0] === input && count > 0) replace();
+        return count;
+      };
+      syncBuiltinESMExports();
+      const {stageSeedFiles} = await import(module);
+      assert.throws(() => stageSeedFiles(seed, destination, JSON.parse(encoded)), /seed input identity changed/);
+      assert(mutated, 'the real filesystem replacement must execute');
+    `, seed, destination, executable, phase, JSON.stringify(manifest),
+    new URL('./exporter-seed-admission.mjs', import.meta.url).href],
+    {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 0, `${phase}: ${result.stderr}`);
+  }
+});
