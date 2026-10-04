@@ -191,6 +191,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/browser-api-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
+            "sdk/migration-qualification.test.mjs",
             "scripts/sdk-vv-inputs.test.mjs",
             "scripts/sdk-vv-run.test.mjs",
             "scripts/sdk-image-inputs.test.mjs",

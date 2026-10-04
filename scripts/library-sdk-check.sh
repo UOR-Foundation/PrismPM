@@ -54,10 +54,12 @@ container=$(docker container create --entrypoint node --user "$(id -u):$(id -g)"
   --workdir /opt/prismpm/share/conformance-root "$image" \
   scripts/library-sdk-check.mjs acquire-lock "$image")
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
-docker container start --attach "$container" > "$sdk_work/lock.json"
+docker container start --attach "$container" > "$sdk_work/acquisition.json"
 test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" = 0
 docker container rm "$container" >/dev/null
 container=''
+node "$helper" acquired-lock "$sdk_work/acquisition.json" > "$sdk_work/lock.json"
+cat "$sdk_work/acquisition.json"
 node "$helper" binding "$sdk_work/lock.json" "$image" "$architecture" "$root/standards.lock" "$sdk_work/inventory.json" > "$sdk_work/binding.json"
 # Native compiler construction uses a separate bounded tmpfs from retained
 # outputs. Reuse its first fresh seed for relocation; do not build a third.

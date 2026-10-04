@@ -5,6 +5,13 @@ DK-17 through the installed CLI in the exact current native SDK. Both SDK
 architectures must pass in the release reproducibility jobs; DK-07–16 remain
 separate mandatory checks.
 
+The online acquisition phase also runs the installed migration command against
+the pinned historical Hologram v1 lock. Its exact reviewed proposal must match
+an independent two-platform capture. Native lock admission and coherent altered
+or foreign inventory refusals run through the installed CLI on each architecture;
+the original lock, process hashes, and proposal remain in the acquisition record.
+This does not accept the historical SDK or replace downstream consumer checks.
+
 The gate compares the closed source/compiler/schema/fixture/helper inventory,
 then executes non-root, read-only and offline with private temporary caches.
 Fresh library roots must reproduce all build bytes and execute their generated
