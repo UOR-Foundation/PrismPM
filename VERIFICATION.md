@@ -1,5 +1,23 @@
 # PrismPM falsifiability and verification record
 
+## Early retained-native consistency admission
+
+The source audit now rejects inconsistent retained AMD64/ARM64 records before
+expensive suites. It reuses the later golden composition rules; it neither
+executes native verification nor accepts coherently stale retained trees as
+current-source evidence. Both full V&V passes and all later gates remain.
+The actual removed-call mutant fails at the expected missing-record case.
+Genuine records pass; missing, extra, changed, platform-swapped and shared-byte
+mutants fail. All 32 xtask tests pass in 47.96 seconds; the complete source audit
+passes all 289 tests without skips in 271.27 seconds. Scoped formatting and
+all-target/all-feature Clippy pass. Independent adversarial review is clear.
+
+An earlier local run omitted the Git mount and failed four formatting tests.
+It also exposed copied ignored compiler state in the nested diagnostic fixture.
+That fixture now excludes only root scratch; a deterministic regression retains
+authored lock bytes and nested same-name directories. The actual compiler still
+produces the required PP4002/LLV7010 failure. Neither earlier failure is accepted.
+
 ## Generated native lease package integration
 
 The generated package now exports nine pure lease functions, bringing its closed

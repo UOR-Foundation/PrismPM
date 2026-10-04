@@ -638,6 +638,12 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+The source audit first checks both retained native-record sets against the
+shared golden tree using the same closed composition rules as the later native
+consistency tests. Missing, stale, substituted or extra records fail before
+expensive suites run. This check performs no native execution and supplies no
+cached acceptance; all subsequent tests and fresh verification gates remain.
+
 Formatting checks a closed inventory of authored test manifests and Rust inputs.
 Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
 
