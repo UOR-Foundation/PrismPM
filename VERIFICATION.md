@@ -24,9 +24,17 @@ policies and runtime artifacts. The lease's execution acceptance belongs to
 DK-30, not the unchanged default kernel. A separate fresh readback matches all
 359 files. The full source audit passes 284 tests after removing an obsolete
 compiler build cache; the preceding run rejected three tests at its unchanged
-12-GiB disk reserve. Package readback and hosted qualification remain required;
-both native source records must be
-regenerated for the expanded inventory. This internal reducer proves no OS fact and
+12-GiB disk reserve. Fresh ordinary package readback passes with attestation
+`6869577dc9a3a290b68bf6a81c4af6ed8ee4697e79ca099e4cbf910117e7751f`;
+generated package bytes, crate archive and release metadata are unchanged.
+Hosted run `37225492341` at `9ae4414066ccc908865aeb5da3942690e858aa5a`
+passes on AMD64 and ARM64. Independent review checks both complete 359-file
+compositions, exact source/image binding, unchanged roots and policies, all
+227 compiler-verification process records and 28 successful driver commands.
+The six genuine native records are imported unchanged. These source records
+capture the lease files; the separate DK-30 owner verifies their semantics.
+Full V&V and installed SDK qualification remain required.
+This internal reducer proves no OS fact and
 does not complete native effects, an application, an SDK release or issue #62.
 
 ## Imported compiler hosted acceptance
@@ -42,6 +50,13 @@ the actual imported model is
 `1e9f66ae5672bdf3743f1b7b48e81564fea407e3f36f0a500d57f1272103f746`.
 Neither full V&V pass is accepted. That revision does not include the new
 native-lane component.
+
+After independent review, exactly four explicit source bindings are refreshed.
+All three actual browser-system owning tests pass in 575.39 seconds, including
+named A/B build/proof verification, the pinned SPDX oracle, source-free export,
+and stale/tampered rejection paths. The owning execution has no build-only
+debug or incremental overrides. Expected planted LLT4001 failures are retained.
+This component result does not establish full V&V or installed-SDK acceptance.
 
 ## Shared-octet native source records
 
