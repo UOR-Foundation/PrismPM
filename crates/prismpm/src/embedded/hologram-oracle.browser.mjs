@@ -6,7 +6,29 @@ import {createRequire} from 'node:module';
 
 const require = createRequire('/opt/prismpm/oracles/package.json');
 assert.equal(require('playwright/package.json').version, '1.62.1');
-const {chromium} = require('playwright');
+const {chromium, errors} = require('playwright');
+const sanitizedFailures = new WeakSet();
+const unavailableBodies = new WeakSet();
+function failureKind(error) {
+  if (unavailableBodies.has(error)) return 'response-body-unavailable';
+  if (error instanceof errors.TimeoutError) return 'timeout';
+  if (error instanceof assert.AssertionError) return 'assertion';
+  return 'unexpected';
+}
+function sanitizedFailure(error, phase) {
+  if (sanitizedFailures.has(error)) return error;
+  const kind = failureKind(error);
+  const detail = kind === 'response-body-unavailable'
+    ? 'Network.getResponseBody: No data found for resource' : kind;
+  // Raw assertion values, Playwright call logs and causes may contain drafts
+  // or responses. Preserve the first failure category without publishing them.
+  const safe = new Error(`portable View oracle ${phase}: ${detail}`);
+  sanitizedFailures.add(safe);
+  return safe;
+}
+let browser;
+let primaryFailure;
+try {
 const input = createInterface({input: process.stdin, crlfDelay: Infinity})[Symbol.asyncIterator]();
 const first = await input.next();
 assert.equal(first.done, false);
@@ -28,7 +50,7 @@ const decode = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
 const view = app.view;
 const cases = [];
 const vectorIndexes = [];
-const browser = await chromium.launch({headless: true, executablePath: browserExecutable});
+browser = await chromium.launch({headless: true, executablePath: browserExecutable});
 assert.equal(browser.browserType().name(), 'chromium');
 assert.equal(browser.version(), '151.0.7922.34');
 const context = await browser.newContext();
@@ -85,7 +107,7 @@ function applicable(vector) {
 const valid = app.acceptance_vectors.map((vector, index) => ({vector, index})).filter(({vector}) => applicable(vector));
 assert.ok(valid.length > 0, 'no modeled request can exercise the actual View');
 const recovery = valid[0].vector;
-async function submit(vector, target = page, keyboard = false) {
+async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {
   const ready = () => {
     const button = document.querySelector('#submit');
     const form = document.querySelector('#application-form');
@@ -102,7 +124,9 @@ async function submit(vector, target = page, keyboard = false) {
   const onRequest = request => {
     if (request.url() !== `${origin}/_hologram/intent`) return;
     invocationCount++;
-    record({event: 'request', method: request.method(), navigation: request.isNavigationRequest()});
+    const method = request.method();
+    record({event: 'request', method: ['GET', 'POST'].includes(method) ? method : 'OTHER',
+      navigation: request.isNavigationRequest()});
     if (request.method() !== 'POST') return;
     try {
       assert.deepEqual(request.postDataJSON(), expectedRequest);
@@ -114,15 +138,14 @@ async function submit(vector, target = page, keyboard = false) {
     navigated = true;
     record({event: 'main-frame-navigation'});
   };
-  const onFailure = request => record({event: 'request-failed',
-    invocation: request === invocation, error: request.failure()?.errorText?.slice(0, 256)});
+  const onFailure = request => record({event: 'request-failed', invocation: request === invocation});
   target.on('request', onRequest);
   target.on('framenavigated', onNavigation);
   target.on('requestfailed', onFailure);
   try {
     await target.waitForFunction(ready);
     phase = 'fill';
-    await fill(vector, target);
+    if (fillInputs) await fill(vector, target);
     phase = 'submission';
     // Match the request object observed after arming this submission, rather
     // than accepting any response that happens to share the endpoint URL.
@@ -131,7 +154,13 @@ async function submit(vector, target = page, keyboard = false) {
       record({event: 'response', status: reply.status(), serviceWorker: reply.fromServiceWorker()});
       // Capture immediately when the correlated response arrives, without
       // waiting for the initiating keyboard/click operation to settle.
-      const replyBody = await reply.body();
+      let replyBody;
+      try { replyBody = await reply.body(); }
+      catch (error) {
+        if (error instanceof Error && /Network\.getResponseBody.*No data found for resource/.test(error.message))
+          unavailableBodies.add(error);
+        throw error;
+      }
       record({event: 'body', bytes: replyBody.length});
       return {reply, replyBody};
     });
@@ -154,8 +183,8 @@ async function submit(vector, target = page, keyboard = false) {
     assert.equal(navigated, false, 'submission must not navigate the main frame');
   } catch (error) {
     console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
-      phase, keyboard, events, invocationCount, navigated}));
-    throw error;
+      phase, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
+    throw sanitizedFailure(error, phase);
   } finally {
     target.off('request', onRequest);
     target.off('framenavigated', onNavigation);
@@ -163,10 +192,10 @@ async function submit(vector, target = page, keyboard = false) {
   }
 }
 async function journey(name, work) {
-  await work();
+  try { await work(); }
+  catch (error) { throw sanitizedFailure(error, name); }
   cases.push({name, status: 'passed', attempts: 1});
 }
-try {
   await journey('attachment-assets', async () => {
     await page.goto(`${origin}/`);
     assert.equal(await page.title(), view.title);
@@ -259,12 +288,7 @@ try {
     const retained = await delayedPage.evaluate(selector => document.querySelector(selector).value, text ? '#request' : '#left');
     const expectedInput = decode.decode(Uint8Array.from(recovery.request));
     assert.equal(retained, text ? expectedInput : expectedInput.split('\t')[2]);
-    const response = delayedPage.waitForResponse(reply => reply.url() === `${origin}/_hologram/intent`);
-    await delayedPage.locator('#submit').click();
-    const reply = await response;
-    assert.equal(reply.status(), 200);
-    assert.deepEqual(reply.request().postDataJSON(), {version: 1, name: 'application.invoke', payload: expectedInput});
-    await shows(displayed(recovery), delayedPage);
+    await submit(recovery, delayedPage, false, {fillInputs: false});
     await delayed.close();
   });
   await journey('intent-boundaries', async () => {
@@ -327,7 +351,19 @@ try {
   process.stdout.write(`${JSON.stringify({schema: 'prismpm/portable-browser-oracle/1', profile,
     engine: browser.browserType().name(), browser_version: browser.version(), playwright: '1.62.1', cases, vector_indexes: vectorIndexes,
     skipped: 0, retries: 0, status: 'passed'})}\n`);
+} catch (error) {
+  primaryFailure = sanitizedFailure(error, 'session');
 } finally {
-  await browser.close();
-  process.stdin.destroy();
+  let cleanupFailure;
+  const failedCleanup = (error, resource) => {
+    console.error(JSON.stringify({schema: 'prismpm/browser-cleanup-diagnostic/1',
+      resource, failure: failureKind(error)}));
+    cleanupFailure ??= sanitizedFailure(error, 'cleanup');
+  };
+  try { if (browser) await browser.close(); }
+  catch (error) { failedCleanup(error, 'browser'); }
+  try { process.stdin.destroy(); }
+  catch (error) { failedCleanup(error, 'stdin'); }
+  if (primaryFailure) throw primaryFailure;
+  if (cleanupFailure) throw cleanupFailure;
 }
