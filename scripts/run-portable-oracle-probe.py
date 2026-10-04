@@ -24,7 +24,8 @@ def main():
     parser.add_argument("--evidence-directory", type=Path, required=True)
     parser.add_argument("--case", required=True, choices=["positive", "delayed-completion", "stuck-busy", "missing-control",
                         "body-unavailable", "wrong-method", "wrong-payload", "duplicate",
-                        "navigation", "trigger-failure"])
+                        "navigation", "trigger-failure", "wrong-response", "fill-failure",
+                        "private-method", "pretend-body-failure", "body-plus-cleanup", "cleanup-failure", "setup-failure"])
     args = parser.parse_args()
     artifact = args.artifact_directory.resolve(strict=True)
     oracle = args.oracle.resolve(strict=True)

@@ -33,6 +33,24 @@ const injections = {
   });`,
   'missing-control': "await page.locator('#submit').evaluate(button => button.remove());",
   'body-unavailable': "await page.route('**/_hologram/intent', route => route.continue({method: 'GET'}));",
+  'wrong-response': `await page.route('**/_hologram/intent', route => route.fulfill({status: 200,
+    contentType: 'application/json', body: JSON.stringify({version: 1, outputs: ['private-oracle-response-71943']})}));`,
+  'fill-failure': `valid[0].vector.request = Array.from(new TextEncoder().encode('private-oracle-draft-71943'));
+    await page.locator('#request').evaluate(field => field.remove());`,
+  'private-method': `await page.evaluate(() => {
+    const original = window.fetch;
+    window.fetch = (url, options) => original(url, {...options, method: 'private-oracle-draft-71943'});
+  });`,
+  // Infrastructure fault, not a replacement application or response oracle.
+  'pretend-body-failure': `fill = async () => {
+    throw new Error('response.body: Protocol error (Network.getResponseBody): No data found for resource with given identifier');
+  };`,
+  'body-plus-cleanup': `await page.route('**/_hologram/intent', route => route.continue({method: 'GET'}));
+    const close = browser.close.bind(browser);
+    browser.close = async () => {await close(); throw new Error('private-oracle-draft-71943');};`,
+  'cleanup-failure': `const close = browser.close.bind(browser);
+    browser.close = async () => {await close(); throw new Error('private-oracle-draft-71943');};`,
+  'setup-failure': '',
   'wrong-method': `await page.evaluate(() => {
     const original = window.fetch;
     window.fetch = (url, options) => original(url, {...options, method: 'GET', body: undefined});
@@ -66,6 +84,11 @@ const evidence = resolve(evidenceDirectory);
 mkdirSync(evidence);
 const driver = join(evidence, 'driver.mjs');
 let driverBytes = name === 'positive' ? source : source.replace(marker, `${marker}\n    ${injections[name]}\n`);
+if (name === 'setup-failure') {
+  const setup = 'const input = createInterface';
+  assert.equal(source.split(setup).length, 2);
+  driverBytes = driverBytes.replace(setup, `throw new Error('private-oracle-draft-71943');\n${setup}`);
+}
 if (name === 'delayed-completion') {
   const submit = '      await submit(vector);';
   assert.equal(source.split(submit).length, 2);
@@ -98,6 +121,10 @@ const diagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
   try { const value = JSON.parse(line); return value.schema === 'prismpm/browser-submission-diagnostic/1' ? [value] : []; }
   catch { return []; }
 });
+const cleanupDiagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
+  try { const value = JSON.parse(line); return value.schema === 'prismpm/browser-cleanup-diagnostic/1' ? [value] : []; }
+  catch { return []; }
+});
 let accepted = false;
 let failure;
 try {
@@ -122,49 +149,79 @@ try {
     assert.equal(diagnostics.length, 0);
   } else {
     assert.notEqual(result.status, 0);
+    assert.equal(result.stderr.includes('private-oracle-response-71943'), false, 'response must not leak through diagnostics');
+    assert.equal(result.stderr.includes('private-oracle-draft-71943'), false, 'draft must not leak through diagnostics');
+    if (name === 'cleanup-failure' || name === 'body-plus-cleanup') {
+      assert.deepEqual(cleanupDiagnostics, [{schema: 'prismpm/browser-cleanup-diagnostic/1', resource: 'browser', failure: 'unexpected'}]);
+    } else assert.deepEqual(cleanupDiagnostics, []);
+    if (name === 'setup-failure' || name === 'cleanup-failure') {
+      assert.equal(diagnostics.length, 0);
+      assert.match(result.stderr, name === 'setup-failure'
+        ? /portable View oracle session: unexpected/ : /portable View oracle cleanup: unexpected/);
+    } else {
     assert.equal(diagnostics.length, 1, 'require the actual submission diagnostic, not an unrelated crash');
     const diagnostic = diagnostics[0];
     assert.equal(diagnostic.keyboard, false);
-    if (name === 'missing-control') {
+    if (name === 'pretend-body-failure') {
+      assert.equal(diagnostic.failure, 'unexpected');
+      assert.equal(diagnostic.phase, 'fill');
+      assert.equal(diagnostic.invocationCount, 0);
+      assert.equal(result.stderr.includes('Network.getResponseBody'), false, 'unobserved body failure must not be attributed');
+    } else if (name === 'wrong-response') {
+      assert.equal(diagnostic.failure, 'assertion');
+      assert.equal(diagnostic.phase, 'response-body');
+      assert.equal(diagnostic.invocationCount, 1);
+      assert.equal(diagnostic.navigated, false);
+      assert.equal(diagnostic.events.filter(event => event.event === 'body').length, 1);
+    } else if (name === 'fill-failure') {
+      assert.equal(diagnostic.failure, 'timeout');
+      assert.equal(diagnostic.phase, 'fill');
+      assert.equal(diagnostic.invocationCount, 0);
+      assert.equal(diagnostic.navigated, false);
+    } else if (name === 'missing-control') {
+      assert.equal(diagnostic.failure, 'timeout');
       assert.equal(diagnostic.phase, 'initial-readiness');
       assert.equal(diagnostic.invocationCount, 0);
     } else if (name === 'trigger-failure') {
+      assert.equal(diagnostic.failure, 'timeout');
       assert.equal(diagnostic.phase, 'submission');
       assert.equal(diagnostic.invocationCount, 0);
     } else if (name === 'duplicate') {
       assert.equal(diagnostic.invocationCount, 2);
-      assert.match(result.stderr, /submission must issue exactly one invocation/);
+      assert.equal(diagnostic.failure, 'assertion');
     } else if (name === 'navigation') {
       assert.equal(diagnostic.navigated, true);
     } else if (name === 'stuck-busy') {
       assert.equal(diagnostic.phase, 'completed-readiness');
       assert.equal(diagnostic.invocationCount, 1);
       assert.equal(diagnostic.navigated, false);
-      assert.match(result.stderr, /waitForFunction.*Timeout/);
+      assert.equal(diagnostic.failure, 'timeout');
     } else {
       assert.equal(diagnostic.invocationCount, 1);
       assert.equal(diagnostic.navigated, false);
       const responses = diagnostic.events.filter(event => event.event === 'response');
-      if (name === 'body-unavailable') {
+      if (name === 'body-unavailable' || name === 'body-plus-cleanup') {
         assert.equal(diagnostic.phase, 'response-body');
         assert.equal(responses.length, 1);
         assert.equal(responses[0].status, 405);
+        assert.equal(diagnostic.failure, 'response-body-unavailable');
         assert.match(result.stderr, /Network\.getResponseBody.*No data found for resource/);
       } else {
         assert.equal(diagnostic.phase, 'submission');
         assert.equal(responses.length, 0, 'mismatched request must not satisfy response correlation');
         const requests = diagnostic.events.filter(event => event.event === 'request');
         assert.equal(requests.length, 1);
-        assert.equal(requests[0].method, name === 'wrong-method' ? 'GET' : 'POST');
-        assert.match(result.stderr, /waitForResponse.*Timeout/);
+        assert.equal(requests[0].method, name === 'wrong-method' ? 'GET' : name === 'private-method' ? 'OTHER' : 'POST');
+        assert.equal(diagnostic.failure, 'timeout');
       }
+    }
     }
   }
   accepted = true;
 } catch (error) { failure = String(error); }
 const receipt = {schema: 'prismpm/portable-oracle-probe/1', case: name,
   ...before, node_version: process.version,
-  exit_code: result.status, signal: result.signal, diagnostics,
+  exit_code: result.status, signal: result.signal, diagnostics, cleanup_diagnostics: cleanupDiagnostics,
   probe_passed: accepted, product_acceptance: 'not-established', ...(failure ? {failure} : {})};
 writeFileSync(join(evidence, 'result.json'), `${JSON.stringify(receipt)}\n`, {flag: 'wx'});
 console.log(JSON.stringify(receipt));
