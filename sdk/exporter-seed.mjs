@@ -48,22 +48,28 @@ export function snapshotFile(path, maximum = limit.file) {
 }
 
 export function readSmall(path, maximum) {
-  const expected = snapshotFile(path, maximum);
+  assert.equal(realpathSync(path), path, 'compiler file is aliased');
+  const before = lstatSync(path, {bigint: true});
+  assert(before.isFile() && before.nlink === 1n && before.size <= BigInt(maximum),
+    'bounded singly-linked compiler file required');
+  assert.equal(before.mode & 0o7000n, 0n, 'special compiler file permissions refused');
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  const bytes = Buffer.alloc(maximum + 1);
   try {
-    const metadata = fstatSync(fd);
-    assert(metadata.isFile() && metadata.nlink === 1 && metadata.size === expected.byte_length,
-      'compiler configuration replaced');
+    // Bind the bytes to one descriptor and its original inode. Comparing only
+    // hashes from separately reopened files accepts same-byte replacement.
+    unchanged(before, fstatSync(fd, {bigint: true}));
+    const bytes = Buffer.alloc(maximum + 1);
     let size = 0;
     while (size <= maximum) {
       const count = readSync(fd, bytes, size, bytes.length - size, null);
       if (!count) break;
       size += count;
     }
-    assert(size <= maximum && size === expected.byte_length && sha(bytes.subarray(0, size)) === expected.sha256,
+    assert(size <= maximum && BigInt(size) === before.size,
       'compiler configuration changed or exceeded bound');
-    assert.deepEqual(snapshotFile(path, maximum), expected);
+    unchanged(before, fstatSync(fd, {bigint: true}));
+    unchanged(before, lstatSync(path, {bigint: true}));
+    assert.equal(realpathSync(path), path, 'compiler file ancestor changed');
     return new TextDecoder('utf-8', {fatal: true}).decode(bytes.subarray(0, size));
   } finally { closeSync(fd); }
 }

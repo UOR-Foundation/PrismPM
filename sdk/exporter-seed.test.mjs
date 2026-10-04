@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -104,6 +105,43 @@ test('configuration reads are bounded, regular, singly linked, and strict UTF-8'
   assert.throws(() => readSmall(join(root, 'alias'), 256), /aliased/);
   linkSync(path, join(root, 'linked'));
   assert.throws(() => readSmall(path, 256), /singly-linked/);
+});
+
+test('configuration reads reject same-byte replacement and rewriting during the actual read', t => {
+  const root = fixture(t);
+  for (const mutation of ['replace', 'rewrite']) {
+    const path = join(root, mutation);
+    writeFileSync(path, 'unchanged configuration');
+    // Isolate scheduling hooks in a child. All reads and mutations use real
+    // descriptors/files; only the instant of the adversarial write is selected.
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import {syncBuiltinESMExports} from 'node:module';
+      const path = process.argv[1], mutation = process.argv[2];
+      const original = fs.readSync;
+      let mutated = false;
+      fs.readSync = (...args) => {
+        const count = original(...args);
+        if (!mutated && args[1].length === 257 && count > 0) {
+          mutated = true;
+          if (mutation === 'replace') {
+            fs.writeFileSync(path + '.replacement', 'unchanged configuration');
+            fs.renameSync(path + '.replacement', path);
+          } else fs.writeFileSync(path, 'unchanged configuration');
+        }
+        return count;
+      };
+      syncBuiltinESMExports();
+      const {readSmall} = await import(process.argv[3]);
+      assert.throws(() => readSmall(path, 256), /compiler input changed/);
+      assert(mutated, 'the real filesystem mutation must execute');
+    `, path, mutation, new URL('./exporter-seed.mjs', import.meta.url).href],
+    {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 0, `${mutation}: ${result.stderr}`);
+  }
 });
 
 test('construction requires a bounded memory filesystem and refuses existing output', t => {
