@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--evidence-directory", type=Path, required=True)
     parser.add_argument("--trigger", choices=["click", "keyboard"], default="click")
     parser.add_argument("--case", required=True, choices=["positive", "delayed-completion", "stuck-busy", "missing-control",
-                        "body-unavailable", "wrong-method", "wrong-payload", "duplicate",
+                        "body-unavailable", "method-rewrite", "wrong-method", "wrong-payload", "duplicate",
                         "navigation", "trigger-failure", "wrong-response", "fill-failure",
                         "private-method", "pretend-body-failure", "body-plus-cleanup", "cleanup-failure", "setup-failure",
                         "delayed-duplicate", "delayed-wrong-response", "delayed-stuck-busy"])

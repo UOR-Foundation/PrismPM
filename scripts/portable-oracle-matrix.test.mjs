@@ -149,11 +149,11 @@ test('portable oracle owns the complete two-profile and two-trigger boundary inv
   ]);
   assert.deepEqual(matrix.triggers, ['click', 'keyboard']);
   assert.deepEqual(matrix.interaction_cases, ['positive', 'delayed-completion', 'stuck-busy', 'missing-control',
-    'body-unavailable', 'wrong-response', 'fill-failure', 'private-method', 'body-plus-cleanup',
+    'body-unavailable', 'method-rewrite', 'wrong-response', 'fill-failure', 'private-method', 'body-plus-cleanup',
     'wrong-method', 'wrong-payload', 'duplicate', 'navigation', 'trigger-failure',
     'delayed-duplicate', 'delayed-wrong-response', 'delayed-stuck-busy']);
   assert.deepEqual(matrix.infrastructure_cases, ['pretend-body-failure', 'cleanup-failure', 'setup-failure']);
-  assert.equal(matrix.profiles.length * (matrix.triggers.length * matrix.interaction_cases.length + matrix.infrastructure_cases.length), 74);
+  assert.equal(matrix.profiles.length * (matrix.triggers.length * matrix.interaction_cases.length + matrix.infrastructure_cases.length), 78);
   assert.deepEqual(matrix.profiles[0].vector_indexes, Array.from({length: 15}, (_, index) => index));
   assert.deepEqual(matrix.profiles[1].vector_indexes, [0, 2, 3]);
   const common = ['attachment-assets', 'modeled-vectors', 'input-validation-recovery',
@@ -173,9 +173,11 @@ test('the existing interoperability binary owns both complete acceptances and on
   assert.equal(rust.split('#[test]').length - 1, 3, 'source pin, report negatives and both-profile matrix owners remain unconditional');
   assert.equal(/#\[(?:ignore|cfg|cfg_attr)/.test(rust), false);
   const owner = read('scripts/portable-oracle-matrix.mjs');
+  assert(owner.includes(`assert.equal(matrix.interaction_cases.length, ${matrix.interaction_cases.length});`));
+  assert(owner.includes(`assert.equal(new Set([...matrix.interaction_cases, ...matrix.infrastructure_cases]).size, ${matrix.interaction_cases.length + matrix.infrastructure_cases.length});`));
   assert.equal(owner.split("run('fresh-compiler'").length, 2);
   assert.match(owner, /'build', '--locked', '--offline'/);
-  assert.match(owner, /assert\.equal\(outcomes\.length, 74/);
+  assert.match(owner, /assert\.equal\(outcomes\.length, 78/);
   assert.match(owner, /executable\.verify\(\)/);
 });
 

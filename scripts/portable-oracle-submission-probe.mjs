@@ -30,18 +30,35 @@ const injections = {
     const form = document.querySelector('#application-form');
     const original = form.removeAttribute.bind(form);
     window.probeCompletions = 0;
+    let pending = false;
+    let scheduled = false;
+    form.addEventListener('submit', () => {
+      pending = true;
+      form.setAttribute('aria-busy', 'true');
+    }, {capture: true});
     form.removeAttribute = name => {
-      if (name !== 'aria-busy') return original(name);
-      setTimeout(() => {original(name); window.probeCompletions++;}, 250);
+      if (name !== 'aria-busy' || !pending) return original(name);
     };
+    new MutationObserver(() => {
+      if (!pending || scheduled) return;
+      scheduled = true;
+      setTimeout(() => {
+        pending = false;
+        scheduled = false;
+        original('aria-busy');
+        window.probeCompletions++;
+      }, 250);
+    }).observe(document.querySelector('#result'), {childList: true, characterData: true, subtree: true});
   });`,
   'stuck-busy': `await page.evaluate(() => {
     const form = document.querySelector('#application-form');
     const original = form.removeAttribute.bind(form);
+    form.addEventListener('submit', () => form.setAttribute('aria-busy', 'true'), {capture: true});
     form.removeAttribute = name => {if (name !== 'aria-busy') original(name);};
   });`,
   'missing-control': "await page.locator('#submit').evaluate(button => button.remove());",
-  'body-unavailable': "await page.route('**/_hologram/intent', route => route.continue({method: 'GET'}));",
+  'body-unavailable': '',
+  'method-rewrite': "await page.route('**/_hologram/intent', route => route.continue({method: 'GET'}));",
   'wrong-response': `await page.route('**/_hologram/intent', route => route.fulfill({status: 200,
     contentType: 'application/json', body: JSON.stringify({version: 1, outputs: ['private-oracle-response-71943']})}));`,
   'fill-failure': `let draft = 'private-oracle-draft-71943';
@@ -56,8 +73,7 @@ const injections = {
   'pretend-body-failure': `fill = async () => {
     throw new Error('response.body: Protocol error (Network.getResponseBody): No data found for resource with given identifier');
   };`,
-  'body-plus-cleanup': `await page.route('**/_hologram/intent', route => route.continue({method: 'GET'}));
-    const close = browser.close.bind(browser);
+  'body-plus-cleanup': `const close = browser.close.bind(browser);
     browser.close = async () => {await close(); throw new Error('private-oracle-draft-71943');};`,
   'cleanup-failure': `const close = browser.close.bind(browser);
     browser.close = async () => {await close(); throw new Error('private-oracle-draft-71943');};`,
@@ -136,6 +152,13 @@ if (trigger === 'keyboard') {
   driverBytes = driverBytes.replace('await submit(vector);', 'await submit(vector, page, true);');
   driverBytes = driverBytes.replace('await submit(recovery, delayedPage, false, {fillInputs: false});',
     'await submit(recovery, delayedPage, true, {fillInputs: false});');
+}
+if (name === 'body-unavailable' || name === 'body-plus-cleanup') {
+  const point = '      try { replyBody = await bounded(reply.body()); }';
+  assert.equal(driverBytes.split(point).length, 2);
+  // Close the actual browser target after correlated headers, then exercise
+  // Playwright's real body read. No fabricated exception is body evidence.
+  driverBytes = driverBytes.replace(point, `      await target.close();\n${point}`);
 }
 writeFileSync(driver, driverBytes, {flag: 'wx'});
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -235,9 +258,21 @@ try {
       if (name === 'body-unavailable' || name === 'body-plus-cleanup') {
         assert.equal(diagnostic.phase, 'response-body');
         assert.equal(responses.length, 1);
+        assert.equal(responses[0].status, 200);
+        assert.equal(diagnostic.failure, 'response-body-failed');
+        assert.equal(diagnostic.events.some(event => event.event === 'body'), false);
+      } else if (name === 'method-rewrite') {
+        assert.equal(diagnostic.phase, 'response-body');
+        assert.equal(responses.length, 1);
         assert.equal(responses[0].status, 405);
-        assert.equal(diagnostic.failure, 'response-body-unavailable');
-        assert.match(result.stderr, /Network\.getResponseBody.*No data found for resource/);
+        if (diagnostic.failure === 'response-body-unavailable') {
+          assert.match(result.stderr, /Network\.getResponseBody.*No data found for resource/);
+          assert.equal(diagnostic.events.some(event => event.event === 'body'), false);
+        } else {
+          assert.equal(diagnostic.failure, 'assertion');
+          assert.equal(diagnostic.check, 'response-status');
+          assert.equal(diagnostic.events.filter(event => event.event === 'body').length, 1);
+        }
       } else {
         assert.equal(diagnostic.phase, 'submission');
         assert.equal(responses.length, 0, 'mismatched request must not satisfy response correlation');

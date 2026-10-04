@@ -20,9 +20,9 @@ const matrix = JSON.parse(readFileSync(join(root, 'tests/data/portable-oracle-ma
 assert.equal(matrix.schema, 'prismpm/portable-oracle-matrix/1');
 assert.deepEqual(matrix.profiles.map(profile => profile.name), ['Calculator', 'Text Request']);
 assert.deepEqual(matrix.triggers, ['click', 'keyboard']);
-assert.equal(matrix.interaction_cases.length, 17);
+assert.equal(matrix.interaction_cases.length, 18);
 assert.equal(matrix.infrastructure_cases.length, 3);
-assert.equal(new Set([...matrix.interaction_cases, ...matrix.infrastructure_cases]).size, 20);
+assert.equal(new Set([...matrix.interaction_cases, ...matrix.infrastructure_cases]).size, 21);
 const browser = process.arch === 'x64'
   ? '/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell'
   : '/ms-playwright/chromium_headless_shell-1234/chrome-linux/headless_shell';
@@ -202,7 +202,7 @@ try {
       for (const input of captured) input.verify();
     }
   }
-  assert.equal(outcomes.length, 74, 'the complete two-profile matrix must execute');
+  assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
   assert.equal(negativeControls.length, 4);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);
   console.log(JSON.stringify({schema: 'prismpm/portable-oracle-matrix-result/1', cases: outcomes.length,

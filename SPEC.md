@@ -194,8 +194,8 @@ in the ordinary full acceptance gate.
 
 The workspace `hologram_interop` owner retains both complete profile acceptance
 bodies and qualifies the closed `portable-oracle-matrix.json` inventory with one
-fresh source-bound oracle compiler: 17 interaction cases per profile and trigger,
-plus three separately labeled infrastructure cases per profile (74 cases).
+fresh source-bound oracle compiler: 18 interaction cases per profile and trigger,
+plus three separately labeled infrastructure cases per profile (78 cases).
 Four additional live negative controls reject a no-op response probe and a
 wrong-status failure masquerading as envelope-validation evidence.
 Every outcome is retained; no missing, failed, timed-out, or skipped case passes.
@@ -206,6 +206,12 @@ from authenticated object downloads, with staged-source and toolchain custody.
 Delayed initialization uses the same correlated submission observer without
 refilling the retained draft. Payload-safe diagnostics preserve the first failure
 even when cleanup also fails. `HO-12` does not duplicate this integration run.
+Readiness fault probes explicitly hold readiness after a real submission and
+release it only after actual result rendering. Body-loss probes close the actual
+target after correlated headers; method-rewrite probes separately retain the
+HTTP 405 rejection or actual protocol body-unavailability evidence. Body reads
+and browser cleanup are each bounded to ten seconds, and observed prohibited
+main-frame navigation rejects the pending submission immediately.
 
 The generic model retains its u32 request and response bounds. The pinned
 Hologram portable intent transport supports at most 65,536 request bytes and

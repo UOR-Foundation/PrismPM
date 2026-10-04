@@ -21,7 +21,7 @@
   "triggers": ["click", "keyboard"],
   "interaction_cases": [
     "positive", "delayed-completion", "stuck-busy", "missing-control",
-    "body-unavailable", "wrong-response", "fill-failure", "private-method",
+    "body-unavailable", "method-rewrite", "wrong-response", "fill-failure", "private-method",
     "body-plus-cleanup", "wrong-method", "wrong-payload", "duplicate",
     "navigation", "trigger-failure", "delayed-duplicate",
     "delayed-wrong-response", "delayed-stuck-busy"
