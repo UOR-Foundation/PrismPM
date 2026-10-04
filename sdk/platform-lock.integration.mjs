@@ -174,7 +174,7 @@ try {
   migrate[migrate.length - 1] = sha('wrong migration standards');
   await assert.rejects(run(cli, migrate), error => error.stderr.includes('PP5401') || error.stdout.includes('PP5401'));
   assert.equal(await readFile(join(project, 'prismpm.lock'), 'utf8'), historical);
-  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture capture; Docker-list rejection; exact OCI registry blobs/manifests; current CLI update/migration proposals; standards mismatch rejection; no lock adoption');
+  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture metadata capture; Docker-list rejection; exact OCI registry blobs/manifests; current CLI update/migration proposals; standards mismatch rejection; no lock adoption');
 } finally {
   for (const socket of connections) socket.destroy();
   if (proxy) await new Promise(resolveClose => proxy.close(resolveClose));

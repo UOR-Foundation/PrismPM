@@ -1,5 +1,16 @@
 # PrismPM falsifiability and verification record
 
+## Mainline integration repair
+
+Mainline `09f8b916` contained committed conflict markers in 13 files. Integration
+retains the verified feature stack, canonical golden/standards bytes and reviewed
+oracle source members. Already-present OSV and migration tests are retained once,
+not duplicated. Independent review confirms no lost native/exporter, migration,
+source-custody or CI controls. The integrated tree passes all eight platform-lock
+tests, 32 xtask tests (46.09 seconds), 50 conformance-library tests (55.84 seconds)
+and 289 source-audit tests (257.27 seconds), without skips. This is merge-resolution
+evidence, not complete V&V, SDK publication or native-effect acceptance.
+
 ## Early retained-native consistency admission
 
 The source audit now rejects inconsistent retained AMD64/ARM64 records before
