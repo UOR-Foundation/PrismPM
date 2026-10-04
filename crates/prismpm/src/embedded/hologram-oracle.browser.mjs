@@ -121,6 +121,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   let invocationCount = 0;
   let navigated = false;
   let phase = 'initial-readiness';
+  let check = null;
   const onRequest = request => {
     if (request.url() !== `${origin}/_hologram/intent`) return;
     invocationCount++;
@@ -168,22 +169,30 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
       ? target.locator(text ? '#request' : '#right').press(text ? 'Control+Enter' : 'Enter')
       : target.locator('#submit').click();
     const [{reply, replyBody}] = await Promise.all([response, trigger]);
+    check = 'response-status';
     assert.equal(reply.status(), 200);
+    check = 'request-envelope';
     assert.deepEqual(reply.request().postDataJSON(), expectedRequest);
+    check = 'request-navigation';
     assert.equal(reply.request().isNavigationRequest(), false);
     // A missing body is a failed oracle execution. Preserve the first error;
     // never swallow it and retry the same vanished response.
+    check = 'response-json';
     const envelope = JSON.parse(replyBody.toString('utf-8'));
+    check = 'response-envelope';
     assert.deepEqual(envelope, {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
+    check = null;
     phase = 'rendered-result';
     await shows(displayed(vector), target);
     phase = 'completed-readiness';
     await target.waitForFunction(ready);
+    check = 'single-invocation';
     assert.equal(invocationCount, 1, 'submission must issue exactly one invocation');
+    check = 'main-frame-navigation';
     assert.equal(navigated, false, 'submission must not navigate the main frame');
   } catch (error) {
     console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
-      phase, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
+      phase, check, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
     throw sanitizedFailure(error, phase);
   } finally {
     target.off('request', onRequest);

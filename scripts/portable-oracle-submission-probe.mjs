@@ -6,11 +6,20 @@ import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {requireBoundaryCheck} from './portable-oracle-custody.mjs';
 
-const [oracle, artifactDirectory, browser, name, evidenceDirectory, ...extra] = process.argv.slice(2);
+const [oracle, artifactDirectory, browser, name, evidenceDirectory, trigger = 'click', control = 'none', ...extra] = process.argv.slice(2);
 assert.equal(extra.length, 0);
 assert.ok(oracle && artifactDirectory && browser && name && evidenceDirectory,
-  'usage: probe ORACLE ARTIFACT_DIRECTORY BROWSER CASE NEW_EVIDENCE_DIRECTORY');
+  'usage: probe ORACLE ARTIFACT_DIRECTORY BROWSER CASE NEW_EVIDENCE_DIRECTORY [click|keyboard]');
+const matrixPath = fileURLToPath(new URL('../tests/data/portable-oracle-matrix.json', import.meta.url));
+const matrix = JSON.parse(readFileSync(matrixPath));
+assert.equal(matrix.schema, 'prismpm/portable-oracle-matrix/1');
+assert(matrix.triggers.includes(trigger), 'closed trigger required');
+assert(['none', 'wrong-status', 'noop'].includes(control), 'closed negative control required');
+if (control !== 'none') assert.equal(name, 'wrong-response', 'negative controls qualify response probe only');
+assert([...matrix.interaction_cases, ...matrix.infrastructure_cases].includes(name), 'closed case required');
+if (matrix.infrastructure_cases.includes(name)) assert.equal(trigger, 'click', 'infrastructure probes do not claim keyboard execution');
 const sourcePath = fileURLToPath(new URL('../crates/prismpm/src/embedded/hologram-oracle.browser.mjs', import.meta.url));
 const source = readFileSync(sourcePath, 'utf8');
 const marker = "  await journey('modeled-vectors', async () => {";
@@ -35,8 +44,10 @@ const injections = {
   'body-unavailable': "await page.route('**/_hologram/intent', route => route.continue({method: 'GET'}));",
   'wrong-response': `await page.route('**/_hologram/intent', route => route.fulfill({status: 200,
     contentType: 'application/json', body: JSON.stringify({version: 1, outputs: ['private-oracle-response-71943']})}));`,
-  'fill-failure': `valid[0].vector.request = Array.from(new TextEncoder().encode('private-oracle-draft-71943'));
-    await page.locator('#request').evaluate(field => field.remove());`,
+  'fill-failure': `let draft = 'private-oracle-draft-71943';
+    if (!text) {const fields = decode.decode(Uint8Array.from(valid[0].vector.request)).split('\\t'); fields[2] = draft; draft = fields.join('\\t');}
+    valid[0].vector.request = Array.from(new TextEncoder().encode(draft));
+    await page.locator(text ? '#request' : '#left').evaluate(field => field.remove());`,
   'private-method': `await page.evaluate(() => {
     const original = window.fetch;
     window.fetch = (url, options) => original(url, {...options, method: 'private-oracle-draft-71943'});
@@ -60,34 +71,53 @@ const injections = {
     window.fetch = (url, options) => original(url, {...options, body:
       JSON.stringify({version: 1, name: 'application.invoke', payload: 'oracle-corrupted-payload'})});
   });`,
-  duplicate: `await page.evaluate(() => document.querySelector('#application-form').addEventListener('submit', () => {
+  duplicate: `await page.evaluate(payload => document.querySelector('#application-form').addEventListener('submit', () => {
     void fetch('/_hologram/intent', {method: 'POST', headers: {'content-type': 'application/json'},
-      body: JSON.stringify({version: 1, name: 'application.invoke', payload: document.querySelector('#request').value})});
-  }));`,
+      body: JSON.stringify({version: 1, name: 'application.invoke', payload})});
+  }), decode.decode(Uint8Array.from(recovery.request)));`,
   navigation: `await page.evaluate(() => document.querySelector('#application-form').addEventListener('submit', () => {
     location.assign('/index.html');
   }));`,
-  'trigger-failure': `await page.evaluate(() => document.querySelector('#request').addEventListener('input', () => {
-    document.querySelector('#submit')?.remove();
-  }, {once: true}));`,
+  'trigger-failure': '',
+  'delayed-duplicate': '',
+  'delayed-wrong-response': '',
+  'delayed-stuck-busy': '',
 };
 assert.ok(Object.hasOwn(injections, name), 'unknown probe case');
 const artifactRoot = resolve(artifactDirectory);
 const modelPath = join(artifactRoot, 'model.prism.json');
 const modelBytes = readFileSync(modelPath);
 const model = JSON.parse(modelBytes);
-assert.equal(model.application.profile, 'prismpm/text-application/1');
-assert.equal(model.application.name, 'Text Request', 'this probe uses the complete Text Request fixture');
-const archive = join(artifactRoot, 'Text Request.holo');
-const wasm = join(artifactRoot, 'core-wasm/prism_text_request_core_wasm.wasm');
+const fixture = matrix.profiles.find(profile => profile.name === model.application.name);
+assert(fixture, 'registered complete application fixture required');
+assert.equal(model.application.cargo_name, fixture.cargo_name);
+assert.equal(model.application.profile, fixture.profile === 'utf8-text' ? 'prismpm/text-application/1' : undefined);
+const archive = join(artifactRoot, fixture.name + '.holo');
+const wasm = join(artifactRoot, 'core-wasm', fixture.cargo_name.replaceAll('-', '_') + '_core_wasm.wasm');
 const evidence = resolve(evidenceDirectory);
 mkdirSync(evidence);
 const driver = join(evidence, 'driver.mjs');
 let driverBytes = name === 'positive' ? source : source.replace(marker, `${marker}\n    ${injections[name]}\n`);
+if (control === 'noop') driverBytes = source;
+if (control === 'wrong-status') {
+  assert.equal(driverBytes.split('route.fulfill({status: 200,').length, 2);
+  driverBytes = driverBytes.replace('route.fulfill({status: 200,', 'route.fulfill({status: 503,');
+}
 if (name === 'setup-failure') {
   const setup = 'const input = createInterface';
   assert.equal(source.split(setup).length, 2);
   driverBytes = driverBytes.replace(setup, `throw new Error('private-oracle-draft-71943');\n${setup}`);
+}
+if (name === 'trigger-failure') {
+  const point = '    const trigger = keyboard';
+  assert.equal(source.split(point).length, 2);
+  driverBytes = driverBytes.replace(point, `    await target.locator(keyboard ? (text ? '#request' : '#right') : '#submit').evaluate(element => element.remove());\n${point}`);
+}
+if (['delayed-duplicate', 'delayed-wrong-response', 'delayed-stuck-busy'].includes(name)) {
+  const point = '    await submit(recovery, delayedPage, false, {fillInputs: false});';
+  assert.equal(source.split(point).length, 2);
+  const injection = injections[name.slice('delayed-'.length)].replaceAll('await page.', 'await delayedPage.');
+  driverBytes = driverBytes.replace(point, `    ${injection}\n${point}`);
 }
 if (name === 'delayed-completion') {
   const submit = '      await submit(vector);';
@@ -105,9 +135,15 @@ if (name === 'delayed-completion') {
     assert.equal(await page.evaluate(() => window.probeCompletions), keyboardBefore + 1,
       'keyboard submission returned before delayed completion');`);
 }
+if (trigger === 'keyboard') {
+  assert.equal(driverBytes.split('await submit(vector);').length, 2);
+  driverBytes = driverBytes.replace('await submit(vector);', 'await submit(vector, page, true);');
+  driverBytes = driverBytes.replace('await submit(recovery, delayedPage, false, {fillInputs: false});',
+    'await submit(recovery, delayedPage, true, {fillInputs: false});');
+}
 writeFileSync(driver, driverBytes, {flag: 'wx'});
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const subjects = {source: sourcePath, driver, oracle, model: modelPath, archive, wasm,
+const subjects = {source: sourcePath, matrix: matrixPath, driver, oracle, model: modelPath, archive, wasm,
   node: process.execPath, browser};
 const identities = () => Object.fromEntries(Object.entries(subjects).map(([key, path]) =>
   [`${key}_sha256`, sha(readFileSync(path))]));
@@ -138,11 +174,9 @@ try {
     assert.equal(report.portable_browser.status, 'passed');
     assert.equal(report.portable_browser.retries, 0);
     assert.equal(report.portable_browser.skipped, 0);
-    assert.deepEqual(report.portable_browser.cases.map(row => row.name), [
-      'attachment-assets', 'modeled-vectors', 'input-validation-recovery',
-      'transport-failure-recovery', 'pre-init-privacy', 'delayed-init',
-      'intent-boundaries', 'text-response-bounds', 'text-safe-rendering', 'detached-session']);
-    assert.deepEqual(report.portable_browser.vector_indexes, [0, 2, 3]);
+    assert.deepEqual(report.portable_browser.cases.map(row => row.name), fixture.journeys);
+    assert.deepEqual(report.portable_browser.vector_indexes, fixture.vector_indexes);
+    assert.equal(report.portable_browser.profile, fixture.profile);
     assert.equal(report.portable_browser.browser_version, '151.0.7922.34');
     assert.equal(report.portable_browser.playwright, '1.62.1');
     assert.ok(report.portable_browser.cases.every(row => row.status === 'passed' && row.attempts === 1));
@@ -161,13 +195,14 @@ try {
     } else {
     assert.equal(diagnostics.length, 1, 'require the actual submission diagnostic, not an unrelated crash');
     const diagnostic = diagnostics[0];
-    assert.equal(diagnostic.keyboard, false);
+    requireBoundaryCheck(name, diagnostic);
+    assert.equal(diagnostic.keyboard, trigger === 'keyboard');
     if (name === 'pretend-body-failure') {
       assert.equal(diagnostic.failure, 'unexpected');
       assert.equal(diagnostic.phase, 'fill');
       assert.equal(diagnostic.invocationCount, 0);
       assert.equal(result.stderr.includes('Network.getResponseBody'), false, 'unobserved body failure must not be attributed');
-    } else if (name === 'wrong-response') {
+    } else if (name === 'wrong-response' || name === 'delayed-wrong-response') {
       assert.equal(diagnostic.failure, 'assertion');
       assert.equal(diagnostic.phase, 'response-body');
       assert.equal(diagnostic.invocationCount, 1);
@@ -186,12 +221,12 @@ try {
       assert.equal(diagnostic.failure, 'timeout');
       assert.equal(diagnostic.phase, 'submission');
       assert.equal(diagnostic.invocationCount, 0);
-    } else if (name === 'duplicate') {
+    } else if (name === 'duplicate' || name === 'delayed-duplicate') {
       assert.equal(diagnostic.invocationCount, 2);
       assert.equal(diagnostic.failure, 'assertion');
     } else if (name === 'navigation') {
       assert.equal(diagnostic.navigated, true);
-    } else if (name === 'stuck-busy') {
+    } else if (name === 'stuck-busy' || name === 'delayed-stuck-busy') {
       assert.equal(diagnostic.phase, 'completed-readiness');
       assert.equal(diagnostic.invocationCount, 1);
       assert.equal(diagnostic.navigated, false);
@@ -219,7 +254,8 @@ try {
   }
   accepted = true;
 } catch (error) { failure = String(error); }
-const receipt = {schema: 'prismpm/portable-oracle-probe/1', case: name,
+const receipt = {schema: 'prismpm/portable-oracle-probe/1', case: name, profile: fixture.profile, trigger, control,
+  scope: matrix.infrastructure_cases.includes(name) ? 'infrastructure-fault' : 'interaction-boundary',
   ...before, node_version: process.version,
   exit_code: result.status, signal: result.signal, diagnostics, cleanup_diagnostics: cleanupDiagnostics,
   probe_passed: accepted, product_acceptance: 'not-established', ...(failure ? {failure} : {})};

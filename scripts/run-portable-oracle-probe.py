@@ -22,10 +22,12 @@ def main():
     parser.add_argument("--artifact-directory", type=Path, required=True)
     parser.add_argument("--oracle", type=Path, required=True)
     parser.add_argument("--evidence-directory", type=Path, required=True)
+    parser.add_argument("--trigger", choices=["click", "keyboard"], default="click")
     parser.add_argument("--case", required=True, choices=["positive", "delayed-completion", "stuck-busy", "missing-control",
                         "body-unavailable", "wrong-method", "wrong-payload", "duplicate",
                         "navigation", "trigger-failure", "wrong-response", "fill-failure",
-                        "private-method", "pretend-body-failure", "body-plus-cleanup", "cleanup-failure", "setup-failure"])
+                        "private-method", "pretend-body-failure", "body-plus-cleanup", "cleanup-failure", "setup-failure",
+                        "delayed-duplicate", "delayed-wrong-response", "delayed-stuck-busy"])
     args = parser.parse_args()
     artifact = args.artifact_directory.resolve(strict=True)
     oracle = args.oracle.resolve(strict=True)
@@ -54,7 +56,7 @@ def main():
                      "--entrypoint", "node", IMAGE,
                      "/source/scripts/portable-oracle-submission-probe.mjs", "/oracle",
                      "/artifact", "/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell",
-                     args.case, "/evidence/probe").strip()
+                     args.case, "/evidence/probe", args.trigger).strip()
         inspected = json.loads(docker("inspect", cid))[0]
         assert inspected["Image"] == IMAGE
         assert inspected["Config"]["Labels"].get("org.prismpm.oracle-probe") == token
