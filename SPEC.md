@@ -1012,8 +1012,11 @@ by their invocation and removed on failure.
 
 Each actual `lake exe prod-export` invocation records a closed
 `prismpm/exporter-execution/1` child executable measurement and
-`prismpm/exporter-acquisition/1` cold/seed provenance. Seed receipts bind their
-inventory and manifest to the consumer lock, and the actual child to its
+`prismpm/exporter-acquisition/1` cold/seed provenance.
+Executable byte, mode and file-identity checks run after failed invocations too.
+Detected custody drift takes precedence; otherwise the original process failure
+is preserved and no successful execution receipt is constructed.
+Seed receipts bind their inventory and manifest to the consumer lock, and the actual child to its
 locked binary. Their native platform must match the retained, validated
 Lean/Rust preflight, not the admission reader's host or a self-selected foreign
 SDK row. Release admission checks this context independently of

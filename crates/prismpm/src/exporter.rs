@@ -136,7 +136,7 @@ pub(crate) fn run_export(
         .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
     let before = measure_executable(&child)?;
     validate_acquisition(acquisition, &before.sha256)?;
-    let mut record = crate::verification::run_process(
+    let result = crate::verification::run_process(
         tool,
         program,
         args,
@@ -144,7 +144,7 @@ pub(crate) fn run_export(
         environment,
         replacements,
         failure_code,
-    )?;
+    );
     if measure_executable(&child)? != before {
         return Err(PrismError::new(
             "PP5008",
@@ -169,6 +169,9 @@ pub(crate) fn run_export(
             "exporter executable identity changed during execution",
         ));
     }
+    // Failure is not an exemption from custody. Preserve the original process
+    // diagnostic only after the actual executable still passes both checks.
+    let mut record = result?;
     record.exporter = Some(ExporterExecution {
         schema: "prismpm/exporter-execution/1",
         source_archive_sha256: format!("{:x}", Sha256::digest(ARCHIVE)),
@@ -613,14 +616,28 @@ mod tests {
         );
         std::fs::write(
             root.path().join("exe"),
-            b"./.lake/build/bin/prod-export\nprintf changed > .lake/build/bin/prod-export\n",
+            b"./.lake/build/bin/prod-export\nprintf genuine-failure >&2\nexit 7\n",
         )
         .unwrap();
-        assert_eq!(invoke().unwrap_err().code, "PP5008");
-        std::fs::write(&child, original).unwrap();
-        std::fs::write(root.path().join("exe"), b"./.lake/build/bin/prod-export\ncp -p .lake/build/bin/prod-export replacement\nmv replacement .lake/build/bin/prod-export\n").unwrap();
-        assert_eq!(invoke().unwrap_err().code, "PP5008");
-        assert_eq!(std::fs::read(child).unwrap(), original);
+        let error = invoke().unwrap_err();
+        assert_eq!(error.code, "PP5004");
+        assert!(error.message.contains("exited 7"));
+        assert!(error.message.contains("genuine-failure"));
+        for exit in [0, 7] {
+            for mutation in [
+                "printf changed > .lake/build/bin/prod-export",
+                "cp -p .lake/build/bin/prod-export replacement\nmv replacement .lake/build/bin/prod-export",
+                "rm .lake/build/bin/prod-export",
+                "chmod 644 .lake/build/bin/prod-export",
+            ] {
+                std::fs::write(&child, original).unwrap();
+                std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
+                std::fs::write(root.path().join("exe"), format!(
+                    "./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"
+                )).unwrap();
+                assert_eq!(invoke().unwrap_err().code, "PP5008", "exit {exit}: {mutation}");
+            }
+        }
     }
 
     #[cfg(unix)]

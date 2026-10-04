@@ -1,5 +1,19 @@
 # PrismPM falsifiability and verification record
 
+## Exporter custody after process failure
+
+Executable byte/mode and inode/ctime checks now run after unsuccessful children
+as well as successful ones. Unchanged failures retain their original diagnostic;
+custody drift reports PP5008 and cannot produce a success receipt. The real-child
+regression fails before the fix and passes afterward for content changes,
+same-byte replacement, removal and permission changes at exits zero and seven.
+All eight exporter tests and strict all-target/all-feature Clippy pass.
+The source audit passes all 289 tests in 279.98 seconds; complete DK-30 passes
+in 484.98 seconds with attestation
+`68392f4a689af473af3481aafb39ef87fe5d012635e5d9847be980836f5382af`.
+Independent adversarial review is clear. This closes a process custody gap,
+not full V&V, SDK release or native-effect acceptance.
+
 ## Native lease compiled Wasm agreement
 
 DK-30 now compiles the manifest-bound kernel IR into an import-free Core Wasm
