@@ -9,12 +9,12 @@ and four type blocks leaves the old generated library byte-for-byte unchanged.
 All prior proof policies remain unchanged; the 13 new declarations have empty
 axiom policies. These functions confer no OS authority.
 
-The expanded DK-30 owner passes in 397.74 seconds, attestation
-`0eca155ab789865395e84d867ec3ac78e7076f8d0c97ad50a3f6f2a927a0c3da`.
+The final expanded DK-30 owner passes in 521.55 seconds, attestation
+`a447fb838cfce1a6e841e7d46ddb8e4e902d7a4ec8b27a013ac53ddbc546b364`.
 It executes all 93 explicit cases against the generated public package in both
 std and no_std, checks all nine ABI signatures, rejects a deliberately wrong
-expected result at runtime, and retains all four actual model mutants. A later
-consumer rerun also passes with a fixed SDK tool environment, temporary HOME
+expected result at runtime, and retains all four actual model mutants. The
+consumer passes with a fixed SDK tool environment, temporary HOME
 and fresh Cargo directories; ambient compiler and loader overrides are excluded.
 Direct verifier tests reject signature and declaration substitutions for every
 one of the 63 exports, in addition to the exact source-register checks.
@@ -32,9 +32,29 @@ registration, scoped formatting and all-target/all-feature Clippy pass. The
 final-verifier golden writer produces 364 files. Its manifest SHA-256 is
 `4126c774b0df49d27e4036a83179a926f8df5b04121e7542b040407e0382c3d2`.
 The earlier writer passed, but its old-binary readback was stopped after the ABI
-fix and is not acceptance. Fresh final-verifier golden/package readbacks, native
-records, hosted V&V and installed-SDK qualification remain required. Component
+fix and is not acceptance. A separate final-verifier golden readback matches all
+364 files; fresh package readback passes against verification manifest
+`cfdbdc2ce49713942918e4218dee3f3367c20fa507330e1746852a6b7247ae6a`.
+All three actual browser-system owners pass in 519.66 seconds, retaining the
+locked external oracle, source-free export and negative checks. Hosted native
+run `37233362723` at `cbbdecc7049e3d12b356cd18cea6b74115587b2e` passes on
+AMD64 and ARM64. Separate reviewers rehash both 364-file compositions, all
+114 roots, 6,815 declaration policies, 231 verification processes, exact source
+and image bindings, and all 28 driver commands per platform. Both genuine
+writer/readback sequences pass; only their six reviewed records are imported,
+without rewriting evidence. The complete 50-test conformance library then passes
+in 34.22 seconds with no skips, including native-profile consistency. Hosted
+V&V and installed-SDK qualification remain required. Component
 evidence does not qualify native effects or complete issue #62.
+
+Hosted V&V `37225580559` at earlier head `9ae4414` passes all 253 Prism library
+tests and all three interoperability tests (78 View cases and four negative
+controls; 1,519.63 seconds). It then rejects stale native records before their
+subsequent import: 49 conformance-library tests pass, one reports a non-exact
+golden tree. Neither full V&V pass is accepted. The current export integration
+likewise rejects its old native records at the exact descriptor/byte boundary;
+the first local diagnostic expected the earlier closure message and is not
+acceptance. Native consistency must pass before launching the next full run.
 
 ## Prior conditional native operation lease qualification
 
