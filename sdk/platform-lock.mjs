@@ -1,19 +1,15 @@
 // SDK-owned bootstrap transport validation. Inventory facts come from the
 // actual digest-selected images; this does not grant release acceptance.
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { lstat, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const digest = /^sha256:[0-9a-f]{64}$/;
 const image = /^[a-z0-9.-]+(?::[0-9]{1,5})?\/[a-z0-9./_-]+@sha256:[0-9a-f]{64}$/;
 const architectures = ['amd64', 'arm64'];
-const ownershipLabel = 'org.prismpm.sdk-capture';
-const ownershipFormat = `{{.Id}} {{index .Config.Labels "${ownershipLabel}"}}`;
 const kinds = ['adapter', 'base-image', 'binary', 'crate', 'dependency-lock', 'image',
   'oracle', 'schema', 'test-corpus', 'trust-root', 'workflow'];
 const canonical = value => Array.isArray(value) ? value.map(canonical)
@@ -130,79 +126,19 @@ export async function createPlatformLock(directory, reference, nativeInventoryBy
   return lock;
 }
 
-// The injected runner is solely a test seam; the CLI always uses the verified
-// Docker executable supplied by PrismPM. Never run either target image.
-export async function capturePlatformLock(reference, standardsDigest, run, owned = undefined) {
-  assert.match(reference, image);
-  assert.match(standardsDigest, digest);
-  const token = randomUUID();
-  const names = owned?.names ?? architectures.map(architecture => `prismpm-sdk-capture-${token}-${architecture}`);
-  assert.equal(names.length, 2);
-  for (const [index, name] of names.entries()) assert.match(name,
-    new RegExp(`^prismpm-sdk-capture-[a-z0-9-]+-${architectures[index]}$`));
-  const absent = async name => {
-    const rows = await run(['container', 'ls', '--all', '--quiet', '--filter', `name=^/${name}$`], true);
-    assert.equal(rows.toString().trim(), '', `SDK capture cleanup unconfirmed for ${name}`);
-  };
-  const cleanup = async name => {
-    let observed;
-    try {
-      observed = (await run(['container', 'inspect', '--format', ownershipFormat, name], true)).toString().trim().split(/\s+/);
-    } catch (_) { await absent(name); return; }
-    assert.ok(observed.length === 2 && /^[0-9a-f]{64}$/.test(observed[0]) && observed[1] === name,
-      `SDK capture ownership unconfirmed for ${name}; nothing removed`);
-    // Remove the inspected ID, never a name that another container can acquire
-    // between inspection and removal. Image labels cannot override --label.
-    try { await run(['rm', '--force', '--volumes', observed[0]], true); } catch (_) { /* establish absence below */ }
-    await absent(name);
-  };
-  // Refuse pre-existing names before acquiring ownership or removing anything.
-  for (const name of names) await absent(name);
-  const directory = owned?.directory ?? await mkdtemp(join(tmpdir(), 'prismpm-sdk-update-'));
-  assert.ok(isAbsolute(directory), 'SDK capture directory must be absolute');
-  if (owned) await mkdir(directory);
-  try {
-    const index = await run(['buildx', 'imagetools', 'inspect', '--raw', reference]);
-    const children = parseSdkIndex(index, reference);
-    await writeFile(`${directory}/index.json`, index);
-    for (const child of children) {
-      const childDirectory = `${directory}/${child.architecture}`;
-      await mkdir(childDirectory);
-      await run(['pull', '--platform', `linux/${child.architecture}`, child.reference]);
-      const inspected = await run(['image', 'inspect', '--format', '{{json .}}', child.reference]);
-      await writeFile(`${childDirectory}/image.json`, inspected);
-      const name = names[architectures.indexOf(child.architecture)];
-      try {
-        try {
-          const container = (await run(['create', '--name', name, '--label', `${ownershipLabel}=${name}`, '--network', 'none', '--platform', `linux/${child.architecture}`, child.reference])).toString().trim();
-          assert.match(container, /^[0-9a-f]{64}$/, 'Docker did not return one exact created container ID');
-        } catch (error) {
-          throw new Error(`SDK capture creation outcome unconfirmed for ${name}`, {cause: error});
-        }
-        await run(['cp', `${name}:/opt/prismpm/share/inventory.json`, `${childDirectory}/inventory.json`]);
-        await run(['cp', `${name}:/opt/prismpm/share/standards.lock`, `${childDirectory}/standards.lock`]);
-      } finally {
-        // Creation may have succeeded daemon-side even if its CLI failed.
-        try { await cleanup(name); } catch (error) {
-          throw new Error(`SDK capture cleanup unconfirmed for ${name}`, {cause: error});
-        }
-      }
-    }
-    const standards = await boundedFile(`${directory}/amd64/standards.lock`, 16 * 1024 * 1024);
-    assert.equal(sha(standards), standardsDigest, 'target SDK standards digest differs from requested update');
-    return await validatePlatformBundle(directory, reference, standards);
-  } finally {
-    await rm(directory, {recursive: true, force: true});
-  }
-}
-
-export function runCaptureCommand(docker, args, cleanup = false, execute = execFileSync) {
-  return execute(docker, args, {timeout: cleanup ? 20_000 : 120_000,
-    maxBuffer: cleanup ? 64 * 1024 : 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']});
+// The transport seam is used only by acquisition-negative tests. Production
+// reads exact OCI graph bytes, never pulls images or starts foreign containers.
+export async function capturePlatformLock(reference, standardsDigest, transport) {
+  const {captureMetadataLock} = await import('./metadata-capture.mjs');
+  if (transport !== undefined) return captureMetadataLock(reference, standardsDigest, transport);
+  const {captureSdkMetadata, verifiedCommands} = await import('./metadata-cli.mjs');
+  const inventory = '/opt/prismpm/share/inventory.json';
+  const commands = existsSync(inventory) ? verifiedCommands(inventory) : [];
+  return JSON.parse(await captureSdkMetadata(reference, standardsDigest, commands));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [command, reference, standardsDigest, docker, directory, amd64, arm64] = process.argv.slice(2);
+  const [command, reference, standardsDigest] = process.argv.slice(2);
   if (command === 'index') {
     assert.equal(process.argv.length, 4);
     for (const child of parseSdkIndex(await readFile('/dev/stdin'), reference)) {
@@ -210,13 +146,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
   } else {
     assert.equal(command, 'capture');
-    assert.ok([6, 9].includes(process.argv.length));
-    assert.ok(docker.startsWith('/'), 'Docker must be an SDK-resolved absolute executable');
-    const lock = await capturePlatformLock(reference, standardsDigest,
-      (args, cleanup) => runCaptureCommand(docker, args, cleanup),
-      directory ? {directory, names: [amd64, arm64]} : undefined);
+    assert.equal(process.argv.length, 5);
     // SDK lock files are exact canonical JSON; unlike inventory files, they
     // do not permit a trailing newline outside the canonical value.
-    process.stdout.write(JSON.stringify(canonical(lock)));
+    capturePlatformLock(reference, standardsDigest).then(lock => process.stdout.write(JSON.stringify(canonical(lock))))
+      .catch(error => {process.stderr.write(String(error) + '\n'); process.exitCode = 1;});
   }
 }

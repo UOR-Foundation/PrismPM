@@ -152,6 +152,28 @@ const probe = `
   }));
 `;
 
+test('credential-helper runtime and kernel capabilities are available before expensive VV', () => {
+  assert.match(readFileSync(resolve(root, '.devcontainer/Dockerfile'), 'utf8'), /\bpython3=3\.11\.2-1\+b1\b/);
+  // This executes the real isolated interpreter before image construction or
+  // Rust compilation. It does not replace the owning DK-28 adversarial suite.
+  const observed = execFileSync('/usr/bin/python3', ['-I', '-S', '-c', `
+import ctypes, fcntl, hashlib, json, os, selectors, signal, stat, subprocess, sys, time
+assert sys.version_info >= (3, 11)
+assert sys.flags.isolated and sys.flags.no_site
+descriptor = os.memfd_create("prismpm-helper-preflight", os.MFD_ALLOW_SEALING)
+try:
+    os.write(descriptor, b"sealed")
+    seals = fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE
+    fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, seals)
+    assert fcntl.fcntl(descriptor, fcntl.F_GET_SEALS) == seals
+finally:
+    os.close(descriptor)
+assert ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) == 0
+print("credential-helper runtime ready")
+`], {encoding: 'utf8', timeout: 5000, maxBuffer: 4096});
+  assert.equal(observed, 'credential-helper runtime ready\n');
+});
+
 test('devcontainer lifecycle waits before attach and wraps the actual fetch command', () => {
   const config = JSON.parse(readFileSync(resolve(root, '.devcontainer/devcontainer.json')));
   assert.equal(config.remoteUser, 'vscode');

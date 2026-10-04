@@ -4,13 +4,14 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {createHash, randomUUID} from 'node:crypto';
-import {lstat, mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
+import {chmod, mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {createServer, connect} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {ociFixtureManifest} from './oci-test-fixture.mjs';
-import {capturePlatformLock, parseSdkIndex} from './platform-lock.mjs';
+import {parseSdkIndex} from './platform-lock.mjs';
+import {label, profile} from './metadata-layer.mjs';
 
 const exec = promisify(execFile);
 const run = async (program, args) => (await exec(program, args, {timeout: 180_000, maxBuffer: 16 * 1024 * 1024})).stdout;
@@ -81,7 +82,11 @@ try {
       }
       await writeFile(join(context, 'inventory.json'), encode({schema: 'prismpm/sdk-inventory/1', artifacts, commands}));
       await writeFile(join(context, 'standards.lock'), standards);
-      await writeFile(join(context, 'Dockerfile'), 'FROM scratch\nCOPY facts /test-facts\nCOPY inventory.json standards.lock /opt/prismpm/share/\nCMD ["/never-executed-test-fixture"]\n');
+      await chmod(join(context, 'inventory.json'), 0o444);
+      await chmod(join(context, 'standards.lock'), 0o444);
+      await writeFile(join(context, 'Dockerfile'), 'FROM scratch AS metadata\nCOPY inventory.json standards.lock /opt/prismpm/share/\n'
+        + 'FROM scratch\nCOPY facts /test-facts\nCOPY --link --from=metadata / /\n'
+        + 'LABEL ' + label + '="' + profile + '"\nCMD ["/never-executed-test-fixture"]\n');
       const tag = `${endpoint}/test-sdk-${nonce}:${generation}-${architecture}`;
       imageReferences.add(tag);
       // This transport fixture has no release-attestation claims; the locked
@@ -130,7 +135,7 @@ try {
     const index = await docker('buildx', 'imagetools', 'inspect', '--raw', indexTag);
     const reference = `${endpoint}/test-sdk-${nonce}@${sha(index)}`;
     assert.deepEqual(parseSdkIndex(Buffer.from(index), reference).map(child => child.reference), children);
-    const lock = JSON.parse(await run(process.execPath, ['sdk/platform-lock.mjs', 'capture', reference, sha(standards), '/usr/local/bin/docker']));
+    const lock = JSON.parse(await run(process.execPath, ['sdk/platform-lock.mjs', 'capture', reference, sha(standards)]));
     assert.equal(lock.sdk_index, index);
     assert.equal(lock.standards_lock, sha(standards));
     for (const platform of lock.platforms) {
@@ -142,67 +147,6 @@ try {
       imageReferences.add(`${endpoint}/test-sdk-${nonce}@${platform.manifest_digest}`);
     }
     captures.push(lock);
-  }
-  // Fault injection surrounds real Docker operations; no daemon response or
-  // evidence is fabricated. Exercise allocation with a lost CLI response and
-  // a competing owner acquiring a name after the initial absence check.
-  for (const fault of ['lost-create-response', 'copy-failure', 'name-conflict']) {
-    const names = ['amd64', 'arm64'].map(architecture => `prismpm-sdk-capture-${randomUUID()}-${architecture}`);
-    const caseDirectory = join(directory, fault);
-    const ownedIds = new Set();
-    const errors = [];
-    const trackedDocker = async (...args) => {
-      const result = await docker(...args);
-      if (args[0] === 'create') {
-        const id = result.trim();
-        assert.match(id, /^[0-9a-f]{64}$/);
-        ownedIds.add(id);
-      }
-      return result;
-    };
-    let foreignId;
-    let injected = false;
-    try {
-      await assert.rejects(capturePlatformLock(captures[1].sdk_image, captures[1].standards_lock, async args => {
-        if (!injected && args[0] === 'create' && fault === 'name-conflict') {
-          injected = true;
-          foreignId = (await trackedDocker('create', '--name', names[0], '--network', 'none',
-            captures[1].sdk_image.split('@')[0] + '@' + captures[1].platforms[0].manifest_digest)).trim();
-          assert.match(foreignId, /^[0-9a-f]{64}$/);
-          // The original create must encounter the actual daemon conflict.
-          return trackedDocker(...args);
-        }
-        if (!injected && args[0] === 'create' && fault === 'lost-create-response') {
-          await trackedDocker(...args);
-          injected = true;
-          throw new Error('injected lost create response after actual allocation');
-        }
-        if (!injected && args[0] === 'cp' && fault === 'copy-failure') {
-          injected = true;
-          throw new Error('injected copy interruption after actual allocation');
-        }
-        return trackedDocker(...args);
-      }, {directory: caseDirectory, names}));
-      assert.ok(injected, `real Docker fault was not exercised: ${fault}`);
-      await assert.rejects(lstat(caseDirectory), {code: 'ENOENT'});
-      for (const [index, name] of names.entries()) {
-        const listed = (await docker('container', 'ls', '--all', '--quiet', '--no-trunc', '--filter', `name=^/${name}$`)).trim();
-        assert.equal(listed, fault === 'name-conflict' && index === 0 ? foreignId : '');
-      }
-      if (foreignId) assert.equal((await docker('inspect', '--format', '{{.Id}}', foreignId)).trim(), foreignId);
-    } catch (error) {
-      errors.push(error);
-    } finally {
-      // A failing absence assertion must not leak the test's own allocation or
-      // hide its failure behind later image removal. Never clean up by name.
-      for (const id of ownedIds) {
-        try {
-          try { await docker('rm', '--force', '--volumes', id); } catch (_) { /* require confirmed absence */ }
-          assert.equal((await docker('container', 'ls', '--all', '--quiet', '--no-trunc', '--filter', `id=${id}`)).trim(), '');
-        } catch (error) { errors.push(error); }
-      }
-    }
-    if (errors.length) throw new AggregateError(errors, `actual Docker capture fault failed: ${fault}`);
   }
   const project = join(directory, 'project'); await mkdir(project);
   const committed = JSON.stringify(canonical(captures[0])); await writeFile(join(project, 'prismpm.lock'), committed);
@@ -230,7 +174,7 @@ try {
   migrate[migrate.length - 1] = sha('wrong migration standards');
   await assert.rejects(run(cli, migrate), error => error.stderr.includes('PP5401') || error.stdout.includes('PP5401'));
   assert.equal(await readFile(join(project, 'prismpm.lock'), 'utf8'), historical);
-  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture capture; Docker-list rejection; exact OCI registry blobs/manifests; allocation/copy failure cleanup; competing-owner preservation; current CLI update/migration proposals; standards mismatch rejection; no lock adoption');
+  console.log('PASS actual Docker-schema2/OCI two-generation, two-architecture metadata capture; Docker-list rejection; exact OCI registry blobs/manifests; current CLI update/migration proposals; standards mismatch rejection; no lock adoption');
 } finally {
   for (const socket of connections) socket.destroy();
   if (proxy) await new Promise(resolveClose => proxy.close(resolveClose));

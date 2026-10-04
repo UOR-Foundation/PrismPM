@@ -544,6 +544,11 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     command(
         root,
         "node",
+        &["sdk/metadata-materialization.integration.mjs"],
+    )?;
+    command(
+        root,
+        "node",
         &[
             "sdk/platform-lock.integration.mjs",
             update_cli

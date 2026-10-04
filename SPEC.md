@@ -925,6 +925,11 @@ The complete lock is bounded to 64 MiB, including JSON-escaped document strings,
 repeated artifact rows and the 1 MiB index. A review proposal is bounded to
 192 MiB for its old/new field evidence and complete proposed lock. The tighter
 per-document bounds remain independently enforced.
+Execution reads enforce the 64 MiB lock and 8 MiB inventory limits before
+allocation and while streaming. Metadata inputs must be regular, non-symlink,
+singly linked files with unchanged descriptor and pathname identities throughout
+the read; oversized locks report PP7601, and invalid inventory or file custody
+reports PP5401. A sparse file cannot bypass these limits.
 The two platforms have the same
 artifact identities and versions, but native binary digests may differ. Lock
 generation extracts both inventories from those exact images without executing
@@ -949,26 +954,46 @@ permits initial unbound loading; dangling links, links outside the project,
 directories and other inspection failures are rejected with PP5401.
 Ordinary commands never update locks. `lock update --sdk-image <digest-ref>
 --standards-lock <digest>` produces a reviewable proposal, never adopts it.
-For a platform lock it captures the requested exact OCI index, pulls both
-digest-selected children, and copies their inventories and standards locks from
-temporary, never-started containers. Both standards files must match the
-requested digest. Copied evidence must be bounded regular files before parsing,
-and subprocess output is bounded; Docker owns image pull/extraction resources.
-Temporary containers and files are cleaned up, while the normal Docker image
-cache may retain pulled images. The updater allocates exact random-scoped
-container names before capture and confines evidence to its own staging
-directory. The helper protects cleanup before issuing create; the surviving
-Rust parent attempts cleanup after success or failure and positively checks
-absence. Both verify the invocation ownership label and remove only the observed
-container ID, never an unrelated container that acquired the reserved name.
-Cleanup calls are bounded to 20 seconds
-and 64 KiB each. Daemon failure is unconfirmed cleanup, never success. A failed
-capture reports its exact recovery names because an interrupted create can
-still be in flight; abrupt parent death or an unavailable daemon cannot promise
-automatic recovery. No unrelated resources or image caches are pruned.
-This is fresh target-image evidence, not a
-comparison with the updating process's older native inventory and not a
-digest-only patch retaining stale hashes. The closed
+For a platform lock, `DK-28` acquires the exact pinned OCI index, its two child
+manifests, configurations and terminal metadata layers. It never pulls ordinary
+filesystem layers, synthesizes Docker inspection results, or starts target code.
+The SDK acquisition profile `prismpm/sdk-metadata/1` is declared by the image
+configuration label `org.prismpm.sdk.metadata`. Its last filesystem layer contains
+only `opt/`, `opt/prismpm/`, `opt/prismpm/share/`, and the exact installed
+`inventory.json` and `standards.lock` under that directory; an optional root
+directory entry is permitted. Ancestors precede children, directories are 0755,
+files are 0444, and uid/gid are zero. Only closed USTAR regular-file/directory
+entries are admitted. Links, whiteouts, sparse/extended headers, duplicates,
+unrelated entries, path traversal, nonzero padding and trailing data are rejected.
+The complete archive is parsed without filesystem extraction. Plain tar or one
+gzip member is admitted; compressed digest, expanded terminal DiffID, exact
+descriptor lengths, configuration layer order, platforms and volume intersections
+are checked before inventory acceptance. Canonical original inventory bytes and
+cross-platform artifact identities must agree; both original standards files
+must match each other and the requested digest.
+
+Bounds are 1 MiB per index/manifest/configuration, 256 layers per manifest,
+32 MiB compressed and expanded terminal layer, 8 MiB inventory, 16 MiB standards,
+and 64 MiB output. Seven graph reads share a 180-second deadline and an aggregate
+byte ceiling of five document bounds plus two layer bounds. Each read has at
+most 45 seconds, 16 HTTP exchanges and four redirects per request sequence;
+authentication responses are limited to 64 KiB and challenges to 4096 characters.
+Failed reads are not retried. HTTP content decoding is refused; TLS verification
+cannot be disabled. Plain HTTP is confined to the selected localhost/127.0.0.1
+registry. Authorization is stripped on cross-origin redirects; foreign redirect
+targets cannot obtain registry credentials. Authentication retains exact pull
+scope and rejects ambiguous or conflicting fields. Docker-compatible credential
+selection is read-only. Helpers require verified current-SDK command identities,
+sealed executable bytes, immutable SDK interpreters, isolated Python startup,
+sanitized environment, bounded output/deadlines and owned-descendant reaping.
+Cleanup uncertainty fails acquisition. The outer SDK process has a 210-second
+limit. Metadata acquisition creates no Docker resources or extraction scratch.
+Older images lacking this profile fail explicitly with PP5401; no automatic
+full-image fallback is provided.
+
+This is fresh target-image metadata, not a comparison with the updating
+process's older native inventory or a digest-only patch retaining stale hashes.
+The closed
 `prismpm/sdk-lock-update/2` proposal includes every changed platform, index,
 image-reference and standards field, plus the complete validated proposed lock;
 compatibility, generated-output and security reviews remain required. A proposal
@@ -982,7 +1007,7 @@ locks retain their existing `prismpm/sdk-lock-update/1` proposal behavior.
 That legacy digest-only proposal is not an executable SDK upgrade and does not
 refresh target inventory. Explicit `lock migrate --sdk-image <digest-ref>
 --standards-lock <digest>` instead captures a v2 target through the same exact
-two-platform image capture. Only this operation reads the canonical regular v1
+two-platform metadata acquisition. Only this operation reads the canonical regular v1
 lock as historical evidence without comparing it to the updater's native
 inventory. The updater still verifies its own environment; ordinary project
 execution retains all inventory checks. The source lock must remain unchanged
@@ -2207,6 +2232,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-24` | `sdk` | The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance. | §12 |
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
+| `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

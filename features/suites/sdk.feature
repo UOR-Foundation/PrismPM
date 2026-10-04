@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-28 @build
+  Scenario: SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance.
+    Given digest-pinned platform manifests with exact configuration, terminal metadata and inventory bindings
+    When bounded registry transport and verified credential helpers capture both native platform inventories
+    Then malformed graphs, ambiguous metadata, unsafe authentication, changed helpers and exceeded resource limits fail closed
+    And real registry and image materialization checks preserve exact bytes without manufacturing SDK qualification
+
   @DK-27 @build
   Scenario: Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds.
     Given a complete independently bound manifest and source-derived per-resource budgets
