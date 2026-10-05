@@ -24,7 +24,7 @@ function read(path, links = null) {
     const before = fstatSync(fd, {bigint: true});
     assert.ok(before.isFile() && before.uid === BigInt(process.getuid())
       && before.size >= 4n && before.size <= BigInt(maximum), 'bounded owned regular compiler required');
-    assert.ok((before.mode & 0o100n) !== 0n && (before.mode & 0o022n) === 0n,
+    assert.ok((before.mode & 0o100n) !== 0n && (before.mode & 0o7022n) === 0n,
       'owned executable without group/other write access required');
     if (links !== null) assert.equal(before.nlink, links, 'compiler link count');
     const bytes = Buffer.alloc(Number(before.size));
@@ -35,12 +35,13 @@ function read(path, links = null) {
     assert.equal(readSync(fd, Buffer.alloc(1), 0, 1, null), 0, 'compiler grew during capture');
     for (const after of [fstatSync(fd, {bigint: true}), lstatSync(path, {bigint: true})]) {
       assert.ok(after.isFile(), 'compiler replaced during capture');
-      for (const key of ['dev', 'ino', 'uid', 'nlink', 'size', 'mode', 'mtimeNs', 'ctimeNs'])
+      for (const key of ['dev', 'ino', 'uid', 'gid', 'nlink', 'size', 'mode', 'mtimeNs', 'ctimeNs'])
         assert.equal(after[key], before[key], 'stable compiler capture ' + key);
     }
     assert.deepEqual(bytes.subarray(0, 4), Buffer.from([0x7f, 0x45, 0x4c, 0x46]),
       'native Linux compiler artifact required');
     return {bytes, identity: Object.freeze({device: before.dev.toString(), inode: before.ino.toString(),
+      uid: before.uid.toString(), gid: before.gid.toString(), mode: Number(before.mode),
       links: before.nlink.toString(), size: bytes.length, sha256: sha(bytes)})};
   } finally {closeSync(fd);}
 }

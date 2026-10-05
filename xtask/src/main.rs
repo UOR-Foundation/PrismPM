@@ -203,6 +203,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "tests/browser-view/compiler-artifact.test.mjs",
             "tests/browser-view/compiler-artifact-mutations.test.mjs",
             "tests/browser-view/compiler-owner.test.mjs",
+            "tests/browser-view/compiler-runtime.test.mjs",
+            "tests/browser-view/compiler-runtime-mutations.test.mjs",
             "scripts/portable-oracle-matrix.test.mjs",
             "tests/native-lease/corpus.test.mjs",
             "tests/native-lease/rust-corpus.test.mjs",

@@ -2,13 +2,13 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {closeSync, constants, cpSync, fstatSync, lstatSync, mkdirSync, mkdtempSync,
+import {chmodSync, closeSync, constants, fchmodSync, fstatSync, futimesSync, lstatSync, mkdirSync, mkdtempSync,
   openSync, opendirSync, readlinkSync, readSync, realpathSync,
-  renameSync, rmSync, statfsSync, writeFileSync} from 'node:fs';
+  renameSync, rmSync, statfsSync, writeFileSync, writeSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {compilerRevision, encodeInventory} from './inventory-metadata.mjs';
+import {compilerRevision, decodeExporterSeed, encodeInventory} from './inventory-metadata.mjs';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const order = (a, b) => Buffer.from(a).compare(Buffer.from(b));
@@ -152,6 +152,147 @@ export function separateConstructionTrees(packageRoot, seedRoot, sources) {
   return snapshotTree(seedRoot, {bounds: seedLimit});
 }
 
+// Shared construction/admission copy: only authenticated or freshly measured
+// manifest rows, never a recursive walk that can discover unbounded new input.
+export function stageSeedFiles(seed, staging, manifest) {
+  decodeExporterSeed(Buffer.from(encodeInventory(manifest)));
+  assert.equal(realpathSync(staging), staging);
+  const directory = lstatSync(staging);
+  assert(directory.isDirectory() && directory.uid === process.getuid() && (directory.mode & 0o7777) === 0o700,
+    'staging must be private and owned by the current process user');
+  assert.deepEqual(snapshotTree(staging), [], 'exclusive empty staging required');
+  let total = 0;
+  for (const row of manifest.files) {
+    const destination = join(staging, row.path);
+    if (row.kind === 'directory') {
+      mkdirSync(destination, {mode: row.mode});
+      chmodSync(destination, row.mode);
+      continue;
+    }
+    assert.equal(row.kind, 'file');
+    total += row.byte_length; assert(total <= 512 * 1024 ** 2, 'seed copy aggregate exceeded');
+    const source = join(seed, row.path);
+    const expected = {byte_length: row.byte_length, mode: row.mode, sha256: row.sha256};
+    const custody = lstatSync(source, {bigint: true});
+    const sameInput = after => {
+      for (const key of ['dev', 'ino', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs'])
+        assert.equal(after[key], custody[key], `seed input identity changed: ${key}`);
+    };
+    assert.deepEqual(snapshotFile(source, row.byte_length), expected, 'seed file changed before copying');
+    const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const before = fstatSync(input, {bigint: true});
+      sameInput(before);
+      assert(before.isFile() && before.nlink === 1n && before.size === BigInt(row.byte_length));
+      const output = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, row.mode);
+      try {
+        const buffer = Buffer.alloc(64 * 1024), hash = createHash('sha256');
+        let remaining = row.byte_length;
+        while (remaining) {
+          const count = readSync(input, buffer, 0, Math.min(remaining, buffer.length), null);
+          assert(count > 0, 'seed file shortened while copying'); hash.update(buffer.subarray(0, count));
+          for (let written = 0; written < count;) {
+            const size = writeSync(output, buffer, written, count - written, null);
+            assert(size > 0, 'seed copy made no progress'); written += size;
+          }
+          remaining -= count;
+        }
+        assert.equal(readSync(input, buffer, 0, 1, null), 0, 'seed file grew while copying');
+        assert.equal(hash.digest('hex'), row.sha256, 'copied seed hash differs');
+        sameInput(fstatSync(input, {bigint: true}));
+        sameInput(lstatSync(source, {bigint: true}));
+        assert.equal(realpathSync(source), source, 'seed input ancestor changed');
+        fchmodSync(output, row.mode);
+        futimesSync(output, Number(before.atimeNs) / 1e9, Number(before.mtimeNs) / 1e9);
+      } finally { closeSync(output); }
+    } finally { closeSync(input); }
+    assert.deepEqual(snapshotFile(source, row.byte_length), expected, 'seed file changed during copying');
+    assert.deepEqual(snapshotFile(destination, row.byte_length), expected, 'staged seed file changed');
+  }
+  assert.deepEqual(snapshotTree(staging, {bounds: seedLimit}), manifest.files, 'staged exporter bytes differ');
+}
+
+// Node exposes only replacing rename. Use the actual Linux/glibc no-replace
+// primitive through isolated system Python, with no fallback on unsupported
+// kernels/filesystems. https://man7.org/linux/man-pages/man2/rename.2.html
+const noReplaceProgram = `import ctypes,json,os,stat,sys
+source,destination,expected,expected_private,expected_value=json.loads(sys.argv[1])
+assert sys.platform == 'linux'
+parent=os.path.dirname(destination)
+assert os.path.realpath(parent) == parent
+flags=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC
+target_fd=os.open(parent,flags)
+source_fd=None
+def identity(value):
+ return [value.st_dev,value.st_ino,value.st_uid,value.st_gid,value.st_mode]
+try:
+ target=os.fstat(target_fd)
+ assert identity(target) == expected
+ assert target.st_uid == os.getuid() and not target.st_mode & 0o7022
+ private=os.path.dirname(source)
+ assert os.path.realpath(private) == private
+ source_fd=os.open(private,flags)
+ owner=os.fstat(source_fd)
+ assert identity(owner) == expected_private
+ assert owner.st_uid == os.getuid() and stat.S_IMODE(owner.st_mode) == 0o700
+ assert os.path.dirname(private) == parent
+ value=os.stat(os.path.basename(source),dir_fd=source_fd,follow_symlinks=False)
+ assert identity(value) == expected_value
+ assert stat.S_ISDIR(value.st_mode) and value.st_uid == os.getuid() and stat.S_IMODE(value.st_mode) == 0o755
+ function=ctypes.CDLL(None,use_errno=True).renameat2
+ function.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint]
+ function.restype=ctypes.c_int
+ if function(source_fd,os.fsencode(os.path.basename(source)),target_fd,os.fsencode(os.path.basename(destination)),1) != 0:
+  raise OSError(ctypes.get_errno(),'exclusive exporter publication failed')
+ assert identity(os.fstat(target_fd)) == expected
+ assert os.path.realpath(parent) == parent and identity(os.stat(parent,follow_symlinks=False)) == expected
+ assert identity(os.stat(os.path.basename(destination),dir_fd=target_fd,follow_symlinks=False)) == identity(value)
+ assert identity(os.fstat(source_fd)) == expected_private
+ assert os.path.realpath(private) == private and identity(os.stat(private,follow_symlinks=False)) == expected_private
+finally:
+ if source_fd is not None: os.close(source_fd)
+ os.close(target_fd)
+`;
+
+export function publishSeedFiles(seedRoot, destination, manifest) {
+  assert.equal(realpathSync(dirname(destination)), dirname(destination));
+  const parent = lstatSync(dirname(destination));
+  assert(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o7022) === 0,
+    'exporter publication parent must be owned and not group/world writable');
+  assert.equal(lstatSync(destination, {throwIfNoEntry: false}), undefined, 'cannot overwrite exporter seed');
+  const encoded = encodeInventory(manifest);
+  assert(Buffer.byteLength(encoded) <= 8 * 1024 * 1024, 'exporter manifest exceeded bound');
+  const publication = mkdtempSync(join(dirname(destination), '.exporter-publication-'));
+  const publicationIdentity = lstatSync(publication);
+  try {
+    const payload = join(publication, 'seed');
+    mkdirSync(payload, {mode: 0o700});
+    stageSeedFiles(seedRoot, payload, manifest);
+    assert.deepEqual(snapshotTree(seedRoot, {bounds: seedLimit}), manifest.files, 'exporter seed changed during publication');
+    writeFileSync(join(payload, 'manifest.json'), encoded, {flag: 'wx', mode: 0o444});
+    chmodSync(join(payload, 'manifest.json'), 0o444);
+    // Staging stays behind the private publication parent until rename; the
+    // installed seed must then be readable by the unprivileged SDK user.
+    chmodSync(payload, 0o755);
+    assert.equal(lstatSync(destination, {throwIfNoEntry: false}), undefined);
+    const identity = stat => ['dev', 'ino', 'uid', 'gid', 'mode'].map(key => {
+      assert(Number.isSafeInteger(stat[key]) && stat[key] >= 0); return stat[key];
+    });
+    const result = spawnSync('/usr/bin/python3', ['-I', '-B', '-c', noReplaceProgram, JSON.stringify([
+      payload, destination, identity(parent), identity(publicationIdentity), identity(lstatSync(payload)),
+    ])], {env: {LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8'}, encoding: 'utf8', timeout: 10000, maxBuffer: 8192});
+    assert.ifError(result.error);
+    assert.equal(result.signal, null, 'exclusive exporter publication interrupted');
+    assert.equal(result.status, 0, 'exclusive exporter publication refused');
+  } finally {
+    const current = lstatSync(publication);
+    assert(current.isDirectory());
+    for (const key of ['dev', 'ino', 'uid', 'gid', 'mode']) assert.equal(current[key], publicationIdentity[key],
+      'private exporter publication identity changed; cleanup refused');
+    rmSync(publication, {recursive: true});
+  }
+}
+
 export function constructionEnvironment(environment, directory) {
   boundedConstructionRoot(directory);
   return {...environment, TMPDIR: directory};
@@ -257,20 +398,7 @@ export function buildSeed(source, destination) {
     // Snapshot/size checks precede the only persistent copy. An interrupted
     // copy never publishes the destination; raw process output stays separate
     // from the deterministic manifest and is not rewritten to invent a build.
-    const publication = mkdtempSync(join(dirname(destination), '.exporter-publication-'));
-    const publicationIdentity = lstatSync(publication);
-    try {
-      const payload = join(publication, 'seed');
-      cpSync(seedRoot, payload, {recursive: true, errorOnExist: true, force: false, preserveTimestamps: true});
-      assert.deepEqual(snapshotTree(payload, {bounds: seedLimit}), files, 'exporter seed copy changed');
-      writeFileSync(join(payload, 'manifest.json'), encoded, {flag: 'wx', mode: 0o444});
-      assert.equal(lstatSync(destination, {throwIfNoEntry: false}), undefined);
-      renameSync(payload, destination);
-    } finally {
-      const current = lstatSync(publication);
-      assert(current.isDirectory() && current.dev === publicationIdentity.dev && current.ino === publicationIdentity.ino);
-      rmSync(publication, {recursive: true});
-    }
+    publishSeedFiles(seedRoot, destination, manifest);
     return {manifest_sha256: sha(encoded), files: files.length, construction: {extraction, build}};
   } finally {
     const current = lstatSync(staging);

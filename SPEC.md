@@ -972,6 +972,23 @@ not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
 
+Private fresh compiler owners bind original/private executables and their
+exporter runtime members to exact native device, inode, ownership and mode,
+in addition to file bytes, sizes and link counts. Permission-only drift is
+refused before and after execution, including failed execution. Special
+permission bits are forbidden. Completed-owner cache retirement verifies the
+retained executables through bounded, stable descriptor reads and their full
+captured identities. These checks are custody, not compiler provenance or
+atomic filesystem isolation; fresh pinned compilation remains required.
+
+Runtime capture enumerates one directory iterator with a one-entry buffer,
+charges each member before queueing descendants, and hashes files in at most
+64 KiB chunks. Source and build closures independently admit 4,096 members
+and 16 MiB/512 MiB respectively. The package root and captured source archive
+are additional members; the archive retains its independent 256 MiB bound.
+Traversal has no additional depth restriction. Every observed member is
+rechecked after complete traversal; metadata remains private custody evidence.
+
 `DK-30` owns the internal conditional native-lane reducer in
 `Foundation.Native.Application.V1.Lease`. Its explicit corpus is mechanically
 bound to every generated LexLean probe and executes in standard and no_std Rust.
@@ -1025,6 +1042,17 @@ Only the new exporter's `.lake` may be published, from a private sibling stage
 through atomic no-overwrite rename. Generated application workspaces, user
 caches and acceptance evidence are never seeded. Temporary stages are owned
 by their invocation and removed on failure.
+SDK seed production and admission share a manifest-driven, exclusive-creation
+copy boundary; recursive discovery cannot expand copied bytes or files. Before
+publication, production rechecks the source closure and preserves declared
+permissions while making the installed seed readable by the SDK user.
+Construction publication uses Linux `renameat2(RENAME_NOREPLACE)` relative to
+identity-bound directory descriptors; no replacing fallback is permitted.
+The destination parent must be process-owned and not group/world writable.
+Private-parent and destination identities are rechecked after publication.
+Late failure may retain a destination; unverified parents or destinations are
+never deleted or adopted as successful construction. Source admission applies
+its own 4,096-entry/16-MiB limits before enumeration and reading.
 
 Each actual `lake exe prod-export` invocation records a closed
 `prismpm/exporter-execution/1` child executable measurement and
