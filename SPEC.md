@@ -1046,6 +1046,13 @@ SDK seed production and admission share a manifest-driven, exclusive-creation
 copy boundary; recursive discovery cannot expand copied bytes or files. Before
 publication, production rechecks the source closure and preserves declared
 permissions while making the installed seed readable by the SDK user.
+Construction publication uses Linux `renameat2(RENAME_NOREPLACE)` relative to
+identity-bound directory descriptors; no replacing fallback is permitted.
+The destination parent must be process-owned and not group/world writable.
+Private-parent and destination identities are rechecked after publication.
+Late failure may retain a destination; unverified parents or destinations are
+never deleted or adopted as successful construction. Source admission applies
+its own 4,096-entry/16-MiB limits before enumeration and reading.
 
 Each actual `lake exe prod-export` invocation records a closed
 `prismpm/exporter-execution/1` child executable measurement and

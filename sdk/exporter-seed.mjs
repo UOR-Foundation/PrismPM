@@ -212,8 +212,53 @@ export function stageSeedFiles(seed, staging, manifest) {
   assert.deepEqual(snapshotTree(staging, {bounds: seedLimit}), manifest.files, 'staged exporter bytes differ');
 }
 
+// Node exposes only replacing rename. Use the actual Linux/glibc no-replace
+// primitive through isolated system Python, with no fallback on unsupported
+// kernels/filesystems. https://man7.org/linux/man-pages/man2/rename.2.html
+const noReplaceProgram = `import ctypes,json,os,stat,sys
+source,destination,expected,expected_private,expected_value=json.loads(sys.argv[1])
+assert sys.platform == 'linux'
+parent=os.path.dirname(destination)
+assert os.path.realpath(parent) == parent
+flags=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC
+target_fd=os.open(parent,flags)
+source_fd=None
+def identity(value):
+ return [value.st_dev,value.st_ino,value.st_uid,value.st_gid,value.st_mode]
+try:
+ target=os.fstat(target_fd)
+ assert identity(target) == expected
+ assert target.st_uid == os.getuid() and not target.st_mode & 0o7022
+ private=os.path.dirname(source)
+ assert os.path.realpath(private) == private
+ source_fd=os.open(private,flags)
+ owner=os.fstat(source_fd)
+ assert identity(owner) == expected_private
+ assert owner.st_uid == os.getuid() and stat.S_IMODE(owner.st_mode) == 0o700
+ assert os.path.dirname(private) == parent
+ value=os.stat(os.path.basename(source),dir_fd=source_fd,follow_symlinks=False)
+ assert identity(value) == expected_value
+ assert stat.S_ISDIR(value.st_mode) and value.st_uid == os.getuid() and stat.S_IMODE(value.st_mode) == 0o755
+ function=ctypes.CDLL(None,use_errno=True).renameat2
+ function.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint]
+ function.restype=ctypes.c_int
+ if function(source_fd,os.fsencode(os.path.basename(source)),target_fd,os.fsencode(os.path.basename(destination)),1) != 0:
+  raise OSError(ctypes.get_errno(),'exclusive exporter publication failed')
+ assert identity(os.fstat(target_fd)) == expected
+ assert os.path.realpath(parent) == parent and identity(os.stat(parent,follow_symlinks=False)) == expected
+ assert identity(os.stat(os.path.basename(destination),dir_fd=target_fd,follow_symlinks=False)) == identity(value)
+ assert identity(os.fstat(source_fd)) == expected_private
+ assert os.path.realpath(private) == private and identity(os.stat(private,follow_symlinks=False)) == expected_private
+finally:
+ if source_fd is not None: os.close(source_fd)
+ os.close(target_fd)
+`;
+
 export function publishSeedFiles(seedRoot, destination, manifest) {
   assert.equal(realpathSync(dirname(destination)), dirname(destination));
+  const parent = lstatSync(dirname(destination));
+  assert(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o7022) === 0,
+    'exporter publication parent must be owned and not group/world writable');
   assert.equal(lstatSync(destination, {throwIfNoEntry: false}), undefined, 'cannot overwrite exporter seed');
   const encoded = encodeInventory(manifest);
   assert(Buffer.byteLength(encoded) <= 8 * 1024 * 1024, 'exporter manifest exceeded bound');
@@ -230,10 +275,20 @@ export function publishSeedFiles(seedRoot, destination, manifest) {
     // installed seed must then be readable by the unprivileged SDK user.
     chmodSync(payload, 0o755);
     assert.equal(lstatSync(destination, {throwIfNoEntry: false}), undefined);
-    renameSync(payload, destination);
+    const identity = stat => ['dev', 'ino', 'uid', 'gid', 'mode'].map(key => {
+      assert(Number.isSafeInteger(stat[key]) && stat[key] >= 0); return stat[key];
+    });
+    const result = spawnSync('/usr/bin/python3', ['-I', '-B', '-c', noReplaceProgram, JSON.stringify([
+      payload, destination, identity(parent), identity(publicationIdentity), identity(lstatSync(payload)),
+    ])], {env: {LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8'}, encoding: 'utf8', timeout: 10000, maxBuffer: 8192});
+    assert.ifError(result.error);
+    assert.equal(result.signal, null, 'exclusive exporter publication interrupted');
+    assert.equal(result.status, 0, 'exclusive exporter publication refused');
   } finally {
     const current = lstatSync(publication);
-    assert(current.isDirectory() && current.dev === publicationIdentity.dev && current.ino === publicationIdentity.ino);
+    assert(current.isDirectory());
+    for (const key of ['dev', 'ino', 'uid', 'gid', 'mode']) assert.equal(current[key], publicationIdentity[key],
+      'private exporter publication identity changed; cleanup refused');
     rmSync(publication, {recursive: true});
   }
 }

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {spawnSync} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, readSmall, runConstruction, runtimePaths, separateConstructionTrees, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
+import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, publishSeedFiles, readSmall, runConstruction, runtimePaths, separateConstructionTrees, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
 import {decodeExporterSeed, encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
 import {bindSeedInventory, bindSeedManifest, stageSeedFiles, verifySeedFiles} from './exporter-seed-admission.mjs';
 
@@ -565,5 +565,151 @@ test('publication failures leave no destination or staging and never copy beyond
     {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
     assert.ifError(result.error); assert.equal(result.signal, null);
     assert.equal(result.status, 0, result.stdout + result.stderr);
+  }
+});
+
+test('actual publication refuses a destination created after its last existence check', t => {
+  for (const kind of ['directory', 'file', 'alias']) {
+    const owner = fixture(t), seed = join(owner, 'source');
+    mkdirSync(join(seed, '.lake/build/bin'), {recursive: true});
+    writeFileSync(join(seed, '.lake/build/bin/prod-export'), 'bounded copy witness', {mode: 0o755});
+    const manifest = manifestFixture(); manifest.files = snapshotTree(seed);
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict'; import fs from 'node:fs';
+      import child from 'node:child_process'; import {syncBuiltinESMExports} from 'node:module';
+      import {join} from 'node:path';
+      const [owner,seed,encoded,kind,module] = process.argv.slice(1), destination=join(owner,'published');
+      const spawn=child.spawnSync;let raced=false,prior;
+      child.spawnSync=(program,args,options)=>{
+        assert.equal(program,'/usr/bin/python3');assert(!raced);raced=true;
+        if(kind==='directory')fs.mkdirSync(destination);
+        else if(kind==='file')fs.writeFileSync(destination,'foreign destination');
+        else fs.symlinkSync(seed,destination);
+        prior=fs.lstatSync(destination);return spawn(program,args,options);
+      };
+      syncBuiltinESMExports();const {publishSeedFiles}=await import(module);
+      assert.throws(()=>publishSeedFiles(seed,destination,JSON.parse(encoded)),/exclusive exporter publication refused/);
+      assert(raced);const current=fs.lstatSync(destination);
+      for(const key of ['dev','ino','mode','size','uid','gid'])assert.equal(current[key],prior[key]);
+      if(kind==='directory')assert.deepEqual(fs.readdirSync(destination),[]);
+      else if(kind==='file')assert.equal(fs.readFileSync(destination,'utf8'),'foreign destination');
+      else assert.equal(fs.readlinkSync(destination),seed);
+      assert.deepEqual(fs.readdirSync(owner).sort(),['published','source']);
+    `, owner, seed, JSON.stringify(manifest), kind, new URL('./exporter-seed.mjs', import.meta.url).href],
+    {encoding:'utf8',timeout:15000,maxBuffer:65536});
+    assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);
+  }
+});
+
+test('publication refuses mutable and special-permission parent authority before becoming visible', t => {
+  for (const mode of [0o777,0o775,0o1777,0o2755]) {
+    const owner=fixture(t),seed=fixture(t),destination=join(owner,'published');
+    chmodSync(owner,mode);assert.throws(()=>publishSeedFiles(seed,destination,manifestFixture()),/publication parent must be owned/);
+  }
+});
+
+test('source admission rejects source bytes and entries at their own limits before reading or accumulating beyond them', t => {
+  for (const phase of ['bytes','entries']) {
+    const owner=fixture(t),source=join(owner,'source'),seed=join(owner,'seed');mkdirSync(source);mkdirSync(seed);
+    const member=join(source,'member');writeFileSync(member,'original source');
+    const manifest={source_files:snapshotTree(source),files:[]};
+    if(phase==='bytes')truncateSync(member,16*1024**2+1);
+    else for(let index=0;index<4096;index++)writeFileSync(join(source,'entry-'+index),'');
+    const result=spawnSync(process.execPath,['--input-type=module','-e',`
+      import assert from 'node:assert/strict';import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+      const [source,seed,member,phase,encoded,module]=process.argv.slice(1);const open=fs.openSync,stat=fs.lstatSync;
+      let opened=0,observed=0;
+      fs.openSync=(...args)=>{if(args[0]===member)opened++;return open(...args);};
+      fs.lstatSync=(...args)=>{if(args[0].startsWith(source+'/'))observed++;return stat(...args);};
+      syncBuiltinESMExports();const {verifySeedFiles}=await import(module);
+      assert.throws(()=>verifySeedFiles(seed,source,JSON.parse(encoded)),phase==='bytes'?/bounded singly-linked/:/entry count exceeded/);
+      if(phase==='bytes')assert.equal(opened,0);else assert(observed<=4096*3,'never observe the one-over entry');
+    `,source,seed,member,phase,JSON.stringify(manifest),new URL('./exporter-seed-admission.mjs',import.meta.url).href],
+    {encoding:'utf8',timeout:15000,maxBuffer:65536});
+    assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);
+  }
+});
+
+test('two actual publishers admit exactly one complete destination without replacing its winner', async t => {
+  const owner=fixture(t),seed=join(owner,'source');mkdirSync(join(seed,'.lake/build/bin'),{recursive:true});
+  writeFileSync(join(seed,'.lake/build/bin/prod-export'),'actual bounded publication witness',{mode:0o755});
+  const manifest=manifestFixture();manifest.files=snapshotTree(seed);
+  const driver=`import {publishSeedFiles} from ${JSON.stringify(new URL('./exporter-seed.mjs',import.meta.url).href)};
+    const [seed,destination,encoded]=process.argv.slice(1);
+    try{publishSeedFiles(seed,destination,JSON.parse(encoded));}catch{process.exitCode=19;}`;
+  const launch=()=>new Promise((resolve,reject)=>{
+    const child=spawn(process.execPath,['--input-type=module','-e',driver,seed,join(owner,'published'),JSON.stringify(manifest)],
+      {stdio:['ignore','ignore','pipe'],timeout:15000});let bytes=0;
+    child.stderr.on('data',data=>{bytes+=data.length;if(bytes>65536)child.kill('SIGKILL');});
+    child.on('error',reject);child.on('close',(code,signal)=>{try{assert.equal(signal,null);resolve(code);}catch(error){reject(error);}});
+  });
+  assert.deepEqual((await Promise.all([launch(),launch()])).sort((a,b)=>a-b),[0,19]);
+  assert.deepEqual(snapshotTree(join(owner,'published')).filter(row=>row.path!=='manifest.json'),manifest.files);
+  assert.deepEqual(snapshotTree(seed),manifest.files);
+});
+
+test('publication authority and source-budget regressions kill real production guard mutations', t => {
+  const source=readFileSync(new URL('./exporter-seed.mjs',import.meta.url),'utf8');
+  const admission=readFileSync(new URL('./exporter-seed-admission.mjs',import.meta.url),'utf8');
+  for(const kind of ['no-replace','parent-authority','source-budget']){
+    const owner=fixture(t),seed=join(owner,'source'),destination=join(owner,'published');
+    mkdirSync(join(seed,'.lake/build/bin'),{recursive:true});writeFileSync(join(seed,'.lake/build/bin/prod-export'),'bounded real file',{mode:0o755});
+    const manifest=manifestFixture();manifest.files=snapshotTree(seed);manifest.source_files=[];
+    const replacements=kind==='no-replace'
+      ?[['target_fd,os.fsencode(os.path.basename(destination)),1)','target_fd,os.fsencode(os.path.basename(destination)),0)']]
+      :kind==='parent-authority'?[[' && (parent.mode & 0o7022) === 0',''],[' and not target.st_mode & 0o7022','']]
+      :[['snapshotTree(source, {bounds: sourceBounds})','snapshotTree(source)']];
+    let mutated=kind==='source-budget'?admission:source;
+    for(const [before,after] of replacements){assert.equal(mutated.split(before).length,2);mutated=mutated.replace(before,after);}
+    for(const name of ['inventory-metadata','exporter-seed'])mutated=mutated.replaceAll("'./"+name+".mjs'",JSON.stringify(new URL('./'+name+'.mjs',import.meta.url).href));
+    const module=join(owner,'mutant.mjs');writeFileSync(module,mutated);
+    const driver=kind==='source-budget'
+      ?`import fs from 'node:fs';const {verifySeedFiles}=await import(module);fs.truncateSync(member,16*1024**2+1);
+        assert.throws(()=>verifySeedFiles(seed,seed,manifest),/bounded singly-linked/);`
+      :`import fs from 'node:fs';import child from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
+        const spawn=child.spawnSync;child.spawnSync=(...args)=>{if(kind==='no-replace')fs.mkdirSync(destination);return spawn(...args);};
+        syncBuiltinESMExports();const {publishSeedFiles}=await import(module);
+        if(kind==='parent-authority')fs.chmodSync(owner,0o777);
+        assert.throws(()=>publishSeedFiles(seed,destination,manifest),kind==='no-replace'?/exclusive exporter publication refused/:/publication parent must be owned/);`;
+    const result=spawnSync(process.execPath,['--input-type=module','-e',`import assert from 'node:assert/strict';
+      const [owner,seed,destination,encoded,kind,module,member]=process.argv.slice(1);const manifest=JSON.parse(encoded);${driver}`,
+      owner,seed,destination,JSON.stringify(manifest),kind,new URL('file://'+module).href,join(seed,'.lake/build/bin/prod-export')],
+      {encoding:'utf8',timeout:15000,maxBuffer:65536});
+    assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,1);assert.match(result.stderr,/AssertionError/);
+  }
+});
+
+test('replacing publication parent never deletes foreign content or publishes into its replacement', t => {
+  for(const phase of ['replacement','mode-drift']){
+    const owner=fixture(t),parent=join(owner,'parent'),seed=join(owner,'source');mkdirSync(parent);
+    mkdirSync(join(seed,'.lake/build/bin'),{recursive:true});
+    writeFileSync(join(seed,'.lake/build/bin/prod-export'),'bounded copy witness',{mode:0o755});
+    writeFileSync(join(seed,'.lake/member'),'actual copy input');const manifest=manifestFixture();manifest.files=snapshotTree(seed);
+    const result=spawnSync(process.execPath,['--input-type=module','-e',`
+      import assert from 'node:assert/strict';import fs from 'node:fs';import child from 'node:child_process';
+      import {syncBuiltinESMExports} from 'node:module';import {join} from 'node:path';
+      const [owner,parent,seed,encoded,phase,module]=process.argv.slice(1),destination=join(parent,'published');
+      const spawn=child.spawnSync;let changed=false,privatePath;
+      child.spawnSync=(program,args,options)=>{
+        const invocation=JSON.parse(args.at(-1));privatePath=join(invocation[0],'..');changed=true;
+        if(phase==='replacement'){
+          fs.renameSync(parent,join(owner,'saved-parent'));fs.mkdirSync(parent);fs.writeFileSync(join(parent,'foreign'),'foreign content');
+          return spawn(program,args,options);
+        }
+        const result=spawn(program,args,options);assert.equal(result.status,0);fs.chmodSync(privatePath,0o777);return result;
+      };
+      syncBuiltinESMExports();const {publishSeedFiles}=await import(module);
+      assert.throws(()=>publishSeedFiles(seed,destination,JSON.parse(encoded)));assert(changed);
+      if(phase==='replacement'){
+        assert.equal(fs.readFileSync(join(parent,'foreign'),'utf8'),'foreign content');assert(!fs.existsSync(destination));
+        assert.equal(fs.readdirSync(join(owner,'saved-parent')).length,1,'unknown private owner is preserved');
+      }else{
+        assert(fs.existsSync(destination),'late uncertainty does not delete an already published destination');
+        assert(fs.existsSync(privatePath),'changed private mode forbids cleanup');
+        assert.equal(fs.readFileSync(join(destination,'.lake/member'),'utf8'),'actual copy input');
+      }
+    `,owner,parent,seed,JSON.stringify(manifest),phase,new URL('./exporter-seed.mjs',import.meta.url).href],
+    {encoding:'utf8',timeout:15000,maxBuffer:65536});
+    assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);
   }
 });
