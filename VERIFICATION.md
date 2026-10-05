@@ -8,10 +8,11 @@ captured archive. Eight actual-filesystem tests pass at complete entry/byte
 limits, deep trees, deferred/final custody drift, growth and alias boundaries.
 Five planted production-guard defects fail their intended behavioral witnesses.
 All 13 tests pass without skips; log SHA-256 is
-`2cfac65bad12d9dbe2baa7b9943d081d6f7998ea5f0b390f8a42167ca5e7d1cf`
-for the initial six-control run. The expanded eight-control run also passes.
-Independent adversarial source review is clear. Infrastructure and six-family
-qualification remain separate required checks; this is not SDK acceptance.
+`2cfac65bad12d9dbe2baa7b9943d081d6f7998ea5f0b390f8a42167ca5e7d1cf`.
+Independent adversarial source review is clear. All 311 infrastructure/source
+audit tests pass without skips, and strict workspace/all-target/all-feature
+Clippy passes in the pinned devcontainer. Full six-family qualification remains
+a separate required check; this is not SDK acceptance.
 
 ## Exact private compiler metadata custody
 
