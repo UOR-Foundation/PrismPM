@@ -13,6 +13,27 @@ adversarial review is clear. Hosted run 37237466412 remains failed: its aborted
 response body is not explained or repaired by this diagnostic change. Full
 V&V, SDK and issue #67 acceptance remain outstanding.
 
+## Imported BLAKE3 corpus qualification
+
+HO-14 executes all 35 upstream 1.5.5 vectors in three digest modes and nine
+streaming partitions, checking 131 XOF bytes, default 32-byte results and the
+actual archive content-identity adapter. Five planted defects must fail. The
+seven-member imported closure is
+`f8ffc0176af3fed9ce66b92f60c424d96f413fa044d7b341fc63b896428037c9`;
+the standards lock separately binds the upstream vector JSON authority.
+Unmodified upstream licenses retain their original whitespace.
+
+An isolated fresh Cargo target passes all three library owners, HO-14 and all
+33 xtask tests (48.29 seconds). The package owner creates an actual Cargo source
+archive, extracts its corpus and reruns the verifier plus a removed-license
+control. Its `--no-verify --exclude-lockfile` scope is source packaging only;
+dependency resolution, package builds and release acceptance are not claimed.
+Strict all-target/all-feature Clippy and all 289 source-audit tests pass
+(255.58 seconds for the audit). Independent adversarial review is clear.
+Earlier shared-target stale-library and unpublished-dependency failures remain
+unaccepted. This finite qualification does not complete native effects, SDK
+qualification, cryptographic proof, or issue #62.
+
 ## Exporter custody after process failure
 
 Executable byte/mode and inode/ctime checks now run after unsuccessful children

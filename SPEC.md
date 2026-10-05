@@ -252,6 +252,19 @@ are pinned adapter primitives. The stdlib validates algorithm, digest width,
 role, phase, ordering, and dependencies; it does not claim collision
 resistance or a proof of the external compression implementation.
 
+HO-14 binds the complete 35-case BLAKE3 1.5.5 source-revision vector corpus,
+licenses and upstream harness to their immutable imported bytes. The native
+adapter checks hash, keyed-hash and derive-key modes, all 131 extended-output
+bytes and 32-byte default outputs. Input partitions are whole input and chunks
+of 1, 63, 64, 65, 1023, 1024, 1025 and 4096 bytes; empty input remains a case.
+Every default hash also passes through the actual archive content-identity
+adapter. Changed expectation, input length, pattern, key and context controls
+must fail. Corpus custody is checked before and after execution. This finite
+oracle does not establish collision resistance, native effects or durability.
+The standards lock binds the upstream vector JSON authority; HO-14 separately
+binds the complete seven-member packaged closure. This internal conformance
+owner is not an executable `prismpm oracle` profile.
+
 ### 3.1 Closed browser surface wire prerequisite
 
 `Foundation.Holo.V1.BrowserWire` defines a separate modeled codec for the
@@ -2267,6 +2280,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-11` | `holo` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. | §3 |
 | `HO-12` | `holo` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. | §3 |
 | `HO-13` | `holo` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. | §3 |
+| `HO-14` | `holo` | Pinned BLAKE3 vectors qualify every imported digest mode, streaming partition and content-identity result without claiming cryptographic proof or durable native storage. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

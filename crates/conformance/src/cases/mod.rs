@@ -383,6 +383,19 @@ pub fn run_at(root: &Path, id: &str) {
             verify_holo(root, id);
         }
         "HO-13" => holo_browser::verify(root),
+        "HO-14" => {
+            let evidence = prismpm::upstream_conformance::verify_blake3_corpus(
+                &root.join("standards/corpora/blake3-1.5.5"),
+            )
+            .expect("complete pinned BLAKE3 oracle and real content-identity adapter");
+            assert_eq!(
+                evidence.corpus_sha256,
+                "sha256:f8ffc0176af3fed9ce66b92f60c424d96f413fa044d7b341fc63b896428037c9"
+            );
+            assert_eq!(evidence.positive, 35);
+            assert_eq!(evidence.negative, 0);
+            assert_eq!(evidence.planted_rejections, 5);
+        }
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
