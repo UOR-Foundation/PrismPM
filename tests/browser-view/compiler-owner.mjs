@@ -1,7 +1,7 @@
 // One freshly compiled tool closure per serial verification owner. This never
 // adopts a prior Cargo target, on-disk receipt, caller executable or model output.
 import assert from 'node:assert/strict';
-import {closeSync, constants, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync,
+import {closeSync, constants, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync,
   readSync, realpathSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
@@ -64,7 +64,7 @@ function file(path, expected) {
     }
     assert.equal(readSync(fd, Buffer.alloc(1), 0, 1, null), 0, 'compiler source grew');
     for (const after of [fstatSync(fd, {bigint: true}), lstatSync(path, {bigint: true})])
-      for (const key of ['dev', 'ino', 'uid', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs']) assert.equal(after[key], before[key], 'stable compiler source');
+      for (const key of ['dev', 'ino', 'uid', 'gid', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs']) assert.equal(after[key], before[key], 'stable compiler source');
     assert.equal(realpathSync(path), path, 'compiler source ancestry changed');
     if (expected !== undefined) assert.equal(sha(bytes), expected, 'captured compiler source ' + path);
     return bytes;
@@ -76,15 +76,20 @@ function exporterTree(root) {
     assert.equal(realpathSync(path), path, 'unaliased exporter runtime closure');
     const stat = lstatSync(path, {bigint: true});
     assert.equal(stat.uid, BigInt(process.getuid()), 'owned exporter runtime closure');
-    assert.equal(stat.mode & 0o022n, 0n, 'exporter runtime cannot be group/other writable');
+    assert.equal(stat.mode & 0o7022n, 0n, 'exporter runtime cannot have special permissions or be group/other writable');
+    const identity = {device: stat.dev.toString(), inode: stat.ino.toString(),
+      uid: stat.uid.toString(), gid: stat.gid.toString(), mode: Number(stat.mode)};
     if (stat.isDirectory()) {
-      entries[relative] = {kind: 'directory', inode: stat.ino.toString()};
+      entries[relative] = {kind: 'directory', ...identity};
       for (const name of readdirSync(path).sort()) visit(join(path, name), relative + '/' + name);
     } else {
       assert.ok(stat.isFile() && stat.size <= 268435456n, 'bounded regular exporter runtime input');
-      entries[relative] = {kind: 'file', inode: stat.ino.toString(), links: stat.nlink.toString(),
+      entries[relative] = {kind: 'file', ...identity, links: stat.nlink.toString(),
         size: Number(stat.size), sha256: sha(file(path))};
     }
+    const after = lstatSync(path, {bigint: true});
+    for (const key of ['dev', 'ino', 'uid', 'gid', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs'])
+      assert.equal(after[key], stat[key], 'stable exporter runtime member');
   }
   visit(root, '.');
   return Object.freeze(Object.fromEntries(Object.entries(entries).map(([path, value]) => [path, Object.freeze(value)])));
@@ -158,10 +163,14 @@ export function createCompilerOwner(name, selectedInputs = captureCompilerInputs
         assert.equal(lstatSync(join(target, 'debug', selected.executable), {throwIfNoEntry: false}), undefined);
         assert.equal(lstatSync(join(exporter.dir, '.lake/build'), {throwIfNoEntry: false}), undefined);
         for (const artifact of [driver, exportArtifact]) {
-          const stat = lstatSync(artifact.path);
-          assert.equal(stat.ino.toString(), artifact.evidence.private.inode);
-          assert.equal(stat.nlink, 1);
-          assert.equal(sha(readFileSync(artifact.path)), artifact.evidence.private.sha256);
+          const before = lstatSync(artifact.path, {bigint: true});
+          const bytes = file(artifact.path, artifact.evidence.private.sha256);
+          const after = lstatSync(artifact.path, {bigint: true});
+          for (const stat of [before, after]) assert.deepEqual({
+            path: artifact.evidence.private.path, device: stat.dev.toString(), inode: stat.ino.toString(),
+            uid: stat.uid.toString(), gid: stat.gid.toString(), mode: Number(stat.mode),
+            links: stat.nlink.toString(), size: Number(stat.size), sha256: sha(bytes),
+          }, artifact.evidence.private, 'retired compiler executable custody');
         }
         const receipt = Object.freeze({scope: 'completed-owner-compiler-caches', status: 'retired', compiler: identity});
         writeFileSync(join(work, 'compiler-owner-retirement.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});

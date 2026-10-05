@@ -521,7 +521,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-view/compiler-artifact-mutations.test.mjs",
                 "tests/browser-view/compiler-owner.test.mjs",
             ],
-            19,
+            21,
         ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (

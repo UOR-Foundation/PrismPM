@@ -972,6 +972,15 @@ not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
 
+Private fresh compiler owners bind original/private executables and their
+exporter runtime members to exact native device, inode, ownership and mode,
+in addition to file bytes, sizes and link counts. Permission-only drift is
+refused before and after execution, including failed execution. Special
+permission bits are forbidden. Completed-owner cache retirement verifies the
+retained executables through bounded, stable descriptor reads and their full
+captured identities. These checks are custody, not compiler provenance or
+atomic filesystem isolation; fresh pinned compilation remains required.
+
 `DK-30` owns the internal conditional native-lane reducer in
 `Foundation.Native.Application.V1.Lease`. Its explicit corpus is mechanically
 bound to every generated LexLean probe and executes in standard and no_std Rust.

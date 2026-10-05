@@ -16,6 +16,8 @@ const mutations = [
     'successful and failed actual executions both check compiler identity afterward'],
   ['opaque-handle', "assert.ok(owners.has(owner), 'actual captured compiler artifact required');",
     "assert.ok(owner, 'actual captured compiler artifact required');", 'fresh compiler capture retains original'],
+  ['persistent-permissions', 'mode: Number(before.mode)', 'mode: 0',
+    'unchanged compiler bytes and inode cannot conceal changed executable permissions'],
 ];
 
 for (const [id, before, after, witness] of mutations) test('actual compiler custody defect ' + id, t => {
@@ -36,7 +38,7 @@ for (const [id, before, after, witness] of mutations) test('actual compiler cust
     'failure must name the intended behavioral witness, not import/tool failure');
   assert.match(result.stdout, id === 'pre-execution-check'
     ? /substituted executable refused before planted sentinel/ : /Missing expected exception/);
-  assert.match(result.stdout, /# tests 7\n/);
+  assert.match(result.stdout, /# tests 8\n/);
   assert.match(result.stdout, /# skipped 0\n/); assert.match(result.stdout, /# todo 0\n/);
   assert.doesNotMatch(result.stdout + result.stderr, /ERR_MODULE_NOT_FOUND|SyntaxError/);
 });

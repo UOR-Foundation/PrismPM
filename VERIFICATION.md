@@ -1,5 +1,19 @@
 # PrismPM falsifiability and verification record
 
+## Exact private compiler metadata custody
+
+Permission-only changes now invalidate the original/private executable and
+exporter runtime identities. Actual successful and failed child executions
+must detect mode drift; same-byte inode substitution preserves the original
+mode so it cannot borrow that rejection. A guard mutant must fail the isolated
+permission witness. Retained executables are checked through bounded descriptor
+reads after cache retirement. The regression first failed on the old code;
+all 298 source-audit tests pass (274.28 seconds, no skips). Independent source
+review is clear. Full six-family owner qualification is pending; the initial
+root-user run was unaccepted because tar preserved group-writable source modes.
+The configured non-root devcontainer user retains the original custody policy.
+These checks do not establish SDK acceptance or completion of issue #69.
+
 ## Bounded SDK seed publication
 
 Production and admission now share exclusive, manifest-driven copying instead
