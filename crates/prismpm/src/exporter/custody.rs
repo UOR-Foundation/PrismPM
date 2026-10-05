@@ -2,12 +2,13 @@
 use crate::PrismError;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
+use std::io::Read;
 use std::path::{Component, Path};
 
 const FILES: usize = 4096;
 const FILE_BYTES: u64 = 256 * 1024 * 1024;
 const TREE_BYTES: u64 = 512 * 1024 * 1024;
+const SOURCE_BYTES: u64 = 16 * 1024 * 1024;
 
 fn failure() -> PrismError {
     PrismError::new(
@@ -73,9 +74,13 @@ fn charge_build(entries: &mut usize, bytes: &mut u64, length: u64) -> Result<(),
 }
 
 fn source_members() -> Result<BTreeMap<String, SourceMember>, PrismError> {
+    source_members_from(super::ARCHIVE)
+}
+
+fn source_members_from(archive: impl Read) -> Result<BTreeMap<String, SourceMember>, PrismError> {
     let mut members = BTreeMap::new();
     let mut total = 0_u64;
-    for entry in tar::Archive::new(Cursor::new(super::ARCHIVE))
+    for entry in tar::Archive::new(archive)
         .entries()
         .map_err(|_| failure())?
     {
@@ -90,16 +95,20 @@ fn source_members() -> Result<BTreeMap<String, SourceMember>, PrismError> {
             return Err(failure());
         }
         let mode = entry.header().mode().map_err(|_| failure())?;
+        let length = entry.size();
+        // Charge the source-only budget before allocating or reading a body.
+        // It must never borrow the independent 512-MiB build-tree allowance.
+        total = total.checked_add(length).ok_or_else(failure)?;
+        if members.len() >= FILES || total > SOURCE_BYTES || (directory && length != 0) {
+            return Err(failure());
+        }
         let mut bytes = Vec::new();
         entry
             .by_ref()
-            .take(FILE_BYTES + 1)
+            .take(length + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| failure())?;
-        total = total.checked_add(bytes.len() as u64).ok_or_else(failure)?;
-        if bytes.len() as u64 > FILE_BYTES
-            || total > TREE_BYTES
-            || members.len() >= FILES
+        if bytes.len() as u64 != length
             || members
                 .insert(
                     name,
@@ -269,6 +278,126 @@ pub(super) fn capture(root: &Path) -> Result<Snapshot, PrismError> {
 mod tests {
     use super::*;
 
+    fn source_archive(rows: &[(&str, u64)]) -> Vec<u8> {
+        let mut archive = tar::Builder::new(Vec::new());
+        for (name, length) in rows {
+            let mut header = tar::Header::new_gnu();
+            header.set_mode(0o644);
+            header.set_size(*length);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, name, std::io::repeat(0).take(*length))
+                .unwrap();
+        }
+        archive.into_inner().unwrap()
+    }
+
+    #[test]
+    fn source_inventory_has_its_own_exact_byte_budget() {
+        assert_eq!(SOURCE_BYTES, 16 * 1024 * 1024, "SPEC source-only allowance");
+        assert_eq!(TREE_BYTES, 512 * 1024 * 1024, "SPEC build-only allowance");
+        let exact = source_archive(&[("first", SOURCE_BYTES - 1), ("last", 1)]);
+        let members = source_members_from(exact.as_slice()).unwrap();
+        assert_eq!(members.len(), 2);
+        assert_eq!(members["first"].bytes.len() as u64, SOURCE_BYTES - 1);
+        assert_eq!(members["last"].bytes, [0]);
+        drop(members);
+        drop(exact);
+        let excess = source_archive(&[("first", SOURCE_BYTES), ("last", 1)]);
+        assert!(source_members_from(excess.as_slice()).is_err());
+        drop(excess);
+        assert!(
+            source_members_from(source_archive(&[("oversized", SOURCE_BYTES + 1)]).as_slice())
+                .is_err()
+        );
+        // Neither the source allowance nor the package root consumes build
+        // capacity. Keep the full independently admitted 512-MiB build budget.
+        let (mut entries, mut bytes) = (0, 0);
+        charge_build(&mut entries, &mut bytes, FILE_BYTES).unwrap();
+        charge_build(&mut entries, &mut bytes, FILE_BYTES).unwrap();
+        assert_eq!(bytes, TREE_BYTES);
+    }
+
+    #[test]
+    fn source_inventory_has_its_own_exact_entry_budget() {
+        assert_eq!(FILES, 4096, "SPEC independent inventory entry allowance");
+        let names = (0..=FILES)
+            .map(|index| format!("source-{index}"))
+            .collect::<Vec<_>>();
+        let rows = names
+            .iter()
+            .map(|name| (name.as_str(), 0))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            source_members_from(source_archive(&rows[..FILES]).as_slice())
+                .unwrap()
+                .len(),
+            FILES
+        );
+        assert!(source_members_from(source_archive(&rows).as_slice()).is_err());
+    }
+
+    #[test]
+    fn source_inventory_rejects_declared_oversize_before_reading_payload() {
+        assert_header_rejected_before_body(tar::EntryType::Regular, SOURCE_BYTES + 1);
+        assert_header_rejected_before_body(tar::EntryType::Regular, u64::MAX);
+    }
+
+    #[test]
+    fn source_inventory_rejects_directory_payload_before_reading_it() {
+        assert_header_rejected_before_body(tar::EntryType::Directory, 1);
+    }
+
+    fn assert_header_rejected_before_body(kind: tar::EntryType, length: u64) {
+        // No payload exists. Refusal must come from the declared source bound,
+        // not allocation or the tar reader's subsequent truncation error.
+        let mut header = tar::Header::new_gnu();
+        header.set_path("member").unwrap();
+        header.set_entry_type(kind);
+        header.set_mode(0o644);
+        header.set_size(length);
+        header.set_cksum();
+        struct HeaderOnly<'a> {
+            header: std::io::Cursor<&'a [u8]>,
+            body_read: &'a std::cell::Cell<bool>,
+        }
+        impl Read for HeaderOnly<'_> {
+            fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+                if self.header.position() < 512 {
+                    self.header.read(output)
+                } else {
+                    self.body_read.set(true);
+                    Err(std::io::Error::other("body must not be read"))
+                }
+            }
+        }
+        let body_read = std::cell::Cell::new(false);
+        let result = source_members_from(HeaderOnly {
+            header: std::io::Cursor::new(header.as_bytes().as_slice()),
+            body_read: &body_read,
+        });
+        let Err(error) = result else {
+            panic!("oversized source must be refused");
+        };
+        assert_eq!(error.code.as_str(), "PP5008");
+        assert!(
+            !body_read.get(),
+            "source budget must be checked before reading the body"
+        );
+    }
+
+    #[test]
+    fn source_inventory_rejects_truncated_member_without_partial_admission() {
+        let mut header = tar::Header::new_gnu();
+        header.set_path("truncated").unwrap();
+        header.set_mode(0o644);
+        header.set_size(2);
+        header.set_cksum();
+        let mut truncated = header.as_bytes().to_vec();
+        truncated.push(0);
+        assert!(source_members_from(truncated.as_slice()).is_err());
+    }
+
     fn fixture() -> (tempfile::TempDir, std::path::PathBuf) {
         let owner = tempfile::tempdir().unwrap();
         let root = owner.path().join("package");
@@ -282,6 +411,32 @@ mod tests {
         .unwrap();
         assert!(capture(&root).is_ok());
         (owner, root)
+    }
+
+    #[test]
+    fn actual_capture_preserves_full_build_budget_beside_pinned_source() {
+        let (_owner, root) = fixture();
+        let child_bytes = std::fs::metadata(root.join(".lake/build/bin/prod-export"))
+            .unwrap()
+            .len();
+        for (name, length) in [
+            ("first", FILE_BYTES),
+            ("last", TREE_BYTES - FILE_BYTES - child_bytes),
+        ] {
+            std::fs::File::create(root.join(".lake").join(name))
+                .unwrap()
+                .set_len(length)
+                .unwrap();
+        }
+        assert!(
+            capture(&root).is_ok(),
+            "pinned source must not consume build bytes"
+        );
+        std::fs::write(root.join(".lake/overflow"), [0]).unwrap();
+        assert!(
+            capture(&root).is_err(),
+            "actual build aggregate excess refused"
+        );
     }
 
     #[test]
