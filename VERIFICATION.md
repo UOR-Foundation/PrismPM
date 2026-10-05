@@ -1,5 +1,24 @@
 # PrismPM falsifiability and verification record
 
+## Bounded SDK seed enumeration
+
+Tree snapshots stream entries with one live iterator, bound rows before retaining
+them, and check deferred and previously visited directory identities. Source
+construction uses a separate 4,096-entry/16-MiB allowance from the full seed
+4,096-entry/512-MiB allowance. A real-filesystem instrumentation regression fails
+on the prior eager enumeration and passes afterward. All 20 SDK seed tests pass,
+including full source/seed limits, 32,768 toolchain entries, deep trees, closed
+iterators and child-only custody mutations. DK-29 passes in 8.03 seconds; strict
+Clippy and all 294 source-audit tests pass (276.26 seconds, no skips).
+
+Two fresh constructions and two baseline constructions at `bdb9f1f0` produce
+the same 176-entry manifest
+`55b6dac643975f541e1c4cf7e089c4d25737c47928b7d9e44d1faeb6e099f899`.
+Failed empty-archive construction cleans up without publishing. Initial local
+`noexec` tmpfs failures are unaccepted; corrected runs retain an executable,
+1-GiB-bounded tmpfs. Independent adversarial review is clear. This does not
+qualify recursive publication copying, immutable SDK adoption or issue #69.
+
 ## Complete exporter package custody
 
 Every exporter invocation now checks exact pinned source/configuration and the

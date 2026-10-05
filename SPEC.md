@@ -1016,6 +1016,9 @@ controls are not a replacement for process memory limits and do not claim to
 cap every compiler or exporter subprocess's operating-system thread count.
 All generated-module builds, exports, kernel checks and deadlines are retained.
 Seed files are bounded to 4,096 entries, 256 MiB per file and 512 MiB total.
+SDK tree enumeration streams directory entries before applying bounds, closes
+every iterator, and preserves canonical bytewise ordering. Source construction
+uses its separate 4,096-entry/16-MiB allowance, never the seed-only allowance.
 Root-owned immutable SDK paths are checked before and after bounded copying;
 custody supplements rather than replaces the independent inventory binding.
 Only the new exporter's `.lake` may be published, from a private sibling stage

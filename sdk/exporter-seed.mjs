@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {closeSync, constants, cpSync, fstatSync, lstatSync, mkdirSync, mkdtempSync,
-  openSync, readdirSync, readlinkSync, readSync, realpathSync,
+  openSync, opendirSync, readlinkSync, readSync, realpathSync,
   renameSync, rmSync, statfsSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve, sep} from 'node:path';
@@ -14,6 +14,7 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const order = (a, b) => Buffer.from(a).compare(Buffer.from(b));
 const limit = Object.freeze({files: 32768, file: 1024 ** 3, total: 4 * 1024 ** 3});
 const seedLimit = Object.freeze({files: 4096, file: 256 * 1024 ** 2, total: 512 * 1024 ** 2});
+const sourceLimit = Object.freeze({files: 4096, file: 16 * 1024 ** 2, total: 16 * 1024 ** 2});
 const identity = ['dev', 'ino', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs'];
 function unchanged(before, after) {
   for (const key of identity) assert.equal(after[key], before[key], `compiler input changed: ${key}`);
@@ -92,21 +93,29 @@ export function validateConstructionFilesystem(filesystem) {
 // targets rather than silently dereferencing or omitting them.
 export function snapshotTree(root, {toolchainAliases = false, bounds = limit} = {}) {
   assert.equal(realpathSync(root), root, 'compiler tree root is aliased');
+  for (const key of ['files', 'file', 'total'])
+    assert(Number.isSafeInteger(bounds[key]) && bounds[key] >= 0 && bounds[key] <= limit[key], 'bounded compiler inventory required');
   const rows = [];
   let total = 0;
-  function visit(directory, prefix) {
-    const before = lstatSync(directory, {bigint: true});
+  const pending = [{directory: root, prefix: '', before: lstatSync(root, {bigint: true})}];
+  const directories = [];
+  while (pending.length) {
+    const {directory, prefix, before} = pending.pop();
+    unchanged(before, lstatSync(directory, {bigint: true}));
     assert(before.isDirectory() && !before.isSymbolicLink(), 'regular compiler directory required');
     assert.equal(before.mode & 0o7000n, 0n, 'special compiler directory permissions refused');
     assert.equal(realpathSync(directory), directory, 'compiler ancestor is aliased');
-    for (const name of readdirSync(directory).sort(order)) {
+    directories.push({directory, before});
+    const stream = opendirSync(directory, {bufferSize: 1});
+    try { for (let entry; (entry = stream.readSync()) !== null;) {
+      const name = entry.name;
       assert(/^[A-Za-z0-9_.+-]+$/.test(name), 'noncanonical compiler entry');
       assert(rows.length < bounds.files, 'compiler entry count exceeded');
       const path = join(directory, name), relative = prefix ? `${prefix}/${name}` : name;
       const stat = lstatSync(path, {bigint: true});
       if (stat.isDirectory()) {
         rows.push({path: relative, kind: 'directory', mode: Number(stat.mode & 0o777n)});
-        visit(path, relative);
+        pending.push({directory: path, prefix: relative, before: stat});
       } else if (stat.isSymbolicLink()) {
         assert(toolchainAliases, 'compiler seed/source alias refused');
         const target = readlinkSync(path);
@@ -121,11 +130,26 @@ export function snapshotTree(root, {toolchainAliases = false, bounds = limit} = 
         total += row.byte_length;
         rows.push({path: relative, kind: 'file', ...row});
       }
-    }
+    } } finally { stream.closeSync(); }
     unchanged(before, lstatSync(directory, {bigint: true}));
   }
-  visit(root, '');
+  // Bind deferred directories to the identity observed by their parent and
+  // recheck even already-visited directories before publishing the snapshot.
+  for (const {directory, before} of directories) {
+    unchanged(before, lstatSync(directory, {bigint: true}));
+    assert.equal(realpathSync(directory), directory, 'compiler ancestor changed');
+  }
   return rows.sort((a, b) => order(a.path, b.path));
+}
+
+// Construction custody only: separate source and seed allowances before
+// comparing exact sources. No generated output is acceptance evidence here.
+export function separateConstructionTrees(packageRoot, seedRoot, sources) {
+  mkdirSync(seedRoot);
+  renameSync(join(packageRoot, '.lake'), join(seedRoot, '.lake'));
+  assert.deepEqual(snapshotTree(packageRoot, {bounds: sourceLimit}), sources,
+    'exporter construction changed source/configuration');
+  return snapshotTree(seedRoot, {bounds: seedLimit});
 }
 
 export function constructionEnvironment(environment, directory) {
@@ -213,13 +237,10 @@ export function buildSeed(source, destination) {
     const extraction = runConstruction('/usr/bin/tar', ['--extract', '--file', archive, '--directory', packageRoot], source, childEnvironment);
     assert.deepEqual(snapshotFile(archive, 16 * 1024 * 1024), archiveRow);
     assert.equal(lstatSync(join(packageRoot, '.lake'), {throwIfNoEntry: false}), undefined);
-    const sources = snapshotTree(packageRoot);
+    const sources = snapshotTree(packageRoot, {bounds: sourceLimit});
     const build = runConstruction(join(toolchain, 'bin/lake'), ['build', 'prod-export'], packageRoot, childEnvironment);
-    const sourcesAfter = snapshotTree(packageRoot, {bounds: seedLimit}).filter(row => row.path !== '.lake' && !row.path.startsWith('.lake/'));
-    assert.deepEqual(sourcesAfter, sources, 'exporter construction changed source/configuration');
-    const seedRoot = join(staging, 'seed'); mkdirSync(seedRoot);
-    renameSync(join(packageRoot, '.lake'), join(seedRoot, '.lake'));
-    const files = snapshotTree(seedRoot, {bounds: seedLimit});
+    const seedRoot = join(staging, 'seed');
+    const files = separateConstructionTrees(packageRoot, seedRoot, sources);
     assert(files.some(row => row.path === '.lake/build/bin/prod-export' && row.kind === 'file' && (row.mode & 0o111)),
       'actual native exporter missing');
     assert.deepEqual(snapshotTree(toolchain, {toolchainAliases: true}), toolsBefore, 'toolchain changed during construction');

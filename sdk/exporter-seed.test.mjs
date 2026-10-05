@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, readSmall, runConstruction, runtimePaths, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
+import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, readSmall, runConstruction, runtimePaths, separateConstructionTrees, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
 import {decodeExporterSeed, encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
 import {bindSeedInventory, bindSeedManifest, stageSeedFiles, verifySeedFiles} from './exporter-seed-admission.mjs';
 
@@ -92,6 +92,123 @@ test('bounded snapshots reject oversized sparse files and aggregate/count excess
   assert.throws(() => snapshotTree(root, {bounds: {files: 1, file: 8, total: 7}}), /bounded/);
   writeFileSync(join(root, 'extra'), 'x');
   assert.throws(() => snapshotTree(root, {bounds: {files: 1, file: 8, total: 16}}), /count exceeded/);
+});
+
+test('directory enumeration is streamed and closes real iterators on every outcome', t => {
+  for (const phase of ['success', 'count', 'alias']) {
+    const root = fixture(t);
+    for (let index = 0; index < 4; index++) writeFileSync(join(root, `entry-${index}`), 'x');
+    if (phase === 'alias') symlinkSync('entry-0', join(root, 'alias'));
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import {syncBuiltinESMExports} from 'node:module';
+      const [root, phase, module] = process.argv.slice(1);
+      const open = fs.opendirSync;
+      let opened = 0, closed = 0, reads = 0;
+      // Instrument real filesystem calls; no substitute tree or acceptance.
+      fs.readdirSync = () => { throw new Error('unbounded directory materialization'); };
+      fs.opendirSync = (...args) => {
+        assert.equal(args[1]?.bufferSize, 1);
+        const stream = open(...args); opened++;
+        const read = stream.readSync.bind(stream), close = stream.closeSync.bind(stream);
+        stream.readSync = () => { reads++; return read(); };
+        stream.closeSync = () => { closed++; return close(); };
+        return stream;
+      };
+      syncBuiltinESMExports();
+      const {snapshotTree} = await import(module);
+      const capture = () => snapshotTree(root, {bounds: {files: phase === 'count' ? 1 : 8, file: 8, total: 64}});
+      if (phase === 'success') assert.equal(capture().length, 4);
+      else assert.throws(capture, phase === 'count' ? /entry count exceeded/ : /alias refused/);
+      assert.equal(opened, 1); assert.equal(closed, opened);
+      if (phase === 'count') assert.equal(reads, 2, 'stop at the first excess entry');
+    `, root, phase, new URL('./exporter-seed.mjs', import.meta.url).href],
+    {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
+    assert.ifError(result.error); assert.equal(result.signal, null);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  }
+});
+
+test('deep and maximum-width snapshots preserve exact bytewise canonical ordering', t => {
+  const root = fixture(t);
+  mkdirSync(join(root, 'a')); writeFileSync(join(root, 'a', 'child'), 'child');
+  writeFileSync(join(root, 'a-'), 'sibling');
+  assert.deepEqual(snapshotTree(root).map(row => row.path), ['a', 'a-', 'a/child']);
+  let deep = root;
+  for (let depth = 0; depth < 80; depth++) { deep = join(deep, 'd'); mkdirSync(deep); }
+  writeFileSync(join(deep, 'member'), 'deep');
+  assert(snapshotTree(root).some(row => row.path === 'd/'.repeat(80) + 'member'));
+  const wide = fixture(t);
+  for (let index = 0; index < 32768; index++) writeFileSync(join(wide, `entry-${index}`), '');
+  assert.equal(snapshotTree(wide).length, 32768);
+  writeFileSync(join(wide, 'overflow'), '');
+  assert.throws(() => snapshotTree(wide), /entry count exceeded/);
+});
+
+test('constructed source and full seed inventories keep independent entry and byte allowances', t => {
+  const root = fixture(t), source = join(root, 'package'), seed = join(root, 'seed');
+  mkdirSync(source);
+  const member = join(source, 'source'); writeFileSync(member, ''); truncateSync(member, 16 * 1024 ** 2);
+  for (let index = 1; index < 4096; index++) writeFileSync(join(source, `source-${index}`), '');
+  const sources = snapshotTree(source);
+  assert.equal(sources.length, 4096);
+  mkdirSync(join(source, '.lake'));
+  for (const name of ['first', 'second']) {
+    const path = join(source, '.lake', name); writeFileSync(path, ''); truncateSync(path, 256 * 1024 ** 2);
+  }
+  // .lake + two full-size files + 4093 empty entries exactly meet both bounds.
+  for (let index = 3; index < 4096; index++) writeFileSync(join(source, '.lake', `entry-${index}`), '');
+  const files = separateConstructionTrees(source, seed, sources);
+  assert.equal(files.length, 4096);
+  assert.equal(files.reduce((sum, row) => sum + (row.byte_length ?? 0), 0), 512 * 1024 ** 2);
+  assert.deepEqual(snapshotTree(source), sources);
+  for (const defect of ['extra', 'source-oversize', 'seed-overflow']) {
+    const owner = fixture(t), input = join(owner, 'package'); mkdirSync(input);
+    writeFileSync(join(input, 'source'), 'source'); const expected = snapshotTree(input);
+    mkdirSync(join(input, '.lake'));
+    if (defect === 'extra') writeFileSync(join(input, 'extra'), 'unexpected');
+    if (defect === 'source-oversize') truncateSync(join(input, 'source'), 16 * 1024 ** 2 + 1);
+    if (defect === 'seed-overflow') {
+      const path = join(input, '.lake', 'oversize'); writeFileSync(path, ''); truncateSync(path, 256 * 1024 ** 2 + 1);
+    }
+    assert.throws(() => separateConstructionTrees(input, join(owner, 'seed'), expected));
+  }
+});
+
+test('deferred and previously visited directory substitution fails custody', t => {
+  for (const phase of ['pending', 'visited']) {
+    const root = fixture(t); mkdirSync(join(root, 'first')); mkdirSync(join(root, 'second'));
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import {syncBuiltinESMExports} from 'node:module';
+      import {join} from 'node:path';
+      const [root, phase, module] = process.argv.slice(1);
+      const open = fs.opendirSync; let first, mutated = false, live = 0;
+      fs.opendirSync = (...args) => {
+        const stream = open(...args); live++;
+        const close = stream.closeSync.bind(stream);
+        stream.closeSync = () => {
+          close(); live--;
+          if (phase === 'pending' && args[0] === root) {
+            // Change only the child, not its parent directory membership.
+            fs.chmodSync(join(root, 'first'), 0o700); mutated = true;
+          } else if (phase === 'visited' && args[0] !== root) {
+            if (!first) first = args[0];
+            else { fs.chmodSync(first, 0o700); mutated = true; }
+          }
+        };
+        return stream;
+      };
+      syncBuiltinESMExports(); const {snapshotTree} = await import(module);
+      assert.throws(() => snapshotTree(root), /compiler input changed/);
+      assert(mutated); assert.equal(live, 0);
+    `, root, phase, new URL('./exporter-seed.mjs', import.meta.url).href],
+    {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
+    assert.ifError(result.error); assert.equal(result.signal, null);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  }
 });
 
 test('configuration reads are bounded, regular, singly linked, and strict UTF-8', t => {
