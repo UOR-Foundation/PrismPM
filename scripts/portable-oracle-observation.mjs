@@ -1,0 +1,136 @@
+// Source-owned qualification of diagnostic noninterference, never application
+// implementation or an alternative response/body acceptance path.
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+import {capture} from './portable-oracle-custody.mjs';
+
+const schema='prismpm/portable-observation-witness/1';
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const replacement=(source,point,value)=>{
+ assert.equal(source.split(point).length,2,'diagnostic qualification point must be unique');
+ return source.replace(point,value);
+};
+export function expectedObservationSubmissions(profile,trigger){
+ assert(['legacy-numeric','utf8-text'].includes(profile.profile));
+ assert(['click','keyboard'].includes(trigger));
+ const recovery=profile.vector_indexes[0];assert(Number.isInteger(recovery));
+ const row=(journey,vectorIndex=recovery,keyboard=false)=>({journey,vectorIndex,keyboard});
+ const expected=profile.vector_indexes.map(index=>row('modeled-vectors',index,trigger==='keyboard'));
+ expected.push(row('modeled-vectors',recovery,true),row('input-validation-recovery'),
+  row('transport-failure-recovery'),row('delayed-init',recovery,trigger==='keyboard'),row('intent-boundaries'));
+ if(profile.profile==='utf8-text'){
+  for(let index=0;index<4;index++)expected.push(row('text-response-bounds'));
+  expected.push(row('text-safe-rendering'));
+ }
+ return expected.map((row,index)=>({submission:index+1,...row}));
+}
+export function observationSummary(value){
+ const integer=(number,maximum)=>Number.isSafeInteger(number)&&number>=0&&number<=maximum?number:null;
+ const digest=number=>typeof number==='string'&&/^[a-f0-9]{64}$/.test(number)?number:null;
+ const journeys=new Set(['modeled-vectors','input-validation-recovery','transport-failure-recovery',
+  'delayed-init','intent-boundaries','text-response-bounds','text-safe-rendering']);
+ return {schema:'prismpm/portable-observation-diagnostic/1',scope:'diagnostics-only-not-acceptance',
+  status:value?.status==='passed'?'passed':'incomplete',exit_code:integer(value?.exit_code,255),
+  terminated:value?.terminated===true,execution_error:value?.execution_error===true,
+  driver_sha256:digest(value?.driver_sha256),stdout_sha256:digest(value?.stdout_sha256),stderr_sha256:digest(value?.stderr_sha256),
+  witnesses:(Array.isArray(value?.witnesses)?value.witnesses:[]).slice(0,128).map(row=>({
+   submission:integer(row?.submission,128),journey:journeys.has(row?.journey)?row.journey:'other',vectorIndex:integer(row?.vectorIndex,65536),
+   keyboard:typeof row?.keyboard==='boolean'?row.keyboard:null,phase:row?.phase==='completed-readiness'?'completed-readiness':'other',
+   network:row?.network?.state==='observed'?{state:'observed',requests:integer(row.network.requests,32),overflow:row.network.overflow===true}:{state:'unavailable'},
+   requests:integer(row?.requests,32),responses:integer(row?.responses,32),completions:integer(row?.completions,32),
+   failures:integer(row?.failures,32),eventsTruncated:row?.eventsTruncated===true})),
+  witnesses_truncated:Array.isArray(value?.witnesses)&&value.witnesses.length>128};
+}
+export function observationDriver(source,mode,trigger){
+ assert(['observed','unobserved'].includes(mode),'closed observation mode required');
+ assert(['click','keyboard'].includes(trigger),'closed observation trigger required');
+ let driver=source;
+ const entry='async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {';
+ driver=replacement(driver,entry,`let observationOrdinal = 0;\n${entry}\n  const observationSubmission = ++observationOrdinal;`);
+ if(mode==='unobserved')driver=replacement(driver,
+  '    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);',
+  '    // Qualification omits only the read-only diagnostic collector.');
+ if(trigger==='keyboard'){
+  driver=replacement(driver,'      await submit(vector);','      await submit(vector, page, true);');
+  driver=replacement(driver,'    await submit(recovery, delayedPage, false, {fillInputs: false});',
+   '    await submit(recovery, delayedPage, true, {fillInputs: false});');
+ }
+ return replacement(driver,'    await network.stop();',
+  `    emitDiagnostic({schema: '${schema}', submission: observationSubmission, phase, journey: activeJourney, vectorIndex: app.acceptance_vectors.indexOf(vector), keyboard, network: network.summary(),
+      requests: events.filter(row => row.event === 'cdp-request' && row.method === 'POST' && row.payloadMatches === true).length,
+      responses: events.filter(row => row.event === 'cdp-response' && row.status === 200).length,
+      completions: events.filter(row => row.event === 'cdp-finished').length,
+      failures: events.filter(row => row.event === 'cdp-failed').length, eventsTruncated});
+    await network.stop();`);
+}
+export function requireObservationWitnesses(rows,mode,expected){
+ assert(['observed','unobserved'].includes(mode));
+ assert(expected.length>0&&expected.length<=128,'complete bounded expected submission inventory required');
+ assert.deepEqual(rows.map(({submission,journey,vectorIndex,keyboard})=>({submission,journey,vectorIndex,keyboard})),expected,
+  'every expected real submission must have its own ordered witness');
+ for(const row of rows){
+  assert.deepEqual(Object.keys(row).sort(),['schema','submission','phase','journey','vectorIndex','keyboard','network','requests','responses','completions','failures','eventsTruncated'].sort());
+  assert.equal(row.schema,schema);assert.equal(row.phase,'completed-readiness');
+  assert.equal(typeof row.keyboard,'boolean');assert.equal(row.eventsTruncated,false);
+  assert.equal(row.failures,0);
+  if(mode==='observed'){
+   assert.deepEqual(row.network,{state:'observed',requests:1,overflow:false});
+   assert.equal(row.requests,1);assert.equal(row.responses,1);assert.equal(row.completions,1);
+  }else{
+   assert.deepEqual(row.network,{state:'unavailable'});
+   assert.equal(row.requests,0);assert.equal(row.responses,0);assert.equal(row.completions,0);
+  }
+ }
+}
+function main(){
+ const [oracle,artifact,browser,mode,trigger,evidence,...extra]=process.argv.slice(2);
+ assert.equal(extra.length,0);assert(oracle&&artifact&&browser&&evidence);
+ assert(['observed','unobserved'].includes(mode));assert(['click','keyboard'].includes(trigger));
+ const root=fileURLToPath(new URL('../',import.meta.url));
+ const sourcePath=join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const source=readFileSync(sourcePath,'utf8'),matrixPath=join(root,'tests/data/portable-oracle-matrix.json');
+ const modelPath=join(resolve(artifact),'model.prism.json'),model=JSON.parse(readFileSync(modelPath));
+ const matrix=JSON.parse(readFileSync(matrixPath));
+ const profile=matrix.profiles.find(row=>row.name===model.application.name);assert(profile);
+ const archive=join(resolve(artifact),profile.name+'.holo');
+ const wasm=join(resolve(artifact),'core-wasm',profile.cargo_name.replaceAll('-','_')+'_core_wasm.wasm');
+ const subjects=[sourcePath,matrixPath,oracle,modelPath,archive,wasm,process.execPath,browser].map(capture);
+ const directory=resolve(evidence);mkdirSync(directory);
+ const driver=join(directory,'driver.mjs');writeFileSync(driver,observationDriver(source,mode,trigger),{flag:'wx'});
+ const driverSubject=capture(driver);subjects.push(driverSubject);
+ const result=spawnSync(resolve(oracle),[archive,modelPath,wasm,driver,process.execPath,resolve(browser)],
+  {timeout:120000,maxBuffer:1048576,encoding:'utf8'});
+ for(const stream of ['stdout','stderr'])writeFileSync(join(directory,stream+'.txt'),result[stream]??'',{flag:'wx'});
+ const rows=(result.stderr??'').split('\n').filter(Boolean).flatMap(line=>{
+  try{const row=JSON.parse(line);return row.schema===schema?[row]:[];}catch{return [];}
+ });
+ const preliminary={schema:'prismpm/portable-observation-result/1',scope:'diagnostic-noninterference-qualification',
+  mode,trigger,profile:profile.profile,witnesses:rows,status:'incomplete',exit_code:result.status,
+  terminated:result.signal!==null,execution_error:!!result.error,driver_sha256:driverSubject.measurement.sha256,
+  stdout_sha256:hash(result.stdout??''),stderr_sha256:hash(result.stderr??'')};
+ // Closed failure witnesses survive even if the real session or any subsequent
+ // assertion fails. Their existence never establishes application acceptance.
+ writeFileSync(join(directory,'result.json'),JSON.stringify({...preliminary,
+  witnesses:observationSummary(preliminary).witnesses})+'\n',{flag:'wx'});
+ for(const subject of subjects)subject.verify();
+ assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,'real upstream session must pass without retry');
+ const report=JSON.parse(result.stdout.trim());assert.equal(report.schema,'prismpm/hologram-oracle/2');
+ const actual=report.portable_browser;
+ assert.equal(actual.schema,'prismpm/portable-browser-oracle/1');assert.equal(actual.status,'passed');
+ assert.equal(actual.skipped,0);assert.equal(actual.retries,0);assert.equal(actual.profile,profile.profile);
+ assert.equal(actual.browser_version,'151.0.7922.34');assert.equal(actual.playwright,'1.62.1');
+ assert.deepEqual(actual.vector_indexes,profile.vector_indexes);
+ assert.deepEqual(actual.cases,profile.journeys.map(name=>({name,status:'passed',attempts:1})));
+ requireObservationWitnesses(rows,mode,expectedObservationSubmissions(profile,trigger));
+ const value={...preliminary,submissions:rows.length,keyboard_submissions:rows.filter(row=>row.keyboard).length,
+  report,report_sha256:hash(result.stdout),driver_sha256:driverSubject.measurement.sha256,
+  subjects:subjects.map(row=>row.measurement),status:'passed'};
+ assert(value.keyboard_submissions>0,'full original keyboard recovery remains required');
+ writeFileSync(join(directory,'result.json'),JSON.stringify(value)+'\n');
+ console.log(JSON.stringify(value));
+}
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main();

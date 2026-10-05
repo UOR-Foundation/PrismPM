@@ -10,12 +10,128 @@ import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapsho
 import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
+import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary} from './portable-oracle-observation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
 
 const diagnosticRoot=t=>{const root=mkdtempSync(join(tmpdir(),'portable-diagnostic-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const hash=value=>createHash('sha256').update(value).digest('hex');
+test('live observation qualification transforms only diagnostics and retains all original acceptance predicates',()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);';
+ for(const mode of ['observed','unobserved'])for(const trigger of ['click','keyboard']){
+  const driver=observationDriver(source,mode,trigger);
+  assert.equal(driver.includes(call),mode==='observed');
+  for(const point of ['try { replyBody = await bounded(reply.body()); }',
+   'assert.equal(invocationCount, 1', 'assert.equal(navigated, false',
+   'assert.deepEqual(envelope,', 'await target.waitForFunction(ready)', 'await shows(displayed(vector), target)'])
+   assert.equal(driver.split(point).length,source.split(point).length);
+  for(const profile of matrix.profiles)for(const journey of profile.journeys)
+   assert(driver.includes(`await journey('${journey}'`));
+  assert.equal(driver.split('await network.stop();').length,source.split('await network.stop();').length);
+  assert.equal(driver.includes('await submit(vector, page, true);'),trigger==='keyboard');
+ }
+ assert.throws(()=>observationDriver(source,'unknown','click'));
+ assert.throws(()=>observationDriver(source,'observed','unknown'));
+ assert.throws(()=>observationDriver(source+call,'unobserved','click'));
+ const owner=read('scripts/portable-oracle-matrix.mjs');
+ assert(owner.includes("'scripts/portable-oracle-observation.mjs'"));
+ assert(owner.includes("assert.equal(observationPairs.length, 4"));
+ assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
+ assert(owner.includes('assert.equal(outcomes.length, 78'));
+ assert(owner.includes('assert.equal(negativeControls.length, 4'));
+});
+test('live CDP qualification rejects unavailable, omitted, incomplete and invented observation witnesses',()=>{
+ const observed={schema:'prismpm/portable-observation-witness/1',submission:1,phase:'completed-readiness',journey:'modeled-vectors',vectorIndex:0,keyboard:true,
+  network:{state:'observed',requests:1,overflow:false},requests:1,responses:1,completions:1,failures:0,eventsTruncated:false};
+ const unobserved={...observed,network:{state:'unavailable'},requests:0,responses:0,completions:0};
+ const expected=[{submission:1,journey:'modeled-vectors',vectorIndex:0,keyboard:true}];
+ assert.doesNotThrow(()=>requireObservationWitnesses([observed],'observed',expected));
+ assert.doesNotThrow(()=>requireObservationWitnesses([unobserved],'unobserved',expected));
+ assert.throws(()=>requireObservationWitnesses([],'observed',expected));
+ assert.throws(()=>requireObservationWitnesses([unobserved],'observed',expected));
+ assert.throws(()=>requireObservationWitnesses([observed],'unobserved',expected));
+ for(const patch of [{requests:0},{responses:0},{completions:0},{failures:1},{eventsTruncated:true},
+  {phase:'response-body'},{keyboard:'yes'},{privatePayload:'secret'},
+  {network:{state:'observed',requests:2,overflow:false}}])
+  assert.throws(()=>requireObservationWitnesses([{...observed,...patch}],'observed',expected));
+ assert.throws(()=>requireObservationWitnesses(Array(129).fill(observed),'observed',expected));
+ const source=read('scripts/portable-oracle-observation.mjs');
+ for(const guard of ["assert.equal(result.status,0",'assert.equal(result.signal,null)',
+  'subject.verify()', 'assert.deepEqual(actual.vector_indexes,profile.vector_indexes)',
+  'assert.deepEqual(actual.cases,profile.journeys', 'requireObservationWitnesses(rows,mode,expectedObservationSubmissions'])assert(source.includes(guard));
+});
+test('observation qualification owns every ordered modeled submission and rejects matching omissions in both modes',()=>{
+ for(const profile of matrix.profiles)for(const trigger of matrix.triggers){
+  const expected=expectedObservationSubmissions(profile,trigger);
+  assert.equal(expected.length,profile.profile==='utf8-text'?13:20);
+  assert.equal(expected.filter(row=>row.keyboard).length,trigger==='click'?1:profile.profile==='utf8-text'?5:17);
+  const observed=expected.map(row=>({...row,schema:'prismpm/portable-observation-witness/1',phase:'completed-readiness',
+   network:{state:'observed',requests:1,overflow:false},requests:1,responses:1,completions:1,failures:0,eventsTruncated:false}));
+  for(const mode of ['observed','unobserved']){
+   const rows=mode==='observed'?observed:observed.map(row=>({...row,network:{state:'unavailable'},requests:0,responses:0,completions:0}));
+   assert.doesNotThrow(()=>requireObservationWitnesses(rows,mode,expected));
+   for(let index=0;index<rows.length;index++){
+    assert.throws(()=>requireObservationWitnesses(rows.filter((_,selected)=>selected!==index),mode,expected));
+    assert.throws(()=>requireObservationWitnesses([...rows.slice(0,index),rows[index],...rows.slice(index)],mode,expected));
+    for(const patch of [{journey:'other'},{vectorIndex:65536},{keyboard:!rows[index].keyboard}])
+     assert.throws(()=>requireObservationWitnesses(rows.map((row,selected)=>selected===index?{...row,...patch}:row),mode,expected));
+   }
+   if(profile.profile==='utf8-text'){
+    const indices=rows.flatMap((row,index)=>row.journey==='text-response-bounds'?[index]:[]);
+    assert.equal(indices.length,4);
+    const identicalDuplicate=rows.slice();identicalDuplicate[indices[0]]=rows[indices[1]];
+    assert.throws(()=>requireObservationWitnesses(identicalDuplicate,mode,expected),assert.AssertionError);
+   }
+  }
+ }
+});
+test('observation failures retain only closed bounded witnesses and their executed driver before acceptance assertions',()=>{
+ const summary=observationSummary({status:'private-text',driver_sha256:'a'.repeat(64),witnesses:[
+  {journey:'private-journey',vectorIndex:'private-text',keyboard:true,phase:'private-phase',requests:-1,
+   network:{state:'observed',requests:99,secret:'private-text'},payload:'private-text'}],report:{secret:'private-text'}});
+ assert.equal(summary.status,'incomplete');assert.equal(summary.witnesses[0].journey,'other');
+ assert.equal(summary.witnesses[0].requests,null);assert.equal(summary.witnesses[0].network.requests,null);
+ assert(!JSON.stringify(summary).includes('private-text'));assert(!JSON.stringify(summary).includes('private-journey'));
+ assert.equal(observationSummary({witnesses:Array(129).fill({})}).witnesses.length,128);
+ assert.equal(observationSummary({witnesses:Array(129).fill({})}).witnesses_truncated,true);
+ const source=read('scripts/portable-oracle-observation.mjs');
+ assert(source.indexOf("writeFileSync(join(directory,'result.json')")<source.indexOf('assert.equal(result.status,0'));
+ const owner=read('scripts/portable-oracle-matrix.mjs');
+ assert(owner.includes('summary=observationSummary(JSON.parse(receiptBytes))'));
+ const retention=owner.slice(owner.indexOf("if(/^[01]-observation-"));
+ assert(retention.indexOf("diagnostics.file('cases/'")<retention.indexOf('readDiagnosticFile(receiptPath'));
+ assert(retention.includes('assert.equal(expectedDriverHash,summary.driver_sha256)'));
+ assert(source.indexOf('const driverSubject=capture(driver)')<source.indexOf('const result=spawnSync'));
+ assert(source.includes('driver_sha256:driverSubject.measurement.sha256'));
+});
+test('actual observation bundle retention copies executed drivers and closed failure receipts even when a receipt is missing',t=>{
+ const source=read('scripts/portable-oracle-matrix.mjs');
+ const start=source.indexOf('  if(/^[01]-observation-'),end=source.indexOf('  // Cleanup uncertainty',start);
+ assert(start>=0&&end>start);const branch=source.slice(start,end);
+ for(const state of ['receipt','missing','changed']){
+  const missing=state==='missing',changed=state==='changed';
+  const root=diagnosticRoot(t),evidence=join(root,'evidence'),name='0-observation-keyboard-observed';
+  mkdirSync(join(evidence,name),{recursive:true});
+  const driver=observationDriver(read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'observed','keyboard');
+  writeFileSync(join(evidence,name,'driver.mjs'),driver+(changed?'\n// changed after execution':''));
+  if(!missing)writeFileSync(join(evidence,name,'result.json'),JSON.stringify({status:'incomplete',driver_sha256:hash(driver),
+   witnesses:[{journey:'private-journey',payload:'private-value'}],stderr:'private-value'}));
+  const diagnostics=new PortableDiagnosticBundle(root);
+  runInNewContext(branch,{name,evidence,result:{status:1},expectedStatus:0,expectedDriverHash:hash(driver),diagnostics,retainDiagnostic,
+   join,createHash,readDiagnosticFile,observationSummary,assert,JSON,Number});
+  const index=JSON.parse(readFileSync(join(diagnostics.path,'index.json')));
+  if(changed){assert.deepEqual(index.files,[]);assert.equal(index.state,'incomplete');continue;}
+  assert(index.files.some(row=>row.path==='cases/'+name+'.driver.mjs'&&row.sha256===hash(driver)));
+  if(missing)assert.equal(index.state,'incomplete');
+  else{
+   const receipt=readFileSync(join(diagnostics.path,'cases/'+name+'.json'),'utf8');
+   assert(!receipt.includes('private-value'));assert(!receipt.includes('private-journey'));
+   assert.equal(JSON.parse(receipt).actual_exit_code,1);
+  }
+ }
+});
 function networkObserver(session, expected, events, source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs')) {
  const start=source.indexOf('function submissionNetworkRecorder('),end=source.indexOf('\nasync function submissionNetworkOwner(',start);
  const reasonStart=source.indexOf('function requestFailureReason('),reasonEnd=source.indexOf('\nfunction failureKind(',reasonStart);

@@ -221,6 +221,16 @@ must not retrieve another body, intercept traffic, override caches or enlarge br
 retention buffers. Version 1 remains readable without acquiring these fields.
 Unavailable observations cannot establish causality or replace the first body
 failure, actual rendered result, single-invocation check or cleanup requirement.
+The same fresh matrix compiler additionally executes both complete profiles with
+and without the read-only collector, for click and keyboard (eight runs). Reports
+must agree exactly, with one ordered observation witness for every modeled submit:
+20 for Calculator and 13 for Text Request. Observed runs require actual correlated
+CDP request, response and completion events; matching omissions, unavailable
+collectors, duplicated or relabeled witnesses fail qualification. The unobserved
+driver omits only diagnostic acquisition; all response-body, rendering, readiness,
+single-invocation and navigation checks remain. Exact drivers and closed failure
+witnesses are retained before assertions. These runs supplement all original cases
+and controls, without increasing their deadlines or claiming historical causality.
 The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed
