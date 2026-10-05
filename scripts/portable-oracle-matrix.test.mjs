@@ -9,12 +9,316 @@ import {runInNewContext} from 'node:vm';
 import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
 import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
 import {createHash} from 'node:crypto';
+import {EventEmitter} from 'node:events';
+import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary} from './portable-oracle-observation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
 
 const diagnosticRoot=t=>{const root=mkdtempSync(join(tmpdir(),'portable-diagnostic-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const hash=value=>createHash('sha256').update(value).digest('hex');
+test('live observation qualification transforms only diagnostics and retains all original acceptance predicates',()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);';
+ for(const mode of ['observed','unobserved'])for(const trigger of ['click','keyboard']){
+  const driver=observationDriver(source,mode,trigger);
+  assert.equal(driver.includes(call),mode==='observed');
+  for(const point of ['try { replyBody = await bounded(reply.body()); }',
+   'assert.equal(invocationCount, 1', 'assert.equal(navigated, false',
+   'assert.deepEqual(envelope,', 'await target.waitForFunction(ready)', 'await shows(displayed(vector), target)'])
+   assert.equal(driver.split(point).length,source.split(point).length);
+  for(const profile of matrix.profiles)for(const journey of profile.journeys)
+   assert(driver.includes(`await journey('${journey}'`));
+  assert.equal(driver.split('await network.stop();').length,source.split('await network.stop();').length);
+  assert.equal(driver.includes('await submit(vector, page, true);'),trigger==='keyboard');
+ }
+ assert.throws(()=>observationDriver(source,'unknown','click'));
+ assert.throws(()=>observationDriver(source,'observed','unknown'));
+ assert.throws(()=>observationDriver(source+call,'unobserved','click'));
+ const owner=read('scripts/portable-oracle-matrix.mjs');
+ assert(owner.includes("'scripts/portable-oracle-observation.mjs'"));
+ assert(owner.includes("assert.equal(observationPairs.length, 4"));
+ assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
+ assert(owner.includes('assert.equal(outcomes.length, 78'));
+ assert(owner.includes('assert.equal(negativeControls.length, 4'));
+});
+test('live CDP qualification rejects unavailable, omitted, incomplete and invented observation witnesses',()=>{
+ const observed={schema:'prismpm/portable-observation-witness/1',submission:1,phase:'completed-readiness',journey:'modeled-vectors',vectorIndex:0,keyboard:true,
+  network:{state:'observed',requests:1,overflow:false},requests:1,responses:1,completions:1,failures:0,eventsTruncated:false};
+ const unobserved={...observed,network:{state:'unavailable'},requests:0,responses:0,completions:0};
+ const expected=[{submission:1,journey:'modeled-vectors',vectorIndex:0,keyboard:true}];
+ assert.doesNotThrow(()=>requireObservationWitnesses([observed],'observed',expected));
+ assert.doesNotThrow(()=>requireObservationWitnesses([unobserved],'unobserved',expected));
+ assert.throws(()=>requireObservationWitnesses([],'observed',expected));
+ assert.throws(()=>requireObservationWitnesses([unobserved],'observed',expected));
+ assert.throws(()=>requireObservationWitnesses([observed],'unobserved',expected));
+ for(const patch of [{requests:0},{responses:0},{completions:0},{failures:1},{eventsTruncated:true},
+  {phase:'response-body'},{keyboard:'yes'},{privatePayload:'secret'},
+  {network:{state:'observed',requests:2,overflow:false}}])
+  assert.throws(()=>requireObservationWitnesses([{...observed,...patch}],'observed',expected));
+ assert.throws(()=>requireObservationWitnesses(Array(129).fill(observed),'observed',expected));
+ const source=read('scripts/portable-oracle-observation.mjs');
+ for(const guard of ["assert.equal(result.status,0",'assert.equal(result.signal,null)',
+  'subject.verify()', 'assert.deepEqual(actual.vector_indexes,profile.vector_indexes)',
+  'assert.deepEqual(actual.cases,profile.journeys', 'requireObservationWitnesses(rows,mode,expectedObservationSubmissions'])assert(source.includes(guard));
+});
+test('observation qualification owns every ordered modeled submission and rejects matching omissions in both modes',()=>{
+ for(const profile of matrix.profiles)for(const trigger of matrix.triggers){
+  const expected=expectedObservationSubmissions(profile,trigger);
+  assert.equal(expected.length,profile.profile==='utf8-text'?13:20);
+  assert.equal(expected.filter(row=>row.keyboard).length,trigger==='click'?1:profile.profile==='utf8-text'?5:17);
+  const observed=expected.map(row=>({...row,schema:'prismpm/portable-observation-witness/1',phase:'completed-readiness',
+   network:{state:'observed',requests:1,overflow:false},requests:1,responses:1,completions:1,failures:0,eventsTruncated:false}));
+  for(const mode of ['observed','unobserved']){
+   const rows=mode==='observed'?observed:observed.map(row=>({...row,network:{state:'unavailable'},requests:0,responses:0,completions:0}));
+   assert.doesNotThrow(()=>requireObservationWitnesses(rows,mode,expected));
+   for(let index=0;index<rows.length;index++){
+    assert.throws(()=>requireObservationWitnesses(rows.filter((_,selected)=>selected!==index),mode,expected));
+    assert.throws(()=>requireObservationWitnesses([...rows.slice(0,index),rows[index],...rows.slice(index)],mode,expected));
+    for(const patch of [{journey:'other'},{vectorIndex:65536},{keyboard:!rows[index].keyboard}])
+     assert.throws(()=>requireObservationWitnesses(rows.map((row,selected)=>selected===index?{...row,...patch}:row),mode,expected));
+   }
+   if(profile.profile==='utf8-text'){
+    const indices=rows.flatMap((row,index)=>row.journey==='text-response-bounds'?[index]:[]);
+    assert.equal(indices.length,4);
+    const identicalDuplicate=rows.slice();identicalDuplicate[indices[0]]=rows[indices[1]];
+    assert.throws(()=>requireObservationWitnesses(identicalDuplicate,mode,expected),assert.AssertionError);
+   }
+  }
+ }
+});
+test('observation failures retain only closed bounded witnesses and their executed driver before acceptance assertions',()=>{
+ const summary=observationSummary({status:'private-text',driver_sha256:'a'.repeat(64),witnesses:[
+  {journey:'private-journey',vectorIndex:'private-text',keyboard:true,phase:'private-phase',requests:-1,
+   network:{state:'observed',requests:99,secret:'private-text'},payload:'private-text'}],report:{secret:'private-text'}});
+ assert.equal(summary.status,'incomplete');assert.equal(summary.witnesses[0].journey,'other');
+ assert.equal(summary.witnesses[0].requests,null);assert.equal(summary.witnesses[0].network.requests,null);
+ assert(!JSON.stringify(summary).includes('private-text'));assert(!JSON.stringify(summary).includes('private-journey'));
+ assert.equal(observationSummary({witnesses:Array(129).fill({})}).witnesses.length,128);
+ assert.equal(observationSummary({witnesses:Array(129).fill({})}).witnesses_truncated,true);
+ const source=read('scripts/portable-oracle-observation.mjs');
+ assert(source.indexOf("writeFileSync(join(directory,'result.json')")<source.indexOf('assert.equal(result.status,0'));
+ const owner=read('scripts/portable-oracle-matrix.mjs');
+ assert(owner.includes('summary=observationSummary(JSON.parse(receiptBytes))'));
+ const retention=owner.slice(owner.indexOf("if(/^[01]-observation-"));
+ assert(retention.indexOf("diagnostics.file('cases/'")<retention.indexOf('readDiagnosticFile(receiptPath'));
+ assert(retention.includes('assert.equal(expectedDriverHash,summary.driver_sha256)'));
+ assert(source.indexOf('const driverSubject=capture(driver)')<source.indexOf('const result=spawnSync'));
+ assert(source.includes('driver_sha256:driverSubject.measurement.sha256'));
+});
+test('actual observation bundle retention copies executed drivers and closed failure receipts even when a receipt is missing',t=>{
+ const source=read('scripts/portable-oracle-matrix.mjs');
+ const start=source.indexOf('  if(/^[01]-observation-'),end=source.indexOf('  // Cleanup uncertainty',start);
+ assert(start>=0&&end>start);const branch=source.slice(start,end);
+ for(const state of ['receipt','missing','changed']){
+  const missing=state==='missing',changed=state==='changed';
+  const root=diagnosticRoot(t),evidence=join(root,'evidence'),name='0-observation-keyboard-observed';
+  mkdirSync(join(evidence,name),{recursive:true});
+  const driver=observationDriver(read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'observed','keyboard');
+  writeFileSync(join(evidence,name,'driver.mjs'),driver+(changed?'\n// changed after execution':''));
+  if(!missing)writeFileSync(join(evidence,name,'result.json'),JSON.stringify({status:'incomplete',driver_sha256:hash(driver),
+   witnesses:[{journey:'private-journey',payload:'private-value'}],stderr:'private-value'}));
+  const diagnostics=new PortableDiagnosticBundle(root);
+  runInNewContext(branch,{name,evidence,result:{status:1},expectedStatus:0,expectedDriverHash:hash(driver),diagnostics,retainDiagnostic,
+   join,createHash,readDiagnosticFile,observationSummary,assert,JSON,Number});
+  const index=JSON.parse(readFileSync(join(diagnostics.path,'index.json')));
+  if(changed){assert.deepEqual(index.files,[]);assert.equal(index.state,'incomplete');continue;}
+  assert(index.files.some(row=>row.path==='cases/'+name+'.driver.mjs'&&row.sha256===hash(driver)));
+  if(missing)assert.equal(index.state,'incomplete');
+  else{
+   const receipt=readFileSync(join(diagnostics.path,'cases/'+name+'.json'),'utf8');
+   assert(!receipt.includes('private-value'));assert(!receipt.includes('private-journey'));
+   assert.equal(JSON.parse(receipt).actual_exit_code,1);
+  }
+ }
+});
+function networkObserver(session, expected, events, source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs')) {
+ const start=source.indexOf('function submissionNetworkRecorder('),end=source.indexOf('\nasync function submissionNetworkOwner(',start);
+ const reasonStart=source.indexOf('function requestFailureReason('),reasonEnd=source.indexOf('\nfunction failureKind(',reasonStart);
+ assert(start>=0&&end>start&&reasonStart>=0&&reasonEnd>reasonStart);
+ const factory=runInNewContext('('+source.slice(start,end)+')',
+  {assert,JSON,requestFailureReason:runInNewContext('('+source.slice(reasonStart,reasonEnd)+')')});
+ return factory(session,'http://127.0.0.1:38129/_hologram/intent',expected,event=>{if(events.length<32)events.push(JSON.parse(JSON.stringify(event)));});
+}
+function networkOwner(target, events, bounded=operation=>operation,
+ source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs')) {
+ const start=source.indexOf('async function submissionNetworkOwner('),end=source.indexOf('\nlet browser;',start);
+ assert(start>=0&&end>start);
+ const factory=runInNewContext('('+source.slice(start,end)+')',{bounded,
+  submissionNetworkRecorder:(session,endpoint,expected,record)=>{
+   assert.equal(endpoint,'http://127.0.0.1:38129/_hologram/intent');
+   return networkObserver(session,expected,events,source);
+  }});
+ return factory(target,'http://127.0.0.1:38129/_hologram/intent',{expected:true},()=>{});
+}
+test('actual CDP owner orchestration enables only default observation and retires exactly its own session',async()=>{
+ const session=new EventEmitter(),commands=[],events=[];let detached=0;
+ session.send=async(...args)=>{commands.push(args);};session.detach=async()=>{detached++;};
+ const target={context:()=>({newCDPSession:async actual=>{assert.equal(actual,target);return session;}})};
+ const owner=await networkOwner(target,events);assert.deepEqual(commands,[['Network.enable']]);
+ assert.equal(owner.summary().state,'observed');await owner.stop();await owner.stop();
+ assert.equal(detached,1);assert.deepEqual(session.eventNames(),[]);
+});
+test('a timed-out CDP acquisition still owns and detaches its real late arrival',async()=>{
+ let resolve;const arrival=new Promise(yes=>{resolve=yes;}),events=[];let detached=0;
+ const session=new EventEmitter();session.detach=async()=>{detached++;};session.send=async()=>assert.fail('retired acquisition cannot enable observations');
+ const target={context:()=>({newCDPSession:()=>arrival})};
+ let calls=0;const bounded=async operation=>{if(++calls===1)throw new Error('acquisition deadline');return operation;};
+ const owner=await networkOwner(target,events,bounded);assert.equal(owner.summary().state,'unavailable');
+ resolve(session);await new Promise(yes=>setImmediate(yes));assert.equal(detached,1);
+ await owner.stop();assert.equal(detached,1);assert.deepEqual(events,[]);
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),guard='if (retired) { await detach(value); return null; }';
+ assert.equal(source.split(guard).length,2);let resolveMutant;const mutantArrival=new Promise(yes=>{resolveMutant=yes;});calls=0;detached=0;
+ const mutant=await networkOwner({context:()=>({newCDPSession:()=>mutantArrival})},[],bounded,source.replace(guard,''));
+ resolveMutant(session);await new Promise(yes=>setImmediate(yes));assert.throws(()=>assert.equal(detached,1),assert.AssertionError);
+ await mutant.stop();assert.equal(detached,1);
+});
+test('CDP setup refusal and detach rejection remain unavailable diagnostics without replacing a body failure',async()=>{
+ const session=new EventEmitter(),events=[];let detached=0;
+ session.send=async()=>{throw new Error('private-setup-failure');};
+ session.detach=async()=>{detached++;throw new Error('private-detach-failure');};
+ const owner=await networkOwner({context:()=>({newCDPSession:async()=>session})},events);
+ assert.equal(owner.summary().state,'unavailable');assert.deepEqual(session.eventNames(),[]);
+ const primary=new Error('original-body-failure');let caught;
+ try{try{throw primary;}finally{await owner.stop();}}catch(error){caught=error;}
+ assert.equal(caught,primary);assert.equal(detached,1);assert.deepEqual(events,[]);
+});
+test('CDP diagnostics bind exact intent request ordinals without exposing protocol identifiers or payloads',()=>{
+ const session=new EventEmitter(),events=[],expected={version:1,name:'application.invoke',payload:'private-draft-71943'};
+ const observer=networkObserver(session,expected,events);
+ session.emit('Network.requestWillBeSent',{requestId:'private-protocol-identifier',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST',postData:JSON.stringify(expected)}});
+ session.emit('Network.responseReceived',{requestId:'private-protocol-identifier',response:{status:200,fromServiceWorker:false,fromDiskCache:false,headers:{secret:'private-header'}}});
+ session.emit('Network.dataReceived',{requestId:'private-protocol-identifier',dataLength:31,encodedDataLength:31,data:'private-response'});
+ session.emit('Network.loadingFinished',{requestId:'private-protocol-identifier',encodedDataLength:176});
+ assert.deepEqual(events,[{event:'cdp-request',request:1,method:'POST',payloadMatches:true,payloadOversized:false,redirect:false},
+  {event:'cdp-response',request:1,status:200,serviceWorker:false,diskCache:false},
+  {event:'cdp-data',request:1,bytes:31,encodedBytes:31},{event:'cdp-finished',request:1,encodedBytes:176}]);
+ assert.deepEqual(JSON.parse(JSON.stringify(observer.summary())),{state:'observed',requests:1,overflow:false});
+ assert(!JSON.stringify(events).includes('private-'));observer.stop();
+});
+test('CDP diagnostics ignore other endpoints and preserve mismatched, duplicated and redirected request observations',()=>{
+ const session=new EventEmitter(),events=[],expected={version:1,payload:'expected'},observer=networkObserver(session,expected,events);
+ session.emit('Network.requestWillBeSent',{requestId:'other',request:{url:'http://other.invalid/_hologram/intent',method:'POST',postData:JSON.stringify(expected)}});
+ session.emit('Network.responseReceived',{requestId:'other',response:{status:200}});assert.deepEqual(events,[]);
+ for(const requestId of ['first','second'])session.emit('Network.requestWillBeSent',{requestId,request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'private-method',postData:'private-malformed-json'}});
+ session.emit('Network.requestWillBeSent',{requestId:'first',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'GET'},redirectResponse:{body:'private-response'}});
+ assert.deepEqual(events.map(({request,method,payloadMatches,redirect})=>({request,method,payloadMatches,redirect})),
+  [{request:1,method:'OTHER',payloadMatches:false,redirect:false},{request:2,method:'OTHER',payloadMatches:false,redirect:false},
+   {request:1,method:'GET',payloadMatches:null,redirect:true}]);
+ assert(!JSON.stringify(events).includes('private-'));observer.stop();
+});
+test('CDP diagnostics bound request and event inventories and close arbitrary failure reasons and byte counts',()=>{
+ const session=new EventEmitter(),events=[],observer=networkObserver(session,{},events);
+ for(let index=0;index<33;index++)session.emit('Network.requestWillBeSent',{requestId:String(index),request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST'}});
+ assert.equal(events.length,32);assert.deepEqual(JSON.parse(JSON.stringify(observer.summary())),{state:'observed',requests:32,overflow:true});
+ events.length=0;
+ session.emit('Network.loadingFailed',{requestId:'0',errorText:'net::ERR_ABORTED',canceled:true});
+ session.emit('Network.loadingFailed',{requestId:'1',errorText:'private-browser-error'});
+ session.emit('Network.dataReceived',{requestId:'0',dataLength:-1,encodedDataLength:16777217});
+ session.emit('Network.dataReceived',{requestId:'32',dataLength:1,encodedDataLength:1});
+ assert.deepEqual(events,[{event:'cdp-failed',request:1,cancelled:true,reason:'ERR_ABORTED'},
+  {event:'cdp-failed',request:2,cancelled:false,reason:'other'},{event:'cdp-data',request:1,bytes:null,encodedBytes:null}]);
+ assert(!JSON.stringify(events).includes('private-'));observer.stop();
+});
+test('retiring CDP diagnostics removes listeners and blocks late observations even if detachment fails',()=>{
+ for(const broken of [false,true]){
+  const session=new EventEmitter(),events=[],observer=networkObserver(session,{},events);
+  if(broken)session.off=()=>{throw new Error('private-diagnostic-failure');};
+  assert.doesNotThrow(()=>observer.stop());assert.doesNotThrow(()=>observer.stop());
+  session.emit('Network.requestWillBeSent',{requestId:'late',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST'}});
+  assert.deepEqual(events,[]);if(!broken)assert.deepEqual(session.eventNames(),[]);
+ }
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ assert(source.includes("acquired.send('Network.enable')"));
+ for(const method of ['Network.getResponseBody','Network.setCacheDisabled','Network.setBypassServiceWorker','Network.setBlockedURLs'])
+  assert(!source.includes(`send('${method}'`));
+ assert(!source.includes('maxTotalBufferSize'));assert(!source.includes('maxResourceBufferSize'));
+ assert(source.includes('try { replyBody = await bounded(reply.body()); }'));
+});
+test('diagnostic version 2 retains only closed CDP observations while version 1 cannot acquire new fields',()=>{
+ const row={schema:'prismpm/browser-submission-diagnostic/2',eventsTruncated:true,network:{state:'observed',requests:1,overflow:false,secret:'private-value'},events:[
+  {event:'cdp-failed',request:1,cancelled:true,reason:'ERR_ABORTED',requestId:'private-value',headers:'private-value',body:'private-value'}]};
+ const value={schema:'prismpm/portable-oracle-probe/1',diagnostics:[row],exit_code:1,signal:null,probe_passed:false};
+ for(const name of ['source','matrix','driver','oracle','model','archive','wasm','node','browser'])value[name+'_sha256']='a'.repeat(64);
+ let summary=probeSummary(value).diagnostics[0];assert.deepEqual(summary.network,{state:'observed',requests:1,overflow:false});
+ assert.equal(summary.events_truncated,true);
+ assert.equal(summary.events[0].event,'cdp-failed');assert.equal(summary.events[0].request,1);
+ assert(!JSON.stringify(summary).includes('private-value'));
+ row.schema='prismpm/browser-submission-diagnostic/1';summary=probeSummary(value).diagnostics[0];
+ assert(!Object.hasOwn(summary,'network'));assert(!Object.hasOwn(summary,'events_truncated'));
+ assert(!Object.hasOwn(summary.events[0],'request'));assert.equal(summary.events[0].event,'other');
+});
+test('CDP ownership regressions reject real endpoint, request-bound, payload-match and late-observation guard mutants',()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const mutations=[
+  ["if (value.request?.url !== endpoint) return;",'',(session,events)=>{
+   session.emit('Network.requestWillBeSent',{requestId:'other',request:{url:'http://other.invalid/intent',method:'POST'}});
+   assert.deepEqual(events,[]);
+  }],
+  ["if (requests.size === 32) { overflow = true; return; }",'',(session,events,observer)=>{
+   for(let i=0;i<33;i++)session.emit('Network.requestWillBeSent',{requestId:String(i),request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST'}});
+   assert.equal(observer.summary().requests,32);
+  }],
+  ["assert.deepEqual(JSON.parse(value.request.postData), expectedRequest);",'',(session,events)=>{
+   session.emit('Network.requestWillBeSent',{requestId:'wrong',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST',postData:'{"wrong":true}'}});
+   assert.equal(events[0].payloadMatches,false);
+  }],
+  ["active = false;","active = true;",(session,events,observer)=>{
+   session.off=()=>{throw new Error('private-diagnostic-failure');};observer.stop();
+   session.emit('Network.requestWillBeSent',{requestId:'late',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST'}});
+   assert.deepEqual(events,[]);
+  }],
+ ];
+ for(const [before,after,regression] of mutations){
+  assert.equal(source.split(before).length,2);const session=new EventEmitter(),events=[];
+  const observer=networkObserver(session,{expected:true},events,source.replace(before,after));
+  assert.throws(()=>regression(session,events,observer),assert.AssertionError);observer.stop();
+ }
+});
+test('diagnostic post-data parsing has exact portable-envelope allocation bounds',()=>{
+ const session=new EventEmitter(),events=[],maximum=65_536*6+256;
+ const expected={payload:'x'.repeat(maximum-14)},encoded=JSON.stringify(expected);assert.equal(encoded.length,maximum);
+ const observer=networkObserver(session,expected,events);
+ session.emit('Network.requestWillBeSent',{requestId:'maximum',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST',postData:encoded}});
+ session.emit('Network.requestWillBeSent',{requestId:'one-over',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST',postData:encoded+' '}});
+ assert.equal(events[0].payloadMatches,true);assert.equal(events[0].payloadOversized,false);
+ assert.equal(events[1].payloadMatches,null);assert.equal(events[1].payloadOversized,true);observer.stop();
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),guard=' && !payloadOversized';
+ assert.equal(source.split(guard).length,2);const mutated=[];
+ const mutant=networkObserver(session,expected,mutated,source.replace(guard,''));
+ session.emit('Network.requestWillBeSent',{requestId:'oversized',request:{url:'http://127.0.0.1:38129/_hologram/intent',method:'POST',postData:encoded+' '}});
+ assert.throws(()=>assert.equal(mutated[0].payloadMatches,null),assert.AssertionError);mutant.stop();
+});
+test('the production event recorder exposes exact32 and one-over truncation without replacing earlier events',()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const start=source.indexOf('  const events = [];'),end=source.indexOf('  let invocation;',start);assert(start>=0&&end>start);
+ const factory=body=>runInNewContext(body+'\n({record, snapshot:()=>({events,eventsTruncated})})');
+ const recorder=factory(source.slice(start,end));for(let i=0;i<32;i++)recorder.record({event:'request',ordinal:i});
+ assert.equal(recorder.snapshot().events.length,32);assert.equal(recorder.snapshot().eventsTruncated,false);
+ recorder.record({event:'request',ordinal:32});assert.equal(recorder.snapshot().events.length,32);
+ assert.equal(recorder.snapshot().eventsTruncated,true);assert.equal(recorder.snapshot().events.at(-1).ordinal,31);
+ const guard='else eventsTruncated = true;';assert.equal(source.slice(start,end).split(guard).length,2);
+ const mutant=factory(source.slice(start,end).replace(guard,''));for(let i=0;i<33;i++)mutant.record({event:'request'});
+ assert.throws(()=>assert.equal(mutant.snapshot().eventsTruncated,true),assert.AssertionError);
+});
+test('actual submission diagnostic emission and cleanup retain the first body failure when both diagnostic sinks throw',async()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const start=source.indexOf('function failureKind('),end=source.indexOf('\n// CDP observations',start);
+ const bodyFailure=new Error('private-body-failure'),failedBodies=new WeakSet([bodyFailure]);let emissions=0;
+ const helpers=runInNewContext(source.slice(start,end)+'\n({failureKind,sanitizedFailure,emitDiagnostic})',
+  {assert,errors:{TimeoutError:class extends Error{}},failedBodies,unavailableBodies:new WeakSet(),sanitizedFailures:new WeakSet(),
+   setTimeout,clearTimeout,console:{error(){emissions++;throw new Error('private-sink-failure');}}});
+ assert.doesNotThrow(()=>helpers.emitDiagnostic({schema:'prismpm/browser-submission-diagnostic/2',failure:'response-body-failed'}));
+ const primary=helpers.sanitizedFailure(bodyFailure,'response-body');
+ const tailStart=source.lastIndexOf('  let cleanupFailure;'),tailEnd=source.trimEnd().length-1;
+ assert(tailStart>=0&&tailEnd>tailStart);let closed=0,destroyed=0;
+ const invoke=primaryFailure=>runInNewContext('(async()=>{'+source.slice(tailStart,tailEnd)+'})',
+  {...helpers,primaryFailure,bounded:operation=>operation,browser:{close:async()=>{closed++;throw new Error('private-cleanup-failure');}},
+   process:{stdin:{destroy(){destroyed++;throw new Error('private-stdin-failure');}}}})();
+ await assert.rejects(invoke(primary),error=>error===primary);assert.equal(closed,1);assert.equal(destroyed,1);
+ await assert.rejects(invoke(undefined),error=>error.message==='portable View oracle cleanup: unexpected');
+ assert.equal(closed,2);assert.equal(destroyed,2);assert.equal(emissions,5);
+});
 test('diagnostics retain exact independently measured subjects and drivers incrementally outside acceptance evidence',t=>{
  const root=diagnosticRoot(t),source=join(root,'actual-driver.mjs'),body=Buffer.from('export const sourceOwned = true;\n');writeFileSync(source,body);
  const bundle=new PortableDiagnosticBundle(root);bundle.file('cases/0-click-positive.driver.mjs',source,hash(body));

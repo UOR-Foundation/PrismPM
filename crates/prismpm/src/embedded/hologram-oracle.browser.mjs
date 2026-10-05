@@ -43,6 +43,102 @@ function sanitizedFailure(error, phase) {
   sanitizedFailures.add(safe);
   return safe;
 }
+function emitDiagnostic(value) {
+  try { console.error(JSON.stringify(value)); }
+  catch { /* A diagnostic sink is not authority to replace the original failure. */ }
+}
+// CDP observations are diagnostic only: no body retrieval, request interception,
+// cache overrides, or enlarged retention buffers can alter the acceptance path.
+function submissionNetworkRecorder(session, endpoint, expectedRequest, record) {
+  const requests = new Map();
+  let ordinal = 0;
+  let overflow = false;
+  let active = true;
+  const integer = value => Number.isSafeInteger(value) && value >= 0 && value <= 16 * 1024 ** 2 ? value : null;
+  const listeners = {
+    'Network.requestWillBeSent': value => {
+      if (value.request?.url !== endpoint) return;
+      if (!requests.has(value.requestId)) {
+        if (requests.size === 32) { overflow = true; return; }
+        requests.set(value.requestId, ++ordinal);
+      }
+      let payloadMatches = null;
+      const payloadOversized = typeof value.request.postData === 'string' && value.request.postData.length > 65_536 * 6 + 256;
+      if (typeof value.request.postData === 'string' && !payloadOversized) {
+        try { assert.deepEqual(JSON.parse(value.request.postData), expectedRequest); payloadMatches = true; }
+        catch { payloadMatches = false; }
+      }
+      record({event: 'cdp-request', request: requests.get(value.requestId),
+        method: ['GET', 'POST'].includes(value.request.method) ? value.request.method : 'OTHER',
+        payloadMatches, payloadOversized, redirect: value.redirectResponse !== undefined});
+    },
+    'Network.responseReceived': value => {
+      if (!requests.has(value.requestId)) return;
+      record({event: 'cdp-response', request: requests.get(value.requestId), status: integer(value.response?.status),
+        serviceWorker: value.response?.fromServiceWorker === true, diskCache: value.response?.fromDiskCache === true});
+    },
+    'Network.dataReceived': value => {
+      if (!requests.has(value.requestId)) return;
+      record({event: 'cdp-data', request: requests.get(value.requestId),
+        bytes: integer(value.dataLength), encodedBytes: integer(value.encodedDataLength)});
+    },
+    'Network.loadingFinished': value => {
+      if (!requests.has(value.requestId)) return;
+      record({event: 'cdp-finished', request: requests.get(value.requestId), encodedBytes: integer(value.encodedDataLength)});
+    },
+    'Network.loadingFailed': value => {
+      if (!requests.has(value.requestId)) return;
+      record({event: 'cdp-failed', request: requests.get(value.requestId),
+        cancelled: value.canceled === true, reason: requestFailureReason(value.errorText ?? null)});
+    },
+  };
+  const registrations = Object.entries(listeners).map(([name, listener]) => [name, value => { if (active) listener(value); }]);
+  for (const [name, listener] of registrations) session.on(name, listener);
+  return {
+    summary: () => ({state: 'observed', requests: ordinal, overflow}),
+    stop() {
+      active = false;
+      for (const [name, listener] of registrations) {
+        try { session.off(name, listener); } catch { /* Diagnostic failure cannot replace the first body failure. */ }
+      }
+      requests.clear();
+    },
+  };
+}
+async function submissionNetworkOwner(target, endpoint, expectedRequest, record) {
+  const unavailable = () => ({summary: () => ({state: 'unavailable'}), stop() {}});
+  let network = unavailable();
+  let session;
+  let retired = false;
+  const detach = async value => {
+    try { await bounded(value.detach()); } catch { /* The browser process owner remains the cleanup authority. */ }
+  };
+  const stop = async () => {
+    retired = true;
+    network.stop();
+    const closing = session;
+    session = undefined;
+    if (closing) await detach(closing);
+  };
+  try {
+    // The original acquisition promise owns late arrivals even if its deadline
+    // wins. A timed-out session must never be abandoned between submissions.
+    const acquisition = Promise.resolve(target.context().newCDPSession(target)).then(async value => {
+      if (retired) { await detach(value); return null; }
+      session = value;
+      return value;
+    });
+    const acquired = await bounded(acquisition);
+    if (acquired) {
+      network = submissionNetworkRecorder(acquired, endpoint, expectedRequest, record);
+      await bounded(acquired.send('Network.enable'));
+    }
+  } catch {
+    await stop();
+    network = unavailable();
+  }
+  return {summary: () => network.summary(), stop};
+}
 let browser;
 let primaryFailure;
 try {
@@ -157,12 +253,14 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   const expectedRequest = {version: 1, name: 'application.invoke',
     payload: decode.decode(Uint8Array.from(vector.request))};
   const events = [];
-  const record = event => { if (events.length < 32) events.push(event); };
+  let eventsTruncated = false;
+  const record = event => { if (events.length < 32) events.push(event); else eventsTruncated = true; };
   let invocation;
   let invocationCount = 0;
   let navigated = false;
   let phase = 'initial-readiness';
   let check = null;
+  let network = {summary: () => ({state: 'unavailable'}), async stop() {}};
   let rejectNavigation;
   const navigation = new Promise((_, reject) => { rejectNavigation = reject; });
   // The observer is armed before readiness/fill, before the submission race.
@@ -199,6 +297,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   target.on('crash', onCrash);
   target.on('close', onClose);
   try {
+    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);
     await target.waitForFunction(ready);
     phase = 'fill';
     if (fillInputs) await fill(vector, target);
@@ -248,9 +347,9 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     assert.equal(navigated, false, 'submission must not navigate the main frame');
   } catch (error) {
     const client = await failedClientState(target, () => displayed(vector));
-    console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
+    emitDiagnostic({schema: 'prismpm/browser-submission-diagnostic/2',
       journey: activeJourney, vectorIndex: app.acceptance_vectors.indexOf(vector),
-      phase, check, keyboard, events, invocationCount, navigated, client, failure: failureKind(error)}));
+      phase, check, keyboard, events, eventsTruncated, invocationCount, navigated, client, network: network.summary(), failure: failureKind(error)});
     throw sanitizedFailure(error, phase);
   } finally {
     target.off('request', onRequest);
@@ -259,6 +358,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     target.off('requestfinished', onFinished);
     target.off('crash', onCrash);
     target.off('close', onClose);
+    await network.stop();
   }
 }
 async function journey(name, work) {
@@ -429,9 +529,9 @@ async function journey(name, work) {
 } finally {
   let cleanupFailure;
   const failedCleanup = (error, resource) => {
-    console.error(JSON.stringify({schema: 'prismpm/browser-cleanup-diagnostic/1',
-      resource, failure: failureKind(error)}));
     cleanupFailure ??= sanitizedFailure(error, 'cleanup');
+    emitDiagnostic({schema: 'prismpm/browser-cleanup-diagnostic/1',
+      resource, failure: failureKind(error)});
   };
   try { if (browser) await bounded(browser.close()); }
   catch (error) { failedCleanup(error, 'browser'); }
