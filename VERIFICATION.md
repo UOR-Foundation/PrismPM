@@ -1,5 +1,18 @@
 # PrismPM falsifiability and verification record
 
+## Independent Rust exporter source bounds
+
+Source custody charges declared bytes before body access: 4,096 entries and
+16 MiB, independently of the full 512-MiB build allowance. Nine custody tests
+pass, including directory/truncation/overflow refusals and actual full-size
+build capture beside the pinned source. Five production-guard mutants fail
+their intended witnesses; restored source passes all nine tests without skips.
+Mutation log SHA-256:
+`acff3d71d437456d07a2b60b894d58f0b100850b483808070e22a165cf227f40`.
+All 311 source-audit tests and strict workspace Clippy pass in the pinned
+devcontainer. Independent adversarial review is clear. These are component
+checks, not full V&V, immutable SDK or consumer acceptance for issue #69.
+
 ## Bounded private exporter runtime capture
 
 Runtime traversal streams one directory iterator and hashes at most 64 KiB
