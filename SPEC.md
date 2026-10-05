@@ -981,6 +981,14 @@ retained executables through bounded, stable descriptor reads and their full
 captured identities. These checks are custody, not compiler provenance or
 atomic filesystem isolation; fresh pinned compilation remains required.
 
+Runtime capture enumerates one directory iterator with a one-entry buffer,
+charges each member before queueing descendants, and hashes files in at most
+64 KiB chunks. Source and build closures independently admit 4,096 members
+and 16 MiB/512 MiB respectively. The package root and captured source archive
+are additional members; the archive retains its independent 256 MiB bound.
+Traversal has no additional depth restriction. Every observed member is
+rechecked after complete traversal; metadata remains private custody evidence.
+
 `DK-30` owns the internal conditional native-lane reducer in
 `Foundation.Native.Application.V1.Lease`. Its explicit corpus is mechanically
 bound to every generated LexLean probe and executes in standard and no_std Rust.
