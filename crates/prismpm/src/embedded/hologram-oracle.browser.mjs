@@ -84,6 +84,29 @@ const output = page.locator('#result');
 async function shows(expected, target = page) {
   await target.waitForFunction(value => document.querySelector('#result')?.textContent === value, expected);
 }
+// Failure-only observations, never a substitute for the correlated network
+// body or an acceptance predicate. No document text or exception escapes.
+async function failedClientState(target, expectedDisplay) {
+  let timer;
+  try {
+    if (target.isClosed()) return {state: 'closed'};
+    const expected = expectedDisplay();
+    return await Promise.race([
+      target.evaluate(({expected, responseError}) => {
+        const output = document.querySelector('#result');
+        const form = document.querySelector('#application-form');
+        const button = document.querySelector('#submit');
+        return {state: 'observed', outputPresent: output !== null,
+          expectedResult: output !== null && output.textContent === expected,
+          responseError: output !== null && output.textContent === responseError,
+          busy: form !== null && form.hasAttribute('aria-busy') === true,
+          disabled: button === null || button.disabled === true};
+      }, {expected, responseError: text ? view.response_error : view.input_error}),
+      new Promise(resolve => {timer = setTimeout(() => resolve({state: 'unavailable'}), 250);}),
+    ]);
+  } catch { return {state: 'unavailable'}; }
+  finally { clearTimeout(timer); }
+}
 async function fill(vector, target = page) {
   const request = decode.decode(Uint8Array.from(vector.request));
   if (text) await target.locator('#request').fill(request);
@@ -167,10 +190,14 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   const onFinished = request => {
     if (request === invocation) record({event: 'request-finished', invocation: true});
   };
+  const onCrash = () => record({event: 'page-crash'});
+  const onClose = () => record({event: 'page-close'});
   target.on('request', onRequest);
   target.on('framenavigated', onNavigation);
   target.on('requestfailed', onFailure);
   target.on('requestfinished', onFinished);
+  target.on('crash', onCrash);
+  target.on('close', onClose);
   try {
     await target.waitForFunction(ready);
     phase = 'fill';
@@ -220,15 +247,18 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     check = 'main-frame-navigation';
     assert.equal(navigated, false, 'submission must not navigate the main frame');
   } catch (error) {
+    const client = await failedClientState(target, () => displayed(vector));
     console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
       journey: activeJourney, vectorIndex: app.acceptance_vectors.indexOf(vector),
-      phase, check, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
+      phase, check, keyboard, events, invocationCount, navigated, client, failure: failureKind(error)}));
     throw sanitizedFailure(error, phase);
   } finally {
     target.off('request', onRequest);
     target.off('framenavigated', onNavigation);
     target.off('requestfailed', onFailure);
     target.off('requestfinished', onFinished);
+    target.off('crash', onCrash);
+    target.off('close', onClose);
   }
 }
 async function journey(name, work) {

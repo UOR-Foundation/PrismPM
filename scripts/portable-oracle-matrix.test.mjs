@@ -10,6 +10,49 @@ import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapsho
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
 
+test('failure-only client observation is bounded and emits no document text or raw exceptions', async () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const start = source.indexOf('async function failedClientState(');
+  const end = source.indexOf('\nasync function fill(', start);
+  assert(start >= 0 && end > start);
+  const privateText = 'private-oracle-draft-71943';
+  const state = {output: {textContent: privateText}, form: {hasAttribute: () => true}, button: {disabled: false}};
+  const document = {querySelector: selector => ({'#result': state.output, '#application-form': state.form, '#submit': state.button})[selector]};
+  const observeFactory = runInNewContext('(' + source.slice(start, end) + ')',
+    {setTimeout, clearTimeout, document, text: true, view: {response_error: 'expected-error'}});
+  const observe = (target, expected) => observeFactory(target, () => expected);
+  const target = {isClosed: () => false, evaluate: async (fn, args) => fn(args)};
+  const plain = value => JSON.parse(JSON.stringify(value));
+  assert.deepEqual(plain(await observe(target, 'expected-result')), {state: 'observed', outputPresent: true,
+    expectedResult: false, responseError: false, busy: true, disabled: false});
+  state.output.textContent = 'expected-result';
+  assert.equal((await observe(target, 'expected-result')).expectedResult, true);
+  state.output.textContent = 'expected-error';
+  assert.equal((await observe(target, 'expected-result')).responseError, true);
+  state.form.hasAttribute = () => privateText; state.button.disabled = privateText;
+  assert(!JSON.stringify(await observe(target, privateText)).includes(privateText));
+  assert.deepEqual(plain(await observe({isClosed: () => true}, privateText)), {state: 'closed'});
+  assert.deepEqual(plain(await observe({isClosed: () => false, evaluate: async () => {throw new Error(privateText);}}, privateText)), {state: 'unavailable'});
+  const began = performance.now();
+  assert.deepEqual(plain(await observe({isClosed: () => false, evaluate: () => new Promise(() => {})}, privateText)), {state: 'unavailable'});
+  assert(performance.now() - began < 2000, 'failure diagnostics must not hang');
+  assert(source.includes('const client = await failedClientState(target, () => displayed(vector));'));
+  for (const prepare of [
+    () => new TextDecoder('utf-8', {fatal: true}).decode(Uint8Array.of(255)),
+    () => assert.match('malformed-numeric-response', /^ok\t-?\d+$/),
+  ]) {
+    const original = new Error('original-network-failure');
+    await assert.rejects(async () => {
+      try { throw original; }
+      catch (error) {
+        assert.deepEqual(plain(await observeFactory(target, prepare)), {state: 'unavailable'});
+        throw error;
+      }
+    }, error => error === original);
+  }
+  assert.deepEqual(plain(await observe({isClosed: () => {throw new Error(privateText);}}, privateText)), {state: 'unavailable'});
+});
+
 test('browser request diagnostics expose only closed failure reasons, never raw private text', () => {
   const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
   const start = source.indexOf('function requestFailureReason(value) {');

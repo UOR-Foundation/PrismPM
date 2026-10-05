@@ -1,5 +1,18 @@
 # PrismPM falsifiability and verification record
 
+## Failed portable-response client state
+
+Failure-only browser diagnostics now record bounded, closed client-state
+booleans and page close/crash events without returning application content.
+Observation preparation, page loss and its 250 ms deadline preserve the original
+failure. No retries, response fallback or acceptance relaxation are introduced.
+All 16 driver tests pass; all three interoperability owners pass in 1440.97
+seconds, including 78 matrix cases and four required negative controls. The
+source audit passes all 290 tests in 260.46 seconds without skips. Independent
+adversarial review is clear. Hosted run 37237466412 remains failed: its aborted
+response body is not explained or repaired by this diagnostic change. Full
+V&V, SDK and issue #67 acceptance remain outstanding.
+
 ## Exporter custody after process failure
 
 Executable byte/mode and inode/ctime checks now run after unsuccessful children
