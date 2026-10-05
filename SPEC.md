@@ -1027,6 +1027,13 @@ Each actual `lake exe prod-export` invocation records a closed
 `prismpm/exporter-execution/1` child executable measurement and
 `prismpm/exporter-acquisition/1` cold/seed provenance.
 Executable byte, mode and file-identity checks run after failed invocations too.
+The complete exporter package is captured before and after execution. Source
+members must still equal the pinned archive; only the private `.lake` build tree
+may extend it. Aliases, hard links, special files, omitted deep entries and
+changes to any source, configuration, build member or directory identity are
+rejected. The build tree retains its full 4,096-entry, 256-MiB-per-file and
+512-MiB-total allowance; the exact pinned source inventory is bounded separately.
+Buffered names are bounded by those inventories plus the package root.
 Detected custody drift takes precedence; otherwise the original process failure
 is preserved and no successful execution receipt is constructed.
 Seed receipts bind their inventory and manifest to the consumer lock, and the actual child to its

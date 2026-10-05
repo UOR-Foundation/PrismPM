@@ -1,5 +1,21 @@
 # PrismPM falsifiability and verification record
 
+## Complete exporter package custody
+
+Every exporter invocation now checks exact pinned source/configuration and the
+complete private build tree before and after execution, including failed children.
+Streaming enumeration preserves the full seed allowance separately from source
+members; aliases, hard links, special files and same-byte replacements fail.
+The real-child regression rejected a previously accepted toolchain mutation.
+All 11 exporter tests and strict all-target/all-feature Clippy pass. Complete
+DK-30 passes in 488.53 seconds with attestation
+`48dc299e9f77bc75adbdcc19e0214fdc3ade84e791cc92a1542642564293d527`;
+all 290 source-audit tests pass in 262.92 seconds without skips. Independent
+adversarial review is clear after enumeration and seed-accounting corrections.
+Superseded runs are not final-code evidence. This is before/after custody
+detection, not atomic isolation, cache provenance, compiler reuse, SDK acceptance
+or completion of issue #69.
+
 ## Failed portable-response client state
 
 Failure-only browser diagnostics now record bounded, closed client-state

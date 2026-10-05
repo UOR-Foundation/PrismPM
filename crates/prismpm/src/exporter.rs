@@ -1,5 +1,7 @@
 //! One fresh acquisition boundary for the pinned Lean exporter package.
 
+mod custody;
+
 use crate::error::PrismError;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -132,6 +134,7 @@ pub(crate) fn run_export(
         ));
     }
     let child = cwd.join(".lake/build/bin/prod-export");
+    let package_before = custody::capture(cwd)?;
     let identity_before = std::fs::symlink_metadata(&child)
         .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
     let before = measure_executable(&child)?;
@@ -145,6 +148,12 @@ pub(crate) fn run_export(
         replacements,
         failure_code,
     );
+    if custody::capture(cwd)? != package_before {
+        return Err(PrismError::new(
+            "PP5008",
+            "exporter package changed during execution",
+        ));
+    }
     if measure_executable(&child)? != before {
         return Err(PrismError::new(
             "PP5008",
@@ -590,33 +599,37 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         // Real process boundary fixture, not Lean/compiler acceptance. The
         // production conformance cases separately execute actual Lake exports.
-        let root = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(root.path().join(".lake/build/bin")).unwrap();
-        let child = root.path().join(".lake/build/bin/prod-export");
+        let work = tempfile::tempdir().unwrap();
+        let root = work.path().join("exporter");
+        acquire(&root).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/bin")).unwrap();
+        let child = root.join(".lake/build/bin/prod-export");
+        let launcher = work.path().join("lake");
+        std::fs::write(&launcher, b"#!/bin/sh\n./.lake/build/bin/prod-export\n").unwrap();
+        std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
         let original = b"#!/bin/sh\nexit 0\n";
         std::fs::write(&child, original).unwrap();
         std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
         let invoke = || {
             run_export(
                 "exporter-identity-test",
-                Path::new("/usr/bin/sh"),
+                &launcher,
                 &["exe".to_owned(), "prod-export".to_owned()],
-                root.path(),
+                &root,
                 &std::collections::BTreeMap::new(),
                 &[],
                 "PP5004",
                 &cold_acquisition(),
             )
         };
-        std::fs::write(root.path().join("exe"), b"./.lake/build/bin/prod-export\n").unwrap();
         let record = invoke().unwrap();
         assert_eq!(
             record.exporter.unwrap().executable,
             measure_executable(&child).unwrap()
         );
         std::fs::write(
-            root.path().join("exe"),
-            b"./.lake/build/bin/prod-export\nprintf genuine-failure >&2\nexit 7\n",
+            &launcher,
+            b"#!/bin/sh\n./.lake/build/bin/prod-export\nprintf genuine-failure >&2\nexit 7\n",
         )
         .unwrap();
         let error = invoke().unwrap_err();
@@ -632,10 +645,44 @@ mod tests {
             ] {
                 std::fs::write(&child, original).unwrap();
                 std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
-                std::fs::write(root.path().join("exe"), format!(
-                    "./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"
+                std::fs::write(&launcher, format!(
+                    "#!/bin/sh\n./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"
                 )).unwrap();
                 assert_eq!(invoke().unwrap_err().code, "PP5008", "exit {exit}: {mutation}");
+            }
+        }
+        // The selected executable is not the whole Lake execution input. A
+        // changed configuration, source or build input must also fail even
+        // when the executable stays byte-for-byte and inode-for-inode intact.
+        std::fs::write(&child, original).unwrap();
+        std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let toolchain = std::fs::read(root.join("lean-toolchain")).unwrap();
+        for exit in [0, 7] {
+            for mutation in [
+                "printf changed >> lean-toolchain",
+                "cp -p lean-toolchain replacement\nmv replacement lean-toolchain",
+                "printf added > .lake/build/extra",
+            ] {
+                std::fs::write(root.join("lean-toolchain"), &toolchain).unwrap();
+                let extra = root.join(".lake/build/extra");
+                if extra.exists() {
+                    std::fs::remove_file(extra).unwrap();
+                }
+                std::fs::write(
+                    &launcher,
+                    format!("#!/bin/sh\n./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"),
+                )
+                .unwrap();
+                let result = invoke();
+                assert!(
+                    result.is_err(),
+                    "accepted package mutation exit {exit}: {mutation}"
+                );
+                assert_eq!(
+                    result.unwrap_err().code,
+                    "PP5008",
+                    "package exit {exit}: {mutation}"
+                );
             }
         }
     }
