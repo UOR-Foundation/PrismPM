@@ -454,7 +454,7 @@ pub fn run_at(root: &Path, id: &str) {
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
-        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 22, "120000"),
+        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 28, "120000"),
         "DK-28" => verify_node_suite(
             root,
             id,
