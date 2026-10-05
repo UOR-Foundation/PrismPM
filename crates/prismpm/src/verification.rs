@@ -2231,6 +2231,7 @@ fn run_application(
     lex_attestation: Vec<u8>,
     lex_attestation_id: String,
     mut processes: Vec<ProcessRecord>,
+    mut exporter_owner: crate::exporter::VerifyExporterOwner,
 ) -> Result<VerifyResult, PrismError> {
     let application = model.application.as_ref().ok_or_else(|| {
         PrismError::new(
@@ -2426,12 +2427,14 @@ fn run_application(
     let application_manifest =
         std::fs::read(build_root.join("application/lexlean-build-manifest.json"))
             .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
-    let mut replay = crate::application_build::generate_recorded(
+    let mut replay = crate::application_build::generate_owned(
         &controller.root,
         &model,
         &model_bytes,
         &application_lex,
         &application_manifest,
+        &mut exporter_owner,
+        crate::exporter::Phase::Replay,
     )?;
     let expected_artifacts = build_manifest["files"]
         .as_array()
@@ -2500,10 +2503,11 @@ fn run_application(
     let manifest = json!({
         "acceptance_sha256": format!("{:x}", Sha256::digest(&acceptance_bytes)),
         "build_id": build.build_id,
+        "exporter_owner": exporter_owner.finish()?,
         "lexlean_attestation_sha256": format!("{:x}", Sha256::digest(&lex_attestation)),
         "model_sha256": format!("{:x}", Sha256::digest(&model_bytes)),
         "processes": process_value,
-        "schema": "prismpm/application-verification-manifest/1"
+        "schema": "prismpm/application-verification-manifest/2"
     });
     let manifest_bytes = encode_value(&manifest)?;
     let attestation_id = content_id(&manifest_bytes);
@@ -2527,11 +2531,13 @@ pub(crate) fn run(
     request: VerifyRequest,
     release: Option<&str>,
 ) -> Result<VerifyResult, PrismError> {
-    let build = controller.build_release(
+    let mut exporter_owner = crate::exporter::VerifyExporterOwner::default();
+    let build = controller.build_release_with_owner(
         BuildRequest {
             config_path: request.config_path.clone(),
         },
         release,
+        Some(&mut exporter_owner),
     )?;
     let (config, _) = ProjectConfig::load(&controller.root, request.config_path.as_deref())?;
     let project_path = config.lexlean_path(&controller.root)?;
@@ -2723,6 +2729,7 @@ pub(crate) fn run(
                 lex_attestation_id,
                 lex_snapshot,
                 processes: toolchain.records,
+                exporter_owner,
             },
         );
     }
@@ -2738,6 +2745,7 @@ pub(crate) fn run(
             lex_attestation,
             lex_attestation_id,
             toolchain.records,
+            exporter_owner,
         );
     }
 

@@ -27,6 +27,18 @@ pub(crate) struct GeneratedLibrary {
     pub(crate) processes: Vec<ProcessRecord>,
 }
 
+impl crate::exporter::ProductEvidence for GeneratedLibrary {
+    fn role(&self) -> &'static str {
+        "library"
+    }
+    fn artifacts(&self) -> &[(String, Vec<u8>)] {
+        &self.artifacts
+    }
+    fn processes(&self) -> &[ProcessRecord] {
+        &self.processes
+    }
+}
+
 pub(crate) fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -155,6 +167,28 @@ pub(crate) fn validate_export_identity(
 }
 
 /// Generate unaccepted native artifacts; verification owns acceptance evidence.
+pub(crate) fn export_arguments(
+    modules: &BTreeSet<String>,
+    library: &crate::holo::model_document::ModelLibrary,
+    export: &Path,
+) -> Vec<String> {
+    let mut arguments = vec!["exe".to_owned(), "prod-export".to_owned()];
+    for module in modules {
+        arguments.extend(["--module".to_owned(), module.clone()]);
+    }
+    for root in &library.export_roots {
+        arguments.extend(["--root".to_owned(), root.clone()]);
+    }
+    arguments.extend([
+        "--ir-module".to_owned(),
+        library.cargo_name.replace('-', "_"),
+        "--out".to_owned(),
+        export.to_string_lossy().into_owned(),
+    ]);
+    arguments
+}
+
+/// Generate unaccepted native artifacts; verification owns acceptance evidence.
 pub(crate) fn generate(
     repository_root: &Path,
     model: &ModelDocument,
@@ -179,6 +213,52 @@ pub(crate) fn generate_recorded(
     lex_root: &Path,
     lex_manifest_bytes: &[u8],
 ) -> Result<GeneratedLibrary, PrismError> {
+    generate_in(
+        repository_root,
+        model,
+        model_bytes,
+        lex_root,
+        lex_manifest_bytes,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn generate_owned(
+    repository_root: &Path,
+    model: &ModelDocument,
+    model_bytes: &[u8],
+    lex_root: &Path,
+    lex_manifest_bytes: &[u8],
+    owner: &mut crate::exporter::VerifyExporterOwner,
+    phase: crate::exporter::Phase,
+) -> Result<GeneratedLibrary, PrismError> {
+    owner.generate(
+        repository_root,
+        phase,
+        model_bytes,
+        lex_manifest_bytes,
+        |package, acquisition| {
+            generate_in(
+                repository_root,
+                model,
+                model_bytes,
+                lex_root,
+                lex_manifest_bytes,
+                Some((package, acquisition)),
+            )
+        },
+    )
+}
+
+fn generate_in(
+    repository_root: &Path,
+    model: &ModelDocument,
+    model_bytes: &[u8],
+    lex_root: &Path,
+    lex_manifest_bytes: &[u8],
+    owned: Option<(&Path, &Value)>,
+) -> Result<GeneratedLibrary, PrismError> {
     let library = model
         .library
         .as_ref()
@@ -188,8 +268,14 @@ pub(crate) fn generate_recorded(
         .tempdir()
         .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
     let workspace = work.path();
-    let lean_package = workspace.join("lean4-prod");
-    let exporter_acquisition = crate::exporter::acquire_for(repository_root, &lean_package)?;
+    let (lean_package, exporter_acquisition) = match owned {
+        Some((package, acquisition)) => (package.to_owned(), acquisition.clone()),
+        None => {
+            let package = workspace.join("lean4-prod");
+            let acquisition = crate::exporter::acquire_for(repository_root, &package)?;
+            (package, acquisition)
+        }
+    };
 
     let manifest: Value = serde_json::from_slice(lex_manifest_bytes)
         .map_err(|error| PrismError::new("PP4004", format!("LexLean manifest: {error}")))?;
@@ -252,7 +338,11 @@ pub(crate) fn generate_recorded(
         b"leanprover/lean4:v4.32.1\n",
     )?;
     let lake = executable("lake")?;
-    let replacements = [(workspace, "$LIBRARY_WORK"), (repository_root, "$PROJECT")];
+    let replacements = [
+        (lean_package.as_path(), "$LEAN4_PROD"),
+        (workspace, "$LIBRARY_WORK"),
+        (repository_root, "$PROJECT"),
+    ];
     let no_env = BTreeMap::new();
     let mut processes = Vec::new();
     for (tool, directory, args) in [
@@ -278,19 +368,7 @@ pub(crate) fn generate_recorded(
         )?);
     }
     let export = workspace.join("export");
-    let mut arguments = vec!["exe".to_owned(), "prod-export".to_owned()];
-    for module in &modules {
-        arguments.extend(["--module".to_owned(), module.clone()]);
-    }
-    for root in &library.export_roots {
-        arguments.extend(["--root".to_owned(), root.clone()]);
-    }
-    arguments.extend([
-        "--ir-module".to_owned(),
-        library.cargo_name.replace('-', "_"),
-        "--out".to_owned(),
-        export.to_string_lossy().into_owned(),
-    ]);
+    let arguments = export_arguments(&modules, library, &export);
     let export_env = BTreeMap::from([(
         "LEAN_PATH".to_owned(),
         workspace

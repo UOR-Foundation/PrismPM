@@ -5,9 +5,9 @@ import {cpSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSyn
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,verifySource,sourceRoots,sourceAliases,cli,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock} from './library-sdk-check.mjs';
+import {capture,verifySource,sourceRoots,sourceAliases,cli,readHistoricalLibraryEvidence,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock} from './library-sdk-check.mjs';
 import {lockFixture,resultFixture,sourceAuthorityFixture} from './library-sdk-fixture.mjs';
-const checkAccepted=(project,receipt)=>checkAcceptedWithAuthority(project,receipt,'3'.repeat(64));
+const checkAccepted=(project,receipt)=>readHistoricalLibraryEvidence(project,receipt,'3'.repeat(64));
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-library-gate-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
@@ -103,7 +103,16 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
   m=>m.processes[6].exit_code=1,m=>m.processes[7].exporter.acquisition.compiler_revision='b'.repeat(40),
   m=>m.processes[7].argv=[],m=>m.processes[7].exporter.executable.mode=-1,
   m=>m.processes[7].exporter.acquisition.toolchain='not-a-toolchain',m=>m.artifacts=[{arbitrary:'not-the-cold-build'}],
-  m=>m.artifacts[0].sha256='a'.repeat(64),m=>m.artifacts[0].byte_length=-1]){
+  m=>m.artifacts[0].sha256='a'.repeat(64),m=>m.artifacts[0].byte_length=-1,
+  m=>m.schema='prismpm/library-verification-manifest/1',m=>delete m.exporter_owner,
+  m=>m.exporter_owner.phases.reverse(),m=>m.exporter_owner.phases.pop(),
+  m=>m.exporter_owner.phases[0].artifacts[0].sha256='a'.repeat(64),
+  m=>m.exporter_owner.phases[0].processes[2].exporter.acquisition.platform='linux/foreign',
+  m=>m.exporter_owner.phases[0].processes[2].exporter.source_archive_sha256='a'.repeat(64),
+  m=>m.exporter_owner.phases[0].processes[2].exporter.executable.sha256='a'.repeat(64),
+  m=>m.exporter_owner.phases[0].processes[0].executable_sha256='a'.repeat(64),
+  m=>m.exporter_owner.phases[1].processes[2].argv.push('--undeclared'),
+  m=>m.exporter_owner.phases[0].extra=true]){
   const bad=structuredClone(value),manifest=JSON.parse(bad.runs[2].manifest);mutate(manifest);
   bad.runs[2].manifest=fixture.encode(manifest);bad.runs[2].manifest_sha256=fixture.hash(bad.runs[2].manifest);
   assert.throws(()=>verify(bad));
@@ -170,6 +179,7 @@ function parserFixture(root,change=()=>{}){
 
 test('closed native evidence parser rejects coherently resealed model, acceptance and process mutations',t=>{
  const valid=temporary(t),receipt=parserFixture(valid);checkAccepted(valid,receipt);
+ assert.throws(()=>checkAcceptedWithAuthority(valid,receipt,'3'.repeat(64)),/both original exporter phases/);
  for(const change of [
   ({manifest})=>{manifest.extra=true;},({manifest})=>{delete manifest.scope;},
   ({manifest})=>{manifest.processes[0].extra=true;},({manifest})=>{delete manifest.processes[0].argv;},
@@ -228,7 +238,7 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
    if(mutation==='unknown')acquisition.extra=true;
    manifest.processes[7].exporter.acquisition=acquisition;
   });
-  const verify=()=>checkAcceptedWithAuthority(root,warm,'3'.repeat(64),mutation==='missing-authority'?undefined:compiler,'sdk-seed');
+  const verify=()=>readHistoricalLibraryEvidence(root,warm,'3'.repeat(64),mutation==='missing-authority'?undefined:compiler,'sdk-seed');
   if(mutation===null)verify();else assert.throws(verify,mutation);
  }
 });

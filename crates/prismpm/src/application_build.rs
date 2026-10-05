@@ -64,6 +64,18 @@ pub(crate) struct GeneratedApplication {
     pub(crate) exporter_processes: Vec<crate::verification::ProcessRecord>,
 }
 
+impl crate::exporter::ProductEvidence for GeneratedApplication {
+    fn role(&self) -> &'static str {
+        "application"
+    }
+    fn artifacts(&self) -> &[(String, Vec<u8>)] {
+        &self.artifacts
+    }
+    fn processes(&self) -> &[crate::verification::ProcessRecord] {
+        &self.exporter_processes
+    }
+}
+
 fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -634,6 +646,52 @@ pub(crate) fn generate_recorded(
     lex_root: &Path,
     lex_manifest_bytes: &[u8],
 ) -> Result<GeneratedApplication, PrismError> {
+    generate_in(
+        repository_root,
+        model,
+        model_bytes,
+        lex_root,
+        lex_manifest_bytes,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn generate_owned(
+    repository_root: &Path,
+    model: &ModelDocument,
+    model_bytes: &[u8],
+    lex_root: &Path,
+    lex_manifest_bytes: &[u8],
+    owner: &mut crate::exporter::VerifyExporterOwner,
+    phase: crate::exporter::Phase,
+) -> Result<GeneratedApplication, PrismError> {
+    owner.generate(
+        repository_root,
+        phase,
+        model_bytes,
+        lex_manifest_bytes,
+        |package, acquisition| {
+            generate_in(
+                repository_root,
+                model,
+                model_bytes,
+                lex_root,
+                lex_manifest_bytes,
+                Some((package, acquisition)),
+            )
+        },
+    )
+}
+
+fn generate_in(
+    repository_root: &Path,
+    model: &ModelDocument,
+    model_bytes: &[u8],
+    lex_root: &Path,
+    lex_manifest_bytes: &[u8],
+    owned: Option<(&Path, &Value)>,
+) -> Result<GeneratedApplication, PrismError> {
     let application = model.application.as_ref().ok_or_else(|| {
         PrismError::new(
             "PP9001",
@@ -673,8 +731,14 @@ pub(crate) fn generate_recorded(
         .tempdir()
         .map_err(|error| PrismError::new("PP4002", format!("application work: {error}")))?;
     let workspace = work.path();
-    let lean_package = workspace.join("lean4-prod");
-    let exporter_acquisition = crate::exporter::acquire_for(repository_root, &lean_package)?;
+    let (lean_package, exporter_acquisition) = match owned {
+        Some((package, acquisition)) => (package.to_owned(), acquisition.clone()),
+        None => {
+            let package = workspace.join("lean4-prod");
+            let acquisition = crate::exporter::acquire_for(repository_root, &package)?;
+            (package, acquisition)
+        }
+    };
 
     let lex_manifest: Value = serde_json::from_slice(lex_manifest_bytes)
         .map_err(|error| PrismError::new("PP4004", format!("LexLean manifest: {error}")))?;
@@ -730,9 +794,9 @@ pub(crate) fn generate_recorded(
     let lake = executable("lake")?;
     let cargo = executable("cargo")?;
     let replacements = [
+        (lean_package.as_path(), "$LEAN4_PROD"),
         (workspace, "$APPLICATION_WORK"),
         (repository_root, "$PROJECT"),
-        (lean_package.as_path(), "$LEAN4_PROD"),
     ];
     let no_env = BTreeMap::new();
     let generated_process = run_process(
