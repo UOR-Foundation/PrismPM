@@ -13,6 +13,7 @@ const installedInventory = '/opt/prismpm/share/inventory.json';
 const installedSeed = '/opt/prismpm/share/exporter-seed';
 const sha = value => createHash('sha256').update(value).digest('hex');
 const seedBounds = {files: 4097, file: 256 * 1024 ** 2, total: 520 * 1024 ** 2};
+const sourceBounds = {files: 4096, file: 16 * 1024 ** 2, total: 16 * 1024 ** 2};
 
 export function bindSeedInventory(bytes, expectedDigest, revision) {
   assert.match(expectedDigest, /^[0-9a-f]{64}$/);
@@ -80,7 +81,7 @@ function immutableTree(root, rows) {
 }
 
 export function verifySeedFiles(seed, source, manifest) {
-  assert.deepEqual(snapshotTree(source), manifest.source_files, 'fresh compiled-in exporter sources differ');
+  assert.deepEqual(snapshotTree(source, {bounds: sourceBounds}), manifest.source_files, 'fresh compiled-in exporter sources differ');
   const files = snapshotTree(seed, {bounds: seedBounds}).filter(row => row.path !== 'manifest.json');
   assert.deepEqual(files, manifest.files, 'actual SDK seed closure differs');
   return files;
