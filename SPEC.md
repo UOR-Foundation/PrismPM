@@ -209,6 +209,19 @@ even when cleanup also fails. They identify the owning journey and modeled-vecto
 index, observed request completion, and only closed network-failure categories;
 arbitrary browser error text is not forwarded. These observations never replace
 the actual response-body or submission checks. `HO-12` does not duplicate this integration run.
+The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
+under the existing uploaded `target/ci-diagnostics/` path. Exact original
+generated subjects and executed drivers, receipt/cleanup digests, closed
+payload-free observations and complete outcome inventories remain separate
+from proof/release evidence. The bundle is bounded to 256 files, 16 MiB per
+file and 32 MiB total, reserving two file slots and two bounded byte slots for
+index replacement. Closed source-owned journey identifiers are retained. Final
+case inventories remain collectible after a copy failure, without changing the
+incomplete state. Retirement rechecks every observed member after bounded
+streaming enumeration; it does not claim an atomic filesystem snapshot.
+Interrupted or failed collection
+is explicitly incomplete; it cannot replace the original failure, retry a case,
+establish acceptance or omit any of the 78 cases/four controls.
 Readiness fault probes explicitly hold readiness after a real submission and
 release it only after actual result rendering. Body-loss probes close the actual
 target after correlated headers; method-rewrite probes separately retain the

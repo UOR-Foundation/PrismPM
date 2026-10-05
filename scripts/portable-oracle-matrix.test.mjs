@@ -1,14 +1,139 @@
 import assert from 'node:assert/strict';
 import {readFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, renameSync, existsSync, realpathSync, chmodSync, linkSync, symlinkSync, copyFileSync} from 'node:fs';
+import * as actualFs from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,dirname as actualDirname,resolve as actualResolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
+import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
+import {createHash} from 'node:crypto';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+const diagnosticRoot=t=>{const root=mkdtempSync(join(tmpdir(),'portable-diagnostic-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
+const hash=value=>createHash('sha256').update(value).digest('hex');
+test('diagnostics retain exact independently measured subjects and drivers incrementally outside acceptance evidence',t=>{
+ const root=diagnosticRoot(t),source=join(root,'actual-driver.mjs'),body=Buffer.from('export const sourceOwned = true;\n');writeFileSync(source,body);
+ const bundle=new PortableDiagnosticBundle(root);bundle.file('cases/0-click-positive.driver.mjs',source,hash(body));
+ assert(bundle.path.startsWith(join(root,'target/ci-diagnostics/portable-oracle-')));
+ const index=JSON.parse(readFileSync(join(bundle.path,'index.json')));
+ assert.equal(index.scope,'diagnostics-only-not-acceptance');assert.equal(index.state,'collecting');assert.equal(index.files.length,1);
+ assert.equal(index.files[0].sha256,hash(body));assert(readFileSync(join(bundle.path,index.files[0].path)).equals(body));
+ bundle.json('outcomes.json',{cases:[{id:'0-click-positive',status:'passed'}]});bundle.complete();
+ assert.equal(JSON.parse(readFileSync(join(bundle.path,'index.json'))).state,'completed');
+ assert.throws(()=>bundle.bytes('late',Buffer.alloc(0)));
+ const matrixSource=read('scripts/portable-oracle-matrix.mjs');assert(matrixSource.includes("'scripts/portable-oracle-diagnostics.mjs'"));
+ assert(matrixSource.indexOf('original_receipt_sha256')<matrixSource.indexOf('assert.ifError(result.error)'));
+ for(const path of ['.github/workflows/vv.yml','.github/workflows/bootstrap.yml'])assert(read(path).includes('target/ci-diagnostics/'));
+});
+test('diagnostic custody rejects aliases, hard links, substituted hashes and unowned destinations without acceptance',t=>{
+ const root=diagnosticRoot(t),source=join(root,'source');writeFileSync(source,'source');const bundle=new PortableDiagnosticBundle(root);
+ symlinkSync(source,join(root,'alias'));linkSync(source,join(root,'linked'));
+ for(const path of [source,join(root,'alias'),join(root,'linked'),root])assert.throws(()=>bundle.file('refused',path,hash('source')));
+ rmSync(join(root,'linked'));assert.throws(()=>bundle.file('refused',source,hash('substitution')));
+ for(const path of ['../escape','/absolute','a/../escape','a//escape','a\\escape','a/'.repeat(80)+'x'])assert.throws(()=>bundle.bytes(path,Buffer.alloc(0)));
+ const outside=join(root,'outside');mkdirSync(outside);symlinkSync(outside,join(bundle.path,'escape'));
+ assert.throws(()=>bundle.bytes('escape/file',Buffer.from('unowned')));assert(!existsSync(join(outside,'file')));
+ rmSync(join(bundle.path,'escape'));bundle.bytes('data',Buffer.from('original'));
+ assert.throws(()=>bundle.bytes('data',Buffer.from('overwrite')));assert.equal(readFileSync(join(bundle.path,'data'),'utf8'),'original');
+ const saved=bundle.path+'-saved';renameSync(bundle.path,saved);symlinkSync(outside,bundle.path);
+ assert.throws(()=>bundle.bytes('file',Buffer.alloc(0)));assert(!existsSync(join(outside,'file')));
+});
+test('diagnostic budgets include index headroom and refuse exact one-over file and aggregate inventories',t=>{
+ const root=diagnosticRoot(t),bundle=new PortableDiagnosticBundle(root),maximum=Buffer.alloc(diagnosticLimits.fileBytes);
+ bundle.bytes('maximum',maximum);assert.throws(()=>bundle.bytes('oversize',Buffer.alloc(maximum.length+1)));
+ const remainder=diagnosticLimits.totalBytes-2*diagnosticLimits.indexBytes-maximum.length;
+ bundle.bytes('remainder',Buffer.alloc(remainder));assert.throws(()=>bundle.bytes('one-over',Buffer.of(1)));bundle.complete();
+ const entries=new PortableDiagnosticBundle(root);for(let index=0;index<diagnosticLimits.files-2;index++)entries.bytes('row-'+index,Buffer.alloc(0));
+ assert.throws(()=>entries.bytes('one-over',Buffer.alloc(0)));entries.complete();
+ const source=join(root,'oversized');writeFileSync(source,maximum);assert.throws(()=>readDiagnosticFile(source,maximum.length-1));
+});
+test('changed, missing, additional or aliased retained bytes never become complete diagnostics',t=>{
+ const root=diagnosticRoot(t);
+ for(const mutate of [bundle=>writeFileSync(join(bundle.path,'data'),'changed'),bundle=>rmSync(join(bundle.path,'data')),
+  bundle=>writeFileSync(join(bundle.path,'extra'),'unowned'),bundle=>mkdirSync(join(bundle.path,'unowned')),
+  bundle=>{renameSync(join(bundle.path,'data'),join(bundle.path,'saved'));symlinkSync(join(bundle.path,'saved'),join(bundle.path,'data'));},
+  bundle=>writeFileSync(join(bundle.path,'index.json'),'{}')]){
+  const bundle=new PortableDiagnosticBundle(root);bundle.bytes('data',Buffer.from('original'));mutate(bundle);assert.throws(()=>bundle.complete());
+ }
+});
+test('failed optional collection preserves the original failure and never emits credentials or a positive receipt',t=>{
+ const bundle=new PortableDiagnosticBundle(diagnosticRoot(t)),output=[];
+ const original=new Error('original-browser-failure');assert.throws(()=>{
+  try{throw original;}catch(error){assert.equal(retainDiagnostic(bundle,()=>{throw new Error('private-credential');},value=>output.push(value)),false);throw error;}
+ },error=>error===original);
+ assert.deepEqual(output,['portable oracle diagnostic bundle incomplete\n']);
+ assert.equal(JSON.parse(readFileSync(join(bundle.path,'index.json'))).state,'incomplete');
+ assert.equal(retainDiagnostic(bundle,()=>assert.fail('incomplete bundle cannot resume')),false);
+ bundle.finish({cases:[{id:'0-click-positive',status:'failed'}],negative_controls:[]},true);
+ assert.equal(JSON.parse(readFileSync(join(bundle.path,'index.json'))).state,'incomplete');
+ assert.deepEqual(JSON.parse(readFileSync(join(bundle.path,'outcomes.json'))).cases,[{id:'0-click-positive',status:'failed'}]);
+ const brokenSink=new PortableDiagnosticBundle(diagnosticRoot(t));
+ assert.throws(()=>{try{throw original;}catch(error){
+  assert.equal(retainDiagnostic(brokenSink,()=>{throw new Error('collection failed');},()=>{throw new Error('sink failed');}),false);throw error;
+ }},error=>error===original);
+ const value={schema:'prismpm/portable-oracle-probe/1',exit_code:1,signal:null,probe_passed:false,failure:'private-credential',diagnostics:[{
+  schema:'prismpm/browser-submission-diagnostic/1',phase:'private-credential',failure:'private-credential',check:'private-credential',
+  vectorIndex:'private-credential',invocationCount:'private-credential',events:[{event:'private-credential',reason:'private-credential',body:'private-credential'}]}]};
+ for(const name of ['source','matrix','driver','oracle','model','archive','wasm','node','browser'])value[name+'_sha256']='a'.repeat(64);
+ value.diagnostics[0].journey='private-credential';assert.equal(probeSummary(value).diagnostics[0].journey,'other');
+ value.diagnostics[0].journey='modeled-vectors';assert.equal(probeSummary(value).diagnostics[0].journey,'modeled-vectors');
+ assert(!JSON.stringify(probeSummary(value)).includes('private-credential'));assert.throws(()=>probeSummary({...value,driver_sha256:'private-credential'}));
+});
+test('actual process interruption leaves previously written diagnostic files and an explicitly incomplete inventory',t=>{
+ const root=diagnosticRoot(t),module=new URL('./portable-oracle-diagnostics.mjs',import.meta.url).href;
+ const source=`import {PortableDiagnosticBundle} from ${JSON.stringify(module)};const bundle=new PortableDiagnosticBundle(process.argv[1]);bundle.bytes('executed.driver.mjs',Buffer.from('original source'));console.log(bundle.path);process.kill(process.pid,'SIGTERM');`;
+ const child=spawnSync(process.execPath,['--input-type=module','-e',source,root],{encoding:'utf8',timeout:10000,maxBuffer:65536});
+ assert.ifError(child.error);assert.equal(child.signal,'SIGTERM');const path=child.stdout.trim();
+ const index=JSON.parse(readFileSync(join(path,'index.json')));assert.equal(index.state,'collecting');assert.equal(index.files.length,1);
+ assert.equal(readFileSync(join(path,'executed.driver.mjs'),'utf8'),'original source');
+});
+test('owning diagnostic regressions kill real source, alias, retirement and incomplete-state guard mutants',t=>{
+ const root=diagnosticRoot(t),source=read('scripts/portable-oracle-diagnostics.mjs');
+ const mutations=[
+  ["assert.equal(hash(data),expected,'diagnostic source differs from executed input');",'',
+   "writeFileSync(path,'source');assert.throws(()=>bundle.file('copied',path,hash('changed')));"],
+  ['before.nlink===1n&&','',
+   "writeFileSync(path,'source');linkSync(path,path+'-linked');assert.throws(()=>bundle.file('copied',path,hash('source')));"],
+  ["assert.equal(hash(data),row.sha256,'diagnostic copy changed');",'',
+   "bundle.bytes('data',Buffer.from('original'));writeFileSync(join(bundle.path,'data'),'tampered');assert.throws(()=>bundle.complete());"],
+  ["assert.deepEqual(actual.sort(),[...expected].sort(),'diagnostic output inventory changed');",'',
+   "bundle.bytes('data',Buffer.from('original'));writeFileSync(join(bundle.path,'extra'),'unowned');assert.throws(()=>bundle.complete());",
+   "assert(expected.has(name),'unexpected diagnostic output');"],
+  ["incomplete(){this.state='incomplete';this.index();}","incomplete(){this.state='completed';this.index();}",
+   "assert.equal(retainDiagnostic(bundle,()=>{throw new Error('collection failed');},()=>{}),false);assert.equal(JSON.parse(readFileSync(join(bundle.path,'index.json'))).state,'incomplete');"],
+ ];
+ for(const [index,[before,after,body,redundant]] of mutations.entries()){
+  assert.equal(source.split(before).length,2,'mutant targets exactly one actual guard');
+  let mutated=source.replace(before,after);
+  if(redundant){assert.equal(mutated.split(redundant).length,2);mutated=mutated.replace(redundant,'');}
+  const directory=join(root,String(index));mkdirSync(directory);const module=join(directory,'mutant.mjs');writeFileSync(module,mutated);
+  const driver=`import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {writeFileSync,readFileSync,linkSync} from 'node:fs';import {join} from 'node:path';import {PortableDiagnosticBundle,retainDiagnostic} from ${JSON.stringify(new URL('file://'+module).href)};const hash=value=>createHash('sha256').update(value).digest('hex');const bundle=new PortableDiagnosticBundle(process.argv[1]);const path=join(process.argv[1],'source');${body}`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',driver,directory],{encoding:'utf8',timeout:10000,maxBuffer:65536});
+  assert.ifError(child.error);assert.equal(child.signal,null);assert.equal(child.status,1);assert.match(child.stderr,/AssertionError/);
+ }
+});
+
+test('real traversal mutation of a previously hashed file cannot receive a completed index',t=>{
+ const root=diagnosticRoot(t),source=read('scripts/portable-oracle-diagnostics.mjs');let bundle,mutated=false;
+ const module=source.replace(/^import .*;$/gm,'').replaceAll('export ','')+'\nPortableDiagnosticBundle';
+ const Bundle=runInNewContext(module,{assert,createHash,Buffer,...actualFs,dirname:actualDirname,join,resolve:actualResolve,
+  opendirSync(path,options){const iterator=actualFs.opendirSync(path,options),read=iterator.readSync.bind(iterator);
+   iterator.readSync=()=>{const entry=read();if(entry&&!mutated){mutated=true;writeFileSync(join(bundle.path,'data'),'tampered');}return entry;};return iterator;}});
+ bundle=new Bundle(root);bundle.bytes('data',Buffer.from('original'));assert.throws(()=>bundle.complete());
+ assert(mutated);assert.equal(JSON.parse(readFileSync(join(bundle.path,'index.json'))).state,'collecting');
+});
+
+test('optional constructor and throwing diagnostic sink cannot interrupt matrix ownership',()=>{
+ const source=read('scripts/portable-oracle-matrix.mjs'),start=source.indexOf('let diagnostics;'),end=source.indexOf('retainDiagnostic(diagnostics,',start);
+ assert(start>=0&&end>start);let attempted=false;
+ assert.doesNotThrow(()=>runInNewContext(source.slice(start,end),{root:'/unused',
+  PortableDiagnosticBundle:class{constructor(){attempted=true;throw new Error('destination unavailable');}},
+  process:{stderr:{write(){throw new Error('sink unavailable');}}}}));assert(attempted);
+});
 
 test('failure-only client observation is bounded and emits no document text or raw exceptions', async () => {
   const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
