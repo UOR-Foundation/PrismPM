@@ -720,6 +720,12 @@ including failure diagnostics. It does not commit a baseline, publish an image,
 accept the current SDK, or bypass candidate/release policy. Native runner
 selection is a trusted CI property, not physical hardware attestation.
 
+Before native cache initialization or compiler construction, each verified
+review container executes all 28 exporter-seed tests with its actual Node,
+Python and libc. The exact outer TAP plan, successful test count and absence
+of failures, omissions, cancellation or skips are required; failure prevents
+golden generation. This component check does not authorize SDK acceptance.
+
 Source development and test profiles optimize only the `sha2` dependency at
 level 3. Complete per-invocation SDK inventory and executable byte checks,
 native golden write/repeat commands and deadlines remain unchanged; caller

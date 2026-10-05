@@ -105,7 +105,7 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
   work.put(architecture === 'arm64' ? 'sdk/golden-development.lock.json' : 'sdk/golden-development-amd64.lock.json', canonical(lock) + '\n');
   const ok = value => ({status: 0, signal: null, stdout: Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)), stderr: Buffer.alloc(0)});
   const bad = () => ({...ok(''), status: 1, stderr: Buffer.from('unit-only genuine command failure')});
-  let created, label, generations = 0, seeded = false, acquired = false, installed = false;
+  let created, label, generations = 0, seeded = false, acquired = false, installed = false, publicationQualified = false;
   const transport = async (command, args, options) => {
     calls.push([command, args]);
     for (const name of ['CARGO_PROFILE_DEV_OPT_LEVEL', 'CARGO_PROFILE_TEST_OPT_LEVEL',
@@ -155,12 +155,27 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
     if (args[0] === 'rm') { if (fault === 'cleanup' && !created.endsWith('-dependencies') || fault === 'acquisition-cleanup' && created.endsWith('-dependencies')) return bad(); created = undefined; return ok('removed'); }
     assert.deepEqual(args.slice(0, 2), ['exec', created]);
     if (args[2] === 'node' && args[3] === '-e') return ok({architecture: fault === 'wrong-executable' ? 'riscv64' : nodeArchitecture, os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
+    if (args[2] === 'node' && args[3] === '--test') {
+      assert(!created.endsWith('-dependencies'));
+      assert.deepEqual(args.slice(2), ['node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);
+      assert.equal(generations, 0); assert.equal(seeded, false);
+      if (fault === 'publication-failure') return bad();
+      if (fault === 'publication-signal') return {...ok(''),status:null,signal:'SIGTERM'};
+      if (fault === 'publication-cancel') process.emit('SIGTERM');
+      publicationQualified = true;
+      const count = fault === 'publication-forged-summary' ? 1 : fault === 'publication-omission' ? 27 : 28;
+      const reported = fault === 'publication-forged-summary' ? 28 : count;
+      const skipped = fault === 'publication-skip' ? 1 : 0;
+      return ok('TAP version 13\n'+Array.from({length:count},(_,i)=>`ok ${i+1} - unit-only transport inventory${skipped && i===0?' # SKIP':''}\n`).join('')
+        +`1..${count}\n# tests ${reported}\n# suites 0\n# pass ${reported-skipped}\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo 0\n`);
+    }
     if (args[2] === 'node') {
       const acquisition = created.endsWith('-dependencies');
       assert.deepEqual(args.slice(2), ['node', '/workspace/scripts/native-golden.mjs', acquisition ? 'seed-download-cache' : 'seed-cache']);
       assert.equal(options.timeout, 120000); assert.equal(options.limit, 16 * 1024 ** 2);
       assert.equal(generations, 0, 'cache preparation precedes every golden command');
       if (acquisition) return ok({bytes: 128, entries: 2});
+      assert(publicationQualified, 'native publication suite must execute before cache/compiler work');
       if (fault === 'cache-failure') return bad();
       if (fault === 'cache-signal') return {...ok(''), status: null, signal: 'SIGTERM'};
       if (fault === 'cache-cancel') process.emit('SIGTERM');
@@ -248,7 +263,8 @@ test('native source review rejects unsupported, mismatched and untrusted runner 
 });
 
 test('private cache initialization failure, signal and cancellation stop generation and clean owned resources', async t => {
-  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel', 'acquisition-failure', 'acquisition-signal', 'acquisition-cancel', 'supplement-corrupt', 'python-suite-failure', 'python-suite-omission']) {
+  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel', 'acquisition-failure', 'acquisition-signal', 'acquisition-cancel', 'supplement-corrupt', 'python-suite-failure', 'python-suite-omission',
+    'publication-failure', 'publication-signal', 'publication-cancel', 'publication-omission', 'publication-skip', 'publication-forged-summary']) {
     const f = fixture(t, fault); await assert.rejects(f.run());
     assert.equal(f.generations(), 0); assert.equal(f.remaining(), undefined);
     assert(!existsSync(join(f.destination, 'review.json')));
@@ -364,6 +380,14 @@ test('executed source-baseline and second-run omission mutants fail owning behav
   await assert.rejects(async () => { const f = fixture(t, 'stale-base'); await assert.rejects(f.run(noBaseline.runReview), /golden source bytes are stale/); }, /Missing expected rejection/);
   const noSeed = await load(source.replace("await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);", ''));
   await assert.rejects(fixture(t).run(noSeed.runReview), /unseeded cache/);
+  const publication = "    const publicationTests = await run(['exec', name, 'node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);\n    const publicationTap = publicationTests.toString();\n    assert.equal(verifyTap(publicationTap, 28), 28);\n    assert.match(publicationTap, /^1\\.\\.28\\r?$/m);\n";
+  assert(source.includes(publication));
+  const noPublication = await load(source.replace(publication, ''));
+  await assert.rejects(fixture(t).run(noPublication.runReview), /native publication suite must execute/);
+  const noPublicationCount = await load(source.replace('    assert.equal(verifyTap(publicationTap, 28), 28);\n', ''));
+  await assert.rejects(async () => {await assert.rejects(fixture(t,'publication-skip').run(noPublicationCount.runReview));}, /Missing expected rejection/);
+  const noPublicationPlan = await load(source.replace('    assert.match(publicationTap, /^1\\.\\.28\\r?$/m);\n', ''));
+  await assert.rejects(async () => {await assert.rejects(fixture(t,'publication-forged-summary').run(noPublicationPlan.runReview));}, /Missing expected rejection/);
   const noRunnerBinding = await load(source.replace('assert.equal(environment.RUNNER_ARCH, platformPolicy.runner);', ''));
   for (const architecture of ['amd64', 'arm64']) {
     await assert.rejects(async () => {

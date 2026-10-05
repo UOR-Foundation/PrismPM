@@ -250,6 +250,13 @@ export async function runReview({source, revision, destination}, transport = exe
     assert.equal(platform.architecture, platformPolicy.node); assert.equal(platform.os, 'linux');
     assert.match(platform.release, /^ID=ubuntu$/m); assert.match(platform.release, /^VERSION_ID="24\.04"$/m);
     if (interrupted) throw interrupted;
+    // Exercise the actual architecture's Python/glibc no-replace publication
+    // and admission boundary before any expensive compiler construction.
+    const publicationTests = await run(['exec', name, 'node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);
+    const publicationTap = publicationTests.toString();
+    assert.equal(verifyTap(publicationTap, 28), 28);
+    assert.match(publicationTap, /^1\.\.28\r?$/m);
+    if (interrupted) throw interrupted;
     await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
     const preparation = JSON.parse(await run(['exec', name, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.py', 'install']));
     assert.match(preparation.preparation_sha256, /^[0-9a-f]{64}$/);
