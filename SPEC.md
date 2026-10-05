@@ -209,6 +209,18 @@ even when cleanup also fails. They identify the owning journey and modeled-vecto
 index, observed request completion, and only closed network-failure categories;
 arbitrary browser error text is not forwarded. These observations never replace
 the actual response-body or submission checks. `HO-12` does not duplicate this integration run.
+Submission diagnostic version 2 additionally observes the correlated Chromium
+Network lifecycle through a separate CDP session. Only closed method, payload-match,
+status/cache, byte-count and cancellation observations are retained, with at most
+32 request ordinals and the existing 32-event limit, with explicit overflow and
+truncation indicators. Protocol identifiers, URLs, headers, payloads and arbitrary
+errors do not escape. Post-data is bounded to 393,472 UTF-16 code units before JSON
+parsing; oversized or unavailable post-data cannot claim a payload match. Submission
+and cleanup emission contain sink errors and preserve the first failure. Collection
+must not retrieve another body, intercept traffic, override caches or enlarge browser
+retention buffers. Version 1 remains readable without acquiring these fields.
+Unavailable observations cannot establish causality or replace the first body
+failure, actual rendered result, single-invocation check or cleanup requirement.
 The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed

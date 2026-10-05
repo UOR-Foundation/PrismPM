@@ -113,7 +113,8 @@ export function probeSummary(value){
  }
  assert(Array.isArray(value.diagnostics)&&value.diagnostics.length<=4);
  const diagnostics=value.diagnostics.map(row=>{
-  assert.equal(row.schema,'prismpm/browser-submission-diagnostic/1');
+  assert(['prismpm/browser-submission-diagnostic/1','prismpm/browser-submission-diagnostic/2'].includes(row.schema));
+  const network=row.schema==='prismpm/browser-submission-diagnostic/2';
   return{journey:choice(row.journey,['attachment-assets','modeled-vectors','input-validation-recovery','transport-failure-recovery',
     'pre-init-privacy','delayed-init','intent-boundaries','text-response-bounds','text-safe-rendering','detached-session']),
    phase:choice(row.phase,['initial-readiness','fill','submission','response-body','rendered-result','completed-readiness','completed']),
@@ -121,16 +122,25 @@ export function probeSummary(value){
    check:choice(row.check,['response-status','request-envelope','request-navigation','response-json','response-envelope','single-invocation','main-frame-navigation',null]),
    vector_index:integer(row.vectorIndex),invocation_count:integer(row.invocationCount),
    keyboard:typeof row.keyboard==='boolean'?row.keyboard:null,navigated:typeof row.navigated==='boolean'?row.navigated:null,
+   ...(network?{events_truncated:typeof row.eventsTruncated==='boolean'?row.eventsTruncated:null,
+    network:{state:choice(row.network?.state,['observed','unavailable']),
+    requests:integer(row.network?.requests,32),overflow:typeof row.network?.overflow==='boolean'?row.network.overflow:null}}:{}),
    client:{state:choice(row.client?.state,['observed','closed','unavailable']),
     ...Object.fromEntries(['busy','disabled','expectedResult','outputPresent','responseError'].map(name=>
      [name,typeof row.client?.[name]==='boolean'?row.client[name]:null]))},
    events:(Array.isArray(row.events)?row.events:[]).slice(0,32).map(event=>({
-    event:choice(event.event,['request','response','body','request-failed','request-finished','main-frame-navigation','page-crash','page-close']),
+    event:choice(event.event,['request','response','body','request-failed','request-finished','main-frame-navigation','page-crash','page-close',
+     ...(network?['cdp-request','cdp-response','cdp-data','cdp-finished','cdp-failed']:[])]),
     method:choice(event.method,['GET','POST','OTHER']),invocation:typeof event.invocation==='boolean'?event.invocation:null,
     navigation:typeof event.navigation==='boolean'?event.navigation:null,service_worker:typeof event.serviceWorker==='boolean'?event.serviceWorker:null,
     reason:choice(event.reason,['ERR_ABORTED','ERR_FAILED','ERR_CONNECTION_RESET','ERR_CONNECTION_CLOSED','ERR_CONTENT_LENGTH_MISMATCH',
      'ERR_INCOMPLETE_CHUNKED_ENCODING','ERR_INSUFFICIENT_RESOURCES','ERR_TIMED_OUT','ERR_BLOCKED_BY_CLIENT','ERR_BLOCKED_BY_RESPONSE','unavailable','other']),
     status:integer(event.status,599),bytes:integer(event.bytes,1048576),
+    ...(network?{request:integer(event.request,32),encoded_bytes:integer(event.encodedBytes,16777216),
+     payload_matches:typeof event.payloadMatches==='boolean'?event.payloadMatches:null,
+     payload_oversized:typeof event.payloadOversized==='boolean'?event.payloadOversized:null,
+     redirect:typeof event.redirect==='boolean'?event.redirect:null,disk_cache:typeof event.diskCache==='boolean'?event.diskCache:null,
+     cancelled:typeof event.cancelled==='boolean'?event.cancelled:null}:{}),
    }))};
  });
  return{hashes,exit_code:integer(value.exit_code,255),signal:choice(value.signal,[null,'SIGTERM','SIGKILL','SIGINT','SIGHUP']),
