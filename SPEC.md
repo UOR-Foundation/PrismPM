@@ -1025,6 +1025,10 @@ Only the new exporter's `.lake` may be published, from a private sibling stage
 through atomic no-overwrite rename. Generated application workspaces, user
 caches and acceptance evidence are never seeded. Temporary stages are owned
 by their invocation and removed on failure.
+SDK seed production and admission share a manifest-driven, exclusive-creation
+copy boundary; recursive discovery cannot expand copied bytes or files. Before
+publication, production rechecks the source closure and preserves declared
+permissions while making the installed seed readable by the SDK user.
 
 Each actual `lake exe prod-export` invocation records a closed
 `prismpm/exporter-execution/1` child executable measurement and

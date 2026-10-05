@@ -495,3 +495,75 @@ test('seed staging rejects same-byte input replacement before and during copying
     assert.equal(result.status, 0, `${phase}: ${result.stderr}`);
   }
 });
+
+test('seed publication preserves declared modes and unprivileged readability under restrictive umask', t => {
+  const owner = fixture(t), seed = join(owner, 'source');
+  mkdirSync(join(seed, '.lake/build/bin'), {recursive: true});
+  writeFileSync(join(seed, '.lake/build/bin/prod-export'), 'copy fixture, not executable acceptance', {mode: 0o755});
+  const manifest = manifestFixture(); manifest.files = snapshotTree(seed);
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict'; import fs from 'node:fs';
+    import {syncBuiltinESMExports} from 'node:module'; import {join} from 'node:path';
+    const [owner, seed, encoded, module] = process.argv.slice(1);
+    fs.cpSync = () => { throw new Error('recursive copy forbidden'); }; syncBuiltinESMExports();
+    const {publishSeedFiles, snapshotTree} = await import(module);
+    const manifest = JSON.parse(encoded), destination = join(owner, 'published');
+    process.umask(0o077); publishSeedFiles(seed, destination, manifest);
+    assert.equal(fs.lstatSync(destination).mode & 0o777, 0o755);
+    assert.equal(fs.lstatSync(join(destination, 'manifest.json')).mode & 0o777, 0o444);
+    assert.deepEqual(snapshotTree(destination).filter(row => row.path !== 'manifest.json'), manifest.files);
+    assert.throws(() => publishSeedFiles(seed, destination, manifest), /cannot overwrite/);
+    assert.deepEqual(fs.readdirSync(owner).sort(), ['published', 'source']);
+    // Give the actual unprivileged process access through this fixture only.
+    if (process.getuid() === 0) { fs.chmodSync(owner, 0o755); process.setgid(1000); process.setuid(1000); }
+    assert.deepEqual(JSON.parse(fs.readFileSync(join(destination, 'manifest.json'))), manifest);
+    assert.equal(fs.readFileSync(join(destination, '.lake/build/bin/prod-export'), 'utf8'), 'copy fixture, not executable acceptance');
+  `, owner, seed, JSON.stringify(manifest), new URL('./exporter-seed.mjs', import.meta.url).href],
+  {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
+  assert.ifError(result.error); assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('publication failures leave no destination or staging and never copy beyond declared bytes', t => {
+  for (const phase of ['growth', 'extra', 'write-failure']) {
+    const owner = fixture(t), seed = join(owner, 'source');
+    mkdirSync(join(seed, '.lake/build/bin'), {recursive: true});
+    const member = join(seed, '.lake/build/bin/prod-export');
+    writeFileSync(member, 'bounded real file copy', {mode: 0o755});
+    const manifest = manifestFixture(); manifest.files = snapshotTree(seed);
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict'; import fs from 'node:fs';
+      import {syncBuiltinESMExports} from 'node:module'; import {join} from 'node:path';
+      const [owner, seed, member, phase, encoded, module] = process.argv.slice(1);
+      const open = fs.openSync, read = fs.readSync, write = fs.writeSync;
+      let opens = 0, input, mutated = false, copied = 0;
+      fs.cpSync = () => { throw new Error('recursive copy forbidden'); };
+      fs.openSync = (...args) => {
+        const fd = open(...args); if (args[0] === member && ++opens === 2) input = fd; return fd;
+      };
+      fs.readSync = (...args) => {
+        const count = read(...args);
+        if (phase === 'growth' && args[0] === input && count && !mutated) {
+          fs.appendFileSync(member, 'unexpected growth'); mutated = true;
+        }
+        return count;
+      };
+      fs.writeSync = (...args) => {
+        const count = write(...args); copied += count;
+        if (!mutated && phase === 'extra') { fs.writeFileSync(join(seed, '.lake/extra'), 'extra'); mutated = true; }
+        if (!mutated && phase === 'write-failure') { mutated = true; throw new Error('injected write failure after real write'); }
+        return count;
+      };
+      syncBuiltinESMExports(); const {publishSeedFiles} = await import(module);
+      const manifest = JSON.parse(encoded), destination = join(owner, 'published');
+      const expected = phase === 'growth' ? /grew while copying/ : phase === 'extra' ? /changed during publication/ : /injected write failure/;
+      assert.throws(() => publishSeedFiles(seed, destination, manifest), expected);
+      assert(mutated); assert(copied <= manifest.files.at(-1).byte_length);
+      assert.equal(fs.existsSync(destination), false);
+      assert.deepEqual(fs.readdirSync(owner), ['source']);
+    `, owner, seed, member, phase, JSON.stringify(manifest), new URL('./exporter-seed.mjs', import.meta.url).href],
+    {encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024});
+    assert.ifError(result.error); assert.equal(result.signal, null);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  }
+});

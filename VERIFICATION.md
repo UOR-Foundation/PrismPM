@@ -1,5 +1,24 @@
 # PrismPM falsifiability and verification record
 
+## Bounded SDK seed publication
+
+Production and admission now share exclusive, manifest-driven copying instead
+of recursive publication. Source growth, undeclared additions and injected
+failure after a real write remain bounded, publish no destination, and clean
+owned pre-publication staging. Declared modes survive restrictive umasks; an
+actual UID-1000 process reads the installed seed and manifest. All 22 tests and
+DK-29 pass (8.07 seconds); strict Clippy and all 296 source-audit tests pass
+(259.77 seconds, no skips). Independent adversarial review is clear.
+
+The real-construction recursive-copy control fails before the change and passes
+afterward. Two fresh constructions preserve manifest
+`55b6dac643975f541e1c4cf7e089c4d25737c47928b7d9e44d1faeb6e099f899`.
+Actual cold/relocated exports agree across two roots and both replays, with no
+relocated build-file changes or trace rewriting. Measured compiler builds take
+15.34/15.61 seconds cold and 0.47/0.45 seconds relocated. These component results
+are not end-to-end speedup, atomic isolation, post-rename rollback, SDK release,
+consumer acceptance or completion of issue #69.
+
 ## Bounded SDK seed enumeration
 
 Tree snapshots stream entries with one live iterator, bound rows before retaining
