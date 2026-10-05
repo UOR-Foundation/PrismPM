@@ -1,6 +1,11 @@
 //! One fresh acquisition boundary for the pinned Lean exporter package.
 
 mod custody;
+mod owner;
+
+pub(crate) use owner::validate_binding as validate_owner_binding;
+pub(crate) use owner::validate_record as validate_owner_record;
+pub(crate) use owner::{Phase, ProductEvidence, VerifyExporterOwner};
 
 use crate::error::PrismError;
 use serde::Serialize;

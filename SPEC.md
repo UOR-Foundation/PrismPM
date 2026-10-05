@@ -1085,6 +1085,27 @@ field rewriting or omitted generated files. This does not change the
 authoritative `.holo` format. Real `lake build prod-export`,
 generated-module/kernel builds, axiom audits, independent exports, two-root
 reproducibility, native/Wasm executions and imported oracles remain mandatory.
+Within one library or application `verify`, one private, non-cloneable exporter
+package serves controller generation A and independent replay B on the
+qualified native Linux x86_64/aarch64 SDK platforms; other owner execution
+platforms fail closed before acquisition. Each phase
+still creates its own generated-module workspace and executes its own module
+build, `lake build prod-export`, and actual export. No caller-selected cache,
+cross-request package, retained generated workspace or acceptance reuse exists.
+Both original phase transcripts, exact model/Lean-manifest digests and complete
+generated artifact rows are retained in closed
+`prismpm/verification-exporter-owner/1` evidence. New library/application
+verification manifests use `/2`; historical `/1` readers remain unchanged and
+cannot qualify a newly installed SDK. Readers bind replay to the original
+transcript, both phases to retained inputs/products and native Lake preflight,
+and both exporter measurements to the independent SDK authority where required.
+Whole-package custody is checked between phases and before retirement. During
+the second real build only existing `.trace` bodies and directory timestamps
+may refresh; compiled members, paths, source and executable identities stay
+exact. Failed/reordered/repeated phases poison the owner and retire its package;
+unwind/drop cannot publish acceptance. Successful retirement precedes accepted
+manifest publication. Ordinary non-application/non-library verification retains
+its one fresh acquisition and actual export; it has no duplicated A/B package.
 Neither seed validity nor faster acquisition establishes SDK or application
 acceptance. SDK qualification requires measured cold/seeded equivalence on
 both native platforms with genuine relocated traces, without trace rewriting,
@@ -1624,7 +1645,7 @@ execute every modeled acceptance root under both `std` and `no_std + alloc`;
 false results, computation errors, omissions and changed bytes fail closed.
 
 Only then are `prismpm/library-acceptance/1` and
-`prismpm/library-verification-manifest/1` atomically published. This is finite
+`prismpm/library-verification-manifest/2` atomically published. This is finite
 native-code evidence, not a universal semantic proof, standards certification,
 browser profile, `.holo`, or deployed service. Product-release construction and
 source-free product-release replay reject library evidence with `PP6101`.

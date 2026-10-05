@@ -66,15 +66,28 @@ export function resultFixture(binding,sourceAuthority=sourceAuthorityFixture){
  const runs=Array.from({length:4},(_,index)=>{
   const acquisition=index<2?'cold':'sdk-seed';
   const processes=tools.map(tool=>({tool,argv:[],executable_sha256:'e'.repeat(64),exit_code:0,stdout:'parser fixture',stderr:''}));
+  processes[5].argv=['build','PrismGenerated'];processes[6].argv=['build','prod-export'];
+  processes[8].argv=['package','--locked','--offline','--allow-dirty'];
   processes[7].argv=['exe','prod-export'];
   processes[7].exporter={schema:'prismpm/exporter-execution/1',source_archive_sha256:sourceAuthority.archive_sha256,
    executable:{byte_length:1234,mode:0o755,sha256:index<2?'4'.repeat(64):binding.exporter_sha256},
    acquisition:index<2?{schema:'prismpm/exporter-acquisition/1',mode:'cold'}:{schema:'prismpm/exporter-acquisition/1',mode:'sdk-seed',
     platform:binding.platform,inventory_sha256:binding.inventory_sha256,manifest_sha256:binding.seed_manifest_sha256,
     executable_sha256:binding.exporter_sha256,compiler_revision:binding.compiler_revision,toolchain:sourceAuthority.toolchain,archive_sha256:sourceAuthority.archive_sha256}};
-  const manifest=encode({schema:'prismpm/library-verification-manifest/1',scope:'native-library-only',build_id,processes,
-   artifacts:['coverage.json','kernel.ir','model-binding.json','package/Cargo.lock','package/Cargo.toml','package/LICENSE-APACHE','package/LICENSE-MIT','package/README.md','package/generation-manifest.json','package/src/lib.rs','prism-library-probe-0.1.0.crate','roots.json'].map(path=>({path:'library/'+path,byte_length:12,sha256:hash(path)})),acceptance_sha256:'5'.repeat(64),lexlean_attestation_sha256:'6'.repeat(64),model_sha256:'7'.repeat(64)});
+  const value={schema:'prismpm/library-verification-manifest/2',scope:'native-library-only',build_id,processes,
+   artifacts:['coverage.json','kernel.ir','model-binding.json','package/Cargo.lock','package/Cargo.toml','package/LICENSE-APACHE','package/LICENSE-MIT','package/README.md','package/generation-manifest.json','package/src/lib.rs','prism-library-probe-0.1.0.crate','roots.json'].map(path=>({path:'library/'+path,byte_length:12,sha256:hash(path)})),acceptance_sha256:'5'.repeat(64),lexlean_attestation_sha256:'6'.repeat(64),model_sha256:'7'.repeat(64)};
+  value.exporter_owner=ownerFixture(value,'library',processes.slice(5,9));
+  const manifest=encode(value);
   return {root:'/tmp/prismpm-library-sdk-fixture/fixture-'+index,acquisition,manifest,manifest_sha256:hash(manifest)};
  });
  return {scope:'installed-native-library-only',build_id,binding,runs,checks:['read-only-check','std','no_std','exact-package-replay','two-root-reproduction','product-refusal','missing-root','wrong-result-root','parameterized-root','nominal-impostor','false-generated-acceptance','restored-acceptance','authenticated-seed-admission','cold-warm-two-root-equivalence'],unclaimed:['application','browser','holo','production-release','deployment']};
+}
+
+// Structural negative-control bytes, never generated or accepted execution.
+export function ownerFixture(manifest,role,processes){
+ return {schema:'prismpm/verification-exporter-owner/1',phases:['controller-build','replay'].map(phase=>({
+  phase,role,model_sha256:manifest.model_sha256,lexlean_manifest_sha256:'8'.repeat(64),
+  artifacts:structuredClone(manifest.artifacts??[{path:'Calculator.holo',byte_length:12,sha256:'9'.repeat(64)}]),
+  processes:structuredClone(processes),
+ }))};
 }

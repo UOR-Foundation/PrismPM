@@ -679,6 +679,17 @@ pub(crate) fn check_existing_lock(root: &Path) -> Result<(), PrismError> {
     Ok(())
 }
 
+/// Invocation-local authority snapshot, including cold source-bootstrap locks.
+/// A later lock addition, removal or replacement must not silently reuse the
+/// earlier verification package, even when neither phase can use an SDK seed.
+pub(crate) fn exporter_lock_authority(root: &Path) -> Result<Option<String>, PrismError> {
+    if lock_is_present(root)? {
+        Ok(Some(execution_lock(root)?.digest()))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Seed authority comes from the consumer's platform lock, never a digest
 /// recomputed from the installed inventory. Legacy/unlocked bootstrap is cold.
 pub(crate) fn exporter_seed_inventory(root: &Path) -> Result<Option<String>, PrismError> {

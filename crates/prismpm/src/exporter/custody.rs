@@ -48,6 +48,48 @@ fn identity(metadata: &std::fs::Metadata) -> Identity {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Snapshot(BTreeMap<String, (Identity, Option<String>)>);
 
+impl Snapshot {
+    /// Lake may legitimately refresh build traces. Source and executable
+    /// identities may not change merely because a second phase builds again.
+    pub(super) fn same_compiler(&self, other: &Self) -> bool {
+        if self.0.keys().ne(other.0.keys()) {
+            return false;
+        }
+        self.0.iter().all(|(name, (before, hash))| {
+            let (after, next_hash) = &other.0[name];
+            if !name.starts_with(".lake/") && name != ".lake" {
+                return before == after && hash == next_hash;
+            }
+            // Only existing Lake trace bodies may refresh. Compiled libraries,
+            // objects, launcher configuration and the executable remain exact.
+            if name.ends_with(".trace") && !before.directory && !after.directory {
+                #[cfg(unix)]
+                {
+                    return before.native.0 == after.native.0 && before.native.2 == after.native.2;
+                }
+                #[cfg(not(unix))]
+                {
+                    return before == after && hash == next_hash;
+                }
+            }
+            if before.directory && after.directory {
+                #[cfg(unix)]
+                {
+                    return before.native.0 == after.native.0
+                        && before.native.1 == after.native.1
+                        && before.native.2 == after.native.2
+                        && before.native.3 == after.native.3;
+                }
+                #[cfg(not(unix))]
+                {
+                    return before == after;
+                }
+            }
+            before == after && hash == next_hash
+        })
+    }
+}
+
 struct SourceMember {
     directory: bool,
     mode: u32,
