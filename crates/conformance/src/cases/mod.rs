@@ -454,7 +454,7 @@ pub fn run_at(root: &Path, id: &str) {
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
-        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 22, "120000"),
+        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 28, "120000"),
         "DK-28" => verify_node_suite(
             root,
             id,
@@ -520,8 +520,10 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-view/compiler-artifact.test.mjs",
                 "tests/browser-view/compiler-artifact-mutations.test.mjs",
                 "tests/browser-view/compiler-owner.test.mjs",
+                "tests/browser-view/compiler-runtime.test.mjs",
+                "tests/browser-view/compiler-runtime-mutations.test.mjs",
             ],
-            19,
+            34,
         ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (

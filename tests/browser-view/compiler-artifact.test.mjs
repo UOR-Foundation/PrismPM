@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync,
+import {chmodSync, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
   renameSync, rmSync, symlinkSync, truncateSync, unlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -56,12 +56,31 @@ test('changed original/private executable refuses before execution and cannot be
   const {work, original} = fixture(t, '/bin/sh');
   const owner = captureCompilerArtifact(work, original, 'driver'), sentinel = join(work, 'executed');
   for (const [kind, path] of [['original', original], ['private', owner.path]]) {
-    const bytes = readFileSync(path), changed = Buffer.concat([bytes, Buffer.from([0])]);
+    const bytes = readFileSync(path), mode = lstatSync(path).mode & 0o777;
+    const changed = Buffer.concat([bytes, Buffer.from([0])]);
     chmodSync(path, 0o700); writeFileSync(path, changed);
     assert.throws(() => owner.run(['-c', ': > "$1"', 'artifact-custody-probe', sentinel], work),
       new RegExp('immutable ' + kind + ' compiler'));
     assert.equal(existsSync(sentinel), false, 'substituted executable refused before planted sentinel');
-    writeFileSync(path, bytes); owner.verify();
+    writeFileSync(path, bytes); chmodSync(path, mode); owner.verify();
+  }
+});
+
+test('unchanged compiler bytes and inode cannot conceal changed executable permissions', t => {
+  const {work, original} = fixture(t, '/bin/sh');
+  const owner = captureCompilerArtifact(work, original, 'driver'), sentinel = join(work, 'executed');
+  for (const [kind, path] of [['original', original], ['private', owner.path]]) {
+    const before = lstatSync(path), bytes = readFileSync(path), mode = before.mode & 0o777;
+    try {
+      chmodSync(path, mode ^ 0o040);
+      assert.equal(lstatSync(path).ino, before.ino);
+      assert.deepEqual(readFileSync(path), bytes);
+      assert.throws(() => owner.verify(), new RegExp('immutable ' + kind + ' compiler'));
+      assert.throws(() => owner.run(['-c', ': > "$1"', 'artifact-mode-probe', sentinel], work),
+        new RegExp('immutable ' + kind + ' compiler'));
+      assert.equal(existsSync(sentinel), false, 'metadata drift refused before execution');
+    } finally {chmodSync(path, mode);}
+    owner.verify();
   }
 });
 
@@ -75,7 +94,10 @@ test('same bytes in a new inode or an added hard link are not the captured compi
   }
   // Keep the old inode alive so a filesystem cannot reuse it for this probe.
   const old = join(work, 'old-private'); renameSync(owner.path, old);
-  copyFileSync(old, owner.path); chmodSync(owner.path, 0o700);
+  copyFileSync(old, owner.path); chmodSync(owner.path, lstatSync(old).mode & 0o777);
+  assert.notEqual(lstatSync(owner.path).ino, lstatSync(old).ino);
+  assert.equal(lstatSync(owner.path).mode, lstatSync(old).mode);
+  assert.deepEqual(readFileSync(owner.path), readFileSync(old));
   assert.throws(() => owner.run([], work), /immutable private compiler/);
 });
 
@@ -86,6 +108,11 @@ test('successful and failed actual executions both check compiler identity after
     assert.throws(() => owner.run(['-c', 'printf x >> "$1"; exit "$2"',
       'artifact-custody-probe', original, status], work), /immutable original compiler/);
     writeFileSync(original, bytes); owner.verify();
+    try {
+      assert.throws(() => owner.run(['-c', 'chmod 740 "$1"; exit "$2"',
+        'artifact-mode-probe', original, status], work), /immutable original compiler/);
+    } finally {chmodSync(original, 0o700);}
+    owner.verify();
   }
 });
 
@@ -111,6 +138,10 @@ test('capture refuses aliases, unowned paths, nonexecutables and out-of-bound fi
   assert.throws(() => captureCompilerArtifact(work, alias, 'driver'), /unaliased/);
   chmodSync(original, 0o600);
   assert.throws(() => captureCompilerArtifact(work, original, 'driver'), /executable/);
+  for (const mode of [0o4700, 0o2700, 0o1700]) {
+    chmodSync(original, mode);
+    assert.throws(() => captureCompilerArtifact(work, original, 'driver'), /executable/);
+  }
   chmodSync(original, 0o700);
   const bytes = readFileSync(original), wrong = Buffer.from(bytes); wrong[0] = 0;
   writeFileSync(original, wrong);
