@@ -3221,3 +3221,32 @@ Logs under hologram-oracle-response-worktree/target, SHA256:
 Separate adversarial source review found no blocking defect. Current-source SDK
 qualification still requires the independent installed SDK gates in SPEC §12;
 neither digest syntax nor source VV establishes it.
+
+## Complete native session record readback (6 October)
+
+Both original native-source-review lanes in run 37449224018 at c8fb9d0e
+passed. Independent review checked all 366 files (365 declared members), all 29 actual
+commands, all 597 cases and 54 controls. Six original JSON records are imported
+byte-for-byte; 363 shared files match the source tree. These are source-golden
+records, not installed-SDK or full-VV acceptance.
+
+The compiler-cache source guard retains all original callers and adds Session.
+Presentation and Session delegate to the actual shared owner; the guard binds
+each exact driver directory/executable, private target and all five original
+build options. Planted direct compiler construction and wrong family mappings
+first failed, then were detected after correction. Generated product builds
+remain permitted. This guard supplements, never replaces, real component runs.
+
+Pinned non-root f061023a tooling passes all 38 xtask tests and all 407 source
+audit tests without omissions, followed by authored workspace formatting and
+strict all-target/all-feature xtask Clippy. Complete captured sources remain
+unchanged. Log: target/hologram-oracle-response-worktree/target/
+native-record-readback-v4.log; SHA256
+a19da6a4157dc255d64ac24a29500575f9abd82ec31e157c268832efad1f09b9.
+
+Prior setup failures and the 397/407 source run remain retained. The next
+407/407 run's supplemental cargo fmt --all rejected generated stdlib bytes;
+those bytes were not reformatted. The prescribed formatting owner excludes
+generated output and itself passes in the complete xtask suite. No timeout,
+predicate, test inventory or runtime limit was relaxed. Both full VV passes,
+current installed-SDK qualification and downstream acceptance remain required.
