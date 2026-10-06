@@ -95,7 +95,19 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  const verify=(value,authority=binding)=>verifyResult(value,authority,sourceAuthorityFixture);verify(value);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.build_id='mutable',
   v=>v.runs.pop(),v=>v.runs.reverse(),v=>v.runs[2].acquisition='cold',v=>v.runs[3].root=v.runs[2].root,
-  v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64)]){
+ v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64)]){
+  const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
+ }
+ for(const change of [v=>delete v.concurrency,v=>v.concurrency.runs.pop(),v=>v.concurrency.overlap.pop(),
+  v=>v.concurrency.runs[0].root=v.runs[0].root,v=>v.concurrency.overlap[1].ino=v.concurrency.overlap[0].ino,
+  v=>v.concurrency.overlap[0].uid='0',v=>v.concurrency.overlap[0].path='/tmp/foreign/prismpm-verify-exporter-ABCDEF',
+  v=>v.concurrency.retirements[0].cleanup_verified=false,v=>v.concurrency.retirements[1].exit_code=1,
+  v=>v.concurrency.retirements[1].timed_out=true,v=>v.concurrency.retirements[0].interrupted=true,
+  v=>v.concurrency.custody.after.sha256='a'.repeat(64),v=>v.concurrency.custody.before.inventory_sha256='a'.repeat(64)]){
+  const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
+ }
+ for(const change of [v=>v.concurrency.environments.pop(),v=>v.concurrency.environments[0].PATH='/tmp/foreign',
+  v=>v.concurrency.environments[0].LD_PRELOAD='/tmp/injected.so',v=>v.concurrency.environments[0].CARGO_TARGET_DIR='/tmp/reuse']){
   const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
  }
  for(const mutate of [m=>m.processes.pop(),m=>m.processes[7].exporter.acquisition.mode='cold',
@@ -121,8 +133,8 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  for(const row of resealed.runs){const manifest=JSON.parse(row.manifest);manifest.processes[7].exporter.source_archive_sha256='a'.repeat(64);if(row.acquisition==='sdk-seed')manifest.processes[7].exporter.acquisition.archive_sha256='a'.repeat(64);row.manifest=fixture.encode(manifest);row.manifest_sha256=fixture.hash(row.manifest);}
  assert.throws(()=>verify(resealed));assert.throws(()=>verifyResult(value));assert.throws(()=>verify(value,fixture.binding('arm64')));
  assert.throws(()=>verifyResult(value,binding));
- const tap='TAP version 13\n'+Array.from({length:19},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..19\n# tests 19\n# suites 0\n# pass 19\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
- testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 19','# tests 18')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const tap='TAP version 13\n'+Array.from({length:23},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..23\n# tests 23\n# suites 0\n# pass 23\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
+ testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 23','# tests 22')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
 });
 
 test('captured seed lock requires both exact platforms and independently selected native bytes',()=>{
@@ -262,6 +274,7 @@ test('owning CLI test kills a removed process-exit guard',t=>{
  const guard='assert.equal(output.status,expected.code ? exits[expected.code] : 0, "CLI exit class");';assert.equal(module.split(guard).length,2);
  put(root,'scripts/library-sdk-check.mjs',module.replace(guard,''));put(root,'scripts/browser-api-sdk-check.mjs',readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url)));put(root,'scripts/library-sdk-check.test.mjs',readFileSync(new URL('./library-sdk-check.test.mjs',import.meta.url)));
  put(root,'scripts/library-sdk-fixture.mjs',readFileSync(new URL('./library-sdk-fixture.mjs',import.meta.url)));
+ put(root,'scripts/installed-exporter-concurrency.mjs',readFileSync(new URL('./installed-exporter-concurrency.mjs',import.meta.url)));
  cpSync(new URL('../sdk',import.meta.url),join(root,'sdk'),{recursive:true});
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
  const output=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=CLI transport invokes',join(root,'scripts/library-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});assert.equal(output.error,undefined);assert.equal(output.status,1);assert.match(output.stdout,/Missing expected exception/);

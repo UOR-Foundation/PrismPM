@@ -1079,6 +1079,31 @@ every iterator, and preserves canonical bytewise ordering. Source construction
 uses its separate 4,096-entry/16-MiB allowance, never the seed-only allowance.
 Root-owned immutable SDK paths are checked before and after bounded copying;
 custody supplements rather than replaces the independent inventory binding.
+Installed native-library qualification preserves its four sequential cold/warm
+two-root executions and additionally executes two fresh installed `verify`
+commands concurrently. Each has a separate private temporary namespace. The
+source-bound gate holds both original no-follow exporter-owner descriptors at
+one shared observation, records distinct native identities, and requires owner
+retirement and actual descendant reaping after each command. CLI wall-clock
+overlap alone is insufficient. The original temporary namespaces must retain
+their native identities and contain only their original process-owner receipts
+after retirement; leaked caches, aliases, linked receipts and replacement
+namespaces fail. Children receive the closed source-pinned SDK environment,
+not caller process variables; Python uses isolated execution. Complete generated artifacts and both phase
+transcripts must match the original cold/warm execution closure. Independently
+locked inventory/manifest, seed, toolchain, runtime bytes and their original
+root-owned namespace identities are checked before and after both invocations.
+The same retained closure includes the installed CLI, Node and Python commands
+bound to the independently locked inventory, and the original captured process
+owner helper. The complete source/image gates are mandatory predecessors.
+The native-library path creates separate operation-private Cargo homes for
+package construction and std/no_std replay; it does not write to or build from
+the shared read-only SDK Cargo home. Installed toolchain lookups remain read-only.
+Closed concurrency observations remain qualification evidence, not stable
+product attestations, OS authority or universal same-user race isolation.
+The owning installed gate requires all 23 named parser, transport, construction,
+migration and real process/descriptor controls with no skips; structural test
+fixtures never qualify installed compiler execution or an SDK release.
 The copy opens source/staging roots and every named ancestor through held Linux
 directory descriptors. Staging ancestor identities are captured when created;
 a replacement cannot redirect writes into foreign content. The private helper
