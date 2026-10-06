@@ -25,7 +25,9 @@ const error=(code,message)=>({status:code==='PP6101'?5:1,signal:null,stdout:JSON
 
 test('closed shipped-library source binding includes implementation, fixtures, schemas and gate itself',t=>{
  const root=temporary(t);source(root);const expected=capture(root,revision);verifySource(root,expected);
- for(const path of ['crates/prismpm/src','crates/prismpm/schemas','tests/fixtures/library/native-library/project','scripts/library-sdk-check.mjs','scripts/library-sdk-check.test.mjs']){
+ for(const path of ['crates/prismpm/src','crates/prismpm/schemas','tests/fixtures/library/native-library/project','scripts/library-sdk-check.mjs','scripts/library-sdk-check.test.mjs',
+  'scripts/hologram-source-pins.mjs','scripts/hologram-source-pins.test.mjs','crates/prismpm/tests/hologram_interop.rs',
+  'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock']){
   assert.ok(sourceRoots.includes(path));put(root,path+'/input','mutated');assert.throws(()=>verifySource(root,expected),/source closure/);put(root,path+'/input','source');
  }
  put(root,'crates/prismpm/src/nested/target/extra','ordinary source');assert.throws(()=>verifySource(root,expected),/source closure/);
