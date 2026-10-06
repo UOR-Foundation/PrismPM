@@ -59,6 +59,24 @@ test('missing session command fails before acquisition or verification', t => {
   assert.equal(result.status, 64);
   assert.deepEqual(result.rows, []);
 });
+test('browser readiness failure prevents lifecycle bootstrap SDK acquisition and verification', t => {
+  const result = run(t, {browserFailure: 73});
+  assert.equal(result.status, 73);
+  assert.deepEqual(result.rows.map(row => row.kind), ['browser-ready']);
+});
+test('each unchanged invocation checks browser readiness before lifecycle and verification', t => {
+  const result = run(t);
+  assert.equal(result.status, 0, result.stderr);
+  const readiness = result.rows.filter(row => row.kind === 'browser-ready');
+  const lifecycle = result.rows.filter(row => row.kind === 'init');
+  const calls = result.rows.filter(row => row.kind === 'cargo');
+  assert.equal(readiness.length, 3);
+  assert.equal(lifecycle.length, 3);
+  for (let i = 0; i < 3; i++) {
+    assert(result.rows.indexOf(readiness[i]) < result.rows.indexOf(lifecycle[i]));
+    if (i > 0) assert(result.rows.indexOf(lifecycle[i]) < result.rows.indexOf(calls[i - 1]));
+  }
+});
 test('ordinary just-vv path retains one full run with the same owned cleanup', t => {
   const result = run(t, {}, []);
   assert.equal(result.status, 0, result.stderr);
