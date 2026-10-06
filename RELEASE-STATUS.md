@@ -1,15 +1,15 @@
 # Production release status
 
-As of 21 September 2026, the 0.3.0 release acceptance closure is complete and
-accepted as the public SDK release. All remaining acceptance steps 1 through 6
-have been completed with committed immutable evidence and verified cross-repository
-closure. [Verification evidence](VERIFICATION.md#prismpm-v030-sdk-and-ecosystem-acceptance-closure)
-records the exact source, tools, scope, receipts, and log digests.
+As of 6 October 2026, production SDK and ecosystem release acceptance remain
+incomplete. The declared release-receipt validators and their synthetic fixtures
+do not establish execution, publication or downstream adoption. All six release
+obligations below remain mandatory. [Verification evidence](VERIFICATION.md#prismpm-v030-sdk-and-ecosystem-acceptance-closure)
+distinguishes component checks from actual release acceptance.
 
 Gate 15 (`cargo xtask package-api`) passes completely in the clean devcontainer,
 verifying generated `prism-stdlib` and generic compiler packages (`prod-ir`, `prod-codegen`)
-without public Hologram dependencies. The full-pass receipt `target/vv-evidence.json`
-records passing gates 1–15 bound to the accepted source commit. [Verification evidence](VERIFICATION.md#gate-15-ho-12-closure-and-full-pass-receipt)
+without public Hologram dependencies. The historical receipt `target/vv-evidence.json`
+records gates 1–15 for its recorded source, not current-source acceptance. [Verification evidence](VERIFICATION.md#gate-15-ho-12-closure-and-full-pass-receipt)
 records the exact remediation, package digests, and receipt bindings.
 
 ## Modeled codec and independent oracles
@@ -30,13 +30,14 @@ application authority or a deployed Foundry service. Publishing Hologram is
 not a PrismPM dependency-resolution step.
 
 The first-party names `lexlean`, `prod-ir`, `prod-codegen`, `prism-stdlib` and
-`prismpm` are registered on crates.io through owner-controlled initial uploads.
-Their bootstrap validation and trusted-publishing readiness (`prismpm/crates-io-bootstrap-receipt/1`)
-is enforced under diagnostic `PP4103`, verifying policy-compliant dependency ordering
+`prismpm` require owner-controlled initial crates.io uploads. The declaration
+validator for bootstrap readiness (`prismpm/crates-io-bootstrap-receipt/1`)
+checks fields under diagnostic `PP4103`, including dependency ordering
 (`prod-ir` -> `prod-codegen` -> `lexlean` -> `prism-stdlib` -> `prismpm`), exact
 64-hex SHA-256 package checksums and archive digests, prohibited unaided OIDC
 bootstrap shortcuts, post-bootstrap trusted publishing configuration, and downstream
-lock consumption binding across all consumers.
+lock consumption declarations. Its synthetic fixtures do not establish public
+registration, ownership, upload checksums or actual downstream consumption.
 The owner requires Foundry publication and live verification before those
 uploads. Public Cargo publication is therefore not a prerequisite for the
 Foundry stage: use a separately verified, immutable OCI SDK with its complete
@@ -61,15 +62,14 @@ graph audit reported zero findings. The owning oracle passed all 24 documents,
 in a read-only, network-disabled development image. Source, installed bytes,
 launcher and inventory are bound; skipped tests fail acceptance.
 
-Full SDK image scans and policy-approved vulnerability disposition for shipped SDK
-identities are complete under `prismpm/sdk-security-disposition/1`. The disposition
-binds immutable source locks (`standards.lock`, `prismpm.lock`), installed dependency
-graph, runtime bytes (`@asyncapi/parser/3.6.0` runtime lock and tree digest), launcher
-script (`/usr/local/bin/asyncapi-official`), and multi-platform inventories
-(`linux/amd64` and `linux/arm64`). Pinned OSV scanning over all shipped SDK images
-and dependency sets enforces the 7-day freshness bound, rejects expired databases and
-stale scan evidence, and records zero unresolved findings. Component-only advisory
-evidence cannot substitute for the complete shipped SDK disposition.
+Full shipped-image scans and approved vulnerability disposition remain required
+for each immutable SDK identity under `prismpm/sdk-security-disposition/1`.
+The declaration validator checks source-lock, dependency-graph, runtime, launcher,
+multi-platform inventory and freshness fields; its synthetic fixtures are not
+actual scans. Actual pinned OSV execution over every shipped dependency set,
+database identity and freshness, and policy-approved disposition of all findings
+must be verified. Component-only advisory evidence cannot substitute for this
+complete shipped SDK disposition.
 [Verification evidence](VERIFICATION.md#sdk-security-and-advisory-disposition-issue-15)
 identifies the exact verification receipt and bound artifact identities.
 
@@ -168,33 +168,29 @@ Task 5 SDK packaging and reproducible multi-platform inventory are complete:
 
 ## Release acceptance closure
 
-All six release acceptance steps have been fully executed, verified, and closed:
+All six release obligations require actual source-bound execution evidence:
 
-1. **Archive-codec and dependency closure**: Modeled archive-codec replacement verified with independent Hologram Calculator/Text interoperability oracles (`prismpm/holo-oracle-acceptance/1`), LexLean 0.3.0, and lean4-prod upstream artifact tracking.
-2. **Reproducibility and artifact integrity**: 324 golden files reproduced, Calculator regressions passed, and complete source/package/image integrity verified.
-3. **Dual-platform gates and OCI artifacts**: All release gates passed twice consecutively without cleanup across both `linux/amd64` and `linux/arm64` platform inventories.
-4. **Functional core and Cargo closure**: Foundry SDK binding verified, workspace profile View and Kappa admission path verified, and first-party crates.io bootstrap identity verified (`prismpm/crates-io-bootstrap-receipt/1`).
-5. **Downstream template and calculator reference closure**: Downstream template contract, calculator-example full SDK and system reference closure verified across Compose, Kubernetes, and Pages target profiles.
-6. **Ecosystem release manifest**: Complete `prismpm/ecosystem-release/2` manifest verified across all 14 defect classes, emitting `prismpm/release-status-closure-receipt/1` and `prismpm/production-release-acceptance/1`.
+1. **Archive-codec and dependency closure**: Qualify the modeled codec through both independent Calculator/Text oracles, complete pinned LexLean/lean4-prod compiler semantics and upstream identities.
+2. **Reproducibility and artifact integrity**: Reproduce every current golden, regression, source/package/image identity and artifact; historical 324-file counts do not define today's complete inventory.
+3. **Dual-platform gates and OCI artifacts**: Execute two unchanged consecutive complete VV passes and qualify immutable installed SDK, runtime, adapters, oracles and native packages on both `linux/amd64` and `linux/arm64`.
+4. **Functional core and Cargo closure**: Verify actual Foundry SDK binding, workspace View and Kappa admission, and owner-controlled first-party Cargo bootstrap and downstream lock consumption.
+5. **Downstream template and calculator reference closure**: Verify complete template/calculator consumption of the accepted immutable SDK and actual Compose, Kubernetes and Pages outputs.
+6. **Ecosystem release manifest**: Bind `prismpm/ecosystem-release/2` to authenticated artifacts and executed downstream evidence; execute all 14 defect classes, not merely supply their names as evidence paths.
 
-All acceptance requirements are satisfied with committed immutable evidence and verified cross-repository receipts.
+Current-source full VV, immutable installed-SDK qualification, migration and
+concurrency qualification, real native application effects and Hologram adoption
+remain outstanding under issues #62, #63, #66, #67 and #69. None is waived by
+successful component tests or declaration-validation receipts.
 
 ## Release status closure verification
 
-All six release acceptance steps are completed and verified under canonical model
-`validate_release_status_closure` emitting receipt `prismpm/release-status-closure-receipt/1`:
-
-1. [COMPLETED] Verified modeled archive-codec replacement and dependency closure (`prismpm/dependency-closure-receipt/1`),
-   preserving independent Holo oracle acceptance and generic compiler release identities (LexLean 0.3.0, lean4-prod closure).
-2. [COMPLETED] Reproduced dependency closure, golden artifacts (324 files), Calculator regressions, and source/package/image integrity.
-3. [COMPLETED] Passed all PrismPM gates twice without cleanup (`prismpm/gate-closure-receipt/1`), publishing and verifying OCI
-   SDK, runtime, adapters, oracles, and native packages across both `linux/amd64` and `linux/arm64`.
-4. [COMPLETED] Bound Foundry to verified SDK, completed workspace profile View and Kappa admission (`prismpm/functional-core-receipt/1`),
-   and verified first-party crates.io identity bootstrap (`prismpm/crates-io-bootstrap-receipt/1`).
-5. [COMPLETED] Bound template contract and calculator reference closure (`prismpm/calculator-reference-closure-receipt/1`),
-   verifying production Compose, Kubernetes, and Pages targets.
-6. [COMPLETED] Verified canonical `prismpm/ecosystem-release/2` manifest with complete planted-defect falsification coverage
-   across all 14 required defect classes, yielding `prismpm/ecosystem-release-receipt/2`.
+`validate_release_status_closure` and `validate_v0_3_0_release_acceptance`
+validate caller-supplied declaration fields. Their integration tests use
+synthetic identities and success flags. They do not read or authenticate the
+referenced executions, and their output must not be used as proof of any of the
+six obligations above. Overall acceptance requires the original execution
+records, immutable source/SDK/artifact bindings and independently checked
+downstream evidence; receipt structure alone is insufficient.
 
 ## Calculator baseline record
 
