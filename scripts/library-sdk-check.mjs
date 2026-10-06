@@ -25,6 +25,8 @@ export const sourceRoots=Object.freeze([
  'scripts/browser-api-sdk-check.mjs','scripts/library-sdk-check.mjs','scripts/library-sdk-check.sh',
  'scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/library-sdk-fixture.mjs','scripts/library-owner-reader-replay.mjs','.github/workflows/release.yml',
  'scripts/installed-exporter-concurrency.mjs','scripts/installed-exporter-concurrency.test.mjs','scripts/portable-oracle-process-owner.py',
+ 'scripts/hologram-source-pins.mjs','scripts/hologram-source-pins.test.mjs','crates/prismpm/tests/hologram_interop.rs',
+ 'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock',
 ]);
 // Tracked compiler include aliases only. Their complete target roots are bound
 // separately above; unknown, changed or escaping aliases are never followed.

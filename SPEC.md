@@ -192,6 +192,16 @@ validator. Actual browser execution remains a separate required part of
 application verification, including the Calculator and text application examples
 in the ordinary full acceptance gate.
 
+Source V&V checks every frozen interoperability source-pin assertion before
+expensive compiler/oracle work. The closed four-path set retains the unchanged
+imported Hologram archive and codec Cargo inputs, plus the reviewed local browser
+driver. The independently reviewed active Rust owner is also byte-bound;
+commented or disabled pin literals cannot substitute for its assertions.
+Bounded stable descriptor hashing refuses changed bytes, removed pin
+assertions and unknown aliases. This early source refusal and its negative
+controls do not replace the original Rust pin checks, either live profile,
+complete trigger matrix, imported oracles or current immutable SDK acceptance.
+
 The workspace `hologram_interop` owner retains both complete profile acceptance
 bodies and qualifies the closed `portable-oracle-matrix.json` inventory with one
 fresh source-bound oracle compiler: 18 interaction cases per profile and trigger,
