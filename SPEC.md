@@ -895,6 +895,12 @@ environment cleared, fixed SDK environment values, read-only inputs and bounded
 scratch, and emits an in-toto validation statement whose subject is the validated
 artifact.
 
+The repository ships the exact lock resolved from its live embedded catalog,
+including current wrapper-source identities. Source audits compare it without
+writes before expensive suites. SDK construction uses the newly built CLI to
+admit that same lock with `authority resolve --locked` before further SDK
+compilation; construction never silently refreshes or bypasses a stale lock.
+
 Compose validation binds `PRISMPM_SECRET_DIR` to the isolated non-secret path
 `/scratch/prismpm-secret-references`; it does not import host paths or credentials.
 Interpolation, normalization and consistency checks stay enabled. This validates

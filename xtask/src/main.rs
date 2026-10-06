@@ -183,6 +183,7 @@ fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
 
 fn audit_all(root: &Path) -> Result<(), Fail> {
     audit::audit_retained_native_profiles(root)?;
+    audit::audit_shipped_standards_lock(root)?;
     command(
         root,
         "node",

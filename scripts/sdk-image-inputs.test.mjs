@@ -64,6 +64,13 @@ function fixture(t) {
 
 test('every source-derived image COPY consumes the verified committed source stage', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const checkLockAdmission = text => assert.match(text,
+    /RUN cargo build --locked --release --package prismpm \\\n    && target\/release\/prismpm --json --project \. authority resolve --locked \\\n    && cargo build --locked --release --package repo-conformance --bins/,
+    'actual newly built CLI must admit the shipped lock before further SDK compilation');
+  checkLockAdmission(recipe);
+  assert.throws(() => checkLockAdmission(recipe.replace('    && target/release/prismpm --json --project . authority resolve --locked \\\n', '')));
+  assert.throws(() => checkLockAdmission(recipe.replace('authority resolve --locked', 'authority resolve')));
+  assert.throws(() => checkLockAdmission(recipe.replace('--project . authority', '--project /tmp/unbound authority')));
   const unverified = recipe.split('\n').filter(line => line.startsWith('COPY ') && !line.includes('--from='));
   assert.deepEqual(unverified, [
     'COPY scripts/sdk-vv-inputs.mjs scripts/sdk-image-inputs.mjs /opt/input-policy/scripts/',
