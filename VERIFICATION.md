@@ -3201,3 +3201,23 @@ driver, deadline or assertion. All four complete owning files pass 67/67,
 25.044s, zero omissions in immutable pinned tooling. Exact-head hosted checks
 and independent review remain required; historical c4 tool receipts do not
 qualify this reconciled source, and full SDK/VV obligations remain unchanged.
+
+## External-oracle reference admission (6 October)
+
+The SDK oracle input uses the existing immutable OCI parser, retaining PP5403
+and the historical-image source-bootstrap contract. Three valid and fifteen
+malformed references are checked before Docker execution. The named regression
+genuinely failed against the prior substring predicate, then passed in pinned
+f061023a tooling: one passed, 289 filtered. Owned formatting and strict prismpm
+all-target/all-feature Clippy pass; this is not full VV or installed acceptance.
+The first green test's formatting failure remains retained.
+
+Logs under hologram-oracle-response-worktree/target, SHA256:
+- sdk-reference-regression-v1-red.log: 6670b3f7d907f3aff482e1624893c477df6ab4fd347b2dd947881c827f0ccfb1
+- sdk-reference-regression-v1-green.log: 3d571f77d0a83c3cba41ad7374a2063b984f70231ba580b6a6d4c6435b4d7dfe
+- sdk-reference-regression-v2-green.log: 2237b629078a2a01b093cce6564a1e452b3e589586fb932ab90bd8de8066162d
+- sdk-reference-regression-v2-clippy.log: f5de0c2524c021fac1aa08ce0b31eb2d9bf31fc8c7b58b2f52fb560e964b521e
+
+Separate adversarial source review found no blocking defect. Current-source SDK
+qualification still requires the independent installed SDK gates in SPEC §12;
+neither digest syntax nor source VV establishes it.
