@@ -2212,8 +2212,9 @@ asserts full coverage of Task 10 requirements:
 
 ## SDK security and advisory disposition (Issue #15)
 
-Full SDK security and advisory disposition (`prismpm/sdk-security-disposition/1`) is verified
-against shipped SDK release identities and locked advisory databases under production release policy:
+The declaration validator for `prismpm/sdk-security-disposition/1` checks the
+following supplied fields and policy constraints. Its synthetic tests do not
+establish actual shipped-image scans, installed graphs or approved disposition:
 
 - **Source Locks**: Immutable source locks `standards.lock` and `prismpm.lock` are bound by exact `sha256:` digest.
 - **Installed Dependency Graph**: Installed dependency lockfile (`package-lock.json`) and canonical installed tree digest are bound.
@@ -2223,7 +2224,10 @@ against shipped SDK release identities and locked advisory databases under produ
 - **Freshness Policy**: Enforces 7-day maximum age (604,800s), verifies database expiration time, rejects future-dated or stale scans, and verifies zero rejected findings (`PP7801`).
 - **Anti-Substitution**: Component-only advisory scan evidence is strictly rejected when full shipped SDK disposition is required.
 
-Verification suite: `cargo test --test sdk_security_advisory_disposition` (6/6 tests pass).
+The recorded `sdk_security_advisory_disposition` suite passes six declaration
+tests using synthetic SDK identities and scan results. Actual pinned scanner
+execution, raw database identity/freshness, installed dependency coverage and
+approved findings disposition remain required for both immutable native images.
 
 ## Upstream generic compiler dependency closure (lean4-prod)
 

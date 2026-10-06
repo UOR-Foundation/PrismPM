@@ -153,7 +153,9 @@ unauthorized or unverified transitions fail closed with PP6101 / PP7401.
 
 ## Reproducible multi-platform SDK (Task 5, DK-01..DK-06)
 
-Task 5 SDK packaging and reproducible multi-platform inventory are complete:
+Task 5 packaging and inventory components define the following contracts;
+actual immutable installed-SDK and multi-platform reproducibility qualification
+remain required:
 - Canonical SDK inventories (`prismpm/sdk-inventory/1`) define every command and
   executable digest in sorted, deterministic order for `linux/amd64` and `linux/arm64`.
 - Multi-platform OCI SDK images are built from immutable inputs and digest-pinned
@@ -172,7 +174,7 @@ All six release obligations require actual source-bound execution evidence:
 
 1. **Archive-codec and dependency closure**: Qualify the modeled codec through both independent Calculator/Text oracles, complete pinned LexLean/lean4-prod compiler semantics and upstream identities.
 2. **Reproducibility and artifact integrity**: Reproduce every current golden, regression, source/package/image identity and artifact; historical 324-file counts do not define today's complete inventory.
-3. **Dual-platform gates and OCI artifacts**: Execute two unchanged consecutive complete VV passes and qualify immutable installed SDK, runtime, adapters, oracles and native packages on both `linux/amd64` and `linux/arm64`.
+3. **Dual-platform gates and OCI artifacts**: Execute two unchanged consecutive complete VV passes without cleanup and qualify immutable installed SDK, runtime, adapters, oracles and native packages on both `linux/amd64` and `linux/arm64`.
 4. **Functional core and Cargo closure**: Verify actual Foundry SDK binding, workspace View and Kappa admission, and owner-controlled first-party Cargo bootstrap and downstream lock consumption.
 5. **Downstream template and calculator reference closure**: Verify complete template/calculator consumption of the accepted immutable SDK and actual Compose, Kubernetes and Pages outputs.
 6. **Ecosystem release manifest**: Bind `prismpm/ecosystem-release/2` to authenticated artifacts and executed downstream evidence; execute all 14 defect classes, not merely supply their names as evidence paths.
