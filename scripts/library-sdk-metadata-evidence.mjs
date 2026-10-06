@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {constants,closeSync,fstatSync,linkSync,lstatSync,mkdirSync,mkdtempSync,openSync,readSync,readdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {verifyImage,verifySource,validateCapturedLock,verifyResult} from './library-sdk-check.mjs';
+import {verifyImage,verifySource,validateAcquisitionBytes,validateCapturedLock,verifyResult} from './library-sdk-check.mjs';
 import {validateQualification} from '../sdk/exporter-qualification.mjs';
 import {verifyMigration} from '../sdk/migration-qualification.mjs';
 import {verifyMetadataEvidence,joinNativeMetadata} from '../sdk/metadata-evidence.mjs';
@@ -46,8 +46,7 @@ export async function captureLane(directory,root,context) {
   verifyImage(json('image.json'),context.sdk_image,context.architecture,context.source_revision);
   assert.equal(json('source.json').revision,context.source_revision);verifySource(root,json('source.json'));
   assert(files.get('standards.lock').equals(regular(join(root,'standards.lock'),16*1024*1024)));
-  const acquisition=json('acquisition.json');
-  assert.deepEqual(Object.keys(acquisition).sort(),['lock','metadata','migration']);
+  const acquisition=validateAcquisitionBytes(files.get('acquisition.json'));
   const lockBytes=Buffer.from(canonical(acquisition.lock));
   const binding=validateCapturedLock(lockBytes,context.sdk_image,context.architecture,
     files.get('standards.lock'),files.get('inventory.json'));

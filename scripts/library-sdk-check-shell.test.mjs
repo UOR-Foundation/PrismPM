@@ -52,7 +52,7 @@ function fixture(t){
  const architecture=process.arch==='x64'?'amd64':'arm64';
  writeFileSync(join(work,'lock.json'),sdk.bytes);
  const historical=historicalLock();
- writeFileSync(join(work,'acquisition.json'),JSON.stringify({lock:sdk.lock,metadata,migration:{
+ writeFileSync(join(work,'acquisition.json'),sdk.encode({lock:sdk.lock,metadata,migration:{
   schema:'prismpm/installed-lock-migration/2',platform:'linux/'+architecture,historical_source:historical.authority,
   historical_sha256:historical.source.sha256,target_sha256:sdk.hash(sdk.bytes),checks:migrationChecks,
   processes:expectedMigrationProcesses(sdk.lock,'linux/'+architecture).map(row=>({...row,stdout_sha256:'1'.repeat(64),stderr_sha256:'2'.repeat(64)})),
@@ -128,6 +128,14 @@ test('real shell invokes the confined Docker sequence and inspects actual termin
   ['RECORDED_OUTPUT',['', 'TAP version 13\n1..0 # SKIP\n','{}']],
   ['RECORDED_COMPILER_OUTPUT',['{}']],['RECORDED_CUSTODY_OUTPUT',['{}']],
  ])for(const output of outputs)tasks.push(async()=>{const context=fixture(t);context.env[field]=output;const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);});
+ for(const transform of [
+  raw=>'{"lock":{},'+raw.slice(1),raw=>'{"\\u006cock":{},'+raw.slice(1),
+  raw=>JSON.stringify(JSON.parse(raw),null,2),raw=>raw+'\n',
+ ])tasks.push(async()=>{
+  const context=fixture(t),raw=readFileSync(join(context.work,'acquisition.json'),'utf8');
+  context.env.RECORDED_LOCK_OUTPUT=transform(raw);
+  const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);
+ });
  for(const mutate of [value=>delete value.migration.historical_source,
   value=>{value.migration.schema='prismpm/installed-lock-migration/1';delete value.migration.historical_source;},
   value=>value.migration.historical_source.blob_oid='0'.repeat(40),

@@ -74,6 +74,16 @@ function regularBytes(path,maximum=64*1024*1024){
 
 // Only independently acquired metadata is admitted. The native bytes below
 // come from the selected immutable image, never the lock being checked.
+export function validateAcquisitionBytes(bytes){
+ assert(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=288*1024*1024,'bounded original acquisition record required');
+ const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes),value=JSON.parse(text);
+ // Compare original bytes before projecting the nested lock. JSON.parse alone
+ // discards duplicate keys; any such normalization must refuse this record.
+ assert.equal(canonical(value),text,'original canonical acquisition record required');
+ keys(value,['lock','migration','metadata']);
+ return value;
+}
+
 export function validateCapturedLock(bytes,image,architecture,standards,nativeInventory){
  assert(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=64*1024*1024,'bounded captured SDK lock required');
  assert(['amd64','arm64'].includes(architecture));
@@ -536,8 +546,8 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  else if(mode==='binding'&&args.length===5)console.log(JSON.stringify(validateCapturedLock(
   regularBytes(args[0]),args[1],args[2],regularBytes(args[3]),regularBytes(args[4]))));
  else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/installed-exporter-concurrency.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs','sdk/metadata-evidence.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
- else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(JSON.stringify(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
- else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],288*1024*1024));keys(value,['lock','migration','metadata']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);assert.equal(value.migration.schema,'prismpm/installed-lock-migration/2');verifyMigration(value.migration,lock);await verifyMetadataEvidence(value.metadata,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
+ else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(canonical(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
+ else if(mode==='acquired-lock'&&args.length===1){const value=validateAcquisitionBytes(regularBytes(args[0],288*1024*1024));const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);assert.equal(value.migration.schema,'prismpm/installed-lock-migration/2');verifyMigration(value.migration,lock);await verifyMetadataEvidence(value.metadata,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
  else if(mode==='run'&&args.length===1)console.log(JSON.stringify(await run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
  else throw Error('closed installed native-library gate command');
 }

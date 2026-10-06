@@ -1873,6 +1873,11 @@ must reproduce the canonical lock byte-for-byte. Acquisition deadlines,
 per-object and aggregate transfer bounds do not change. The private acquisition
 record's 288-MiB retention allowance includes the separately bounded base64 raw
 object witness; it does not increase accepted lock or transport limits.
+The private acquisition producer emits exact canonical JSON without a final LF.
+Both the acquired-lock CLI and retained-lane reader validate those original
+bytes before projecting the nested lock. Duplicate decoded keys, invalid UTF-8,
+extra envelope members and noncanonical serialization fail closed; retained
+evidence preserves the original acquisition bytes rather than normalized data.
 
 Each successful native library gate retains its original source, image,
 independently materialized inventory/standards, acquisition, construction,
