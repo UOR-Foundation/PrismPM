@@ -1354,6 +1354,10 @@ descriptor lengths, configuration layer order, platforms and volume intersection
 are checked before inventory acceptance. Canonical original inventory bytes and
 cross-platform artifact identities must agree; both original standards files
 must match each other and the requested digest.
+OCI's imported configuration schema permits absent, null or object `Volumes`.
+Absent/null declare no mounts; an object requires object-valued entries and
+canonical absolute paths. Every metadata-intersecting mount and field-case
+alias remains forbidden even when the ordinary OCI schema permits that map.
 
 Bounds are 1 MiB per index/manifest/configuration, 256 layers per manifest,
 32 MiB compressed and expanded terminal layer, 8 MiB inventory, 16 MiB standards,

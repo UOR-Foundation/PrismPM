@@ -124,9 +124,10 @@ export function parseConfig(bytes, manifest, platform) {
   assert.equal(config.config?.Labels?.[label], profile, 'SDK has no bounded metadata profile; no full-image fallback');
   caseKeys(config.config, ['User', 'ExposedPorts', 'Env', 'Entrypoint', 'Cmd', 'Volumes', 'WorkingDir', 'Labels',
     'StopSignal', 'ArgsEscaped', 'Memory', 'MemorySwap', 'CpuShares', 'Healthcheck', 'OnBuild', 'Shell']);
-  if (config.config.Volumes !== undefined) {
+  if (config.config.Volumes !== undefined && config.config.Volumes !== null) {
     assert(object(config.config.Volumes), 'OCI volumes must be an object');
-    for (const volume of Object.keys(config.config.Volumes)) {
+    for (const [volume, declaration] of Object.entries(config.config.Volumes)) {
+      assert(object(declaration), 'OCI volume declarations must be objects');
       assert(volume.startsWith('/') && !volume.slice(1).split('/').some(part => !part || part === '.' || part === '..'),
         'noncanonical OCI volume path');
       for (const name of Object.values(paths)) {
