@@ -32,3 +32,18 @@ Required before acceptance: exact-head independent review, current native CI,
 complete 37-check generated owner with unchanged five compiled source mutants
 and every 64-MiB maximum, then unchanged full V&V and immutable installed SDK/
 downstream qualification. No component check satisfies those obligations.
+
+Independent review custody corrections retain stable FD/inode/stat/digest
+bindings for the full presentation source closure, all 30 LexLean output
+descriptors and bytes, and closed canonical package manifests matching the
+current generator's identifier/dependency/u32/page schemas.
+No same-user hostile-race-proof directory authority is claimed.
+
+Hardening component v3: 55/55 passing, zero omissions, 42.924s, exit0/no OOM.
+Log SHA256: 9760f30304fc63c45c47b589c43eaec23f4e1d583796d3b6d9c784ca27e50ab9.
+This also includes four FD-custody tests and two manifest schema/serialization
+tests. Preserve the earlier hardening-v1 18/19 failure: its final control
+expected a later immutable-byte error instead of the new earlier closed-schema
+refusal. All original controls remain; its assertion now requires that specific
+earlier refusal. Generated package input/output allocation caps remain u32
+ceilings, not promises that a guest can allocate them within its page limit.
