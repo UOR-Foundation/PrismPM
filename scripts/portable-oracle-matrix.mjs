@@ -99,8 +99,11 @@ const environment = {PATH: `${toolchain}/bin:/usr/bin:/bin`, HOME: work,
 function run(name, program, args, directory, seconds, selectedEnvironment = environment, expectedStatus = 0) {
   const cleanupReceipt = join(evidence, `${name}.cleanup.json`);
   const observation=name.match(/^[01]-observation-(click|keyboard)-(observed|unobserved)$/);
+  const retirement=name.match(/^[01]-retirement-(click|keyboard)-([a-z-]+)$/);
   const expectedDriverHash=observation?createHash('sha256').update(observationDriver(
-    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),observation[2],observation[1])).digest('hex'):null;
+    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),observation[2],observation[1])).digest('hex'):
+    retirement?createHash('sha256').update(retirementDriver(
+    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),retirement[2],retirement[1])).digest('hex'):null;
   const result = spawnSync('/usr/bin/python3', ['-I', '-B', join(root, 'scripts/portable-oracle-process-owner.py'),
     String(seconds), cleanupReceipt, program, ...args],
     {cwd: directory, env: selectedEnvironment, encoding: 'utf8', timeout: (seconds + 10) * 1000, maxBuffer: 16 * 1024 ** 2});
@@ -131,13 +134,10 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
       actual_exit_code:Number.isInteger(result.status)?result.status:null,
       original_receipt_sha256:createHash('sha256').update(receiptBytes).digest('hex')});
   });
-  const retirement=name.match(/^[01]-retirement-(click|keyboard)-([a-z-]+)$/);
   if(retirement)retainDiagnostic(diagnostics,()=>{
-    const expected=createHash('sha256').update(retirementDriver(
-      readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),retirement[2],retirement[1])).digest('hex');
-    diagnostics.file('cases/'+name+'.driver.mjs',join(evidence,name,'driver.mjs'),expected);
+    diagnostics.file('cases/'+name+'.driver.mjs',join(evidence,name,'driver.mjs'),expectedDriverHash);
     const bytes=readDiagnosticFile(join(evidence,name,'result.json'),65536),summary=retirementSummary(JSON.parse(bytes));
-    assert.equal(summary.driver_sha256,expected);
+    assert.equal(summary.driver_sha256,expectedDriverHash);
     diagnostics.json('cases/'+name+'.json',{...summary,stage:name,
       original_receipt_sha256:createHash('sha256').update(bytes).digest('hex'),
       expected_exit_code:expectedStatus,actual_exit_code:Number.isInteger(result.status)?result.status:null});

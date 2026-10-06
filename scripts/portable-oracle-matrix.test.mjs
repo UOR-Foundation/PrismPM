@@ -11,7 +11,7 @@ import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummar
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary,observationFailureDiagnostics} from './portable-oracle-observation.mjs';
-import {retirementFaults,retirementDriver,retirementSummary} from './portable-oracle-retirement.mjs';
+import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFault} from './portable-oracle-retirement.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
@@ -67,6 +67,26 @@ test('live observation qualification transforms only diagnostics and retains all
  const summary=retirementSummary({fault:'private-control',witness:{acquisitions:129,detaches:1,enables:0,elapsed_ms:120001,secret:'private-data'},secret:'private-data'});
  assert.equal(summary.fault,null);assert.equal(summary.witness.acquisitions,null);assert.equal(summary.witness.elapsed_ms,null);
  assert(!JSON.stringify(summary).includes('private-'));
+ const bodyDriver=retirementDriver(source,'primary-body-failure','click');
+ assert(bodyDriver.includes('await target.close(); retirementTargetClosed = target.isClosed();\n      try { retirementBodyInvocations++; replyBody = await bounded(reply.body()); }'));
+ assert(!bodyDriver.includes('try { await target.close();'));
+ const bodyWitness={primary_failure:true,cleanup_failure:true,acquisitions:1,detaches:1,target_closed:true,body_invocations:1};
+ const bodyFailures={submission_failures:[{failure:'response-body-failed'}],cleanup_failures:[{failure:'unexpected'}]};
+ const bodyError='portable View oracle response-body-failed';
+ assert.doesNotThrow(()=>requirePrimaryBodyFault(bodyWitness,bodyFailures,bodyError));
+ for(const patch of [{target_closed:false},{body_invocations:0},{body_invocations:2},{primary_failure:false}])
+  assert.throws(()=>requirePrimaryBodyFault({...bodyWitness,...patch},bodyFailures,bodyError));
+ assert.throws(()=>requirePrimaryBodyFault(bodyWitness,{...bodyFailures,submission_failures:[{failure:'unexpected'}]},bodyError));
+ const closedFailures=retirementSummary({fault:'primary-body-failure',exit_code:1,terminated:true,execution_error:true,
+  submission_failures:[{failure:'response-body-failed',phase:'response-body',secret:'private-value'}],
+  cleanup_failures:[{resource:'browser',failure:'unexpected',secret:'private-value'}],
+  submission_failures_truncated:true,cleanup_failures_truncated:true});
+ assert.equal(closedFailures.exit_code,1);assert.equal(closedFailures.terminated,true);assert.equal(closedFailures.execution_error,true);
+ assert.equal(closedFailures.submission_failures[0].failure,'response-body-failed');
+ assert.equal(closedFailures.cleanup_failures[0].failure,'unexpected');
+ assert.equal(closedFailures.submission_failures_truncated,true);assert.equal(closedFailures.cleanup_failures_truncated,true);
+ assert(!JSON.stringify(closedFailures).includes('private-value'));
+ assert.deepEqual(retirementSummary(closedFailures),closedFailures);
 });
 test('live CDP qualification rejects unavailable, omitted, incomplete and invented observation witnesses',()=>{
  const observed={schema:'prismpm/portable-observation-witness/1',submission:1,phase:'completed-readiness',journey:'modeled-vectors',vectorIndex:0,keyboard:true,
@@ -211,11 +231,13 @@ test('actual observation bundle retention copies executed drivers and closed fai
  const source=read('scripts/portable-oracle-matrix.mjs');
  const start=source.indexOf('  if(/^[01]-observation-'),end=source.indexOf('  // Cleanup uncertainty',start);
  assert(start>=0&&end>start);const branch=source.slice(start,end);
- for(const state of ['receipt','missing','changed']){
+ for(const kind of ['observation','retirement'])for(const state of ['receipt','missing','changed']){
   const missing=state==='missing',changed=state==='changed';
-  const root=diagnosticRoot(t),evidence=join(root,'evidence'),name='0-observation-keyboard-observed';
+  const root=diagnosticRoot(t),evidence=join(root,'evidence'),name=kind==='observation'
+   ?'0-observation-keyboard-observed':'0-retirement-click-primary-body-failure';
   mkdirSync(join(evidence,name),{recursive:true});
-  const driver=observationDriver(read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'observed','keyboard');
+  const original=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const driver=kind==='observation'?observationDriver(original,'observed','keyboard'):retirementDriver(original,'primary-body-failure','click');
   writeFileSync(join(evidence,name,'driver.mjs'),driver+(changed?'\n// changed after execution':''));
   if(!missing)writeFileSync(join(evidence,name,'result.json'),JSON.stringify({status:'incomplete',driver_sha256:hash(driver),
    witnesses:[{journey:'private-journey',payload:'private-value'}],stderr:'private-value',
@@ -223,7 +245,8 @@ test('actual observation bundle retention copies executed drivers and closed fai
    cleanup_failures:[{resource:'browser',failure:'timeout'}]}));
   const diagnostics=new PortableDiagnosticBundle(root);
   runInNewContext(branch,{name,evidence,result:{status:1},expectedStatus:0,expectedDriverHash:hash(driver),diagnostics,retainDiagnostic,
-   join,createHash,readDiagnosticFile,observationSummary,assert,JSON,Number});
+   retirement:name.match(/^[01]-retirement-(click|keyboard)-([a-z-]+)$/),
+   join,createHash,readDiagnosticFile,observationSummary,retirementSummary,assert,JSON,Number});
   const index=JSON.parse(readFileSync(join(diagnostics.path,'index.json')));
   if(changed){assert.deepEqual(index.files,[]);assert.equal(index.state,'incomplete');continue;}
   assert(index.files.some(row=>row.path==='cases/'+name+'.driver.mjs'&&row.sha256===hash(driver)));

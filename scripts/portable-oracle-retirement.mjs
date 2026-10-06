@@ -7,7 +7,7 @@ import {resolve, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {capture} from './portable-oracle-custody.mjs';
-import {expectedObservationSubmissions, observationFailureDiagnostics} from './portable-oracle-observation.mjs';
+import {expectedObservationSubmissions, observationFailureDiagnostics, observationSummary} from './portable-oracle-observation.mjs';
 
 export const retirementFaults = Object.freeze([
   'pending-detach', 'rejected-detach', 'primary-body-failure',
@@ -28,6 +28,7 @@ export function retirementDriver(source, fault, trigger) {
 let retirementActiveDetaches = 0, retirementPeakDetaches = 0, retirementSettledDetaches = 0;
 let retirementCloseStarted = 0, retirementClosed = false, retirementCloseHeld = false, retirementHandoffs = 0;
 let retirementRetiredListeners = 0;
+let retirementBodyInvocations = 0, retirementTargetClosed = false;
 let retirementRelease;
 const retirementGate = new Promise(resolve => { retirementRelease = resolve; });
 const retirementStart = performance.now();
@@ -77,7 +78,7 @@ browser.close = async () => { retirementCloseStarted++; await retirementRealClos
   }
   if (fault === 'primary-body-failure') driver = replace(driver,
     '      try { replyBody = await bounded(reply.body()); }',
-    '      try { await target.close(); replyBody = await bounded(reply.body()); }');
+    '      await target.close(); retirementTargetClosed = target.isClosed();\n      try { retirementBodyInvocations++; replyBody = await bounded(reply.body()); }');
   const beforeJourneys = "  await journey('attachment-assets', async () => {";
   if (fault === 'registry-overflow') driver = replace(driver, beforeJourneys,
     `  for (let index = 0; index < 128; index++) diagnosticCleanup.own(() => retirementGate);\n${beforeJourneys}`);
@@ -100,6 +101,7 @@ browser.close = async () => { retirementCloseStarted++; await retirementRealClos
     active_detaches: retirementActiveDetaches, peak_detaches: retirementPeakDetaches, settled_detaches: retirementSettledDetaches,
     close_started: retirementCloseStarted, browser_closed: retirementClosed, close_held: retirementCloseHeld,
     retired_listeners: retirementRetiredListeners, handoffs: retirementHandoffs,
+    body_invocations: retirementBodyInvocations, target_closed: retirementTargetClosed,
     cleanup_elapsed_ms: performance.now() - retirementCleanupStart, primary_failure: !!primaryFailure, cleanup_failure: !!cleanupFailure});
   if (primaryFailure) throw primaryFailure;`);
   return driver;
@@ -109,21 +111,36 @@ export function retirementSummary(value) {
   const count = number => Number.isSafeInteger(number) && number >= 0 && number <= 128 ? number : null;
   const duration = number => Number.isFinite(number) && number >= 0 && number <= 120_000 ? number : null;
   const digest = text => typeof text === 'string' && /^[a-f0-9]{64}$/.test(text) ? text : null;
+  const failures = observationSummary(value);
   return {schema: 'prismpm/portable-retirement-diagnostic/1', scope: 'diagnostics-only-not-acceptance',
     fault: retirementFaults.includes(value?.fault) ? value.fault : null,
     trigger: ['click', 'keyboard'].includes(value?.trigger) ? value.trigger : null,
     profile: ['legacy-numeric', 'utf8-text'].includes(value?.profile) ? value.profile : null,
     status: value?.status === 'passed' ? 'passed' : 'incomplete',
+    exit_code: failures.exit_code, terminated: failures.terminated, execution_error: failures.execution_error,
     driver_sha256: digest(value?.driver_sha256), oracle_sha256: digest(value?.oracle_sha256),
     model_sha256: digest(value?.model_sha256), archive_sha256: digest(value?.archive_sha256), wasm_sha256: digest(value?.wasm_sha256),
     stdout_sha256: digest(value?.stdout_sha256), stderr_sha256: digest(value?.stderr_sha256),
+    submission_failures: failures.submission_failures, cleanup_failures: failures.cleanup_failures,
+    submission_failures_truncated: failures.submission_failures_truncated,
+    cleanup_failures_truncated: failures.cleanup_failures_truncated,
     witness: {acquisitions: count(witness?.acquisitions), detaches: count(witness?.detaches), enables: count(witness?.enables),
       active_detaches: count(witness?.active_detaches), peak_detaches: count(witness?.peak_detaches),
       settled_detaches: count(witness?.settled_detaches), close_started: count(witness?.close_started),
       browser_closed: witness?.browser_closed === true, close_held: witness?.close_held === true,
       retired_listeners: count(witness?.retired_listeners), handoffs: count(witness?.handoffs),
+      body_invocations: count(witness?.body_invocations), target_closed: witness?.target_closed === true,
       elapsed_ms: duration(witness?.elapsed_ms), cleanup_elapsed_ms: duration(witness?.cleanup_elapsed_ms),
       primary_failure: witness?.primary_failure === true, cleanup_failure: witness?.cleanup_failure === true}};
+}
+export function requirePrimaryBodyFault(witness, failures, stderr) {
+  assert.equal(witness.primary_failure, true); assert.equal(witness.acquisitions, 1); assert.equal(witness.detaches, 1);
+  assert.equal(witness.target_closed, true, 'actual target close must succeed outside the branded body catch');
+  assert.equal(witness.body_invocations, 1, 'actual response body must be invoked after successful target close');
+  assert.equal(failures.submission_failures.length, 1); assert.equal(witness.cleanup_failure, true);
+  assert.equal(failures.cleanup_failures.length, 1); assert.equal(failures.cleanup_failures[0].failure, 'unexpected');
+  assert(['response-body-failed', 'response-body-unavailable'].includes(failures.submission_failures[0].failure));
+  assert.match(stderr, /portable View oracle .*response-body-(?:failed|unavailable)|Network\.getResponseBody: No data found for resource/);
 }
 function main() {
   const [oracle, artifact, browser, fault, trigger, reference, evidence, ...extra] = process.argv.slice(2);
@@ -156,21 +173,26 @@ function main() {
   });
   const faults = observationFailureDiagnostics(result.stderr);
   const receipt = {schema: 'prismpm/portable-retirement-result/1', fault, trigger, profile: profile.profile,
-    status: 'incomplete', exit_code: result.status, driver_sha256: driverSubject.measurement.sha256,
+    status: 'incomplete', exit_code: result.status, terminated: result.signal !== null, execution_error: !!result.error,
+    driver_sha256: driverSubject.measurement.sha256,
     oracle_sha256: subjects[2].measurement.sha256, model_sha256: subjects[3].measurement.sha256,
     archive_sha256: subjects[4].measurement.sha256, wasm_sha256: subjects[5].measurement.sha256,
     stdout_sha256: sha(result.stdout ?? ''), stderr_sha256: sha(result.stderr ?? ''), witness: witnesses[0],
-    submission_failures: faults.submission_failures, cleanup_failures: faults.cleanup_failures};
+    submission_failures: faults.submission_failures, cleanup_failures: faults.cleanup_failures,
+    submission_failures_truncated: faults.submission_failures_truncated,
+    cleanup_failures_truncated: faults.cleanup_failures_truncated};
   writeFileSync(join(directory, 'result.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
   for (const subject of subjects) subject.verify();
   assert.ifError(result.error); assert.equal(result.signal, null); assert.equal(result.status, positive.has(fault) ? 0 : 1);
+  assert.equal(faults.submission_failures_truncated,false);assert.equal(faults.cleanup_failures_truncated,false);
   assert.equal(witnesses.length, 1, 'one actual browser cleanup witness required');
   const witness = witnesses[0];
   assert.deepEqual(Object.keys(witness).sort(), ['schema', 'fault', 'acquisitions', 'detaches', 'enables',
     'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'browser_closed', 'close_held', 'retired_listeners', 'handoffs',
+    'body_invocations', 'target_closed',
     'elapsed_ms', 'cleanup_elapsed_ms', 'primary_failure', 'cleanup_failure'].sort());
   assert.equal(witness.fault, fault);
-  for (const key of ['acquisitions', 'detaches', 'enables', 'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'retired_listeners', 'handoffs'])
+  for (const key of ['acquisitions', 'detaches', 'enables', 'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'retired_listeners', 'handoffs', 'body_invocations'])
     assert(Number.isSafeInteger(witness[key]) && witness[key] >= 0 && witness[key] <= 128);
   assert.equal(witness.close_started, 1); assert.equal(witness.browser_closed, true, 'actual browser close must complete');
   assert.equal(witness.close_held, fault === 'pending-close', 'synthetic close hold starts only after actual close completes');
@@ -179,6 +201,7 @@ function main() {
   assert(witness.cleanup_elapsed_ms >= 0 && witness.cleanup_elapsed_ms < 12_000, 'one original ten-second cleanup bound');
   assert(!(result.stderr ?? '').includes('private-retirement-control'), 'diagnostics cannot publish raw injected errors');
   if (positive.has(fault)) {
+    assert.equal(faults.submission_failures.length,0);assert.equal(faults.cleanup_failures.length,0);
     assert.deepEqual(JSON.parse(result.stdout.trim()), baseline.report, 'fault cannot change any actual full-profile acceptance');
     assert.equal(witness.primary_failure, false); assert.equal(witness.cleanup_failure, false);
     assert.equal(witness.active_detaches,0);assert.equal(witness.settled_detaches,witness.detaches);
@@ -192,12 +215,9 @@ function main() {
         'multiple actual bounded retirement operations must overlap within the unchanged owner capacity');
     }
   } else if (fault === 'primary-body-failure') {
-    assert.equal(witness.primary_failure, true); assert.equal(witness.acquisitions, 1); assert.equal(witness.detaches, 1);
-    assert.equal(faults.submission_failures.length, 1);assert.equal(witness.cleanup_failure,true);
-    assert.equal(faults.cleanup_failures.length,1);assert.equal(faults.cleanup_failures[0].failure,'unexpected');
-    assert(['response-body-failed', 'response-body-unavailable'].includes(faults.submission_failures[0].failure));
-    assert.match(result.stderr, /portable View oracle .*response-body-(?:failed|unavailable)|Network\.getResponseBody: No data found for resource/);
+    requirePrimaryBodyFault(witness, faults, result.stderr);
   } else {
+    assert.equal(faults.submission_failures.length,0);
     assert.equal(witness.primary_failure, false); assert.equal(witness.cleanup_failure, true);
     assert.equal(faults.cleanup_failures.length, 1); assert.equal(faults.cleanup_failures[0].resource, 'browser');
     assert.equal(faults.cleanup_failures[0].failure, ['pending-close', 'pending-acquisition'].includes(fault) ? 'timeout' : 'unexpected');
