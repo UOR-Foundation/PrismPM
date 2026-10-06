@@ -1,5 +1,50 @@
 # PrismPM falsifiability and verification record
 
+## Native golden source preflight
+
+Native SDK platforms now reject stale shared source paths, bytes or descriptors
+before proof generation. The normative development writer still regenerates the
+baseline; complete generation, native-record validation and comparison remain
+mandatory. This changes refusal timing, not golden acceptance.
+
+On the original PR #55 branch, all 41 xtask unit tests and three integration tests passed in the pinned
+development container, including five new preflight tests. Reversing the actual
+platform condition failed four of those tests. All-target/all-feature Clippy
+and formatting passed. The actual CLI on Ubuntu 24.04 rejected a renamed-source
+fixture in 4.95 ms without writing or starting generation.
+
+Restored test log SHA-256:
+`fb4bd566b96b9c672e8e8b38ee63506622a1eef05a85de6f1316c61a3f043987`.
+Negative CLI receipt `target/preflight-cli-evidence.json`, SHA-256:
+`93996d62b42ee5c6bb3353d9f6336c8f52db5552de526a6f79f3a8eeb303b837`.
+This is a historical preflight checkpoint, not qualification of the current
+integrated source, full V&V, SDK or Foundry acceptance. Fresh integrated
+verification remains required.
+
+Integrated preflight `v2` compiled fresh in the pinned devcontainer: 32/38 xtask
+tests passed, including all five preflight tests. The whole owner failed on
+stale retained native records, unavailable absolute Git metadata and inherited
+build-profile overrides in a compiler-boundary control. The failed run is
+retained at `target/hologram-oracle-response-worktree/target/integrated-golden-preflight-v2/`;
+it is not a passing qualification. Authentic record import and the corrected
+test environment require a fresh complete owner run.
+
+After importing the independently reviewed raw AMD64/ARM64 records from run
+`37412263195` at `81884410`, complete integrated xtask tests passed (38/38,
+61.20 seconds) and strict all-target Clippy passed. Inverting the actual native
+platform guard failed four original preflight controls; restored source again
+passed all 38 tests (61.68 seconds), formatting and strict Clippy. The compiled
+Rust DK-28 owner also passed, enforcing all 60 original/additive Node checks
+with unchanged file deadlines. This is scoped source evidence, not full
+conformance, current installed SDK execution or closure of issues #66/#69.
+
+| Evidence under `target/hologram-oracle-response-worktree/target/` | SHA-256 |
+| --- | --- |
+| `integrated-golden-preflight-v3/gate.log` | `f6efd3effda9d7cce95b6d34ac42a975d81efac51b319a0dccc989b26d5f5f25` |
+| `golden-preflight-guard-mutant-v1/gate.log` | `98d25eabd20e4f2edf35e1504bd866967530402bb60c0903eb56fdb9a5cdc5e6` |
+| `integrated-golden-preflight-v4/gate.log` | `8275d09caf4ba247aaf6a6415f0aa7d5b0295681276100219db6d35cf7125a9f` |
+| `integrated-metadata-owner-v1/gate.log` | `e05f1e8717d446d4ddd78b3c8391e258dc370de5c665627590c17fd7bcc8b96e` |
+
 ## Historical migration input custody
 
 The new source-proof test first failed on the missing verifier. Restored source
@@ -3009,6 +3054,42 @@ The first release-test attempt lacked the Docker socket and failed its real
 BuildKit owner; that record remains retained. These checks establish private
 evidence handling, not full VV, immutable SDK qualification, publisher authority,
 hostile-host race safety, Hologram adoption or production release acceptance.
+
+## Isolated public metadata helper — 6 October 2026
+
+The new acquisition regression exposed an unconditional private-gate import in
+the public helper. Actual Cargo file listing followed by isolated helper
+execution failed with `ERR_MODULE_NOT_FOUND`. Private evidence capture now lives
+in a separate gate-only module. `metadata-cli.mjs` is byte-identical to its
+pre-change source (SHA-256 `534bdc85d7e2326c9d5e1febf136f906ca45df91e384dabad50025b40a4d7b35`).
+The eight actual Rust `include_bytes!` helper inputs remain self-contained and
+present in Cargo's file list. This is file-inclusion and isolated source-helper
+execution evidence, not execution from a published Cargo archive.
+
+All 60 DK-28 Node tests pass in 25.386 seconds, retaining every original file
+and the 120-second deadline; both new files are registered in its owning suite.
+The complete 29-test library gate passes in 98.268 seconds under its original
+150/120-second limits. All 13 direct capture/CLI/evidence/embedded tests pass.
+The actual isolated helper acquires seven objects over HTTP; deleting a real
+runtime dependency fails before any new acquisition. Independent read-only
+review checked public/private separation, the eight-file Cargo/runtime closure,
+registered counts and private source dependencies. All containers use pinned
+devcontainer `f061023ac557b763aaddcd9ee3fd769a558b43e519c0f272377a429709fd3267`,
+exit zero without OOM, and omit no selected tests.
+
+Logs under `target/hologram-oracle-response-worktree/target/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `metadata-embedded-red-v2/gate.log` | `a1d52e7e2ab21b8096e5880754fb7da643d1dbabfb3e32b7ab4f1f2451b527d8` |
+| `metadata-embedded-owning-v1/gate.log` | `a2528540cc520232644d9de37a5d73647af0378d60f47c98ea0bb570dd8d1087` |
+| `metadata-dk28-owner-v1/gate.log` | `236adf5c0fce136a3cc33e2606c1e1076ad3a410d849ce45883375ce3cda4fac` |
+| `metadata-join-owning-v4/gate.log` | `5ef67691e8171af862f2ac0e1588ddcdcae9e4f82b7aabee42b30b3e9140a248` |
+
+An initial package-list attempt used a read-only default target and failed
+before the intended regression; it remains retained separately. Full source
+VV, actual immutable SDK qualification, native effects and Hologram adoption
+are not established by these component checks.
 
 ## PrismPM v0.3.0 SDK and ecosystem acceptance closure
 
