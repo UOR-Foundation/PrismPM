@@ -24,11 +24,13 @@ function failureKind(error) {
   if (error instanceof assert.AssertionError) return 'assertion';
   return 'unexpected';
 }
-async function bounded(operation) {
+async function bounded(operation, diagnostic = false) {
   let timer;
   try {
     return await Promise.race([operation, new Promise((_, reject) => {
       timer = setTimeout(() => reject(new errors.TimeoutError('oracle operation deadline')), 10_000);
+      // An optional observer must not keep a completed browser owner alive.
+      if (diagnostic) timer.unref();
     })]);
   } finally { clearTimeout(timer); }
 }
@@ -111,7 +113,7 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record)
   let session;
   let retired = false;
   const detach = async value => {
-    try { await bounded(value.detach()); } catch { /* The browser process owner remains the cleanup authority. */ }
+    try { await bounded(value.detach(), true); } catch { /* The browser process owner remains the cleanup authority. */ }
   };
   const stop = async () => {
     retired = true;
@@ -120,7 +122,7 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record)
     session = undefined;
     if (closing) await detach(closing);
   };
-  try {
+  const ready = (async () => { try {
     // The original acquisition promise owns late arrivals even if its deadline
     // wins. A timed-out session must never be abandoned between submissions.
     const acquisition = Promise.resolve(target.context().newCDPSession(target)).then(async value => {
@@ -128,16 +130,18 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record)
       session = value;
       return value;
     });
-    const acquired = await bounded(acquisition);
-    if (acquired) {
+    const acquired = await bounded(acquisition, true);
+    if (acquired && !retired) {
       network = submissionNetworkRecorder(acquired, endpoint, expectedRequest, record);
-      await bounded(acquired.send('Network.enable'));
+      await bounded(acquired.send('Network.enable'), true);
     }
   } catch {
     await stop();
     network = unavailable();
-  }
-  return {summary: () => network.summary(), stop};
+  } })();
+  // Ordinary submission never waits for diagnostic acquisition. The separate
+  // mandatory observation owner explicitly joins ready before its witness.
+  return {summary: () => network.summary(), stop, ready};
 }
 let browser;
 let primaryFailure;

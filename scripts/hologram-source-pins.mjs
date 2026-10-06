@@ -13,7 +13,7 @@ export const pinnedPaths=Object.freeze([
 const identity=['dev','ino','uid','gid','mode','size','nlink','mtimeNs','ctimeNs'];
 // Independently reviewed original Rust owner, including its active #[test].
 // Literal text in a comment/raw string cannot substitute for these bytes.
-const reviewedOwner='62b4be2eb80bf5e88a01d143e28ea94dba5308f40d58ecf714f285a398ba3034';
+const reviewedOwner='b64bd12972d54815ca3ed101cbc0b0fb7d241a006b450af6b5d13d0b7bc946d9';
 function digest(path,capture=false){
  assert.equal(realpathSync(dirname(path)),dirname(path),'source ancestor alias');
  const before=lstatSync(path,{bigint:true});assert(before.isFile()&&before.nlink===1n&&before.size<=(capture?1n:64n)*1024n**2n);

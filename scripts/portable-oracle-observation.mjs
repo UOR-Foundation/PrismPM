@@ -76,9 +76,10 @@ export function observationDriver(source,mode,trigger){
  let driver=source;
  const entry='async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {';
  driver=replacement(driver,entry,`let observationOrdinal = 0;\n${entry}\n  const observationSubmission = ++observationOrdinal;`);
- if(mode==='unobserved')driver=replacement(driver,
-  '    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);',
-  '    // Qualification omits only the read-only diagnostic collector.');
+ const acquisition='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);';
+ driver=replacement(driver,acquisition,mode==='observed'
+  ? acquisition+'\n    await network.ready; // Diagnostic-only witness preparation, not ordinary acceptance.'
+  : '    // Qualification omits only the read-only diagnostic collector.');
  if(trigger==='keyboard'){
   driver=replacement(driver,'      await submit(vector);','      await submit(vector, page, true);');
   driver=replacement(driver,'    await submit(recovery, delayedPage, false, {fillInputs: false});',

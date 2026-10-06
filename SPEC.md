@@ -266,6 +266,14 @@ replace that failure. Trigger rejections remain eagerly observed even after
 completion. A successful body still requires a completed successful trigger
 and no prohibited navigation; navigation observed first remains an immediate
 failure. These ordering rules do not establish historical failure causality.
+Optional CDP setup starts concurrently with ordinary submissions and is never
+awaited by their acceptance path. The owner still retires its listeners and
+session, including a late acquisition after retirement; the enclosing browser
+owner remains cleanup authority. Diagnostic-only timers retain the ten-second
+bound but cannot keep a completed process alive. The separate eight mandatory
+observation runs explicitly await setup before collecting their complete
+ordered witnesses, while retaining every original acceptance check and deadline.
+Unavailable diagnostics never constitute acceptance or historical causality.
 
 The generic model retains its u32 request and response bounds. The pinned
 Hologram portable intent transport supports at most 65,536 request bytes and

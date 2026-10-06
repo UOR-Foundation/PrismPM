@@ -23,6 +23,8 @@ test('live observation qualification transforms only diagnostics and retains all
  for(const mode of ['observed','unobserved'])for(const trigger of ['click','keyboard']){
   const driver=observationDriver(source,mode,trigger);
   assert.equal(driver.includes(call),mode==='observed');
+  assert.equal(driver.includes('await network.ready;'),mode==='observed');
+  assert.equal(source.includes('await network.ready;'),false,'ordinary acceptance cannot join diagnostic setup');
   for(const point of ['try { replyBody = await bounded(reply.body()); }',
    'assert.equal(invocationCount, 1', 'assert.equal(navigated, false',
    'assert.deepEqual(envelope,', 'await target.waitForFunction(ready)', 'await shows(displayed(vector), target)'])
@@ -235,21 +237,62 @@ test('actual CDP owner orchestration enables only default observation and retire
  const session=new EventEmitter(),commands=[],events=[];let detached=0;
  session.send=async(...args)=>{commands.push(args);};session.detach=async()=>{detached++;};
  const target={context:()=>({newCDPSession:async actual=>{assert.equal(actual,target);return session;}})};
- const owner=await networkOwner(target,events);assert.deepEqual(commands,[['Network.enable']]);
+ const owner=await networkOwner(target,events);await owner.ready;assert.deepEqual(commands,[['Network.enable']]);
  assert.equal(owner.summary().state,'observed');await owner.stop();await owner.stop();
  assert.equal(detached,1);assert.deepEqual(session.eventNames(),[]);
+ let resolveLate,nonblocking;
+ const lateArrival=new Promise(resolve=>{resolveLate=resolve;}),lateSession=new EventEmitter(),lateCommands=[];
+ let lateDetached=0;lateSession.send=async(...args)=>{lateCommands.push(args);};lateSession.detach=async()=>{lateDetached++;};
+ const acquiring=networkOwner({context:()=>({newCDPSession:()=>lateArrival})},[]);
+ void acquiring.then(value=>{nonblocking=value;});await new Promise(resolve=>setImmediate(resolve));
+ try {
+  assert.ok(nonblocking,'diagnostic acquisition must not delay ordinary submission');
+  assert.equal(typeof nonblocking.ready?.then,'function');assert.equal(nonblocking.summary().state,'unavailable');
+  await nonblocking.stop();assert.equal(lateDetached,0);
+  resolveLate(lateSession);await nonblocking.ready;await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(lateDetached,1);assert.deepEqual(lateCommands,[]);assert.deepEqual(lateSession.eventNames(),[]);
+ } finally {resolveLate(lateSession);await (await acquiring).stop();}
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const postArrivalRetirement=async body=>{
+  let resume;const resumed=new Promise(resolve=>{resume=resolve;}),actual=new EventEmitter(),enabled=[];
+  let calls=0,closed=0;actual.send=async(...args)=>{enabled.push(args);};actual.detach=async()=>{closed++;};
+  const bounds=async operation=>{const value=await operation;if(++calls===1)await resumed;return value;};
+  const staged=await networkOwner({context:()=>({newCDPSession:async()=>actual})},[],bounds,body);
+  await new Promise(resolve=>setImmediate(resolve));
+  try {await staged.stop();assert.equal(closed,1);resume();await staged.ready;
+   assert.deepEqual(enabled,[],'retirement after session arrival cannot activate diagnostics');assert.deepEqual(actual.eventNames(),[]);
+  }finally{resume();await staged.ready;await staged.stop();}
+ };
+ await postArrivalRetirement(source);
+ const retirementGuard='if (acquired && !retired) {';assert.equal(source.split(retirementGuard).length,2);
+ await assert.rejects(postArrivalRetirement(source.replace(retirementGuard,'if (acquired) {')),assert.AssertionError);
+ const start=source.indexOf('async function bounded('),end=source.indexOf('\nfunction sanitizedFailure(',start);
+ assert(start>=0&&end>start);const boundedSource=source.slice(start,end);
+ const child=body=>spawnSync(process.execPath,['--input-type=module','--eval',
+  "const errors={TimeoutError:class TimeoutError extends Error{}};\n"+body+
+  "\nbounded(new Promise(()=>{}),true).catch(()=>{});console.log('diagnostic-does-not-own-process');"],{encoding:'utf8',timeout:500,maxBuffer:65536});
+ const detachedTimer=child(boundedSource);assert.ifError(detachedTimer.error);assert.equal(detachedTimer.status,0);
+ assert.equal(detachedTimer.stdout.trim(),'diagnostic-does-not-own-process');
+ const unref='if (diagnostic) timer.unref();';assert.equal(boundedSource.split(unref).length,2);
+ const liveTimer=child(boundedSource.replace(unref,''));assert.equal(liveTimer.error?.code,'ETIMEDOUT');
+ const timerLiteral='10_000';assert.equal(boundedSource.split(timerLiteral).length,2);
+ const bodyTimer=spawnSync(process.execPath,['--input-type=module','--eval',
+  "const errors={TimeoutError:class TimeoutError extends Error{}};\n"+boundedSource.replace(timerLiteral,'25')+
+  "\ntry{await bounded(new Promise(()=>{}));throw new Error('missing body deadline');}catch(error){if(!(error instanceof errors.TimeoutError))throw error;console.log('body-deadline-still-owned');}"],
+  {encoding:'utf8',timeout:1000,maxBuffer:65536});
+ assert.ifError(bodyTimer.error);assert.equal(bodyTimer.status,0);assert.equal(bodyTimer.stdout.trim(),'body-deadline-still-owned');
 });
 test('a timed-out CDP acquisition still owns and detaches its real late arrival',async()=>{
  let resolve;const arrival=new Promise(yes=>{resolve=yes;}),events=[];let detached=0;
  const session=new EventEmitter();session.detach=async()=>{detached++;};session.send=async()=>assert.fail('retired acquisition cannot enable observations');
  const target={context:()=>({newCDPSession:()=>arrival})};
  let calls=0;const bounded=async operation=>{if(++calls===1)throw new Error('acquisition deadline');return operation;};
- const owner=await networkOwner(target,events,bounded);assert.equal(owner.summary().state,'unavailable');
+ const owner=await networkOwner(target,events,bounded);await owner.ready;assert.equal(owner.summary().state,'unavailable');
  resolve(session);await new Promise(yes=>setImmediate(yes));assert.equal(detached,1);
  await owner.stop();assert.equal(detached,1);assert.deepEqual(events,[]);
  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),guard='if (retired) { await detach(value); return null; }';
  assert.equal(source.split(guard).length,2);let resolveMutant;const mutantArrival=new Promise(yes=>{resolveMutant=yes;});calls=0;detached=0;
- const mutant=await networkOwner({context:()=>({newCDPSession:()=>mutantArrival})},[],bounded,source.replace(guard,''));
+ const mutant=await networkOwner({context:()=>({newCDPSession:()=>mutantArrival})},[],bounded,source.replace(guard,''));await mutant.ready;
  resolveMutant(session);await new Promise(yes=>setImmediate(yes));assert.throws(()=>assert.equal(detached,1),assert.AssertionError);
  await mutant.stop();assert.equal(detached,1);
 });
@@ -258,6 +301,7 @@ test('CDP setup refusal and detach rejection remain unavailable diagnostics with
  session.send=async()=>{throw new Error('private-setup-failure');};
  session.detach=async()=>{detached++;throw new Error('private-detach-failure');};
  const owner=await networkOwner({context:()=>({newCDPSession:async()=>session})},events);
+ await owner.ready;
  assert.equal(owner.summary().state,'unavailable');assert.deepEqual(session.eventNames(),[]);
  const primary=new Error('original-body-failure');let caught;
  try{try{throw primary;}finally{await owner.stop();}}catch(error){caught=error;}
