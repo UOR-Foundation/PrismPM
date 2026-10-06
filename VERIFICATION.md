@@ -3267,3 +3267,31 @@ runtime-reference-complete-v4.log; SHA256
 e5f6f9685ac1c763f95f11507cbf639a433b8358fb8dea108001148feb838b93.
 This is source-component evidence only. Exact-head native checks, independent
 review, full VV and installed-SDK/downstream obligations remain distinct.
+
+## Observation failure retention (6 October)
+
+Run 37423301262 completed its first full VV pass, then failed the second pass
+in the Text Request keyboard/unobserved session at submission two. All original
+78 cases and four negative controls passed before that failure. Retained driver
+and artifact bytes agree across both passes; the old uploaded observation
+receipt discarded the submission and cleanup diagnostics, so its cause is not
+established. This change preserves those existing closed facts and the closed
+failure phase through receipt creation and repeated upload sanitization.
+
+The fail-first regression genuinely rejected the old receipt. All 45 portable
+oracle source tests now pass, including both inventory bounds, privacy,
+idempotence, version-one isolation and actual bundle retention. No product
+code, browser deadlines, retries, original matrix cases, negative controls or
+eight observation sessions changed. Complete owning source and real matrix
+execution, exact-head native checks and independent review remain pending.
+This is a diagnostic correction, not a claim that the browser failure is fixed.
+
+Independent review found no production blocker and requested coverage of the
+actual receipt-construction seam. That owner now executes the production block
+with a genuinely failing child fixture and rejects both assignment omissions;
+this white-box fixture is not product acceptance. All 46 portable tests pass.
+Pinned f061 complete source validation at cd8c285c passes 39 xtask and 409 source
+tests, authored formatting and strict Clippy with unchanged captured source.
+Its real interoperability attempt fails before the matrix because the read-only
+fixture mount cannot create .lexlean; this failure is retained, not acceptance.
+The next run permits only normal ignored build output on the frozen worktree.

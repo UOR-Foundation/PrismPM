@@ -10,7 +10,7 @@ import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapsho
 import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
-import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary} from './portable-oracle-observation.mjs';
+import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary,observationFailureDiagnostics} from './portable-oracle-observation.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
@@ -106,6 +106,81 @@ test('observation failures retain only closed bounded witnesses and their execut
  assert(source.indexOf('const driverSubject=capture(driver)')<source.indexOf('const result=spawnSync'));
  assert(source.includes('driver_sha256:driverSubject.measurement.sha256'));
 });
+test('observation receipts preserve submission and cleanup failure facts through repeated closed sanitization',()=>{
+ const value={status:'incomplete',exit_code:1,witnesses:[{phase:'response-body'}],
+  submission_failures:[{journey:'modeled-vectors',phase:'response-body',failure:'response-body-failed',
+   check:'response-json',vector_index:2,invocation_count:1,keyboard:true,navigated:false,
+   events_truncated:false,network:{state:'unavailable',secret:'private-value'},
+   client:{state:'observed',responseError:true,secret:'private-value'},
+   events:[{event:'request-failed',reason:'ERR_ABORTED',payload:'private-value'}],secret:'private-value'}],
+  cleanup_failures:[{resource:'browser',failure:'timeout',secret:'private-value'}],
+  submission_failures_truncated:true,cleanup_failures_truncated:true};
+ const summary=observationSummary(value);
+ assert.equal(summary.witnesses[0].phase,'response-body');
+ assert.equal(summary.submission_failures[0].failure,'response-body-failed');
+ assert.equal(summary.submission_failures[0].vector_index,2);
+ assert.equal(summary.submission_failures[0].events[0].reason,'ERR_ABORTED');
+ assert.deepEqual(summary.cleanup_failures,[{resource:'browser',failure:'timeout'}]);
+ assert.equal(summary.submission_failures_truncated,true);assert.equal(summary.cleanup_failures_truncated,true);
+ assert(!JSON.stringify(summary).includes('private-value'));
+ assert.deepEqual(observationSummary(summary),summary,'uploaded receipt must not lose facts on its second sanitizer pass');
+ const bounded=observationSummary({...value,submission_failures:Array(5).fill(value.submission_failures[0]),
+  cleanup_failures:Array(3).fill({resource:'private-value',failure:'private-value'})});
+ assert.equal(bounded.submission_failures.length,4);assert.equal(bounded.cleanup_failures.length,2);
+ assert.deepEqual(bounded.cleanup_failures[0],{resource:'other',failure:'other'});
+ const source=read('scripts/portable-oracle-observation.mjs');
+ assert(source.includes('observationFailureDiagnostics(result.stderr'));
+ assert(source.indexOf('observationFailureDiagnostics(result.stderr')<source.indexOf('assert.equal(result.status,0'));
+});
+test('observation stderr collection distinguishes closed failure schemas, bounds both inventories and excludes private text',()=>{
+ const submission={schema:'prismpm/browser-submission-diagnostic/2',journey:'modeled-vectors',
+  phase:'submission',failure:'timeout',vectorIndex:2,invocationCount:0,keyboard:true,
+  network:{state:'unavailable'},events:[null,{event:'request-failed',reason:'ERR_ABORTED',secret:'private-value'}],
+  client:{state:'unavailable'},secret:'private-value'};
+ const cleanup={schema:'prismpm/browser-cleanup-diagnostic/1',resource:'stdin',failure:'unexpected',secret:'private-value'};
+ const stderr=['private-value','null',JSON.stringify({schema:'private-value'}),
+  ...Array(5).fill(JSON.stringify(submission)),...Array(3).fill(JSON.stringify(cleanup))].join('\n');
+ const summary=observationFailureDiagnostics(stderr);
+ assert.equal(summary.status,'incomplete');assert.equal(summary.submission_failures.length,4);
+ assert.equal(summary.submission_failures_truncated,true);assert.equal(summary.cleanup_failures.length,2);
+ assert.equal(summary.cleanup_failures_truncated,true);assert.equal(summary.submission_failures[0].phase,'submission');
+ assert.equal(summary.submission_failures[0].vector_index,2);assert.equal(summary.submission_failures[0].events[1].reason,'ERR_ABORTED');
+ assert.deepEqual(summary.cleanup_failures[0],{resource:'stdin',failure:'unexpected'});
+ assert(!JSON.stringify(summary).includes('private-value'));
+ assert.deepEqual(observationSummary(summary),summary);
+ const v1=observationFailureDiagnostics(JSON.stringify({...submission,schema:'prismpm/browser-submission-diagnostic/1'}));
+ assert(!Object.hasOwn(v1.submission_failures[0],'network'));
+ assert(!Object.hasOwn(v1.submission_failures[0].events[1],'request'));
+});
+test('actual failure receipt construction retains collected facts and rejects either omitted assignment',t=>{
+ // White-box failure wiring: this child is a negative fixture, not a product oracle.
+ const source=read('scripts/portable-oracle-observation.mjs');
+ const start=source.indexOf(' const rows=(result.stderr'),end=source.indexOf(' for(const subject of subjects)subject.verify();',start);
+ assert(start>=0&&end>start);const block=source.slice(start,end);
+ const submission={schema:'prismpm/browser-submission-diagnostic/2',phase:'response-body',failure:'response-body-failed',
+  vectorIndex:2,keyboard:true,network:{state:'unavailable'},events:[],secret:'private-value'};
+ const cleanup={schema:'prismpm/browser-cleanup-diagnostic/1',resource:'browser',failure:'timeout',secret:'private-value'};
+ const stderr=JSON.stringify(submission)+'\n'+JSON.stringify(cleanup)+'\n';
+ const result=spawnSync(process.execPath,['-e',`process.stderr.write(${JSON.stringify(stderr)});process.exit(17);`],
+  {encoding:'utf8',timeout:1000,maxBuffer:1048576});
+ assert.equal(result.status,17);assert.ifError(result.error);assert.equal(result.signal,null);
+ const root=diagnosticRoot(t);
+ const execute=body=>{
+  const directory=mkdtempSync(join(root,'receipt-'));
+  runInNewContext(body,{result,mode:'unobserved',trigger:'keyboard',profile:{profile:'utf8-text'},schema:'prismpm/portable-observation-witness/1',
+   directory,driverSubject:{measurement:{sha256:'a'.repeat(64)}},observationSummary,observationFailureDiagnostics,hash,writeFileSync,join,JSON});
+  const receipt=JSON.parse(readFileSync(join(directory,'result.json')));
+  assert.equal(receipt.schema,'prismpm/portable-observation-result/1');assert.equal(receipt.status,'incomplete');assert.equal(receipt.exit_code,17);
+  assert.equal(receipt.submission_failures[0].failure,'response-body-failed');assert.equal(receipt.submission_failures[0].vector_index,2);
+  assert.deepEqual(receipt.cleanup_failures,[{resource:'browser',failure:'timeout'}]);assert(!JSON.stringify(receipt).includes('private-value'));
+ };
+ execute(block);
+ for(const line of [
+  '  submission_failures:failures.submission_failures,submission_failures_truncated:failures.submission_failures_truncated,\n',
+  '  cleanup_failures:failures.cleanup_failures,cleanup_failures_truncated:failures.cleanup_failures_truncated,\n']){
+  assert.equal(block.split(line).length,2);assert.throws(()=>execute(block.replace(line,'')));
+ }
+});
 test('actual observation bundle retention copies executed drivers and closed failure receipts even when a receipt is missing',t=>{
  const source=read('scripts/portable-oracle-matrix.mjs');
  const start=source.indexOf('  if(/^[01]-observation-'),end=source.indexOf('  // Cleanup uncertainty',start);
@@ -117,7 +192,9 @@ test('actual observation bundle retention copies executed drivers and closed fai
   const driver=observationDriver(read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'observed','keyboard');
   writeFileSync(join(evidence,name,'driver.mjs'),driver+(changed?'\n// changed after execution':''));
   if(!missing)writeFileSync(join(evidence,name,'result.json'),JSON.stringify({status:'incomplete',driver_sha256:hash(driver),
-   witnesses:[{journey:'private-journey',payload:'private-value'}],stderr:'private-value'}));
+   witnesses:[{journey:'private-journey',payload:'private-value'}],stderr:'private-value',
+   submission_failures:[{phase:'response-body',failure:'response-body-failed',vector_index:2,keyboard:true}],
+   cleanup_failures:[{resource:'browser',failure:'timeout'}]}));
   const diagnostics=new PortableDiagnosticBundle(root);
   runInNewContext(branch,{name,evidence,result:{status:1},expectedStatus:0,expectedDriverHash:hash(driver),diagnostics,retainDiagnostic,
    join,createHash,readDiagnosticFile,observationSummary,assert,JSON,Number});
@@ -129,6 +206,9 @@ test('actual observation bundle retention copies executed drivers and closed fai
    const receipt=readFileSync(join(diagnostics.path,'cases/'+name+'.json'),'utf8');
    assert(!receipt.includes('private-value'));assert(!receipt.includes('private-journey'));
    assert.equal(JSON.parse(receipt).actual_exit_code,1);
+   assert.equal(JSON.parse(receipt).submission_failures[0].failure,'response-body-failed');
+   assert.equal(JSON.parse(receipt).submission_failures[0].vector_index,2);
+   assert.deepEqual(JSON.parse(receipt).cleanup_failures,[{resource:'browser',failure:'timeout'}]);
   }
  }
 });

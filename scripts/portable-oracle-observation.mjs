@@ -7,6 +7,7 @@ import {resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {capture} from './portable-oracle-custody.mjs';
+import {submissionDiagnosticSummary} from './portable-oracle-diagnostics.mjs';
 
 const schema='prismpm/portable-observation-witness/1';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -33,17 +34,41 @@ export function observationSummary(value){
  const digest=number=>typeof number==='string'&&/^[a-f0-9]{64}$/.test(number)?number:null;
  const journeys=new Set(['modeled-vectors','input-validation-recovery','transport-failure-recovery',
   'delayed-init','intent-boundaries','text-response-bounds','text-safe-rendering']);
+ const phases=new Set(['initial-readiness','fill','submission','response-body','rendered-result','completed-readiness','completed']);
+ const submissionFailures=Array.isArray(value?.submission_failures)?value.submission_failures:[];
+ const cleanupFailures=Array.isArray(value?.cleanup_failures)?value.cleanup_failures:[];
  return {schema:'prismpm/portable-observation-diagnostic/1',scope:'diagnostics-only-not-acceptance',
   status:value?.status==='passed'?'passed':'incomplete',exit_code:integer(value?.exit_code,255),
   terminated:value?.terminated===true,execution_error:value?.execution_error===true,
   driver_sha256:digest(value?.driver_sha256),stdout_sha256:digest(value?.stdout_sha256),stderr_sha256:digest(value?.stderr_sha256),
   witnesses:(Array.isArray(value?.witnesses)?value.witnesses:[]).slice(0,128).map(row=>({
    submission:integer(row?.submission,128),journey:journeys.has(row?.journey)?row.journey:'other',vectorIndex:integer(row?.vectorIndex,65536),
-   keyboard:typeof row?.keyboard==='boolean'?row.keyboard:null,phase:row?.phase==='completed-readiness'?'completed-readiness':'other',
+   keyboard:typeof row?.keyboard==='boolean'?row.keyboard:null,phase:phases.has(row?.phase)?row.phase:'other',
    network:row?.network?.state==='observed'?{state:'observed',requests:integer(row.network.requests,32),overflow:row.network.overflow===true}:{state:'unavailable'},
    requests:integer(row?.requests,32),responses:integer(row?.responses,32),completions:integer(row?.completions,32),
    failures:integer(row?.failures,32),eventsTruncated:row?.eventsTruncated===true})),
-  witnesses_truncated:Array.isArray(value?.witnesses)&&value.witnesses.length>128};
+  witnesses_truncated:value?.witnesses_truncated===true||(Array.isArray(value?.witnesses)&&value.witnesses.length>128),
+  submission_failures:submissionFailures.slice(0,4).map(row=>submissionDiagnosticSummary(row,'summary')),
+  submission_failures_truncated:value?.submission_failures_truncated===true||submissionFailures.length>4,
+  cleanup_failures:cleanupFailures.slice(0,2).map(row=>({
+   resource:['browser','stdin'].includes(row?.resource)?row.resource:'other',
+   failure:['assertion','timeout','unexpected','response-body-failed','response-body-unavailable'].includes(row?.failure)?row.failure:'other'})),
+  cleanup_failures_truncated:value?.cleanup_failures_truncated===true||cleanupFailures.length>2};
+}
+export function observationFailureDiagnostics(stderr){
+ const submission_failures=[],cleanup_failures=[];
+ let submission_failures_truncated=false,cleanup_failures_truncated=false;
+ for(const line of (stderr??'').split('\n')){
+  let row;try{row=JSON.parse(line);}catch{continue;}
+  if(['prismpm/browser-submission-diagnostic/1','prismpm/browser-submission-diagnostic/2'].includes(row?.schema)){
+   if(submission_failures.length<4)submission_failures.push(submissionDiagnosticSummary(row));
+   else submission_failures_truncated=true;
+  }else if(row?.schema==='prismpm/browser-cleanup-diagnostic/1'){
+   if(cleanup_failures.length<2)cleanup_failures.push({resource:row.resource,failure:row.failure});
+   else cleanup_failures_truncated=true;
+  }
+ }
+ return observationSummary({submission_failures,cleanup_failures,submission_failures_truncated,cleanup_failures_truncated});
 }
 export function observationDriver(source,mode,trigger){
  assert(['observed','unobserved'].includes(mode),'closed observation mode required');
@@ -106,10 +131,13 @@ function main(){
   {timeout:120000,maxBuffer:1048576,encoding:'utf8'});
  for(const stream of ['stdout','stderr'])writeFileSync(join(directory,stream+'.txt'),result[stream]??'',{flag:'wx'});
  const rows=(result.stderr??'').split('\n').filter(Boolean).flatMap(line=>{
-  try{const row=JSON.parse(line);return row.schema===schema?[row]:[];}catch{return [];}
+  try{const row=JSON.parse(line);return row?.schema===schema?[row]:[];}catch{return [];}
  });
+ const failures=observationFailureDiagnostics(result.stderr);
  const preliminary={schema:'prismpm/portable-observation-result/1',scope:'diagnostic-noninterference-qualification',
   mode,trigger,profile:profile.profile,witnesses:rows,status:'incomplete',exit_code:result.status,
+  submission_failures:failures.submission_failures,submission_failures_truncated:failures.submission_failures_truncated,
+  cleanup_failures:failures.cleanup_failures,cleanup_failures_truncated:failures.cleanup_failures_truncated,
   terminated:result.signal!==null,execution_error:!!result.error,driver_sha256:driverSubject.measurement.sha256,
   stdout_sha256:hash(result.stdout??''),stderr_sha256:hash(result.stderr??'')};
  // Closed failure witnesses survive even if the real session or any subsequent
