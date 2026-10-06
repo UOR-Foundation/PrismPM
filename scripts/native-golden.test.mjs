@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execute } from './sdk-vv-check.mjs';
 import test from 'node:test';
-import { canonical, readEnvironmentLock, validateSourceBaseline, collectProfile, validateImageSpace, seedCargoCache, runReview, validateWorkflow } from './native-golden.mjs';
+import { canonical, readEnvironmentLock, validateSourceBaseline, validateApplicationGenerator, collectProfile, validateImageSpace, seedCargoCache, runReview, validateWorkflow } from './native-golden.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const revision = 'a'.repeat(40), environmentRevision = 'b'.repeat(40);
@@ -18,6 +18,15 @@ function workspace(t) {
   const put = (path, bytes) => { mkdirSync(join(source, path, '..'), {recursive: true}); writeFileSync(join(source, path), bytes); };
   put('stdlib/src/Probe.lex.tex', 'unit-only source\n'); put('tests/golden/stdlib/source/Probe.lex.tex', 'unit-only source\n');
   put('tests/golden/stdlib/golden-manifest.json', '{}');
+  // Actual reviewed recipe owner plus explicitly synthetic input/baseline bytes.
+  put('crates/prismpm/src/controller/mod.rs', readFileSync(new URL('../crates/prismpm/src/controller/mod.rs', import.meta.url)));
+  const parts = ['application_build.rs', 'lean_project.rs', 'holo/archive.rs'].map(path => {
+    const bytes = Buffer.from('unit-only ' + path); put('crates/prismpm/src/' + path, bytes); return bytes;
+  });
+  const compiler = Buffer.from('unit-only compiler manifest'); put('vendor/lean4-prod/rust/MANIFEST.sha256', compiler);
+  mkdirSync(join(source, 'crates/prismpm/src/embedded'), {recursive: true});
+  symlinkSync('../../../../vendor/lean4-prod/rust/MANIFEST.sha256', join(source, 'crates/prismpm/src/embedded/lean4-prod-rust.MANIFEST.sha256'));
+  put('tests/golden/stdlib/build/manifest.json', canonical({inputs:{application_generator_sha256:hash(Buffer.concat([...parts, compiler, Buffer.from('prismpm/build-artifacts/2')]))}}));
   return {root, source, put};
 }
 
@@ -72,6 +81,25 @@ test('current shared source baseline is byte-exact before expensive generation',
   assert.throws(() => validateSourceBaseline(source));
 });
 
+test('generator preflight binds actual recipe and dereferenced compiler manifest without rewriting records', t => {
+  for (const path of ['crates/prismpm/src/application_build.rs', 'crates/prismpm/src/lean_project.rs',
+    'crates/prismpm/src/holo/archive.rs', 'vendor/lean4-prod/rust/MANIFEST.sha256', 'crates/prismpm/src/controller/mod.rs',
+    'tests/golden/stdlib/build/manifest.json']) {
+    const f = workspace(t), before = readFileSync(join(f.source, 'tests/golden/stdlib/build/manifest.json'));
+    validateApplicationGenerator(f.source); f.put(path, 'changed'); assert.throws(() => validateApplicationGenerator(f.source));
+    if (!path.endsWith('build/manifest.json')) assert.deepEqual(readFileSync(join(f.source, 'tests/golden/stdlib/build/manifest.json')), before);
+    rmSync(join(f.source, path)); assert.throws(() => validateApplicationGenerator(f.source));
+  }
+  for (const target of ['../../../../vendor/lean4-prod/rust/foreign', '/etc/hosts']) {
+    const f = workspace(t), alias = join(f.source, 'crates/prismpm/src/embedded/lean4-prod-rust.MANIFEST.sha256');
+    rmSync(alias); symlinkSync(target, alias); assert.throws(() => validateApplicationGenerator(f.source));
+  }
+  for (const wrap of [value=>'/*'+value+'*/', value=>value.replace('"application_generator_sha256"', '"unrecognized_generator"')]) {
+    const f = workspace(t), path = 'crates/prismpm/src/controller/mod.rs';
+    f.put(path, wrap(readFileSync(join(f.source, path), 'utf8'))); assert.throws(() => validateApplicationGenerator(f.source));
+  }
+});
+
 test('native profile collection retains exactly three original raw files', t => {
   for (const architecture of ['amd64', 'arm64']) {
   const {source, put} = workspace(t), profile = `tests/golden/native/linux-${architecture}-ubuntu-24.04`;
@@ -94,6 +122,7 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
   const profile = `tests/golden/native/linux-${architecture}-ubuntu-24.04`;
   const nodeArchitecture = architecture === 'amd64' ? 'x64' : 'arm64';
   if (fault === 'stale-base') work.put('stdlib/src/Probe.lex.tex', 'changed current model\n');
+  if (fault === 'stale-generator') work.put('crates/prismpm/src/application_build.rs', 'changed current generator');
   if (fault === 'stale-artifact') work.put('.prism/build/prior/result.json', '{}');
   const config = 'sha256:' + 'c'.repeat(64);
   const manifest = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config: {digest: config, size: 100}, layers: []}));
@@ -236,12 +265,13 @@ test('source review executes exact image, both unchanged golden commands and byt
 });
 
 test('failure and missing evidence never become a reviewed or accepted SDK baseline', async t => {
-  for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-executable', 'wrong-container-image', 'write-failure', 'repeat-failure',
+  for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-generator', 'stale-artifact', 'wrong-platform', 'wrong-executable', 'wrong-container-image', 'write-failure', 'repeat-failure',
     'missing-profile', 'repeat-mutation', 'source-changed', 'cleanup', 'acquisition-cleanup']) {
     const f = fixture(t, fault, store, architecture); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'review.json')), fault);
     if (!['cleanup', 'acquisition-cleanup'].includes(fault)) assert.equal(f.remaining(), undefined, fault);
     if (fault === 'acquisition-cleanup') assert.equal(f.generations(), 0);
+    if (fault === 'stale-generator') assert.equal(f.calls.filter(([command]) => command === 'docker').length, 0, 'stale source must refuse before Docker acquisition');
     if (fault === 'write-failure') {
       assert.equal(f.generations(), 1); assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
     }

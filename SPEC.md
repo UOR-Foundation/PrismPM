@@ -765,6 +765,15 @@ including failure diagnostics. It does not commit a baseline, publish an image,
 accept the current SDK, or bypass candidate/release policy. Native runner
 selection is a trusted CI property, not physical hardware attestation.
 
+Before image acquisition, source review also checks the shared build manifest's
+application-generator input against the exact concatenation owned by the
+independently reviewed active Rust controller. It hashes the original Rust
+generator inputs, the dereferenced reviewed embedded compiler-manifest alias,
+and the recipe literal. Unknown recipe-owner bytes or aliases fail closed;
+commented recipe literals are not authority. This early refusal never writes
+goldens or normalizes native records, and does not replace either genuine native
+write/repeat execution or subsequent SDK qualification.
+
 Before native cache initialization or compiler construction, each verified
 review container executes all 35 exporter-seed tests with its actual Node,
 Python and libc. The exact outer TAP plan, successful test count and absence

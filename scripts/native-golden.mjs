@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, constants, closeSync, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync,
-  readdirSync, readSync, realpathSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
+  readdirSync, readlinkSync, readSync, realpathSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -124,6 +124,32 @@ export function validateSourceBaseline(source) {
   assert(current.length > 0, 'stdlib source is absent');
   assert.deepEqual(current.map(row => row.path), reviewed.map(row => row.path), 'committed shared golden source path set is stale');
   for (const [index, row] of current.entries()) assert.equal(hash(row.bytes), hash(reviewed[index].bytes), `committed shared golden source bytes are stale: ${row.path}`);
+  validateApplicationGenerator(source);
+}
+
+// Only an early source refusal. Never rewrite a baseline or normalize native
+// records here. The reviewed active Rust owner fixes the exact concatenation;
+// literals in comments/disabled code cannot authorize a different recipe.
+export function validateApplicationGenerator(source) {
+  const owner = regular(join(source, 'crates/prismpm/src/controller/mod.rs'), 1024 ** 2);
+  assert.equal(hash(owner), '50be2692612003779058466355c3ca09e664a4ffdc4d4dfad91a302e4ba6e79e',
+    'application generator recipe owner requires independent source review');
+  const parts = ['application_build.rs', 'lean_project.rs', 'holo/archive.rs']
+    .map(path => regular(join(source, 'crates/prismpm/src', path), 16 * 1024 ** 2));
+  const alias = join(source, 'crates/prismpm/src/embedded/lean4-prod-rust.MANIFEST.sha256');
+  const before = lstatSync(alias, {bigint: true});
+  assert(before.isSymbolicLink(), 'exact embedded compiler manifest alias required');
+  assert.equal(readlinkSync(alias), '../../../../vendor/lean4-prod/rust/MANIFEST.sha256');
+  assert.equal(realpathSync(dirname(alias)), dirname(alias), 'compiler manifest ancestor is aliased');
+  const target = join(source, 'vendor/lean4-prod/rust/MANIFEST.sha256');
+  assert.equal(realpathSync(alias), target, 'compiler manifest alias escaped captured source');
+  parts.push(regular(target, 1024 ** 2), Buffer.from('prismpm/build-artifacts/2'));
+  const after = lstatSync(alias, {bigint: true});
+  for (const name of ['dev', 'ino', 'uid', 'gid', 'mode', 'size', 'mtimeNs', 'ctimeNs']) assert.equal(after[name], before[name]);
+  assert.equal(readlinkSync(alias), '../../../../vendor/lean4-prod/rust/MANIFEST.sha256');
+  const baseline = JSON.parse(regular(join(source, 'tests/golden/stdlib/build/manifest.json'), 8 * 1024 ** 2));
+  assert.equal(baseline.inputs?.application_generator_sha256, hash(Buffer.concat(parts)),
+    'committed shared application generator source hash is stale');
 }
 
 export function collectProfile(source, architecture = 'arm64') {
@@ -362,7 +388,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const environment = {...process.env}; delete environment.NODE_TEST_CONTEXT;
     const result = await execute(process.execPath, ['--test', '--test-reporter=tap', '--test-timeout=120000', join(dirname(process.argv[1]), 'native-golden.test.mjs')], {environment});
     process.stdout.write(result.stdout); process.stderr.write(result.stderr); success(result, 'owning source-review tests');
-    assert.equal(verifyTap(result.stdout.toString(), 12), 12);
+    assert.equal(verifyTap(result.stdout.toString(), 13), 13);
   } else {
     assert.equal(operation, 'run'); assert(revision && destination && extra.length === 0, 'usage: native-golden.mjs tests | run SOURCE_COMMIT FRESH_OUTPUT');
     await runReview({source: process.cwd(), revision, destination});
