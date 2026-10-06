@@ -47,3 +47,17 @@ expected a later immutable-byte error instead of the new earlier closed-schema
 refusal. All original controls remain; its assertion now requires that specific
 earlier refusal. Generated package input/output allocation caps remain u32
 ceilings, not promises that a guest can allocate them within its page limit.
+
+Generated-owner v2 fails closed before compiler admission: upstream lean.tar
+contains group-writable archive modes, which root extraction preserved.
+Fresh extraction/build now uses a scoped owner-only mask and ignores archive
+owner/permission restoration; the caller's mask is restored in finally.
+Runtime capture still refuses special/group/other-writable files and directories;
+the existing negative owner additionally exercises those writable modes.
+Archive/source bytes, fresh construction and all 37 generated checks remain
+mandatory. The retained v2 failure is not SDK or generated-owner acceptance.
+The complete runtime/input owner passes 10/10 checks, 4.826s, zero omissions.
+Its first run failed only the new root-path diagnostic regex because Node appends
+assertion details after the message; the corrected assertion requires the exact
+root-path line. Both runs are retained. The generated owner also checks caller
+mask restoration on success or failure.

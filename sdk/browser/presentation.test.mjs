@@ -5,7 +5,10 @@ import {verifyWire, replayBrowser, verifyModelMutation, verifyInventory, prerequ
 import {verifyJourneys, verifyMutants, verifyMaximum} from '../../tests/browser-presentation/browser.mjs';
 
 test('DK-23 actual generated closed presentation and private browser execution', {timeout: 3500000}, async t => {
-  const owner = createCompilerOwner('presentation');
+  const mask = process.umask();
+  let owner;
+  try { owner = createCompilerOwner('presentation'); }
+  finally { assert.equal(process.umask(), mask, 'compiler construction restores the caller mask'); }
   const build = await verifyWire(t, owner); assert.equal(build.compilerOwner, owner);
   const substitutions = build.compilerSubstitutions;
   for (const engine of ['chromium', 'firefox', 'webkit'])

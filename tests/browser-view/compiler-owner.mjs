@@ -97,7 +97,8 @@ export function captureCompilerRuntime(root) {
     assert.equal(realpathSync(path), path, 'unaliased exporter runtime closure');
     unchanged(stat, lstatSync(path, {bigint: true}));
     assert.equal(stat.uid, BigInt(process.getuid()), 'owned exporter runtime closure');
-    assert.equal(stat.mode & 0o7022n, 0n, 'exporter runtime cannot have special permissions or be group/other writable');
+    assert.equal(stat.mode & 0o7022n, 0n,
+      'exporter runtime cannot have special permissions or be group/other writable: ' + relative);
     if (relative !== '.' && relative !== './.source-lean.tar') {
       const kind = relative === './.lake' || relative.startsWith('./.lake/') ? 'build' : 'source';
       assert(counts[kind] < 4096, 'exporter runtime ' + kind + ' entry count exceeded');
