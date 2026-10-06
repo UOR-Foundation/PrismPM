@@ -169,6 +169,9 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
         .map(|byte| format!("%{byte:02X}"))
         .collect::<String>();
     let reporter = format!("--test-reporter=data:text/javascript,{encoded}");
+    // Measure this actual child execution, not time spent waiting for the
+    // compiler scheduler. Timing is diagnostic only, never acceptance.
+    let started = std::time::Instant::now();
     let output = Command::new("node")
         .env_remove("LD_LIBRARY_PATH")
         .env_remove("NODE_TEST_CONTEXT")
@@ -177,6 +180,7 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
         .current_dir(root)
         .output()
         .expect("execute complete owning Node suite in the devcontainer");
+    let elapsed_ms = started.elapsed().as_millis();
     let validation = std::panic::catch_unwind(|| {
         let stdout = std::str::from_utf8(&output.stdout).expect("UTF-8 TAP output");
         assert!(
@@ -206,29 +210,46 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
                 "{id}: {outcome} tests cannot satisfy acceptance"
             );
         }
-        file_completions(stdout, &selected, count("tests"));
+        let tests = count("tests");
+        file_completions(stdout, &selected, tests);
+        tests
     });
-    if let Err(failure) = validation {
-        // Direct Write bypasses libtest's per-test print capture. ci-observe
-        // retains process AND transcript failures before another long test
-        // can be cancelled ahead of libtest's final failure report.
-        use std::io::Write;
-        let mut stderr = std::io::stderr().lock();
-        let reason = failure
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| failure.downcast_ref::<&str>().copied())
-            .unwrap_or("non-string assertion payload");
-        // A closed diagnostic pipe must not replace the owning failure.
-        let _ = stderr.write_all(&failure_diagnostics(
-            id,
-            reason,
-            &output.stdout,
-            &output.stderr,
-        ));
-        let _ = stderr.flush();
-        std::panic::resume_unwind(failure);
-    }
+    let tests = match validation {
+        Ok(tests) => tests,
+        Err(failure) => {
+            // Direct Write bypasses libtest's per-test print capture. ci-observe
+            // retains process AND transcript failures before another long test
+            // can be cancelled ahead of libtest's final failure report.
+            use std::io::Write;
+            let mut stderr = std::io::stderr().lock();
+            let reason = failure
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| failure.downcast_ref::<&str>().copied())
+                .unwrap_or("non-string assertion payload");
+            // A closed diagnostic pipe must not replace the owning failure.
+            let _ = stderr.write_all(&failure_diagnostics(
+                id,
+                reason,
+                &output.stdout,
+                &output.stderr,
+            ));
+            let _ = stderr.flush();
+            std::panic::resume_unwind(failure);
+        }
+    };
+    // Direct Write also bypasses libtest capture for successful owners. Keep
+    // only closed numeric summary fields and the owning identifier: never
+    // echo child diagnostics, private paths, environment or arbitrary stdout.
+    use std::io::Write;
+    let diagnostic = serde_json::json!({
+        "scope": "node-owner-diagnostic-not-acceptance", "owner": id,
+        "elapsed_ms": elapsed_ms, "files": files.len(), "tests": tests
+    });
+    let mut stderr = std::io::stderr().lock();
+    // A broken diagnostic pipe cannot replace a successful owning result.
+    let _ = writeln!(stderr, "# prismpm-node-owner-diagnostic {diagnostic}");
+    let _ = stderr.flush();
 }
 
 #[cfg(test)]
@@ -269,27 +290,38 @@ mod tests {
         use std::io::{BufRead, Read, Write};
         use std::process::{Command, Stdio};
         const CHILD: &str = "PRISMPM_NODE_DIAGNOSTICS_CHILD";
-        if std::env::var_os(CHILD).is_some() {
+        if let Some(mode) = std::env::var_os(CHILD) {
             let temporary = tempfile::tempdir().unwrap();
             std::fs::write(
                 temporary.path().join("one.mjs"),
                 "import{test}from'node:test';test('one',()=>{});",
             )
             .unwrap();
-            let failure = std::panic::catch_unwind(|| {
+            if mode == "success" {
                 verify(
                     temporary.path(),
                     "diagnostic-probe",
                     &["one.mjs"],
-                    2,
+                    1,
                     "10000",
-                )
-            })
-            .unwrap_err();
-            assert!(failure
-                .downcast_ref::<String>()
-                .unwrap()
-                .contains("incomplete test suite"));
+                );
+            } else {
+                assert_eq!(mode, "failure");
+                let failure = std::panic::catch_unwind(|| {
+                    verify(
+                        temporary.path(),
+                        "diagnostic-probe",
+                        &["one.mjs"],
+                        2,
+                        "10000",
+                    )
+                })
+                .unwrap_err();
+                assert!(failure
+                    .downcast_ref::<String>()
+                    .unwrap()
+                    .contains("incomplete test suite"));
+            }
             std::io::stderr()
                 .write_all(b"PRISMPM_DIAGNOSTICS_READY\n")
                 .unwrap();
@@ -297,50 +329,76 @@ mod tests {
             std::io::stdin().read_exact(&mut [0u8; 1]).unwrap();
             return;
         }
-        let mut child = Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "cases::node_suite::tests::diagnostics_precede_libtest_summary",
-                "--test-threads=1",
-            ])
-            .env(CHILD, "1")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let stderr = child.stderr.take().unwrap();
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let reader = std::thread::spawn(move || {
-            let mut observed = String::new();
-            for line in std::io::BufReader::new(stderr).lines() {
-                let line = line.unwrap();
-                observed.push_str(&line);
-                observed.push('\n');
-                if line == "PRISMPM_DIAGNOSTICS_READY" {
-                    sender.send(observed).unwrap();
-                    break;
+        for mode in ["failure", "success"] {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "cases::node_suite::tests::diagnostics_precede_libtest_summary",
+                    "--test-threads=1",
+                ])
+                .env(CHILD, mode)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let stderr = child.stderr.take().unwrap();
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let reader = std::thread::spawn(move || {
+                let mut observed = String::new();
+                for line in std::io::BufReader::new(stderr).lines() {
+                    let line = line.unwrap();
+                    observed.push_str(&line);
+                    observed.push('\n');
+                    if line == "PRISMPM_DIAGNOSTICS_READY" {
+                        sender.send(observed).unwrap();
+                        break;
+                    }
                 }
+            });
+            let observed = receiver.recv_timeout(std::time::Duration::from_secs(30));
+            if observed.is_err() {
+                let _ = child.kill();
+                let _ = child.wait();
             }
-        });
-        let observed = receiver.recv_timeout(std::time::Duration::from_secs(30));
-        if observed.is_err() {
-            let _ = child.kill();
-            let _ = child.wait();
+            let observed = observed.expect("immediate diagnostics before child test completion");
+            assert!(child.try_wait().unwrap().is_none());
+            child.stdin.take().unwrap().write_all(b"x").unwrap();
+            let output = child.wait_with_output().unwrap();
+            reader.join().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            if mode == "failure" {
+                assert!(observed.contains("assertion: diagnostic-probe: incomplete test suite"));
+                assert!(observed.contains("# pass 1"));
+            } else {
+                let prefix = "# prismpm-node-owner-diagnostic ";
+                let rows = observed
+                    .lines()
+                    .filter_map(|line| line.strip_prefix(prefix))
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    rows.len(),
+                    1,
+                    "one direct completion diagnostic before libtest summary"
+                );
+                let record: serde_json::Value = serde_json::from_str(rows[0]).unwrap();
+                assert_eq!(record["scope"], "node-owner-diagnostic-not-acceptance");
+                assert_eq!(record["owner"], "diagnostic-probe");
+                assert_eq!(record["files"], 1);
+                assert_eq!(record["tests"], 1);
+                assert!(record["elapsed_ms"].as_u64().unwrap() < 10000);
+                assert_eq!(record.as_object().unwrap().len(), 5);
+                assert!(
+                    !observed.contains("# pass 1"),
+                    "success diagnostics do not dump child output"
+                );
+            }
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
         }
-        let observed = observed.expect("immediate diagnostics before child test completion");
-        assert!(child.try_wait().unwrap().is_none());
-        child.stdin.take().unwrap().write_all(b"x").unwrap();
-        let output = child.wait_with_output().unwrap();
-        reader.join().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        assert!(observed.contains("assertion: diagnostic-probe: incomplete test suite"));
-        assert!(observed.contains("# pass 1"));
-        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
     }
 
     #[test]
