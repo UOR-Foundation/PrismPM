@@ -49,6 +49,39 @@ function emitDiagnostic(value) {
   try { console.error(JSON.stringify(value)); }
   catch { /* A diagnostic sink is not authority to replace the original failure. */ }
 }
+// Pending observers belong to the browser lifetime, not to individual body
+// acceptance. Register before starting an operation and never silently drop a
+// late task. One final cleanup deadline owns the registry and browser together.
+function diagnosticRetirementRegistry() {
+  const pending = new Set();
+  let sealed = false;
+  let uncertainty;
+  const own = operation => {
+    if (sealed || pending.size >= 128) {
+      uncertainty ??= new Error('diagnostic cleanup ownership is uncertain');
+      throw uncertainty;
+    }
+    const entry = {};
+    pending.add(entry);
+    entry.work = Promise.resolve().then(operation);
+    // Observe rejection immediately, including if ordinary acceptance ends
+    // before this operation. The owner still retains its original outcome.
+    void entry.work.then(() => pending.delete(entry), () => {
+      uncertainty ??= new Error('diagnostic cleanup operation failed');
+      pending.delete(entry);
+    });
+    return entry.work;
+  };
+  return {
+    own,
+    async join() {
+      while (pending.size) await Promise.allSettled([...pending].map(entry => entry.work));
+      sealed = true;
+      if (uncertainty) throw uncertainty;
+    },
+    check() { if (uncertainty) throw uncertainty; },
+  };
+}
 // CDP observations are diagnostic only: no body retrieval, request interception,
 // cache overrides, or enlarged retention buffers can alter the acceptance path.
 function submissionNetworkRecorder(session, endpoint, expectedRequest, record) {
@@ -107,26 +140,38 @@ function submissionNetworkRecorder(session, endpoint, expectedRequest, record) {
     },
   };
 }
-async function submissionNetworkOwner(target, endpoint, expectedRequest, record) {
+async function submissionNetworkOwner(target, endpoint, expectedRequest, record,
+  registry = diagnosticRetirementRegistry()) {
   const unavailable = () => ({summary: () => ({state: 'unavailable'}), stop() {}});
   let network = unavailable();
   let session;
   let retired = false;
-  const detach = async value => {
-    try { await bounded(value.detach(), true); } catch { /* The browser process owner remains the cleanup authority. */ }
+  const retirements = new Set();
+  const detach = value => {
+    try {
+      const work = registry.own(async () => {
+        try { await bounded(value.detach(), true); }
+        catch { /* The browser process owner remains the cleanup authority. */ }
+      });
+      retirements.add(work);
+      void work.then(() => retirements.delete(work), () => retirements.delete(work));
+    } catch { /* Registry uncertainty is owned by final browser cleanup. */ }
   };
-  const stop = async () => {
+  const retire = () => {
     retired = true;
     network.stop();
     const closing = session;
     session = undefined;
-    if (closing) await detach(closing);
+    if (closing) detach(closing);
   };
   const ready = (async () => { try {
     // The original acquisition promise owns late arrivals even if its deadline
     // wins. A timed-out session must never be abandoned between submissions.
-    const acquisition = Promise.resolve(target.context().newCDPSession(target)).then(async value => {
-      if (retired) { await detach(value); return null; }
+    const acquisition = registry.own(async () => {
+      let value;
+      try { value = await target.context().newCDPSession(target); }
+      catch { return null; } // Expected optional acquisition refusal is contained.
+      if (retired) { detach(value); return null; }
       session = value;
       return value;
     });
@@ -136,14 +181,22 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record)
       await bounded(acquired.send('Network.enable'), true);
     }
   } catch {
-    await stop();
+    retire();
     network = unavailable();
   } })();
+  try { registry.own(() => ready); }
+  catch { /* Acquisition remains owned; final cleanup refuses uncertainty. */ }
+  const stop = async () => {
+    retire();
+    await ready;
+    while (retirements.size) await Promise.allSettled([...retirements]);
+  };
   // Ordinary submission never waits for diagnostic acquisition. The separate
   // mandatory observation owner explicitly joins ready before its witness.
-  return {summary: () => network.summary(), stop, ready};
+  return {summary: () => network.summary(), retire, stop, ready};
 }
 let browser;
+const diagnosticCleanup = diagnosticRetirementRegistry();
 let primaryFailure;
 try {
 const input = createInterface({input: process.stdin, crlfDelay: Infinity})[Symbol.asyncIterator]();
@@ -276,7 +329,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   let navigated = false;
   let phase = 'initial-readiness';
   let check = null;
-  let network = {summary: () => ({state: 'unavailable'}), async stop() {}};
+  let network = {summary: () => ({state: 'unavailable'}), retire() {}, async stop() {}};
   let rejectNavigation;
   const navigation = new Promise((_, reject) => { rejectNavigation = reject; });
   // The observer is armed before readiness/fill, before the submission race.
@@ -313,7 +366,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   target.on('crash', onCrash);
   target.on('close', onClose);
   try {
-    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);
+    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);
     await target.waitForFunction(ready);
     phase = 'fill';
     if (fillInputs) await fill(vector, target);
@@ -374,7 +427,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     target.off('requestfinished', onFinished);
     target.off('crash', onCrash);
     target.off('close', onClose);
-    await network.stop();
+    network.retire();
   }
 }
 async function journey(name, work) {
@@ -544,13 +597,25 @@ async function journey(name, work) {
   primaryFailure = sanitizedFailure(error, 'session');
 } finally {
   let cleanupFailure;
+  let firstBrowserCleanupFailure;
   const failedCleanup = (error, resource) => {
     cleanupFailure ??= sanitizedFailure(error, 'cleanup');
     emitDiagnostic({schema: 'prismpm/browser-cleanup-diagnostic/1',
       resource, failure: failureKind(error)});
   };
-  try { if (browser) await bounded(browser.close()); }
-  catch (error) { failedCleanup(error, 'browser'); }
+  try {
+    await bounded((async () => {
+      const ownCleanup = operation => Promise.resolve().then(operation).catch(error => {
+        firstBrowserCleanupFailure ??= error;
+        throw error;
+      });
+      const outcomes = await Promise.allSettled([ownCleanup(() => diagnosticCleanup.join()),
+        ownCleanup(() => browser ? browser.close() : Promise.resolve())]);
+      for (const outcome of outcomes) if (outcome.status === 'rejected') throw outcome.reason;
+      diagnosticCleanup.check();
+    })());
+  }
+  catch (error) { failedCleanup(firstBrowserCleanupFailure ?? error, 'browser'); }
   try { process.stdin.destroy(); }
   catch (error) { failedCleanup(error, 'stdin'); }
   if (primaryFailure) throw primaryFailure;

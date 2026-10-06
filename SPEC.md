@@ -274,6 +274,23 @@ bound but cannot keep a completed process alive. The separate eight mandatory
 observation runs explicitly await setup before collecting their complete
 ordered witnesses, while retaining every original acceptance check and deadline.
 Unavailable diagnostics never constitute acceptance or historical causality.
+Ordinary submission retires diagnostic listeners synchronously and queues any
+detach under its browser lifetime owner, without serially awaiting optional
+detach completion. An acquisition is registered before it starts; a late
+session is detached through the same owner and cannot enable retired listeners.
+The private registry retains at most 128 active operations, observes rejections
+immediately, includes tasks added by pending acquisitions, and seals at final
+joining. Overflow or a post-seal task is cleanup uncertainty, not permission to
+drop resource ownership. Unexpected registered-task rejection also marks
+cleanup uncertainty; expected optional acquisition/detach refusal is contained
+by its caller. Mandatory observation qualification explicitly joins
+its own retired observer. Final registry joining and browser close run
+concurrently under one unchanged ten-second cleanup deadline; both outcomes
+remain owned, and cleanup failure cannot replace a primary submission failure.
+The first observed browser cleanup failure remains authoritative even if a
+second cleanup task subsequently reaches that shared deadline. Additive real
+session qualification retains every original case and observed/unobserved run
+and executes 28 cleanup-fault controls across both complete application profiles.
 
 The generic model retains its u32 request and response bounds. The pinned
 Hologram portable intent transport supports at most 65,536 request bytes and

@@ -11,6 +11,7 @@ import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummar
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary,observationFailureDiagnostics} from './portable-oracle-observation.mjs';
+import {retirementFaults,retirementDriver,retirementSummary} from './portable-oracle-retirement.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
@@ -19,7 +20,7 @@ const diagnosticRoot=t=>{const root=mkdtempSync(join(tmpdir(),'portable-diagnost
 const hash=value=>createHash('sha256').update(value).digest('hex');
 test('live observation qualification transforms only diagnostics and retains all original acceptance predicates',()=>{
  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
- const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);';
+ const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
  for(const mode of ['observed','unobserved'])for(const trigger of ['click','keyboard']){
   const driver=observationDriver(source,mode,trigger);
   assert.equal(driver.includes(call),mode==='observed');
@@ -31,7 +32,9 @@ test('live observation qualification transforms only diagnostics and retains all
    assert.equal(driver.split(point).length,source.split(point).length);
   for(const profile of matrix.profiles)for(const journey of profile.journeys)
    assert(driver.includes(`await journey('${journey}'`));
-  assert.equal(driver.split('await network.stop();').length,source.split('await network.stop();').length);
+  assert.equal(driver.split('network.retire();').length,source.split('network.retire();').length);
+  assert.equal(driver.includes('await network.stop();'),mode==='observed');
+  assert.equal(source.includes('await network.stop();'),false,'ordinary acceptance cannot join optional detach');
   assert.equal(driver.includes('await submit(vector, page, true);'),trigger==='keyboard');
  }
  assert.throws(()=>observationDriver(source,'unknown','click'));
@@ -43,6 +46,27 @@ test('live observation qualification transforms only diagnostics and retains all
  assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
  assert(owner.includes('assert.equal(outcomes.length, 78'));
  assert(owner.includes('assert.equal(negativeControls.length, 4'));
+ assert.equal(retirementFaults.length,11);assert.equal(new Set(retirementFaults).size,11);
+ for(const fault of retirementFaults)for(const trigger of ['click','keyboard']){
+  const driver=retirementDriver(source,fault,trigger);
+  for(const point of ['assert.equal(invocationCount, 1','assert.equal(navigated, false',
+   'assert.deepEqual(envelope,','await target.waitForFunction(ready)','await shows(displayed(vector), target)'])
+   assert.equal(driver.split(point).length,source.split(point).length);
+  for(const profile of matrix.profiles)for(const journey of profile.journeys)assert(driver.includes(`await journey('${journey}'`));
+  assert.equal(driver.includes('await submit(vector, page, true);'),trigger==='keyboard');
+  assert.equal(driver.includes('await network.stop();'),false,'whole-profile faults must exercise ordinary nonjoining retirement');
+  assert(driver.includes('10_000'),'original operation bound remains unchanged');
+ }
+ assert.throws(()=>retirementDriver(source,'unknown','click'));assert.throws(()=>retirementDriver(source,'pending-detach','unknown'));
+ assert(owner.includes("'scripts/portable-oracle-retirement.mjs'"));assert(owner.includes('assert.equal(retirementOutcomes.length,28'));
+ assert(owner.includes('retirement_controls:retirementOutcomes'));
+ const faults=read('scripts/portable-oracle-retirement.mjs');
+ for(const guard of ['witness.retired_listeners, 0','witness.close_held, fault',
+  'witness.handoffs,witness.acquisitions','witness.enables,0', 'witness.peak_detaches<=expected',
+  'witness.elapsed_ms < 120_000','witness.cleanup_elapsed_ms < 12_000'])assert(faults.includes(guard));
+ const summary=retirementSummary({fault:'private-control',witness:{acquisitions:129,detaches:1,enables:0,elapsed_ms:120001,secret:'private-data'},secret:'private-data'});
+ assert.equal(summary.fault,null);assert.equal(summary.witness.acquisitions,null);assert.equal(summary.witness.elapsed_ms,null);
+ assert(!JSON.stringify(summary).includes('private-'));
 });
 test('live CDP qualification rejects unavailable, omitted, incomplete and invented observation witnesses',()=>{
  const observed={schema:'prismpm/portable-observation-witness/1',submission:1,phase:'completed-readiness',journey:'modeled-vectors',vectorIndex:0,keyboard:true,
@@ -223,15 +247,17 @@ function networkObserver(session, expected, events, source=read('crates/prismpm/
  return factory(session,'http://127.0.0.1:38129/_hologram/intent',expected,event=>{if(events.length<32)events.push(JSON.parse(JSON.stringify(event)));});
 }
 function networkOwner(target, events, bounded=operation=>operation,
- source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs')) {
+ source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),registry) {
  const start=source.indexOf('async function submissionNetworkOwner('),end=source.indexOf('\nlet browser;',start);
+ const registryStart=source.indexOf('function diagnosticRetirementRegistry('),registryEnd=source.indexOf('\n// CDP observations',registryStart);
  assert(start>=0&&end>start);
  const factory=runInNewContext('('+source.slice(start,end)+')',{bounded,
+  diagnosticRetirementRegistry:runInNewContext('('+source.slice(registryStart,registryEnd)+')'),
   submissionNetworkRecorder:(session,endpoint,expected,record)=>{
    assert.equal(endpoint,'http://127.0.0.1:38129/_hologram/intent');
    return networkObserver(session,expected,events,source);
   }});
- return factory(target,'http://127.0.0.1:38129/_hologram/intent',{expected:true},()=>{});
+ return factory(target,'http://127.0.0.1:38129/_hologram/intent',{expected:true},()=>{},registry);
 }
 test('actual CDP owner orchestration enables only default observation and retires exactly its own session',async()=>{
  const session=new EventEmitter(),commands=[],events=[];let detached=0;
@@ -240,6 +266,20 @@ test('actual CDP owner orchestration enables only default observation and retire
  const owner=await networkOwner(target,events);await owner.ready;assert.deepEqual(commands,[['Network.enable']]);
  assert.equal(owner.summary().state,'observed');await owner.stop();await owner.stop();
  assert.equal(detached,1);assert.deepEqual(session.eventNames(),[]);
+ const pendingSession=new EventEmitter();let releaseDetach,retired=false,pendingDetaches=0;
+ pendingSession.send=async()=>{};
+ pendingSession.detach=()=>{pendingDetaches++;return new Promise(resolve=>{releaseDetach=resolve;});};
+ const pendingOwner=await networkOwner({context:()=>({newCDPSession:async()=>pendingSession})},[]);
+ await pendingOwner.ready;
+ // Exercise the real owner with a withheld diagnostic completion. Older
+ // stop-only ownership serializes this optional wait into ordinary acceptance.
+ const retiring=Promise.resolve(pendingOwner.retire ? pendingOwner.retire() : pendingOwner.stop())
+  .then(()=>{retired=true;});
+ try {
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(retired,true,'ordinary retirement must not await optional diagnostic detachment');
+  assert.equal(pendingDetaches,1);assert.deepEqual(pendingSession.eventNames(),[]);
+ } finally {releaseDetach();await retiring;await pendingOwner.stop();}
  let resolveLate,nonblocking;
  const lateArrival=new Promise(resolve=>{resolveLate=resolve;}),lateSession=new EventEmitter(),lateCommands=[];
  let lateDetached=0;lateSession.send=async(...args)=>{lateCommands.push(args);};lateSession.detach=async()=>{lateDetached++;};
@@ -248,7 +288,7 @@ test('actual CDP owner orchestration enables only default observation and retire
  try {
   assert.ok(nonblocking,'diagnostic acquisition must not delay ordinary submission');
   assert.equal(typeof nonblocking.ready?.then,'function');assert.equal(nonblocking.summary().state,'unavailable');
-  await nonblocking.stop();assert.equal(lateDetached,0);
+  nonblocking.retire();assert.equal(lateDetached,0);
   resolveLate(lateSession);await nonblocking.ready;await new Promise(resolve=>setImmediate(resolve));
   assert.equal(lateDetached,1);assert.deepEqual(lateCommands,[]);assert.deepEqual(lateSession.eventNames(),[]);
  } finally {resolveLate(lateSession);await (await acquiring).stop();}
@@ -259,7 +299,7 @@ test('actual CDP owner orchestration enables only default observation and retire
   const bounds=async operation=>{const value=await operation;if(++calls===1)await resumed;return value;};
   const staged=await networkOwner({context:()=>({newCDPSession:async()=>actual})},[],bounds,body);
   await new Promise(resolve=>setImmediate(resolve));
-  try {await staged.stop();assert.equal(closed,1);resume();await staged.ready;
+  try {staged.retire();await new Promise(resolve=>setImmediate(resolve));assert.equal(closed,1);resume();await staged.ready;
    assert.deepEqual(enabled,[],'retirement after session arrival cannot activate diagnostics');assert.deepEqual(actual.eventNames(),[]);
   }finally{resume();await staged.ready;await staged.stop();}
  };
@@ -290,7 +330,7 @@ test('a timed-out CDP acquisition still owns and detaches its real late arrival'
  const owner=await networkOwner(target,events,bounded);await owner.ready;assert.equal(owner.summary().state,'unavailable');
  resolve(session);await new Promise(yes=>setImmediate(yes));assert.equal(detached,1);
  await owner.stop();assert.equal(detached,1);assert.deepEqual(events,[]);
- const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),guard='if (retired) { await detach(value); return null; }';
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),guard='if (retired) { detach(value); return null; }';
  assert.equal(source.split(guard).length,2);let resolveMutant;const mutantArrival=new Promise(yes=>{resolveMutant=yes;});calls=0;detached=0;
  const mutant=await networkOwner({context:()=>({newCDPSession:()=>mutantArrival})},[],bounded,source.replace(guard,''));await mutant.ready;
  resolveMutant(session);await new Promise(yes=>setImmediate(yes));assert.throws(()=>assert.equal(detached,1),assert.AssertionError);
@@ -472,7 +512,7 @@ test('actual submission diagnostic emission and cleanup retain the first body fa
  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
  const start=source.indexOf('function failureKind('),end=source.indexOf('\n// CDP observations',start);
  const bodyFailure=new Error('private-body-failure'),failedBodies=new WeakSet([bodyFailure]);let emissions=0;
- const helpers=runInNewContext(source.slice(start,end)+'\n({failureKind,sanitizedFailure,emitDiagnostic})',
+ const helpers=runInNewContext(source.slice(start,end)+'\n({failureKind,sanitizedFailure,emitDiagnostic,diagnosticRetirementRegistry})',
   {assert,errors:{TimeoutError:class extends Error{}},failedBodies,unavailableBodies:new WeakSet(),sanitizedFailures:new WeakSet(),
    setTimeout,clearTimeout,console:{error(){emissions++;throw new Error('private-sink-failure');}}});
  assert.doesNotThrow(()=>helpers.emitDiagnostic({schema:'prismpm/browser-submission-diagnostic/2',failure:'response-body-failed'}));
@@ -480,11 +520,80 @@ test('actual submission diagnostic emission and cleanup retain the first body fa
  const tailStart=source.lastIndexOf('  let cleanupFailure;'),tailEnd=source.trimEnd().length-1;
  assert(tailStart>=0&&tailEnd>tailStart);let closed=0,destroyed=0;
  const invoke=primaryFailure=>runInNewContext('(async()=>{'+source.slice(tailStart,tailEnd)+'})',
-  {...helpers,primaryFailure,bounded:operation=>operation,browser:{close:async()=>{closed++;throw new Error('private-cleanup-failure');}},
+  {...helpers,primaryFailure,diagnosticCleanup:helpers.diagnosticRetirementRegistry(),bounded:operation=>operation,browser:{close:async()=>{closed++;throw new Error('private-cleanup-failure');}},
    process:{stdin:{destroy(){destroyed++;throw new Error('private-stdin-failure');}}}})();
  await assert.rejects(invoke(primary),error=>error===primary);assert.equal(closed,1);assert.equal(destroyed,1);
  await assert.rejects(invoke(undefined),error=>error.message==='portable View oracle cleanup: unexpected');
  assert.equal(closed,2);assert.equal(destroyed,2);assert.equal(emissions,5);
+ const registry=helpers.diagnosticRetirementRegistry();let releaseParent,releaseChild,joined=false,childFinished=false;
+ const parent=new Promise(resolve=>{releaseParent=resolve;}),child=new Promise(resolve=>{releaseChild=resolve;});
+ registry.own(async()=>{await parent;registry.own(async()=>{await child;childFinished=true;});});
+ const joining=registry.join().then(()=>{joined=true;});releaseParent();
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(joined,false);
+ releaseChild();await joining;assert.equal(childFinished,true);registry.check();
+ let lateStarted=false;assert.throws(()=>registry.own(()=>{lateStarted=true;}),/ownership is uncertain/);
+ assert.equal(lateStarted,false);assert.throws(()=>registry.check(),/ownership is uncertain/);
+ const crowded=helpers.diagnosticRetirementRegistry();let releaseCrowd,overflowStarted=false;
+ const crowd=new Promise(resolve=>{releaseCrowd=resolve;});
+ for(let i=0;i<128;i++)crowded.own(()=>crowd);
+ assert.throws(()=>crowded.own(()=>{overflowStarted=true;}),/ownership is uncertain/);
+ assert.equal(overflowStarted,false);releaseCrowd();await assert.rejects(crowded.join(),/ownership is uncertain/);
+ const registryStart=source.indexOf('function diagnosticRetirementRegistry('),registryEnd=source.indexOf('\n// CDP observations',registryStart);
+ const registryCode=source.slice(registryStart,registryEnd);
+ for(const guard of ['sealed || ', 'pending.size >= 128']){
+  assert.equal(registryCode.split(guard).length,2);
+  const mutantCode=registryCode.replace(guard,guard==='sealed || '?'':'false');
+  const refuseBoundary=async code=>{
+   const actual=runInNewContext('('+code+')')();
+   if(guard==='sealed || ')await actual.join();
+   else for(let i=0;i<128;i++)actual.own(()=>Promise.resolve());
+   assert.throws(()=>actual.own(()=>{}),/ownership is uncertain/);
+   await assert.rejects(actual.join(),/ownership is uncertain/);
+  };
+  await refuseBoundary(registryCode);
+  // Removing either actual guard must fail the same owning refusal predicate.
+  await assert.rejects(refuseBoundary(mutantCode),assert.AssertionError);
+ }
+ const aboveCapacity=code=>{
+  // Fault-inject an already-over-capacity counter into the actual guard.
+  class OverCapacitySet extends Set {get size(){return 129;}}
+  const actual=runInNewContext('('+code+')',{Set:OverCapacitySet})();let started=false;
+  assert.throws(()=>actual.own(()=>{started=true;}),/ownership is uncertain/);assert.equal(started,false);
+ };
+ aboveCapacity(registryCode);
+ assert.throws(()=>aboveCapacity(registryCode.replace('pending.size >= 128','pending.size === 128')),assert.AssertionError);
+ const rejection=helpers.diagnosticRetirementRegistry(),unexpected=new Error('private-operation-failure');
+ await assert.rejects(rejection.own(()=>Promise.reject(unexpected)),error=>error===unexpected);
+ await assert.rejects(rejection.join(),/diagnostic cleanup operation failed/);
+ assert.throws(()=>rejection.check(),/diagnostic cleanup operation failed/);
+ const sealed=helpers.diagnosticRetirementRegistry();await sealed.join();let acquisitions=0;
+ const afterSeal=await networkOwner({context:()=>({newCDPSession:async()=>{acquisitions++;return new EventEmitter();}})},[],operation=>operation,source,sealed);
+ await afterSeal.ready;await afterSeal.stop();assert.equal(acquisitions,0);
+ assert.equal(afterSeal.summary().state,'unavailable');assert.throws(()=>sealed.check(),/ownership is uncertain/);
+ const ownedRejection=async code=>{
+  const actual=runInNewContext('('+code+')')(),failure=new Error('private-rejection');
+  await assert.rejects(actual.own(()=>Promise.reject(failure)),error=>error===failure);
+  await assert.rejects(actual.join(),/diagnostic cleanup operation failed/);
+ };
+ const rejectionGuard="      uncertainty ??= new Error('diagnostic cleanup operation failed');";
+ assert.equal(registryCode.split(rejectionGuard).length,2);
+ await ownedRejection(registryCode);
+ await assert.rejects(ownedRejection(registryCode.replace(rejectionGuard,'')),assert.AssertionError);
+ const lateAcquisition=async code=>{
+  const actual=runInNewContext('('+code+')')();let resolveArrival,done=false,detached=0,enabled=0;
+  const arrival=new Promise(resolve=>{resolveArrival=resolve;}),session=new EventEmitter();
+  session.detach=async()=>{detached++;};session.send=async()=>{enabled++;};
+  const observer=await networkOwner({context:()=>({newCDPSession:()=>arrival})},[],operation=>operation,source,actual);
+  observer.retire();const complete=actual.join().then(()=>{done=true;});
+  try {
+   await new Promise(resolve=>setImmediate(resolve));assert.equal(done,false,'pending physical acquisition must remain owned through final join');
+   resolveArrival(session);await complete;await observer.stop();actual.check();
+   assert.equal(detached,1);assert.equal(enabled,0);assert.deepEqual(session.eventNames(),[]);
+  }finally{resolveArrival(session);await observer.stop();await complete.catch(()=>{});}
+ };
+ await lateAcquisition(registryCode);
+ const registrationGuard='    pending.add(entry);';assert.equal(registryCode.split(registrationGuard).length,2);
+ await assert.rejects(lateAcquisition(registryCode.replace(registrationGuard,'')),assert.AssertionError);
 });
 test('diagnostics retain exact independently measured subjects and drivers incrementally outside acceptance evidence',t=>{
  const root=diagnosticRoot(t),source=join(root,'actual-driver.mjs'),body=Buffer.from('export const sourceOwned = true;\n');writeFileSync(source,body);

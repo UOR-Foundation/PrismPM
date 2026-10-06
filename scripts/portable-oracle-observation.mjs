@@ -76,7 +76,7 @@ export function observationDriver(source,mode,trigger){
  let driver=source;
  const entry='async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {';
  driver=replacement(driver,entry,`let observationOrdinal = 0;\n${entry}\n  const observationSubmission = ++observationOrdinal;`);
- const acquisition='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record);';
+ const acquisition='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
  driver=replacement(driver,acquisition,mode==='observed'
   ? acquisition+'\n    await network.ready; // Diagnostic-only witness preparation, not ordinary acceptance.'
   : '    // Qualification omits only the read-only diagnostic collector.');
@@ -85,13 +85,13 @@ export function observationDriver(source,mode,trigger){
   driver=replacement(driver,'    await submit(recovery, delayedPage, false, {fillInputs: false});',
    '    await submit(recovery, delayedPage, true, {fillInputs: false});');
  }
- return replacement(driver,'    await network.stop();',
+ return replacement(driver,'    network.retire();',
   `    emitDiagnostic({schema: '${schema}', submission: observationSubmission, phase, journey: activeJourney, vectorIndex: app.acceptance_vectors.indexOf(vector), keyboard, network: network.summary(),
       requests: events.filter(row => row.event === 'cdp-request' && row.method === 'POST' && row.payloadMatches === true).length,
       responses: events.filter(row => row.event === 'cdp-response' && row.status === 200).length,
       completions: events.filter(row => row.event === 'cdp-finished').length,
       failures: events.filter(row => row.event === 'cdp-failed').length, eventsTruncated});
-    await network.stop();`);
+    network.retire();${mode==='observed' ? '\n    await network.stop(); // Mandatory diagnostic qualification owns this join.' : ''}`);
 }
 export function requireObservationWitnesses(rows,mode,expected){
  assert(['observed','unobserved'].includes(mode));
