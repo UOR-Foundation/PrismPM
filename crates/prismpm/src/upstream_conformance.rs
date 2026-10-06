@@ -1,5 +1,13 @@
 //! Execution of exact, imported upstream standards conformance assets.
 
+mod blake3_corpus;
+
+/// Execute the complete pinned BLAKE3 vector corpus and its mutation controls.
+/// This finite adapter qualification is not cryptographic proof or storage acceptance.
+pub fn verify_blake3_corpus(corpus: &std::path::Path) -> Result<CorpusEvidence, crate::PrismError> {
+    blake3_corpus::verify(corpus)
+}
+
 /// Validate complete Hologram and actual portable-browser execution evidence.
 ///
 /// This is the same fail-closed PP5301 check used by application verification;

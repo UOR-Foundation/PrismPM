@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execute } from './sdk-vv-check.mjs';
 import test from 'node:test';
-import { canonical, readEnvironmentLock, validateSourceBaseline, collectProfile, validateImageSpace, seedCargoCache, runReview, validateWorkflow } from './native-golden.mjs';
+import { canonical, readEnvironmentLock, validateSourceBaseline, validateApplicationGenerator, collectProfile, validateImageSpace, seedCargoCache, runReview, validateWorkflow } from './native-golden.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const revision = 'a'.repeat(40), environmentRevision = 'b'.repeat(40);
@@ -18,6 +18,15 @@ function workspace(t) {
   const put = (path, bytes) => { mkdirSync(join(source, path, '..'), {recursive: true}); writeFileSync(join(source, path), bytes); };
   put('stdlib/src/Probe.lex.tex', 'unit-only source\n'); put('tests/golden/stdlib/source/Probe.lex.tex', 'unit-only source\n');
   put('tests/golden/stdlib/golden-manifest.json', '{}');
+  // Actual reviewed recipe owner plus explicitly synthetic input/baseline bytes.
+  put('crates/prismpm/src/controller/mod.rs', readFileSync(new URL('../crates/prismpm/src/controller/mod.rs', import.meta.url)));
+  const parts = ['application_build.rs', 'lean_project.rs', 'holo/archive.rs'].map(path => {
+    const bytes = Buffer.from('unit-only ' + path); put('crates/prismpm/src/' + path, bytes); return bytes;
+  });
+  const compiler = Buffer.from('unit-only compiler manifest'); put('vendor/lean4-prod/rust/MANIFEST.sha256', compiler);
+  mkdirSync(join(source, 'crates/prismpm/src/embedded'), {recursive: true});
+  symlinkSync('../../../../vendor/lean4-prod/rust/MANIFEST.sha256', join(source, 'crates/prismpm/src/embedded/lean4-prod-rust.MANIFEST.sha256'));
+  put('tests/golden/stdlib/build/manifest.json', canonical({inputs:{application_generator_sha256:hash(Buffer.concat([...parts, compiler, Buffer.from('prismpm/build-artifacts/2')]))}}));
   return {root, source, put};
 }
 
@@ -72,6 +81,25 @@ test('current shared source baseline is byte-exact before expensive generation',
   assert.throws(() => validateSourceBaseline(source));
 });
 
+test('generator preflight binds actual recipe and dereferenced compiler manifest without rewriting records', t => {
+  for (const path of ['crates/prismpm/src/application_build.rs', 'crates/prismpm/src/lean_project.rs',
+    'crates/prismpm/src/holo/archive.rs', 'vendor/lean4-prod/rust/MANIFEST.sha256', 'crates/prismpm/src/controller/mod.rs',
+    'tests/golden/stdlib/build/manifest.json']) {
+    const f = workspace(t), before = readFileSync(join(f.source, 'tests/golden/stdlib/build/manifest.json'));
+    validateApplicationGenerator(f.source); f.put(path, 'changed'); assert.throws(() => validateApplicationGenerator(f.source));
+    if (!path.endsWith('build/manifest.json')) assert.deepEqual(readFileSync(join(f.source, 'tests/golden/stdlib/build/manifest.json')), before);
+    rmSync(join(f.source, path)); assert.throws(() => validateApplicationGenerator(f.source));
+  }
+  for (const target of ['../../../../vendor/lean4-prod/rust/foreign', '/etc/hosts']) {
+    const f = workspace(t), alias = join(f.source, 'crates/prismpm/src/embedded/lean4-prod-rust.MANIFEST.sha256');
+    rmSync(alias); symlinkSync(target, alias); assert.throws(() => validateApplicationGenerator(f.source));
+  }
+  for (const wrap of [value=>'/*'+value+'*/', value=>value.replace('"application_generator_sha256"', '"unrecognized_generator"')]) {
+    const f = workspace(t), path = 'crates/prismpm/src/controller/mod.rs';
+    f.put(path, wrap(readFileSync(join(f.source, path), 'utf8'))); assert.throws(() => validateApplicationGenerator(f.source));
+  }
+});
+
 test('native profile collection retains exactly three original raw files', t => {
   for (const architecture of ['amd64', 'arm64']) {
   const {source, put} = workspace(t), profile = `tests/golden/native/linux-${architecture}-ubuntu-24.04`;
@@ -94,6 +122,7 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
   const profile = `tests/golden/native/linux-${architecture}-ubuntu-24.04`;
   const nodeArchitecture = architecture === 'amd64' ? 'x64' : 'arm64';
   if (fault === 'stale-base') work.put('stdlib/src/Probe.lex.tex', 'changed current model\n');
+  if (fault === 'stale-generator') work.put('crates/prismpm/src/application_build.rs', 'changed current generator');
   if (fault === 'stale-artifact') work.put('.prism/build/prior/result.json', '{}');
   const config = 'sha256:' + 'c'.repeat(64);
   const manifest = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config: {digest: config, size: 100}, layers: []}));
@@ -105,7 +134,7 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
   work.put(architecture === 'arm64' ? 'sdk/golden-development.lock.json' : 'sdk/golden-development-amd64.lock.json', canonical(lock) + '\n');
   const ok = value => ({status: 0, signal: null, stdout: Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)), stderr: Buffer.alloc(0)});
   const bad = () => ({...ok(''), status: 1, stderr: Buffer.from('unit-only genuine command failure')});
-  let created, label, generations = 0, seeded = false, acquired = false, installed = false;
+  let created, label, generations = 0, seeded = false, acquired = false, installed = false, publicationQualified = false;
   const transport = async (command, args, options) => {
     calls.push([command, args]);
     for (const name of ['CARGO_PROFILE_DEV_OPT_LEVEL', 'CARGO_PROFILE_TEST_OPT_LEVEL',
@@ -155,12 +184,27 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
     if (args[0] === 'rm') { if (fault === 'cleanup' && !created.endsWith('-dependencies') || fault === 'acquisition-cleanup' && created.endsWith('-dependencies')) return bad(); created = undefined; return ok('removed'); }
     assert.deepEqual(args.slice(0, 2), ['exec', created]);
     if (args[2] === 'node' && args[3] === '-e') return ok({architecture: fault === 'wrong-executable' ? 'riscv64' : nodeArchitecture, os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
+    if (args[2] === 'node' && args[3] === '--test') {
+      assert(!created.endsWith('-dependencies'));
+      assert.deepEqual(args.slice(2), ['node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);
+      assert.equal(generations, 0); assert.equal(seeded, false);
+      if (fault === 'publication-failure') return bad();
+      if (fault === 'publication-signal') return {...ok(''),status:null,signal:'SIGTERM'};
+      if (fault === 'publication-cancel') process.emit('SIGTERM');
+      publicationQualified = true;
+      const count = fault === 'publication-forged-summary' ? 1 : fault === 'publication-omission' ? 34 : 35;
+      const reported = fault === 'publication-forged-summary' ? 35 : count;
+      const skipped = fault === 'publication-skip' ? 1 : 0;
+      return ok('TAP version 13\n'+Array.from({length:count},(_,i)=>`ok ${i+1} - unit-only transport inventory${skipped && i===0?' # SKIP':''}\n`).join('')
+        +`1..${count}\n# tests ${reported}\n# suites 0\n# pass ${reported-skipped}\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo 0\n`);
+    }
     if (args[2] === 'node') {
       const acquisition = created.endsWith('-dependencies');
       assert.deepEqual(args.slice(2), ['node', '/workspace/scripts/native-golden.mjs', acquisition ? 'seed-download-cache' : 'seed-cache']);
       assert.equal(options.timeout, 120000); assert.equal(options.limit, 16 * 1024 ** 2);
       assert.equal(generations, 0, 'cache preparation precedes every golden command');
       if (acquisition) return ok({bytes: 128, entries: 2});
+      assert(publicationQualified, 'native publication suite must execute before cache/compiler work');
       if (fault === 'cache-failure') return bad();
       if (fault === 'cache-signal') return {...ok(''), status: null, signal: 'SIGTERM'};
       if (fault === 'cache-cancel') process.emit('SIGTERM');
@@ -221,12 +265,13 @@ test('source review executes exact image, both unchanged golden commands and byt
 });
 
 test('failure and missing evidence never become a reviewed or accepted SDK baseline', async t => {
-  for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-executable', 'wrong-container-image', 'write-failure', 'repeat-failure',
+  for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-generator', 'stale-artifact', 'wrong-platform', 'wrong-executable', 'wrong-container-image', 'write-failure', 'repeat-failure',
     'missing-profile', 'repeat-mutation', 'source-changed', 'cleanup', 'acquisition-cleanup']) {
     const f = fixture(t, fault, store, architecture); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'review.json')), fault);
     if (!['cleanup', 'acquisition-cleanup'].includes(fault)) assert.equal(f.remaining(), undefined, fault);
     if (fault === 'acquisition-cleanup') assert.equal(f.generations(), 0);
+    if (fault === 'stale-generator') assert.equal(f.calls.filter(([command]) => command === 'docker').length, 0, 'stale source must refuse before Docker acquisition');
     if (fault === 'write-failure') {
       assert.equal(f.generations(), 1); assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
     }
@@ -248,7 +293,8 @@ test('native source review rejects unsupported, mismatched and untrusted runner 
 });
 
 test('private cache initialization failure, signal and cancellation stop generation and clean owned resources', async t => {
-  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel', 'acquisition-failure', 'acquisition-signal', 'acquisition-cancel', 'supplement-corrupt', 'python-suite-failure', 'python-suite-omission']) {
+  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel', 'acquisition-failure', 'acquisition-signal', 'acquisition-cancel', 'supplement-corrupt', 'python-suite-failure', 'python-suite-omission',
+    'publication-failure', 'publication-signal', 'publication-cancel', 'publication-omission', 'publication-skip', 'publication-forged-summary']) {
     const f = fixture(t, fault); await assert.rejects(f.run());
     assert.equal(f.generations(), 0); assert.equal(f.remaining(), undefined);
     assert(!existsSync(join(f.destination, 'review.json')));
@@ -364,6 +410,14 @@ test('executed source-baseline and second-run omission mutants fail owning behav
   await assert.rejects(async () => { const f = fixture(t, 'stale-base'); await assert.rejects(f.run(noBaseline.runReview), /golden source bytes are stale/); }, /Missing expected rejection/);
   const noSeed = await load(source.replace("await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);", ''));
   await assert.rejects(fixture(t).run(noSeed.runReview), /unseeded cache/);
+  const publication = "    const publicationTests = await run(['exec', name, 'node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);\n    const publicationTap = publicationTests.toString();\n    assert.equal(verifyTap(publicationTap, 35), 35);\n    assert.match(publicationTap, /^1\\.\\.35\\r?$/m);\n";
+  assert(source.includes(publication));
+  const noPublication = await load(source.replace(publication, ''));
+  await assert.rejects(fixture(t).run(noPublication.runReview), /native publication suite must execute/);
+  const noPublicationCount = await load(source.replace('    assert.equal(verifyTap(publicationTap, 35), 35);\n', ''));
+  await assert.rejects(async () => {await assert.rejects(fixture(t,'publication-skip').run(noPublicationCount.runReview));}, /Missing expected rejection/);
+  const noPublicationPlan = await load(source.replace('    assert.match(publicationTap, /^1\\.\\.35\\r?$/m);\n', ''));
+  await assert.rejects(async () => {await assert.rejects(fixture(t,'publication-forged-summary').run(noPublicationPlan.runReview));}, /Missing expected rejection/);
   const noRunnerBinding = await load(source.replace('assert.equal(environment.RUNNER_ARCH, platformPolicy.runner);', ''));
   for (const architecture of ['amd64', 'arm64']) {
     await assert.rejects(async () => {

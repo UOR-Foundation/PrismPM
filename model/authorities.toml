@@ -1,5 +1,24 @@
 spec = "prismpm/authorities/2"
 
+[[authority]]
+id = "BLAKE3-VECTORS-1-5-5"
+name = "BLAKE3 immutable digest vectors"
+issuer = "BLAKE3 team"
+canonical_identifier = "BLAKE3-team/BLAKE3/test_vectors/test_vectors.json"
+edition = "1.5.5"
+source_role = "normative"
+immutable_url = "https://raw.githubusercontent.com/BLAKE3-team/BLAKE3/81f772a4cd70dc0325047a6a737d2f6f4b92180e/test_vectors/test_vectors.json"
+revision = "81f772a4cd70dc0325047a6a737d2f6f4b92180e"
+acquired_sha256 = "dcb91ea8accc77e6d6e632af7cdc1a99a9f3ae78cf648da595c7d064db32f624"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/json"
+license = "CC0-1.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-04"
+supersession_policy = "explicit-lock-update-only"
+statement = "All 35 upstream digest vectors qualify hash, keyed-hash, derive-key, extended output and the archive content-identity adapter; not cryptographic proof or durable storage."
+realized_by = ["HO-14"]
+
 # Retrieval dates are evidence metadata only. Exact revisions and acquired
 # SHA-256 values, never dates or mutable names, determine locked identity.
 
