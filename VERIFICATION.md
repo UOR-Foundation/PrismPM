@@ -3133,3 +3133,30 @@ failures. Independent read-only review clears the source component only.
 These controls do not establish real three-engine readiness: current-source
 browser-ready and final devcontainer builds, both-user engine execution,
 complete unchanged VV and SDK qualification remain required.
+
+## Portable submission completion (6 October)
+
+Full VV run `37405947037` at `e0d30289` failed the actual keyboard
+`body-plus-cleanup` probe: page closure rejected both the body read and the
+trigger, and `Promise.all` exposed the unclassified trigger error. Its
+diagnostic-only failed log is retained (SHA-256
+`f1f8294851347ea01fd0ebe630c99869ecce9ebfaa53205b8a7950e2bd9cb67d`).
+
+The driver now observes both operations, prioritizes a correlated response
+failure, preserves trigger-only failure and navigation precedence, and retains
+all body/envelope/rendering/cleanup checks and deadlines. Its real source pin
+is updated. Independent adversarial source review found no blocking defect.
+
+The pinned devcontainer's complete 43-test diagnostic owner passes (6.138 s;
+zero skips), including both rejection orderings and a wrong-priority mutant.
+The new test first failed against the original source (42 passed, one failed).
+Logs under `target/hologram-oracle-response-worktree/target/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `portable-submission-completion-red-v1/gate.log` | `a465c013cba6b1a8ca857882836a0bdb36d6468c7b518b5ae9ce6a358d2cdca1` |
+| `portable-submission-completion-owning-v2/gate.log` | `661e82a7f493e8de780c9d1e25d33affb20f750a573cae5b4c95dfd7fc5201f0` |
+
+This is source-component evidence, not live matrix or SDK acceptance. Both
+unchanged full VV passes and the complete live matrix remain required; this
+newly observed failure does not establish the historical #67 failure's cause.

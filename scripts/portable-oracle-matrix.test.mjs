@@ -301,6 +301,32 @@ test('the production event recorder exposes exact32 and one-over truncation with
  const mutant=factory(source.slice(start,end).replace(guard,''));for(let i=0;i<33;i++)mutant.record({event:'request'});
  assert.throws(()=>assert.equal(mutant.snapshot().eventsTruncated,true),assert.AssertionError);
 });
+test('actual submission completion owns both rejections and preserves correlated response failure',async()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const start=source.indexOf('async function submissionCompletion('),end=source.indexOf('\nasync function submit(',start);
+ assert(start>=0&&end>start,'actual source-owned completion helper');
+ const completion=runInNewContext(source.slice(start,end)+'\nsubmissionCompletion');
+ const pending=new Promise(()=>{}),bodyFailure=new Error('private-body'),triggerFailure=new Error('private-trigger');
+ for(const [bodyDelay,triggerDelay] of [[0,5],[5,0]]) {
+  const rejected=(failure,delay)=>new Promise((_,reject)=>setTimeout(()=>reject(failure),delay));
+  await assert.rejects(completion(rejected(bodyFailure,bodyDelay),rejected(triggerFailure,triggerDelay),pending),error=>error===bodyFailure);
+ }
+ const value={reply:{},replyBody:Buffer.from('actual observed body')};
+ assert.equal(await completion(Promise.resolve(value),Promise.resolve(),pending),value);
+ await assert.rejects(completion(Promise.resolve(value),Promise.reject(triggerFailure),pending),error=>error===triggerFailure);
+ const navigationFailure=new Error('private-navigation');
+ await assert.rejects(completion(pending,pending,Promise.reject(navigationFailure)),error=>error===navigationFailure);
+ // A navigation winner still attaches rejection observers to both operations.
+ let rejectBody,rejectTrigger;
+ const body=new Promise((_,reject)=>{rejectBody=reject;}),trigger=new Promise((_,reject)=>{rejectTrigger=reject;});
+ await assert.rejects(completion(body,trigger,Promise.reject(navigationFailure)),error=>error===navigationFailure);
+ rejectBody(bodyFailure);rejectTrigger(triggerFailure);await new Promise(resolve=>setImmediate(resolve));
+ const guard="    if (body.status === 'rejected') throw body.reason;\n    if (initiated.status === 'rejected') throw initiated.reason;";
+ const original=source.slice(start,end);assert.equal(original.split(guard).length,2);
+ const mutant=runInNewContext(original.replace(guard,"    if (initiated.status === 'rejected') throw initiated.reason;\n    if (body.status === 'rejected') throw body.reason;")+'\nsubmissionCompletion');
+ await assert.rejects(assert.rejects(mutant(Promise.reject(bodyFailure),Promise.reject(triggerFailure),pending),error=>error===bodyFailure),assert.AssertionError);
+ assert.equal(source.split('await submissionCompletion(response, trigger, navigation)').length,2);
+});
 test('actual submission diagnostic emission and cleanup retain the first body failure when both diagnostic sinks throw',async()=>{
  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
  const start=source.indexOf('function failureKind('),end=source.indexOf('\n// CDP observations',start);

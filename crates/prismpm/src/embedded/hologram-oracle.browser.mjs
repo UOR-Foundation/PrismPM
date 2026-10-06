@@ -244,6 +244,16 @@ function applicable(vector) {
 const valid = app.acceptance_vectors.map((vector, index) => ({vector, index})).filter(({vector}) => applicable(vector));
 assert.ok(valid.length > 0, 'no modeled request can exercise the actual View');
 const recovery = valid[0].vector;
+async function submissionCompletion(response, trigger, navigation) {
+  // Closing a target can reject both operations. Observe both, retaining the
+  // correlated response error instead of racing it against keyboard teardown.
+  const completed = Promise.allSettled([response, trigger]).then(([body, initiated]) => {
+    if (body.status === 'rejected') throw body.reason;
+    if (initiated.status === 'rejected') throw initiated.reason;
+    return body.value;
+  });
+  return Promise.race([completed, navigation]);
+}
 async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {
   const ready = () => {
     const button = document.querySelector('#submit');
@@ -323,7 +333,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     const trigger = keyboard
       ? target.locator(text ? '#request' : '#right').press(text ? 'Control+Enter' : 'Enter')
       : target.locator('#submit').click();
-    const [{reply, replyBody}] = await Promise.race([Promise.all([response, trigger]), navigation]);
+    const {reply, replyBody} = await submissionCompletion(response, trigger, navigation);
     check = 'response-status';
     assert.equal(reply.status(), 200);
     check = 'request-envelope';
