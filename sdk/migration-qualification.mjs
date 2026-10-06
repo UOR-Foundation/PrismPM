@@ -8,6 +8,54 @@ import {join} from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item)
   ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const fields=(value,expected)=>{
+  assert(value&&typeof value==='object'&&!Array.isArray(value));
+  assert.deepEqual(Object.keys(value).sort(),expected.slice().sort());
+};
+const gitObject=(kind,bytes)=>createHash('sha1').update(Buffer.concat([
+  Buffer.from(`${kind} ${bytes.length}\0`),bytes])).digest('hex');
+export function verifyHistoricalSource(document,bytes=readFileSync(new URL('./fixtures/hologram-live-historical-source.json',import.meta.url))) {
+  assert.equal(typeof document,'string'); assert(Buffer.byteLength(document)<=128*1024);
+  assert(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=64*1024);
+  const source=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+  assert.equal(bytes.toString(),canonical(source)+'\n');
+  fields(source,['schema','repository','revision','path','commit','tree','document_sha256','blob_oid']);
+  assert.equal(source.schema,'prismpm/historical-lock-git-source/1');
+  assert.equal(source.repository,'https://github.com/Hologram-Technologies/hologram-live');
+  assert.equal(source.revision,'419759164f6cfae768fd5536da5cd8422efbf032');
+  assert.equal(source.path,'prismpm.lock');
+  const object=(kind,row,oid,sha256)=>{
+    fields(row,['git_oid','sha256','base64']);
+    assert.equal(row.git_oid,oid); assert.equal(row.sha256,sha256);
+    assert.equal(typeof row.base64,'string'); assert(row.base64.length>0&&row.base64.length<=64*1024);
+    const decoded=Buffer.from(row.base64,'base64'); assert.equal(decoded.toString('base64'),row.base64);
+    assert.equal(hash(decoded),sha256); assert.equal(gitObject(kind,decoded),oid); return decoded;
+  };
+  const commit=object('commit',source.commit,source.revision,'12f347be78c92f8569c6e03602011374685c84867cfaa2ec74a75ea89c186979');
+  const tree=object('tree',source.tree,'71011ce2afb0e3354819d20bea2dd4623b09db90','5b7277fa96431637230a46886e73b3f511bbb70302aff796cbafb4fbe1ed1b27');
+  assert.equal(commit.toString('utf8').split('\n')[0],'tree '+source.tree.git_oid);
+  const entries=[];
+  for(let offset=0;offset<tree.length;) {
+    const space=tree.indexOf(32,offset); assert(space>offset&&space-offset<=6);
+    const mode=tree.subarray(offset,space).toString('ascii');
+    assert(['40000','100644','100755','120000','160000'].includes(mode));
+    const end=tree.indexOf(0,space+1); assert(end>space+1&&end-space<=256&&end+21<=tree.length);
+    const path=new TextDecoder('utf-8',{fatal:true}).decode(tree.subarray(space+1,end));
+    assert(!/[\x00-\x1f/\\]/.test(path)&&!['.','..'].includes(path));
+    assert(!entries.some(row=>row.path===path));
+    entries.push({mode,path,oid:tree.subarray(end+1,end+21).toString('hex')}); offset=end+21;
+  }
+  const selected=entries.filter(row=>row.path===source.path); assert.equal(selected.length,1);
+  assert.equal(selected[0].mode,'100644');
+  assert.equal(source.blob_oid,'cec41c29f6caf8ace4ea2cbf1fb38db3d242bdaa');
+  assert.equal(selected[0].oid,source.blob_oid); assert.equal(gitObject('blob',Buffer.from(document)),source.blob_oid);
+  assert.equal(source.document_sha256,'5ee081904bacc478e07a0706421c4a09fe02121e0e0c65391ca2395ec1b41bac');
+  assert.equal(hash(document),source.document_sha256);
+  return {schema:'prismpm/historical-lock-source/1',scope:'historical-input-only-not-target-sdk-acceptance',
+    repository:source.repository,revision:source.revision,path:source.path,blob_oid:source.blob_oid,
+    commit_sha256:source.commit.sha256,tree_oid:source.tree.git_oid,tree_sha256:source.tree.sha256,
+    document_sha256:source.document_sha256,source_document_sha256:hash(bytes)};
+}
 export function historicalLock() {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/hologram-live-historical-lock.json', import.meta.url)));
   assert.deepEqual(fixture.source, {repository: 'https://github.com/Hologram-Technologies/hologram-live',
@@ -17,7 +65,7 @@ export function historicalLock() {
   assert.equal(hash(fixture.document), fixture.source.sha256);
   assert.equal(canonical(JSON.parse(fixture.document)), fixture.document);
   assert.equal(JSON.parse(fixture.document).schema, 'prismpm/sdk-lock/1');
-  return fixture;
+  return {...fixture,authority:verifyHistoricalSource(fixture.document)};
 }
 export const migrationChecks = Object.freeze(['historical-refusal', 'read-only-proposal', 'exact-root-replay',
   'native-admission', 'changed-native-inventory-refusal', 'swapped-platform-refusal']);
@@ -45,8 +93,12 @@ export function expectedMigrationProcesses(target, platform) {
   ];
 }
 export function verifyMigration(value, lockBytes) {
-  assert.deepEqual(Object.keys(value).sort(), ['checks', 'historical_sha256', 'platform', 'processes', 'proposal', 'schema', 'target_sha256']);
-  assert.equal(value.schema, 'prismpm/installed-lock-migration/1');
+  assert(['prismpm/installed-lock-migration/1','prismpm/installed-lock-migration/2'].includes(value.schema));
+  const expectedFields=['checks', 'historical_sha256', 'platform', 'processes', 'proposal', 'schema', 'target_sha256'];
+  if(value.schema==='prismpm/installed-lock-migration/2') {
+    expectedFields.push('historical_source'); assert.deepEqual(value.historical_source,historicalLock().authority);
+  }
+  assert.deepEqual(Object.keys(value).sort(),expectedFields.sort());
   assert(['linux/amd64', 'linux/arm64'].includes(value.platform));
   assert.equal(value.historical_sha256, historicalLock().source.sha256);
   assert.equal(value.target_sha256, hash(lockBytes));
@@ -114,7 +166,7 @@ export function qualifyMigration(lockBytes) {
       put(canonical(mutant)); invoke(['lock', 'check'], 'SDK platform inventory disagrees with the running SDK');
     }
     assert.equal(processes.length, 5);
-    const evidence = {schema: 'prismpm/installed-lock-migration/1', platform, processes,
+    const evidence = {schema: 'prismpm/installed-lock-migration/2', platform, processes,historical_source:original.authority,
       historical_sha256: original.source.sha256, target_sha256: hash(lockBytes), proposal, checks: [...migrationChecks]};
     verifyMigration(evidence, lockBytes);
     return evidence;

@@ -1,5 +1,28 @@
 # PrismPM falsifiability and verification record
 
+## Historical migration input custody
+
+The new source-proof test first failed on the missing verifier. Restored source
+passes all 24 owning SDK-driver tests without skips, retaining the original
+individual and aggregate deadlines. Corrupted commit/tree/blob bindings,
+missing witnesses and legacy-record downgrade fail closed. Seven independent
+Git object commands reproduce the captured upstream commit, root tree and lock
+blob; reviewed SHA-256 bindings supplement Git's object identities.
+
+Retained evidence under `target/hologram-oracle-response-worktree/target/`:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `migration-authority-red-v1/gate.log` | `f028150e812fc8e1c75d0f0c58d30c8749dfe6feabff797ec63a45971b44371d` |
+| `migration-authority-owning-v2/gate.log` | `be9de669bbdb818da0d80329681416f7b68781c62357b8dfe4fa8fa507126517` |
+| `migration-authority-git-oracle-v1.json` | `d8e2480fbaf3548b22b55490a9cd62ea9d2d4721e66780aa191d0066c1f4d51c` |
+
+This is immutable historical-input provenance, not signed publisher
+authentication. Historical private `/1` records remain readable; the active
+installed gate requires `/2` custody. These component checks do not establish
+current immutable SDK qualification, full V&V or hologram-live adoption for
+issues #63 and #66.
+
 ## Independent Rust exporter source bounds
 
 Source custody charges declared bytes before body access: 4,096 entries and

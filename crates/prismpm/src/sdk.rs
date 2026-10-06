@@ -26,6 +26,14 @@ const SDK_INDEX_MAX_BYTES: usize = 1024 * 1024;
 // envelope too; the per-document limits are still enforced independently.
 const SDK_CAPTURE_MAX_BYTES: usize = 64 * 1024 * 1024;
 
+pub(crate) fn exporter_seed_manifest_bytes() -> Result<Vec<u8>, PrismError> {
+    read_metadata(
+        Path::new("/opt/prismpm/share/exporter-seed/manifest.json"),
+        SDK_INVENTORY_MAX_BYTES,
+        "PP5008",
+    )
+}
+
 // Apply wire limits before allocation as well as during reading. Metadata is
 // never executable: aliases, hard links and replacements cannot supply it.
 fn read_metadata(

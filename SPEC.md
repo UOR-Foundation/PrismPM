@@ -192,6 +192,16 @@ validator. Actual browser execution remains a separate required part of
 application verification, including the Calculator and text application examples
 in the ordinary full acceptance gate.
 
+Source V&V checks every frozen interoperability source-pin assertion before
+expensive compiler/oracle work. The closed four-path set retains the unchanged
+imported Hologram archive and codec Cargo inputs, plus the reviewed local browser
+driver. The independently reviewed active Rust owner is also byte-bound;
+commented or disabled pin literals cannot substitute for its assertions.
+Bounded stable descriptor hashing refuses changed bytes, removed pin
+assertions and unknown aliases. This early source refusal and its negative
+controls do not replace the original Rust pin checks, either live profile,
+complete trigger matrix, imported oracles or current immutable SDK acceptance.
+
 The workspace `hologram_interop` owner retains both complete profile acceptance
 bodies and qualifies the closed `portable-oracle-matrix.json` inventory with one
 fresh source-bound oracle compiler: 18 interaction cases per profile and trigger,
@@ -755,8 +765,17 @@ including failure diagnostics. It does not commit a baseline, publish an image,
 accept the current SDK, or bypass candidate/release policy. Native runner
 selection is a trusted CI property, not physical hardware attestation.
 
+Before image acquisition, source review also checks the shared build manifest's
+application-generator input against the exact concatenation owned by the
+independently reviewed active Rust controller. It hashes the original Rust
+generator inputs, the dereferenced reviewed embedded compiler-manifest alias,
+and the recipe literal. Unknown recipe-owner bytes or aliases fail closed;
+commented recipe literals are not authority. This early refusal never writes
+goldens or normalizes native records, and does not replace either genuine native
+write/repeat execution or subsequent SDK qualification.
+
 Before native cache initialization or compiler construction, each verified
-review container executes all 28 exporter-seed tests with its actual Node,
+review container executes all 35 exporter-seed tests with its actual Node,
 Python and libc. The exact outer TAP plan, successful test count and absence
 of failures, omissions, cancellation or skips are required; failure prevents
 golden generation. This component check does not authorize SDK acceptance.
@@ -1079,10 +1098,59 @@ every iterator, and preserves canonical bytewise ordering. Source construction
 uses its separate 4,096-entry/16-MiB allowance, never the seed-only allowance.
 Root-owned immutable SDK paths are checked before and after bounded copying;
 custody supplements rather than replaces the independent inventory binding.
+Installed native-library qualification preserves its four sequential cold/warm
+two-root executions and additionally executes two fresh installed `verify`
+commands concurrently. Each has a separate private temporary namespace. The
+source-bound gate holds both original no-follow exporter-owner descriptors at
+one shared observation, records distinct native identities, and requires owner
+retirement and actual descendant reaping after each command. CLI wall-clock
+overlap alone is insufficient. The original temporary namespaces must retain
+their native identities and contain only their original process-owner receipts
+after retirement; leaked caches, aliases, linked receipts and replacement
+namespaces fail. Children receive the closed source-pinned SDK environment,
+not caller process variables; Python uses isolated execution. Complete generated artifacts and both phase
+transcripts must match the original cold/warm execution closure. Independently
+locked inventory/manifest, seed, toolchain, runtime bytes and their original
+root-owned namespace identities are checked before and after both invocations.
+The same retained closure includes the installed CLI, Node and Python commands
+bound to the independently locked inventory, and the original captured process
+owner helper. The complete source/image gates are mandatory predecessors.
+The native-library path creates separate operation-private Cargo homes for
+package construction and std/no_std replay; it does not write to or build from
+the shared read-only SDK Cargo home. Installed toolchain lookups remain read-only.
+Closed concurrency observations remain qualification evidence, not stable
+product attestations, OS authority or universal same-user race isolation.
+The owning installed gate requires all 23 named parser, transport, construction,
+migration and real process/descriptor controls with no skips; structural test
+fixtures never qualify installed compiler execution or an SDK release.
+The copy opens source/staging roots and every named ancestor through held Linux
+directory descriptors. Staging ancestor identities are captured when created;
+a replacement cannot redirect writes into foreign content. The private helper
+handoff carries the unchanged acquisition receipt and original authenticated
+manifest bytes. Rust rebinds every staged member before descriptor-relative
+no-overwrite publication, retains descendant identities across relocation, and
+transfers that authenticated snapshot directly to the consumer. Fresh SDK
+construction binds the original staging creation identity, uses inherited
+package/stage descriptors for actual tar/Lake working paths and temporary
+storage, and preserves their genuine descriptor paths in raw process records.
+Source members retain their original native identities across construction.
+Every first
+exporter build checks the original snapshot; a fresh self-measurement cannot
+replace it. The completed build snapshot is retained exactly through export,
+owner completion and final cleanup; cold source-only growth cannot authorize
+a replacement build tree after export. Private verification owners retain
+that custody across generation.
+Failed or interrupted admission marks enclosing retirement uncertain;
+replacement roots and descendants are retained, never pathname-deleted or
+adopted as accepted state. Cleanup uses a retained original node inventory and
+constant-descriptor iterative removal, not recursive descriptor retention. These
+observed-identity checks do not claim atomic isolation against same-user races.
+
 Only the new exporter's `.lake` may be published, from a private sibling stage
 through atomic no-overwrite rename. Generated application workspaces, user
 caches and acceptance evidence are never seeded. Temporary stages are owned
-by their invocation and removed on failure.
+by their invocation. Cleanup removes only identity-bound owned nodes; uncertain
+or interrupted stages remain unaccepted and are never reused.
 SDK seed production and admission share a manifest-driven, exclusive-creation
 copy boundary; recursive discovery cannot expand copied bytes or files. Before
 publication, production rechecks the source closure and preserves declared
@@ -1137,7 +1205,8 @@ and both exporter measurements to the independent SDK authority where required.
 Whole-package custody is checked between phases and before retirement. During
 the second real build only existing `.trace` bodies and directory timestamps
 may refresh; compiled members, paths, source and executable identities stay
-exact. Failed/reordered/repeated phases poison the owner and retire its package;
+exact. Failed/reordered/repeated phases poison the owner; retirement removes
+only proved-owned nodes and refuses changed or unknown descendants.
 unwind/drop cannot publish acceptance. Successful retirement precedes accepted
 manifest publication. Ordinary non-application/non-library verification retains
 its one fresh acquisition and actual export; it has no duplicated A/B package.
@@ -1258,6 +1327,17 @@ generated-output and security reviews remain required; capture and a valid
 proposal are not SDK qualification or release acceptance. Existing v2 projects
 use `lock update`, not migration. Proposal limits are 192 MiB and 262,144 items;
 each embedded lock independently retains its existing closed schema and bounds.
+Private, gate-internal installed migration qualification records use
+`prismpm/installed-lock-migration/2`, binding the original historical document
+through the pinned Hologram Git commit, its root tree and the regular-file blob.
+Captured raw Git objects have independently reviewed SHA-256 identities; their
+Git object identities and complete commit/tree/blob relation are rechecked
+offline. These witnesses establish immutable historical-input identity, not
+signed publisher authenticity. The closed historical-source witness is input provenance only, not
+target SDK or release acceptance. Historical `/1` records retain their reader;
+the current installed acquisition gate requires `/2` and rejects missing or
+changed source witnesses. All original migration executions and independent
+target-inventory checks remain mandatory.
 `fetch --locked`
 materializes all content required for subsequent check, build, test, package,
 verify and release assembly with networking disabled. Native Linux archives

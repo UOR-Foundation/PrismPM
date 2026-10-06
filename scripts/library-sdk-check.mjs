@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {constants,closeSync,cpSync,existsSync,fstatSync,lstatSync,mkdtempSync,openSync,readFileSync,readlinkSync,readdirSync,readSync,rmSync,chmodSync,writeFileSync} from 'node:fs';
+import {constants,closeSync,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,mkdtempSync,openSync,readFileSync,readlinkSync,readdirSync,readSync,rmSync,chmodSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {verifyImage,verifyTap} from './browser-api-sdk-check.mjs';
@@ -10,6 +10,7 @@ import {compilerRevision} from '../sdk/inventory-metadata.mjs';
 import {parseSdkIndex,validateInventory} from '../sdk/platform-lock.mjs';
 import {captureSdkMetadata,verifiedCommands} from '../sdk/metadata-cli.mjs';
 import {qualifyMigration,verifyMigration} from '../sdk/migration-qualification.mjs';
+import {captureInstalledCustody,runConcurrentInstalled,verifyCustody,installedEnvironment} from './installed-exporter-concurrency.mjs';
 export {verifyImage};
 
 export const sourceRoots=Object.freeze([
@@ -23,6 +24,9 @@ export const sourceRoots=Object.freeze([
  'tests/fixtures/library/native-library/project','tests/hologram-oracle','vendor',
  'scripts/browser-api-sdk-check.mjs','scripts/library-sdk-check.mjs','scripts/library-sdk-check.sh',
  'scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/library-sdk-fixture.mjs','scripts/library-owner-reader-replay.mjs','.github/workflows/release.yml',
+ 'scripts/installed-exporter-concurrency.mjs','scripts/installed-exporter-concurrency.test.mjs','scripts/portable-oracle-process-owner.py',
+ 'scripts/hologram-source-pins.mjs','scripts/hologram-source-pins.test.mjs','crates/prismpm/tests/hologram_interop.rs',
+ 'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock',
 ]);
 // Tracked compiler include aliases only. Their complete target roots are bound
 // separately above; unknown, changed or escaping aliases are never followed.
@@ -46,7 +50,7 @@ export const sourceAliases=Object.freeze({
 const acceptanceRoot='LibraryProbe.Probe.acceptance',identityRoot='LibraryProbe.Probe.identity';
 const roots=[acceptanceRoot,identityRoot],unclaimed=['application','browser','holo','production-release','deployment'];
 const exits=Object.freeze({PP2001:1,PP5006:1,PP6101:5});
-const completedChecks=Object.freeze(['read-only-check','std','no_std','exact-package-replay','two-root-reproduction','product-refusal','missing-root','wrong-result-root','parameterized-root','nominal-impostor','false-generated-acceptance','restored-acceptance','authenticated-seed-admission','cold-warm-two-root-equivalence']);
+const completedChecks=Object.freeze(['read-only-check','std','no_std','exact-package-replay','two-root-reproduction','product-refusal','missing-root','wrong-result-root','parameterized-root','nominal-impostor','false-generated-acceptance','restored-acceptance','authenticated-seed-admission','cold-warm-two-root-equivalence','installed-concurrent-owner-equivalence','immutable-seed-original-custody']);
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const hex=value=>{assert.equal(typeof value,'string');assert.match(value,/^[0-9a-f]{64}$/);return value;};
 const canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]])):v);
@@ -146,6 +150,9 @@ export function verifySource(root,expected){same(capture(root,expected.revision)
 export function cli(project,args,expected,launch=spawnSync){
  const env={...process.env,CARGO_NET_OFFLINE:'true'};delete env.CARGO_TARGET_DIR;
  const output=launch('/usr/local/bin/prismpm',['--project',project,'--json',...args],{encoding:'utf8',env,timeout:900000,maxBuffer:16*1024*1024});
+ return cliOutput(output,expected);
+}
+export function cliOutput(output,expected){
  assert.equal(output.error,undefined,'CLI execution failed');assert.equal(output.signal,null,'CLI terminated');
  if(expected.code)assert.ok(Object.hasOwn(exits,expected.code),'declared diagnostic exit class');
  assert.equal(output.status,expected.code ? exits[expected.code] : 0, "CLI exit class");
@@ -292,7 +299,7 @@ export function mutateModule(project,change){
 const declaration=(module,name)=>{const rows=module.declarations.filter(row=>row.name===name);assert.equal(rows.length,1);return rows[0];};
 const rootField=(module,name)=>{const rows=declaration(module,'probeLibrary').body.fields.filter(row=>row.field===name);assert.equal(rows.length,1);return rows[0].value;};
 
-export function run(root,image,lockBytes){
+export async function run(root,image,lockBytes){
  assert.equal(process.getuid(),1000,'native SDK gate must run non-root');
  const binding=validateCapturedLock(lockBytes,image,{x64:'amd64',arm64:'arm64'}[process.arch],
   regularBytes(join(root,'standards.lock')),regularBytes('/opt/prismpm/share/inventory.json'));
@@ -300,9 +307,9 @@ export function run(root,image,lockBytes){
  const compilerIdentity={revision:compilerRevision(regularBytes(join(root,'model/dependencies.toml')).toString()),toolchain:regularBytes(join(root,'lean-toolchain')).toString().trim(),platform:'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]};
  const work=mkdtempSync('/tmp/prismpm-library-sdk-'),source=join(root,'tests/fixtures/library/native-library/project');let sequence=0;
  const runs=[];
- const retain=(project,receipt,acquisition)=>{
+ const retain=(project,receipt,acquisition,destination=runs)=>{
   const bytes=regularBytes(join(project,receipt.verified_root,'manifest.json'));
-  runs.push({root:project,acquisition,manifest:bytes.toString('utf8'),manifest_sha256:hash(bytes)});
+  destination.push({root:project,acquisition,manifest:bytes.toString('utf8'),manifest_sha256:hash(bytes)});
  };
  function fixture(){
   const destination=join(work,'fixture-'+sequence++);cpSync(source,destination,{recursive:true,errorOnExist:true,force:false});
@@ -341,7 +348,27 @@ export function run(root,image,lockBytes){
    same(tree(warmEvidence.build),firstBuild,'complete cold/warm artifact closure differs');
    assert(regularBytes(join(warm,'prismpm.lock')).equals(lockBytes),'warm execution changed its independent lock');
   }
-  return {scope:'installed-native-library-only',build_id:accepted.build_id,binding,runs,checks:completedChecks,unclaimed};
+  // Keep all four original sequential cold/warm invocations. These additional
+  // two commands are genuine installed SDK processes with separate temporary
+  // namespaces, not replayed manifests or a transport-fixture acceptance.
+  const projects=[fixture(),fixture()],temporaries=[0,1].map(index=>join(work,'invocation-'+index));
+  for(const path of temporaries)mkdirSync(path,{mode:0o700});
+  for(const project of projects)writeFileSync(join(project,'prismpm.lock'),lockBytes,{flag:'wx',mode:0o600});
+  const identity={compiler_revision:compilerIdentity.revision,archive_sha256:exporterArchiveSha256,
+   toolchain:compilerIdentity.toolchain,platform:compilerIdentity.platform};
+  const beforeCustody=captureInstalledCustody(binding,identity);
+  const concurrent=await runConcurrentInstalled(projects,temporaries),concurrentRuns=[];
+  for(const [index,{output}] of concurrent.outcomes.entries()){
+   const verified=cliOutput(output,{schema:'prismpm/verify-result/1'});assert.equal(verified.build_id,accepted.build_id);
+   const evidence=checkAccepted(projects[index],verified,exporterArchiveSha256,compilerIdentity,'sdk-seed',binding);
+   same(tree(evidence.build),firstBuild,'concurrent generated artifact closure differs');
+   assert(regularBytes(join(projects[index],'prismpm.lock')).equals(lockBytes));
+   retain(projects[index],verified,'sdk-seed',concurrentRuns);
+  }
+  const afterCustody=captureInstalledCustody(binding,identity);same(afterCustody,beforeCustody,'original immutable SDK custody changed during concurrent execution');
+  const concurrency={scope:'installed-exporter-concurrency-only',runs:concurrentRuns,overlap:concurrent.overlap,
+   retirements:concurrent.outcomes.map(row=>row.retirement),environments:concurrent.outcomes.map(row=>row.environment),custody:{before:beforeCustody,after:afterCustody}};
+  return {scope:'installed-native-library-only',build_id:accepted.build_id,binding,runs,concurrency,checks:completedChecks,unclaimed};
  }finally{rmSync(work,{recursive:true,force:true});}
 }
 
@@ -421,11 +448,30 @@ export function verifyResult(value,binding,sourceAuthority){
  hex(value.build_id);assert(binding,'independent captured SDK binding required');
  keys(sourceAuthority,['archive_sha256','toolchain']);hex(sourceAuthority.archive_sha256);
  assert.match(sourceAuthority.toolchain,/^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/);
- same(value,{scope:'installed-native-library-only',build_id:value.build_id,binding,runs:value.runs,checks:completedChecks,unclaimed},'complete installed native-library result');
+ same(value,{scope:'installed-native-library-only',build_id:value.build_id,binding,runs:value.runs,concurrency:value.concurrency,checks:completedChecks,unclaimed},'complete installed native-library result');
  assert(Array.isArray(value.runs)&&value.runs.length===4,'complete cold/warm records required');
  assert.equal(new Set(value.runs.map(row=>row.root)).size,4,'four fresh absolute roots required');
+ const concurrency=value.concurrency;keys(concurrency,['scope','runs','overlap','retirements','environments','custody']);
+ assert.equal(concurrency.scope,'installed-exporter-concurrency-only');
+ assert(Array.isArray(concurrency.runs)&&concurrency.runs.length===2);assert(Array.isArray(concurrency.overlap)&&concurrency.overlap.length===2);
+ assert(Array.isArray(concurrency.retirements)&&concurrency.retirements.length===2);keys(concurrency.custody,['before','after']);
+ assert(Array.isArray(concurrency.environments)&&concurrency.environments.length===2);
+ const identity={compiler_revision:binding.compiler_revision,archive_sha256:sourceAuthority.archive_sha256,toolchain:sourceAuthority.toolchain,platform:binding.platform};
+ for(const record of [concurrency.custody.before,concurrency.custody.after])verifyCustody(record,binding,identity);
+ same(concurrency.custody.before,concurrency.custody.after,'original SDK native identities or bytes changed');
+ for(const [index,row] of concurrency.overlap.entries()){
+  keys(row,['path','dev','ino','uid','gid','mode']);
+  const prefix=dirname(concurrency.runs[index].root)+'/invocation-'+index+'/';
+  assert(row.path.startsWith(prefix));assert.match(row.path.slice(prefix.length),/^prismpm-verify-exporter-[A-Za-z0-9]+$/);
+  same(concurrency.environments[index],installedEnvironment(prefix.slice(0,-1)),'closed installed environment differs');
+  for(const name of ['dev','ino','uid','gid','mode']){assert(typeof row[name]==='string'&&/^(?:0|[1-9][0-9]{0,19})$/.test(row[name]));assert(BigInt(row[name])<=0xffffffffffffffffn);}
+  assert.equal(row.uid,'1000');assert.equal(row.gid,'1000');assert.equal(BigInt(row.mode),0o40700n);
+  same(concurrency.retirements[index],{schema:'prismpm/portable-process-owner/1',exit_code:0,timed_out:false,interrupted:false,cleanup_verified:true});
+ }
+ assert.notEqual(concurrency.overlap[0].dev+':'+concurrency.overlap[0].ino,concurrency.overlap[1].dev+':'+concurrency.overlap[1].ino);
+ const allRuns=[...value.runs,...concurrency.runs];assert.equal(new Set(allRuns.map(row=>row.root)).size,6,'six independent source roots required');
  let nativeArtifacts;
- for(const [index,row] of value.runs.entries()){
+ for(const [index,row] of allRuns.entries()){
   keys(row,['root','acquisition','manifest','manifest_sha256']);
   assert.match(row.root,/^\/tmp\/prismpm-library-sdk-[A-Za-z0-9]+\/fixture-[0-9]+$/);
   assert.equal(row.acquisition,index<2?'cold':'sdk-seed');assert.equal(typeof row.manifest,'string');
@@ -449,7 +495,7 @@ export function verifyResult(value,binding,sourceAuthority){
   validateVerificationOwner(manifest,'library',row.acquisition,binding,sourceAuthority);
  }
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,19),19,'complete owning gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,24),24,'complete owning gate test count');}
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
@@ -462,9 +508,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   {archive_sha256:hash(regularBytes(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),toolchain:regularBytes(new URL('../lean-toolchain',import.meta.url)).toString().trim()});
  else if(mode==='binding'&&args.length===5)console.log(JSON.stringify(validateCapturedLock(
   regularBytes(args[0]),args[1],args[2],regularBytes(args[3]),regularBytes(args[4]))));
- else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
+ else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/installed-exporter-concurrency.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
  else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(JSON.stringify(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
- else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],192*1024*1024));keys(value,['lock','migration']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);verifyMigration(value.migration,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
- else if(mode==='run'&&args.length===1)console.log(JSON.stringify(run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
+ else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],192*1024*1024));keys(value,['lock','migration']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);assert.equal(value.migration.schema,'prismpm/installed-lock-migration/2');verifyMigration(value.migration,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
+ else if(mode==='run'&&args.length===1)console.log(JSON.stringify(await run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
  else throw Error('closed installed native-library gate command');
 }

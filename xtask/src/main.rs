@@ -188,10 +188,12 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
         &[
             "--test",
             "scripts/oracle-source-closure.test.mjs",
+            "scripts/hologram-source-pins.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
+            "scripts/installed-exporter-concurrency.test.mjs",
             "sdk/migration-qualification.test.mjs",
             "scripts/sdk-vv-inputs.test.mjs",
             "scripts/sdk-vv-run.test.mjs",

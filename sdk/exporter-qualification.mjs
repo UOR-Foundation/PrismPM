@@ -60,8 +60,8 @@ export function validateQualification(value, binding, authority) {
     const archive = record.extraction.argv[3];
     assert.match(archive, /^\/work\/prismpm-exporter-qualification-[A-Za-z0-9]+\/source-[ab]\/vendor\/lean4-prod\/lean\.tar$/);
     roots.push(archive);
-    process(record.extraction, ['/usr/bin/tar', '--extract', '--file', archive, '--directory', '/tmp/prismpm-exporter-construction/package'], '/tmp/prismpm-exporter-construction');
-    process(record.build, [lake, 'build', 'prod-export'], '/tmp/prismpm-exporter-construction');
+    process(record.extraction, ['/usr/bin/tar', '--extract', '--file', archive, '--directory', '/proc/self/fd/3'], '/proc/self/fd/4');
+    process(record.build, [lake, 'build', 'prod-export'], '/proc/self/fd/4');
   }
   assert.equal(new Set(roots).size, 2, 'distinct construction roots required');
   const relocation = value.relocation;

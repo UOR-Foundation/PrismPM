@@ -257,23 +257,30 @@ fn generate_in(
     model_bytes: &[u8],
     lex_root: &Path,
     lex_manifest_bytes: &[u8],
-    owned: Option<(&Path, &Value)>,
+    owned: Option<(&Path, &crate::exporter::GenerationContext<'_>)>,
 ) -> Result<GeneratedLibrary, PrismError> {
     let library = model
         .library
         .as_ref()
         .ok_or_else(|| PrismError::new("PP9001", "native generation requires a library profile"))?;
-    let work = tempfile::Builder::new()
-        .prefix("prismpm-native-library-")
-        .tempdir()
-        .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
-    let workspace = work.path();
+    let mut work = crate::exporter::directory::Directory::temporary(
+        "prismpm-native-library-",
+        None,
+        Default::default(),
+    )?;
+    let workspace_path = work.path().to_owned();
+    let workspace = workspace_path.as_path();
+    let first_build = owned.is_none();
+    let mut seed_custody = None;
     let (lean_package, exporter_acquisition) = match owned {
-        Some((package, acquisition)) => (package.to_owned(), acquisition.clone()),
+        Some((package, acquisition)) => (package.to_owned(), acquisition.receipt().clone()),
         None => {
             let package = workspace.join("lean4-prod");
-            let acquisition = crate::exporter::acquire_for(repository_root, &package)?;
-            (package, acquisition)
+            let acquisition =
+                crate::exporter::acquire_for_owned(repository_root, &package, work.scope())?;
+            work.protect_package(&package, &acquisition.snapshot)?;
+            seed_custody = Some(acquisition.snapshot);
+            (package, acquisition.receipt)
         }
     };
 
@@ -357,6 +364,20 @@ fn generate_in(
             vec!["build".to_owned(), "prod-export".to_owned()],
         ),
     ] {
+        if tool == "lean4-prod-build" {
+            if let Some((_, context)) = owned {
+                context.before_build(repository_root, &lean_package)?;
+            } else if first_build {
+                crate::exporter::before_first_build(
+                    repository_root,
+                    &lean_package,
+                    &exporter_acquisition,
+                    seed_custody
+                        .as_ref()
+                        .expect("first build retains original custody"),
+                )?;
+            }
+        }
         processes.push(run_process(
             tool,
             &lake,
@@ -368,6 +389,14 @@ fn generate_in(
         )?);
     }
     let export = workspace.join("export");
+    let export_custody = match owned {
+        Some((_, context)) => context.after_build(&lean_package)?,
+        None => crate::exporter::after_build(
+            &lean_package,
+            &exporter_acquisition,
+            seed_custody.as_ref().expect("original unowned custody"),
+        )?,
+    };
     let arguments = export_arguments(&modules, library, &export);
     let export_env = BTreeMap::from([(
         "LEAN_PATH".to_owned(),
@@ -376,7 +405,7 @@ fn generate_in(
             .to_string_lossy()
             .into_owned(),
     )]);
-    processes.push(crate::exporter::run_export(
+    processes.push(crate::exporter::run_export_with_custody(
         "prod-export",
         &lake,
         &arguments,
@@ -385,6 +414,7 @@ fn generate_in(
         &replacements,
         "PP5004",
         &exporter_acquisition,
+        &export_custody,
     )?);
     let mut artifacts = Vec::new();
     for name in ["coverage.json", "kernel.ir", "roots.json"] {
@@ -476,6 +506,10 @@ fn generate_in(
         .to_vec(),
     ));
     artifacts.sort_by(|left, right| left.0.cmp(&right.0));
+    if seed_custody.is_some() {
+        work.protect_verified_package(&lean_package, &export_custody)?;
+    }
+    work.close()?;
     Ok(GeneratedLibrary {
         artifacts,
         processes,

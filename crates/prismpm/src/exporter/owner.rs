@@ -28,8 +28,55 @@ pub(crate) trait ProductEvidence {
     fn processes(&self) -> &[ProcessRecord];
 }
 
+/// Owner-created original custody carried through generated-module work to
+/// the actual exporter build boundary. Not a caller-produced cache handle.
+pub(crate) struct GenerationContext<'a> {
+    receipt: &'a Value,
+    snapshot: &'a custody::Snapshot,
+    first: bool,
+    built: std::cell::RefCell<Option<custody::Snapshot>>,
+}
+
+impl GenerationContext<'_> {
+    pub(crate) fn receipt(&self) -> &Value {
+        self.receipt
+    }
+    pub(crate) fn before_build(&self, project: &Path, package: &Path) -> Result<(), PrismError> {
+        if self.first {
+            super::before_first_build(project, package, self.receipt, self.snapshot)
+        } else if custody::capture(package)? == *self.snapshot {
+            Ok(())
+        } else {
+            Err(failure(
+                "private exporter custody changed before phased build",
+            ))
+        }
+    }
+    pub(crate) fn after_build(&self, package: &Path) -> Result<custody::Snapshot, PrismError> {
+        if self.built.borrow().is_some() {
+            return Err(failure(
+                "private exporter build custody cannot be recaptured",
+            ));
+        }
+        let after = custody::capture(package)?;
+        let unchanged = if self.first && *self.receipt == super::cold_acquisition() {
+            self.snapshot.same_source(&after)
+        } else {
+            self.snapshot.same_compiler(&after)
+        };
+        if !unchanged {
+            return Err(failure(
+                "private exporter custody changed during phased build",
+            ));
+        }
+        *self.built.borrow_mut() = Some(after.clone());
+        Ok(after)
+    }
+}
+
 struct Package {
-    directory: tempfile::TempDir,
+    namespace: Option<super::directory::Directory>,
+    directory: super::directory::Directory,
     path: PathBuf,
     project: PathBuf,
     inventory: Option<String>,
@@ -41,21 +88,31 @@ struct Package {
 
 impl Package {
     fn retire(self) -> Result<(), PrismError> {
-        if self.snapshot.as_ref() != Some(&custody::capture(&self.path)?) {
-            return Err(failure(
-                "private exporter custody changed before retirement",
-            ));
-        }
-        if crate::sdk::exporter_seed_inventory(&self.project)? != self.inventory {
-            return Err(failure(
-                "private exporter inventory authority changed before retirement",
-            ));
-        }
-        if crate::sdk::exporter_lock_authority(&self.project)? != self.lock_authority {
-            return Err(failure(
-                "private exporter consumer lock authority changed before retirement",
-            ));
-        }
+        let check = || {
+            self.namespace
+                .as_ref()
+                .ok_or_else(|| failure("private exporter namespace absent"))?
+                .ready()?;
+            if self.snapshot.as_ref() != Some(&custody::capture(&self.path)?) {
+                return Err(failure(
+                    "private exporter custody changed before retirement",
+                ));
+            }
+            if crate::sdk::exporter_seed_inventory(&self.project)? != self.inventory {
+                return Err(failure(
+                    "private exporter inventory authority changed before retirement",
+                ));
+            }
+            if crate::sdk::exporter_lock_authority(&self.project)? != self.lock_authority {
+                return Err(failure(
+                    "private exporter consumer lock authority changed before retirement",
+                ));
+            }
+            Ok(())
+        };
+        check().inspect_err(|_| self.directory.scope().uncertain())?;
+        // This non-retiring guard is checked before the owned parent is removed.
+        drop(self.namespace);
         self.directory
             .close()
             .map_err(|error| failure(&format!("private exporter retirement: {error}")))
@@ -87,7 +144,7 @@ impl VerifyExporterOwner {
         phase: Phase,
         model: &[u8],
         lex_manifest: &[u8],
-        generation: impl FnOnce(&Path, &Value) -> Result<T, PrismError>,
+        generation: impl FnOnce(&Path, &GenerationContext<'_>) -> Result<T, PrismError>,
     ) -> Result<T, PrismError> {
         if !cfg!(all(
             target_os = "linux",
@@ -114,7 +171,13 @@ impl VerifyExporterOwner {
         self.poisoned = true;
         let result = self.generate_inner(project, phase, model, lex_manifest, generation);
         if result.is_err() {
-            self.abort()?;
+            if let Err(mut cleanup) = self.abort() {
+                cleanup.message.push_str(&format!(
+                    "; original failure: {}",
+                    result.as_ref().err().expect("failed generation").message
+                ));
+                return Err(cleanup);
+            }
         }
         result
     }
@@ -123,6 +186,10 @@ impl VerifyExporterOwner {
         self.poisoned = true;
         self.phases.clear();
         if let Some(package) = self.package.take() {
+            if let Some(namespace) = &package.namespace {
+                namespace.ready()?;
+            }
+            drop(package.namespace);
             package.directory.close().map_err(|error| {
                 failure(&format!("failed private exporter retirement: {error}"))
             })?;
@@ -136,7 +203,7 @@ impl VerifyExporterOwner {
         phase: Phase,
         model: &[u8],
         lex_manifest: &[u8],
-        generation: impl FnOnce(&Path, &Value) -> Result<T, PrismError>,
+        generation: impl FnOnce(&Path, &GenerationContext<'_>) -> Result<T, PrismError>,
     ) -> Result<T, PrismError> {
         let project = project
             .canonicalize()
@@ -144,24 +211,46 @@ impl VerifyExporterOwner {
         let inventory = crate::sdk::exporter_seed_inventory(&project)?;
         let lock_authority = crate::sdk::exporter_lock_authority(&project)?;
         if self.package.is_none() {
-            let directory = tempfile::Builder::new()
-                .prefix("prismpm-verify-exporter-")
-                .tempdir()
-                .map_err(|error| failure(&format!("private exporter owner: {error}")))?;
+            let directory = super::directory::Directory::temporary(
+                "prismpm-verify-exporter-",
+                None,
+                Default::default(),
+            )?;
             let path = directory.path().join("lean4-prod");
-            let acquisition = super::acquire_for(&project, &path)?;
             self.package = Some(Package {
+                namespace: None,
                 directory,
                 path,
                 project: project.clone(),
                 inventory: inventory.clone(),
                 lock_authority: lock_authority.clone(),
-                acquisition,
+                acquisition: Value::Null,
                 snapshot: None,
                 executable: None,
             });
+            let package = self
+                .package
+                .as_mut()
+                .expect("private owner established before acquisition");
+            let acquisition =
+                super::acquire_for_owned(&project, &package.path, package.directory.scope())?;
+            package.namespace = Some(super::directory::Directory::existing(
+                &package.path,
+                package.directory.scope(),
+            )?);
+            package
+                .directory
+                .bind_package(&package.path, &acquisition.snapshot)?;
+            package.acquisition = acquisition.receipt;
+            package.snapshot = Some(acquisition.snapshot);
         }
         let package = self.package.as_mut().expect("private package established");
+        package.directory.ready()?;
+        package
+            .namespace
+            .as_ref()
+            .expect("acquired namespace")
+            .ready()?;
         if package.project != project
             || package.inventory != inventory
             || package.lock_authority != lock_authority
@@ -171,21 +260,28 @@ impl VerifyExporterOwner {
             ));
         }
         if let Some(snapshot) = &package.snapshot {
-            if &custody::capture(&package.path)? != snapshot {
+            if self.phases.is_empty() {
+                super::before_first_build(&project, &package.path, &package.acquisition, snapshot)?;
+            } else if &custody::capture(&package.path)? != snapshot {
                 return Err(failure("private exporter custody changed between phases"));
             }
         }
         // Each generator still builds its fresh generated-module workspace,
         // executes real `lake build prod-export`, and performs its actual export.
-        let product = generation(&package.path, &package.acquisition)?;
+        let context = GenerationContext {
+            receipt: &package.acquisition,
+            snapshot: package
+                .snapshot
+                .as_ref()
+                .expect("original acquisition custody"),
+            first: self.phases.is_empty(),
+            built: Default::default(),
+        };
+        let product = generation(&package.path, &context)?;
         let snapshot = custody::capture(&package.path)?;
-        if package
-            .snapshot
-            .as_ref()
-            .is_some_and(|prior| !prior.same_compiler(&snapshot))
-        {
+        if context.built.into_inner().as_ref() != Some(&snapshot) {
             return Err(failure(
-                "private exporter source or executable identity changed during replay",
+                "private exporter post-build custody absent or changed after generation",
             ));
         }
         let executable =
@@ -225,6 +321,12 @@ impl VerifyExporterOwner {
                 }
             }
         }
+        package
+            .namespace
+            .as_ref()
+            .expect("acquired namespace")
+            .ready()?;
+        package.directory.bind_package(&package.path, &snapshot)?;
         package.snapshot = Some(snapshot);
         package.executable = Some(executable);
         self.phases.push(record);
@@ -254,6 +356,14 @@ impl VerifyExporterOwner {
             .expect("two phases retain one private package");
         package.retire()?;
         Ok(record)
+    }
+}
+
+impl Drop for VerifyExporterOwner {
+    fn drop(&mut self) {
+        // No acceptance is possible in Drop; cleanup still uses the retained
+        // original node inventory, including on a generation unwind.
+        let _ = self.abort();
     }
 }
 
@@ -413,7 +523,7 @@ mod tests {
             &[]
         }
     }
-    fn provisional(path: &Path, _: &Value) -> Result<Unaccepted, PrismError> {
+    fn provisional(path: &Path, context: &GenerationContext<'_>) -> Result<Unaccepted, PrismError> {
         std::fs::create_dir_all(path.join(".lake/build/bin")).unwrap();
         let executable = path.join(".lake/build/bin/prod-export");
         std::fs::write(&executable, b"unaccepted custody fixture").unwrap();
@@ -424,6 +534,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(path.join(".lake/build/compiler.trace"), b"initial trace").unwrap();
+        context.after_build(path)?;
         Ok(Unaccepted(vec![(
             "library/unaccepted".to_owned(),
             b"fixture".to_vec(),
@@ -442,7 +553,81 @@ mod tests {
             .unwrap();
         owner
     }
-    fn unused(_: &Path, _: &Value) -> Result<Unaccepted, PrismError> {
+
+    #[test]
+    fn first_cold_phase_retains_actual_post_build_custody_until_completion() {
+        let project = tempfile::tempdir().unwrap();
+        let mut owner = VerifyExporterOwner::default();
+        let mut original_root = PathBuf::new();
+        let error = owner
+            .generate(
+                project.path(),
+                Phase::ControllerBuild,
+                b"model",
+                b"manifest",
+                |package, context| {
+                    let product = provisional(package, context)?;
+                    original_root = package.parent().unwrap().to_owned();
+                    std::fs::rename(package.join(".lake"), original_root.join("original-lake"))
+                        .unwrap();
+                    std::fs::create_dir_all(package.join(".lake/build/bin")).unwrap();
+                    std::fs::copy(
+                        original_root.join("original-lake/build/bin/prod-export"),
+                        package.join(".lake/build/bin/prod-export"),
+                    )
+                    .unwrap();
+                    std::fs::write(package.join(".lake/foreign-marker"), b"must survive").unwrap();
+                    Ok(product)
+                },
+            )
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "PP5008");
+        assert!(owner.package.is_none());
+        assert!(owner.finish().is_err());
+        assert_eq!(
+            std::fs::read(original_root.join("lean4-prod/.lake/foreign-marker")).unwrap(),
+            b"must survive"
+        );
+        assert!(original_root
+            .join("original-lake/build/bin/prod-export")
+            .exists());
+        std::fs::remove_dir_all(original_root).unwrap();
+    }
+
+    #[test]
+    fn first_cold_generation_checks_source_again_at_the_actual_build_boundary() {
+        let project = tempfile::tempdir().unwrap();
+        let mut owner = VerifyExporterOwner::default();
+        let mut reached_build_boundary = false;
+        let error = owner
+            .generate::<Unaccepted>(
+                project.path(),
+                Phase::ControllerBuild,
+                b"model",
+                b"manifest",
+                |package, context| {
+                    // Generated-module work separates acquisition from the real
+                    // exporter build. Mutate an actual original source in place
+                    // during that interval; checking only before generation fails.
+                    std::fs::write(
+                        package.join("Prod/Export.lean"),
+                        b"unauthenticated source at build boundary",
+                    )
+                    .unwrap();
+                    reached_build_boundary = true;
+                    context.before_build(project.path(), package)?;
+                    panic!("changed source reached forbidden build");
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(reached_build_boundary);
+        assert_eq!(error.code, "PP5008");
+        assert!(owner.package.is_none());
+        assert!(owner.finish().is_err());
+    }
+    fn unused(_: &Path, _: &GenerationContext<'_>) -> Result<Unaccepted, PrismError> {
         panic!("forbidden generation invoked")
     }
 
@@ -514,17 +699,23 @@ mod tests {
             let selected = package.path.join(member);
             let bytes = std::fs::read(&selected).unwrap();
             let replacement = selected.with_extension("substitution");
-            std::fs::write(&replacement, bytes).unwrap();
+            std::fs::write(&replacement, &bytes).unwrap();
             std::fs::set_permissions(
                 &replacement,
                 std::fs::metadata(&selected).unwrap().permissions(),
             )
             .unwrap();
-            std::fs::rename(replacement, selected).unwrap();
+            std::fs::rename(replacement, &selected).unwrap();
             assert!(owner
                 .generate(project.path(), Phase::Replay, b"model", b"manifest", unused)
                 .is_err());
-            assert!(!path.exists());
+            assert_eq!(
+                std::fs::read(&selected).unwrap(),
+                bytes,
+                "same-byte foreign replacement must survive refused cleanup"
+            );
+            assert!(path.exists());
+            std::fs::remove_dir_all(&path).unwrap();
             assert!(owner.finish().is_err());
         }
     }
@@ -584,7 +775,15 @@ mod tests {
                 },
             );
             assert!(result.is_err(), "accepted defect {defect}");
-            assert!(!path.exists());
+            if defect == "executable-mode" {
+                assert!(
+                    path.exists(),
+                    "mode uncertainty must retain the original scratch tree"
+                );
+                std::fs::remove_dir_all(&path).unwrap();
+            } else {
+                assert!(!path.exists());
+            }
             assert!(owner.finish().is_err());
         }
     }
@@ -601,13 +800,14 @@ mod tests {
                 Phase::Replay,
                 b"model",
                 b"manifest",
-                |package, _| {
+                |package, context| {
                     assert_eq!(package, original);
                     std::fs::write(
                         package.join(".lake/build/compiler.trace"),
                         b"legitimate refreshed trace",
                     )
                     .unwrap();
+                    context.after_build(package)?;
                     Ok(Unaccepted(vec![(
                         "library/unaccepted".to_owned(),
                         b"fixture".to_vec(),
@@ -711,7 +911,8 @@ mod tests {
                 Phase::Replay,
                 b"model",
                 b"manifest",
-                |_, _| {
+                |package, context| {
+                    context.after_build(package)?;
                     Ok(Unaccepted(vec![(
                         "library/unaccepted".to_owned(),
                         b"fixture".to_vec(),
@@ -723,6 +924,51 @@ mod tests {
             .generate(project.path(), Phase::Replay, b"model", b"manifest", unused)
             .is_err());
         assert!(!path.exists());
+        assert!(owner.finish().is_err());
+    }
+
+    #[test]
+    fn abort_preserves_replacement_directory_and_its_foreign_marker() {
+        let project = tempfile::tempdir().unwrap();
+        let mut owner = VerifyExporterOwner::default();
+        let mut replaced = PathBuf::new();
+        let mut displaced = PathBuf::new();
+        let error = owner
+            .generate::<Unaccepted>(
+                project.path(),
+                Phase::ControllerBuild,
+                b"model",
+                b"manifest",
+                |package, _| {
+                    replaced = package.parent().unwrap().to_owned();
+                    displaced = replaced.with_extension("owned-test-displaced");
+                    std::fs::rename(&replaced, &displaced).unwrap();
+                    std::fs::create_dir(&replaced).unwrap();
+                    std::fs::write(replaced.join("foreign-marker"), b"must survive cleanup")
+                        .unwrap();
+                    Err(PrismError::new(
+                        "PP5004",
+                        "generation failed after substitution",
+                    ))
+                },
+            )
+            .err()
+            .unwrap();
+        let preserved = std::fs::read(replaced.join("foreign-marker")).ok();
+        // These two paths contain only this test's original package and marker.
+        // Retire them after recording the outcome, not via the owner under test.
+        if replaced.exists() {
+            std::fs::remove_dir_all(&replaced).unwrap();
+        }
+        std::fs::remove_dir_all(displaced).unwrap();
+        assert_eq!(
+            error.code, "PP5008",
+            "cleanup uncertainty must supersede generation failure"
+        );
+        assert_eq!(
+            preserved.as_deref(),
+            Some(b"must survive cleanup".as_slice())
+        );
         assert!(owner.finish().is_err());
     }
 
@@ -786,7 +1032,56 @@ mod tests {
                     "private exporter custody changed before retirement"
                 }
             );
-            assert!(!path.exists());
+            assert!(
+                path.exists(),
+                "retirement failure must retain unaccepted custody"
+            );
+            assert_eq!(
+                std::fs::read(path.join("lean4-prod").join(member)).unwrap(),
+                b"retirement custody drift"
+            );
+            std::fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn nested_substitutions_survive_abort_retirement_and_drop() {
+        let project = tempfile::tempdir().unwrap();
+        for target in ["lean4-prod", "lean4-prod/.lake/build"] {
+            for operation in ["abort", "retire", "drop"] {
+                let mut owner = first(project.path());
+                let root = owner.package.as_ref().unwrap().directory.path().to_owned();
+                let replaced = root.join(target);
+                let displaced = replaced.with_extension("test-original");
+                std::fs::rename(&replaced, &displaced).unwrap();
+                std::fs::create_dir(&replaced).unwrap();
+                std::fs::set_permissions(&replaced, std::fs::Permissions::from_mode(0o700))
+                    .unwrap();
+                let marker = replaced.join("foreign-marker");
+                std::fs::write(&marker, b"must never be adopted for cleanup").unwrap();
+                match operation {
+                    "abort" => {
+                        assert!(owner.abort().is_err());
+                    }
+                    "retire" => {
+                        assert!(owner.package.take().unwrap().retire().is_err());
+                    }
+                    "drop" => {
+                        drop(owner);
+                    }
+                    _ => unreachable!(),
+                }
+                assert_eq!(
+                    std::fs::read(&marker).unwrap(),
+                    b"must never be adopted for cleanup",
+                    "{operation} deleted foreign content at {target}"
+                );
+                assert!(
+                    displaced.exists(),
+                    "uncertain original must also be retained"
+                );
+                std::fs::remove_dir_all(root).unwrap();
+            }
         }
     }
 }
