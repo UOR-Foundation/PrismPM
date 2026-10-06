@@ -3160,3 +3160,19 @@ Logs under `target/hologram-oracle-response-worktree/target/`:
 This is source-component evidence, not live matrix or SDK acceptance. Both
 unchanged full VV passes and the complete live matrix remain required; this
 newly observed failure does not establish the historical #67 failure's cause.
+
+## Conditional native tool construction (6 October)
+
+The tool workflow compares complete source-owned stage/preamble and harness
+inputs at exact base/head revisions. Unchanged inputs explicitly establish no
+new native qualification. Relevant changes and manual dispatch still run both
+native constructions, all four cache-hit checks, equal-image checks and six
+binary executions/hash comparisons. Source-boundary tests always run.
+
+Independent review cleared Git, index, file-mode, alias and environment custody
+corrections. All 22 pinned-devcontainer controls pass (15.857 s; zero omissions),
+including actual wrong-classifier and workflow-wiring mutants. Retained log:
+`target/hologram-oracle-response-worktree/target/rust-tool-preflight-owning-v6/gate.log`,
+SHA-256 `3433d63a01afbe03efa3de6ac3636b7f73c4d5b08bf9b5a23e94555faacb47ec`.
+Actual conditional hosted execution remains required; these tests are not
+fresh dual-native tool, SDK or full-VV acceptance.
