@@ -48,8 +48,8 @@ test('new installed Node suites retain exact complete owning files and deadlines
  const effects = suites.find(row => row.id === 'DK-20'), view = suites.find(row => row.id === 'DK-23');
  assert.deepEqual(effects?.files, ['sdk/browser/effects-wire.test.mjs', 'sdk/browser/effects-module.test.mjs', 'sdk/browser/effects-test.mjs']);
  assert.equal(effects?.minimum, 18);
- assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'sdk/browser/presentation.test.mjs']);
- assert.equal(view?.minimum, 24);
+ assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'tests/browser-presentation/replay.test.mjs', 'tests/browser-presentation/provenance.test.mjs', 'sdk/browser/presentation.test.mjs']);
+ assert.equal(view?.minimum, 37);
  const owning = /"DK-23"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(sdkSource('crates/conformance/src/cases/mod.rs'));
  assert.ok(owning, 'actual registered Rust owning suite exists');
  assert.equal(Number(owning[2]), view.minimum, 'installed and source-owning minimum agree');
@@ -143,20 +143,20 @@ test('SDK identity is immutable, exact-source and native-platform bound',()=>{
 const testSource=(count,skip=false)=>"import {test} from 'node:test';\n"+Array.from({length:count},(_,index)=>`test('case ${index}',${skip&&index===0?'{skip:true},':''}()=>{});\n`).join('');
 function testFixtures(root){for(const suite of suites)for(const file of suite.files)put(root,file,testSource(suite.minimum));}
 
-test('installed DK23 gate requires all 24 wire, DOM and full-owner tests', t => {
+test('installed DK23 gate requires every wire, DOM, replay, provenance and full-owner check', t => {
  const root = temporary(t); testFixtures(root);
  const view = suites.find(row => row.id === 'DK-23');
- assert.equal(view.files.length, 3);
- // Parser-boundary fixtures execute actual Node tests, not application
- // acceptance. Neither a missing wire case nor an owner case may pass.
- for (const [index, count] of [4, 3, 16].entries()) put(root, view.files[index], testSource(count));
- assert.throws(() => runSuites(root, spawnSync, () => {}), /incomplete test suite/);
- put(root, view.files[0], testSource(5));
- put(root, view.files[2], testSource(15));
- assert.throws(() => runSuites(root, spawnSync, () => {}), /incomplete test suite/);
- put(root, view.files[2], testSource(16));
+ assert.equal(view.files.length, 5);
+ // Real Node harness executions do not stand in for application acceptance.
+ const counts = [5, 5, 2, 7, 18];
+ for (const [index, count] of counts.entries()) put(root, view.files[index], testSource(count));
+ for (const [index, count] of counts.entries()) {
+  put(root, view.files[index], testSource(count - 1));
+  assert.throws(() => runSuites(root, spawnSync, () => {}), /incomplete test suite/, view.files[index]);
+  put(root, view.files[index], testSource(count));
+ }
  const accepted = runSuites(root, spawnSync, () => {}).find(row => row.id === 'DK-23');
- assert.deepEqual(accepted, {id: 'DK-23', tests: 24});
+ assert.deepEqual(accepted, {id: 'DK-23', tests: 37});
 });
 
 test('every selected file must exist even when its sibling supplies the total minimum',t=>{

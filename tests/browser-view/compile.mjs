@@ -167,8 +167,14 @@ export function ensureProdExport(repo = repository, work = null) {
   mkdirSync(dir, {mode:0o700});
   const archive = join(dir, '.source-lean.tar');
   writeFileSync(archive, captured.get('vendor/lean4-prod/lean.tar'), {flag:'wx', mode:0o600});
-  run('tar', ['-xf', archive, '-C', dir], dir);
-  run('lake', ['build', 'prod-export'], dir);
+  // Archive modes describe upstream packaging, not this private executable
+  // owner. Construct under an owner-only mask instead of chmod'ing an adopted
+  // runtime after capture; restore the caller's mask even when construction fails.
+  const previousMask = process.umask(0o077);
+  try {
+    run('tar', ['--no-same-owner', '--no-same-permissions', '-xf', archive, '-C', dir], dir);
+    run('lake', ['build', 'prod-export'], dir);
+  } finally { process.umask(previousMask); }
   const bin = join(dir, '.lake/build/bin/prod-export');
   sourceFile(dir, '.lake/build/bin/prod-export');
   for (const [name, bytes] of captured) assert.deepEqual(sourceFile(repo, name), bytes,

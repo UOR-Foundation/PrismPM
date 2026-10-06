@@ -54,6 +54,7 @@ Feature: sdk
     Given source-owned semantic presentation fixtures and the exact bounded wire grammar
     When fresh kernel, native, no_std, Core-Wasm and real browser journeys execute every declared maximum
     Then actual generated frames and browser transcripts agree without HTML injection or control authority
+    And Chromium, Firefox and WebKit preserve one connected atomic status region without duplicate announcements or implicit focus changes
     And actual model and adapter mutations fail their owning assertions
 
   @DK-21 @build

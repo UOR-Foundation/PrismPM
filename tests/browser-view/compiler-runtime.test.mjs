@@ -129,6 +129,13 @@ test('runtime rejects non-directory roots, special permissions and aliases', t =
   assert.throws(()=>captureCompilerRuntime(file),/root must be a directory/);
   fs.chmodSync(file,0o4600);
   assert.throws(()=>captureCompilerRuntime(root),/special permissions/);
+  for (const mode of [0o620, 0o602, 0o666]) {
+    fs.chmodSync(file,mode);
+    assert.throws(()=>captureCompilerRuntime(root),/group\/other writable: \.\/file/);
+  }
+  fs.chmodSync(file,0o600);fs.chmodSync(root,0o770);
+  assert.throws(()=>captureCompilerRuntime(root),/group\/other writable: \.\n/);
+  fs.chmodSync(root,0o700);
   fs.chmodSync(file,0o600);fs.linkSync(file,join(root,'alias'));
   assert.throws(()=>captureCompilerRuntime(root),/single-link/);
   fs.unlinkSync(join(root,'alias'));fs.symlinkSync(file,join(root,'alias'));
