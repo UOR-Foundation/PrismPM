@@ -326,7 +326,7 @@ fn accepted(fixture: &Fixture, verified: &prismpm::controller::VerifyResult) {
     assert_eq!(manifest["acceptance_sha256"], content_id(&acceptance_bytes));
     assert_eq!(
         manifest["schema"],
-        "prismpm/library-verification-manifest/1"
+        "prismpm/library-verification-manifest/2"
     );
     assert_eq!(acceptance["schema"], "prismpm/library-acceptance/1");
     assert_eq!(acceptance["profile"], "prismpm/native-library/1");

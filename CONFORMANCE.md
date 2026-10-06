@@ -115,6 +115,7 @@ The three honesty levels:
 | `HO-11` | `build` | The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations. |
 | `HO-12` | `build` | Application verification executes the exact portable View in Chromium through the authoritative Hologram intent and Core-Wasm session, rejecting incomplete browser evidence. |
 | `HO-13` | `build` | The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority. |
+| `HO-14` | `build` | Pinned BLAKE3 vectors qualify every imported digest mode, streaming partition and content-identity result without claiming cryptographic proof or durable native storage. |
 
 ## lifecycle
 
@@ -293,6 +294,7 @@ The three honesty levels:
 
 | Authority | Edition | Immutable source | Acquired SHA-256 | Evidence here |
 | --- | --- | --- | --- | --- |
+| `BLAKE3-VECTORS-1-5-5` | `1.5.5` | https://raw.githubusercontent.com/BLAKE3-team/BLAKE3/81f772a4cd70dc0325047a6a737d2f6f4b92180e/test_vectors/test_vectors.json | `dcb91ea8accc77e6d6e632af7cdc1a99a9f3ae78cf648da595c7d064db32f624` | `HO-14` |
 | `LEAN-REL-4-32-1` | `4.32.1` | https://codeload.github.com/leanprover/lean4/tar.gz/f054605aea4b840552cca2e725580bffd1e1b704 | `6dec8667fbf57ba480a18a8b0c353b2ee157346b2630b211ccbefeedf20545f8` | `VR-01`, `VR-02` |
 | `LAKE-4-32-1` | `4.32.1` | https://codeload.github.com/leanprover/lean4/tar.gz/f054605aea4b840552cca2e725580bffd1e1b704 | `6dec8667fbf57ba480a18a8b0c353b2ee157346b2630b211ccbefeedf20545f8` | `VR-03` |
 | `LEANCHECKER-4-32-1` | `4.32.1` | https://codeload.github.com/leanprover/lean4/tar.gz/f054605aea4b840552cca2e725580bffd1e1b704 | `6dec8667fbf57ba480a18a8b0c353b2ee157346b2630b211ccbefeedf20545f8` | `VR-04` |

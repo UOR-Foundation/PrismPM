@@ -1,5 +1,171 @@
 # PrismPM falsifiability and verification record
 
+## Historical migration input custody
+
+The new source-proof test first failed on the missing verifier. Restored source
+passes all 24 owning SDK-driver tests without skips, retaining the original
+individual and aggregate deadlines. Corrupted commit/tree/blob bindings,
+missing witnesses and legacy-record downgrade fail closed. Seven independent
+Git object commands reproduce the captured upstream commit, root tree and lock
+blob; reviewed SHA-256 bindings supplement Git's object identities.
+
+Retained evidence under `target/hologram-oracle-response-worktree/target/`:
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `migration-authority-red-v1/gate.log` | `f028150e812fc8e1c75d0f0c58d30c8749dfe6feabff797ec63a45971b44371d` |
+| `migration-authority-owning-v2/gate.log` | `be9de669bbdb818da0d80329681416f7b68781c62357b8dfe4fa8fa507126517` |
+| `migration-authority-git-oracle-v1.json` | `d8e2480fbaf3548b22b55490a9cd62ea9d2d4721e66780aa191d0066c1f4d51c` |
+
+This is immutable historical-input provenance, not signed publisher
+authentication. Historical private `/1` records remain readable; the active
+installed gate requires `/2` custody. These component checks do not establish
+current immutable SDK qualification, full V&V or hologram-live adoption for
+issues #63 and #66.
+
+## Independent Rust exporter source bounds
+
+Source custody charges declared bytes before body access: 4,096 entries and
+16 MiB, independently of the full 512-MiB build allowance. Nine custody tests
+pass, including directory/truncation/overflow refusals and actual full-size
+build capture beside the pinned source. Five production-guard mutants fail
+their intended witnesses; restored source passes all nine tests without skips.
+Mutation log SHA-256:
+`acff3d71d437456d07a2b60b894d58f0b100850b483808070e22a165cf227f40`.
+All 311 source-audit tests and strict workspace Clippy pass in the pinned
+devcontainer. Independent adversarial review is clear. These are component
+checks, not full V&V, immutable SDK or consumer acceptance for issue #69.
+
+## Bounded private exporter runtime capture
+
+Runtime traversal streams one directory iterator and hashes at most 64 KiB
+at a time. Source/build allowances remain independent, with an additional
+captured archive. Eight actual-filesystem tests pass at complete entry/byte
+limits, deep trees, deferred/final custody drift, growth and alias boundaries.
+Five planted production-guard defects fail their intended behavioral witnesses.
+All 13 tests pass without skips; log SHA-256 is
+`2cfac65bad12d9dbe2baa7b9943d081d6f7998ea5f0b390f8a42167ca5e7d1cf`.
+Independent adversarial source review is clear. All 311 infrastructure/source
+audit tests pass without skips, and strict workspace/all-target/all-feature
+Clippy passes in the pinned devcontainer. Full six-family qualification remains
+a separate required check; this is not SDK acceptance.
+
+## Exact private compiler metadata custody
+
+Permission-only changes now invalidate the original/private executable and
+exporter runtime identities. Actual successful and failed child executions
+must detect mode drift; same-byte inode substitution preserves the original
+mode so it cannot borrow that rejection. A guard mutant must fail the isolated
+permission witness. Retained executables are checked through bounded descriptor
+reads after cache retirement. The regression first failed on the old code;
+all 298 source-audit tests pass (274.28 seconds, no skips). Independent source
+review is clear. Full six-family owner qualification is pending; the initial
+root-user run was unaccepted because tar preserved group-writable source modes.
+The configured non-root devcontainer user retains the original custody policy.
+These checks do not establish SDK acceptance or completion of issue #69.
+
+## Bounded SDK seed publication
+
+Production and admission now share exclusive, manifest-driven copying instead
+of recursive publication. Source growth, undeclared additions and injected
+failure after a real write remain bounded, publish no destination, and clean
+owned pre-publication staging. Declared modes survive restrictive umasks; an
+actual UID-1000 process reads the installed seed and manifest. All 22 tests and
+DK-29 pass (8.07 seconds); strict Clippy and all 296 source-audit tests pass
+(259.77 seconds, no skips). Independent adversarial review is clear.
+
+The real-construction recursive-copy control fails before the change and passes
+afterward. Two fresh constructions preserve manifest
+`55b6dac643975f541e1c4cf7e089c4d25737c47928b7d9e44d1faeb6e099f899`.
+Actual cold/relocated exports agree across two roots and both replays, with no
+relocated build-file changes or trace rewriting. Measured compiler builds take
+15.34/15.61 seconds cold and 0.47/0.45 seconds relocated. These component results
+are not end-to-end speedup, atomic isolation, post-rename rollback, SDK release,
+consumer acceptance or completion of issue #69.
+
+## Bounded SDK seed enumeration
+
+Tree snapshots stream entries with one live iterator, bound rows before retaining
+them, and check deferred and previously visited directory identities. Source
+construction uses a separate 4,096-entry/16-MiB allowance from the full seed
+4,096-entry/512-MiB allowance. A real-filesystem instrumentation regression fails
+on the prior eager enumeration and passes afterward. All 20 SDK seed tests pass,
+including full source/seed limits, 32,768 toolchain entries, deep trees, closed
+iterators and child-only custody mutations. DK-29 passes in 8.03 seconds; strict
+Clippy and all 294 source-audit tests pass (276.26 seconds, no skips).
+
+Two fresh constructions and two baseline constructions at `bdb9f1f0` produce
+the same 176-entry manifest
+`55b6dac643975f541e1c4cf7e089c4d25737c47928b7d9e44d1faeb6e099f899`.
+Failed empty-archive construction cleans up without publishing. Initial local
+`noexec` tmpfs failures are unaccepted; corrected runs retain an executable,
+1-GiB-bounded tmpfs. Independent adversarial review is clear. This does not
+qualify recursive publication copying, immutable SDK adoption or issue #69.
+
+## Complete exporter package custody
+
+Every exporter invocation now checks exact pinned source/configuration and the
+complete private build tree before and after execution, including failed children.
+Streaming enumeration preserves the full seed allowance separately from source
+members; aliases, hard links, special files and same-byte replacements fail.
+The real-child regression rejected a previously accepted toolchain mutation.
+All 11 exporter tests and strict all-target/all-feature Clippy pass. Complete
+DK-30 passes in 488.53 seconds with attestation
+`48dc299e9f77bc75adbdcc19e0214fdc3ade84e791cc92a1542642564293d527`;
+all 290 source-audit tests pass in 262.92 seconds without skips. Independent
+adversarial review is clear after enumeration and seed-accounting corrections.
+Superseded runs are not final-code evidence. This is before/after custody
+detection, not atomic isolation, cache provenance, compiler reuse, SDK acceptance
+or completion of issue #69.
+
+## Failed portable-response client state
+
+Failure-only browser diagnostics now record bounded, closed client-state
+booleans and page close/crash events without returning application content.
+Observation preparation, page loss and its 250 ms deadline preserve the original
+failure. No retries, response fallback or acceptance relaxation are introduced.
+All 16 driver tests pass; all three interoperability owners pass in 1440.97
+seconds, including 78 matrix cases and four required negative controls. The
+source audit passes all 290 tests in 260.46 seconds without skips. Independent
+adversarial review is clear. Hosted run 37237466412 remains failed: its aborted
+response body is not explained or repaired by this diagnostic change. Full
+V&V, SDK and issue #67 acceptance remain outstanding.
+
+## Imported BLAKE3 corpus qualification
+
+HO-14 executes all 35 upstream 1.5.5 vectors in three digest modes and nine
+streaming partitions, checking 131 XOF bytes, default 32-byte results and the
+actual archive content-identity adapter. Five planted defects must fail. The
+seven-member imported closure is
+`f8ffc0176af3fed9ce66b92f60c424d96f413fa044d7b341fc63b896428037c9`;
+the standards lock separately binds the upstream vector JSON authority.
+Unmodified upstream licenses retain their original whitespace.
+
+An isolated fresh Cargo target passes all three library owners, HO-14 and all
+33 xtask tests (48.29 seconds). The package owner creates an actual Cargo source
+archive, extracts its corpus and reruns the verifier plus a removed-license
+control. Its `--no-verify --exclude-lockfile` scope is source packaging only;
+dependency resolution, package builds and release acceptance are not claimed.
+Strict all-target/all-feature Clippy and all 289 source-audit tests pass
+(255.58 seconds for the audit). Independent adversarial review is clear.
+Earlier shared-target stale-library and unpublished-dependency failures remain
+unaccepted. This finite qualification does not complete native effects, SDK
+qualification, cryptographic proof, or issue #62.
+
+## Exporter custody after process failure
+
+Executable byte/mode and inode/ctime checks now run after unsuccessful children
+as well as successful ones. Unchanged failures retain their original diagnostic;
+custody drift reports PP5008 and cannot produce a success receipt. The real-child
+regression fails before the fix and passes afterward for content changes,
+same-byte replacement, removal and permission changes at exits zero and seven.
+All eight exporter tests and strict all-target/all-feature Clippy pass.
+The source audit passes all 289 tests in 279.98 seconds; complete DK-30 passes
+in 484.98 seconds with attestation
+`68392f4a689af473af3481aafb39ef87fe5d012635e5d9847be980836f5382af`.
+Independent adversarial review is clear. This closes a process custody gap,
+not full V&V, SDK release or native-effect acceptance.
+
 ## Native lease compiled Wasm agreement
 
 DK-30 now compiles the manifest-bound kernel IR into an import-free Core Wasm

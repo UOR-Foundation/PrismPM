@@ -37,6 +37,24 @@ export function verifyCompilerOwnerSubstitutions(owner) {
     } finally {writeFileSync(path, bytes); chmodSync(path, mode);}
     owner.verify();
   }
+  const exporter = join(work, 'exporter');
+  for (const [kind, path] of [
+    ['exporter-root-mode', exporter], ['exporter-build-mode', join(exporter, '.lake')],
+    ['exporter-library-mode', join(exporter, library)],
+    ...['driver', 'exporter'].flatMap(kind => ['original', 'private'].map(side =>
+      [kind + '-' + side + '-mode', join(work, owner.evidence[kind][side].path)])),
+  ]) {
+    const mode = lstatSync(path).mode & 0o777;
+    try {
+      chmodSync(path, mode ^ 0o040);
+      const message = /immutable (original|private) compiler|immutable complete exporter runtime closure/;
+      assert.throws(() => owner.verify(), message);
+      assert.throws(() => owner.runDriver(['--help'], work), message);
+      assert.throws(() => owner.runExporter(['--help'], work), message);
+      observed.push(kind);
+    } finally {chmodSync(path, mode);}
+    owner.verify();
+  }
   // An apparently matching disk receipt cannot override the live captured map.
   const forged = join(work, 'forged-compiler-evidence.json');
   writeFileSync(forged, JSON.stringify({...owner.evidence, inputs: changedInputs}), {flag: 'wx'});

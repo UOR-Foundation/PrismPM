@@ -173,7 +173,7 @@ const result = spawnSync(resolve(oracle), [archive, modelPath, wasm, driver, pro
 writeFileSync(join(evidence, 'stdout.txt'), result.stdout ?? '', {flag: 'wx'});
 writeFileSync(join(evidence, 'stderr.txt'), result.stderr ?? '', {flag: 'wx'});
 const diagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
-  try { const value = JSON.parse(line); return value.schema === 'prismpm/browser-submission-diagnostic/1' ? [value] : []; }
+  try { const value = JSON.parse(line); return ['prismpm/browser-submission-diagnostic/1', 'prismpm/browser-submission-diagnostic/2'].includes(value.schema) ? [value] : []; }
   catch { return []; }
 });
 const cleanupDiagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
@@ -223,6 +223,18 @@ try {
       assert(['ERR_ABORTED', 'ERR_FAILED', 'ERR_CONNECTION_RESET', 'ERR_CONNECTION_CLOSED',
         'ERR_CONTENT_LENGTH_MISMATCH', 'ERR_INCOMPLETE_CHUNKED_ENCODING', 'ERR_INSUFFICIENT_RESOURCES',
         'ERR_TIMED_OUT', 'ERR_BLOCKED_BY_CLIENT', 'ERR_BLOCKED_BY_RESPONSE', 'unavailable', 'other'].includes(event.reason));
+    }
+    assert(['observed', 'closed', 'unavailable'].includes(diagnostic.client?.state));
+    if (diagnostic.client.state === 'observed') {
+      assert.deepEqual(Object.keys(diagnostic.client).sort(),
+        ['busy', 'disabled', 'expectedResult', 'outputPresent', 'responseError', 'state']);
+      for (const [key, value] of Object.entries(diagnostic.client)) {
+        if (key !== 'state') assert.equal(typeof value, 'boolean');
+      }
+    } else assert.deepEqual(Object.keys(diagnostic.client), ['state']);
+    if (name === 'body-unavailable' || name === 'body-plus-cleanup') {
+      assert.equal(diagnostic.client.state, 'closed');
+      assert(diagnostic.events.some(event => event.event === 'page-close'));
     }
     requireBoundaryCheck(name, diagnostic);
     assert.equal(diagnostic.keyboard, trigger === 'keyboard');

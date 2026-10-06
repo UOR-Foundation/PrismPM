@@ -188,10 +188,12 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
         &[
             "--test",
             "scripts/oracle-source-closure.test.mjs",
+            "scripts/hologram-source-pins.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
+            "scripts/installed-exporter-concurrency.test.mjs",
             "sdk/migration-qualification.test.mjs",
             "scripts/sdk-vv-inputs.test.mjs",
             "scripts/sdk-vv-run.test.mjs",
@@ -203,6 +205,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "tests/browser-view/compiler-artifact.test.mjs",
             "tests/browser-view/compiler-artifact-mutations.test.mjs",
             "tests/browser-view/compiler-owner.test.mjs",
+            "tests/browser-view/compiler-runtime.test.mjs",
+            "tests/browser-view/compiler-runtime-mutations.test.mjs",
             "scripts/portable-oracle-matrix.test.mjs",
             "tests/native-lease/corpus.test.mjs",
             "tests/native-lease/rust-corpus.test.mjs",
@@ -1017,6 +1021,23 @@ fn check_verified_evidence(root: &Path) -> Result<(), Fail> {
     Ok(())
 }
 
+fn verify_packaged_blake3_corpus(packaged: &Path) -> Result<(), Fail> {
+    let evidence = prismpm::upstream_conformance::verify_blake3_corpus(
+        &packaged.join("standards/corpora/blake3-1.5.5"),
+    )?;
+    if evidence.corpus_sha256
+        != "sha256:f8ffc0176af3fed9ce66b92f60c424d96f413fa044d7b341fc63b896428037c9"
+        || (
+            evidence.positive,
+            evidence.negative,
+            evidence.planted_rejections,
+        ) != (35, 0, 5)
+    {
+        return Err("packaged BLAKE3 corpus qualification differs".into());
+    }
+    Ok(())
+}
+
 fn package_api_check(root: &Path) -> Result<(), Fail> {
     stdlib::check_acceptance(root)?;
     let selection = Command::new("cargo")
@@ -1119,6 +1140,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
             return Err(format!("packaged crate omits {required}").into());
         }
     }
+    verify_packaged_blake3_corpus(&packaged)?;
     for entry in walkdir::WalkDir::new(&packaged) {
         let entry = entry?;
         let relative = entry.path().strip_prefix(&packaged)?.to_string_lossy();
@@ -1655,6 +1677,62 @@ mod command_tests {
 
 #[cfg(test)]
 mod package_tests {
+    #[test]
+    fn cargo_source_archive_contains_complete_executable_blake3_corpus() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
+        let stage = tempfile::tempdir().unwrap();
+        // Source-archive qualification only. Dependency resolution and package
+        // builds remain owned by package-api and full release verification.
+        let selected = std::process::Command::new("cargo")
+            .args([
+                "package",
+                "--package",
+                "prismpm",
+                "--allow-dirty",
+                "--offline",
+                "--no-verify",
+                "--exclude-lockfile",
+                "--target-dir",
+            ])
+            .arg(stage.path())
+            .current_dir(root)
+            .env("CARGO_NET_OFFLINE", "true")
+            .output()
+            .unwrap();
+        assert!(
+            selected.status.success(),
+            "{}",
+            String::from_utf8_lossy(&selected.stderr)
+        );
+        let extracted = tempfile::tempdir().unwrap();
+        let package = format!("prismpm-{}", env!("CARGO_PKG_VERSION"));
+        let unpacked = std::process::Command::new("tar")
+            .args(["--extract", "--gzip", "--file"])
+            .arg(
+                stage
+                    .path()
+                    .join("package")
+                    .join(format!("{package}.crate")),
+            )
+            .arg("--directory")
+            .arg(extracted.path())
+            .arg("--")
+            .arg(format!("{package}/standards/corpora/blake3-1.5.5"))
+            .output()
+            .unwrap();
+        assert!(
+            unpacked.status.success(),
+            "{}",
+            String::from_utf8_lossy(&unpacked.stderr)
+        );
+        let packaged = extracted.path().join(package);
+        super::verify_packaged_blake3_corpus(&packaged).unwrap();
+        std::fs::remove_file(packaged.join("standards/corpora/blake3-1.5.5/LICENSE_CC0")).unwrap();
+        assert!(super::verify_packaged_blake3_corpus(&packaged).is_err());
+    }
+
     #[test]
     fn package_manifest_follows_workspace_dependencies_and_rejects_unpublishable_paths() {
         let source = r#"

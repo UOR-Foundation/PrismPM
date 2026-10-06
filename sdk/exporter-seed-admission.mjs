@@ -2,17 +2,18 @@
 // from the independently validated consumer lock, never from this filesystem.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {closeSync, constants, fchmodSync, fstatSync, futimesSync, lstatSync, mkdirSync,
-  openSync, readlinkSync, readSync, realpathSync, writeSync} from 'node:fs';
+import {lstatSync, readlinkSync, realpathSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {readSmall, snapshotFile, snapshotTree} from './exporter-seed.mjs';
+import {readSmall, snapshotFile, snapshotTree, stageSeedFiles} from './exporter-seed.mjs';
+export {stageSeedFiles} from './exporter-seed.mjs';
 import {decodeExporterSeed, encodeInventory} from './inventory-metadata.mjs';
 
 const installedInventory = '/opt/prismpm/share/inventory.json';
 const installedSeed = '/opt/prismpm/share/exporter-seed';
 const sha = value => createHash('sha256').update(value).digest('hex');
 const seedBounds = {files: 4097, file: 256 * 1024 ** 2, total: 520 * 1024 ** 2};
+const sourceBounds = {files: 4096, file: 16 * 1024 ** 2, total: 16 * 1024 ** 2};
 
 export function bindSeedInventory(bytes, expectedDigest, revision) {
   assert.match(expectedDigest, /^[0-9a-f]{64}$/);
@@ -80,69 +81,13 @@ function immutableTree(root, rows) {
 }
 
 export function verifySeedFiles(seed, source, manifest) {
-  assert.deepEqual(snapshotTree(source), manifest.source_files, 'fresh compiled-in exporter sources differ');
+  assert.deepEqual(snapshotTree(source, {bounds: sourceBounds}), manifest.source_files, 'fresh compiled-in exporter sources differ');
   const files = snapshotTree(seed, {bounds: seedBounds}).filter(row => row.path !== 'manifest.json');
   assert.deepEqual(files, manifest.files, 'actual SDK seed closure differs');
   return files;
 }
 
-// Copy only declared bytes with exclusive creation. A concurrent growth cannot
-// turn an already-validated sparse input into an unbounded persistent write.
-export function stageSeedFiles(seed, staging, manifest) {
-  decodeExporterSeed(Buffer.from(encodeInventory(manifest)));
-  assert.equal(realpathSync(staging), staging);
-  const directory = lstatSync(staging);
-  assert(directory.isDirectory() && directory.uid === process.getuid() && (directory.mode & 0o7777) === 0o700,
-    'staging must be private and owned by the current process user');
-  assert.deepEqual(snapshotTree(staging), [], 'exclusive empty staging required');
-  let total = 0;
-  for (const row of manifest.files) {
-    const destination = join(staging, row.path);
-    if (row.kind === 'directory') { mkdirSync(destination, {mode: row.mode}); continue; }
-    assert.equal(row.kind, 'file');
-    total += row.byte_length; assert(total <= 512 * 1024 ** 2, 'seed copy aggregate exceeded');
-    const source = join(seed, row.path);
-    const expected = {byte_length: row.byte_length, mode: row.mode, sha256: row.sha256};
-    const custody = lstatSync(source, {bigint: true});
-    const sameInput = after => {
-      for (const key of ['dev', 'ino', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs'])
-        assert.equal(after[key], custody[key], `seed input identity changed: ${key}`);
-    };
-    assert.deepEqual(snapshotFile(source, row.byte_length), expected, 'seed file changed before copying');
-    const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    try {
-      const before = fstatSync(input, {bigint: true});
-      sameInput(before);
-      assert(before.isFile() && before.nlink === 1n && before.size === BigInt(row.byte_length));
-      const output = openSync(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, row.mode);
-      try {
-        const buffer = Buffer.alloc(64 * 1024), hash = createHash('sha256');
-        let remaining = row.byte_length;
-        while (remaining) {
-          const count = readSync(input, buffer, 0, Math.min(remaining, buffer.length), null);
-          assert(count > 0, 'seed file shortened while copying'); hash.update(buffer.subarray(0, count));
-          for (let written = 0; written < count;) {
-            const size = writeSync(output, buffer, written, count - written, null);
-            assert(size > 0, 'seed copy made no progress'); written += size;
-          }
-          remaining -= count;
-        }
-        assert.equal(readSync(input, buffer, 0, 1, null), 0, 'seed file grew while copying');
-        assert.equal(hash.digest('hex'), row.sha256, 'copied seed hash differs');
-        sameInput(fstatSync(input, {bigint: true}));
-        sameInput(lstatSync(source, {bigint: true}));
-        assert.equal(realpathSync(source), source, 'seed input ancestor changed');
-        fchmodSync(output, row.mode);
-        futimesSync(output, Number(before.atimeNs) / 1e9, Number(before.mtimeNs) / 1e9);
-      } finally { closeSync(output); }
-    } finally { closeSync(input); }
-    assert.deepEqual(snapshotFile(source, row.byte_length), expected, 'seed file changed during copying');
-    assert.deepEqual(snapshotFile(destination, row.byte_length), expected, 'staged seed file changed');
-  }
-  assert.deepEqual(snapshotTree(staging, {bounds: seedBounds}), manifest.files, 'staged exporter bytes differ');
-}
-
-export function stageInstalledSeed(source, staging, inventoryDigest, identity) {
+export function stageInstalledSeed(source, staging, inventoryDigest, identity, {rootIdentity} = {}) {
   immutablePath(installedInventory);
   assert.equal(lstatSync(installedInventory).mode & 0o222, 0, 'SDK inventory must be read-only');
   const inventory = Buffer.from(readSmall(installedInventory, 8 * 1024 ** 2));
@@ -170,7 +115,7 @@ export function stageInstalledSeed(source, staging, inventoryDigest, identity) {
     assert.equal(readSmall(join(installedSeed, 'manifest.json'), 8 * 1024 ** 2), manifestBytes.toString('utf8'), 'seed manifest changed');
   };
   verify();
-  stageSeedFiles(installedSeed, staging, manifest);
+  stageSeedFiles(installedSeed, staging, manifest, {rootIdentity});
   verify();
   return {schema: 'prismpm/exporter-acquisition/1', mode: 'sdk-seed', inventory_sha256: inventoryDigest,
     manifest_sha256: authority.manifest_sha256, executable_sha256: authority.executable_sha256,
@@ -179,10 +124,22 @@ export function stageInstalledSeed(source, staging, inventoryDigest, identity) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  assert.equal(process.argv.length, 8, 'internal seed admission requires source, staging and independently bound SDK identity');
-  const [source, staging, inventory, revision, archive, toolchain] = process.argv.slice(2);
+  assert.equal(process.argv.length, 9, 'internal seed admission requires source, staging and independently bound SDK identity');
+  const [source, staging, inventory, revision, archive, toolchain, originalStage] = process.argv.slice(2);
+  assert(originalStage.length <= 1024, 'bounded original staging identity required');
+  const encodedStage = JSON.parse(originalStage);
+  assert.deepEqual(Object.keys(encodedStage).sort(), ['dev','gid','ino','mode','uid']);
+  const rootIdentity = Object.fromEntries(Object.entries(encodedStage).map(([name,value]) => {
+    assert(typeof value === 'string' && /^(?:0|[1-9][0-9]{0,19})$/.test(value));
+    const parsed = BigInt(value); assert(parsed <= 0xffffffffffffffffn); return [name,parsed];
+  }));
   const platform = `linux/${{x64: 'amd64', arm64: 'arm64'}[process.arch]}`;
   assert.equal(process.platform, 'linux');
-  process.stdout.write(encodeInventory(stageInstalledSeed(resolve(source), resolve(staging), inventory,
-    {compiler_revision: revision, archive_sha256: archive, toolchain, platform})));
+  const acquisition = stageInstalledSeed(resolve(source), resolve(staging), inventory,
+    {compiler_revision: revision, archive_sha256: archive, toolchain, platform}, {rootIdentity});
+  // Private handoff only. The unchanged acquisition receipt remains the public
+  // evidence; Rust independently binds the complete original manifest bytes.
+  const manifest_document = acquisition.mode === 'sdk-seed'
+    ? readSmall(join(installedSeed, 'manifest.json'), 8 * 1024 ** 2) : null;
+  process.stdout.write(encodeInventory({acquisition, manifest_document}));
 }
