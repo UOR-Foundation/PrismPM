@@ -1,0 +1,180 @@
+name: M0 LexLean reconciliation writer
+
+on:
+  push:
+    branches:
+      - m0/issue-5-lexlean-reconcile
+
+permissions:
+  contents: write
+
+concurrency:
+  group: m0-lexlean-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: ${{ !contains(github.event.head_commit.message, '[m0-generated]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      LEXLEAN_SOURCE_SHA: 0e7e84f8bcbb83d7e9534d42b6a1b08339975a99
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Check out PrismPM reconciliation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Check out the frozen LexLean source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: UOR-Foundation/LexLean
+          ref: 0e7e84f8bcbb83d7e9534d42b6a1b08339975a99
+          path: _m0/lexlean
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Package the exact LexLean crate twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          export RUSTUP_TOOLCHAIN=1.97.1
+          for pass in one two; do
+            target="$RUNNER_TEMP/lexlean-package-$pass"
+            cargo package --locked --manifest-path _m0/lexlean/Cargo.toml \
+              --package lexlean --target-dir "$target"
+          done
+          first="$RUNNER_TEMP/lexlean-package-one/package/lexlean-0.3.0.crate"
+          second="$RUNNER_TEMP/lexlean-package-two/package/lexlean-0.3.0.crate"
+          cmp "$first" "$second"
+          sha256sum "$first" "$second"
+
+      - name: Replace the vendored LexLean package and dependency binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/lexlean-package-one/package/lexlean-0.3.0.crate"
+          stage="$RUNNER_TEMP/lexlean-extract"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          tar -xzf "$archive" -C "$stage"
+          rm -rf vendor/lexlean
+          mkdir -p vendor/lexlean
+          cp -a "$stage/lexlean-0.3.0/." vendor/lexlean/
+          cp "$archive" vendor/lexlean/lexlean-0.3.0.crate
+          (
+            cd vendor/lexlean
+            find . -type f ! -name MANIFEST.sha256 -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              | sed 's#  \./#  #' > MANIFEST.sha256
+          )
+          manifest_sha="$(sha256sum vendor/lexlean/MANIFEST.sha256 | cut -d' ' -f1)"
+          crate_sha="$(sha256sum vendor/lexlean/lexlean-0.3.0.crate | cut -d' ' -f1)"
+          python3 - "$LEXLEAN_SOURCE_SHA" "$manifest_sha" "$crate_sha" <<'PY'
+          import pathlib, re, sys
+          source_sha, manifest_sha, crate_sha = sys.argv[1:]
+          path = pathlib.Path("model/dependencies.toml")
+          text = path.read_text()
+          text, n = re.subn(
+              r'(\[\[dependency\]\]\nid = "lexlean"\nversion = "0\.3\.0"\nrevision = ")[0-9a-f]{40}(")',
+              rf'\g<1>{source_sha}\2',
+              text,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("lexlean dependency revision row not found exactly once")
+          for artifact_path, digest in [
+              ("vendor/lexlean/MANIFEST.sha256", manifest_sha),
+              ("vendor/lexlean/lexlean-0.3.0.crate", crate_sha),
+          ]:
+              pattern = (
+                  r'(\[\[dependency\.artifact\]\]\nkind = "[^"]+"\npath = "'
+                  + re.escape(artifact_path)
+                  + r'"\nsha256 = ")[0-9a-f]{64}(")'
+              )
+              text, n = re.subn(pattern, rf'\g<1>{digest}\2', text, count=1)
+              if n != 1:
+                  raise SystemExit(f"artifact row not found exactly once: {artifact_path}")
+          path.write_text(text)
+          PY
+          rm -rf _m0
+          printf 'LexLean source: %s\nmanifest sha256: %s\ncrate sha256: %s\n' \
+            "$LEXLEAN_SOURCE_SHA" "$manifest_sha" "$crate_sha"
+
+      - name: Update the root dependency lock and every real LexLean consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUSTUP_TOOLCHAIN=1.97.1
+          cargo check --workspace --all-targets
+          target="$RUNNER_TEMP/vendor-lexlean-target"
+          CARGO_TARGET_DIR="$target" cargo build --manifest-path vendor/lexlean/Cargo.toml --bin lexlean
+          lexlean="$target/debug/lexlean"
+          while IFS= read -r config; do
+            directory="$(dirname "$config")"
+            test -f "$directory/lexlean.lock" || continue
+            if test "$directory" = "./tests/negative/lock/stale/project"; then
+              echo "retaining deliberate stale-lock fixture: $directory"
+              continue
+            fi
+            echo "relocking $directory"
+            (cd "$directory" && "$lexlean" lock)
+          done < <(find . \
+            -path './vendor' -prune -o \
+            -path './target' -prune -o \
+            -name lexlean.toml -type f -print | sort)
+
+      - name: Regenerate owned PrismPM evidence through the pinned devcontainer
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
+        with:
+          push: never
+          runCmd: |
+            set -euo pipefail
+            just codegen
+            just fixtures-write
+            just golden-write "M0 issue #5: reconcile frozen LexLean main 0e7e84f8bcbb83d7e9534d42b6a1b08339975a99"
+            just stdlib-package-write
+            stage="$(mktemp -d)"
+            cp -a stdlib/generated/package "$stage/stdlib"
+            (
+              cd "$stage/stdlib"
+              CARGO_NET_OFFLINE=true cargo package --locked --offline --target-dir target
+            )
+            cp "$stage/stdlib/target/package/prism-stdlib-0.2.0.crate" \
+              stdlib/generated/prism-stdlib-0.2.0.crate
+            crate_sha="$(sha256sum stdlib/generated/prism-stdlib-0.2.0.crate | cut -d' ' -f1)"
+            semantic_id="$(python3 - <<'PY'
+            import json
+            print(json.load(open("tests/golden/stdlib/build/model.prism.json"))["provenance"]["semantic_id"])
+            PY
+            )"
+            python3 - "$crate_sha" "$semantic_id" <<'PY'
+            import json, pathlib, sys
+            crate_sha, semantic_id = sys.argv[1:]
+            value = {
+                "crate_path": "stdlib/generated/prism-stdlib-0.2.0.crate",
+                "crate_sha256": crate_sha,
+                "schema": "prismpm/stdlib-release/1",
+                "semantic_id": semantic_id,
+            }
+            pathlib.Path("stdlib/release.json").write_text(
+                json.dumps(value, separators=(",", ":"), sort_keys=True)
+            )
+            PY
+            just package-release-crates-check
+
+      - name: Commit only the generated dependency reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/m0-lexlean-reconcile.yml
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "build(m0): reconcile frozen LexLean main [m0-generated]"
+          git push origin HEAD:m0/issue-5-lexlean-reconcile
