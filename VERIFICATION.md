@@ -3295,3 +3295,22 @@ tests, authored formatting and strict Clippy with unchanged captured source.
 Its real interoperability attempt fails before the matrix because the read-only
 fixture mount cannot create .lexlean; this failure is retained, not acceptance.
 The next run permits only normal ignored build output on the frozen worktree.
+
+## Unpublished native SDK construction (6 October)
+
+The manual construction lane requires an exact workflow/source revision and
+actual AMD64/ARM64 runners. It invokes the normal image recipe and unchanged
+real candidate smoke command without publication credentials. A held archive
+descriptor binds pre/post hashes and native identity; bounded streamed inventories
+and a final receipt/directory/archive sweep protect the artifact handoff.
+Protected main-only candidate publication jobs are unchanged.
+
+Pinned f061 filesystem/policy units pass 13/13 without skips. Their real tiny
+GNU-tar OCI archives and synthetic smoke facts are custody tests, not SDK
+execution. Archive/receipt substitutions and actual guard-removal controls fail
+closed. The old post-smoke-only archive owner genuinely fails the planted
+substitution control (three original units pass, one new control fails; retained
+log SHA-256 `73e0133c9a3e3832eafdbc4fbd42f990a0a889e848082f3b9759a34c7aa0972b`).
+Actual dual-native image construction, complete source V&V, installed two-run
+SDK verification, downstream acceptance and release qualification remain
+separate required owners. Construction receipts cannot close #66 or #69.
