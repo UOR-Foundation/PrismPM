@@ -259,6 +259,48 @@ test('all private driver callers retain locked offline builds and bounded resour
       }
     }
   }
+  // Supplemental source guards only: the complete real OC09 owner and actual
+  // private-copy cleanup-interference controls establish runtime behavior.
+  // In particular, checking inputs before close does not cover cleanup itself.
+  const publication = readFileSync(join(repository, 'tests/publication-admission/compile.mjs'), 'utf8');
+  const publicationOwner = readFileSync(join(repository, 'tests/publication-admission/owner.test.mjs'), 'utf8');
+  const coldRetirement = "    const cacheRetirement = ownsCompiler ? compiler.close() : null;";
+  const coldInputs = "    assert.deepEqual(frozenInputs(), inputs, 'complete publication inputs changed during compiler retirement');";
+  const coldModels = "    for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'post-retirement source ' + module);";
+  const coldManifest = "    assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), manifestBytes);";
+  const coldAttestation = "    assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);";
+  const sharedRetirement = " retirementAttempted=true;const cacheRetirement=compiler.close();retired=true;";
+  const sharedInputs = " assert.deepEqual(frozenInputs(),inputs,'complete publication inputs changed during final compiler retirement');";
+  const checkRetirement = (source, owner) => {
+    const coldStart = source.indexOf(coldRetirement);
+    const coldEnd = source.indexOf('    completed = true;', coldStart);
+    assert(coldStart >= 0 && coldEnd > coldStart, 'cold cleanup precedes completed return');
+    const postClose = source.slice(coldStart, coldEnd);
+    for (const guard of [coldInputs, coldModels, coldManifest, coldAttestation]) {
+      assert(postClose.includes(guard), 'cold post-retirement source/proof check: ' + guard);
+    }
+    const sharedStart = owner.indexOf(sharedRetirement);
+    const sharedEnd = owner.indexOf(' const evidence=', sharedStart);
+    assert(sharedStart >= 0 && sharedEnd > sharedStart, 'shared cleanup precedes acceptance evidence');
+    assert(owner.slice(sharedStart, sharedEnd).includes(sharedInputs), 'shared complete inputs rechecked after cleanup');
+  };
+  checkRetirement(publication, publicationOwner);
+  for (const guard of [coldInputs, coldModels, coldManifest, coldAttestation]) {
+    // Manifest and attestation checks also exist before retirement. Removing
+    // or moving just the final one must refuse, not accept the earlier check.
+    const start = publication.indexOf(coldRetirement);
+    const prefix = publication.slice(0, start), suffix = publication.slice(start);
+    assert(suffix.includes(guard));
+    for (const changed of [prefix + suffix.replace(guard, ''), prefix + guard + '\n' + suffix.replace(guard, '')]) {
+      assert.notEqual(changed, publication);
+      assert.throws(() => checkRetirement(changed, publicationOwner), 'removed or pre-close cold guard');
+    }
+  }
+  for (const changed of [publicationOwner.replace(sharedInputs, ''),
+    publicationOwner.replace(sharedRetirement, sharedInputs + '\n' + sharedRetirement).replace(sharedRetirement + '\n' + sharedInputs, sharedRetirement)]) {
+    assert.notEqual(changed, publicationOwner);
+    assert.throws(() => checkRetirement(publication, changed), 'removed or pre-close shared guard');
+  }
 });
 
 test('completed effects and custody tool caches retire under their exact owning paths', t => {
