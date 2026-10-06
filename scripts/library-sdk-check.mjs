@@ -495,7 +495,7 @@ export function verifyResult(value,binding,sourceAuthority){
   validateVerificationOwner(manifest,'library',row.acquisition,binding,sourceAuthority);
  }
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,23),23,'complete owning gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,24),24,'complete owning gate test count');}
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
@@ -510,7 +510,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   regularBytes(args[0]),args[1],args[2],regularBytes(args[3]),regularBytes(args[4]))));
  else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/installed-exporter-concurrency.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
  else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(JSON.stringify(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
- else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],192*1024*1024));keys(value,['lock','migration']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);verifyMigration(value.migration,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
+ else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],192*1024*1024));keys(value,['lock','migration']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);assert.equal(value.migration.schema,'prismpm/installed-lock-migration/2');verifyMigration(value.migration,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
  else if(mode==='run'&&args.length===1)console.log(JSON.stringify(await run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
  else throw Error('closed installed native-library gate command');
 }
