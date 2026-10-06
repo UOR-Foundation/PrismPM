@@ -395,16 +395,33 @@ test('actual submission completion owns both rejections and preserves correlated
  assert.equal(await completion(Promise.resolve(value),Promise.resolve(),pending),value);
  await assert.rejects(completion(Promise.resolve(value),Promise.reject(triggerFailure),pending),error=>error===triggerFailure);
  const navigationFailure=new Error('private-navigation');
+ // An already observed body failure must not wait for a pending trigger and
+ // then lose to a later navigation. Both other promises remain observed.
+ const bodyBeforeNavigation=async operation=>{
+  let releaseTrigger,rejectLaterNavigation;
+  const pendingTrigger=new Promise(resolve=>{releaseTrigger=resolve;}),laterNavigation=new Promise((_,reject)=>{rejectLaterNavigation=reject;});
+  const bodyFirst=operation(Promise.reject(bodyFailure),pendingTrigger,laterNavigation);
+  void bodyFirst.catch(()=>{});
+  await new Promise(resolve=>setImmediate(resolve));
+  rejectLaterNavigation(navigationFailure);
+  try { await assert.rejects(bodyFirst,error=>error===bodyFailure); }
+  finally { releaseTrigger(); await new Promise(resolve=>setImmediate(resolve)); }
+ };
+ await bodyBeforeNavigation(completion);
  await assert.rejects(completion(pending,pending,Promise.reject(navigationFailure)),error=>error===navigationFailure);
  // A navigation winner still attaches rejection observers to both operations.
  let rejectBody,rejectTrigger;
  const body=new Promise((_,reject)=>{rejectBody=reject;}),trigger=new Promise((_,reject)=>{rejectTrigger=reject;});
  await assert.rejects(completion(body,trigger,Promise.reject(navigationFailure)),error=>error===navigationFailure);
  rejectBody(bodyFailure);rejectTrigger(triggerFailure);await new Promise(resolve=>setImmediate(resolve));
- const guard="    if (body.status === 'rejected') throw body.reason;\n    if (initiated.status === 'rejected') throw initiated.reason;";
+ const guard='  const completed = Promise.resolve(response).then(async body => {';
  const original=source.slice(start,end);assert.equal(original.split(guard).length,2);
- const mutant=runInNewContext(original.replace(guard,"    if (initiated.status === 'rejected') throw initiated.reason;\n    if (body.status === 'rejected') throw body.reason;")+'\nsubmissionCompletion');
- await assert.rejects(assert.rejects(mutant(Promise.reject(bodyFailure),Promise.reject(triggerFailure),pending),error=>error===bodyFailure),assert.AssertionError);
+ const mutant=runInNewContext(original.replace(guard,"  const completed = Promise.allSettled([response, trigger]).then(async ([observedBody]) => {\n    if (observedBody.status === 'rejected') throw observedBody.reason;\n    const body = observedBody.value;")+'\nsubmissionCompletion');
+ await assert.rejects(bodyBeforeNavigation(mutant),assert.AssertionError);
+ const triggerGuard="    if (initiated.status === 'rejected') throw initiated.reason;";
+ assert.equal(original.split(triggerGuard).length,2);
+ const triggerMutant=runInNewContext(original.replace(triggerGuard,'')+'\nsubmissionCompletion');
+ await assert.rejects(assert.rejects(triggerMutant(Promise.resolve(value),Promise.reject(triggerFailure),pending),error=>error===triggerFailure),assert.AssertionError);
  assert.equal(source.split('await submissionCompletion(response, trigger, navigation)').length,2);
 });
 test('actual submission diagnostic emission and cleanup retain the first body failure when both diagnostic sinks throw',async()=>{

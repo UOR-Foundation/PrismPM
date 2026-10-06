@@ -260,6 +260,12 @@ target after correlated headers; method-rewrite probes separately retain the
 HTTP 405 rejection or actual protocol body-unavailability evidence. Body reads
 and browser cleanup are each bounded to ten seconds, and observed prohibited
 main-frame navigation rejects the pending submission immediately.
+An observed response-body failure rejects completion without waiting for the
+initiating action to settle, so later navigation or trigger teardown cannot
+replace that failure. Trigger rejections remain eagerly observed even after
+completion. A successful body still requires a completed successful trigger
+and no prohibited navigation; navigation observed first remains an immediate
+failure. These ordering rules do not establish historical failure causality.
 
 The generic model retains its u32 request and response bounds. The pinned
 Hologram portable intent transport supports at most 65,536 request bytes and

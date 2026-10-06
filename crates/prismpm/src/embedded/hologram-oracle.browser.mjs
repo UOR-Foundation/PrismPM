@@ -245,12 +245,14 @@ const valid = app.acceptance_vectors.map((vector, index) => ({vector, index})).f
 assert.ok(valid.length > 0, 'no modeled request can exercise the actual View');
 const recovery = valid[0].vector;
 async function submissionCompletion(response, trigger, navigation) {
-  // Closing a target can reject both operations. Observe both, retaining the
-  // correlated response error instead of racing it against keyboard teardown.
-  const completed = Promise.allSettled([response, trigger]).then(([body, initiated]) => {
-    if (body.status === 'rejected') throw body.reason;
+  // Observe trigger rejection immediately, including after body/navigation
+  // failure. Do not delay a first body failure until keyboard teardown settles.
+  const triggerOutcome = Promise.resolve(trigger).then(
+    () => ({status: 'fulfilled'}), reason => ({status: 'rejected', reason}));
+  const completed = Promise.resolve(response).then(async body => {
+    const initiated = await triggerOutcome;
     if (initiated.status === 'rejected') throw initiated.reason;
-    return body.value;
+    return body;
   });
   return Promise.race([completed, navigation]);
 }
