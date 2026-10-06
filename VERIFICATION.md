@@ -3161,7 +3161,22 @@ This is source-component evidence, not live matrix or SDK acceptance. Both
 unchanged full VV passes and the complete live matrix remain required; this
 newly observed failure does not establish the historical #67 failure's cause.
 
-### Original source-owner preflight integration
+## Conditional native tool construction (6 October)
+
+The tool workflow compares complete source-owned stage/preamble and harness
+inputs at exact base/head revisions. Unchanged inputs explicitly establish no
+new native qualification. Relevant changes and manual dispatch still run both
+native constructions, all four cache-hit checks, equal-image checks and six
+binary executions/hash comparisons. Source-boundary tests always run.
+
+Independent review cleared Git, index, file-mode, alias and environment custody
+corrections. All 22 pinned-devcontainer controls pass (15.857 s; zero omissions),
+including actual wrong-classifier and workflow-wiring mutants. Retained log:
+`target/hologram-oracle-response-worktree/target/rust-tool-preflight-owning-v6/gate.log`,
+SHA-256 `3433d63a01afbe03efa3de6ac3636b7f73c4d5b08bf9b5a23e94555faacb47ec`.
+Actual conditional hosted execution remains required; these tests are not
+fresh dual-native tool, SDK or full-VV acceptance.
+## Original source-owner preflight integration
 
 Full VV 37418080873 at c02b6049 built the final Debian devcontainer, then
 passed 369/371 Node audit checks. The two failures were the unchanged source
@@ -3177,3 +3192,12 @@ unchanged. The exact original two-file owner passes 45/45 without omissions,
 6.107s in pinned container f061023a. Log SHA256:
 8cc5894fd4efec3441cf5b5b773ed365b77b2f9c06fdd80ad22ed237a5000d0d.
 Both full VV passes, live matrix and installed SDK acceptance remain required.
+
+## Reviewed preflight reconciliation (6 October)
+
+PR123's advanced base adds the reviewed source-owner pin above. Reconciliation
+retains both verification histories and changes no tool classifier, workflow,
+driver, deadline or assertion. All four complete owning files pass 67/67,
+25.044s, zero omissions in immutable pinned tooling. Exact-head hosted checks
+and independent review remain required; historical c4 tool receipts do not
+qualify this reconciled source, and full SDK/VV obligations remain unchanged.
