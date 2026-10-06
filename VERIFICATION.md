@@ -3285,3 +3285,13 @@ code, browser deadlines, retries, original matrix cases, negative controls or
 eight observation sessions changed. Complete owning source and real matrix
 execution, exact-head native checks and independent review remain pending.
 This is a diagnostic correction, not a claim that the browser failure is fixed.
+
+Independent review found no production blocker and requested coverage of the
+actual receipt-construction seam. That owner now executes the production block
+with a genuinely failing child fixture and rejects both assignment omissions;
+this white-box fixture is not product acceptance. All 46 portable tests pass.
+Pinned f061 complete source validation at cd8c285c passes 39 xtask and 409 source
+tests, authored formatting and strict Clippy with unchanged captured source.
+Its real interoperability attempt fails before the matrix because the read-only
+fixture mount cannot create .lexlean; this failure is retained, not acceptance.
+The next run permits only normal ignored build output on the frozen worktree.

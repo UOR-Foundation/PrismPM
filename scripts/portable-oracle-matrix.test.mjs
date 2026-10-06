@@ -152,6 +152,35 @@ test('observation stderr collection distinguishes closed failure schemas, bounds
  assert(!Object.hasOwn(v1.submission_failures[0],'network'));
  assert(!Object.hasOwn(v1.submission_failures[0].events[1],'request'));
 });
+test('actual failure receipt construction retains collected facts and rejects either omitted assignment',t=>{
+ // White-box failure wiring: this child is a negative fixture, not a product oracle.
+ const source=read('scripts/portable-oracle-observation.mjs');
+ const start=source.indexOf(' const rows=(result.stderr'),end=source.indexOf(' for(const subject of subjects)subject.verify();',start);
+ assert(start>=0&&end>start);const block=source.slice(start,end);
+ const submission={schema:'prismpm/browser-submission-diagnostic/2',phase:'response-body',failure:'response-body-failed',
+  vectorIndex:2,keyboard:true,network:{state:'unavailable'},events:[],secret:'private-value'};
+ const cleanup={schema:'prismpm/browser-cleanup-diagnostic/1',resource:'browser',failure:'timeout',secret:'private-value'};
+ const stderr=JSON.stringify(submission)+'\n'+JSON.stringify(cleanup)+'\n';
+ const result=spawnSync(process.execPath,['-e',`process.stderr.write(${JSON.stringify(stderr)});process.exit(17);`],
+  {encoding:'utf8',timeout:1000,maxBuffer:1048576});
+ assert.equal(result.status,17);assert.ifError(result.error);assert.equal(result.signal,null);
+ const root=diagnosticRoot(t);
+ const execute=body=>{
+  const directory=mkdtempSync(join(root,'receipt-'));
+  runInNewContext(body,{result,mode:'unobserved',trigger:'keyboard',profile:{profile:'utf8-text'},schema:'prismpm/portable-observation-witness/1',
+   directory,driverSubject:{measurement:{sha256:'a'.repeat(64)}},observationSummary,observationFailureDiagnostics,hash,writeFileSync,join,JSON});
+  const receipt=JSON.parse(readFileSync(join(directory,'result.json')));
+  assert.equal(receipt.schema,'prismpm/portable-observation-result/1');assert.equal(receipt.status,'incomplete');assert.equal(receipt.exit_code,17);
+  assert.equal(receipt.submission_failures[0].failure,'response-body-failed');assert.equal(receipt.submission_failures[0].vector_index,2);
+  assert.deepEqual(receipt.cleanup_failures,[{resource:'browser',failure:'timeout'}]);assert(!JSON.stringify(receipt).includes('private-value'));
+ };
+ execute(block);
+ for(const line of [
+  '  submission_failures:failures.submission_failures,submission_failures_truncated:failures.submission_failures_truncated,\n',
+  '  cleanup_failures:failures.cleanup_failures,cleanup_failures_truncated:failures.cleanup_failures_truncated,\n']){
+  assert.equal(block.split(line).length,2);assert.throws(()=>execute(block.replace(line,'')));
+ }
+});
 test('actual observation bundle retention copies executed drivers and closed failure receipts even when a receipt is missing',t=>{
  const source=read('scripts/portable-oracle-matrix.mjs');
  const start=source.indexOf('  if(/^[01]-observation-'),end=source.indexOf('  // Cleanup uncertainty',start);
