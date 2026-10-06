@@ -2050,6 +2050,48 @@ origin-eviction protection, or public application acceptance. Explicit creation
 after total origin loss creates new custody, never restores an earlier identity.
 DK-08, DK-20 and the public `PP2011` build refusal remain unchanged.
 
+### 12.14 Private source-owned session kernel
+
+
+`DK-26` is a pure transition and canonical-codec prerequisite, not a public
+dispatcher or durable host. Source application wrappers admit authority facts,
+derive domain transitions and validate volatile selectors against durable
+application state. The kernel binds the selected principal, scope, epoch,
+command, complete prior state, exact effect and continuation. Caller flags,
+control presence and private wire observations confer no authority.
+
+Durable instance, command sequence, application, authority and pending records
+are distinct from volatile execution, revision, selector and presentation.
+Read-only actions preserve durable state. Ordinary action admission uses the
+actual typed presentation/Intent predicates and rejects only the selected
+secret-bearing action. Begin consumes one command sequence; finite continuation
+steps bind the actual prior request, result and continuation. Unknown and Close
+retain pending custody, forbid late promotion and never imply retry on reopening.
+
+Source limits bound each application, selector, continuation, evidence, Intent
+and presentation byte field to 1–64 MiB and effects per command to 1–512. The complete
+encoded request and response are each at most 64 MiB; independently legal fields
+need not fit together. Field-scoped canonical references share only the exact
+declared predecessor; explicit equal values reject, while differing values still
+undergo full typed context comparison. Before each effect, source arithmetic
+reserves actual-family terminal/refusal/Unknown domains and every later
+observation/continuation envelope, including future distinct payload maxima.
+Infeasible global budgets refuse before effects; no scalar cap is clamped.
+Source-owned size folds preserve the actual View/Effects encoders' complete
+byte-count and error domains. Their owning oracle compares real encoder output,
+including typed writer failures and combined maxima. Session-private balanced
+Commit assembly reuses the accepted EffectsWire scalar/item encoders and emits
+identical bytes/errors; it does not change the effect contract.
+The fixed generated Wasm ceiling is 1 GiB. Acceptance
+requires actual source/kernel/axiom verification, native std/no_std and Wasm
+execution, combined aggregate maxima and source guard mutations.
+
+This does not authenticate a principal, persist a context, execute an effect or
+accept a public application. Atomic initial state, authenticated contextual
+history, effect acknowledgments, safe checkpoint/segment rotation, rollback
+witnesses and private secret-to-nonsecret evidence composition remain separately
+required SessionJournal/runtime obligations. `PP2011` and Holo/1 are unchanged.
+
 ### Private per-resource admission
 
 DK-27's `Foundation.Browser.Application.V1.Budget` supplements the existing
@@ -2586,6 +2628,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-23` | `sdk` | A source-owned bounded presentation codec and private closed DOM adapter preserve semantic labels, actions, lifecycle and plain text through actual generated execution without granting authority or accepting a public application. | §12 |
 | `DK-24` | `sdk` | The private generated operation journal persists exact admitted effect bindings before execution and authenticates durable terminal receipts on replay, retaining unresolved outcomes without retry or application acceptance. | §12 |
 | `DK-25` | `sdk` | Private modeled credential custody binds immutable application policy, complete logical key slots and exact signing resources to atomic nonextractable browser key creation and validated reopening without key export, silent replacement or account authority. | §12 |
+| `DK-26` | `sdk` | The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |

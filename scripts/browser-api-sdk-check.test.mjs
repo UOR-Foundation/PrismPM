@@ -27,7 +27,7 @@ test('installed module inventory includes every accepted private browser prerequ
 });
 
 test('installed browser closure includes complete new owning fixtures and actual Rust refusal owners', () => {
- for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody', 'tests/browser-operation-journal',
+ for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody', 'tests/browser-operation-journal', 'tests/browser-session',
   'tests/fixtures/library/native-library/project', 'tests/support/browser_application.rs',
   'crates/prismpm/src/browser_build.rs', 'crates/prismpm/src/browser_build',
   'crates/prismpm/src/holo/browser_application.rs', 'crates/prismpm/src/holo/browser_application',
@@ -36,7 +36,7 @@ test('installed browser closure includes complete new owning fixtures and actual
   assert.ok(sourceRoots.includes(path), 'required installed source: ' + path);
  }
  const source = sdkSource('crates/conformance/tests/conformance.rs');
- for (const id of [21, 22, 24, 25]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
+ for (const id of [21, 22, 24, 25, 26]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
  assert.match(sdkSource('crates/prismpm/src/holo/browser_application.rs'), /Err\(PrismError::new\("PP2011"/);
  assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
  const workflow = sdkSource('.github/workflows/release.yml');
@@ -61,6 +61,13 @@ test('new installed Node suites retain exact complete owning files and deadlines
  const journal = suites.find(row => row.id === 'DK-24');
  assert.deepEqual(journal?.files, ['sdk/browser/operation-journal.test.mjs']);
  assert.equal(journal?.minimum, 28); assert.equal(journal?.deadline, 3600000);
+ const session = suites.find(row => row.id === 'DK-26');
+ assert.deepEqual(session?.files, ['sdk/browser/session-model-test.mjs','tests/browser-session/wire.test.mjs','tests/browser-session/provenance.test.mjs']);
+ assert.equal(session?.minimum, 37); assert.equal(session?.deadline, 3600000);
+ const sessionOwner = /"DK-26"\s*=>\s*verify_node_suite\(\s*root,\s*id,\s*&\[([^\]]+)\],\s*(\d+),\s*"([0-9]+)"/.exec(sdkSource('crates/conformance/src/cases/mod.rs'));
+ assert.ok(sessionOwner, 'actual complete registered session owner');
+ assert.deepEqual([...sessionOwner[1].matchAll(/"([^"]+)"/g)].map(row=>row[1]), session.files);
+ assert.equal(Number(sessionOwner[2]), session.minimum); assert.equal(Number(sessionOwner[3]), session.deadline);
 });
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
@@ -91,7 +98,7 @@ test('actual installed module trees reject missing extra changed and aliased mod
 });
 function source(root){
  for(const path of sourceRoots){
-  if(path!=='.cargo'&&path.includes('.')&&!path.endsWith('/rust')||path==='lean-toolchain'||path==='sdk/Dockerfile')put(root,path,path+'\n');
+  if(path!=='.cargo'&&path.includes('.')&&!path.endsWith('/rust')||['lean-toolchain','LICENSE-MIT','LICENSE-APACHE','sdk/Dockerfile'].includes(path))put(root,path,path+'\n');
   else put(root,path+'/source.txt',path+'\n');
  }
 }
@@ -159,6 +166,19 @@ test('installed DK23 gate requires every wire, DOM, replay, provenance and full-
  assert.deepEqual(accepted, {id: 'DK-23', tests: 37});
 });
 
+test('installed DK26 gate requires every session kernel, canonical wire and custody check',t=>{
+ const root=temporary(t);testFixtures(root);
+ const owner=suites.find(row=>row.id==='DK-26'),counts=[28,6,3];
+ assert.equal(owner.files.length,counts.length);
+ for(const [index,count] of counts.entries())put(root,owner.files[index],testSource(count));
+ for(const [index,count] of counts.entries()){
+  put(root,owner.files[index],testSource(count-1));
+  assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,owner.files[index]);
+  put(root,owner.files[index],testSource(count));
+ }
+ assert.deepEqual(runSuites(root,spawnSync,()=>{}).find(row=>row.id==='DK-26'),{id:'DK-26',tests:37});
+});
+
 test('every selected file must exist even when its sibling supplies the total minimum',t=>{
  const root=temporary(t);testFixtures(root);
  const path=join(root,'sdk/browser/identity.browser.test.mjs');
@@ -205,8 +225,8 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25']);
- assert.equal(runSuites(root,launch,()=>{}).length,15);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26']);
+ assert.equal(runSuites(root,launch,()=>{}).length,16);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';

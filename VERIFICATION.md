@@ -3201,3 +3201,69 @@ driver, deadline or assertion. All four complete owning files pass 67/67,
 25.044s, zero omissions in immutable pinned tooling. Exact-head hosted checks
 and independent review remain required; historical c4 tool receipts do not
 qualify this reconciled source, and full SDK/VV obligations remain unchanged.
+
+## External-oracle reference admission (6 October)
+
+The SDK oracle input uses the existing immutable OCI parser, retaining PP5403
+and the historical-image source-bootstrap contract. Three valid and fifteen
+malformed references are checked before Docker execution. The named regression
+genuinely failed against the prior substring predicate, then passed in pinned
+f061023a tooling: one passed, 289 filtered. Owned formatting and strict prismpm
+all-target/all-feature Clippy pass; this is not full VV or installed acceptance.
+The first green test's formatting failure remains retained.
+
+Logs under hologram-oracle-response-worktree/target, SHA256:
+- sdk-reference-regression-v1-red.log: 6670b3f7d907f3aff482e1624893c477df6ab4fd347b2dd947881c827f0ccfb1
+- sdk-reference-regression-v1-green.log: 3d571f77d0a83c3cba41ad7374a2063b984f70231ba580b6a6d4c6435b4d7dfe
+- sdk-reference-regression-v2-green.log: 2237b629078a2a01b093cce6564a1e452b3e589586fb932ab90bd8de8066162d
+- sdk-reference-regression-v2-clippy.log: f5de0c2524c021fac1aa08ce0b31eb2d9bf31fc8c7b58b2f52fb560e964b521e
+
+Separate adversarial source review found no blocking defect. Current-source SDK
+qualification still requires the independent installed SDK gates in SPEC §12;
+neither digest syntax nor source VV establishes it.
+
+## Complete native session record readback (6 October)
+
+Both original native-source-review lanes in run 37449224018 at c8fb9d0e
+passed. Independent review checked all 366 files (365 declared members), all 29 actual
+commands, all 597 cases and 54 controls. Six original JSON records are imported
+byte-for-byte; 363 shared files match the source tree. These are source-golden
+records, not installed-SDK or full-VV acceptance.
+
+The compiler-cache source guard retains all original callers and adds Session.
+Presentation and Session delegate to the actual shared owner; the guard binds
+each exact driver directory/executable, private target and all five original
+build options. Planted direct compiler construction and wrong family mappings
+first failed, then were detected after correction. Generated product builds
+remain permitted. This guard supplements, never replaces, real component runs.
+
+Pinned non-root f061023a tooling passes all 38 xtask tests and all 407 source
+audit tests without omissions, followed by authored workspace formatting and
+strict all-target/all-feature xtask Clippy. Complete captured sources remain
+unchanged. Log: target/hologram-oracle-response-worktree/target/
+native-record-readback-v4.log; SHA256
+a19da6a4157dc255d64ac24a29500575f9abd82ec31e157c268832efad1f09b9.
+
+Prior setup failures and the 397/407 source run remain retained. The next
+407/407 run's supplemental cargo fmt --all rejected generated stdlib bytes;
+those bytes were not reformatted. The prescribed formatting owner excludes
+generated output and itself passes in the complete xtask suite. No timeout,
+predicate, test inventory or runtime limit was relaxed. Both full VV passes,
+current installed-SDK qualification and downstream acceptance remain required.
+
+## SDK runtime reference entry (6 October)
+
+The runtime boundary now invokes the existing immutable OCI parser before any
+Docker process. The named regression rejects fifteen malformed references
+through the actual entry path and retains valid registry/loopback syntax. The
+original substring predicate genuinely failed the regression; prior incomplete
+fixture/environment attempts remain retained, not counted as acceptance.
+
+Pinned non-root f061023a tooling passes all 39 xtask tests and all 407 source
+audit tests without omissions, authored workspace formatting and strict xtask
+all-target/all-feature Clippy. Complete captured source remains unchanged.
+Log: target/hologram-oracle-response-worktree/target/
+runtime-reference-complete-v4.log; SHA256
+e5f6f9685ac1c763f95f11507cbf639a433b8358fb8dea108001148feb838b93.
+This is source-component evidence only. Exact-head native checks, independent
+review, full VV and installed-SDK/downstream obligations remain distinct.
