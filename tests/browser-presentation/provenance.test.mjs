@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import test from 'node:test';
-import {capturePresentationProvenance} from './provenance.mjs';
+import {capturePresentationProvenance, presentationOutputRows} from './provenance.mjs';
 
 const modules = ['Fixture', 'Foundation.Bytes', 'Foundation.Codec',
   'Foundation.Codec.Cbor.V1.Primitive', 'Foundation.View.Browser.V1.Model',
@@ -30,14 +30,17 @@ function fixture() {
   const build_id = frame('lexlean-build-v1', 'source-id', Buffer.from(source_id, 'hex'),
     [['semantic-id', Buffer.from(semantic_id, 'hex')]]);
   const row = (kind, path, value) => ({kind, path, byte_length: value.length, sha256: sha(value)});
+  const outputs = new Map(presentationOutputRows.map(row => [row.path, row.kind === 'lean'
+    ? generated.get(modules.find(name => row.path === 'modules/PrismPM/' + name.replaceAll('.', '/') + '.lean'))
+    : Buffer.from('synthetic ' + row.kind + ' ' + row.path)]));
   const manifest = {spec: 'lexlean/build-manifest/1', source_id, semantic_id, build_id,
     selection: modules, modules: modules.map(name => ({module: name, lean_module: 'PrismPM.' + name,
       source_path: 'src/' + name.replaceAll('.', '/') + '.lex.tex'})),
     inputs: [...sources].map(([name, value]) => row('source', 'src/' + name.replaceAll('.', '/') + '.lex.tex', value)),
-    outputs: [...generated].map(([name, value]) => row('lean', 'modules/PrismPM/' + name.replaceAll('.', '/') + '.lean', value))};
+    outputs: presentationOutputRows.map(({kind, path}) => row(kind, path, outputs.get(path)))};
   const verified = {source_id, semantic_id, build_id, attestation_id: '', root: '/private/verified', modules};
   const attestation = {spec: 'lexlean/attestation/1', status: 'verified', source_id, semantic_id, build_id};
-  const input = {verified, sources, generated, manifestBytes: null, attestationBytes: null};
+  const input = {verified, sources, generated, outputs, manifestBytes: null, attestationBytes: null};
   function bind() {
     input.manifestBytes = file(manifest);
     attestation.build_manifest = {byte_length: input.manifestBytes.length, sha256: sha(input.manifestBytes)};
@@ -73,6 +76,17 @@ test('changed source or generated Lean cannot inherit the authenticated kernel m
 });
 
 test('missing, extra, duplicate, relabeled or aliased inventories are rejected', () => {
+  for (const kind of ['tex', 'map', 'coverage', 'lexicon-closure']) {
+    const f = fixture(), row = f.manifest.outputs.find(row => row.kind === kind);
+    f.input.outputs.delete(row.path);
+    assert.throws(() => capturePresentationProvenance(f.input), /complete output inventory/);
+    const g = fixture(), descriptor = g.manifest.outputs.find(row => row.kind === kind);
+    g.input.outputs.set(descriptor.path, Buffer.from('changed'));
+    assert.throws(() => capturePresentationProvenance(g.input), /byte length|byte digest/);
+    const h = fixture(), owner = capturePresentationProvenance(h.input);
+    h.input.outputs.set(h.manifest.outputs.find(row => row.kind === kind).path, Buffer.from('changed'));
+    assert.throws(() => owner.verify(h.input), /immutable complete kernel output/);
+  }
   for (const field of ['inputs', 'outputs']) for (const kind of ['missing', 'duplicate', 'extra', 'path', 'kind', 'row-field']) {
     const f = fixture(), rows = f.manifest[field];
     if (kind === 'missing') rows.pop();

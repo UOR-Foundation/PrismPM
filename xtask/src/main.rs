@@ -208,6 +208,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/compiler-driver-cache.test.mjs",
             "tests/browser-view/compiler-artifact.test.mjs",
             "tests/browser-view/generated-package.test.mjs",
+            "tests/browser-view/file-custody.test.mjs",
             "tests/browser-view/generated-wasm.test.mjs",
             "tests/browser-presentation/provenance.test.mjs",
             "tests/browser-presentation/replay.test.mjs",

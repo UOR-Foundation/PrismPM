@@ -8,7 +8,8 @@ import {run, sha} from '../browser-view/compile.mjs';
 import {captureCompilerInputs, createCompilerOwner, requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
-import {capturePresentationProvenance} from './provenance.mjs';
+import {captureFile, capturedFile} from '../browser-view/file-custody.mjs';
+import {capturePresentationProvenance, presentationOutputRows} from './provenance.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -36,6 +37,7 @@ export function frozenInputs() {
       'compiler-owner.test.mjs', 'compiler-artifact.mjs', 'compiler-artifact.test.mjs',
       'generated-package.mjs', 'generated-package.test.mjs', 'generated-wasm.mjs',
       'generated-wasm.test.mjs', 'driver-cache.mjs'].map(path => 'tests/browser-view/' + path),
+    'tests/browser-view/file-custody.mjs', 'tests/browser-view/file-custody.test.mjs',
     'tests/fixtures/library/native-library/project/lexlean.toml', 'model/authorities.toml',
     'model/dependencies.toml', 'rust-toolchain.toml', 'lean-toolchain', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json', 'model/browser-presentation-diagnostics.json',
@@ -48,7 +50,7 @@ export function frozenInputs() {
       const row = /^([0-9a-f]{64})  ([A-Za-z0-9_./-]+)$/.exec(line); assert.ok(row);
       files.add(tree + '/' + row[2]);
     }
-  return Object.freeze(Object.fromEntries([...files].sort().map(path => [path, sha(readFileSync(join(repository, path)))])));
+  return Object.freeze(Object.fromEntries([...files].sort().map(path => [path, captureFile(join(repository, path)).evidence])));
 }
 
 export function assertFrozenInputs(inputs) {
@@ -56,9 +58,7 @@ export function assertFrozenInputs(inputs) {
 }
 
 function capturedInput(path, inputs) {
-  const bytes = readFileSync(join(repository, path));
-  assert.equal(sha(bytes), inputs[path], 'frozen captured presentation input ' + path);
-  return bytes;
+  return capturedFile(join(repository, path), inputs[path]);
 }
 
 export function assertBaselineSources(actual, expected) {
@@ -196,6 +196,10 @@ function prepareStage(mutation, sourceOnly, baseline, inputs, compilerOwner) {
     const manifestBytes = readFileSync(join(verified.root, 'build-manifest.json'));
     const attestationBytes = readFileSync(join(verified.root, 'attestation.json'));
     const attestation = JSON.parse(attestationBytes);
+    function readOutputs() {
+      return new Map(presentationOutputRows.map(({path}) =>
+        [path, captureFile(join(verified.root, path)).bytes]));
+    }
     assert.equal(attestation.status, 'verified');
     assert.equal(attestation.build_manifest.sha256, sha(manifestBytes));
     assert.equal(attestation.attestation_id, verified.attestation_id);
@@ -222,7 +226,7 @@ function prepareStage(mutation, sourceOnly, baseline, inputs, compilerOwner) {
       }));
     }
     const provenance = capturePresentationProvenance({verified, sources, manifestBytes, attestationBytes,
-      generated: readLean(join(verified.root, 'modules'))});
+      generated: readLean(join(verified.root, 'modules')), outputs: readOutputs()});
     for (const module of modules) {
       stage('lean/' + generatedPath(module), provenance.generatedBytes(module));
     }
@@ -265,7 +269,7 @@ function prepareStage(mutation, sourceOnly, baseline, inputs, compilerOwner) {
         sources: new Map(modules.map(module => [module, readFileSync(join(project, 'src', ...module.split('.')) + '.lex.tex')])),
         manifestBytes: readFileSync(join(verified.root, 'build-manifest.json')),
         attestationBytes: readFileSync(join(verified.root, 'attestation.json')),
-        generated: readLean(join(verified.root, 'modules')), staged: readLean(lean)});
+        generated: readLean(join(verified.root, 'modules')), staged: readLean(lean), outputs: readOutputs()});
     }
     function compileNative(standard) {
       assert.equal(typeof standard, 'boolean'); unchanged();

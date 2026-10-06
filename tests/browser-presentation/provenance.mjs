@@ -8,6 +8,18 @@ const modules = Object.freeze(['Fixture', 'Foundation.Bytes', 'Foundation.Codec'
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const sourcePath = name => 'src/' + name.replaceAll('.', '/') + '.lex.tex';
 const leanPath = name => 'modules/PrismPM/' + name.replaceAll('.', '/') + '.lean';
+export const presentationOutputRows = Object.freeze(modules.flatMap(name => {
+  const path = 'PrismPM/' + name.replaceAll('.', '/');
+  return [
+    {kind: 'lean', path: 'modules/' + path + '.lean'},
+    {kind: 'tex', path: 'modules/' + path + '.tex'},
+    {kind: 'map', path: 'maps/' + path + '.map.json'},
+    {kind: 'coverage', path: 'coverage/' + path + '.coverage.json'},
+    {kind: 'lexicon-closure', path: 'lexicons/' + name + '.closure.json'},
+  ];
+}).sort((a, b) => Buffer.compare(Buffer.from(a.kind), Buffer.from(b.kind))
+  || Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)))
+  .map(row => Object.freeze(row)));
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 function closed(value, keys, label) {
   assert.ok(value && Object.getPrototypeOf(value) === Object.prototype, label);
@@ -66,7 +78,12 @@ function fileRow(row, path, captured, label) {
   assert.equal(row.byte_length, captured.length, label + ' byte length');
   assert.equal(row.sha256, sha(captured), label + ' byte digest');
 }
-function inspect({verified, sources, manifestBytes, attestationBytes, generated}) {
+function outputMap(value, label) {
+  assert(value instanceof Map, label + ' captured output map');
+  assert.deepEqual([...value.keys()], presentationOutputRows.map(row => row.path), label + ' complete output inventory');
+  return new Map([...value].map(([path, value]) => [path, bytes(value, label + ' ' + path)]));
+}
+function inspect({verified, sources, manifestBytes, attestationBytes, generated, outputs}) {
   closed(verified, ['attestation_id', 'build_id', 'semantic_id', 'source_id', 'root', 'modules'], 'closed actual driver record');
   assert.deepEqual(verified.modules, modules, 'driver exact six-module inventory');
   assert.ok(typeof verified.root === 'string' && verified.root.startsWith('/'), 'actual verified root');
@@ -106,18 +123,24 @@ function inspect({verified, sources, manifestBytes, attestationBytes, generated}
     assert.equal(leanRows[index].kind, 'lean', 'generated Lean descriptor kind');
     fileRow(leanRows[index], leanPath(name), lean.get(name), 'generated Lean ' + name);
   }
-  return {source, lean, manifest, attestation};
+  assert.deepEqual(manifest.outputs.map(({kind, path}) => ({kind, path})), presentationOutputRows,
+    'manifest complete output inventory');
+  const complete = outputMap(outputs, 'kernel outputs');
+  for (const row of manifest.outputs) fileRow(row, row.path, complete.get(row.path), 'kernel output ' + row.path);
+  for (const name of modules)
+    assert.deepEqual(complete.get(leanPath(name)), lean.get(name), 'generated Lean byte digest agrees with complete outputs');
+  return {source, lean, complete, manifest, attestation};
 }
 
 export function capturePresentationProvenance(input) {
-  const {source, lean, manifest, attestation} = inspect(input);
+  const {source, lean, complete, manifest, attestation} = inspect(input);
   const manifestBytes = Buffer.from(input.manifestBytes), attestationBytes = Buffer.from(input.attestationBytes);
   const verified = freeze(JSON.parse(JSON.stringify(input.verified)));
-  const evidence = freeze({scope: 'kernel-to-generated-lean-byte-linkage', verified,
+  const evidence = freeze({scope: 'kernel-to-complete-generated-byte-linkage', verified,
     manifest: {byte_length: manifestBytes.length, sha256: sha(manifestBytes)},
     attestation: {byte_length: attestationBytes.length, sha256: sha(attestationBytes)},
     sources: manifest.inputs.filter(row => row.kind === 'source'),
-    generated: manifest.outputs.filter(row => row.kind === 'lean')});
+    generated: manifest.outputs.filter(row => row.kind === 'lean'), outputs: manifest.outputs});
   const snapshot = freeze({manifest, attestation});
   return Object.freeze({evidence, snapshot,
     generatedBytes(name) {
@@ -128,6 +151,9 @@ export function capturePresentationProvenance(input) {
       assert.deepEqual(observed.verified, verified, 'immutable actual driver record');
       assert.deepEqual(observed.manifestBytes, manifestBytes, 'immutable authenticated manifest');
       assert.deepEqual(observed.attestationBytes, attestationBytes, 'immutable kernel attestation');
+      const currentOutputs = outputMap(observed.outputs, 'observed kernel outputs');
+      for (const [path, value] of complete)
+        assert.deepEqual(currentOutputs.get(path), value, 'immutable complete kernel output ' + path);
       for (const [label, current, expected] of [
         ['original source', observed.sources, source], ['original generated Lean', observed.generated, lean],
         ...(observed.staged === undefined ? [] : [['staged generated Lean', observed.staged, lean]]),

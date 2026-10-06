@@ -1,8 +1,9 @@
 // Test infrastructure: freeze a fresh generator's complete declared output.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {lstatSync, readdirSync, readFileSync, realpathSync} from 'node:fs';
+import {lstatSync, opendirSync, realpathSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
+import {captureFile} from './file-custody.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const layouts = Object.freeze({
@@ -12,12 +13,16 @@ const layouts = Object.freeze({
     files: ['.cargo/config.toml', 'Cargo.lock', 'Cargo.toml', 'src/lib.rs']},
 });
 const manifestPath = 'generation-manifest.json';
+const canonical = value => JSON.stringify(value, (_key, child) =>
+  child && !Array.isArray(child) && typeof child === 'object'
+    ? Object.fromEntries(Object.keys(child).sort().map(key => [key, child[key]])) : child);
+function closed(value, keys, label) {
+  assert(value && Object.getPrototypeOf(value) === Object.prototype, label);
+  assert.deepEqual(Object.keys(value).sort(), [...keys].sort(), label);
+}
 
 function fileBytes(path) {
-  const stat = lstatSync(path);
-  assert.equal(realpathSync(path), path, 'unaliased generated package file');
-  assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked generated package file');
-  return readFileSync(path);
+  return captureFile(path).bytes;
 }
 
 function inventory(directory, kind, inputIrSha256) {
@@ -25,7 +30,36 @@ function inventory(directory, kind, inputIrSha256) {
   assert.ok(Object.hasOwn(layouts, kind), 'closed generated package kind');
   assert.match(inputIrSha256, /^[a-f0-9]{64}$/, 'exact expected input IR');
   const layout = layouts[kind], before = fileBytes(join(directory, manifestPath));
-  const manifest = JSON.parse(before.toString('utf8'));
+  const manifest = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(before));
+  assert.deepEqual(Buffer.from(canonical(manifest) + '\n'), before, 'canonical generated manifest bytes');
+  closed(manifest, kind === 'native'
+    ? ['dependencies', 'files', 'input_ir_sha256', 'module', 'schema']
+    : ['entry', 'export', 'files', 'input_allocation_cap', 'input_ir_sha256',
+      'maximum_pages', 'output_allocation_cap', 'schema'], 'closed generated manifest');
+  if (kind === 'native') {
+    assert.equal(typeof manifest.module, 'string'); assert(manifest.module.length > 0 && manifest.module.length <= 4096);
+    assert(Array.isArray(manifest.dependencies) && manifest.dependencies.length <= 256, 'bounded generated dependencies');
+    const names = new Set();
+    for (const dependency of manifest.dependencies) {
+      closed(dependency, ['checksum', 'default_features', 'features', 'name', 'version'], 'closed generated dependency');
+      assert.match(dependency.name, /^[a-z][a-z0-9_-]{0,63}$/);
+      assert(!names.has(dependency.name), 'unique generated dependency'); names.add(dependency.name);
+      assert.match(dependency.checksum, /^[a-f0-9]{64}$/);
+      assert.equal(typeof dependency.default_features, 'boolean');
+      assert.match(dependency.version, /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/);
+      assert(Array.isArray(dependency.features) && dependency.features.length <= 256);
+      assert.equal(new Set(dependency.features).size, dependency.features.length, 'unique generated features');
+      for (const feature of dependency.features) assert.match(feature, /^[a-z][a-z0-9_-]{0,63}$/);
+    }
+  } else {
+    for (const key of ['entry', 'export']) {
+      assert.match(manifest[key], /^[A-Za-z_][A-Za-z0-9_]{0,127}$/);
+    }
+    assert(Number.isInteger(manifest.maximum_pages) && manifest.maximum_pages > 0 && manifest.maximum_pages <= 32767);
+    for (const key of ['input_allocation_cap', 'output_allocation_cap'])
+      assert(Number.isSafeInteger(manifest[key]) && manifest[key] > 0
+        && manifest[key] <= 4294967295, 'bounded generated allocation');
+  }
   assert.equal(manifest.schema, layout.schema, 'exact generated package schema');
   assert.equal(manifest.input_ir_sha256, inputIrSha256, 'generated package input IR');
   assert.ok(Array.isArray(manifest.files));
@@ -45,11 +79,23 @@ function inventory(directory, kind, inputIrSha256) {
     assert.equal(realpathSync(path), path, 'unaliased generated package directory');
     assert.ok(lstatSync(path).isDirectory(), 'actual generated package directory');
     directories.push(relative);
-    for (const name of readdirSync(path).sort()) {
-      const child = relative ? relative + '/' + name : name, absolute = join(directory, child);
-      const stat = lstatSync(absolute);
-      if (stat.isDirectory()) visit(child);
-      else files[child] = digest(fileBytes(absolute));
+    const handle = opendirSync(path), children = [];
+    try {
+      for (let entry; (entry = handle.readSync()) !== null;) {
+        assert(children.length < expectedFiles.length + expectedDirectories.size, 'bounded generated package inventory');
+        const child = relative ? relative + '/' + entry.name : entry.name;
+        assert(expectedFiles.includes(child) || expectedDirectories.has(child), 'complete generated package file inventory');
+        children.push(child);
+      }
+    } finally {handle.closeSync();}
+    for (const child of children.sort()) {
+      const absolute = join(directory, child), stat = lstatSync(absolute);
+      if (stat.isDirectory()) {
+        assert(expectedDirectories.has(child), 'complete generated package directory inventory'); visit(child);
+      } else {
+        assert(expectedFiles.includes(child), 'complete generated package file inventory');
+        files[child] = digest(fileBytes(absolute));
+      }
     }
   }
   visit('');
