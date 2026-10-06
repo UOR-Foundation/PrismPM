@@ -3176,3 +3176,28 @@ including actual wrong-classifier and workflow-wiring mutants. Retained log:
 SHA-256 `3433d63a01afbe03efa3de6ac3636b7f73c4d5b08bf9b5a23e94555faacb47ec`.
 Actual conditional hosted execution remains required; these tests are not
 fresh dual-native tool, SDK or full-VV acceptance.
+## Original source-owner preflight integration
+
+Full VV 37418080873 at c02b6049 built the final Debian devcontainer, then
+passed 369/371 Node audit checks. The two failures were the unchanged source
+preflight owners: their separate Rust-owner digest had not followed the sole
+reviewed driver-pin update. No live matrix or later VV phase ran.
+Raw failure log SHA256:
+f89d2fcdbc4bd9abce3a0d0da1bfa444a4c2d9d894e174d408500c0494bc9625.
+
+The preflight now pins the actual independently reviewed owner bytes
+113f7c2697507067ad70090cf94f5031570b420b2199dee18874036f3dc1a620.
+All four archive/codec assertions, byte custody and negative controls are
+unchanged. The exact original two-file owner passes 45/45 without omissions,
+6.107s in pinned container f061023a. Log SHA256:
+8cc5894fd4efec3441cf5b5b773ed365b77b2f9c06fdd80ad22ed237a5000d0d.
+Both full VV passes, live matrix and installed SDK acceptance remain required.
+
+## Reviewed preflight reconciliation (6 October)
+
+PR123's advanced base adds the reviewed source-owner pin above. Reconciliation
+retains both verification histories and changes no tool classifier, workflow,
+driver, deadline or assertion. All four complete owning files pass 67/67,
+25.044s, zero omissions in immutable pinned tooling. Exact-head hosted checks
+and independent review remain required; historical c4 tool receipts do not
+qualify this reconciled source, and full SDK/VV obligations remain unchanged.
