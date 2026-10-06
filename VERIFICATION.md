@@ -3314,3 +3314,19 @@ log SHA-256 `73e0133c9a3e3832eafdbc4fbd42f990a0a889e848082f3b9759a34c7aa0972b`).
 Actual dual-native image construction, complete source V&V, installed two-run
 SDK verification, downstream acceptance and release qualification remain
 separate required owners. Construction receipts cannot close #66 or #69.
+
+## Native static exporter runtime closure (6 October)
+
+Actual ARM64 SDK construction run 37497860684 fails when ldd rejects the pinned
+leantar. The unchanged runtime owner also fails on a real newly compiled static
+ELF. Native ELF64 headers now establish static linkage without accepting failed
+ldd status or error text. Dynamic discovery, runtime snapshots and executable
+identity checks remain mandatory; the toolchain is rechecked before publication.
+
+The 38-test registered owner includes GNU readelf cross-checks of real static
+and dynamic binaries, real missing-library refusal, malformed/foreign ELF,
+PT_NULL compatibility, guard-removal mutations and executable custody. All 38
+owner tests and 13 native-review policy tests pass in pinned 670 tooling with
+no skips. Complete source qualification, actual both-native construction and
+SDK acceptance remain required. The separate AMD64 smoke failure has no retained
+command result yet; this correction does not claim to explain it.

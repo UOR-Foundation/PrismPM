@@ -280,8 +280,8 @@ export async function runReview({source, revision, destination}, transport = exe
     // and admission boundary before any expensive compiler construction.
     const publicationTests = await run(['exec', name, 'node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);
     const publicationTap = publicationTests.toString();
-    assert.equal(verifyTap(publicationTap, 35), 35);
-    assert.match(publicationTap, /^1\.\.35\r?$/m);
+    assert.equal(verifyTap(publicationTap, 38), 38);
+    assert.match(publicationTap, /^1\.\.38\r?$/m);
     if (interrupted) throw interrupted;
     await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
     const preparation = JSON.parse(await run(['exec', name, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.py', 'install']));

@@ -775,8 +775,11 @@ goldens or normalizes native records, and does not replace either genuine native
 write/repeat execution or subsequent SDK qualification.
 
 Before native cache initialization or compiler construction, each verified
-review container executes all 35 exporter-seed tests with its actual Node,
-Python and libc. The exact outer TAP plan, successful test count and absence
+review container executes all 38 exporter-seed tests with its actual Node,
+Python, C compiler, GNU readelf and libc. Native ELF64 program headers establish
+static linkage; neither failed ldd status nor error text can authorize it.
+Dynamic dependency inspection and executable custody remain fail-closed.
+The exact outer TAP plan, successful test count and absence
 of failures, omissions, cancellation or skips are required; failure prevents
 golden generation. This component check does not authorize SDK acceptance.
 
