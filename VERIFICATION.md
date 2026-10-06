@@ -1,5 +1,50 @@
 # PrismPM falsifiability and verification record
 
+## Native golden source preflight
+
+Native SDK platforms now reject stale shared source paths, bytes or descriptors
+before proof generation. The normative development writer still regenerates the
+baseline; complete generation, native-record validation and comparison remain
+mandatory. This changes refusal timing, not golden acceptance.
+
+On the original PR #55 branch, all 41 xtask unit tests and three integration tests passed in the pinned
+development container, including five new preflight tests. Reversing the actual
+platform condition failed four of those tests. All-target/all-feature Clippy
+and formatting passed. The actual CLI on Ubuntu 24.04 rejected a renamed-source
+fixture in 4.95 ms without writing or starting generation.
+
+Restored test log SHA-256:
+`fb4bd566b96b9c672e8e8b38ee63506622a1eef05a85de6f1316c61a3f043987`.
+Negative CLI receipt `target/preflight-cli-evidence.json`, SHA-256:
+`93996d62b42ee5c6bb3353d9f6336c8f52db5552de526a6f79f3a8eeb303b837`.
+This is a historical preflight checkpoint, not qualification of the current
+integrated source, full V&V, SDK or Foundry acceptance. Fresh integrated
+verification remains required.
+
+Integrated preflight `v2` compiled fresh in the pinned devcontainer: 32/38 xtask
+tests passed, including all five preflight tests. The whole owner failed on
+stale retained native records, unavailable absolute Git metadata and inherited
+build-profile overrides in a compiler-boundary control. The failed run is
+retained at `target/hologram-oracle-response-worktree/target/integrated-golden-preflight-v2/`;
+it is not a passing qualification. Authentic record import and the corrected
+test environment require a fresh complete owner run.
+
+After importing the independently reviewed raw AMD64/ARM64 records from run
+`37412263195` at `81884410`, complete integrated xtask tests passed (38/38,
+61.20 seconds) and strict all-target Clippy passed. Inverting the actual native
+platform guard failed four original preflight controls; restored source again
+passed all 38 tests (61.68 seconds), formatting and strict Clippy. The compiled
+Rust DK-28 owner also passed, enforcing all 60 original/additive Node checks
+with unchanged file deadlines. This is scoped source evidence, not full
+conformance, current installed SDK execution or closure of issues #66/#69.
+
+| Evidence under `target/hologram-oracle-response-worktree/target/` | SHA-256 |
+| --- | --- |
+| `integrated-golden-preflight-v3/gate.log` | `f6efd3effda9d7cce95b6d34ac42a975d81efac51b319a0dccc989b26d5f5f25` |
+| `golden-preflight-guard-mutant-v1/gate.log` | `98d25eabd20e4f2edf35e1504bd866967530402bb60c0903eb56fdb9a5cdc5e6` |
+| `integrated-golden-preflight-v4/gate.log` | `8275d09caf4ba247aaf6a6415f0aa7d5b0295681276100219db6d35cf7125a9f` |
+| `integrated-metadata-owner-v1/gate.log` | `e05f1e8717d446d4ddd78b3c8391e258dc370de5c665627590c17fd7bcc8b96e` |
+
 ## Historical migration input custody
 
 The new source-proof test first failed on the missing verifier. Restored source
