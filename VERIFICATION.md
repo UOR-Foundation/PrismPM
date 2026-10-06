@@ -3330,3 +3330,18 @@ owner tests and 13 native-review policy tests pass in pinned 670 tooling with
 no skips. Complete source qualification, actual both-native construction and
 SDK acceptance remain required. The separate AMD64 smoke failure has no retained
 command result yet; this correction does not claim to explain it.
+
+## Failed SDK smoke diagnostics (6 October)
+
+The construction owner now preserves bounded error code/message facts from
+the three known public smoke-result files when the actual smoke exits nonzero.
+These facts are diagnostics only and cannot produce a construction receipt.
+Malformed, oversized, aliased or hard-linked results are not adopted. Commands,
+environment, arbitrary details and application payloads are omitted.
+
+The original owner genuinely fails the added assertion for a redirected error
+result. All 13 construction custody/policy tests pass in pinned 670 tooling;
+their synthetic smoke facts are unit evidence only. Actual AMD64 failure cause,
+complete current source qualification and real dual-native construction remain
+pending. No smoke step, result requirement, deadline or protected publication
+job changes.

@@ -122,6 +122,18 @@ test('archive changes during the final receipt sweep also fail closed',t=>{
  try{assert.throws(()=>constructionRecord(f.root,f.env,f.smoke));assert(changed);}finally{fs.lstatSync=original;syncBuiltinESMExports();}
 });
 test('the actual smoke invocation cannot turn failed or interrupted processes into records',t=>{
+ const failed=fixture(t);failed.rows['cli.json']=JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code:'PP1001',message:'actual fixture failure'}});
+ assert.throws(()=>constructionRecord(failed.root,failed.env,(...args)=>{failed.smoke(...args);return{status:2,signal:null};}),
+  error=>error.message.includes('PP1001')&&error.message.includes('actual fixture failure')&&error.message.includes('failure-diagnostics-only'));
+ for(const mutate of [f=>{rmSync(join(f.evidence,'cli.json'));symlinkSync(join(f.evidence,'model-check.json'),join(f.evidence,'cli.json'));},
+  f=>{linkSync(join(f.evidence,'cli.json'),join(f.work,'alias.json'));},
+  f=>writeFileSync(join(f.evidence,'cli.json'),'x'.repeat(65537)),
+  f=>writeFileSync(join(f.evidence,'cli.json'),JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code:'PP1001',message:'x'.repeat(2049)}})),
+  f=>writeFileSync(join(f.evidence,'cli.json'),Buffer.from([255]))]){
+  const f=fixture(t);f.rows['cli.json']=JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code:'PP1001',message:'must not be read'}});
+  assert.throws(()=>constructionRecord(f.root,f.env,(...args)=>{f.smoke(...args);mutate(f);return{status:2,signal:null};}),
+   error=>error.message.includes('failure-diagnostics-only')&&!error.message.includes('must not be read'));
+ }
  for(const outcome of [{status:17,signal:null},{status:null,signal:'SIGTERM'},{status:null,signal:null,error:new Error('spawn failed')}]){
   const f=fixture(t);assert.throws(()=>constructionRecord(f.root,f.env,()=>outcome));
  }

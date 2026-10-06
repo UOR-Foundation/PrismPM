@@ -52,6 +52,24 @@ function capture(path,limit,retain=false){
 }
 const smoke=(program,args,environment)=>spawnSync(program,args,{env:environment,stdio:'inherit'});
 
+// Failed construction only. Known public smoke fixtures contain no user data;
+// omit command/environment/payload/details and never issue a success receipt.
+function failureContext(evidence){
+ const results=[];
+ try{directory(evidence);}catch{return {scope:'failure-diagnostics-only',results};}
+ for(const name of ['cli.json','authority-result.json','model-check.json']){
+  try{
+   const row=capture(join(evidence,name),64*1024,true);
+   const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(row.bytes));
+   if(value?.schema!=='prismpm/error-result/1'||!/^PP[0-9]{4}$/.test(value.diagnostic?.code)
+    ||typeof value.diagnostic?.message!=='string'||value.diagnostic.message.length>2048)continue;
+   results.push({path:name,byte_length:row.byte_length,digest:row.digest,
+    code:value.diagnostic.code,message:value.diagnostic.message});
+  }catch{/* Missing, malformed, oversized or aliased output cannot explain the failure. */}
+ }
+ return {scope:'failure-diagnostics-only',results};
+}
+
 // The optional transport is for filesystem unit tests; the CLI always executes
 // the unchanged real smoke command against this process's held archive descriptor.
 export function constructionRecord(location,environment,transport=smoke){
@@ -68,7 +86,8 @@ export function constructionRecord(location,environment,transport=smoke){
   const original=captureDescriptor(fd,archive,64*1024**3);
   const outcome=transport('/bin/bash',[fileURLToPath(new URL('./sdk-candidate.sh',import.meta.url)),
    'smoke',`/proc/${process.pid}/fd/${fd}`,arch,source,evidence],environment);
-  assert.ifError(outcome.error);assert.equal(outcome.signal,null);assert.equal(outcome.status,0,'actual SDK construction smoke failed');
+  assert.ifError(outcome.error);assert.equal(outcome.signal,null);
+  if(outcome.status!==0)assert.equal(outcome.status,0,'actual SDK construction smoke failed: '+JSON.stringify(failureContext(evidence)));
   const rootIdentity=directory(root),evidenceIdentity=directory(evidence);
   // Smoke creates evidence, so the root's size/timestamps legitimately change.
   for(const key of ['dev','ino','uid','gid','mode'])assert.equal(rootIdentity[key],originalRoot[key],'construction root replaced during smoke');
