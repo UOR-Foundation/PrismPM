@@ -3250,3 +3250,20 @@ those bytes were not reformatted. The prescribed formatting owner excludes
 generated output and itself passes in the complete xtask suite. No timeout,
 predicate, test inventory or runtime limit was relaxed. Both full VV passes,
 current installed-SDK qualification and downstream acceptance remain required.
+
+## SDK runtime reference entry (6 October)
+
+The runtime boundary now invokes the existing immutable OCI parser before any
+Docker process. The named regression rejects fifteen malformed references
+through the actual entry path and retains valid registry/loopback syntax. The
+original substring predicate genuinely failed the regression; prior incomplete
+fixture/environment attempts remain retained, not counted as acceptance.
+
+Pinned non-root f061023a tooling passes all 39 xtask tests and all 407 source
+audit tests without omissions, authored workspace formatting and strict xtask
+all-target/all-feature Clippy. Complete captured source remains unchanged.
+Log: target/hologram-oracle-response-worktree/target/
+runtime-reference-complete-v4.log; SHA256
+e5f6f9685ac1c763f95f11507cbf639a433b8358fb8dea108001148feb838b93.
+This is source-component evidence only. Exact-head native checks, independent
+review, full VV and installed-SDK/downstream obligations remain distinct.
