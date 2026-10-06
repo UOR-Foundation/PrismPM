@@ -3109,3 +3109,27 @@ calculator target consumption, and authenticated ecosystem evidence with all
 bounded metadata/native correspondence and actual Hologram adoption are also
 required. Successful component checks, native source-golden review or local
 receipt validation do not close issues #62, #63, #66, #67 or #69.
+
+## Integrated Debian browser environment (6 October)
+
+PR #57's source is integrated without replacing the shared Rust-tool stage,
+Python pin, SDK session ownership, stdin protection or verification deadlines.
+Its inherited browser helper and all eight real-engine controls are retained.
+The devcontainer requires a child reaper for hard browser timeouts.
+
+Pinned devcontainer `f061023a…` passes all 58 selected orchestration/source
+controls (34.700 s; zero skips) and all 16 real Docker lifecycle controls at
+their original deadlines (134.585 s). Logs under
+`target/hologram-oracle-response-worktree/target/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `browser-environment-source-v3/gate.log` | `87d7358981fce2707544aae872c6b31b6e6be51c36e672c2b126c2ff674c8be1` |
+| `browser-devcontainer-owner-v2/gate.log` | `0a797b330039395dd62742fb9e572e83f331dace95e5d6a6da9254be02a18e97` |
+
+The first integrated attempt's missing fixture seam, absent test-container
+reaper and unintended aggregate lifecycle-test deadline remain recorded as
+failures. Independent read-only review clears the source component only.
+These controls do not establish real three-engine readiness: current-source
+browser-ready and final devcontainer builds, both-user engine execution,
+complete unchanged VV and SDK qualification remain required.
