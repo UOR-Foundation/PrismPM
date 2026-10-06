@@ -14,8 +14,9 @@ export const retirementFaults = Object.freeze([
   'late-acquisition', 'pending-acquisition', 'rejected-close', 'pending-close',
   'pending-acquisition-rejected-close',
   'registry-overflow', 'registry-rejection', 'post-seal-acquisition',
+  'preclosed-browser', 'rejected-acquisition',
 ]);
-const positive = new Set(['pending-detach', 'rejected-detach', 'late-acquisition']);
+const positive = new Set(['pending-detach', 'rejected-detach', 'late-acquisition', 'rejected-acquisition']);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const replace = (source, point, value) => {
   assert.equal(source.split(point).length, 2, 'unique retirement qualification point');
@@ -27,7 +28,8 @@ export function retirementDriver(source, fault, trigger) {
   let driver = replace(source, 'let browser;', `let retirementAcquisitions = 0, retirementDetaches = 0, retirementEnables = 0;
 let retirementActiveDetaches = 0, retirementPeakDetaches = 0, retirementSettledDetaches = 0;
 let retirementCloseStarted = 0, retirementClosed = false, retirementCloseHeld = false, retirementHandoffs = 0;
-let retirementRetiredListeners = 0;
+let retirementRetiredListeners = 0, retirementAcquisitionRefusals = 0;
+let retirementPreparedAcquisitions = 0, retirementAcquisitionInvocations = 0;
 let retirementBodyInvocations = 0, retirementTargetClosed = false;
 let retirementRelease;
 const retirementGate = new Promise(resolve => { retirementRelease = resolve; });
@@ -35,7 +37,13 @@ const retirementStart = performance.now();
 let browser;`);
   const acquired = '      try { value = await target.context().newCDPSession(target); }';
   driver = replace(driver, acquired, `      try {
-        value = await target.context().newCDPSession(target);
+        ${fault === 'rejected-acquisition'
+    ? `const closedTarget = await target.context().newPage(); await closedTarget.close();
+        if (!closedTarget.isClosed()) throw new Error('private-retirement-control');
+        retirementPreparedAcquisitions++;
+        try { retirementAcquisitionInvocations++; value = await target.context().newCDPSession(closedTarget); }
+        catch (error) { retirementAcquisitionRefusals++; throw error; }`
+    : 'value = await target.context().newCDPSession(target);'}
         retirementAcquisitions++;
         const detach = value.detach.bind(value), send = value.send.bind(value);
         value.send = (...args) => { if (args[0] === 'Network.enable') retirementEnables++; return send(...args); };
@@ -44,7 +52,7 @@ let browser;`);
           retirementRetiredListeners += ['Network.requestWillBeSent', 'Network.responseReceived',
             'Network.dataReceived', 'Network.loadingFinished', 'Network.loadingFailed']
             .reduce((count, name) => count + value.listenerCount(name), 0);
-          ${['pending-detach', 'primary-body-failure'].includes(fault)
+          ${['pending-detach', 'primary-body-failure', 'rejected-close', 'pending-close'].includes(fault)
     ? 'try { await detach(); } catch {} await new Promise(() => {});'
     : fault === 'rejected-detach'
       ? "try { await detach(); } catch {} throw new Error('private-retirement-control');"
@@ -58,15 +66,22 @@ let browser;`);
     driver = replace(driver, '      session = value;',
       '      session = value; retirementHandoffs++; await new Promise(() => {});');
   }
-  driver = replace(driver, '      const work = registry.own(async () => {',
-    `      const work = registry.own(async () => {
-        retirementActiveDetaches++; retirementPeakDetaches = Math.max(retirementPeakDetaches, retirementActiveDetaches);`);
-  const detachCatch = '        catch { /* The browser process owner remains the cleanup authority. */ }';
-  driver = replace(driver, detachCatch, detachCatch + '\n        finally { retirementActiveDetaches--; retirementSettledDetaches++; }');
+  const retirement = '      const work = registry.retire(() => value.detach());';
+  driver = replace(driver, retirement, retirement + `
+      retirementActiveDetaches++; retirementPeakDetaches = Math.max(retirementPeakDetaches, retirementActiveDetaches);
+      const retirementSettled = () => { retirementActiveDetaches--; retirementSettledDetaches++; };
+      void work.then(retirementSettled, retirementSettled);`);
   const launched = 'browser = await chromium.launch({headless: true, executablePath: browserExecutable});';
   driver = replace(driver, launched, launched + `
 const retirementRealClose = browser.close.bind(browser);
-browser.close = async () => { retirementCloseStarted++; await retirementRealClose(); retirementClosed = !browser.isConnected(); };`);
+browser.close = async () => {
+  retirementCloseStarted++; await retirementRealClose(); retirementClosed = !browser.isConnected();
+  ${['rejected-close','primary-body-failure','pending-acquisition-rejected-close'].includes(fault)
+    ? "throw new Error('private-retirement-control');"
+    : fault === 'pending-close'
+      ? 'retirementCloseHeld = retirementClosed; await new Promise(() => {});'
+      : ''}
+};`);
   if (!['late-acquisition', 'pending-acquisition', 'pending-acquisition-rejected-close', 'registry-overflow', 'post-seal-acquisition'].includes(fault)) {
     const acquisition = '    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
     driver = replace(driver, acquisition, acquisition + '\n    await network.ready; // Fault preparation only; ordinary production never joins setup.');
@@ -86,15 +101,11 @@ browser.close = async () => { retirementCloseStarted++; await retirementRealClos
     `  diagnosticCleanup.own(async () => { throw new Error('private-retirement-control'); });\n${beforeJourneys}`);
   if (fault === 'post-seal-acquisition') driver = replace(driver, beforeJourneys,
     `  await diagnosticCleanup.join();\n${beforeJourneys}`);
-  let close = 'browser ? browser.close() : Promise.resolve()';
-  if (['late-acquisition', 'registry-overflow'].includes(fault)) close =
-    '(async () => { retirementRelease(); if (browser) await browser.close(); })()';
-  if (['rejected-close','primary-body-failure','pending-acquisition-rejected-close'].includes(fault)) close =
-    "(async () => { if (browser) await browser.close(); throw new Error('private-retirement-control'); })()";
-  if (fault === 'pending-close') close =
-    '(async () => { if (browser) await browser.close(); retirementCloseHeld = retirementClosed; await new Promise(() => {}); })()';
-  driver = replace(driver, 'browser ? browser.close() : Promise.resolve()', close);
-  driver = replace(driver, '  let cleanupFailure;', '  const retirementCleanupStart = performance.now();\n  let cleanupFailure;');
+  const close = 'browser ? diagnosticCleanup.closeBrowser(browser) : Promise.resolve()';
+  if (['late-acquisition', 'registry-overflow'].includes(fault)) driver = replace(driver, close,
+    '(async () => { retirementRelease(); if (browser) await diagnosticCleanup.closeBrowser(browser); })()');
+  driver = replace(driver, '  let cleanupFailure;',
+    `${fault === 'preclosed-browser' ? '  if (browser) await browser.close();\n' : ''}  const retirementCleanupStart = performance.now();\n  let cleanupFailure;`);
   driver = replace(driver, '  if (primaryFailure) throw primaryFailure;',
     `  emitDiagnostic({schema: '${witnessSchema}', fault: '${fault}', acquisitions: retirementAcquisitions,
     detaches: retirementDetaches, enables: retirementEnables, elapsed_ms: performance.now() - retirementStart,
@@ -102,6 +113,9 @@ browser.close = async () => { retirementCloseStarted++; await retirementRealClos
     close_started: retirementCloseStarted, browser_closed: retirementClosed, close_held: retirementCloseHeld,
     retired_listeners: retirementRetiredListeners, handoffs: retirementHandoffs,
     body_invocations: retirementBodyInvocations, target_closed: retirementTargetClosed,
+    acquisition_refusals: retirementAcquisitionRefusals,
+    prepared_acquisitions: retirementPreparedAcquisitions, acquisition_invocations: retirementAcquisitionInvocations,
+    ...diagnosticCleanup.summary(),
     cleanup_elapsed_ms: performance.now() - retirementCleanupStart, primary_failure: !!primaryFailure, cleanup_failure: !!cleanupFailure});
   if (primaryFailure) throw primaryFailure;`);
   return driver;
@@ -130,6 +144,12 @@ export function retirementSummary(value) {
       browser_closed: witness?.browser_closed === true, close_held: witness?.close_held === true,
       retired_listeners: count(witness?.retired_listeners), handoffs: count(witness?.handoffs),
       body_invocations: count(witness?.body_invocations), target_closed: witness?.target_closed === true,
+      acquisition_refusals: count(witness?.acquisition_refusals),
+      prepared_acquisitions: count(witness?.prepared_acquisitions), acquisition_invocations: count(witness?.acquisition_invocations),
+      unresolved_acquisitions: count(witness?.unresolved_acquisitions),
+      actual_detaches_settled: count(witness?.actual_detaches_settled),
+      closed_browser_transfers: count(witness?.closed_browser_transfers),
+      unresolved_detaches: count(witness?.unresolved_detaches),
       elapsed_ms: duration(witness?.elapsed_ms), cleanup_elapsed_ms: duration(witness?.cleanup_elapsed_ms),
       primary_failure: witness?.primary_failure === true, cleanup_failure: witness?.cleanup_failure === true}};
 }
@@ -141,6 +161,13 @@ export function requirePrimaryBodyFault(witness, failures, stderr) {
   assert.equal(failures.cleanup_failures.length, 1); assert.equal(failures.cleanup_failures[0].failure, 'unexpected');
   assert(['response-body-failed', 'response-body-unavailable'].includes(failures.submission_failures[0].failure));
   assert.match(stderr, /portable View oracle .*response-body-(?:failed|unavailable)|Network\.getResponseBody: No data found for resource/);
+}
+export function requireAcquisitionRefusal(witness, expected) {
+  assert(Number.isSafeInteger(expected) && expected > 1);
+  assert.equal(witness.prepared_acquisitions,expected,'actual closed targets must be prepared for every submission');
+  assert.equal(witness.acquisition_invocations,expected,'the intended actual protocol operation must be invoked exactly once');
+  assert.equal(witness.acquisition_refusals,expected,'only that actual acquisition call may supply the refusal');
+  assert.equal(witness.acquisitions,0);assert.equal(witness.enables,0);
 }
 function main() {
   const [oracle, artifact, browser, fault, trigger, reference, evidence, ...extra] = process.argv.slice(2);
@@ -189,10 +216,13 @@ function main() {
   const witness = witnesses[0];
   assert.deepEqual(Object.keys(witness).sort(), ['schema', 'fault', 'acquisitions', 'detaches', 'enables',
     'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'browser_closed', 'close_held', 'retired_listeners', 'handoffs',
-    'body_invocations', 'target_closed',
+    'body_invocations', 'target_closed', 'unresolved_acquisitions', 'actual_detaches_settled',
+    'closed_browser_transfers', 'unresolved_detaches', 'acquisition_refusals', 'prepared_acquisitions', 'acquisition_invocations',
     'elapsed_ms', 'cleanup_elapsed_ms', 'primary_failure', 'cleanup_failure'].sort());
   assert.equal(witness.fault, fault);
-  for (const key of ['acquisitions', 'detaches', 'enables', 'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'retired_listeners', 'handoffs', 'body_invocations'])
+  for (const key of ['acquisitions', 'detaches', 'enables', 'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'retired_listeners', 'handoffs', 'body_invocations',
+    'unresolved_acquisitions', 'actual_detaches_settled', 'closed_browser_transfers', 'unresolved_detaches', 'acquisition_refusals',
+    'prepared_acquisitions', 'acquisition_invocations'])
     assert(Number.isSafeInteger(witness[key]) && witness[key] >= 0 && witness[key] <= 128);
   assert.equal(witness.close_started, 1); assert.equal(witness.browser_closed, true, 'actual browser close must complete');
   assert.equal(witness.close_held, fault === 'pending-close', 'synthetic close hold starts only after actual close completes');
@@ -205,14 +235,21 @@ function main() {
     assert.deepEqual(JSON.parse(result.stdout.trim()), baseline.report, 'fault cannot change any actual full-profile acceptance');
     assert.equal(witness.primary_failure, false); assert.equal(witness.cleanup_failure, false);
     assert.equal(witness.active_detaches,0);assert.equal(witness.settled_detaches,witness.detaches);
-    assert(witness.acquisitions > 1, 'multiple actual sessions must exercise retirement');
+    assert.equal(witness.unresolved_acquisitions,0);assert.equal(witness.unresolved_detaches,0);
+    assert.equal(witness.actual_detaches_settled+witness.closed_browser_transfers,witness.detaches,
+      'every started detach must settle or transfer to the successfully retired actual browser');
+    if (fault === 'rejected-acquisition') {
+      requireAcquisitionRefusal(witness,expectedObservationSubmissions(profile,trigger).length);
+    } else assert(witness.acquisitions > 1, 'multiple actual sessions must exercise retirement');
     assert.equal(witness.detaches, witness.acquisitions);
     if (fault === 'late-acquisition') assert.equal(witness.enables, 0, 'retired late sessions cannot enable Network');
-    else {
+    else if (fault !== 'rejected-acquisition') {
       const expected = expectedObservationSubmissions(profile, trigger).length;
       assert.equal(witness.acquisitions, expected); assert.equal(witness.detaches, expected); assert.equal(witness.enables, expected);
       if(fault==='pending-detach')assert(witness.peak_detaches>1&&witness.peak_detaches<=expected,
         'multiple actual bounded retirement operations must overlap within the unchanged owner capacity');
+      if(fault==='pending-detach')assert(witness.closed_browser_transfers>0,
+        'actual detach completion withheld after physical detachment must transfer only after owned close');
     }
   } else if (fault === 'primary-body-failure') {
     requirePrimaryBodyFault(witness, faults, result.stderr);
@@ -227,6 +264,14 @@ function main() {
       assert(witness.handoffs>1,'multiple real sessions must be accessible to the owner before withholding acquisition completion');
       assert.equal(witness.handoffs,witness.acquisitions);assert.equal(witness.enables,0,'withheld acquisition cannot enable retired diagnostics');
       assert.equal(witness.detaches,witness.acquisitions);assert.equal(witness.active_detaches,0);
+      assert.equal(witness.unresolved_acquisitions,witness.acquisitions,
+        'physical browser closure cannot retire unfinished acquisition operations');
+    }
+    if (['rejected-close','pending-close','pending-acquisition-rejected-close','preclosed-browser'].includes(fault))
+      assert.equal(witness.closed_browser_transfers,0,'unsuccessful close cannot authorize transfers');
+    if (['rejected-close','pending-close'].includes(fault)) {
+      assert(witness.unresolved_detaches>0,'the control must actually withhold detach completion');
+      assert(witness.cleanup_elapsed_ms>=9_900);
     }
     if (['registry-overflow', 'post-seal-acquisition'].includes(fault)) assert.equal(witness.acquisitions, 0);
   }

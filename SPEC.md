@@ -290,7 +290,22 @@ remain owned, and cleanup failure cannot replace a primary submission failure.
 The first observed browser cleanup failure remains authoritative even if a
 second cleanup task subsequently reaches that shared deadline. Additive real
 session qualification retains every original case and observed/unobserved run
-and executes 28 cleanup-fault controls across both complete application profiles.
+and executes 32 cleanup-fault controls across both complete application profiles,
+including actual closed-target acquisition refusal and preclosed-browser refusal.
+Final cleanup closes admission to new acquisitions and tasks while still owning
+retirement children of already-admitted acquisitions. An actually initiated
+session detach may transfer to the browser owner only after that owner's awaited
+`close()` fulfills and the same browser is disconnected. A pending, rejected or
+merely disconnected browser cannot mint this witness. The actual detach promise
+remains observed after transfer. The race occurs inside the existing diagnostic
+operation bound, so physical browser retirement clears its timer. A timed-out
+detach without a retirement witness remains owned, rather than becoming success.
+Acquisition, readiness, registry uncertainty and joining never race this witness.
+Diagnostics distinguish actually settled detach calls, closed-browser transfers,
+unresolved detach obligations and unresolved acquisitions; every successful
+cleanup has zero unresolved obligations. All original deadlines remain unchanged.
+Settled means the actual detach promise fulfilled or rejected, not that detachment
+succeeded; successful cleanup still requires the verified enclosing browser close.
 
 The generic model retains its u32 request and response bounds. The pinned
 Hologram portable intent transport supports at most 65,536 request bytes and

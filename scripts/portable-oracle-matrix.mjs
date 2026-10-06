@@ -310,7 +310,7 @@ try {
       executable.verify();for(const input of captured)input.verify();
     }
   }
-  assert.equal(retirementOutcomes.length,28,'both full profiles and every cleanup fault required');
+  assert.equal(retirementOutcomes.length,32,'both full profiles and every cleanup fault required');
   assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
   assert.equal(negativeControls.length, 4);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);

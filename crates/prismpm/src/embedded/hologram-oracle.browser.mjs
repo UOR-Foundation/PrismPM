@@ -55,15 +55,23 @@ function emitDiagnostic(value) {
 function diagnosticRetirementRegistry() {
   const pending = new Set();
   let sealed = false;
+  let closing = false;
+  let closeStarted = false;
   let uncertainty;
-  const own = operation => {
-    if (sealed || pending.size >= 128) {
+  let releaseBrowser;
+  const browserRetired = new Promise(resolve => { releaseBrowser = resolve; });
+  let acquisitions = 0, detaches = 0, settledDetaches = 0, transferredDetaches = 0;
+  const admit = (operation, kind) => {
+    if (sealed || (closing && kind !== 'retirement') || pending.size >= 128) {
       uncertainty ??= new Error('diagnostic cleanup ownership is uncertain');
       throw uncertainty;
     }
     const entry = {};
     pending.add(entry);
-    entry.work = Promise.resolve().then(operation);
+    if (kind === 'acquisition') acquisitions++;
+    entry.work = Promise.resolve().then(operation).finally(() => {
+      if (kind === 'acquisition') acquisitions--;
+    });
     // Observe rejection immediately, including if ordinary acceptance ends
     // before this operation. The owner still retains its original outcome.
     void entry.work.then(() => pending.delete(entry), () => {
@@ -73,7 +81,42 @@ function diagnosticRetirementRegistry() {
     return entry.work;
   };
   return {
-    own,
+    own: operation => admit(operation, 'task'),
+    acquire: operation => admit(operation, 'acquisition'),
+    retire: operation => admit(async () => {
+      detaches++;
+      // Observe the actual detach even when physical browser retirement wins.
+      // Only a completed acquisition may create this retirement obligation.
+      const actual = Promise.resolve().then(operation).then(() => 'settled', () => 'settled');
+      const transferred = browserRetired.then(() => 'transferred');
+      let disposition;
+      try { disposition = await bounded(Promise.race([actual, transferred]), true); }
+      catch {
+        // A diagnostic timeout is not disposal. Keep owning the session until
+        // the enclosing browser has demonstrably retired it.
+        disposition = await transferred;
+      }
+      if (disposition === 'settled') settledDetaches++;
+      else transferredDetaches++;
+    }, 'retirement'),
+    beginClose() {
+      if (closing || sealed) {
+        uncertainty ??= new Error('diagnostic cleanup ownership is uncertain');
+      }
+      closing = true;
+    },
+    async closeBrowser(value) {
+      if (!closing || closeStarted || !value?.isConnected()) {
+        uncertainty ??= new Error('diagnostic browser ownership is uncertain');
+        throw uncertainty;
+      }
+      closeStarted = true;
+      await value.close();
+      if (value.isConnected()) throw new Error('diagnostic browser retirement is uncertain');
+      releaseBrowser();
+    },
+    summary: () => ({unresolved_acquisitions: acquisitions, actual_detaches_settled: settledDetaches,
+      closed_browser_transfers: transferredDetaches, unresolved_detaches: detaches - settledDetaches - transferredDetaches}),
     async join() {
       while (pending.size) await Promise.allSettled([...pending].map(entry => entry.work));
       sealed = true;
@@ -149,10 +192,7 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record,
   const retirements = new Set();
   const detach = value => {
     try {
-      const work = registry.own(async () => {
-        try { await bounded(value.detach(), true); }
-        catch { /* The browser process owner remains the cleanup authority. */ }
-      });
+      const work = registry.retire(() => value.detach());
       retirements.add(work);
       void work.then(() => retirements.delete(work), () => retirements.delete(work));
     } catch { /* Registry uncertainty is owned by final browser cleanup. */ }
@@ -167,7 +207,7 @@ async function submissionNetworkOwner(target, endpoint, expectedRequest, record,
   const ready = (async () => { try {
     // The original acquisition promise owns late arrivals even if its deadline
     // wins. A timed-out session must never be abandoned between submissions.
-    const acquisition = registry.own(async () => {
+    const acquisition = registry.acquire(async () => {
       let value;
       try { value = await target.context().newCDPSession(target); }
       catch { return null; } // Expected optional acquisition refusal is contained.
@@ -604,13 +644,14 @@ async function journey(name, work) {
       resource, failure: failureKind(error)});
   };
   try {
+    diagnosticCleanup.beginClose();
     await bounded((async () => {
       const ownCleanup = operation => Promise.resolve().then(operation).catch(error => {
         firstBrowserCleanupFailure ??= error;
         throw error;
       });
       const outcomes = await Promise.allSettled([ownCleanup(() => diagnosticCleanup.join()),
-        ownCleanup(() => browser ? browser.close() : Promise.resolve())]);
+        ownCleanup(() => browser ? diagnosticCleanup.closeBrowser(browser) : Promise.resolve())]);
       for (const outcome of outcomes) if (outcome.status === 'rejected') throw outcome.reason;
       diagnosticCleanup.check();
     })());

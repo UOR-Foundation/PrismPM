@@ -11,7 +11,7 @@ import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummar
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary,observationFailureDiagnostics} from './portable-oracle-observation.mjs';
-import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFault} from './portable-oracle-retirement.mjs';
+import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFault,requireAcquisitionRefusal} from './portable-oracle-retirement.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
@@ -46,7 +46,7 @@ test('live observation qualification transforms only diagnostics and retains all
  assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
  assert(owner.includes('assert.equal(outcomes.length, 78'));
  assert(owner.includes('assert.equal(negativeControls.length, 4'));
- assert.equal(retirementFaults.length,11);assert.equal(new Set(retirementFaults).size,11);
+ assert.equal(retirementFaults.length,13);assert.equal(new Set(retirementFaults).size,13);
  for(const fault of retirementFaults)for(const trigger of ['click','keyboard']){
   const driver=retirementDriver(source,fault,trigger);
   for(const point of ['assert.equal(invocationCount, 1','assert.equal(navigated, false',
@@ -58,7 +58,7 @@ test('live observation qualification transforms only diagnostics and retains all
   assert(driver.includes('10_000'),'original operation bound remains unchanged');
  }
  assert.throws(()=>retirementDriver(source,'unknown','click'));assert.throws(()=>retirementDriver(source,'pending-detach','unknown'));
- assert(owner.includes("'scripts/portable-oracle-retirement.mjs'"));assert(owner.includes('assert.equal(retirementOutcomes.length,28'));
+ assert(owner.includes("'scripts/portable-oracle-retirement.mjs'"));assert(owner.includes('assert.equal(retirementOutcomes.length,32'));
  assert(owner.includes('retirement_controls:retirementOutcomes'));
  const faults=read('scripts/portable-oracle-retirement.mjs');
  for(const guard of ['witness.retired_listeners, 0','witness.close_held, fault',
@@ -77,6 +77,11 @@ test('live observation qualification transforms only diagnostics and retains all
  for(const patch of [{target_closed:false},{body_invocations:0},{body_invocations:2},{primary_failure:false}])
   assert.throws(()=>requirePrimaryBodyFault({...bodyWitness,...patch},bodyFailures,bodyError));
  assert.throws(()=>requirePrimaryBodyFault(bodyWitness,{...bodyFailures,submission_failures:[{failure:'unexpected'}]},bodyError));
+ const refusal={prepared_acquisitions:2,acquisition_invocations:2,acquisition_refusals:2,acquisitions:0,enables:0};
+ assert.doesNotThrow(()=>requireAcquisitionRefusal(refusal,2));
+ for(const patch of [{prepared_acquisitions:0},{prepared_acquisitions:1},{acquisition_invocations:0},
+  {acquisition_invocations:1},{acquisition_refusals:0},{acquisitions:1},{enables:1}])
+  assert.throws(()=>requireAcquisitionRefusal({...refusal,...patch},2));
  const closedFailures=retirementSummary({fault:'primary-body-failure',exit_code:1,terminated:true,execution_error:true,
   submission_failures:[{failure:'response-body-failed',phase:'response-body',secret:'private-value'}],
   cleanup_failures:[{resource:'browser',failure:'unexpected',secret:'private-value'}],
@@ -275,7 +280,7 @@ function networkOwner(target, events, bounded=operation=>operation,
  const registryStart=source.indexOf('function diagnosticRetirementRegistry('),registryEnd=source.indexOf('\n// CDP observations',registryStart);
  assert(start>=0&&end>start);
  const factory=runInNewContext('('+source.slice(start,end)+')',{bounded,
-  diagnosticRetirementRegistry:runInNewContext('('+source.slice(registryStart,registryEnd)+')'),
+  diagnosticRetirementRegistry:runInNewContext('('+source.slice(registryStart,registryEnd)+')',{bounded}),
   submissionNetworkRecorder:(session,endpoint,expected,record)=>{
    assert.equal(endpoint,'http://127.0.0.1:38129/_hologram/intent');
    return networkObserver(session,expected,events,source);
@@ -344,6 +349,98 @@ test('actual CDP owner orchestration enables only default observation and retire
   "\ntry{await bounded(new Promise(()=>{}));throw new Error('missing body deadline');}catch(error){if(!(error instanceof errors.TimeoutError))throw error;console.log('body-deadline-still-owned');}"],
   {encoding:'utf8',timeout:1000,maxBuffer:65536});
  assert.ifError(bodyTimer.error);assert.equal(bodyTimer.status,0);assert.equal(bodyTimer.stdout.trim(),'body-deadline-still-owned');
+});
+test('only successful owned browser retirement can dispose a pending detach and never an acquisition',async()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const start=source.indexOf('function diagnosticRetirementRegistry('),end=source.indexOf('\n// CDP observations',start);
+ const code=source.slice(start,end);
+ const factory=body=>runInNewContext('('+body+')',{bounded:operation=>operation})();
+ const exercise=async(body,mode)=>{
+  const registry=factory(body);let connected=true,closeCalls=0,detaches=0,releaseClose,releaseDetach;
+  const closeGate=new Promise(resolve=>{releaseClose=resolve;});
+  const detachGate=new Promise(resolve=>{releaseDetach=resolve;});
+  const browser={isConnected:()=>connected,close:async()=>{
+   closeCalls++;connected=false;
+   if(mode==='rejected')throw new Error('private-close-failure');
+   if(mode==='pending')await closeGate;
+  }};
+  let retired=false,joined=false;
+  const work=registry.retire(()=>{detaches++;return detachGate;}).then(()=>{retired=true;});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(detaches,1);
+  registry.beginClose();
+  let acquired=false;
+  assert.throws(()=>registry.acquire(()=>{acquired=true;}),/ownership is uncertain/);assert.equal(acquired,false);
+  // Admission uncertainty is deliberately retained, separate from disposal.
+  const join=registry.join().then(()=>{joined=true;},()=>{joined=true;});
+  const closing=registry.closeBrowser(browser);
+  if(mode==='rejected')await assert.rejects(closing,/private-close-failure/);
+  if(mode==='pending'||mode==='rejected'){
+   await new Promise(resolve=>setImmediate(resolve));assert.equal(retired,false);assert.equal(joined,false);
+   assert.equal(registry.summary().closed_browser_transfers,0,'mere physical disconnect cannot mint authority');
+  }
+  if(mode==='pending'){releaseClose();await closing;}
+  if(mode==='successful')await closing;
+  if(mode==='rejected')releaseDetach();
+  await work;await join;
+  assert.equal(closeCalls,1);assert.equal(registry.summary().unresolved_detaches,0);
+  assert.equal(registry.summary().actual_detaches_settled,mode==='rejected'?1:0);
+  assert.equal(registry.summary().closed_browser_transfers,mode==='rejected'?0:1);
+  await assert.rejects(registry.closeBrowser(browser),/ownership is uncertain|browser ownership is uncertain/);
+  releaseDetach();
+ };
+ for(const mode of ['successful','pending','rejected'])await exercise(code,mode);
+ const pending=factory(code);let resolveAcquisition,drained=false,connected=true;
+ const acquisition=pending.acquire(()=>new Promise(resolve=>{resolveAcquisition=resolve;}));
+ await new Promise(resolve=>setImmediate(resolve));pending.beginClose();
+ const joining=pending.join().then(()=>{drained=true;});
+ await pending.closeBrowser({isConnected:()=>connected,close:async()=>{connected=false;}});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(drained,false);
+ assert.equal(pending.summary().unresolved_acquisitions,1);
+ resolveAcquisition();await acquisition;await joining;assert.equal(pending.summary().unresolved_acquisitions,0);
+ const unexpected=factory(code);unexpected.beginClose();let called=false;
+ await assert.rejects(unexpected.closeBrowser({isConnected:()=>false,close:async()=>{called=true;}}),/browser ownership is uncertain/);
+ assert.equal(called,false);await assert.rejects(unexpected.join(),/browser ownership is uncertain/);
+ const timedOut=runInNewContext('('+code+')',{bounded:async()=>{throw new Error('diagnostic deadline');}})();
+ let timeoutDetached=0,timeoutDone=false,timeoutConnected=true;
+ const timeoutWork=timedOut.retire(()=>{timeoutDetached++;return new Promise(()=>{});}).then(()=>{timeoutDone=true;});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(timeoutDetached,1);assert.equal(timeoutDone,false);
+ assert.equal(timedOut.summary().unresolved_detaches,1,'diagnostic timeout is not disposal');
+ timedOut.beginClose();
+ await timedOut.closeBrowser({isConnected:()=>timeoutConnected,close:async()=>{timeoutConnected=false;}});
+ await timeoutWork;await timedOut.join();assert.equal(timedOut.summary().closed_browser_transfers,1);
+ const stillConnected=async body=>{
+  const registry=factory(body);let release,done=false;
+  const work=registry.retire(()=>new Promise(resolve=>{release=resolve;})).then(()=>{done=true;});
+  await new Promise(resolve=>setImmediate(resolve));registry.beginClose();
+  try {
+   await assert.rejects(registry.closeBrowser({isConnected:()=>true,close:async()=>{}}),/browser retirement is uncertain/);
+   await new Promise(resolve=>setImmediate(resolve));assert.equal(done,false);
+   assert.equal(registry.summary().closed_browser_transfers,0);
+  }finally{release();await work;await registry.join();}
+ };
+ await stillConnected(code);
+ const disconnectedGuard="      if (value.isConnected()) throw new Error('diagnostic browser retirement is uncertain');";
+ assert.equal(code.split(disconnectedGuard).length,2);
+ await assert.rejects(stillConnected(code.replace(disconnectedGuard,'')),assert.AssertionError);
+ const observed=factory(code);let rejectDetach,observedConnected=true;
+ const transferred=observed.retire(()=>new Promise((_,reject)=>{rejectDetach=reject;}));
+ await new Promise(resolve=>setImmediate(resolve));observed.beginClose();
+ await observed.closeBrowser({isConnected:()=>observedConnected,close:async()=>{observedConnected=false;}});
+ await transferred;await observed.join();rejectDetach(new Error('private-late-detach-refusal'));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(observed.summary().closed_browser_transfers,1);
+ const release='      releaseBrowser();';assert.equal(code.split(release).length,2);
+ const onlyFulfilledClose=code.replace('      await value.close();','      try { await value.close(); } catch {}');
+ await assert.rejects(exercise(onlyFulfilledClose,'rejected'),assert.AssertionError);
+ const noAcquisitionTransfer=code.replace('entry.work = Promise.resolve().then(operation).finally(',
+  "entry.work = Promise.race([Promise.resolve().then(operation),browserRetired]).finally(");
+ assert.notEqual(noAcquisitionTransfer,code);
+ const pendingGuard=async body=>{
+  const registry=factory(body);registry.acquire(()=>new Promise(()=>{}));registry.beginClose();let done=false,connected=true;
+  void registry.join().then(()=>{done=true;});
+  await registry.closeBrowser({isConnected:()=>connected,close:async()=>{connected=false;}});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(done,false,'physical close cannot drop unfinished acquisition');
+ };
+ await pendingGuard(code);await assert.rejects(pendingGuard(noAcquisitionTransfer),assert.AssertionError);
 });
 test('a timed-out CDP acquisition still owns and detaches its real late arrival',async()=>{
  let resolve;const arrival=new Promise(yes=>{resolve=yes;}),events=[];let detached=0;
@@ -543,7 +640,7 @@ test('actual submission diagnostic emission and cleanup retain the first body fa
  const tailStart=source.lastIndexOf('  let cleanupFailure;'),tailEnd=source.trimEnd().length-1;
  assert(tailStart>=0&&tailEnd>tailStart);let closed=0,destroyed=0;
  const invoke=primaryFailure=>runInNewContext('(async()=>{'+source.slice(tailStart,tailEnd)+'})',
-  {...helpers,primaryFailure,diagnosticCleanup:helpers.diagnosticRetirementRegistry(),bounded:operation=>operation,browser:{close:async()=>{closed++;throw new Error('private-cleanup-failure');}},
+  {...helpers,primaryFailure,diagnosticCleanup:helpers.diagnosticRetirementRegistry(),bounded:operation=>operation,browser:{isConnected:()=>true,close:async()=>{closed++;throw new Error('private-cleanup-failure');}},
    process:{stdin:{destroy(){destroyed++;throw new Error('private-stdin-failure');}}}})();
  await assert.rejects(invoke(primary),error=>error===primary);assert.equal(closed,1);assert.equal(destroyed,1);
  await assert.rejects(invoke(undefined),error=>error.message==='portable View oracle cleanup: unexpected');
@@ -603,7 +700,7 @@ test('actual submission diagnostic emission and cleanup retain the first body fa
  await ownedRejection(registryCode);
  await assert.rejects(ownedRejection(registryCode.replace(rejectionGuard,'')),assert.AssertionError);
  const lateAcquisition=async code=>{
-  const actual=runInNewContext('('+code+')')();let resolveArrival,done=false,detached=0,enabled=0;
+  const actual=runInNewContext('('+code+')',{bounded:operation=>operation})();let resolveArrival,done=false,detached=0,enabled=0;
   const arrival=new Promise(resolve=>{resolveArrival=resolve;}),session=new EventEmitter();
   session.detach=async()=>{detached++;};session.send=async()=>{enabled++;};
   const observer=await networkOwner({context:()=>({newCDPSession:()=>arrival})},[],operation=>operation,source,actual);
