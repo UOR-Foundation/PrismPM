@@ -3,6 +3,8 @@ import {createHash} from 'node:crypto';
 import {dirname,join} from 'node:path';
 import {readFileSync} from 'node:fs';
 import {installedEnvironment} from './installed-exporter-concurrency.mjs';
+import {fixture as metadataFixture} from '../sdk/metadata-test-fixture.mjs';
+import {captureMetadataEvidence} from '../sdk/metadata-evidence.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const encode=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)
  ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
@@ -20,8 +22,8 @@ export function seedManifestFixture(architecture, authority=sourceAuthorityFixtu
   files:[directory('.lake'),directory('.lake/build'),directory('.lake/build/bin'),file('.lake/build/bin/prod-export')]};
 }
 
-export function lockFixture(authority=sourceAuthorityFixture){
- const standards=Buffer.from('synthetic library SDK standards\n'),platforms=[],children=[];
+export function lockFixture(authority=sourceAuthorityFixture,standards=Buffer.from('synthetic library SDK standards\n')){
+ const platforms=[];
  for(const architecture of ['amd64','arm64']){
   const manifest=seedManifestFixture(architecture,authority);
   const artifacts=['adapter','base-image','binary','crate','dependency-lock','oracle','schema','test-corpus','trust-root','workflow']
@@ -32,18 +34,24 @@ export function lockFixture(authority=sourceAuthorityFixture){
   const inventory_document=encode({schema:'prismpm/sdk-inventory/1',artifacts,
    commands:['cargo','devcontainer','docker','just','node','prismpm','python3'].map(command=>({command,
     executable:command==='node'?'/usr/bin/node':command==='python3'?'/usr/bin/python3.12':'/usr/local/bin/'+command,sha256:hash(architecture+command)}))});
-  const manifest_digest='sha256:'+hash(architecture+'manifest');
-  children.push({digest:manifest_digest,size:100,mediaType:'application/vnd.oci.image.manifest.v1+json',platform:{os:'linux',architecture}});
-  platforms.push({platform:'linux/'+architecture,manifest_digest,inventory_digest:'sha256:'+hash(inventory_document),inventory_document,inventory:artifacts});
+  platforms.push({platform:'linux/'+architecture,inventory_digest:'sha256:'+hash(inventory_document),inventory_document,inventory:artifacts});
  }
- const sdk_index=encode({schemaVersion:2,mediaType:'application/vnd.oci.image.index.v1+json',manifests:children});
- const image='example.invalid/library-sdk@sha256:'+hash(sdk_index);
+ const cleanup=[];
+ let graph;
+ try {
+  graph=metadataFixture({after:fn=>cleanup.push(fn)},'',{standards,repository:'example.invalid/library-sdk',
+   inventories:new Map(platforms.map(row=>[row.platform.split('/')[1],Buffer.from(row.inventory_document)]))});
+ } finally {for(const fn of cleanup)fn();}
+ const sdk_index=graph.index.toString(),image=graph.reference;
+ for(const [index,descriptor] of JSON.parse(sdk_index).manifests.entries())platforms[index].manifest_digest=descriptor.digest;
  const lock={schema:'prismpm/sdk-lock/2',sdk_version:'0.3.0',sdk_image:image,sdk_index,standards_lock:'sha256:'+hash(standards),platforms};
  const bytes=Buffer.from(encode(lock));
  const binding=architecture=>({sdk_image:image,platform:'linux/'+architecture,lock_sha256:hash(bytes),
   inventory_sha256:hash(platforms.find(row=>row.platform==='linux/'+architecture).inventory_document),
   seed_manifest_sha256:hash(encode(seedManifestFixture(architecture,authority))+'\n'),exporter_sha256:seedManifestFixture(architecture,authority).files.at(-1).sha256,compiler_revision:'a'.repeat(40)});
- return {bytes,lock,image,standards,encode,hash,binding};
+ return {bytes,lock,image,standards,encode,hash,binding,
+  metadataEvidence:async()=>{const captured=await captureMetadataEvidence(image,lock.standards_lock,graph.transport);
+   if(encode(captured.lock)!==bytes.toString())throw Error('synthetic graph lock differs');return captured.evidence;}};
 }
 
 export const sourceAuthorityFixture={archive_sha256:'3'.repeat(64),toolchain:'leanprover/lean4:v4.32.1'};

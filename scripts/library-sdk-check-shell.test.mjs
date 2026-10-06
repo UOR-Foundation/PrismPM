@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {chmodSync,copyFileSync,cpSync,mkdtempSync,mkdirSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
+import {chmodSync,copyFileSync,cpSync,existsSync,mkdtempSync,mkdirSync,readFileSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -14,6 +14,7 @@ import {historicalLock,migrationChecks,expectedMigrationProcesses} from '../sdk/
 const source=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const sourceAuthority={archive_sha256:createHash('sha256').update(readFileSync(join(source,'vendor/lean4-prod/lean.tar'))).digest('hex'),toolchain:readFileSync(join(source,'lean-toolchain'),'utf8').trim()};
 const revision='a'.repeat(40),sdk=lockFixture(sourceAuthority),image=sdk.image;
+const metadata=await sdk.metadataEvidence();
 const capturedSource=capture(source,revision);
 const dockerMock=`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2),root=process.env.RECORDED_SOURCE,log=process.env.RECORDED_CALLS;
@@ -26,6 +27,7 @@ if(args[0]==='container'&&args[1]==='create'){console.log(id);process.exit(0);}
 if(args[0]==='container'&&args[1]==='cp'){
  const from=args[2].split(':').slice(1).join(':'),prefix='/opt/prismpm/share/conformance-root/';
  if(from==='/opt/prismpm/share/inventory.json'){fs.copyFileSync(process.env.RECORDED_INVENTORY,args[3]);process.exit(0);}
+ if(from==='/opt/prismpm/share/standards.lock'){fs.copyFileSync(path.join(root,'standards.lock'),args[3]);process.exit(0);}
  const input=from.startsWith(prefix)?path.join(root,from.slice(prefix.length)):from==='/usr/local/bin/prismpm-devcontainer-init'?path.join(root,'sdk/devcontainer-init.sh'):null;
  if(!input)process.exit(65);fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
 }
@@ -50,7 +52,7 @@ function fixture(t){
  const architecture=process.arch==='x64'?'amd64':'arm64';
  writeFileSync(join(work,'lock.json'),sdk.bytes);
  const historical=historicalLock();
- writeFileSync(join(work,'acquisition.json'),JSON.stringify({lock:sdk.lock,migration:{
+ writeFileSync(join(work,'acquisition.json'),JSON.stringify({lock:sdk.lock,metadata,migration:{
   schema:'prismpm/installed-lock-migration/2',platform:'linux/'+architecture,historical_source:historical.authority,
   historical_sha256:historical.source.sha256,target_sha256:sdk.hash(sdk.bytes),checks:migrationChecks,
   processes:expectedMigrationProcesses(sdk.lock,'linux/'+architecture).map(row=>({...row,stdout_sha256:'1'.repeat(64),stderr_sha256:'2'.repeat(64)})),
@@ -68,11 +70,21 @@ async function execute(context){
  try{
   const result=await new Promise(resolve=>execFile('bash',[join(context.root,'scripts/library-sdk-check.sh'),image,revision],{encoding:'utf8',env:context.env,timeout:30000,maxBuffer:1024*1024},(error,stdout,stderr)=>resolve({status:error?.code??0,signal:error?.signal??null,error:error&&typeof error.code!=='number'?error:undefined,stdout,stderr})));
   assert.equal(result.error,undefined,'shell transport must complete within its resource bounds');assert.equal(result.signal,null,'shell transport must exit without a signal');
-  const calls=readFileSync(context.env.RECORDED_CALLS,'utf8').trim().split('\n').map(JSON.parse);return{result,calls};
+  const calls=readFileSync(context.env.RECORDED_CALLS,'utf8').trim().split('\n').map(JSON.parse);
+  const retainedPath=join(context.root,'target/library-sdk-evidence/linux-'+(process.arch==='x64'?'amd64':'arm64'));
+  let retained;
+  if(existsSync(join(retainedPath,'evidence.json'))) {
+    retained=JSON.parse(readFileSync(join(retainedPath,'evidence.json')));
+    for(const row of retained.files) {const bytes=readFileSync(join(retainedPath,row.path));assert.equal(bytes.length,row.byte_length);assert.equal(sdk.hash(bytes),row.sha256);}
+  }
+  return{result,calls,retained};
  }finally{rmSync(context.work,{recursive:true,force:true});}
 }
 async function accepted(context){
- const {result,calls}=await execute(context);assert.equal(result.status,0,result.stderr.slice(-2000));
+ const {result,calls,retained}=await execute(context);assert.equal(result.status,0,result.stderr.slice(-2000));
+ assert.equal(retained.schema,'prismpm/sdk-native-metadata-evidence/1');assert.equal(retained.scope,'original-native-gate-inputs-only');
+ assert.equal(retained.source_revision,revision);assert.equal(retained.sdk_image,image);
+ assert.deepEqual(retained.files.map(row=>row.path),['acquisition.json','compiler.json','custody.json','image.json','inventory.json','result.json','source.json','standards.lock']);
  const created=calls.filter(row=>row[0]==='container'&&row[1]==='create');assert.equal(created.length,5);
  const online=created[1];for(const arg of ['--read-only','--network','bridge','--cap-drop','ALL','--security-opt','no-new-privileges','--memory','512m','--pids-limit','128','DOCKER_CONFIG=/run/prismpm-registry-auth'])assert.ok(online.includes(arg),arg);
  assert.deepEqual(online.slice(-4),[image,'scripts/library-sdk-check.mjs','acquire-lock',image]);

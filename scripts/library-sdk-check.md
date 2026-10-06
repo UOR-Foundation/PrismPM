@@ -12,6 +12,13 @@ or foreign inventory refusals run through the installed CLI on each architecture
 the original lock, process hashes, and proposal remain in the acquisition record.
 This does not accept the historical SDK or replace downstream consumer checks.
 
+Successful gates retain original bytes under
+`target/library-sdk-evidence/linux-ARCH/`, with a final closed manifest and no
+overwrite. Raw metadata custody contains exactly seven selected OCI objects;
+replay does not contact the registry. Release evidence joins both architecture
+directories against the same image/source, captured lock and native bytes.
+This correspondence does not replace any compiler, concurrency or consumer gate.
+
 The gate compares the closed source/compiler/schema/fixture/helper inventory,
 then executes non-root, read-only and offline with private temporary caches.
 Fresh library roots must reproduce all build bytes and execute their generated

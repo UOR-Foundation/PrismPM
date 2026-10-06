@@ -1783,6 +1783,25 @@ with a bounded sub-1-GiB temporary filesystem; root-only custody adversaries
 use a separate disposable fixture mount. Neither phase replaces consumer tests.
 This gate remains native-library evidence, not full SDK or deployment acceptance.
 
+Private gate-internal `prismpm/sdk-metadata-inputs/1` records retain exactly the
+seven original digest-selected OCI objects, their bounded request identities
+and observed timings. Offline replay uses the unchanged metadata decoder and
+must reproduce the canonical lock byte-for-byte. Acquisition deadlines,
+per-object and aggregate transfer bounds do not change. The private acquisition
+record's 288-MiB retention allowance includes the separately bounded base64 raw
+object witness; it does not increase accepted lock or transport limits.
+
+Each successful native library gate retains its original source, image,
+independently materialized inventory/standards, acquisition, construction,
+custody and execution bytes. Complete source and original readers must pass
+before the fresh, non-overwriting evidence directory gains its final manifest.
+The release evidence phase joins both actual native lanes against one immutable
+SDK index, requiring identical captured lock/object bytes and each platform's
+exact independently materialized inventory. Missing, swapped, altered or
+incomplete lanes fail closed. This is metadata/native byte correspondence,
+not an additional execution, signed publisher authentication, hardware
+attestation or a substitute for complete installed V&V and consumer acceptance.
+
 ### 12.7 Internal browser effect protocol
 
 DK-18 owns `Foundation.Browser.Application.V1.Effects` and its closed contract

@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import {parseSdkIndex, validateInventory} from './platform-lock.mjs';
 import {caseKeys, decodeMetadataLayer, limits, parseConfig, parseJson, parseManifest, sha} from './metadata-layer.mjs';
 
-export async function captureMetadataLock(reference, standardsDigest, transport) {
+export async function captureMetadataLock(reference, standardsDigest, transport, observeRequest) {
   assert.equal(typeof transport, 'function', 'bounded SDK transport required');
+  assert(observeRequest === undefined || typeof observeRequest === 'function');
   assert.match(standardsDigest, /^sha256:[0-9a-f]{64}$/);
   assert.match(reference, /^[a-z0-9.-]+(?::[0-9]{1,5})?\/[a-z0-9./_-]+@sha256:[0-9a-f]{64}$/);
   const [repository] = reference.split('@');
@@ -13,13 +14,16 @@ export async function captureMetadataLock(reference, standardsDigest, transport)
   assert(segments.length > 0 && segments.every(part => part && part !== '.' && part !== '..'), 'noncanonical SDK repository path');
   const port = authority.split(':')[1];
   assert(port === undefined || (Number(port) >= 1 && Number(port) <= 65535), 'invalid SDK registry port');
-  const deadline = performance.now() + 180000;
+  const origin = performance.now(), deadline = origin + 180000;
   let received = 0;
   const fetch = async (kind, ref, maximum) => {
-    const remaining = Math.floor(deadline - performance.now());
+    const requested = performance.now(), remaining = Math.floor(deadline - requested);
     assert(remaining > 0, 'SDK metadata capture deadline exceeded');
     // The production transport must enforce this deadline during acquisition,
     // not merely check elapsed time after an unbounded request completes.
+    // Private evidence observes the exact acquisition clock; it cannot change
+    // the request, its bounds, or its result. Ordinary callers remain unchanged.
+    observeRequest?.(origin, requested);
     const bytes = await transport({kind, reference:ref, maximum, timeout_ms:Math.min(45000, remaining)});
     assert(performance.now() <= deadline, 'SDK metadata capture deadline exceeded');
     assert(Buffer.isBuffer(bytes) && bytes.length <= maximum, 'SDK transport exceeded its byte bound');

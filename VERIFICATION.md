@@ -2969,6 +2969,40 @@ runtime, adapter, and oracle image are built twice and must be identical;
 their checksums, SPDX SBOMs, provenance attestations, and signatures are
 produced only for those accepted bytes.
 
+## Metadata/native evidence correspondence — 6 October 2026
+
+The private gate retains all seven bounded OCI input objects and joins them to
+the original independently materialized inventory and standards bytes from both
+native library lanes. It reuses the original metadata decoder, migration,
+compiler, library-result and custody readers. No acquisition deadline, raw-byte
+limit, installed execution, source comparison or release prerequisite is removed.
+The private 288 MiB retention bound includes the additional raw-object encoding;
+it does not increase the 69 MiB network acquisition budget.
+
+Pinned devcontainer `f061023ac557b763aaddcd9ee3fd769a558b43e519c0f272377a429709fd3267`
+passes all 29 owning tests in 102.628 seconds with the original 150-second suite
+and 120-second file bounds. All seven original capture/CLI tests pass; all 22
+release-evidence tests pass, including real three-crate Cargo verification and
+the pinned BuildKit two-platform OCI export. No tests are skipped or cancelled;
+each container exits zero without OOM. Independent read-only adversarial review
+checked source closure, exact release assets, timeout binding and both native
+byte-correspondence paths. The direct reader/packer tests use explicitly synthetic
+SDK records; they do not establish native SDK execution or issue #66 completion.
+
+Logs under `target/hologram-oracle-response-worktree/target/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `metadata-join-red-v1/gate.log` | `f82edad4f127ed24d48b75f47fd9f9b0c244da3ec755733aaea9fd92b4fb71ee` |
+| `metadata-join-owning-v3/gate.log` | `956ce16c4a1467a317c09627ca7b4ff0e4307fc1e0cbd2beafc7b915d9ad7389` |
+| `metadata-capture-clock-v1/gate.log` | `0a368862e00333715c35b17f193bf2bc06c5454f12803dde3972d6d3c474cbdd` |
+| `metadata-release-fixtures-v2/gate.log` | `fc5b50da6c627fe68a4a200ebead9e91527c4bc03fff800eb3b1a8f564072aba` |
+
+The first release-test attempt lacked the Docker socket and failed its real
+BuildKit owner; that record remains retained. These checks establish private
+evidence handling, not full VV, immutable SDK qualification, publisher authority,
+hostile-host race safety, Hologram adoption or production release acceptance.
+
 ## PrismPM v0.3.0 SDK and ecosystem acceptance closure
 
 The complete v0.3.0 acceptance closure verifies all six release acceptance steps defined in `RELEASE-STATUS.md`:
