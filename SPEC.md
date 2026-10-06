@@ -756,7 +756,7 @@ accept the current SDK, or bypass candidate/release policy. Native runner
 selection is a trusted CI property, not physical hardware attestation.
 
 Before native cache initialization or compiler construction, each verified
-review container executes all 28 exporter-seed tests with its actual Node,
+review container executes all 35 exporter-seed tests with its actual Node,
 Python and libc. The exact outer TAP plan, successful test count and absence
 of failures, omissions, cancellation or skips are required; failure prevents
 golden generation. This component check does not authorize SDK acceptance.
@@ -1079,10 +1079,34 @@ every iterator, and preserves canonical bytewise ordering. Source construction
 uses its separate 4,096-entry/16-MiB allowance, never the seed-only allowance.
 Root-owned immutable SDK paths are checked before and after bounded copying;
 custody supplements rather than replaces the independent inventory binding.
+The copy opens source/staging roots and every named ancestor through held Linux
+directory descriptors. Staging ancestor identities are captured when created;
+a replacement cannot redirect writes into foreign content. The private helper
+handoff carries the unchanged acquisition receipt and original authenticated
+manifest bytes. Rust rebinds every staged member before descriptor-relative
+no-overwrite publication, retains descendant identities across relocation, and
+transfers that authenticated snapshot directly to the consumer. Fresh SDK
+construction binds the original staging creation identity, uses inherited
+package/stage descriptors for actual tar/Lake working paths and temporary
+storage, and preserves their genuine descriptor paths in raw process records.
+Source members retain their original native identities across construction.
+Every first
+exporter build checks the original snapshot; a fresh self-measurement cannot
+replace it. The completed build snapshot is retained exactly through export,
+owner completion and final cleanup; cold source-only growth cannot authorize
+a replacement build tree after export. Private verification owners retain
+that custody across generation.
+Failed or interrupted admission marks enclosing retirement uncertain;
+replacement roots and descendants are retained, never pathname-deleted or
+adopted as accepted state. Cleanup uses a retained original node inventory and
+constant-descriptor iterative removal, not recursive descriptor retention. These
+observed-identity checks do not claim atomic isolation against same-user races.
+
 Only the new exporter's `.lake` may be published, from a private sibling stage
 through atomic no-overwrite rename. Generated application workspaces, user
 caches and acceptance evidence are never seeded. Temporary stages are owned
-by their invocation and removed on failure.
+by their invocation. Cleanup removes only identity-bound owned nodes; uncertain
+or interrupted stages remain unaccepted and are never reused.
 SDK seed production and admission share a manifest-driven, exclusive-creation
 copy boundary; recursive discovery cannot expand copied bytes or files. Before
 publication, production rechecks the source closure and preserves declared
@@ -1137,7 +1161,8 @@ and both exporter measurements to the independent SDK authority where required.
 Whole-package custody is checked between phases and before retirement. During
 the second real build only existing `.trace` bodies and directory timestamps
 may refresh; compiled members, paths, source and executable identities stay
-exact. Failed/reordered/repeated phases poison the owner and retire its package;
+exact. Failed/reordered/repeated phases poison the owner; retirement removes
+only proved-owned nodes and refuses changed or unknown descendants.
 unwind/drop cannot publish acceptance. Successful retirement precedes accepted
 manifest publication. Ordinary non-application/non-library verification retains
 its one fresh acquisition and actual export; it has no duplicated A/B package.

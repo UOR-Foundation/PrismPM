@@ -690,7 +690,7 @@ fn generate_in(
     model_bytes: &[u8],
     lex_root: &Path,
     lex_manifest_bytes: &[u8],
-    owned: Option<(&Path, &Value)>,
+    owned: Option<(&Path, &crate::exporter::GenerationContext<'_>)>,
 ) -> Result<GeneratedApplication, PrismError> {
     let application = model.application.as_ref().ok_or_else(|| {
         PrismError::new(
@@ -726,17 +726,24 @@ fn generate_in(
     let lexlean = dependency(&dependency_register, "lexlean")?;
     let lean4_prod = dependency(&dependency_register, "lean4-prod")?;
 
-    let work = tempfile::Builder::new()
-        .prefix("prismpm-application-")
-        .tempdir()
-        .map_err(|error| PrismError::new("PP4002", format!("application work: {error}")))?;
-    let workspace = work.path();
+    let mut work = crate::exporter::directory::Directory::temporary(
+        "prismpm-application-",
+        None,
+        Default::default(),
+    )?;
+    let workspace_path = work.path().to_owned();
+    let workspace = workspace_path.as_path();
+    let first_build = owned.is_none();
+    let mut seed_custody = None;
     let (lean_package, exporter_acquisition) = match owned {
-        Some((package, acquisition)) => (package.to_owned(), acquisition.clone()),
+        Some((package, acquisition)) => (package.to_owned(), acquisition.receipt().clone()),
         None => {
             let package = workspace.join("lean4-prod");
-            let acquisition = crate::exporter::acquire_for(repository_root, &package)?;
-            (package, acquisition)
+            let acquisition =
+                crate::exporter::acquire_for_owned(repository_root, &package, work.scope())?;
+            work.protect_package(&package, &acquisition.snapshot)?;
+            seed_custody = Some(acquisition.snapshot);
+            (package, acquisition.receipt)
         }
     };
 
@@ -808,6 +815,18 @@ fn generate_in(
         &replacements,
         "PP5001",
     )?;
+    if let Some((_, context)) = owned {
+        context.before_build(repository_root, &lean_package)?;
+    } else if first_build {
+        crate::exporter::before_first_build(
+            repository_root,
+            &lean_package,
+            &exporter_acquisition,
+            seed_custody
+                .as_ref()
+                .expect("first build retains original custody"),
+        )?;
+    }
     let build_process = run_process(
         "application-exporter",
         &lake,
@@ -827,7 +846,15 @@ fn generate_in(
             .to_string_lossy()
             .into_owned(),
     );
-    let exporter_process = crate::exporter::run_export(
+    let export_custody = match owned {
+        Some((_, context)) => context.after_build(&lean_package)?,
+        None => crate::exporter::after_build(
+            &lean_package,
+            &exporter_acquisition,
+            seed_custody.as_ref().expect("original unowned custody"),
+        )?,
+    };
+    let exporter_process = crate::exporter::run_export_with_custody(
         "application-export",
         &lake,
         &export_args,
@@ -836,6 +863,7 @@ fn generate_in(
         &replacements,
         "PP5004",
         &exporter_acquisition,
+        &export_custody,
     )?;
     let kernel_bytes = std::fs::read(export.join("kernel.ir"))
         .map_err(|error| PrismError::new("PP5004", format!("kernel.ir: {error}")))?;
@@ -1232,6 +1260,10 @@ fn generate_in(
             "application generator produced duplicate paths",
         ));
     }
+    if seed_custody.is_some() {
+        work.protect_verified_package(&lean_package, &export_custody)?;
+    }
+    work.close()?;
     Ok(GeneratedApplication {
         artifacts,
         exporter_processes: vec![generated_process, build_process, exporter_process],

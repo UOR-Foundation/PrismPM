@@ -87,7 +87,7 @@ export function verifySeedFiles(seed, source, manifest) {
   return files;
 }
 
-export function stageInstalledSeed(source, staging, inventoryDigest, identity) {
+export function stageInstalledSeed(source, staging, inventoryDigest, identity, {rootIdentity} = {}) {
   immutablePath(installedInventory);
   assert.equal(lstatSync(installedInventory).mode & 0o222, 0, 'SDK inventory must be read-only');
   const inventory = Buffer.from(readSmall(installedInventory, 8 * 1024 ** 2));
@@ -115,7 +115,7 @@ export function stageInstalledSeed(source, staging, inventoryDigest, identity) {
     assert.equal(readSmall(join(installedSeed, 'manifest.json'), 8 * 1024 ** 2), manifestBytes.toString('utf8'), 'seed manifest changed');
   };
   verify();
-  stageSeedFiles(installedSeed, staging, manifest);
+  stageSeedFiles(installedSeed, staging, manifest, {rootIdentity});
   verify();
   return {schema: 'prismpm/exporter-acquisition/1', mode: 'sdk-seed', inventory_sha256: inventoryDigest,
     manifest_sha256: authority.manifest_sha256, executable_sha256: authority.executable_sha256,
@@ -124,10 +124,22 @@ export function stageInstalledSeed(source, staging, inventoryDigest, identity) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  assert.equal(process.argv.length, 8, 'internal seed admission requires source, staging and independently bound SDK identity');
-  const [source, staging, inventory, revision, archive, toolchain] = process.argv.slice(2);
+  assert.equal(process.argv.length, 9, 'internal seed admission requires source, staging and independently bound SDK identity');
+  const [source, staging, inventory, revision, archive, toolchain, originalStage] = process.argv.slice(2);
+  assert(originalStage.length <= 1024, 'bounded original staging identity required');
+  const encodedStage = JSON.parse(originalStage);
+  assert.deepEqual(Object.keys(encodedStage).sort(), ['dev','gid','ino','mode','uid']);
+  const rootIdentity = Object.fromEntries(Object.entries(encodedStage).map(([name,value]) => {
+    assert(typeof value === 'string' && /^(?:0|[1-9][0-9]{0,19})$/.test(value));
+    const parsed = BigInt(value); assert(parsed <= 0xffffffffffffffffn); return [name,parsed];
+  }));
   const platform = `linux/${{x64: 'amd64', arm64: 'arm64'}[process.arch]}`;
   assert.equal(process.platform, 'linux');
-  process.stdout.write(encodeInventory(stageInstalledSeed(resolve(source), resolve(staging), inventory,
-    {compiler_revision: revision, archive_sha256: archive, toolchain, platform})));
+  const acquisition = stageInstalledSeed(resolve(source), resolve(staging), inventory,
+    {compiler_revision: revision, archive_sha256: archive, toolchain, platform}, {rootIdentity});
+  // Private handoff only. The unchanged acquisition receipt remains the public
+  // evidence; Rust independently binds the complete original manifest bytes.
+  const manifest_document = acquisition.mode === 'sdk-seed'
+    ? readSmall(join(installedSeed, 'manifest.json'), 8 * 1024 ** 2) : null;
+  process.stdout.write(encodeInventory({acquisition, manifest_document}));
 }
