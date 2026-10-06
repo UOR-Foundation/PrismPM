@@ -26,6 +26,14 @@ const SDK_INDEX_MAX_BYTES: usize = 1024 * 1024;
 // envelope too; the per-document limits are still enforced independently.
 const SDK_CAPTURE_MAX_BYTES: usize = 64 * 1024 * 1024;
 
+pub(crate) fn exporter_seed_manifest_bytes() -> Result<Vec<u8>, PrismError> {
+    read_metadata(
+        Path::new("/opt/prismpm/share/exporter-seed/manifest.json"),
+        SDK_INVENTORY_MAX_BYTES,
+        "PP5008",
+    )
+}
+
 // Apply wire limits before allocation as well as during reading. Metadata is
 // never executable: aliases, hard links and replacements cannot supply it.
 fn read_metadata(
@@ -677,6 +685,17 @@ pub(crate) fn check_existing_lock(root: &Path) -> Result<(), PrismError> {
         execution_lock(root)?;
     }
     Ok(())
+}
+
+/// Invocation-local authority snapshot, including cold source-bootstrap locks.
+/// A later lock addition, removal or replacement must not silently reuse the
+/// earlier verification package, even when neither phase can use an SDK seed.
+pub(crate) fn exporter_lock_authority(root: &Path) -> Result<Option<String>, PrismError> {
+    if lock_is_present(root)? {
+        Ok(Some(execution_lock(root)?.digest()))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Seed authority comes from the consumer's platform lock, never a digest

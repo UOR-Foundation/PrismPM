@@ -6,7 +6,7 @@ import {spawn} from 'node:child_process';
 import {chmodSync,closeSync,constants,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,openSync,readFileSync,readSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {tree,sourceRoots as libraryRoots,sourceAliases,verifyImage,validateCapturedLock,verifyExporterProcess} from './library-sdk-check.mjs';
+import {tree,sourceRoots as libraryRoots,sourceAliases,verifyImage,validateCapturedLock,verifyExporterProcess,validateVerificationOwner} from './library-sdk-check.mjs';
 import {verifyTap} from './browser-api-sdk-check.mjs';
 import {capturePlatformLock,validateInventory} from '../sdk/platform-lock.mjs';
 
@@ -182,14 +182,14 @@ async function generatedPackage(project,build){
 }
 function scans(project,lock){return ['amd64','arm64'].map(arch=>json(join(project,'.prism/cache/advisory-scans/sha256',lock.sdk_image.split('@sha256:')[1],'linux-'+arch+'.json')));}
 
-// Additional installed-SDK acquisition evidence; the public source-free reader
-// still owns complete semantic, execution and oracle validation of the proof.
-export function validateSeededApplication(original,buildId,modelDigest,binding,sourceAuthority){
+// Independently bind both original exports to authenticated, retained build
+// bytes. The public Rust reader additionally verifies semantics and oracles.
+export function validateSeededApplication(original,buildId,modelDigest,binding,sourceAuthority,buildEvidence){
  assert(Buffer.isBuffer(original)&&original.length>0&&original.length<=16*1024*1024);
  const text=new TextDecoder('utf-8',{fatal:true}).decode(original),manifest=JSON.parse(text);
  assert.equal(canonical(manifest),text);hex(buildId);assert.match(modelDigest,digestPattern);
- keys(manifest,['acceptance_sha256','build_id','lexlean_attestation_sha256','model_sha256','processes','schema']);
- assert.equal(manifest.schema,'prismpm/application-verification-manifest/1');assert.equal(manifest.build_id,buildId);
+ keys(manifest,['acceptance_sha256','build_id','exporter_owner','lexlean_attestation_sha256','model_sha256','processes','schema']);
+ assert.equal(manifest.schema,'prismpm/application-verification-manifest/2');assert.equal(manifest.build_id,buildId);
  assert.equal('sha256:'+manifest.model_sha256,modelDigest);
  hex(manifest.acceptance_sha256);hex(manifest.lexlean_attestation_sha256);
  assert(Array.isArray(manifest.processes)&&manifest.processes.length>0);
@@ -197,6 +197,25 @@ export function validateSeededApplication(original,buildId,modelDigest,binding,s
  const exporters=manifest.processes.filter(row=>row.tool==='application-export'||Object.hasOwn(row,'exporter'));
  assert.equal(exporters.length,1,'one actual application regeneration exporter required');
  verifyExporterProcess(exporters[0],'application-export','sdk-seed',binding,sourceAuthority);
+ const owner=validateVerificationOwner(manifest,'application','sdk-seed',binding,sourceAuthority);
+ keys(buildEvidence,['model','lexlean_manifest','artifacts']);
+ assert(Buffer.isBuffer(buildEvidence.model)&&Buffer.isBuffer(buildEvidence.lexlean_manifest));
+ assert.equal(sha(buildEvidence.model),modelDigest);
+ const model=JSON.parse(buildEvidence.model),application=model.application;
+ assert(application&&Array.isArray(application.library_roots)&&application.library_roots.length>0);
+ const outputs=JSON.parse(buildEvidence.lexlean_manifest).outputs;assert(Array.isArray(outputs));
+ const modules=outputs.filter(row=>row.kind==='lean').map(row=>{
+  assert.match(row.path,/^modules\/[A-Za-z0-9_/]+\.lean$/);return row.path.slice(8,-5).replaceAll('/','.');
+ }).sort();assert(modules.length>0&&new Set(modules).size===modules.length);
+ const ir=Object.hasOwn(application,'profile')?application.cargo_name.replaceAll('-','_'):application.name;
+ assert.match(ir,/^[A-Za-z_][A-Za-z0-9_]*$/);
+ const argv=['exe','prod-export',...modules.flatMap(module=>['--module',module]),
+  ...application.library_roots.flatMap(root=>['--root',root]),'--ir-module',ir,'--out','$APPLICATION_WORK/export'];
+ assert(Array.isArray(buildEvidence.artifacts)&&buildEvidence.artifacts.length>0);
+ for(const phase of owner.phases){
+  assert.equal(phase.lexlean_manifest_sha256,sha(buildEvidence.lexlean_manifest).slice(7));
+  equal(phase.artifacts,buildEvidence.artifacts);equal(phase.processes[2].argv,argv);
+ }
  return {manifest:text,manifest_sha256:sha(original)};
 }
 function seededProof(project,proof,result,buildId,lock){
@@ -204,8 +223,29 @@ function seededProof(project,proof,result,buildId,lock){
  assert.equal(selected.length,1,'one original runtime manifest required');
  const binding=validateCapturedLock(Buffer.from(canonical(lock)),lock.sdk_image,{x64:'amd64',arm64:'arm64'}[process.arch],
   bytes(shared+'/standards.lock'),bytes(shared+'/inventory.json'));
+ const release=rootBlob(project,result.release_digest);
+ const manifests=release.layers.filter(row=>row.annotations?.['org.prismpm.role']==='build-manifest');
+ assert.equal(manifests.length,1);assert.equal(manifests[0].digest,result.build_digest);
+ const build=JSON.parse(verifiedBlob(project,manifests[0]));
+ assert.equal(sha(canonical(build.inputs)).slice(7),buildId);
+ const retained=new Map();
+ for(const row of release.layers.filter(row=>row.annotations?.['org.prismpm.role']==='release-artifact')){
+  const path=row.annotations?.['org.opencontainers.image.title'];assert(typeof path==='string'&&!retained.has(path));
+  assert(!path.includes('\\')&&!path.startsWith('/')&&path.split('/').every(part=>part!==''&&part!=='.'&&part!=='..'));
+  retained.set(path,verifiedBlob(project,row));
+ }
+ const files=[...retained].map(([path,value])=>({path,byte_length:value.length,sha256:sha(value).slice(7)})).sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);
+ equal(build.files.map(({kind,...row})=>row),files);
+ const model=retained.get('model.prism.json'),lexlean_manifest=retained.get('application/lexlean-build-manifest.json');
+ // This installed gate explicitly owns the browser-resident Calculator system.
+ // No broad projections/* exclusion can hide an unowned application artifact.
+ const system=JSON.parse(retained.get('system.prism.json'));assert.equal(system.schema,'prismpm/system-model/2');
+ const excluded=new Set(['model.prism.json','system.prism.json','application/lexlean-snapshot.json',
+  'application/lexlean-build-manifest.json','projections/browser-system-release.json','projections/spdx.json']);
+ const artifacts=files.filter(row=>!row.path.startsWith('lexlean/')&&!row.path.startsWith('application/lexlean-build/')&&!excluded.has(row.path));
  return validateSeededApplication(verifiedBlob(project,selected[0]),buildId,result.model_digest,binding,
-  {archive_sha256:sha(bytes(join(installed,'vendor/lean4-prod/lean.tar'))).slice(7),toolchain:bytes(join(installed,'lean-toolchain')).toString().trim()});
+  {archive_sha256:sha(bytes(join(installed,'vendor/lean4-prod/lean.tar'))).slice(7),toolchain:bytes(join(installed,'lean-toolchain')).toString().trim()},
+  {model,lexlean_manifest,artifacts});
 }
 
 export async function acquire(){

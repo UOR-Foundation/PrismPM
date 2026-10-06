@@ -173,7 +173,7 @@ const result = spawnSync(resolve(oracle), [archive, modelPath, wasm, driver, pro
 writeFileSync(join(evidence, 'stdout.txt'), result.stdout ?? '', {flag: 'wx'});
 writeFileSync(join(evidence, 'stderr.txt'), result.stderr ?? '', {flag: 'wx'});
 const diagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
-  try { const value = JSON.parse(line); return value.schema === 'prismpm/browser-submission-diagnostic/1' ? [value] : []; }
+  try { const value = JSON.parse(line); return ['prismpm/browser-submission-diagnostic/1', 'prismpm/browser-submission-diagnostic/2'].includes(value.schema) ? [value] : []; }
   catch { return []; }
 });
 const cleanupDiagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
