@@ -1327,6 +1327,17 @@ generated-output and security reviews remain required; capture and a valid
 proposal are not SDK qualification or release acceptance. Existing v2 projects
 use `lock update`, not migration. Proposal limits are 192 MiB and 262,144 items;
 each embedded lock independently retains its existing closed schema and bounds.
+Private, gate-internal installed migration qualification records use
+`prismpm/installed-lock-migration/2`, binding the original historical document
+through the pinned Hologram Git commit, its root tree and the regular-file blob.
+Captured raw Git objects have independently reviewed SHA-256 identities; their
+Git object identities and complete commit/tree/blob relation are rechecked
+offline. These witnesses establish immutable historical-input identity, not
+signed publisher authenticity. The closed historical-source witness is input provenance only, not
+target SDK or release acceptance. Historical `/1` records retain their reader;
+the current installed acquisition gate requires `/2` and rejects missing or
+changed source witnesses. All original migration executions and independent
+target-inventory checks remain mandatory.
 `fetch --locked`
 materializes all content required for subsequent check, build, test, package,
 verify and release assembly with networking disabled. Native Linux archives
