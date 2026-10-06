@@ -42,11 +42,13 @@ export async function captureLane(directory,root,context) {
   assert.equal(realpathSync(directory),directory);assert.equal(realpathSync(root),root);
   const files=new Map(names.map(name=>[name,regular(join(directory,name),bound(name))]));
   assert([...files.values()].reduce((total,bytes)=>total+bytes.length,0)<=512*1024*1024);
+  // Refuse malformed original bytes before expensive source-closure hashing.
+  // A valid record still passes every independent image/source/lock check.
+  const acquisition=validateAcquisitionBytes(files.get('acquisition.json'));
   const json=name=>JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(files.get(name)));
   verifyImage(json('image.json'),context.sdk_image,context.architecture,context.source_revision);
   assert.equal(json('source.json').revision,context.source_revision);verifySource(root,json('source.json'));
   assert(files.get('standards.lock').equals(regular(join(root,'standards.lock'),16*1024*1024)));
-  const acquisition=validateAcquisitionBytes(files.get('acquisition.json'));
   const lockBytes=Buffer.from(canonical(acquisition.lock));
   const binding=validateCapturedLock(lockBytes,context.sdk_image,context.architecture,
     files.get('standards.lock'),files.get('inventory.json'));
