@@ -1,5 +1,34 @@
 # PrismPM falsifiability and verification record
 
+## Native golden source preflight
+
+Native SDK platforms now reject stale shared source paths, bytes or descriptors
+before proof generation. The normative development writer still regenerates the
+baseline; complete generation, native-record validation and comparison remain
+mandatory. This changes refusal timing, not golden acceptance.
+
+On the original PR #55 branch, all 41 xtask unit tests and three integration tests passed in the pinned
+development container, including five new preflight tests. Reversing the actual
+platform condition failed four of those tests. All-target/all-feature Clippy
+and formatting passed. The actual CLI on Ubuntu 24.04 rejected a renamed-source
+fixture in 4.95 ms without writing or starting generation.
+
+Restored test log SHA-256:
+`fb4bd566b96b9c672e8e8b38ee63506622a1eef05a85de6f1316c61a3f043987`.
+Negative CLI receipt `target/preflight-cli-evidence.json`, SHA-256:
+`93996d62b42ee5c6bb3353d9f6336c8f52db5552de526a6f79f3a8eeb303b837`.
+This is a historical preflight checkpoint, not qualification of the current
+integrated source, full V&V, SDK or Foundry acceptance. Fresh integrated
+verification remains required.
+
+Integrated preflight `v2` compiled fresh in the pinned devcontainer: 32/38 xtask
+tests passed, including all five preflight tests. The whole owner failed on
+stale retained native records, unavailable absolute Git metadata and inherited
+build-profile overrides in a compiler-boundary control. The failed run is
+retained at `target/hologram-oracle-response-worktree/target/integrated-golden-preflight-v2/`;
+it is not a passing qualification. Authentic record import and the corrected
+test environment require a fresh complete owner run.
+
 ## Historical migration input custody
 
 The new source-proof test first failed on the missing verifier. Restored source

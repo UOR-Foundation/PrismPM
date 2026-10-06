@@ -13,6 +13,7 @@ mod audit;
 mod codegen;
 mod formatting;
 mod gate_driver;
+mod golden_preflight;
 mod spec_links;
 mod stdlib;
 
@@ -912,7 +913,8 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
     if review_reason.trim().is_empty() {
         return Err("golden review reason may not be empty".into());
     }
-    let expected = golden_files(root, &review_reason)?;
+    let expected =
+        golden_preflight::generate(root, platform, || golden_files(root, &review_reason))?;
     if write {
         let expected = if platform == Platform::DevelopmentAmd64 {
             golden::native_records(&expected, &expected, platform)?;
