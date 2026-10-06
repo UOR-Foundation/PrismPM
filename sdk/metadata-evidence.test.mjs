@@ -68,7 +68,7 @@ test('metadata custody cannot publish overflow failed or changed graph acquisiti
 });
 
 test('SDK-owned HTTP acquisition retains exact original metadata bytes without credentials or lower layers',async t=>{
-  const {captureSdkMetadataEvidence}=await import('./metadata-cli.mjs');
+  const {captureSdkMetadataEvidence}=await import('./metadata-evidence-cli.mjs');
   const {verifyMetadataEvidence}=await import('./metadata-evidence.mjs');
   const f=fixture(t),requests=[];
   const server=createServer((req,res)=>{

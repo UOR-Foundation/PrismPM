@@ -5,7 +5,6 @@ import {constants, closeSync, fstatSync, openSync, readSync, realpathSync} from 
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {captureMetadataLock} from './metadata-capture.mjs';
-import {captureMetadataEvidence} from './metadata-evidence.mjs';
 import {dockerCredentialProvider} from './metadata-credentials.mjs';
 import {credentialHelperRunner} from './metadata-helper.mjs';
 import {createRegistryTransport} from './metadata-transport.mjs';
@@ -38,11 +37,6 @@ export async function captureSdkMetadata(reference, standards, commands) {
   const bytes = Buffer.from(JSON.stringify(canonical(lock)));
   assert(bytes.length <= 64 * 1024 * 1024, 'SDK capture output exceeds bound');
   return bytes;
-}
-
-export async function captureSdkMetadataEvidence(reference,standards,commands) {
-  const credentials=dockerCredentialProvider({runHelper:credentialHelperRunner(commands)});
-  return captureMetadataEvidence(reference,standards,createRegistryTransport(reference,credentials));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

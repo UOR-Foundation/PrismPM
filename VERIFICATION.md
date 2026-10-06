@@ -3010,6 +3010,42 @@ BuildKit owner; that record remains retained. These checks establish private
 evidence handling, not full VV, immutable SDK qualification, publisher authority,
 hostile-host race safety, Hologram adoption or production release acceptance.
 
+## Isolated public metadata helper — 6 October 2026
+
+The new acquisition regression exposed an unconditional private-gate import in
+the public helper. Actual Cargo file listing followed by isolated helper
+execution failed with `ERR_MODULE_NOT_FOUND`. Private evidence capture now lives
+in a separate gate-only module. `metadata-cli.mjs` is byte-identical to its
+pre-change source (SHA-256 `534bdc85d7e2326c9d5e1febf136f906ca45df91e384dabad50025b40a4d7b35`).
+The eight actual Rust `include_bytes!` helper inputs remain self-contained and
+present in Cargo's file list. This is file-inclusion and isolated source-helper
+execution evidence, not execution from a published Cargo archive.
+
+All 60 DK-28 Node tests pass in 25.386 seconds, retaining every original file
+and the 120-second deadline; both new files are registered in its owning suite.
+The complete 29-test library gate passes in 98.268 seconds under its original
+150/120-second limits. All 13 direct capture/CLI/evidence/embedded tests pass.
+The actual isolated helper acquires seven objects over HTTP; deleting a real
+runtime dependency fails before any new acquisition. Independent read-only
+review checked public/private separation, the eight-file Cargo/runtime closure,
+registered counts and private source dependencies. All containers use pinned
+devcontainer `f061023ac557b763aaddcd9ee3fd769a558b43e519c0f272377a429709fd3267`,
+exit zero without OOM, and omit no selected tests.
+
+Logs under `target/hologram-oracle-response-worktree/target/`:
+
+| Log | SHA-256 |
+| --- | --- |
+| `metadata-embedded-red-v2/gate.log` | `a1d52e7e2ab21b8096e5880754fb7da643d1dbabfb3e32b7ab4f1f2451b527d8` |
+| `metadata-embedded-owning-v1/gate.log` | `a2528540cc520232644d9de37a5d73647af0378d60f47c98ea0bb570dd8d1087` |
+| `metadata-dk28-owner-v1/gate.log` | `236adf5c0fce136a3cc33e2606c1e1076ad3a410d849ce45883375ce3cda4fac` |
+| `metadata-join-owning-v4/gate.log` | `5ef67691e8171af862f2ac0e1588ddcdcae9e4f82b7aabee42b30b3e9140a248` |
+
+An initial package-list attempt used a read-only default target and failed
+before the intended regression; it remains retained separately. Full source
+VV, actual immutable SDK qualification, native effects and Hologram adoption
+are not established by these component checks.
+
 ## PrismPM v0.3.0 SDK and ecosystem acceptance closure
 
 Production release acceptance remains incomplete. `v0_3_0_release_closure.rs`,
