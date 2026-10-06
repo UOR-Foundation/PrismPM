@@ -29,6 +29,22 @@ retained at `target/hologram-oracle-response-worktree/target/integrated-golden-p
 it is not a passing qualification. Authentic record import and the corrected
 test environment require a fresh complete owner run.
 
+After importing the independently reviewed raw AMD64/ARM64 records from run
+`37412263195` at `81884410`, complete integrated xtask tests passed (38/38,
+61.20 seconds) and strict all-target Clippy passed. Inverting the actual native
+platform guard failed four original preflight controls; restored source again
+passed all 38 tests (61.68 seconds), formatting and strict Clippy. The compiled
+Rust DK-28 owner also passed, enforcing all 60 original/additive Node checks
+with unchanged file deadlines. This is scoped source evidence, not full
+conformance, current installed SDK execution or closure of issues #66/#69.
+
+| Evidence under `target/hologram-oracle-response-worktree/target/` | SHA-256 |
+| --- | --- |
+| `integrated-golden-preflight-v3/gate.log` | `f6efd3effda9d7cce95b6d34ac42a975d81efac51b319a0dccc989b26d5f5f25` |
+| `golden-preflight-guard-mutant-v1/gate.log` | `98d25eabd20e4f2edf35e1504bd866967530402bb60c0903eb56fdb9a5cdc5e6` |
+| `integrated-golden-preflight-v4/gate.log` | `8275d09caf4ba247aaf6a6415f0aa7d5b0295681276100219db6d35cf7125a9f` |
+| `integrated-metadata-owner-v1/gate.log` | `e05f1e8717d446d4ddd78b3c8391e258dc370de5c665627590c17fd7bcc8b96e` |
+
 ## Historical migration input custody
 
 The new source-proof test first failed on the missing verifier. Restored source
