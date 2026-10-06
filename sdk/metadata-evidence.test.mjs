@@ -88,7 +88,12 @@ test('SDK-owned HTTP acquisition retains exact original metadata bytes without c
 });
 
 test('private native evidence survives two-lane roundtrip and refuses missing changed aliased or swapped records',async t=>{
-  const {capture}=await import('../scripts/library-sdk-check.mjs');
+  const {capture,validateAcquisitionBytes}=await import('../scripts/library-sdk-check.mjs');
+  // The exact bound reaches JSON validation; the next byte must fail before
+  // decoding/allocation. These are reader bounds, not usable SDK evidence.
+  const maximum=288*1024*1024,oversized=Buffer.alloc(maximum+1);
+  assert.throws(()=>validateAcquisitionBytes(oversized),/bounded original acquisition/);
+  assert.throws(()=>validateAcquisitionBytes(oversized.subarray(0,maximum)),SyntaxError);
   const {captureLane,writeLane,readLane,joinLanes,packLane}=await import('../scripts/library-sdk-metadata-evidence.mjs');
   const {lockFixture,qualificationFixture,resultFixture}=await import('../scripts/library-sdk-fixture.mjs');
   const {historicalLock,migrationChecks,expectedMigrationProcesses}=await import('./migration-qualification.mjs');
@@ -129,6 +134,9 @@ test('private native evidence survives two-lane roundtrip and refuses missing ch
       Buffer.from('{"lock":{},'+raw.toString().slice(1)),
       Buffer.from('{"\\u006cock":{},'+raw.toString().slice(1)),
       Buffer.from(raw.toString().replace('"schema":"prismpm/sdk-lock/2"','"schema":"ignored","schema":"prismpm/sdk-lock/2"')),
+      Buffer.from(raw.toString().replace('"schema":"prismpm/sdk-lock/2"','"schema":"ignored","\\u0073chema":"prismpm/sdk-lock/2"')),
+      Buffer.from([0xff]),
+      Buffer.from(canonical({...values['acquisition.json'],extra:true})),
       Buffer.from(JSON.stringify(values['acquisition.json'],null,2)),
       Buffer.concat([raw,Buffer.from('\n')]),
     ]) {
