@@ -1,5 +1,13 @@
 //! One fresh acquisition boundary for the pinned Lean exporter package.
 
+mod custody;
+pub(crate) mod directory;
+mod owner;
+
+pub(crate) use owner::validate_binding as validate_owner_binding;
+pub(crate) use owner::validate_record as validate_owner_record;
+pub(crate) use owner::{GenerationContext, Phase, ProductEvidence, VerifyExporterOwner};
+
 use crate::error::PrismError;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -113,7 +121,7 @@ pub(crate) struct ExporterExecution {
 /// Every invocation still goes through actual `lake exe prod-export` after the
 /// ordinary build. Measurement refuses an executable that changed across it.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_export(
+pub(crate) fn run_export_with_custody(
     tool: &str,
     program: &Path,
     args: &[String],
@@ -122,6 +130,7 @@ pub(crate) fn run_export(
     replacements: &[(&Path, &str)],
     failure_code: &'static str,
     acquisition: &serde_json::Value,
+    expected: &custody::Snapshot,
 ) -> Result<crate::verification::ProcessRecord, PrismError> {
     if args.first().map(String::as_str) != Some("exe")
         || args.get(1).map(String::as_str) != Some("prod-export")
@@ -132,6 +141,13 @@ pub(crate) fn run_export(
         ));
     }
     let child = cwd.join(".lake/build/bin/prod-export");
+    let package_before = custody::capture(cwd)?;
+    if &package_before != expected {
+        return Err(PrismError::new(
+            "PP5008",
+            "original exporter custody changed before invocation",
+        ));
+    }
     let identity_before = std::fs::symlink_metadata(&child)
         .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
     let before = measure_executable(&child)?;
@@ -145,6 +161,12 @@ pub(crate) fn run_export(
         replacements,
         failure_code,
     );
+    if custody::capture(cwd)? != package_before {
+        return Err(PrismError::new(
+            "PP5008",
+            "exporter package changed during execution",
+        ));
+    }
     if measure_executable(&child)? != before {
         return Err(PrismError::new(
             "PP5008",
@@ -187,6 +209,12 @@ pub(crate) fn run_export(
 pub(crate) fn acquire(destination: &Path) -> Result<(), PrismError> {
     std::fs::create_dir(destination)
         .map_err(|error| PrismError::new("PP5008", format!("fresh exporter directory: {error}")))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(destination, std::fs::Permissions::from_mode(0o700))
+            .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    }
     tar::Archive::new(Cursor::new(ARCHIVE))
         .unpack(destination)
         .map_err(|error| PrismError::new("PP5008", format!("pinned exporter archive: {error}")))?;
@@ -329,25 +357,108 @@ pub(crate) fn validate_acquisition_authority(
 
 /// Only the independently bound installed SDK can seed a fresh exporter. A
 /// private same-filesystem stage is published atomically without overwriting.
+#[cfg(test)]
 pub(crate) fn acquire_for(
     project: &Path,
     destination: &Path,
 ) -> Result<serde_json::Value, PrismError> {
+    acquire_for_owned(project, destination, Default::default())
+        .map(|acquisition| acquisition.receipt)
+}
+
+pub(crate) struct Acquisition {
+    pub(crate) receipt: serde_json::Value,
+    pub(crate) snapshot: custody::Snapshot,
+}
+
+pub(crate) fn before_first_build(
+    project: &Path,
+    package: &Path,
+    receipt: &serde_json::Value,
+    expected: &custody::Snapshot,
+) -> Result<(), PrismError> {
+    if receipt == &cold_acquisition() {
+        if custody::capture_source(package)? != *expected {
+            return Err(PrismError::new(
+                "PP5008",
+                "cold exporter custody changed before first build",
+            ));
+        }
+        return Ok(());
+    }
+    let child = measure_executable(&package.join(".lake/build/bin/prod-export"))?;
+    validate_acquisition_authority(
+        receipt,
+        &child.sha256,
+        crate::sdk::execution_lock(project)?.value(),
+    )?;
+    let bytes = crate::sdk::exporter_seed_manifest_bytes()?;
+    if receipt["manifest_sha256"] != format!("{:x}", Sha256::digest(&bytes)) {
+        return Err(PrismError::new(
+            "PP5008",
+            "seed manifest changed before first build",
+        ));
+    }
+    let manifest: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    if custody::authenticate_seed(package, true, &manifest["files"])? != *expected {
+        return Err(PrismError::new(
+            "PP5008",
+            "authenticated seed custody changed before first build",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn after_build(
+    package: &Path,
+    receipt: &serde_json::Value,
+    before: &custody::Snapshot,
+) -> Result<custody::Snapshot, PrismError> {
+    let after = custody::capture(package)?;
+    let unchanged = if receipt == &cold_acquisition() {
+        before.same_source(&after)
+    } else {
+        before.same_compiler(&after)
+    };
+    if !unchanged {
+        return Err(PrismError::new(
+            "PP5008",
+            "original exporter source or seed custody changed during build",
+        ));
+    }
+    Ok(after)
+}
+
+pub(crate) fn acquire_for_owned(
+    project: &Path,
+    destination: &Path,
+    scope: directory::Scope,
+) -> Result<Acquisition, PrismError> {
+    acquire_for_owned_inner(project, destination, scope.clone()).inspect_err(|_| scope.uncertain())
+}
+
+fn acquire_for_owned_inner(
+    project: &Path,
+    destination: &Path,
+    scope: directory::Scope,
+) -> Result<Acquisition, PrismError> {
     acquire(destination)?;
     let Some(inventory) = crate::sdk::exporter_seed_inventory(project)? else {
-        return Ok(cold_acquisition());
+        return Ok(Acquisition {
+            receipt: cold_acquisition(),
+            snapshot: custody::capture_source(destination)?,
+        });
     };
     let parent = destination
         .parent()
         .ok_or_else(|| PrismError::new("PP5008", "exporter parent is absent"))?;
-    let stage = tempfile::Builder::new()
-        .prefix(".exporter-seed-")
-        .tempdir_in(parent)
-        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
-    let helper = tempfile::Builder::new()
-        .prefix("prismpm-exporter-admission-")
-        .tempdir()
-        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+    let lock = crate::sdk::execution_lock(project)?;
+    let target = directory::Directory::existing(destination, scope.clone())?;
+    let mut stage =
+        directory::Directory::temporary(".exporter-seed-", Some(parent), scope.clone())?;
+    let mut helper =
+        directory::Directory::temporary("prismpm-exporter-admission-", None, scope.clone())?;
     for (name, bytes) in [
         (
             "exporter-seed-admission.mjs",
@@ -362,8 +473,7 @@ pub(crate) fn acquire_for(
             include_bytes!("../sdk/inventory-metadata.mjs").as_slice(),
         ),
     ] {
-        std::fs::write(helper.path().join(name), bytes)
-            .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+        helper.write_file(name, bytes)?;
     }
     let (revision, toolchain) = compiler_identity()?;
     let result = crate::verification::run_process_limited(
@@ -381,36 +491,110 @@ pub(crate) fn acquire_for(
             revision,
             format!("{:x}", Sha256::digest(ARCHIVE)),
             toolchain,
+            serde_json::to_string(&stage.stage_identity()?)
+                .map_err(|error| PrismError::new("PP5008", error.to_string()))?,
         ],
         helper.path(),
         &std::collections::BTreeMap::new(),
         &[],
         "PP5008",
         "180s",
-        64 * 1024,
-    )?;
-    let receipt: serde_json::Value = serde_json::from_str(&result.stdout)
-        .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+        16 * 1024 * 1024,
+    );
+    // A failed or interrupted copy may have uncertain namespace custody. All
+    // enclosing directory owners share this conservative retirement latch.
+    let result = result.inspect_err(|_| scope.uncertain())?;
+    let handoff: serde_json::Value = serde_json::from_str(&result.stdout).map_err(|error| {
+        scope.uncertain();
+        PrismError::new("PP5008", error.to_string())
+    })?;
+    if handoff.as_object().is_none_or(|object| {
+        object
+            .keys()
+            .map(String::as_str)
+            .ne(["acquisition", "manifest_document"])
+    }) {
+        scope.uncertain();
+        return Err(PrismError::new("PP5008", "exporter handoff is not closed"));
+    }
+    let receipt = handoff["acquisition"].clone();
     if receipt == cold_acquisition() {
-        return Ok(receipt);
+        if !handoff["manifest_document"].is_null() {
+            scope.uncertain();
+            return Err(PrismError::new(
+                "PP5008",
+                "cold exporter supplied seeded evidence",
+            ));
+        }
+        stage.expect_empty()?;
+        stage.close()?;
+        helper.close()?;
+        return Ok(Acquisition {
+            receipt,
+            snapshot: custody::capture_source(destination)?,
+        });
     }
-    let child = measure_executable(&stage.path().join(".lake/build/bin/prod-export"))?;
-    validate_acquisition(&receipt, &child.sha256)?;
-    if receipt["inventory_sha256"] != inventory {
-        return Err(PrismError::new(
-            "PP5008",
-            "seed inventory authority changed",
-        ));
-    }
-    rustix::fs::renameat_with(
-        rustix::fs::CWD,
-        stage.path().join(".lake"),
-        rustix::fs::CWD,
-        destination.join(".lake"),
-        rustix::fs::RenameFlags::NOREPLACE,
-    )
-    .map_err(|error| PrismError::new("PP5008", format!("exclusive seed publication: {error}")))?;
-    Ok(receipt)
+    let publish = || {
+        stage.ready()?;
+        target.ready()?;
+        let child = measure_executable(&stage.path().join(".lake/build/bin/prod-export"))?;
+        validate_acquisition_authority(&receipt, &child.sha256, lock.value())?;
+        if receipt["inventory_sha256"] != inventory
+            || crate::sdk::execution_lock(project)?.digest() != lock.digest()
+        {
+            return Err(PrismError::new(
+                "PP5008",
+                "seed inventory authority changed",
+            ));
+        }
+        let bytes = handoff["manifest_document"]
+            .as_str()
+            .filter(|bytes| bytes.len() <= 8 * 1024 * 1024)
+            .ok_or_else(|| {
+                PrismError::new("PP5008", "bounded original seed manifest is missing")
+            })?;
+        if receipt["manifest_sha256"] != format!("{:x}", Sha256::digest(bytes.as_bytes())) {
+            return Err(PrismError::new(
+                "PP5008",
+                "seed handoff manifest differs from SDK authority",
+            ));
+        }
+        let manifest: serde_json::Value = serde_json::from_str(bytes)
+            .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
+        let mut canonical = crate::holo::canonical::encode_value(&manifest)?;
+        canonical.push(b'\n');
+        if canonical != bytes.as_bytes() || manifest["schema"] != "prismpm/exporter-seed/1" {
+            return Err(PrismError::new(
+                "PP5008",
+                "seed handoff manifest is not original canonical metadata",
+            ));
+        }
+        let before = custody::authenticate_seed(stage.path(), false, &manifest["files"])?;
+        stage.ready()?;
+        target.ready()?;
+        if custody::authenticate_seed(stage.path(), false, &manifest["files"])? != before {
+            return Err(PrismError::new(
+                "PP5008",
+                "seed custody changed before publication",
+            ));
+        }
+        stage.publish_lake(&target)?;
+        let after = custody::authenticate_seed(destination, true, &manifest["files"])?;
+        if !before.same_relocated_seed(&after) {
+            return Err(PrismError::new(
+                "PP5008",
+                "authenticated seed descendant custody changed across publication",
+            ));
+        }
+        stage.ready()?;
+        target.ready()?;
+        Ok::<_, PrismError>(after)
+    };
+    let snapshot = publish().inspect_err(|_| scope.uncertain())?;
+    stage.expect_empty()?;
+    stage.close()?;
+    helper.close()?;
+    Ok(Acquisition { receipt, snapshot })
 }
 
 /// A repository-backed verifier must use the same pinned source as builders.
@@ -586,37 +770,93 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn invocation_refuses_preexisting_compiled_replacement_without_launching_child() {
+        use std::os::unix::fs::PermissionsExt;
+        // Actual filesystem and process-boundary refusal, not compiler acceptance.
+        let work = tempfile::tempdir().unwrap();
+        let root = work.path().join("exporter");
+        acquire(&root).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/bin")).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/lib/lean")).unwrap();
+        let executable = root.join(".lake/build/bin/prod-export");
+        std::fs::write(&executable, b"#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let compiled = root.join(".lake/build/lib/lean/Prod.olean");
+        let bytes = b"compiled identity fixture, never accepted as Lean output";
+        std::fs::write(&compiled, bytes).unwrap();
+        let expected = custody::capture(&root).unwrap();
+        let original_executable = measure_executable(&executable).unwrap();
+        let retired = work.path().join("original-compiled");
+        std::fs::rename(&compiled, &retired).unwrap();
+        std::fs::write(&compiled, bytes).unwrap();
+        let launcher = work.path().join("lake");
+        std::fs::write(
+            &launcher,
+            b"#!/bin/sh\nprintf executed > ../child-executed\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let error = run_export_with_custody(
+            "exporter-preinvocation-test",
+            &launcher,
+            &["exe".to_owned(), "prod-export".to_owned()],
+            &root,
+            &std::collections::BTreeMap::new(),
+            &[],
+            "PP5004",
+            &cold_acquisition(),
+            &expected,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "PP5008");
+        assert!(!work.path().join("child-executed").exists());
+        assert_eq!(
+            measure_executable(&executable).unwrap(),
+            original_executable
+        );
+        assert_eq!(std::fs::read(&compiled).unwrap(), bytes);
+        assert_eq!(std::fs::read(&retired).unwrap(), bytes);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn invocation_guard_rejects_actual_child_mutation_and_same_bytes_replacement() {
         use std::os::unix::fs::PermissionsExt;
         // Real process boundary fixture, not Lean/compiler acceptance. The
         // production conformance cases separately execute actual Lake exports.
-        let root = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(root.path().join(".lake/build/bin")).unwrap();
-        let child = root.path().join(".lake/build/bin/prod-export");
+        let work = tempfile::tempdir().unwrap();
+        let root = work.path().join("exporter");
+        acquire(&root).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/bin")).unwrap();
+        let child = root.join(".lake/build/bin/prod-export");
+        let launcher = work.path().join("lake");
+        std::fs::write(&launcher, b"#!/bin/sh\n./.lake/build/bin/prod-export\n").unwrap();
+        std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
         let original = b"#!/bin/sh\nexit 0\n";
         std::fs::write(&child, original).unwrap();
         std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
         let invoke = || {
-            run_export(
+            let snapshot = custody::capture(&root)?;
+            run_export_with_custody(
                 "exporter-identity-test",
-                Path::new("/usr/bin/sh"),
+                &launcher,
                 &["exe".to_owned(), "prod-export".to_owned()],
-                root.path(),
+                &root,
                 &std::collections::BTreeMap::new(),
                 &[],
                 "PP5004",
                 &cold_acquisition(),
+                &snapshot,
             )
         };
-        std::fs::write(root.path().join("exe"), b"./.lake/build/bin/prod-export\n").unwrap();
         let record = invoke().unwrap();
         assert_eq!(
             record.exporter.unwrap().executable,
             measure_executable(&child).unwrap()
         );
         std::fs::write(
-            root.path().join("exe"),
-            b"./.lake/build/bin/prod-export\nprintf genuine-failure >&2\nexit 7\n",
+            &launcher,
+            b"#!/bin/sh\n./.lake/build/bin/prod-export\nprintf genuine-failure >&2\nexit 7\n",
         )
         .unwrap();
         let error = invoke().unwrap_err();
@@ -632,10 +872,44 @@ mod tests {
             ] {
                 std::fs::write(&child, original).unwrap();
                 std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
-                std::fs::write(root.path().join("exe"), format!(
-                    "./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"
+                std::fs::write(&launcher, format!(
+                    "#!/bin/sh\n./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"
                 )).unwrap();
                 assert_eq!(invoke().unwrap_err().code, "PP5008", "exit {exit}: {mutation}");
+            }
+        }
+        // The selected executable is not the whole Lake execution input. A
+        // changed configuration, source or build input must also fail even
+        // when the executable stays byte-for-byte and inode-for-inode intact.
+        std::fs::write(&child, original).unwrap();
+        std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let toolchain = std::fs::read(root.join("lean-toolchain")).unwrap();
+        for exit in [0, 7] {
+            for mutation in [
+                "printf changed >> lean-toolchain",
+                "cp -p lean-toolchain replacement\nmv replacement lean-toolchain",
+                "printf added > .lake/build/extra",
+            ] {
+                std::fs::write(root.join("lean-toolchain"), &toolchain).unwrap();
+                let extra = root.join(".lake/build/extra");
+                if extra.exists() {
+                    std::fs::remove_file(extra).unwrap();
+                }
+                std::fs::write(
+                    &launcher,
+                    format!("#!/bin/sh\n./.lake/build/bin/prod-export\n{mutation}\nexit {exit}\n"),
+                )
+                .unwrap();
+                let result = invoke();
+                assert!(
+                    result.is_err(),
+                    "accepted package mutation exit {exit}: {mutation}"
+                );
+                assert_eq!(
+                    result.unwrap_err().code,
+                    "PP5008",
+                    "package exit {exit}: {mutation}"
+                );
             }
         }
     }
