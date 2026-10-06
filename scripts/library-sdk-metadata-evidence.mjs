@@ -57,7 +57,7 @@ export async function captureLane(directory,root,context) {
   assert.equal(acquisition.migration.platform,binding.platform);
   const authority={archive_sha256:hash(regular(join(root,'vendor/lean4-prod/lean.tar'),64*1024*1024)),
     toolchain:regular(join(root,'lean-toolchain'),1024).toString().trim()};
-  validateQualification(json('compiler.json'),binding,authority);verifyResult(json('result.json'),binding,authority);
+  validateQualification(json('compiler.json'),binding,authority,files.get('inventory.json'));verifyResult(json('result.json'),binding,authority);
   assert.deepEqual(json('custody.json'),{scope:'filesystem-custody-only',checks:6,status:'passed'});
   const row={platform:binding.platform,sdk_image:context.sdk_image,source_revision:context.source_revision,
     inventory_document:files.get('inventory.json').toString(),standards_base64:files.get('standards.lock').toString('base64')};

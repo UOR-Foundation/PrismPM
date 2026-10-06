@@ -1166,7 +1166,7 @@ package construction and std/no_std replay; it does not write to or build from
 the shared read-only SDK Cargo home. Installed toolchain lookups remain read-only.
 Closed concurrency observations remain qualification evidence, not stable
 product attestations, OS authority or universal same-user race isolation.
-The owning installed gate requires all 23 named parser, transport, construction,
+The owning installed gate requires all 29 named parser, transport, construction,
 migration and real process/descriptor controls with no skips; structural test
 fixtures never qualify installed compiler execution or an SDK release.
 The copy opens source/staging roots and every named ancestor through held Linux
@@ -1179,6 +1179,12 @@ transfers that authenticated snapshot directly to the consumer. Fresh SDK
 construction binds the original staging creation identity, uses inherited
 package/stage descriptors for actual tar/Lake working paths and temporary
 storage, and preserves their genuine descriptor paths in raw process records.
+Installed compiler qualification binds every construction and relocation
+extraction transcript to the exact `tar` executable and hash in its independently
+captured native SDK inventory. Hash syntax, a caller-rehashed inventory or a
+different platform's inventory cannot supply extraction authority. Each reader
+negative begins from a separately valid fixture so one mutation cannot poison
+the authority or silently satisfy subsequent negative assertions.
 Source members retain their original native identities across construction.
 Every first
 exporter build checks the original snapshot; a fresh self-measurement cannot
