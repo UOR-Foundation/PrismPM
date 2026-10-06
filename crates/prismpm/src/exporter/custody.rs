@@ -2,12 +2,13 @@
 use crate::PrismError;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
+use std::io::Read;
 use std::path::{Component, Path};
 
 const FILES: usize = 4096;
 const FILE_BYTES: u64 = 256 * 1024 * 1024;
 const TREE_BYTES: u64 = 512 * 1024 * 1024;
+const SOURCE_BYTES: u64 = 16 * 1024 * 1024;
 
 fn failure() -> PrismError {
     PrismError::new(
@@ -16,13 +17,13 @@ fn failure() -> PrismError {
     )
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Identity {
     directory: bool,
     length: u64,
     modified: Option<std::time::SystemTime>,
     #[cfg(unix)]
-    native: (u64, u64, u32, u64, i64, i64),
+    native: (u64, u64, u32, u64, i64, i64, u32, u32),
 }
 
 fn identity(metadata: &std::fs::Metadata) -> Identity {
@@ -40,12 +41,167 @@ fn identity(metadata: &std::fs::Metadata) -> Identity {
             metadata.nlink(),
             metadata.ctime(),
             metadata.ctime_nsec(),
+            metadata.uid(),
+            metadata.gid(),
         ),
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub(super) struct Snapshot(BTreeMap<String, (Identity, Option<String>)>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Snapshot(BTreeMap<String, (Identity, Option<String>)>);
+
+impl Snapshot {
+    pub(super) fn same_source(&self, other: &Self) -> bool {
+        let source = |name: &str| name != ".lake" && !name.starts_with(".lake/");
+        if self
+            .0
+            .keys()
+            .filter(|name| source(name))
+            .ne(other.0.keys().filter(|name| source(name)))
+        {
+            return false;
+        }
+        self.0
+            .iter()
+            .filter(|(name, _)| source(name))
+            .all(|(name, (before, hash))| {
+                let (after, next_hash) = &other.0[name];
+                if name.is_empty() {
+                    #[cfg(unix)]
+                    {
+                        return before.directory
+                            && after.directory
+                            && before.native.0 == after.native.0
+                            && before.native.1 == after.native.1
+                            && before.native.2 == after.native.2
+                            && before.native.6 == after.native.6
+                            && before.native.7 == after.native.7;
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        return before.directory && after.directory;
+                    }
+                }
+                before == after && hash == next_hash
+            })
+    }
+    #[cfg(unix)]
+    pub(super) fn cleanup_nodes(&self) -> impl Iterator<Item = (&str, super::directory::Identity)> {
+        self.0.iter().map(|(path, (node, _))| {
+            (
+                path.as_str(),
+                super::directory::Identity(
+                    node.native.0,
+                    node.native.1,
+                    node.native.6,
+                    node.native.7,
+                    node.native.2,
+                ),
+            )
+        })
+    }
+
+    /// Relocation changes the .lake root's timestamps, not descendant custody.
+    pub(super) fn same_relocated_seed(&self, other: &Self) -> bool {
+        let seed = |name: &str| name == ".lake" || name.starts_with(".lake/");
+        if self
+            .0
+            .keys()
+            .filter(|name| seed(name))
+            .ne(other.0.keys().filter(|name| seed(name)))
+        {
+            return false;
+        }
+        self.0
+            .iter()
+            .filter(|(name, _)| seed(name))
+            .all(|(name, (before, hash))| {
+                let (after, next_hash) = &other.0[name];
+                if name == ".lake" {
+                    #[cfg(unix)]
+                    {
+                        return before.directory
+                            && after.directory
+                            && before.native.0 == after.native.0
+                            && before.native.1 == after.native.1
+                            && before.native.2 == after.native.2
+                            && before.native.6 == after.native.6
+                            && before.native.7 == after.native.7;
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        return before == after;
+                    }
+                }
+                before == after && hash == next_hash
+            })
+    }
+    fn seed_files(&self) -> serde_json::Value {
+        serde_json::Value::Array(
+            self.0
+                .iter()
+                .filter(|(name, _)| *name == ".lake" || name.starts_with(".lake/"))
+                .map(|(name, (identity, hash))| {
+                    #[cfg(unix)]
+                    let mode = identity.native.2 & 0o777;
+                    #[cfg(not(unix))]
+                    let mode = 0;
+                    if identity.directory {
+                        serde_json::json!({"path":name,"kind":"directory","mode":mode})
+                    } else {
+                        serde_json::json!({"path":name,"kind":"file","mode":mode,
+                            "byte_length":identity.length,"sha256":hash})
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    /// Lake may legitimately refresh build traces. Source and executable
+    /// identities may not change merely because a second phase builds again.
+    pub(super) fn same_compiler(&self, other: &Self) -> bool {
+        if self.0.keys().ne(other.0.keys()) {
+            return false;
+        }
+        self.0.iter().all(|(name, (before, hash))| {
+            let (after, next_hash) = &other.0[name];
+            if !name.starts_with(".lake/") && name != ".lake" {
+                return before == after && hash == next_hash;
+            }
+            // Only existing Lake trace bodies may refresh. Compiled libraries,
+            // objects, launcher configuration and the executable remain exact.
+            if name.ends_with(".trace") && !before.directory && !after.directory {
+                #[cfg(unix)]
+                {
+                    return before.native.0 == after.native.0
+                        && before.native.2 == after.native.2
+                        && before.native.6 == after.native.6
+                        && before.native.7 == after.native.7;
+                }
+                #[cfg(not(unix))]
+                {
+                    return before == after && hash == next_hash;
+                }
+            }
+            if before.directory && after.directory {
+                #[cfg(unix)]
+                {
+                    return before.native.0 == after.native.0
+                        && before.native.1 == after.native.1
+                        && before.native.2 == after.native.2
+                        && before.native.3 == after.native.3
+                        && before.native.6 == after.native.6
+                        && before.native.7 == after.native.7;
+                }
+                #[cfg(not(unix))]
+                {
+                    return before == after;
+                }
+            }
+            before == after && hash == next_hash
+        })
+    }
+}
 
 struct SourceMember {
     directory: bool,
@@ -73,9 +229,13 @@ fn charge_build(entries: &mut usize, bytes: &mut u64, length: u64) -> Result<(),
 }
 
 fn source_members() -> Result<BTreeMap<String, SourceMember>, PrismError> {
+    source_members_from(super::ARCHIVE)
+}
+
+fn source_members_from(archive: impl Read) -> Result<BTreeMap<String, SourceMember>, PrismError> {
     let mut members = BTreeMap::new();
     let mut total = 0_u64;
-    for entry in tar::Archive::new(Cursor::new(super::ARCHIVE))
+    for entry in tar::Archive::new(archive)
         .entries()
         .map_err(|_| failure())?
     {
@@ -90,16 +250,20 @@ fn source_members() -> Result<BTreeMap<String, SourceMember>, PrismError> {
             return Err(failure());
         }
         let mode = entry.header().mode().map_err(|_| failure())?;
+        let length = entry.size();
+        // Charge the source-only budget before allocating or reading a body.
+        // It must never borrow the independent 512-MiB build-tree allowance.
+        total = total.checked_add(length).ok_or_else(failure)?;
+        if members.len() >= FILES || total > SOURCE_BYTES || (directory && length != 0) {
+            return Err(failure());
+        }
         let mut bytes = Vec::new();
         entry
             .by_ref()
-            .take(FILE_BYTES + 1)
+            .take(length + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| failure())?;
-        total = total.checked_add(bytes.len() as u64).ok_or_else(failure)?;
-        if bytes.len() as u64 > FILE_BYTES
-            || total > TREE_BYTES
-            || members.len() >= FILES
+        if bytes.len() as u64 != length
             || members
                 .insert(
                     name,
@@ -118,10 +282,48 @@ fn source_members() -> Result<BTreeMap<String, SourceMember>, PrismError> {
 }
 
 pub(super) fn capture(root: &Path) -> Result<Snapshot, PrismError> {
+    capture_members(root, source_members()?, true)
+}
+
+pub(super) fn capture_source(root: &Path) -> Result<Snapshot, PrismError> {
+    let snapshot = capture_members(root, source_members()?, false)?;
+    if snapshot.0.contains_key(".lake") {
+        return Err(failure());
+    }
+    Ok(snapshot)
+}
+
+pub(super) fn authenticate_seed(
+    root: &Path,
+    sources: bool,
+    expected: &serde_json::Value,
+) -> Result<Snapshot, PrismError> {
+    let observed = capture_members(
+        root,
+        if sources {
+            source_members()?
+        } else {
+            BTreeMap::new()
+        },
+        true,
+    )?;
+    if observed.seed_files() != *expected {
+        return Err(PrismError::new(
+            "PP5008",
+            "staged exporter differs from authenticated SDK manifest",
+        ));
+    }
+    Ok(observed)
+}
+
+fn capture_members(
+    root: &Path,
+    mut sources: BTreeMap<String, SourceMember>,
+    require_executable: bool,
+) -> Result<Snapshot, PrismError> {
     if root.canonicalize().ok().as_deref() != Some(root) {
         return Err(failure());
     }
-    let mut sources = source_members()?;
     // Seed bounds count .lake and its descendants, not the pinned source
     // members or the package root. Preserve that full admitted domain.
     let maximum_names = sources.len() + FILES + 1;
@@ -249,7 +451,9 @@ pub(super) fn capture(root: &Path) -> Result<Snapshot, PrismError> {
             }
         }
     }
-    if !sources.is_empty() || !observed.contains_key(".lake/build/bin/prod-export") {
+    if !sources.is_empty()
+        || (require_executable && !observed.contains_key(".lake/build/bin/prod-export"))
+    {
         return Err(failure());
     }
     // Recheck all names and identities, including directories after traversal.
@@ -269,6 +473,278 @@ pub(super) fn capture(root: &Path) -> Result<Snapshot, PrismError> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn first_cold_build_checks_the_original_source_snapshot() {
+        let project = tempfile::tempdir().unwrap();
+        let package = project.path().join("package");
+        super::super::acquire(&package).unwrap();
+        let original = capture_source(&package).unwrap();
+        super::super::before_first_build(
+            project.path(),
+            &package,
+            &super::super::cold_acquisition(),
+            &original,
+        )
+        .unwrap();
+        std::fs::write(package.join("Prod/Export.lean"), b"changed in-place source").unwrap();
+        assert!(
+            super::super::before_first_build(
+                project.path(),
+                &package,
+                &super::super::cold_acquisition(),
+                &original
+            )
+            .is_err(),
+            "unchanged inode cannot substitute source bytes before the first Lake build"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn permitted_trace_refresh_cannot_rebase_file_or_directory_ownership() {
+        let owner = tempfile::tempdir().unwrap();
+        let root = owner.path().join("package");
+        super::super::acquire(&root).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/bin")).unwrap();
+        std::fs::write(
+            root.join(".lake/build/bin/prod-export"),
+            b"unaccepted fixture",
+        )
+        .unwrap();
+        std::fs::write(root.join(".lake/build/compile.trace"), b"original trace").unwrap();
+        let before = capture(&root).unwrap();
+        std::fs::write(
+            root.join(".lake/build/compile.trace"),
+            b"legitimate body refresh",
+        )
+        .unwrap();
+        let after = capture(&root).unwrap();
+        assert!(before.same_compiler(&after));
+        // Internal metadata-negative corpus, not fabricated SDK acceptance.
+        // Every row originates from the real tree above; change one ownership
+        // fact in the private comparison input without requiring root CI.
+        for path in [".lake/build", ".lake/build/compile.trace"] {
+            for ownership in ["uid", "gid"] {
+                let mut changed = after.clone();
+                let (node, _) = changed.0.get_mut(path).unwrap();
+                if ownership == "uid" {
+                    node.native.6 = node.native.6.checked_add(1).unwrap();
+                } else {
+                    node.native.7 = node.native.7.checked_add(1).unwrap();
+                }
+                assert!(
+                    !before.same_compiler(&changed),
+                    "accepted {ownership} drift at {path}"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn publication_transfers_original_descendant_custody_not_just_equal_bytes() {
+        use std::os::unix::fs::PermissionsExt;
+        let owner = tempfile::tempdir().unwrap();
+        let stage = owner.path().join("stage");
+        let destination = owner.path().join("package");
+        super::super::acquire(&destination).unwrap();
+        std::fs::create_dir_all(stage.join(".lake/build/bin")).unwrap();
+        let executable = stage.join(".lake/build/bin/prod-export");
+        let compiled = stage.join(".lake/build/member.olean");
+        std::fs::write(&executable, b"unaccepted filesystem executable").unwrap();
+        std::fs::set_permissions(executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(&compiled, b"admitted member").unwrap();
+        let staged = capture_members(&stage, BTreeMap::new(), true).unwrap();
+        std::fs::rename(stage.join(".lake"), destination.join(".lake")).unwrap();
+        let published = capture(&destination).unwrap();
+        assert!(
+            staged.same_relocated_seed(&published),
+            "ordinary rename must retain the whole admitted domain"
+        );
+        let selected = destination.join(".lake/build/member.olean");
+        let replacement = selected.with_extension("replacement");
+        std::fs::write(&replacement, std::fs::read(&selected).unwrap()).unwrap();
+        std::fs::set_permissions(
+            &replacement,
+            std::fs::metadata(&selected).unwrap().permissions(),
+        )
+        .unwrap();
+        std::fs::rename(replacement, selected).unwrap();
+        let substituted = capture(&destination).unwrap();
+        assert_eq!(
+            staged.seed_files(),
+            substituted.seed_files(),
+            "hash/mode equality alone cannot detect replacement"
+        );
+        assert!(
+            !staged.same_relocated_seed(&substituted),
+            "same-byte replacement cannot become a new admitted baseline"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn seed_handoff_rejects_non_executable_drift_before_first_build() {
+        use std::os::unix::fs::PermissionsExt;
+        // Actual filesystem handoff, not installed-SDK or compiler acceptance.
+        let owner = tempfile::tempdir().unwrap();
+        let root = owner.path().join("package");
+        super::super::acquire(&root).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/bin")).unwrap();
+        std::fs::create_dir_all(root.join(".lake/build/lib/lean")).unwrap();
+        let executable = root.join(".lake/build/bin/prod-export");
+        let object = root.join(".lake/build/lib/lean/Dependency.olean");
+        std::fs::write(&executable, b"filesystem executable fixture").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(&object, b"admitted dependency bytes").unwrap();
+        let expected = capture(&root).unwrap().seed_files();
+        let measured = super::super::measure_executable(&executable).unwrap();
+        authenticate_seed(&root, true, &expected).unwrap();
+        for mutation in ["bytes", "mode", "extra", "missing"] {
+            std::fs::write(&object, b"admitted dependency bytes").unwrap();
+            std::fs::set_permissions(&object, std::fs::Permissions::from_mode(0o644)).unwrap();
+            match mutation {
+                "bytes" => std::fs::write(&object, b"substituted dependency bytes").unwrap(),
+                "mode" => std::fs::set_permissions(&object, std::fs::Permissions::from_mode(0o600))
+                    .unwrap(),
+                "extra" => std::fs::write(root.join(".lake/extra"), b"extra").unwrap(),
+                "missing" => std::fs::remove_file(&object).unwrap(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                super::super::measure_executable(&executable).unwrap(),
+                measured
+            );
+            assert!(
+                authenticate_seed(&root, true, &expected).is_err(),
+                "accepted {mutation}"
+            );
+            if mutation == "extra" {
+                std::fs::remove_file(root.join(".lake/extra")).unwrap();
+            }
+        }
+    }
+
+    fn source_archive(rows: &[(&str, u64)]) -> Vec<u8> {
+        let mut archive = tar::Builder::new(Vec::new());
+        for (name, length) in rows {
+            let mut header = tar::Header::new_gnu();
+            header.set_mode(0o644);
+            header.set_size(*length);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, name, std::io::repeat(0).take(*length))
+                .unwrap();
+        }
+        archive.into_inner().unwrap()
+    }
+
+    #[test]
+    fn source_inventory_has_its_own_exact_byte_budget() {
+        assert_eq!(SOURCE_BYTES, 16 * 1024 * 1024, "SPEC source-only allowance");
+        assert_eq!(TREE_BYTES, 512 * 1024 * 1024, "SPEC build-only allowance");
+        let exact = source_archive(&[("first", SOURCE_BYTES - 1), ("last", 1)]);
+        let members = source_members_from(exact.as_slice()).unwrap();
+        assert_eq!(members.len(), 2);
+        assert_eq!(members["first"].bytes.len() as u64, SOURCE_BYTES - 1);
+        assert_eq!(members["last"].bytes, [0]);
+        drop(members);
+        drop(exact);
+        let excess = source_archive(&[("first", SOURCE_BYTES), ("last", 1)]);
+        assert!(source_members_from(excess.as_slice()).is_err());
+        drop(excess);
+        assert!(
+            source_members_from(source_archive(&[("oversized", SOURCE_BYTES + 1)]).as_slice())
+                .is_err()
+        );
+        // Neither the source allowance nor the package root consumes build
+        // capacity. Keep the full independently admitted 512-MiB build budget.
+        let (mut entries, mut bytes) = (0, 0);
+        charge_build(&mut entries, &mut bytes, FILE_BYTES).unwrap();
+        charge_build(&mut entries, &mut bytes, FILE_BYTES).unwrap();
+        assert_eq!(bytes, TREE_BYTES);
+    }
+
+    #[test]
+    fn source_inventory_has_its_own_exact_entry_budget() {
+        assert_eq!(FILES, 4096, "SPEC independent inventory entry allowance");
+        let names = (0..=FILES)
+            .map(|index| format!("source-{index}"))
+            .collect::<Vec<_>>();
+        let rows = names
+            .iter()
+            .map(|name| (name.as_str(), 0))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            source_members_from(source_archive(&rows[..FILES]).as_slice())
+                .unwrap()
+                .len(),
+            FILES
+        );
+        assert!(source_members_from(source_archive(&rows).as_slice()).is_err());
+    }
+
+    #[test]
+    fn source_inventory_rejects_declared_oversize_before_reading_payload() {
+        assert_header_rejected_before_body(tar::EntryType::Regular, SOURCE_BYTES + 1);
+        assert_header_rejected_before_body(tar::EntryType::Regular, u64::MAX);
+    }
+
+    #[test]
+    fn source_inventory_rejects_directory_payload_before_reading_it() {
+        assert_header_rejected_before_body(tar::EntryType::Directory, 1);
+    }
+
+    fn assert_header_rejected_before_body(kind: tar::EntryType, length: u64) {
+        // No payload exists. Refusal must come from the declared source bound,
+        // not allocation or the tar reader's subsequent truncation error.
+        let mut header = tar::Header::new_gnu();
+        header.set_path("member").unwrap();
+        header.set_entry_type(kind);
+        header.set_mode(0o644);
+        header.set_size(length);
+        header.set_cksum();
+        struct HeaderOnly<'a> {
+            header: std::io::Cursor<&'a [u8]>,
+            body_read: &'a std::cell::Cell<bool>,
+        }
+        impl Read for HeaderOnly<'_> {
+            fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+                if self.header.position() < 512 {
+                    self.header.read(output)
+                } else {
+                    self.body_read.set(true);
+                    Err(std::io::Error::other("body must not be read"))
+                }
+            }
+        }
+        let body_read = std::cell::Cell::new(false);
+        let result = source_members_from(HeaderOnly {
+            header: std::io::Cursor::new(header.as_bytes().as_slice()),
+            body_read: &body_read,
+        });
+        let Err(error) = result else {
+            panic!("oversized source must be refused");
+        };
+        assert_eq!(error.code.as_str(), "PP5008");
+        assert!(
+            !body_read.get(),
+            "source budget must be checked before reading the body"
+        );
+    }
+
+    #[test]
+    fn source_inventory_rejects_truncated_member_without_partial_admission() {
+        let mut header = tar::Header::new_gnu();
+        header.set_path("truncated").unwrap();
+        header.set_mode(0o644);
+        header.set_size(2);
+        header.set_cksum();
+        let mut truncated = header.as_bytes().to_vec();
+        truncated.push(0);
+        assert!(source_members_from(truncated.as_slice()).is_err());
+    }
+
     fn fixture() -> (tempfile::TempDir, std::path::PathBuf) {
         let owner = tempfile::tempdir().unwrap();
         let root = owner.path().join("package");
@@ -282,6 +758,32 @@ mod tests {
         .unwrap();
         assert!(capture(&root).is_ok());
         (owner, root)
+    }
+
+    #[test]
+    fn actual_capture_preserves_full_build_budget_beside_pinned_source() {
+        let (_owner, root) = fixture();
+        let child_bytes = std::fs::metadata(root.join(".lake/build/bin/prod-export"))
+            .unwrap()
+            .len();
+        for (name, length) in [
+            ("first", FILE_BYTES),
+            ("last", TREE_BYTES - FILE_BYTES - child_bytes),
+        ] {
+            std::fs::File::create(root.join(".lake").join(name))
+                .unwrap()
+                .set_len(length)
+                .unwrap();
+        }
+        assert!(
+            capture(&root).is_ok(),
+            "pinned source must not consume build bytes"
+        );
+        std::fs::write(root.join(".lake/overflow"), [0]).unwrap();
+        assert!(
+            capture(&root).is_err(),
+            "actual build aggregate excess refused"
+        );
     }
 
     #[test]
