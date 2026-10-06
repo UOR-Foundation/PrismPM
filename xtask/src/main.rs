@@ -421,12 +421,20 @@ fn mutated_sdk_command(
     Ok(output?)
 }
 
+fn validate_sdk_runtime_reference(image: &str) -> Result<(), Fail> {
+    prismpm::oci::validate_reference(image, true)
+        .map_err(|_| "SDK runtime boundary requires a valid immutable OCI SDK reference")?;
+    Ok(())
+}
+
 fn check_sdk_runtime_boundary() -> Result<(), Fail> {
     let image = std::env::var("PRISMPM_TEST_SDK_IMAGE")
         .map_err(|_| "PRISMPM_TEST_SDK_IMAGE is required for the SDK runtime boundary gate")?;
-    if !image.contains("@sha256:") {
-        return Err("SDK runtime boundary requires a digest-qualified image".into());
-    }
+    check_sdk_runtime_boundary_for_image(&image)
+}
+
+fn check_sdk_runtime_boundary_for_image(image: &str) -> Result<(), Fail> {
+    validate_sdk_runtime_reference(image)?;
 
     let infrastructure_tests = Command::new("docker")
         .args([
@@ -444,7 +452,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
             "/opt/prismpm/share/conformance-root",
             "--entrypoint",
             "node",
-            &image,
+            image,
             "--test",
             "scripts/sdk-candidate.test.mjs",
             "sdk/platform-lock.test.mjs",
@@ -454,7 +462,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         return Err("SDK candidate transport or platform-lock negative tests failed".into());
     }
 
-    let baseline = docker_sdk_command(&image, &[])?;
+    let baseline = docker_sdk_command(image, &[])?;
     if !baseline.status.success()
         || !String::from_utf8_lossy(&baseline.stdout)
             .contains("\"schema\":\"prismpm/completion-result/1\"")
@@ -469,7 +477,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
     }
 
     let override_attempt = docker_sdk_command(
-        &image,
+        image,
         &[
             "--env",
             "PRISMPM_SDK_INVENTORY=/tmp/attacker-inventory.json",
@@ -494,7 +502,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         std::fs::set_permissions(&planted_command, std::fs::Permissions::from_mode(0o755))?;
     }
     let injected = mutated_sdk_command(
-        &image,
+        image,
         Some("PATH=/planted:/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin"),
         planted.path(),
         "/planted",
@@ -508,7 +516,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(tampered.path(), std::fs::Permissions::from_mode(0o755))?;
     }
-    let changed = mutated_sdk_command(&image, None, tampered.path(), "/usr/local/bin/just")?;
+    let changed = mutated_sdk_command(image, None, tampered.path(), "/usr/local/bin/just")?;
     assert_sdk_inventory_rejection(&changed, "a changed declared executable")?;
 
     println!(
@@ -1674,6 +1682,58 @@ mod golden_tests {
 
 #[cfg(test)]
 mod command_tests {
+    #[test]
+    fn sdk_runtime_reference_rejects_malformed_digest_before_execution() {
+        let digest = "a".repeat(64);
+        for reference in [
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}"),
+            format!("127.0.0.1:5000/sdk@sha256:{digest}"),
+        ] {
+            super::validate_sdk_runtime_reference(&reference).unwrap();
+        }
+        for reference in [
+            String::new(),
+            "ghcr.io/uor-foundation/prismpm-sdk:latest".to_owned(),
+            "ghcr.io/uor-foundation/prismpm-sdk@sha256:".to_owned(),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "a".repeat(63)
+            ),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "a".repeat(65)
+            ),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "A".repeat(64)
+            ),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "g".repeat(64)
+            ),
+            format!("ghcr.io/uor-foundation/prismpm-sdk:tag@sha256:{digest}"),
+            format!("https://ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}"),
+            format!("ghcr.io/../prismpm-sdk@sha256:{digest}"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}\n"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}@sha256:{digest}"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}?secret=x"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}#fragment"),
+            format!("@sha256:{digest}"),
+        ] {
+            assert!(
+                super::validate_sdk_runtime_reference(&reference).is_err(),
+                "malformed SDK runtime reference must fail before Docker execution"
+            );
+            let error = super::check_sdk_runtime_boundary_for_image(&reference)
+                .expect_err("the actual runtime boundary must reject the same malformed input");
+            assert_eq!(
+                error.to_string(),
+                "SDK runtime boundary requires a valid immutable OCI SDK reference",
+                "the actual entry path must refuse before invoking Docker"
+            );
+        }
+    }
+
     #[test]
     fn node_gate_does_not_inherit_cargo_loader_state() {
         super::command(
