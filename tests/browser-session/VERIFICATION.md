@@ -62,7 +62,31 @@ on failure. Cleanup checks the owned workspace identity and moves it into a
 fresh private retirement directory. It is trusted-host housekeeping, not a
 security guarantee against a hostile process with the same host UID.
 
-The complete generated 37-check owner, current presentation owner, both native
-records, full VV, installed immutable SDK and downstream consumption must still
-pass on their exact source before broader acceptance. These checkpoints close
-no SDK/native/application issue and do not qualify candidate 602 as a release.
+## Complete generated-owner checkpoint — 6 October 2026
+
+Both complete owners executed at frozen revision
+`578b1fb210aa8b7fc2da5ce8668477337756c76c`; source snapshots were unchanged.
+
+- Session: all 37 checks passed, no skips/cancellations, 3,486.093 seconds;
+  all original vectors, maxima, 21 generated behavioral mutants, 44 custody
+  substitutions and twelve maximum observers remained required. Log SHA-256:
+  `6e1bd56d9e49abe0082e2bcacf5980112d11247f59591a5be52e0fa11b695234`.
+- Presentation: all 37 checks passed, no skips/cancellations, 1,985.298 seconds;
+  actual Chromium/Firefox/WebKit paths, native comparisons and mutation checks.
+  Log SHA-256:
+  `33da8e8938c2289eb8d130a0f340d2e7e1c1dc768f374ca68de196b1082c9aec`.
+- Exact-revision native source review `37441393526` passed both AMD64 and ARM64.
+  Separate adversarial review rechecked both actual receipts and original
+  owner inventories.
+
+The subsequent merge `64addb80` changes only documentation and the external
+oracle SDK-reference parser. Independent review verified these paths are
+disjoint from both generated-owner input closures. The retained executions are
+dependency-equivalent evidence, not newly executed owners at that merge SHA.
+The changed Rust boundary still requires its own current-head native checks.
+
+These are fresh source executions using candidate 602 tooling, not installed
+SDK qualification. Complete consecutive VV, installed immutable dual-native
+SDK qualification and downstream consumption remain required. No
+SDK/native/application issue is closed and candidate 602 is not qualified as a
+release by these checkpoints.
