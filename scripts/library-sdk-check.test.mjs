@@ -167,7 +167,9 @@ test('captured seed lock requires both exact platforms and independently selecte
    index=>{index.manifests[0].platform.variant=null;},index=>{index.manifests[0].platform.OS='linux';},
    index=>{index.manifests[0].platform['os.version']=null;},index=>{index.manifests[1].platform['os.features']=[];},
    index=>{index.manifests[0].size=1024*1024+1;},
-   ()=>'{"schemaVersion":2,'+lock.sdk_index.slice(1)]){
+   ()=>'{"schemaVersion":2,'+lock.sdk_index.slice(1),
+   ...['2.0000000000000000001','1.9999999999999999999'].map(n=>()=>lock.sdk_index.replace('"schemaVersion":2','"schemaVersion":'+n)),
+   ...['100.000000000000000001','1048576.00000000001','99.999999999999999999'].map(n=>()=>lock.sdk_index.replace(/"size":\d+/, '"size":'+n))]){
    assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
    const changed=structuredClone(lock),index=structuredClone(originalIndex),raw=alter(index);
    changed.sdk_index=typeof raw==='string'?raw:encode(index);

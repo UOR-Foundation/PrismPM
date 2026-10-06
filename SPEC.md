@@ -1340,6 +1340,10 @@ levels during parsing. The Rust runtime enforces the same rules on the original
 digest-bound nested index, even when an invalid index and its reference are
 coherently rehashed. OCI whitespace and equivalent integral numeric spellings
 remain valid; original OCI bytes are never replaced with Prism canonical JSON.
+Integral index fields are checked against their original decimal tokens before
+floating-point conversion. Fractional values that round to schema version 2 or
+to a permitted child size are rejected; equivalent exact integral decimal and
+exponent spellings and unrelated fractional extension values remain valid.
 The SDK acquisition profile `prismpm/sdk-metadata/1` is declared by the image
 configuration label `org.prismpm.sdk.metadata`. Its last filesystem layer contains
 only `opt/`, `opt/prismpm/`, `opt/prismpm/share/`, and the exact installed

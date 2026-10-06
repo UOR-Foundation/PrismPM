@@ -16,7 +16,7 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 
 // JSON.parse alone discards duplicate keys. OCI consumers must not observe a
 // different effective configuration through duplicate objects or case aliases.
-export function parseJson(bytes) {
+export function parseJson(bytes, numberToken = () => {}) {
   assert(Buffer.isBuffer(bytes) && bytes.length <= limits.document, 'bounded OCI JSON required');
   const text = new TextDecoder('utf-8', {fatal:true}).decode(bytes);
   let at = 0;
@@ -30,28 +30,49 @@ export function parseJson(bytes) {
     }
     assert.fail('unterminated JSON string');
   };
-  const value = depth => {
+  const value = (depth, path) => {
     assert(depth <= 64, 'OCI JSON nesting exceeds bound'); white();
     const char = text[at];
     if (char === '"') {string(); return;}
     if (char === '{' || char === '[') {
       at++; white(); const end = char === '{' ? '}' : ']', seen = new Set();
       if (text[at] === end) {at++; return;}
+      let index = 0;
       for (;;) {
+        let key = index++;
         if (char === '{') {
-          white(); const key = string(); assert(!seen.has(key), 'duplicate OCI JSON key'); seen.add(key);
+          white(); key = string(); assert(!seen.has(key), 'duplicate OCI JSON key'); seen.add(key);
           white(); assert.equal(text[at++], ':');
         }
-        value(depth + 1); white();
+        value(depth + 1, [...path, key]); white();
         if (text[at] === end) {at++; return;}
         assert.equal(text[at++], ',', 'JSON delimiter required');
       }
     }
     const token = /^(?:true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)/.exec(text.slice(at));
     assert(token, 'JSON value required'); at += token[0].length;
+    if (/^[-0-9]/.test(token[0])) numberToken(token[0], path);
   };
-  value(0); white(); assert.equal(at, text.length, 'trailing OCI JSON data');
+  value(0, []); white(); assert.equal(at, text.length, 'trailing OCI JSON data');
   return JSON.parse(text);
+}
+
+// Check the decimal token before JSON.parse can round fractions to integers.
+// Exponents and output allocation stay bounded by the document/maximum width.
+export function boundedPositiveInteger(token, maximum) {
+  const match = /^(0|[1-9][0-9]*)(?:\.([0-9]+))?(?:[eE]([+-]?[0-9]+))?$/.exec(token);
+  assert(match, 'positive integral OCI number required');
+  let digits = (match[1] + (match[2] ?? '')).replace(/^0+/, '');
+  assert(digits.length > 0, 'positive integral OCI number required');
+  const exponent = match[3] ?? '0';
+  assert(exponent.replace(/^[+-]?0*/, '').length <= 7, 'OCI exponent exceeds bound');
+  const significant = digits.replace(/0+$/, '');
+  const scale = Number(exponent) - (match[2]?.length ?? 0) + digits.length - significant.length;
+  digits = significant;
+  assert(scale >= 0 && digits.length + scale <= String(maximum).length, 'OCI integer exceeds bound or is fractional');
+  const exact = digits + '0'.repeat(scale);
+  assert(exact.length < String(maximum).length || exact <= String(maximum), 'OCI integer exceeds bound');
+  return Number(exact);
 }
 
 export function caseKeys(value, names) {

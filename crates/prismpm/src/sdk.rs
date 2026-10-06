@@ -484,6 +484,58 @@ fn oci_field_casing(value: &serde_json::Value, names: &[&str]) -> bool {
     })
 }
 
+// RawValue retains decimal spelling after the duplicate/depth guard has run.
+// serde_json::Number/f64 alone can round a fractional token to an integer.
+#[derive(serde::Deserialize)]
+struct IndexNumbers<'a> {
+    #[serde(borrow, rename = "schemaVersion")]
+    schema_version: &'a serde_json::value::RawValue,
+    #[serde(borrow)]
+    manifests: Vec<IndexDescriptorNumber<'a>>,
+}
+
+#[derive(serde::Deserialize)]
+struct IndexDescriptorNumber<'a> {
+    #[serde(borrow)]
+    size: &'a serde_json::value::RawValue,
+}
+
+fn bounded_positive_integer(token: &str, maximum: usize) -> Option<usize> {
+    let (mantissa, exponent) = token.split_once(['e', 'E']).unwrap_or((token, "0"));
+    let exponent_digits = exponent
+        .trim_start_matches(['+', '-'])
+        .trim_start_matches('0');
+    if exponent_digits.len() > 7 {
+        return None;
+    }
+    let exponent = exponent.parse::<i64>().ok()?;
+    let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    if whole.is_empty()
+        || !whole
+            .bytes()
+            .chain(fraction.bytes())
+            .all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let coefficient = format!("{whole}{fraction}");
+    let digits = coefficient.trim_start_matches('0');
+    let significant = digits.trim_end_matches('0');
+    if significant.is_empty() {
+        return None;
+    }
+    let scale = exponent - fraction.len() as i64 + (digits.len() - significant.len()) as i64;
+    let maximum = maximum.to_string();
+    if scale < 0 || significant.len() as i64 + scale > maximum.len() as i64 {
+        return None;
+    }
+    let exact = format!("{significant}{}", "0".repeat(scale as usize));
+    if exact.len() == maximum.len() && exact > maximum {
+        return None;
+    }
+    exact.parse().ok()
+}
+
 pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), PrismError> {
     let fail = || {
         PrismError::new(
@@ -505,6 +557,14 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
         return Err(fail());
     }
     let index = crate::holo::canonical::decode_json_unique(bytes).map_err(|_| fail())?;
+    let numbers: IndexNumbers<'_> = serde_json::from_slice(bytes).map_err(|_| fail())?;
+    if bounded_positive_integer(numbers.schema_version.get(), 2) != Some(2)
+        || numbers.manifests.iter().any(|manifest| {
+            bounded_positive_integer(manifest.size.get(), SDK_INDEX_MAX_BYTES).is_none()
+        })
+    {
+        return Err(fail());
+    }
     let manifests = index["manifests"].as_array().ok_or_else(fail)?;
     let platforms = value["platforms"].as_array().ok_or_else(fail)?;
     if !oci_field_casing(
@@ -517,8 +577,7 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
             "subject",
             "artifactType",
         ],
-    ) || index["schemaVersion"].as_f64() != Some(2.0)
-        || index["mediaType"] != "application/vnd.oci.image.index.v1+json"
+    ) || index["mediaType"] != "application/vnd.oci.image.index.v1+json"
         || manifests.len() != 2
         || platforms.len() != 2
     {
@@ -565,9 +624,6 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
             || platform.get("os.features").is_some()
             || manifest["digest"] != row["manifest_digest"]
             || manifest["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
-            || manifest["size"].as_f64().is_none_or(|size| {
-                size <= 0.0 || size > SDK_INDEX_MAX_BYTES as f64 || size.fract() != 0.0
-            })
             || !(platform.get("variant").is_none()
                 || (architecture == "arm64" && platform["variant"] == "v8"))
         {
@@ -759,7 +815,7 @@ pub(crate) fn exporter_seed_inventory(root: &Path) -> Result<Option<String>, Pri
             return Err(PrismError::new(
                 "PP5401",
                 "unsupported native exporter platform",
-            ))
+            ));
         }
     };
     let platform = format!("{}/{architecture}", std::env::consts::OS);
@@ -1398,7 +1454,7 @@ mod tests {
         };
         assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
         let raw = baseline["sdk_index"].as_str().unwrap();
-        for spelling in ["2.0", "2e0"] {
+        for spelling in ["2.0", "2e0", "2000e-3", "2.0000000000000000000000"] {
             assert!(admit(
                 raw.replace(
                     "\"schemaVersion\":2",
@@ -1427,6 +1483,11 @@ mod tests {
             "1048577",
             "9007199254740993",
             "1e400",
+            "100.000000000000000001",
+            "1048576.00000000001",
+            "99.999999999999999999",
+            "1e-10000000",
+            "1e10000000",
         ] {
             assert_eq!(
                 admit(raw.replace("\"size\":100", &format!("\"size\":{number}")))
@@ -1435,6 +1496,22 @@ mod tests {
                 "PP5401"
             );
         }
+        for number in [
+            "2.0000000000000000001",
+            "1.9999999999999999999",
+            "2.0000000000000000001e0",
+        ] {
+            assert_eq!(
+                admit(raw.replace(
+                    "\"schemaVersion\":2",
+                    &format!("\"schemaVersion\":{number}")
+                ))
+                .unwrap_err()
+                .code,
+                "PP5401"
+            );
+        }
+        assert!(admit(format!("{{\"extension\":0.125,{}", &raw[1..])).is_ok());
         for duplicate in [
             format!("{{\"schemaVersion\":2,{}", &raw[1..]),
             raw.replace(

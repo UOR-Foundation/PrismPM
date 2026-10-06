@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import {caseKeys, descriptor as ociDescriptor, limits, parseJson} from './metadata-layer.mjs';
+import {boundedPositiveInteger, caseKeys, descriptor as ociDescriptor, limits, parseJson} from './metadata-layer.mjs';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const digest = /^sha256:[0-9a-f]{64}$/;
@@ -30,7 +30,12 @@ export function parseSdkIndex(bytes, reference) {
   const port = reference.split('/', 1)[0].split(':', 2)[1];
   assert.ok(port === undefined || (Number(port) >= 1 && Number(port) <= 65535));
   assert.equal(sha(bytes), reference.split('@')[1], 'SDK index bytes disagree with pinned digest');
-  const index = parseJson(bytes);
+  const index = parseJson(bytes, (token, path) => {
+    if (path.length === 1 && path[0] === 'schemaVersion')
+      assert.equal(boundedPositiveInteger(token, 2), 2, 'OCI schema version differs');
+    if (path.length === 3 && path[0] === 'manifests' && Number.isInteger(path[1]) && path[2] === 'size')
+      boundedPositiveInteger(token, limits.document);
+  });
   caseKeys(index, ['schemaVersion', 'mediaType', 'manifests', 'annotations', 'subject', 'artifactType']);
   assert.equal(index.schemaVersion, 2);
   assert.equal(index.mediaType, 'application/vnd.oci.image.index.v1+json');

@@ -177,7 +177,7 @@ test('all platform-lock entry points reject coherently rehashed ambiguous OCI in
     const pretty = Buffer.from(JSON.stringify(JSON.parse(index), null, 2) + '\n');
     assert.equal(parseSdkIndex(pretty, `example.invalid/test-sdk@${sha(pretty)}`).length, 2,
       'OCI index bytes are preserved, not required to use Prism canonical serialization');
-    for (const spelling of ['2.0', '2e0']) {
+    for (const spelling of ['2.0', '2e0', '2000e-3', '2.0000000000000000000000']) {
       const bytes = Buffer.from(index.toString().replace('"schemaVersion":2', '"schemaVersion":' + spelling)
         .replace('"size":100', '"size":1e2'));
       assert.equal(parseSdkIndex(bytes, `example.invalid/test-sdk@${sha(bytes)}`).length, 2);
@@ -199,8 +199,14 @@ test('all platform-lock entry points reject coherently rehashed ambiguous OCI in
     ].map(mutate => {const value = JSON.parse(index); mutate(value); return encode(value);});
     changes.unshift(Buffer.from('{"schemaVersion":2,' + index.toString().slice(1)));
     changes.unshift(nested(64));
-    for (const number of ['0', '-0', '-1', '0.5', '100.1', '1048577', '9007199254740993', '1e400'])
+    for (const number of ['0', '-0', '-1', '0.5', '100.1', '1048577', '9007199254740993', '1e400',
+      '100.000000000000000001', '1048576.00000000001', '99.999999999999999999',
+      '1e-10000000', '1e10000000'])
       changes.push(Buffer.from(index.toString().replace('"size":100', '"size":' + number)));
+    for (const number of ['2.0000000000000000001', '1.9999999999999999999', '2.0000000000000000001e0'])
+      changes.push(Buffer.from(index.toString().replace('"schemaVersion":2', '"schemaVersion":' + number)));
+    const extension = Buffer.from('{"extension":0.125,' + index.toString().slice(1));
+    assert.equal(parseSdkIndex(extension, `example.invalid/test-sdk@${sha(extension)}`).length, 2);
     changes.unshift(Buffer.from(index.toString().replace('"architecture":"amd64"',
       '"architecture":"amd64","architec\\u0074ure":"amd64"')));
     for (const bytes of changes) {
