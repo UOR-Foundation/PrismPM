@@ -61,3 +61,17 @@ Its first run failed only the new root-path diagnostic regex because Node append
 assertion details after the message; the corrected assertion requires the exact
 root-path line. Both runs are retained. The generated owner also checks caller
 mask restoration on success or failure.
+
+Generated-owner v5: 37/37 passing, 1916.196s, zero failures, omissions, skips,
+cancellations or TODOs; Docker exit0/no OOM. Fresh compiler construction and
+all original std/no_std/Wasm, three-engine/native replay, 64-MiB maxima,
+five compiled-source mutants, substitution and terminal-retirement checks run.
+The source remains unchanged at aa2ce13a throughout this owner. Log SHA256:
+075d653aaa68b93efef76863db810185b0c288e0d0a48b6311c645c6f7f8f353.
+Environment: the existing immutable 60226bc7 devcontainer's pinned tools,
+fresh source compilation, private Cargo home with read-only download inputs,
+read-only repository and tmpfs-owned compiler/application artifacts. Explicit
+node entrypoint matches v2; v3/v4 entrypoint preflights fail before this owner
+because the default initializer drops privileges against its root-owned cache.
+Those failures remain retained. This is generated source-component acceptance,
+not installed SDK, dual-native/full-VV or downstream application acceptance.
