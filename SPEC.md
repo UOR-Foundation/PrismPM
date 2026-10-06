@@ -1332,6 +1332,14 @@ Ordinary commands never update locks. `lock update --sdk-image <digest-ref>
 For a platform lock, `DK-28` acquires the exact pinned OCI index, its two child
 manifests, configurations and terminal metadata layers. It never pulls ordinary
 filesystem layers, synthesizes Docker inspection results, or starts target code.
+All captured, materialized and persisted platform-lock readers reject duplicate
+decoded index keys, OCI field-case aliases, alternate descriptor URLs/inline
+data, unsupported platform requirements and explicit null CPU variants. Index
+and child-manifest bounds apply before acquisition; nesting is limited to 64
+levels during parsing. The Rust runtime enforces the same rules on the original
+digest-bound nested index, even when an invalid index and its reference are
+coherently rehashed. OCI whitespace and equivalent integral numeric spellings
+remain valid; original OCI bytes are never replaced with Prism canonical JSON.
 The SDK acquisition profile `prismpm/sdk-metadata/1` is declared by the image
 configuration label `org.prismpm.sdk.metadata`. Its last filesystem layer contains
 only `opt/`, `opt/prismpm/`, `opt/prismpm/share/`, and the exact installed

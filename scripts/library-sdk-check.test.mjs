@@ -161,6 +161,19 @@ test('captured seed lock requires both exact platforms and independently selecte
  for(const architecture of ['amd64','arm64']){
   const inventory=Buffer.from(lock.platforms.find(row=>row.platform==='linux/'+architecture).inventory_document);
   assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
+  const originalIndex=JSON.parse(lock.sdk_index);
+  for(const alter of [index=>{index.SchemaVersion=2;},index=>{index.Manifeſts=[];},
+   index=>{index.manifests[0].urls=[];},index=>{index.manifests[0].data=null;},
+   index=>{index.manifests[0].platform.variant=null;},index=>{index.manifests[0].platform.OS='linux';},
+   index=>{index.manifests[0].platform['os.version']=null;},index=>{index.manifests[1].platform['os.features']=[];},
+   index=>{index.manifests[0].size=1024*1024+1;},
+   ()=>'{"schemaVersion":2,'+lock.sdk_index.slice(1)]){
+   assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
+   const changed=structuredClone(lock),index=structuredClone(originalIndex),raw=alter(index);
+   changed.sdk_index=typeof raw==='string'?raw:encode(index);
+   changed.sdk_image=image.split('@')[0]+'@sha256:'+hash(changed.sdk_index);
+   assert.throws(()=>validateCapturedLock(Buffer.from(encode(changed)),changed.sdk_image,architecture,standards,inventory));
+  }
   for(const bad of [Buffer.concat([bytes,Buffer.from('\n')]),Buffer.from([255]),Buffer.alloc(64*1024*1024+1)])
    assert.throws(()=>validateCapturedLock(bad,image,architecture,standards,inventory));
   assert.throws(()=>validateCapturedLock(bytes,image,architecture,Buffer.from('changed'),inventory));

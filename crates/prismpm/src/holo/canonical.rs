@@ -2,30 +2,53 @@
 
 use super::model_document::ModelDocument;
 use crate::error::PrismError;
-use serde::de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Visitor};
+use serde::de::{Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
 
-struct UniqueValue(Value);
+struct UniqueValue<const FLOATS: bool = false>(Value);
 
-impl<'de> Deserialize<'de> for UniqueValue {
+impl<'de, const FLOATS: bool> Deserialize<'de> for UniqueValue<FLOATS> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_any(UniqueVisitor).map(Self)
+        UniqueSeed::<FLOATS> { depth: 0 }
+            .deserialize(deserializer)
+            .map(Self)
     }
 }
 
-struct UniqueVisitor;
+struct UniqueSeed<const FLOATS: bool> {
+    depth: usize,
+}
 
-impl<'de> Visitor<'de> for UniqueVisitor {
+impl<'de, const FLOATS: bool> DeserializeSeed<'de> for UniqueSeed<FLOATS> {
+    type Value = Value;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Value, D::Error> {
+        if FLOATS && self.depth > 64 {
+            return Err(D::Error::custom("OCI JSON nesting exceeds bound"));
+        }
+        deserializer.deserialize_any(UniqueVisitor::<FLOATS> { depth: self.depth })
+    }
+}
+
+struct UniqueVisitor<const FLOATS: bool> {
+    depth: usize,
+}
+
+impl<'de, const FLOATS: bool> Visitor<'de> for UniqueVisitor<FLOATS> {
     type Value = Value;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("canonical JSON without duplicate keys or floats")
+        formatter.write_str(if FLOATS {
+            "JSON without duplicate keys"
+        } else {
+            "canonical JSON without duplicate keys or floats"
+        })
     }
 
     fn visit_bool<E: Error>(self, value: bool) -> Result<Self::Value, E> {
@@ -40,8 +63,14 @@ impl<'de> Visitor<'de> for UniqueVisitor {
         Ok(Value::Number(Number::from(value)))
     }
 
-    fn visit_f64<E: Error>(self, _value: f64) -> Result<Self::Value, E> {
-        Err(E::custom("floating-point values are forbidden"))
+    fn visit_f64<E: Error>(self, value: f64) -> Result<Self::Value, E> {
+        if FLOATS {
+            Number::from_f64(value)
+                .map(Value::Number)
+                .ok_or_else(|| E::custom("nonfinite JSON number"))
+        } else {
+            Err(E::custom("floating-point values are forbidden"))
+        }
     }
 
     fn visit_str<E: Error>(self, value: &str) -> Result<Self::Value, E> {
@@ -65,8 +94,10 @@ impl<'de> Visitor<'de> for UniqueVisitor {
         A: SeqAccess<'de>,
     {
         let mut values = Vec::new();
-        while let Some(value) = sequence.next_element::<UniqueValue>()? {
-            values.push(value.0);
+        while let Some(value) = sequence.next_element_seed(UniqueSeed::<FLOATS> {
+            depth: self.depth + 1,
+        })? {
+            values.push(value);
         }
         Ok(Value::Array(values))
     }
@@ -81,7 +112,12 @@ impl<'de> Visitor<'de> for UniqueVisitor {
             if !keys.insert(key.clone()) {
                 return Err(A::Error::custom(format!("duplicate object key {key}")));
             }
-            values.insert(key, map.next_value::<UniqueValue>()?.0);
+            values.insert(
+                key,
+                map.next_value_seed(UniqueSeed::<FLOATS> {
+                    depth: self.depth + 1,
+                })?,
+            );
         }
         Ok(Value::Object(values))
     }
@@ -162,6 +198,18 @@ pub fn decode_canonical(bytes: &[u8]) -> Result<ModelDocument, PrismError> {
         ));
     }
     Ok(doc)
+}
+
+// OCI hashes original bytes and permits insignificant JSON whitespace. Share
+// duplicate detection without imposing Prism's canonical encoding on that data.
+pub(crate) fn decode_json_unique(bytes: &[u8]) -> Result<Value, PrismError> {
+    let fail = |error| PrismError::new("PP4004", format!("malformed OCI JSON: {error}"));
+    let mut decoder = serde_json::Deserializer::from_slice(bytes);
+    let value = UniqueValue::<true>::deserialize(&mut decoder)
+        .map_err(fail)?
+        .0;
+    decoder.end().map_err(fail)?;
+    Ok(value)
 }
 
 /// Strictly decode one canonical JSON value, rejecting duplicates, floats,

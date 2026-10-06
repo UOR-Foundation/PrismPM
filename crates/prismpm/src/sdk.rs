@@ -473,6 +473,17 @@ pub fn parse_lock(bytes: &[u8]) -> Result<CanonicalDocument, PrismError> {
     CanonicalDocument::parse(schema, bytes)
 }
 
+fn oci_field_casing(value: &serde_json::Value, names: &[&str]) -> bool {
+    value.as_object().is_some_and(|object| {
+        object.keys().all(|key| {
+            let folded = key.to_uppercase().to_lowercase();
+            names
+                .iter()
+                .all(|name| folded != name.to_uppercase().to_lowercase() || key == name)
+        })
+    })
+}
+
 pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), PrismError> {
     let fail = || {
         PrismError::new(
@@ -493,10 +504,20 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
     {
         return Err(fail());
     }
-    let index: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| fail())?;
+    let index = crate::holo::canonical::decode_json_unique(bytes).map_err(|_| fail())?;
     let manifests = index["manifests"].as_array().ok_or_else(fail)?;
     let platforms = value["platforms"].as_array().ok_or_else(fail)?;
-    if index["schemaVersion"] != 2
+    if !oci_field_casing(
+        &index,
+        &[
+            "schemaVersion",
+            "mediaType",
+            "manifests",
+            "annotations",
+            "subject",
+            "artifactType",
+        ],
+    ) || index["schemaVersion"].as_f64() != Some(2.0)
         || index["mediaType"] != "application/vnd.oci.image.index.v1+json"
         || manifests.len() != 2
         || platforms.len() != 2
@@ -522,11 +543,33 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
             return Err(fail());
         }
         let manifest = matching[0];
-        if manifest["digest"] != row["manifest_digest"]
+        let platform = &manifest["platform"];
+        if !oci_field_casing(
+            manifest,
+            &[
+                "mediaType",
+                "digest",
+                "size",
+                "urls",
+                "data",
+                "annotations",
+                "platform",
+                "artifactType",
+            ],
+        ) || !oci_field_casing(
+            platform,
+            &["architecture", "os", "os.version", "os.features", "variant"],
+        ) || manifest.get("urls").is_some()
+            || manifest.get("data").is_some()
+            || platform.get("os.version").is_some()
+            || platform.get("os.features").is_some()
+            || manifest["digest"] != row["manifest_digest"]
             || manifest["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
-            || manifest["size"].as_u64().is_none_or(|size| size == 0)
-            || !(manifest["platform"]["variant"].is_null()
-                || (architecture == "arm64" && manifest["platform"]["variant"] == "v8"))
+            || manifest["size"].as_f64().is_none_or(|size| {
+                size <= 0.0 || size > SDK_INDEX_MAX_BYTES as f64 || size.fract() != 0.0
+            })
+            || !(platform.get("variant").is_none()
+                || (architecture == "arm64" && platform["variant"] == "v8"))
         {
             return Err(fail());
         }
@@ -1337,6 +1380,96 @@ mod tests {
         json!({"schema":"prismpm/sdk-lock/2","sdk_version":"0.3.0",
             "sdk_image":format!("example.invalid/test-sdk@{}",digest(&index)),"sdk_index":index,
             "standards_lock":digest(generation),"platforms":platforms})
+    }
+
+    #[test]
+    fn platform_lock_rejects_rehashed_ambiguous_nested_indexes() {
+        let baseline = platform_fixture("strict-index");
+        let original: Value =
+            serde_json::from_str(baseline["sdk_index"].as_str().unwrap()).unwrap();
+        let admit = |raw: String| {
+            let mut lock = baseline.clone();
+            lock["sdk_image"] = json!(format!(
+                "example.invalid/test-sdk@sha256:{:x}",
+                Sha256::digest(raw.as_bytes())
+            ));
+            lock["sdk_index"] = json!(raw);
+            super::CanonicalDocument::from_value("prismpm/sdk-lock/2", lock)
+        };
+        assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
+        let raw = baseline["sdk_index"].as_str().unwrap();
+        for spelling in ["2.0", "2e0"] {
+            assert!(admit(
+                raw.replace(
+                    "\"schemaVersion\":2",
+                    &format!("\"schemaVersion\":{spelling}")
+                )
+                .replace("\"size\":100", "\"size\":1e2")
+            )
+            .is_ok());
+        }
+        let nested = |depth| {
+            format!(
+                "{{\"extension\":{}0{},{}",
+                "[".repeat(depth),
+                "]".repeat(depth),
+                &raw[1..]
+            )
+        };
+        assert!(admit(nested(63)).is_ok());
+        assert_eq!(admit(nested(64)).unwrap_err().code, "PP5401");
+        for number in [
+            "0",
+            "-0",
+            "-1",
+            "0.5",
+            "100.1",
+            "1048577",
+            "9007199254740993",
+            "1e400",
+        ] {
+            assert_eq!(
+                admit(raw.replace("\"size\":100", &format!("\"size\":{number}")))
+                    .unwrap_err()
+                    .code,
+                "PP5401"
+            );
+        }
+        for duplicate in [
+            format!("{{\"schemaVersion\":2,{}", &raw[1..]),
+            raw.replace(
+                "\"architecture\":\"amd64\"",
+                "\"architecture\":\"amd64\",\"architec\\u0074ure\":\"amd64\"",
+            ),
+        ] {
+            assert!(admit(raw.to_owned()).is_ok());
+            assert_eq!(admit(duplicate).unwrap_err().code, "PP5401");
+        }
+        for mutation in 0..10 {
+            assert!(admit(raw.to_owned()).is_ok());
+            let mut index = original.clone();
+            match mutation {
+                0 => index["SchemaVersion"] = json!(2),
+                1 => index["Manifeſts"] = json!([]),
+                2 => {
+                    index["manifests"][0]["MediaType"] = index["manifests"][0]["mediaType"].clone()
+                }
+                3 => index["manifests"][0]["urls"] = json!([]),
+                4 => index["manifests"][0]["data"] = Value::Null,
+                5 => index["manifests"][0]["size"] = json!(super::SDK_INDEX_MAX_BYTES + 1),
+                6 => index["manifests"][0]["platform"]["OS"] = json!("linux"),
+                7 => index["manifests"][0]["platform"]["variant"] = Value::Null,
+                8 => index["manifests"][0]["platform"]["os.version"] = Value::Null,
+                _ => index["manifests"][1]["platform"]["os.features"] = json!([]),
+            }
+            assert_eq!(
+                admit(serde_json::to_string(&index).unwrap())
+                    .unwrap_err()
+                    .code,
+                "PP5401",
+                "mutation {mutation}"
+            );
+        }
     }
 
     #[test]
