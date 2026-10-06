@@ -193,6 +193,10 @@ export function prepare(mutation = null, inputs = frozenInputs(), compilerOwner 
     // Borrowed tools stay live only in this serial owner. Every model/proof/IR
     // and generated std/no_std/two-Wasm build remains fresh and independent.
     const cacheRetirement = ownsCompiler ? compiler.close() : null;
+    assert.deepEqual(frozenInputs(), inputs, 'complete publication inputs changed during compiler retirement');
+    for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'post-retirement source ' + module);
+    assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), manifestBytes);
+    assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
     completed = true;
     return {work, sources, verified, generation, compileNative, runner, wasmBytes: guests[0], cacheRetirement,
       compiler: {identity: compiler.identity, evidence: compiler.evidence}};

@@ -52,6 +52,7 @@ test('OC-09 complete generated conditional publication admission', {timeout:3500
  }
  const subjectMilliseconds=performance.now()-started;
  retirementAttempted=true;const cacheRetirement=compiler.close();retired=true;
+ assert.deepEqual(frozenInputs(),inputs,'complete publication inputs changed during final compiler retirement');
  assert.equal(cacheRetirement.status,'retired');assert.equal(cacheRetirement.compiler,compiler.identity);
  assert.throws(()=>requireCompilerOwner(compiler,'publication'),/compiler owner closed/);
  assert.throws(()=>compiler.close(),/compiler owner closed/);
