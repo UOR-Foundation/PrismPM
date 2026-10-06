@@ -182,9 +182,13 @@ test('all private driver callers retain locked offline builds and bounded resour
   const callers = ['view', 'command', 'query', 'journal', 'custody', 'effects', 'presentation', 'operation-journal']
     .map(name => `tests/browser-${name}/compile.mjs`)
     .concat(['sdk/browser/workspace-model-test.mjs', 'sdk/browser/envelope-model-test.mjs',
-      'tests/browser-session/compile.mjs']);
+      'tests/browser-session/compile.mjs','tests/publication-admission/compile.mjs']);
   const sharedFamilies = new Map(['presentation', 'session']
-    .map(name => [`tests/browser-${name}/compile.mjs`, name]));
+    .map(name => [`tests/browser-${name}/compile.mjs`, name])
+    .concat([['tests/publication-admission/compile.mjs','publication']]));
+  const registration = family => family === 'publication'
+    ? {directory:'publication-admission',executable:'publication-admission-driver'}
+    : {directory:'browser-'+family,executable:'browser-'+family+'-driver'};
   const shared = readFileSync(join(repository, 'tests/browser-view/compiler-owner.mjs'), 'utf8');
   const check = (source, target = 'driverTarget') => {
     assert.ok(['driverTarget', 'target'].includes(target));
@@ -215,7 +219,8 @@ test('all private driver callers retain locked offline builds and bounded resour
     assert.match(source, delegation(family), 'exact family and complete captured input delegation');
     assert.match(source, new RegExp(`requireCompilerOwner\\(\\s*compilerOwner\\s*,\\s*'${family}'\\s*\\)`),
       'borrowed owners require the same admitted family');
-    assert.match(owner, new RegExp(`${family}:\\s*Object\\.freeze\\(\\{\\s*directory:\\s*'browser-${family}',\\s*executable:\\s*'browser-${family}-driver'\\s*\\}\\)`),
+    const selected=registration(family);
+    assert.match(owner, new RegExp(`${family}:\\s*Object\\.freeze\\(\\{\\s*directory:\\s*'${selected.directory}',\\s*executable:\\s*'${selected.executable}'\\s*\\}\\)`),
       'registered family binds its exact driver directory and executable');
     check(owner, 'target');
   };
@@ -248,7 +253,7 @@ test('all private driver callers retain locked offline builds and bounded resour
         assert.throws(() => checkShared(source + '\n' + additional + ';\n', shared, family),
           caller + ': additional direct compiler construction');
       }
-      for (const field of [`'browser-${family}'`, `'browser-${family}-driver'`]) {
+      for (const field of [`'${registration(family).directory}'`, `'${registration(family).executable}'`]) {
         const changed = shared.replace(field, "'wrong-family'"); assert.notEqual(changed, shared);
         assert.throws(() => checkShared(source, changed, family), caller + ': registered ' + field);
       }

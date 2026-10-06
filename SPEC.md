@@ -2245,6 +2245,14 @@ byte observation and every deployment-specific assessment. Stale, unknown,
 failed, replayed and substituted facts do not advance state. The complete
 private wire and bounds are in `Production/PublicationAdmission/V1.md` and its
 CDDL; real generated std/no_std/Wasm tests own the conditional semantics.
+The serial OC-09 owner constructs one fresh source-bound compiler tool closure
+for its baseline and all six independent source mutants. Each subject still
+performs fresh source/kernel verification, export, native std/no_std execution
+and two independent byte-equal Wasm builds. The opaque tool owner checks its
+complete immutable closure before and after each use, rejects substitutions,
+and retires exactly once before final acceptance evidence is written. No prior
+target, subject artifact or cross-test compiler owner is admitted; standalone
+preparation remains cold. Phase timings are diagnostic, not acceptance.
 This prerequisite does not enable public Pages deployment, authorize a target,
 certify a producer, or convert OC-08's integrity receipt into product acceptance.
 
