@@ -484,22 +484,6 @@ fn oci_field_casing(value: &serde_json::Value, names: &[&str]) -> bool {
     })
 }
 
-// RawValue retains decimal spelling after the duplicate/depth guard has run.
-// serde_json::Number/f64 alone can round a fractional token to an integer.
-#[derive(serde::Deserialize)]
-struct IndexNumbers<'a> {
-    #[serde(borrow, rename = "schemaVersion")]
-    schema_version: &'a serde_json::value::RawValue,
-    #[serde(borrow)]
-    manifests: Vec<IndexDescriptorNumber<'a>>,
-}
-
-#[derive(serde::Deserialize)]
-struct IndexDescriptorNumber<'a> {
-    #[serde(borrow)]
-    size: &'a serde_json::value::RawValue,
-}
-
 fn bounded_positive_integer(token: &str, maximum: usize) -> Option<usize> {
     let (mantissa, exponent) = token.split_once(['e', 'E']).unwrap_or((token, "0"));
     let exponent_digits = exponent
@@ -536,6 +520,130 @@ fn bounded_positive_integer(token: &str, maximum: usize) -> Option<usize> {
     exact.parse().ok()
 }
 
+// Lexical pass over already duplicate/depth-validated JSON. Retain numeric
+// tokens without enabling serde_json features that alter global Value decoding.
+fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
+    #[derive(Clone, Copy)]
+    enum Focus {
+        Index,
+        Children,
+        Child,
+        Schema,
+        Size,
+        Other,
+    }
+    fn white(bytes: &[u8], at: &mut usize) {
+        while bytes.get(*at).is_some_and(u8::is_ascii_whitespace) {
+            *at += 1;
+        }
+    }
+    fn string<'a>(bytes: &'a [u8], at: &mut usize) -> Option<&'a [u8]> {
+        let start = *at;
+        if *bytes.get(*at)? != b'"' {
+            return None;
+        }
+        *at += 1;
+        loop {
+            match *bytes.get(*at)? {
+                b'"' => {
+                    *at += 1;
+                    return bytes.get(start..*at);
+                }
+                b'\\' => *at += 2,
+                _ => *at += 1,
+            }
+        }
+    }
+    fn value(bytes: &[u8], at: &mut usize, focus: Focus, depth: usize) -> Option<()> {
+        if depth > 64 {
+            return None;
+        }
+        white(bytes, at);
+        let start = *at;
+        let first = *bytes.get(*at)?;
+        if matches!(focus, Focus::Schema | Focus::Size) {
+            while bytes
+                .get(*at)
+                .is_some_and(|byte| !b",]} \t\r\n".contains(byte))
+            {
+                *at += 1;
+            }
+            let maximum = if matches!(focus, Focus::Schema) {
+                2
+            } else {
+                SDK_INDEX_MAX_BYTES
+            };
+            let integer = bounded_positive_integer(
+                std::str::from_utf8(bytes.get(start..*at)?).ok()?,
+                maximum,
+            )?;
+            return (!matches!(focus, Focus::Schema) || integer == 2).then_some(());
+        }
+        match first {
+            b'"' => {
+                string(bytes, at)?;
+            }
+            b'{' | b'[' => {
+                *at += 1;
+                let end = if first == b'{' { b'}' } else { b']' };
+                white(bytes, at);
+                if bytes.get(*at) == Some(&end) {
+                    *at += 1;
+                    return Some(());
+                }
+                loop {
+                    white(bytes, at);
+                    let child = if first == b'{' {
+                        let key = string(bytes, at)?;
+                        white(bytes, at);
+                        if *bytes.get(*at)? != b':' {
+                            return None;
+                        }
+                        *at += 1;
+                        let key: String = serde_json::from_slice(key).ok()?;
+                        match (focus, key.as_str()) {
+                            (Focus::Index, "schemaVersion") => Focus::Schema,
+                            (Focus::Index, "manifests") => Focus::Children,
+                            (Focus::Child, "size") => Focus::Size,
+                            _ => Focus::Other,
+                        }
+                    } else if matches!(focus, Focus::Children) {
+                        Focus::Child
+                    } else {
+                        Focus::Other
+                    };
+                    value(bytes, at, child, depth + 1)?;
+                    white(bytes, at);
+                    match *bytes.get(*at)? {
+                        byte if byte == end => {
+                            *at += 1;
+                            break;
+                        }
+                        b',' => *at += 1,
+                        _ => return None,
+                    }
+                }
+            }
+            _ => {
+                while bytes
+                    .get(*at)
+                    .is_some_and(|byte| !b",]} \t\r\n".contains(byte))
+                {
+                    *at += 1;
+                }
+                if *at == start {
+                    return None;
+                }
+            }
+        }
+        Some(())
+    }
+    let mut at = 0;
+    value(bytes, &mut at, Focus::Index, 0)?;
+    white(bytes, &mut at);
+    (at == bytes.len()).then_some(())
+}
+
 pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), PrismError> {
     let fail = || {
         PrismError::new(
@@ -557,14 +665,7 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
         return Err(fail());
     }
     let index = crate::holo::canonical::decode_json_unique(bytes).map_err(|_| fail())?;
-    let numbers: IndexNumbers<'_> = serde_json::from_slice(bytes).map_err(|_| fail())?;
-    if bounded_positive_integer(numbers.schema_version.get(), 2) != Some(2)
-        || numbers.manifests.iter().any(|manifest| {
-            bounded_positive_integer(manifest.size.get(), SDK_INDEX_MAX_BYTES).is_none()
-        })
-    {
-        return Err(fail());
-    }
+    validate_index_number_tokens(bytes).ok_or_else(fail)?;
     let manifests = index["manifests"].as_array().ok_or_else(fail)?;
     let platforms = value["platforms"].as_array().ok_or_else(fail)?;
     if !oci_field_casing(
@@ -577,7 +678,8 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
             "subject",
             "artifactType",
         ],
-    ) || index["mediaType"] != "application/vnd.oci.image.index.v1+json"
+    ) || index["schemaVersion"].as_f64() != Some(2.0)
+        || index["mediaType"] != "application/vnd.oci.image.index.v1+json"
         || manifests.len() != 2
         || platforms.len() != 2
     {
@@ -624,6 +726,7 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
             || platform.get("os.features").is_some()
             || manifest["digest"] != row["manifest_digest"]
             || manifest["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
+            || !manifest["size"].is_number()
             || !(platform.get("variant").is_none()
                 || (architecture == "arm64" && platform["variant"] == "v8"))
         {
@@ -1512,6 +1615,11 @@ mod tests {
             );
         }
         assert!(admit(format!("{{\"extension\":0.125,{}", &raw[1..])).is_ok());
+        // No serde feature may reinterpret reserved-looking ordinary objects.
+        assert_eq!(
+            serde_json::from_str::<Value>(r#"{"$serde_json::private::RawValue":"1"}"#).unwrap(),
+            json!({"$serde_json::private::RawValue":"1"})
+        );
         for duplicate in [
             format!("{{\"schemaVersion\":2,{}", &raw[1..]),
             raw.replace(

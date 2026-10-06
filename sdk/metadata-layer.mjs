@@ -66,7 +66,9 @@ export function boundedPositiveInteger(token, maximum) {
   assert(digits.length > 0, 'positive integral OCI number required');
   const exponent = match[3] ?? '0';
   assert(exponent.replace(/^[+-]?0*/, '').length <= 7, 'OCI exponent exceeds bound');
-  const significant = digits.replace(/0+$/, '');
+  let end = digits.length;
+  while (digits[end - 1] === '0') end--;
+  const significant = digits.slice(0, end);
   const scale = Number(exponent) - (match[2]?.length ?? 0) + digits.length - significant.length;
   digits = significant;
   assert(scale >= 0 && digits.length + scale <= String(maximum).length, 'OCI integer exceeds bound or is fractional');
