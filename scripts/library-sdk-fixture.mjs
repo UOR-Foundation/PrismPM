@@ -100,7 +100,10 @@ export function resultFixture(binding,sourceAuthority=sourceAuthorityFixture){
   retirements:[0,1].map(()=>({schema:'prismpm/portable-process-owner/1',exit_code:0,timed_out:false,interrupted:false,cleanup_verified:true})),
   environments:[0,1].map(index=>installedEnvironment('/tmp/prismpm-library-sdk-fixture/invocation-'+index)),
   custody:{before:custody,after:structuredClone(custody)}};
- return {scope:'installed-native-library-only',build_id,binding,runs,concurrency,checks:['read-only-check','std','no_std','exact-package-replay','two-root-reproduction','product-refusal','missing-root','wrong-result-root','parameterized-root','nominal-impostor','false-generated-acceptance','restored-acceptance','authenticated-seed-admission','cold-warm-two-root-equivalence','installed-concurrent-owner-equivalence','immutable-seed-original-custody'],unclaimed:['application','browser','holo','production-release','deployment']};
+ const acceptance_rejection={schema:'prismpm/generated-acceptance-rejection/1',root:'LibraryProbe.Probe.acceptance',
+  result:{schema:'prismpm/error-result/1',diagnostic:{code:'PP5006',primary:null,labels:[],notes:[],help:[],causes:[],
+   message:'native-library-std-acceptance exited 101: stdout=""; stderr="\\nthread \'main\' (123) panicked at src/main.rs:4:1:\\nLibraryProbe.Probe.acceptance\\n"'}}};
+ return {scope:'installed-native-library-only',build_id,binding:structuredClone(binding),runs,concurrency,acceptance_rejection,checks:['read-only-check','std','no_std','exact-package-replay','two-root-reproduction','product-refusal','missing-root','wrong-result-root','parameterized-root','nominal-impostor','false-generated-acceptance','restored-acceptance','authenticated-seed-admission','cold-warm-two-root-equivalence','installed-concurrent-owner-equivalence','immutable-seed-original-custody'],unclaimed:['application','browser','holo','production-release','deployment']};
 }
 
 // Only a strict-reader fixture; no stat, compiler or installed execution is

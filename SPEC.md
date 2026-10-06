@@ -1810,6 +1810,14 @@ Lean elaboration and kernel replay. Independent regeneration must reproduce
 every library artifact byte. Registry-format consumers of the exact package
 execute every modeled acceptance root under both `std` and `no_std + alloc`;
 false results, computation errors, omissions and changed bytes fail closed.
+The false-acceptance conformance negative requires the actual generated `std`
+acceptance process to exit101 with its first main assertion naming the exact
+modeled root. A shared diagnostic code, compilation error, timeout, wrong-root
+panic or mismatching success transcript cannot satisfy that negative. Installed
+qualification retains the original CLI refusal in closed
+`prismpm/generated-acceptance-rejection/1` evidence and rechecks it on replay;
+this is private gate-internal evidence, not a public SDK or model contract.
+the original positive, restored-source and `no_std` executions remain mandatory.
 
 Only then are `prismpm/library-acceptance/1` and
 `prismpm/library-verification-manifest/2` atomically published. This is finite

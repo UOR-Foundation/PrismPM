@@ -21,7 +21,7 @@ function source(root){
  }
 }
 const result=value=>({status:0,signal:null,stdout:JSON.stringify(value),stderr:''});
-const error=(code,message)=>({status:code==='PP6101'?5:1,signal:null,stdout:JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code,message}}),stderr:''});
+const error=(code,message)=>({status:code==='PP6101'?5:1,signal:null,stdout:JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code,message,primary:null,labels:[],notes:[],help:[],causes:[]}}),stderr:''});
 
 test('closed shipped-library source binding includes implementation, fixtures, schemas and gate itself',t=>{
  const root=temporary(t);source(root);const expected=capture(root,revision);verifySource(root,expected);
@@ -75,6 +75,18 @@ test('negative CLI probes require the owning diagnostic and expected exit class'
  cli('/tmp/fixture',['verify'],{code:'PP5006'},()=>error('PP5006','modeled acceptance failed'));
  cli('/tmp/fixture',['build','--locked','-t','ghcr.io/uor-foundation/prismpm-library-probe:0.1.0'],{code:'PP6101'},()=>error('PP6101','native library cannot release'));
  for(const bad of [result({schema:'prismpm/error-result/1',diagnostic:{code:'PP2001',message:'facet closure is not exact'}}),error('PP1001','facet closure is not exact'),error('PP2001','different failure'),{...error('PP2001','facet closure is not exact'),status:101}])assert.throws(()=>cli('/tmp/fixture',['check'],{code:'PP2001',message:'facet closure is not exact'},()=>bad));
+ const root='LibraryProbe.Probe.acceptance',expected={code:'PP5006',assertion:root};
+ const panic="native-library-std-acceptance exited 101: stdout=\"\"; stderr=\"\\nthread 'main' (123) panicked at src/main.rs:4:1:\\n"+root+'\\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\\n"';
+ for(const message of [panic,panic.replace(' (123)','')])
+  cli('/tmp/fixture',['verify'],expected,()=>error('PP5006',message));
+ for(const message of ['native modeled acceptance transcript differs','native-library-std-acceptance timed out',
+  'native-library-std-acceptance exited 101: stdout=""; stderr="error[E0308]: could not compile"',
+  panic.replace(root,'wrongRoot'),panic.replace(root,'wrongRoot\\n'+root),
+  panic.replace('(123)','(not-a-pid)'),panic.replace('src/main.rs:4:1','src/other.rs:4:1'),
+  panic.replace('src/main.rs:4:1','src/main.rs:x:1'),panic.replace('exited 101','exited 1'),
+  panic.replace('std-acceptance','no_std-acceptance'),panic+' error[E0308]: could not compile'])
+  assert.throws(()=>cli('/tmp/fixture',['verify'],expected,()=>error('PP5006',message)),
+   'a build, transport, wrong-root or transcript failure cannot qualify the modeled assertion negative');
 });
 
 test('source mutation preserves canonical LexLean module structure and changes the real identity body',t=>{
@@ -97,7 +109,12 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  const verify=(value,authority=binding)=>verifyResult(value,authority,sourceAuthorityFixture);verify(value);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.build_id='mutable',
   v=>v.runs.pop(),v=>v.runs.reverse(),v=>v.runs[2].acquisition='cold',v=>v.runs[3].root=v.runs[2].root,
- v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64)]){
+  v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64),
+  v=>delete v.acceptance_rejection,v=>v.acceptance_rejection.root='Other.Root',
+  v=>v.acceptance_rejection.extra=true,v=>v.acceptance_rejection.result.diagnostic.code='PP5008',
+  v=>v.acceptance_rejection.result.diagnostic.message='native modeled acceptance transcript differs',
+  v=>v.acceptance_rejection.result.diagnostic.message=v.acceptance_rejection.result.diagnostic.message.replace('LibraryProbe.Probe.acceptance','Other.Root'),
+  v=>v.acceptance_rejection.result.diagnostic.causes.push({code:'unaccepted'})]){
   const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
  }
  for(const change of [v=>delete v.concurrency,v=>v.concurrency.runs.pop(),v=>v.concurrency.overlap.pop(),
