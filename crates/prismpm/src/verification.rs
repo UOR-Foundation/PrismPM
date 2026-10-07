@@ -2568,6 +2568,9 @@ pub(crate) fn run(
                 config.limits.max_diagnostics,
             )
         })?;
+    // The independently published verification result owns its identities and
+    // paths. Do not retain the loaded source engine during native compilation.
+    drop(lex_engine);
     let lex_attestation_path = lex_verified.root.join("attestation.json");
     let lex_attestation = std::fs::read(lex_attestation_path.as_std_path())
         .map_err(|error| PrismError::new("PP4002", format!("LexLean attestation: {error}")))?;
@@ -2748,6 +2751,18 @@ pub(crate) fn run(
             exporter_owner,
         );
     }
+
+    // All snapshot, declaration, coverage and generated-file admission checks
+    // above are complete. The default native chain uses only the copied typed
+    // identities, corpus, export roots and attested file rows. Release these
+    // large decoded graphs before Lake starts its own compiler processes; keep
+    // the exact original attestation bytes for the final published evidence.
+    drop(lex_snapshot);
+    drop(build_manifest);
+    drop(lex_value);
+    drop(canonical_attestation);
+    drop(lex_manifest_value);
+    drop(lex_manifest);
 
     let staging_parent = output_root.join(".verify-work");
     std::fs::create_dir_all(&staging_parent)
