@@ -788,6 +788,50 @@ test('diagnostic budgets include index headroom and refuse exact one-over file a
  assert.throws(()=>entries.bytes('one-over',Buffer.alloc(0)));entries.complete();
  const source=join(root,'oversized');writeFileSync(source,maximum);assert.throws(()=>readDiagnosticFile(source,maximum.length-1));
 });
+test('the complete expanded matrix retains every diagnostic member and its final outcomes within bounded headroom',t=>{
+ const bundle=new PortableDiagnosticBundle(diagnosticRoot(t));
+ const cases=[];
+ for(const [profile] of matrix.profiles.entries()){
+  for(const trigger of matrix.triggers)for(const name of matrix.interaction_cases)
+   cases.push(`${profile}-${trigger}-${name}`);
+  for(const name of matrix.infrastructure_cases)cases.push(`${profile}-click-${name}`);
+  for(const control of ['wrong-status','noop'])cases.push(`${profile}-probe-control-${control}`);
+  for(const trigger of matrix.triggers)for(const control of ['omit-finished','malformed-finished'])
+   cases.push(`${profile}-probe-control-${control}-${trigger}`);
+  for(const trigger of matrix.triggers)for(const mode of ['observed','unobserved'])
+   cases.push(`${profile}-observation-${trigger}-${mode}`);
+  for(const fault of retirementFaults){
+   const triggers=['pending-detach','rejected-detach','primary-body-failure'].includes(fault)?matrix.triggers:['click'];
+   for(const trigger of triggers)cases.push(`${profile}-retirement-${trigger}-${fault}`);
+  }
+ }
+ assert.equal(cases.length,78+12+8+32);assert.equal(new Set(cases).size,cases.length);
+ // Exercise the actual bounded filesystem collector, not a success marker or
+ // browser simulation. Real browser acceptance remains the complete owner.
+ bundle.json('source-witnesses.json',{scope:'budget-regression-only'});
+ for(const [profile] of matrix.profiles.entries())for(const member of ['model','archive','wasm','verification'])
+  bundle.bytes(`subjects/${profile}-${member}`,Buffer.from(member));
+ for(const id of cases){
+  bundle.bytes(`cases/${id}.driver.mjs`,Buffer.from('// diagnostic capacity regression\n'));
+  bundle.json(`cases/${id}.json`,{stage:id,scope:'budget-regression-only'});
+ }
+ bundle.finish({scope:'budget-regression-only',cases},true);
+ const index=JSON.parse(readFileSync(join(bundle.path,'index.json')));
+ assert.equal(index.state,'completed');assert.equal(index.files.length,270);
+ assert.equal(diagnosticLimits.files,index.files.length+2,'retain exactly two reserved file slots');
+ assert.equal(diagnosticLimits.fileBytes,16*1024**2);assert.equal(diagnosticLimits.totalBytes,32*1024**2);
+ assert.equal(diagnosticLimits.indexBytes,128*1024);
+ assert.equal(index.files.filter(row=>/retirement-.*\.json$/.test(row.path)).length,32);
+ for(const row of index.files)assert.equal(hash(readFileSync(join(bundle.path,row.path))),row.sha256);
+ const original=read('scripts/portable-oracle-diagnostics.mjs');
+ const limit=/files:\d+/.exec(original);assert(limit,'one actual file-count bound required');
+ const directory=diagnosticRoot(t),mutant=join(directory,'under-budget.mjs');
+ writeFileSync(mutant,original.replace(limit[0],'files:256'));
+ const source=`import assert from 'node:assert/strict';import {PortableDiagnosticBundle} from ${JSON.stringify(new URL('file://'+mutant).href)};const bundle=new PortableDiagnosticBundle(process.argv[1]);for(let n=0;n<270;n++)bundle.bytes('row-'+n,Buffer.alloc(0));bundle.complete();assert.equal(bundle.state,'completed');`;
+ const child=spawnSync(process.execPath,['--input-type=module','-e',source,directory],{encoding:'utf8',timeout:10000,maxBuffer:65536});
+ assert.ifError(child.error);assert.equal(child.signal,null);assert.equal(child.status,1);
+ assert.match(child.stderr,/diagnostic byte or file limit/,'actual old-bound mutant cannot retain the complete matrix');
+});
 test('changed, missing, additional or aliased retained bytes never become complete diagnostics',t=>{
  const root=diagnosticRoot(t);
  for(const mutate of [bundle=>writeFileSync(join(bundle.path,'data'),'changed'),bundle=>rmSync(join(bundle.path,'data')),
