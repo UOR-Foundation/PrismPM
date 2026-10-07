@@ -37,7 +37,7 @@ fn phase_summary(stdout: &[u8]) -> Option<PhaseSummary> {
     let summary: PhaseSummary = serde_json::from_str(line).ok()?;
     if summary.scope != "compiler-phase-diagnostic-not-acceptance"
         || summary.phases.is_empty()
-        || summary.phases.len() > 11
+        || summary.phases.len() > 12
     {
         return None;
     }
@@ -46,8 +46,8 @@ fn phase_summary(stdout: &[u8]) -> Option<PhaseSummary> {
         if !matches!(
             row.phase.as_str(),
             "archive-extraction"
+                | "artifact-cleanup"
                 | "exporter-construction"
-                | "generated-execution"
                 | "generated-module-build"
                 | "kernel-export"
                 | "lake-update"
@@ -55,6 +55,7 @@ fn phase_summary(stdout: &[u8]) -> Option<PhaseSummary> {
                 | "native-code-generation"
                 | "rust-compilation"
                 | "toolchain-check"
+                | "unclassified-execution"
                 | "wasm-code-generation"
         ) || row.calls == 0
             || row.calls > 1_000_000

@@ -14,10 +14,15 @@ test('classifications are closed labels, not private paths or arguments',()=>{
   const cases=[['cargo',['--version'],'toolchain-check'],['cargo',['build'],'rust-compilation'],
     ['tar',['-xf','/private/archive'],'archive-extraction'],['lake',['update'],'lake-update'],
     ['lake',['build','prod-export'],'exporter-construction'],['lake',['build','PrismGenerated'],'generated-module-build'],
-    ['/private/prod-export',[],'kernel-export'],['/private/driver',['verify'],'lexlean-verification'],
-    ['/private/driver',['native'],'native-code-generation'],['/private/driver',['wasm'],'wasm-code-generation'],
-    ['/private/runner',['private-payload'],'generated-execution']];
+    ['/private/prod-export',[],'kernel-export'],['/private/driver-execution',['verify'],'lexlean-verification'],
+    ['/private/driver-execution',['native'],'native-code-generation'],['/private/driver-execution',['wasm'],'wasm-code-generation'],
+    ['/private/driver-execution',['generate'],'native-code-generation'],['/private/driver-execution',['generate-wasm'],'wasm-code-generation'],
+    ['cargo',['clean'],'artifact-cleanup'],['lake',['clean'],'artifact-cleanup'],['cargo',['run'],'unclassified-execution'],
+    ['/private/runner',['native'],'unclassified-execution'],['lake',['unknown'],'unclassified-execution'],
+    ['/private/runner',['private-payload'],'unclassified-execution']];
   for(const [program,args,phase]of cases)assert.equal(compilerPhase(program,args),phase);
+  for(const mode of ['labels','intent','secret','route','sink','maxroute','maxsink','maxfield','maxsecret','progress','maxprogress'])
+    assert.equal(compilerPhase('/private/driver-execution',[mode]),'wasm-code-generation');
 });
 test('arbitrary chunks and interleaved files preserve exact numeric totals',()=>{
   const c=phaseCollector(),a=encoded(row()),b=encoded(row('kernel-export',8,false));
@@ -96,7 +101,7 @@ test('real SDK command timings and a closed diagnostic pipe preserve outcomes',a
   assert.equal(outcome.signal,null);assert.equal(outcome.status,0,stderr);assert(closed);
   assert.equal(stdout,'actual-outcomes-preserved');
   const records=stderr.split('\n').filter(line=>line.startsWith(prefix)).map(line=>JSON.parse(line.slice(prefix.length)));
-  assert.deepEqual(records.filter(row=>row.phase==='generated-execution').map(row=>row.success),[true,false]);
+  assert.deepEqual(records.filter(row=>row.phase==='unclassified-execution').map(row=>row.success),[true,false]);
   assert(records.every(row=>Number.isSafeInteger(row.elapsed_ms)&&row.elapsed_ms>=0));
   assert(!stderr.includes('phase-positive')&&!stderr.includes('phase-negative'));
 });

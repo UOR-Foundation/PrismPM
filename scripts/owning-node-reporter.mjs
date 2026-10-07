@@ -2,9 +2,9 @@
 // empty-file wrapper is not a registered test and has no per-file summary.
 import {tap} from 'node:test/reporters';
 
-const phases = ['archive-extraction','exporter-construction','generated-execution','generated-module-build',
+const phases = ['archive-extraction','artifact-cleanup','exporter-construction','generated-module-build',
   'kernel-export','lake-update','lexlean-verification','native-code-generation','rust-compilation',
-  'toolchain-check','wasm-code-generation'];
+  'toolchain-check','unclassified-execution','wasm-code-generation'];
 // Child stderr can arrive in arbitrary chunks. Retain at most 256 characters
 // per selected file; discard oversized lines without echoing any source text.
 export function phaseCollector() {

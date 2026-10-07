@@ -94,16 +94,23 @@ function terminateOwnedGroup(pid) {
 export function compilerPhase(program,args) {
   if (['cargo','rustc','lean','lake'].includes(program) && args[0]?.startsWith('--version')) return 'toolchain-check';
   if (program === 'tar') return 'archive-extraction';
-  if (program === 'cargo') return 'rust-compilation';
+  if (['cargo','lake'].includes(program) && args[0] === 'clean') return 'artifact-cleanup';
+  if (program === 'cargo') return args[0] === 'build' ? 'rust-compilation' : 'unclassified-execution';
   if (program === 'lake') {
     if (args[0] === 'update') return 'lake-update';
-    return args[1] === 'prod-export' ? 'exporter-construction' : 'generated-module-build';
+    if (args[0] === 'build') return args[1] === 'prod-export' ? 'exporter-construction' : 'generated-module-build';
+    return 'unclassified-execution';
   }
   if (program.endsWith('/prod-export')) return 'kernel-export';
-  if (args[0] === 'verify') return 'lexlean-verification';
-  if (args[0] === 'native') return 'native-code-generation';
-  if (['wasm','fixture','size','p256','point','pkce'].includes(args[0])) return 'wasm-code-generation';
-  return 'generated-execution';
+  // The actual compiler artifact has this owner-created private basename.
+  // Never interpret arbitrary generated applications' payload as a tool mode.
+  if (program.endsWith('/driver-execution')) {
+    if (['verify','check'].includes(args[0])) return 'lexlean-verification';
+    if (['native','generate'].includes(args[0])) return 'native-code-generation';
+    if (['wasm','generate-wasm','fixture','size','p256','point','pkce','labels','intent','secret','route','sink',
+      'maxroute','maxsink','maxfield','maxsecret','progress','maxprogress'].includes(args[0])) return 'wasm-code-generation';
+  }
+  return 'unclassified-execution';
 }
 function execute(program,args,cwd,env={}) {
   const childEnvironment = compilerEnvironment(env);
