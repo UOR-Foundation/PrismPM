@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
+import {createHash} from 'node:crypto';
+import {syncBuiltinESMExports} from 'node:module';
 import {chmodSync, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
   renameSync, rmSync, symlinkSync, truncateSync, unlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -150,5 +153,73 @@ test('capture refuses aliases, unowned paths, nonexecutables and out-of-bound fi
   for (const size of [0, 3, 268435457]) {
     truncateSync(original, size);
     assert.throws(() => captureCompilerArtifact(work, original, 'driver'), /bounded owned/);
+  }
+});
+
+test('each verification freshly streams both complete artifacts with bounded buffers and short reads', t => {
+  const {work, original} = fixture(t);
+  const bytes = Buffer.concat([readFileSync(original), Buffer.alloc(131089, 0xa5)]);
+  writeFileSync(original, bytes);
+  const owner = captureCompilerArtifact(work, original, 'driver');
+  const expected = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(owner.evidence.original.sha256, expected);
+  assert.equal(owner.evidence.private.sha256, expected);
+  const read = fs.readSync, allocate = Buffer.alloc;
+  let captures = new Map(), allocations = [];
+  try {
+    Buffer.alloc = function(size, ...args) {allocations.push(size); return allocate(size, ...args);};
+    fs.readSync = function(fd, buffer, offset, length, position) {
+      assert.ok(buffer.length <= 65536, 'verification read buffer is bounded');
+      const inode = fs.fstatSync(fd, {bigint: true}).ino.toString();
+      const capture = captures.get(inode) ?? {bytes: 0, reads: 0, eof: 0};
+      // Split the ELF header across real reads, then exercise chunk boundaries.
+      const count = read(fd, buffer, offset, capture.reads++ < 2 ? Math.min(length, 3) : length, position);
+      capture.bytes += count; if (count === 0) capture.eof++;
+      captures.set(inode, capture); return count;
+    };
+    syncBuiltinESMExports();
+    for (let barrier = 0; barrier < 2; barrier++) {
+      captures = new Map(); allocations = []; owner.verify();
+      assert.equal(captures.size, 2, 'original and private executable independently read');
+      for (const capture of captures.values()) {
+        assert.equal(capture.bytes, bytes.length, 'every byte freshly read at each barrier');
+        assert.equal(capture.eof, 1, 'EOF checked at each barrier');
+        assert.ok(capture.reads > 4, 'short reads and chunk boundaries actually exercised');
+      }
+      assert.ok(allocations.length > 0);
+      assert.ok(allocations.every(size => size <= 65536), 'no whole executable verification allocation');
+    }
+  } finally {fs.readSync = read; Buffer.alloc = allocate; syncBuiltinESMExports();}
+  for (const [kind, path] of [['original', original], ['private', owner.path]]) {
+    const mode = lstatSync(path).mode & 0o777;
+    for (const offset of [65536, bytes.length - 1]) {
+      const changed = Buffer.from(bytes); changed[offset] ^= 1;
+      chmodSync(path, 0o700); writeFileSync(path, changed);
+      chmodSync(path, mode);
+      try {assert.throws(() => owner.verify(), new RegExp('immutable ' + kind + ' compiler'));}
+      finally {chmodSync(path, 0o700); writeFileSync(path, bytes); chmodSync(path, mode);}
+      owner.verify();
+    }
+  }
+  for (const [change, refusal] of [
+    [() => fs.appendFileSync(original, Buffer.from([1])), /compiler grew during capture/],
+    [() => truncateSync(original, 65536), /compiler shortened during capture/],
+    [() => {const changed = Buffer.from(bytes); changed[changed.length - 1] ^= 1;
+      writeFileSync(original, changed);}, /stable compiler capture (?:mtimeNs|ctimeNs)/],
+  ]) {
+    let changed = false;
+    try {
+      fs.readSync = function(fd, ...args) {
+        const count = read(fd, ...args);
+        if (!changed && fs.fstatSync(fd, {bigint: true}).ino.toString() === owner.evidence.original.inode) {
+          changed = true; change();
+        }
+        return count;
+      };
+      syncBuiltinESMExports();
+      assert.throws(() => owner.verify(), refusal);
+      assert.equal(changed, true, 'real file changed during the actual streaming read');
+    } finally {fs.readSync = read; syncBuiltinESMExports(); writeFileSync(original, bytes);}
+    owner.verify();
   }
 });
