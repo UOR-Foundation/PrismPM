@@ -33,6 +33,7 @@ test('completion evidence requires the actual correlated event and its exact clo
   for(const code of ['PORTABLE_WRONG_CHECK','PORTABLE_REQUEST_COMPLETION'])
     assert.equal(classify({code}),code,'retain the actual refusal reason');
   for(const code of ['UNRELATED',undefined,'__proto__'])assert.equal(classify({code}),'PROBE_ASSERTION');
+  for(const error of [null,undefined,42])assert.equal(classify(error),'PROBE_ASSERTION');
   const owner = read('scripts/portable-oracle-matrix.mjs');
   assert(owner.includes("for (const trigger of matrix.triggers) for (const control of ['omit-finished', 'malformed-finished'])"));
   assert(owner.includes("assert.equal(receipt.failure_code, 'PORTABLE_REQUEST_COMPLETION')"));

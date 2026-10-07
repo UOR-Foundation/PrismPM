@@ -309,7 +309,7 @@ try {
   accepted = true;
 } catch (error) {
   failure = String(error);
-  failureCode = error.code === 'PORTABLE_WRONG_CHECK' ? error.code : 'PROBE_ASSERTION';
+  failureCode = ['PORTABLE_WRONG_CHECK', 'PORTABLE_REQUEST_COMPLETION'].includes(error?.code) ? error.code : 'PROBE_ASSERTION';
 }
 const receipt = {schema: 'prismpm/portable-oracle-probe/1', case: name, profile: fixture.profile, trigger, control,
   scope: matrix.infrastructure_cases.includes(name) ? 'infrastructure-fault' : 'interaction-boundary',
