@@ -47,7 +47,10 @@ export function seedCargoCache(source = '/opt/prismpm/cargo-home', destination =
   const space = statfsSync(dirname(destination));
   // Include conservative per-entry allocation/metadata overhead in addition
   // to the same 12 GiB reserve required by the outer source-review runner.
-  validateImageSpace(space.bavail * space.bsize, bytes + rows.length * 8192);
+  if (destination === '/tmp/prismpm-golden-fetch/cache') {
+    assert(space.bavail * space.bsize >= bytes + rows.length * 8192 + 512 * 1024 ** 2,
+      'bounded acquisition tmpfs needs cache and download headroom');
+  } else validateImageSpace(space.bavail * space.bsize, bytes + rows.length * 8192);
   for (const row of rows) {
     const target = join(destination, row.relative);
     if (row.directory) mkdirSync(target, {mode: 0o700});
@@ -167,7 +170,9 @@ export async function runReview({source, revision, destination}, transport = exe
   const {uid, gid} = context;
   assert(Number.isSafeInteger(uid) && uid > 0 && Number.isSafeInteger(gid) && gid >= 0, 'unprivileged host UID required');
   const name = `prismpm-native-golden-${randomBytes(12).toString('hex')}`, owner = 'org.uor.prismpm.golden-review';
-  let sequence = 0, created = false, failure, result, interrupted;
+  const acquisition = `${name}-dependencies`, supplement = join(runtime, 'dependencies');
+  mkdirSync(supplement, {mode: 0o700});
+  let sequence = 0, created = false, acquisitionCreated = false, failure, result, interrupted;
   const handlers = ['SIGHUP', 'SIGINT', 'SIGTERM'].map(signal => [signal, () => { interrupted ??= Error(`interrupted by ${signal}`); }]);
   for (const [signal, handler] of handlers) process.on(signal, handler);
   const call = async (command, args, options = {}) => {
@@ -186,7 +191,9 @@ export async function runReview({source, revision, destination}, transport = exe
   const checkRevision = async () => assert.equal((await git(['rev-parse', 'HEAD'])).trim(), revision, 'source revision changed');
   const requireSpace = (compressedBytes = 0) => { const space = statfsSync(destination); validateImageSpace(space.bavail * space.bsize, compressedBytes); };
   try {
-    requireSpace(); await checkRevision(); assert.equal(await git(['status', '--porcelain=v1', '--untracked-files=all']), '', 'clean committed source required');
+    // Include the bounded supplement and conservative per-entry filesystem
+    // overhead in addition to the unchanged verifier reserve.
+    requireSpace(256 * 1024 ** 2); await checkRevision(); assert.equal(await git(['status', '--porcelain=v1', '--untracked-files=all']), '', 'clean committed source required');
     validateSourceBaseline(source);
     for (const kind of ['build', 'verified']) assert.equal(lstatSync(join(source, '.prism', kind), {throwIfNoEntry: false}), undefined, 'fresh source outputs required');
     const lock = readEnvironmentLock(regular(join(source, platformPolicy.lock), 8192), architecture);
@@ -199,10 +206,36 @@ export async function runReview({source, revision, destination}, transport = exe
     await run(['pull', '--platform', `linux/${architecture}`, lock.reference], {timeout: 1200000}); requireSpace();
     const identity = await inspectLoadedImage(docker, chain, architecture, lock.source_revision);
     if (interrupted) throw interrupted;
+    requireSpace(256 * 1024 ** 2);
+    // Acquisition has network access but cannot compile or alter source. Its
+    // data-only handoff is revalidated after this owner has been destroyed.
+    acquisitionCreated = true;
+    await run(['create', '--name', acquisition, '--label', `${owner}=${acquisition}`, '--pull=never', '--platform', `linux/${architecture}`,
+      '--network', 'bridge', '--read-only', '--user', `${uid}:${gid}`, '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+      '--pids-limit', '256', '--cpus', '2', '--memory', '2g', '--memory-swap', '2g', '--init',
+      '--tmpfs', `/tmp/prismpm-golden-fetch:rw,noexec,nosuid,nodev,size=3221225472,mode=0700,uid=${uid},gid=${gid}`,
+      '--mount', `type=bind,source=${source},target=/workspace,readonly`, '--workdir', '/workspace',
+      '--mount', `type=bind,source=${supplement},target=/tmp/prismpm-dependency-supplement`,
+      '--env', 'HOME=/tmp/prismpm-golden-fetch/home', '--env', 'CARGO_HOME=/tmp/prismpm-golden-fetch/cache',
+      '--env', 'TMPDIR=/tmp/prismpm-golden-fetch',
+      '--env', 'CARGO_NET_OFFLINE=false', '--entrypoint', '/bin/bash', lock.reference,
+      '-ec', 'mkdir -p /tmp/prismpm-golden-fetch/home; exec sleep infinity']);
+    await run(['start', acquisition]);
+    const fetchOwner = JSON.parse(await run(['inspect', acquisition]));
+    assert(fetchOwner.length === 1 && fetchOwner[0].Image === identity.id && fetchOwner[0].Config.Labels[owner] === acquisition,
+      'dependency acquisition ownership differs');
+    await run(['exec', acquisition, 'node', '/workspace/scripts/native-golden.mjs', 'seed-download-cache']);
+    const dependencyTests = JSON.parse(await run(['exec', acquisition, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.test.py']));
+    assert.deepEqual(dependencyTests, {tests: 18, status: 'passed'}, 'complete dependency test inventory required');
+    await run(['exec', acquisition, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.py', 'prepare'], {timeout: 660000});
+    await run(['rm', '--force', '--volumes', acquisition]); acquisitionCreated = false;
+    if (interrupted) throw interrupted;
+    await checkRevision(); requireSpace();
     created = true;
     await run(['create', '--name', name, '--label', `${owner}=${name}`, '--pull=never', '--platform', `linux/${architecture}`, '--network', 'none',
       '--user', `${uid}:${gid}`, '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '4096', '--init',
       '--mount', `type=bind,source=${source},target=/workspace`, '--workdir', '/workspace',
+      '--mount', `type=bind,source=${supplement},target=/tmp/prismpm-dependency-supplement,readonly`,
       '--env', 'HOME=/tmp/prismpm-golden-home', '--env', 'CARGO_NET_OFFLINE=true', '--env', 'CARGO_TARGET_DIR=/workspace/target/native-golden',
       '--env', `CARGO_HOME=${CARGO_HOME}`,
       '--env', 'CARGO_BUILD_JOBS=2', '--env', 'CARGO_PROFILE_DEV_DEBUG=0', '--env', 'CARGO_PROFILE_TEST_DEBUG=0',
@@ -218,6 +251,10 @@ export async function runReview({source, revision, destination}, transport = exe
     assert.match(platform.release, /^ID=ubuntu$/m); assert.match(platform.release, /^VERSION_ID="24\.04"$/m);
     if (interrupted) throw interrupted;
     await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
+    const preparation = JSON.parse(await run(['exec', name, '/usr/bin/python3', '-I', '-B', '/workspace/scripts/native-golden-dependencies.py', 'install']));
+    assert.match(preparation.preparation_sha256, /^[0-9a-f]{64}$/);
+    assert.equal(preparation.preparation_sha256, hash(Buffer.from(canonical(preparation.preparation))));
+    writeFileSync(join(destination, 'dependency-preparation.json'), canonical(preparation), {flag: 'wx'});
     requireSpace();
     let records;
     for (const write of [true, false]) {
@@ -239,12 +276,24 @@ export async function runReview({source, revision, destination}, transport = exe
     }
     result = {schema: 'prismpm/native-golden-review/1', scope: 'source-golden-review-only', status: 'review-required',
       source_revision: revision, environment_revision: lock.source_revision, environment_image: lock.reference, identity,
+      dependency_preparation_sha256: preparation.preparation_sha256,
       platform: `linux-${architecture}-ubuntu-24.04`, native_basis: `github-hosted-${platformPolicy.runner}-runner-selection`,
       run_id: environment.GITHUB_RUN_ID, run_attempt: environment.GITHUB_RUN_ATTEMPT,
       records: records.map(({path, bytes}) => ({path, byte_length: bytes.length, sha256: hash(bytes)})),
       unclaimed: ['hardware-attestation', 'reviewed-baseline', 'current-sdk-acceptance', 'sdk-release', 'product-readiness']};
   } catch (error) { failure = error; }
   finally {
+    if (acquisitionCreated) try {
+      const container = JSON.parse(await run(['inspect', acquisition]));
+      assert(container.length === 1 && container[0].Config.Labels[owner] === acquisition, 'acquisition cleanup ownership differs');
+      await run(['rm', '--force', '--volumes', acquisition]); acquisitionCreated = false;
+    } catch (error) { failure ??= error; }
+    if (!acquisitionCreated) try {
+      const receipt = join(supplement, 'preparation.json');
+      if (lstatSync(receipt, {throwIfNoEntry: false})) {
+        writeFileSync(join(destination, 'unaccepted-dependency-preparation.json'), regular(receipt, 4 * 1024 ** 2), {flag: 'wx'});
+      }
+    } catch (error) { failure ??= error; }
     // Stop the owned container before retaining evidence. A timed-out Docker
     // exec client can leave its in-container compiler running and writing.
     if (created) try {
@@ -263,7 +312,7 @@ export async function runReview({source, revision, destination}, transport = exe
       }
     } catch (error) { failure ??= error; }
     for (const [signal, handler] of handlers) process.removeListener(signal, handler);
-    rmSync(runtime, {recursive: true});
+    if (!created && !acquisitionCreated) rmSync(runtime, {recursive: true});
   }
   failure ??= interrupted;
   if (failure) { writeFileSync(join(destination, 'failure.json'), canonical({scope: 'source-golden-review-only', message: failure.message}), {flag: 'wx'}); throw failure; }
@@ -297,10 +346,11 @@ export function validateWorkflow(text) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [operation, revision, destination, ...extra] = process.argv.slice(2);
-  if (operation === 'seed-cache') {
+  if (operation === 'seed-cache' || operation === 'seed-download-cache') {
     assert.equal(process.argv.length, 3, 'seed-cache admits no path operands');
-    assert.equal(process.env.CARGO_HOME, CARGO_HOME, 'fixed private Cargo home required');
-    process.stdout.write(canonical(seedCargoCache()) + '\n');
+    const destination = operation === 'seed-cache' ? CARGO_HOME : '/tmp/prismpm-golden-fetch/cache';
+    assert.equal(process.env.CARGO_HOME, destination, 'fixed private Cargo home required');
+    process.stdout.write(canonical(seedCargoCache('/opt/prismpm/cargo-home', destination)) + '\n');
   } else if (operation === 'tests' && process.argv.length === 3) {
     const environment = {...process.env}; delete environment.NODE_TEST_CONTEXT;
     const result = await execute(process.execPath, ['--test', '--test-reporter=tap', '--test-timeout=120000', join(dirname(process.argv[1]), 'native-golden.test.mjs')], {environment});
