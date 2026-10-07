@@ -13,7 +13,7 @@ export const retirementFaults = Object.freeze([
   'pending-detach', 'rejected-detach', 'primary-body-failure',
   'late-acquisition', 'pending-acquisition', 'rejected-close', 'pending-close',
   'pending-acquisition-rejected-close',
-  'registry-overflow', 'registry-rejection', 'post-seal-acquisition',
+  'registry-overflow', 'owned-operation-failure', 'registry-rejection', 'post-seal-acquisition',
   'preclosed-browser', 'rejected-acquisition',
 ]);
 const positive = new Set(['pending-detach', 'rejected-detach', 'late-acquisition', 'rejected-acquisition']);
@@ -30,11 +30,19 @@ let retirementActiveDetaches = 0, retirementPeakDetaches = 0, retirementSettledD
 let retirementCloseStarted = 0, retirementClosed = false, retirementCloseHeld = false, retirementHandoffs = 0;
 let retirementRetiredListeners = 0, retirementAcquisitionRefusals = 0;
 let retirementPreparedAcquisitions = 0, retirementAcquisitionInvocations = 0;
+let retirementRegistryAcquisitionRefusals = 0, retirementRegistryTaskRefusals = 0;
+let retirementSubmission = 0;
+const retirementRegistryRefusals = [];
 let retirementBodyInvocations = 0, retirementTargetClosed = false;
 let retirementRelease;
 const retirementGate = new Promise(resolve => { retirementRelease = resolve; });
 const retirementStart = performance.now();
 let browser;`);
+  driver = replace(driver, "    if (sealed || (closing && kind !== 'retirement') || pending.size >= 128) {",
+    "    if (sealed || (closing && kind !== 'retirement') || pending.size >= 128) {\n      if (kind === 'acquisition') retirementRegistryAcquisitionRefusals++;\n      if (kind === 'task') retirementRegistryTaskRefusals++;\n      if (kind === 'acquisition' || kind === 'task') {\n        if (retirementRegistryRefusals.length >= 128) throw new Error('private-retirement-control');\n        retirementRegistryRefusals.push({submission: retirementSubmission, kind});\n      }");
+  driver = replace(driver,
+    'async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {',
+    'async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {\n  retirementSubmission++;');
   const acquired = '      try { value = await target.context().newCDPSession(target); }';
   driver = replace(driver, acquired, `      try {
         ${fault === 'rejected-acquisition'
@@ -82,7 +90,7 @@ browser.close = async () => {
       ? 'retirementCloseHeld = retirementClosed; await new Promise(() => {});'
       : ''}
 };`);
-  if (!['late-acquisition', 'pending-acquisition', 'pending-acquisition-rejected-close', 'registry-overflow', 'post-seal-acquisition'].includes(fault)) {
+  if (!['late-acquisition', 'pending-acquisition', 'pending-acquisition-rejected-close', 'registry-overflow', 'registry-rejection', 'post-seal-acquisition'].includes(fault)) {
     const acquisition = '    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
     driver = replace(driver, acquisition, acquisition + '\n    await network.ready; // Fault preparation only; ordinary production never joins setup.');
   }
@@ -97,8 +105,10 @@ browser.close = async () => {
   const beforeJourneys = "  await journey('attachment-assets', async () => {";
   if (fault === 'registry-overflow') driver = replace(driver, beforeJourneys,
     `  for (let index = 0; index < 128; index++) diagnosticCleanup.own(() => retirementGate);\n${beforeJourneys}`);
-  if (fault === 'registry-rejection') driver = replace(driver, beforeJourneys,
+  if (fault === 'owned-operation-failure') driver = replace(driver, beforeJourneys,
     `  diagnosticCleanup.own(async () => { throw new Error('private-retirement-control'); });\n${beforeJourneys}`);
+  if (fault === 'registry-rejection') driver = replace(driver, beforeJourneys,
+    `  diagnosticCleanup.beginClose();\n${beforeJourneys}`);
   if (fault === 'post-seal-acquisition') driver = replace(driver, beforeJourneys,
     `  await diagnosticCleanup.join();\n${beforeJourneys}`);
   const close = 'browser ? diagnosticCleanup.closeBrowser(browser) : Promise.resolve()';
@@ -115,6 +125,8 @@ browser.close = async () => {
     body_invocations: retirementBodyInvocations, target_closed: retirementTargetClosed,
     acquisition_refusals: retirementAcquisitionRefusals,
     prepared_acquisitions: retirementPreparedAcquisitions, acquisition_invocations: retirementAcquisitionInvocations,
+    registry_acquisition_refusals: retirementRegistryAcquisitionRefusals, registry_task_refusals: retirementRegistryTaskRefusals,
+    registry_refusals: retirementRegistryRefusals,
     ...diagnosticCleanup.summary(),
     cleanup_elapsed_ms: performance.now() - retirementCleanupStart, primary_failure: !!primaryFailure, cleanup_failure: !!cleanupFailure});
   if (primaryFailure) throw primaryFailure;`);
@@ -146,12 +158,21 @@ export function retirementSummary(value) {
       body_invocations: count(witness?.body_invocations), target_closed: witness?.target_closed === true,
       acquisition_refusals: count(witness?.acquisition_refusals),
       prepared_acquisitions: count(witness?.prepared_acquisitions), acquisition_invocations: count(witness?.acquisition_invocations),
+      registry_acquisition_refusals: count(witness?.registry_acquisition_refusals), registry_task_refusals: count(witness?.registry_task_refusals),
+      registry_refusals: registryRefusalSummary(witness?.registry_refusals),
       unresolved_acquisitions: count(witness?.unresolved_acquisitions),
       actual_detaches_settled: count(witness?.actual_detaches_settled),
       closed_browser_transfers: count(witness?.closed_browser_transfers),
       unresolved_detaches: count(witness?.unresolved_detaches),
       elapsed_ms: duration(witness?.elapsed_ms), cleanup_elapsed_ms: duration(witness?.cleanup_elapsed_ms),
       primary_failure: witness?.primary_failure === true, cleanup_failure: witness?.cleanup_failure === true}};
+}
+function registryRefusalSummary(rows) {
+  if (!Array.isArray(rows) || rows.length > 128) return null;
+  if (!rows.every(row => row && Object.keys(row).sort().join(',') === 'kind,submission'
+    && Number.isSafeInteger(row.submission) && row.submission >= 0 && row.submission <= 128
+    && ['acquisition', 'task'].includes(row.kind))) return null;
+  return rows.map(({submission, kind}) => ({submission, kind}));
 }
 export function requirePrimaryBodyFault(witness, failures, stderr) {
   assert.equal(witness.primary_failure, true); assert.equal(witness.acquisitions, 1); assert.equal(witness.detaches, 1);
@@ -168,6 +189,16 @@ export function requireAcquisitionRefusal(witness, expected) {
   assert.equal(witness.acquisition_invocations,expected,'the intended actual protocol operation must be invoked exactly once');
   assert.equal(witness.acquisition_refusals,expected,'only that actual acquisition call may supply the refusal');
   assert.equal(witness.acquisitions,0);assert.equal(witness.enables,0);
+}
+export function requireRegistryRefusal(witness, expected) {
+  assert(Number.isSafeInteger(expected) && expected > 1);
+  assert.equal(witness.registry_acquisition_refusals, expected, 'every actual acquisition admission must refuse before starting');
+  assert.equal(witness.registry_task_refusals, expected, 'every actual ready-task admission must refuse synchronously');
+  assert.equal(witness.acquisitions, 0); assert.equal(witness.detaches, 0); assert.equal(witness.enables, 0);
+  assert.equal(witness.unresolved_acquisitions, 0); assert.equal(witness.unresolved_detaches, 0);
+  assert.deepEqual(witness.registry_refusals, Array.from({length: expected}, (_, index) =>
+    ['acquisition', 'task'].map(kind => ({submission: index + 1, kind}))).flat(),
+  'every modeled submission must own its exact ordered pair; matching aggregate omissions cannot pass');
 }
 function main() {
   const [oracle, artifact, browser, fault, trigger, reference, evidence, ...extra] = process.argv.slice(2);
@@ -218,12 +249,15 @@ function main() {
     'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'browser_closed', 'close_held', 'retired_listeners', 'handoffs',
     'body_invocations', 'target_closed', 'unresolved_acquisitions', 'actual_detaches_settled',
     'closed_browser_transfers', 'unresolved_detaches', 'acquisition_refusals', 'prepared_acquisitions', 'acquisition_invocations',
+    'registry_acquisition_refusals', 'registry_task_refusals',
+    'registry_refusals',
     'elapsed_ms', 'cleanup_elapsed_ms', 'primary_failure', 'cleanup_failure'].sort());
   assert.equal(witness.fault, fault);
   for (const key of ['acquisitions', 'detaches', 'enables', 'active_detaches', 'peak_detaches', 'settled_detaches', 'close_started', 'retired_listeners', 'handoffs', 'body_invocations',
     'unresolved_acquisitions', 'actual_detaches_settled', 'closed_browser_transfers', 'unresolved_detaches', 'acquisition_refusals',
-    'prepared_acquisitions', 'acquisition_invocations'])
+    'prepared_acquisitions', 'acquisition_invocations', 'registry_acquisition_refusals', 'registry_task_refusals'])
     assert(Number.isSafeInteger(witness[key]) && witness[key] >= 0 && witness[key] <= 128);
+  assert.deepEqual(registryRefusalSummary(witness.registry_refusals), witness.registry_refusals);
   assert.equal(witness.close_started, 1); assert.equal(witness.browser_closed, true, 'actual browser close must complete');
   assert.equal(witness.close_held, fault === 'pending-close', 'synthetic close hold starts only after actual close completes');
   assert.equal(witness.retired_listeners, 0, 'every detached real session must have no diagnostic listeners left');
@@ -274,6 +308,12 @@ function main() {
       assert(witness.cleanup_elapsed_ms>=9_900);
     }
     if (['registry-overflow', 'post-seal-acquisition'].includes(fault)) assert.equal(witness.acquisitions, 0);
+    if (fault === 'registry-rejection') requireRegistryRefusal(witness, expectedObservationSubmissions(profile, trigger).length);
+    if (fault === 'owned-operation-failure') {
+      assert.equal(witness.registry_acquisition_refusals, 0); assert.equal(witness.registry_task_refusals, 0);
+      const expected = expectedObservationSubmissions(profile, trigger).length;
+      assert.equal(witness.acquisitions, expected); assert.equal(witness.detaches, expected); assert.equal(witness.enables, expected);
+    }
   }
   receipt.status = 'passed';
   writeFileSync(join(directory, 'result.json'), JSON.stringify(receipt) + '\n');

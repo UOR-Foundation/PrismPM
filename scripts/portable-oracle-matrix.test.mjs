@@ -11,7 +11,7 @@ import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummar
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {observationDriver,requireObservationWitnesses,expectedObservationSubmissions,observationSummary,observationFailureDiagnostics} from './portable-oracle-observation.mjs';
-import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFault,requireAcquisitionRefusal} from './portable-oracle-retirement.mjs';
+import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFault,requireAcquisitionRefusal,requireRegistryRefusal} from './portable-oracle-retirement.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
@@ -83,7 +83,7 @@ test('live observation qualification transforms only diagnostics and retains all
  assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
  assert(owner.includes('assert.equal(outcomes.length, 78'));
  assert(owner.includes('assert.equal(negativeControls.length, 12'));
- assert.equal(retirementFaults.length,13);assert.equal(new Set(retirementFaults).size,13);
+ assert.equal(retirementFaults.length,14);assert.equal(new Set(retirementFaults).size,14);
  for(const fault of retirementFaults)for(const trigger of ['click','keyboard']){
   const driver=retirementDriver(source,fault,trigger);
   for(const point of ['assert.equal(invocationCount, 1','assert.equal(navigated, false',
@@ -95,7 +95,7 @@ test('live observation qualification transforms only diagnostics and retains all
   assert(driver.includes('10_000'),'original operation bound remains unchanged');
  }
  assert.throws(()=>retirementDriver(source,'unknown','click'));assert.throws(()=>retirementDriver(source,'pending-detach','unknown'));
- assert(owner.includes("'scripts/portable-oracle-retirement.mjs'"));assert(owner.includes('assert.equal(retirementOutcomes.length,32'));
+ assert(owner.includes("'scripts/portable-oracle-retirement.mjs'"));assert(owner.includes('assert.equal(retirementOutcomes.length,34'));
  assert(owner.includes('retirement_controls:retirementOutcomes'));
  const faults=read('scripts/portable-oracle-retirement.mjs');
  for(const guard of ['witness.retired_listeners, 0','witness.close_held, fault',
@@ -119,6 +119,23 @@ test('live observation qualification transforms only diagnostics and retains all
  for(const patch of [{prepared_acquisitions:0},{prepared_acquisitions:1},{acquisition_invocations:0},
   {acquisition_invocations:1},{acquisition_refusals:0},{acquisitions:1},{enables:1}])
   assert.throws(()=>requireAcquisitionRefusal({...refusal,...patch},2));
+ const registryRefusal={registry_acquisition_refusals:2,registry_task_refusals:2,acquisitions:0,detaches:0,enables:0,
+  unresolved_acquisitions:0,unresolved_detaches:0,
+  registry_refusals:[{submission:1,kind:'acquisition'},{submission:1,kind:'task'},
+   {submission:2,kind:'acquisition'},{submission:2,kind:'task'}]};
+ assert.doesNotThrow(()=>requireRegistryRefusal(registryRefusal,2));
+ for(const patch of [{registry_acquisition_refusals:0},{registry_acquisition_refusals:1},{registry_acquisition_refusals:3},
+  {registry_task_refusals:0},{registry_task_refusals:1},{registry_task_refusals:3},
+  {acquisitions:1},{detaches:1},{enables:1},{unresolved_acquisitions:1},{unresolved_detaches:1}])
+  assert.throws(()=>requireRegistryRefusal({...registryRefusal,...patch},2));
+ for(let index=0;index<registryRefusal.registry_refusals.length;index++){
+  const rows=registryRefusal.registry_refusals;
+  for(const changed of [rows.filter((_,i)=>i!==index),[...rows.slice(0,index),rows[index],...rows.slice(index)],
+   rows.map((row,i)=>i===index?{...row,submission:row.submission===1?2:1}:row),
+   rows.map((row,i)=>i===index?{...row,kind:row.kind==='task'?'acquisition':'task'}:row),
+   rows.map((row,i)=>i===index?{...row,extra:true}:row)])
+   assert.throws(()=>requireRegistryRefusal({...registryRefusal,registry_refusals:changed},2));
+ }
  const closedFailures=retirementSummary({fault:'primary-body-failure',exit_code:1,terminated:true,execution_error:true,
   submission_failures:[{failure:'response-body-failed',phase:'response-body',secret:'private-value'}],
   cleanup_failures:[{resource:'browser',failure:'unexpected',secret:'private-value'}],
@@ -129,6 +146,33 @@ test('live observation qualification transforms only diagnostics and retains all
  assert.equal(closedFailures.submission_failures_truncated,true);assert.equal(closedFailures.cleanup_failures_truncated,true);
  assert(!JSON.stringify(closedFailures).includes('private-value'));
  assert.deepEqual(retirementSummary(closedFailures),closedFailures);
+});
+test('registry admission refusal uses actual closing admission rather than an admitted task rejection',async()=>{
+ const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+ const driver=retirementDriver(source,'registry-rejection','click');
+ const taskDriver=retirementDriver(source,'owned-operation-failure','click');
+ const before="  await journey('attachment-assets', async () => {";
+ assert(driver.includes('  diagnosticCleanup.beginClose();\n'+before));
+ assert(!driver.includes('diagnosticCleanup.own(async () => { throw'));
+ assert(taskDriver.includes("diagnosticCleanup.own(async () => { throw new Error('private-retirement-control'); });"));
+ const start=driver.indexOf('function diagnosticRetirementRegistry('),end=driver.indexOf('\n// CDP observations',start);
+ const helpers=runInNewContext('let retirementRegistryAcquisitionRefusals=0,retirementRegistryTaskRefusals=0,retirementSubmission=0;const retirementRegistryRefusals=[];\n'+driver.slice(start,end)+
+  '\n({create:diagnosticRetirementRegistry,counts:()=>[retirementRegistryAcquisitionRefusals,retirementRegistryTaskRefusals],next:()=>retirementSubmission++,rows:()=>retirementRegistryRefusals})',
+  {bounded:operation=>operation});
+ const registry=helpers.create();let invoked=0;registry.beginClose();
+ for(let submission=0;submission<3;submission++){
+  helpers.next();
+  assert.throws(()=>registry.acquire(()=>{invoked++;}));
+  assert.throws(()=>registry.own(()=>{invoked++;}));
+ }
+ assert.equal(invoked,0);assert.deepEqual(Array.from(helpers.counts()),[3,3]);
+ assert.deepEqual(JSON.parse(JSON.stringify(helpers.rows())),Array.from({length:3},(_,i)=>
+  [{submission:i+1,kind:'acquisition'},{submission:i+1,kind:'task'}]).flat());
+ await assert.rejects(registry.join(),/ownership is uncertain/);
+ const taskRegistry=helpers.create();
+ const admitted=taskRegistry.own(async()=>{invoked++;throw new Error('admitted failure');});
+ await assert.rejects(admitted,/admitted failure/);await assert.rejects(taskRegistry.join(),/operation failed/);
+ assert.equal(invoked,1);assert.deepEqual(Array.from(helpers.counts()),[3,3]);
 });
 test('live CDP qualification rejects unavailable, omitted, incomplete and invented observation witnesses',()=>{
  const observed={schema:'prismpm/portable-observation-witness/1',submission:1,phase:'completed-readiness',journey:'modeled-vectors',vectorIndex:0,keyboard:true,
@@ -805,7 +849,7 @@ test('the complete expanded matrix retains every diagnostic member and its final
    for(const trigger of triggers)cases.push(`${profile}-retirement-${trigger}-${fault}`);
   }
  }
- assert.equal(cases.length,78+12+8+32);assert.equal(new Set(cases).size,cases.length);
+ assert.equal(cases.length,78+12+8+34);assert.equal(new Set(cases).size,cases.length);
  // Exercise the actual bounded filesystem collector, not a success marker or
  // browser simulation. Real browser acceptance remains the complete owner.
  bundle.json('source-witnesses.json',{scope:'budget-regression-only'});
@@ -817,17 +861,17 @@ test('the complete expanded matrix retains every diagnostic member and its final
  }
  bundle.finish({scope:'budget-regression-only',cases},true);
  const index=JSON.parse(readFileSync(join(bundle.path,'index.json')));
- assert.equal(index.state,'completed');assert.equal(index.files.length,270);
+ assert.equal(index.state,'completed');assert.equal(index.files.length,274);
  assert.equal(diagnosticLimits.files,index.files.length+2,'retain exactly two reserved file slots');
  assert.equal(diagnosticLimits.fileBytes,16*1024**2);assert.equal(diagnosticLimits.totalBytes,32*1024**2);
  assert.equal(diagnosticLimits.indexBytes,128*1024);
- assert.equal(index.files.filter(row=>/retirement-.*\.json$/.test(row.path)).length,32);
+ assert.equal(index.files.filter(row=>/retirement-.*\.json$/.test(row.path)).length,34);
  for(const row of index.files)assert.equal(hash(readFileSync(join(bundle.path,row.path))),row.sha256);
  const original=read('scripts/portable-oracle-diagnostics.mjs');
  const limit=/files:\d+/.exec(original);assert(limit,'one actual file-count bound required');
  const directory=diagnosticRoot(t),mutant=join(directory,'under-budget.mjs');
  writeFileSync(mutant,original.replace(limit[0],'files:256'));
- const source=`import assert from 'node:assert/strict';import {PortableDiagnosticBundle} from ${JSON.stringify(new URL('file://'+mutant).href)};const bundle=new PortableDiagnosticBundle(process.argv[1]);for(let n=0;n<270;n++)bundle.bytes('row-'+n,Buffer.alloc(0));bundle.complete();assert.equal(bundle.state,'completed');`;
+ const source=`import assert from 'node:assert/strict';import {PortableDiagnosticBundle} from ${JSON.stringify(new URL('file://'+mutant).href)};const bundle=new PortableDiagnosticBundle(process.argv[1]);for(let n=0;n<274;n++)bundle.bytes('row-'+n,Buffer.alloc(0));bundle.complete();assert.equal(bundle.state,'completed');`;
  const child=spawnSync(process.execPath,['--input-type=module','-e',source,directory],{encoding:'utf8',timeout:10000,maxBuffer:65536});
  assert.ifError(child.error);assert.equal(child.signal,null);assert.equal(child.status,1);
  assert.match(child.stderr,/diagnostic byte or file limit/,'actual old-bound mutant cannot retain the complete matrix');
