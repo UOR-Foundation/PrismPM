@@ -156,7 +156,20 @@ export function probeSummary(value){
  assert(Array.isArray(value.diagnostics)&&value.diagnostics.length<=4);
  const diagnostics=value.diagnostics.map(row=>submissionDiagnosticSummary(row));
  return{hashes,exit_code:integer(value.exit_code,255),signal:choice(value.signal,[null,'SIGTERM','SIGKILL','SIGINT','SIGHUP']),
-  probe_passed:value.probe_passed===true,product_acceptance:'not-established',diagnostics};
+  probe_passed:value.probe_passed===true,product_acceptance:'not-established',diagnostics,
+  ...(Object.hasOwn(value,'duplicate_control')?{
+   duplicate_control_truncated:Array.isArray(value.duplicate_control)&&value.duplicate_control.length>1,
+   duplicate_control:
+   (Array.isArray(value.duplicate_control)?value.duplicate_control:[]).slice(0,1).map(row=>({
+    state:choice(row?.state,['joined','missing']),pending:integer(row?.pending,32),
+    outcomes_truncated:Array.isArray(row?.outcomes)&&row.outcomes.length>32,
+    outcome_count:Array.isArray(row?.outcomes)?integer(row.outcomes.length):null,
+    outcomes:(Array.isArray(row?.outcomes)?row.outcomes:[]).slice(0,32).map(outcome=>({
+     status:choice(outcome?.status,['passed','failed','overflow']),http_status:integer(outcome?.http_status,599),
+     bytes:integer(outcome?.bytes,16*1024**2),envelope:outcome?.envelope===true,
+    })),
+   }))}:{}),
+ };
 }
 
 // A diagnostic failure must not invent acceptance, retry a case, or replace the

@@ -214,7 +214,9 @@ manifest, and its Linux subreaper must establish descendant cleanup before the
 next case. Construction uses isolated Cargo configuration and fresh Git checkouts
 from authenticated object downloads, with staged-source and toolchain custody.
 Delayed initialization uses the same correlated submission observer without
-refilling the retained draft. Payload-safe diagnostics preserve the first failure
+refilling the retained draft. Its owned module-delay route is removed after
+module completion and before the real intent, so setup interception does not
+remain active during response validation. Payload-safe diagnostics preserve the first failure
 even when cleanup also fails. They identify the owning journey and modeled-vector
 index, observed request completion, and only closed network-failure categories;
 arbitrary browser error text is not forwarded. These observations never replace
@@ -251,6 +253,14 @@ an entirely unavailable or empty collector cannot qualify noninterference. Their
 complete application reports must equal the corresponding unobserved reports.
 The original eight serialized-observed/unobserved runs remain mandatory and
 retain their stricter complete CDP request/response/completion witnesses.
+Injected duplicate clients own and consume their actual response with the same
+modeled envelope bound. Their tasks are retained, rejection-observed, and joined
+within the original browser-cleanup deadline. A duplicate control requires one
+fully consumed successful duplicate response, zero pending tasks, and the
+unchanged primary `single-invocation` assertion with two actual invocations;
+unavailable bodies, abandoned tasks or unrelated failures cannot qualify it.
+This negative-control lifecycle is not a change to production body acceptance
+and does not establish the cause of historical browser failures.
 The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed

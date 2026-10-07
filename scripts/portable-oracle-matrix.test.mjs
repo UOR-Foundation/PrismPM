@@ -6,7 +6,7 @@ import {join,dirname as actualDirname,resolve as actualResolve} from 'node:path'
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {capture, requireBoundaryCheck, requireRequestCompletion, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
+import {capture, requireBoundaryCheck, requireRequestCompletion, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure, installDuplicateResponseOwner, duplicateInjection, duplicateOwnedDriver, requireDuplicateWitness} from './portable-oracle-custody.mjs';
 import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
@@ -15,6 +15,142 @@ import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFa
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('delayed module fault retires its exact route before the unchanged retained-input submission', async () => {
+  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const start=source.indexOf("  await journey('delayed-init', async () => {");
+  const end=source.indexOf("  await journey('intent-boundaries',",start);
+  assert(start>=0&&end>start);
+  const body=source.slice(start,end);
+  const events=[];let handler,continued=false;const recovery={request:[120]};
+  const locator={isDisabled:async()=>true};
+  const page={goto:async()=>events.push('goto'),locator:()=>locator,on(){},waitForTimeout:async()=>{},url:()=> 'http://127.0.0.1/',
+    async waitForLoadState(state){assert.equal(state,'networkidle');await handler({continue:async()=>{continued=true;events.push('continued');}});},
+    evaluate:async()=> 'x'};
+  const context={async route(pattern,value){assert.equal(pattern,'**/app.js');handler=value;events.push('route');},newPage:async()=>page,
+    async unroute(pattern,value){assert.equal(pattern,'**/app.js');assert.equal(value,handler);assert(continued);events.push('unroute');},close:async()=>events.push('close')};
+  await runInNewContext('(async()=>{'+body+'})()', {assert,browser:{newContext:async()=>context},origin:'http://127.0.0.1',recovery,text:true,view:{response_error:'not ready'},decode:new TextDecoder(),Uint8Array,
+    journey:async(name,run)=>{assert.equal(name,'delayed-init');await run();},fill:async()=>events.push('fill'),shows:async()=>{},
+    submit:async(vector,target,keyboard,options)=>{assert.equal(vector,recovery);assert.equal(target,page);assert.equal(keyboard,false);assert.equal(options.fillInputs,false);assert(events.includes('unroute'));events.push('submit');}});
+  assert.deepEqual(events,['route','goto','fill','continued','unroute','submit','close']);
+});
+
+test('duplicate control owns its real response task and preserves rejection, envelope and byte bounds', async () => {
+  const good = new TextEncoder().encode(JSON.stringify({version: 1, outputs: ['🌱']}));
+  for (const fault of ['none', 'over-limit', 'status', 'missing-body', 'read', 'invalid-utf8', 'wrong-output', 'extra-field', 'fetch']) {
+    const window = {}, callbacks = new Map();let listener, released = false, cancelled = false, signal, reads = 0;
+    const bytes = fault === 'invalid-utf8' ? Uint8Array.of(255)
+      : fault === 'wrong-output' ? new TextEncoder().encode('{"version":1,"outputs":["wrong"]}')
+      : fault === 'extra-field' ? new TextEncoder().encode('{"version":1,"outputs":["🌱"],"extra":true}') : good;
+    const install = runInNewContext('('+installDuplicateResponseOwner.toString()+')', {
+      window, document: {querySelector: () => ({addEventListener: (event, callback) => {assert.equal(event, 'submit');listener = callback;}})},
+      AbortController, TextDecoder, Uint8Array,
+      setTimeout(callback, ms) {assert.equal(ms, 10000);callbacks.set(1, callback);return 1;},
+      clearTimeout(id) {assert.equal(id, 1);callbacks.delete(id);},
+      async fetch(url, options) {
+        assert.equal(url, '/_hologram/intent');assert.equal(options.method, 'POST');
+        signal = options.signal;
+        assert.deepEqual(JSON.parse(options.body), {version: 1, name: 'application.invoke', payload: 'input'});
+        if (fault === 'fetch') throw new Error('private failure');
+        return {status: fault === 'status' ? 503 : 200, body: fault === 'missing-body' ? null : {getReader: () => ({
+          async read() {if (fault === 'read') throw new Error('private read');return reads++ ? {done: true} : {done: false, value: bytes};},
+          async cancel() {cancelled = true;},
+          releaseLock() {released = true;},
+        })}};
+      },
+    });
+    install({payload: 'input', maximum: fault === 'over-limit' ? good.length - 1 : good.length + 100, expectedOutput: '🌱'});
+    assert.throws(() => install({}), /already installed/);
+    listener();const state = window.__prismDuplicateControl;
+    assert.equal(state.pending.size, 1, 'actual promise must remain strongly owned');
+    await Promise.all([...state.pending]);
+    assert.equal(state.pending.size, 0);assert.equal(callbacks.size, 0);
+    assert.equal(state.outcomes.length, 1);
+    assert.equal(state.outcomes[0].status, fault === 'none' ? 'passed' : 'failed');
+    assert.equal(JSON.stringify(state.outcomes).includes('private'), false);
+    if (!['status', 'missing-body', 'fetch'].includes(fault)) assert(released);
+    if (!['none', 'status', 'missing-body', 'fetch'].includes(fault)) assert(cancelled);
+    if (fault !== 'none') assert(signal.aborted);
+    if (fault === 'none') {
+      const value = JSON.parse(JSON.stringify({schema: 'prismpm/duplicate-control/1', state: 'joined', pending: 0, outcomes: state.outcomes}));
+      requireDuplicateWitness(value, good.length);
+      for (const changed of [{...value, pending: 1}, {...value, outcomes: []}, {...value, state: 'missing'},
+        {...value, outcomes: [...value.outcomes, ...value.outcomes]}, {...value, private: 'secret'},
+        ...[{status: 'failed'}, {http_status: 503}, {envelope: false}, {bytes: good.length+1}, {bytes: 0}, {bytes: null}, {private: 'secret'}]
+          .map(change => ({...value, outcomes: [{...value.outcomes[0], ...change}]}))]) assert.throws(() => requireDuplicateWitness(changed, good.length));
+    }
+  }
+});
+
+test('retained duplicate witnesses disclose truncation and never echo private fields', () => {
+  const hashes=Object.fromEntries(['source','matrix','driver','oracle','model','archive','wasm','node','browser'].map(name=>[name+'_sha256','a'.repeat(64)]));
+  const base={schema:'prismpm/portable-oracle-probe/1',...hashes,diagnostics:[],exit_code:1,signal:null,probe_passed:false};
+  const outcome={status:'passed',http_status:200,bytes:41,envelope:true,private:'secret'};
+  for(const controls of [[],[{state:'joined',pending:0,outcomes:[outcome]}],
+    [{state:'joined',pending:0,outcomes:Array.from({length:32},()=>outcome).concat({status:'overflow',private:'secret'})}],
+    [{state:'joined',pending:0,outcomes:[outcome]},{state:'missing',outcomes:[]}],
+    [{state:'private',pending:'private',outcomes:[{status:'private',http_status:'private',bytes:'private',envelope:'private'}]}]]){
+    const summary=probeSummary({...base,duplicate_control:controls});
+    assert.equal(summary.duplicate_control_truncated,controls.length>1);
+    if(controls.length){assert.equal(summary.duplicate_control[0].outcomes_truncated,controls[0].outcomes.length>32);
+      assert.equal(summary.duplicate_control[0].outcome_count,controls[0].outcomes.length);}
+    assert.equal(JSON.stringify(summary).includes('private'),false);assert.equal(JSON.stringify(summary).includes('secret'),false);
+    assert.equal(summary.probe_passed,false);
+  }
+});
+
+test('duplicate driver joins ownership inside the existing cleanup bound without changing primary acceptance', () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const changed = duplicateOwnedDriver(source);
+  for (const predicate of ["try { replyBody = await bounded(reply.body()); }", "assert.equal(invocationCount, 1, 'submission must issue exactly one invocation');",
+    'await shows(displayed(vector), target);', 'await target.waitForFunction(ready);', 'if (primaryFailure) throw primaryFailure;'])
+    assert.equal(changed.split(predicate).length, source.split(predicate).length);
+  assert(changed.indexOf('await bounded((async () => {') < changed.indexOf('for (const target of duplicatePages)'));
+  assert(changed.includes('finally { await closeDuplicateBrowser(); }'));
+  assert(changed.includes('void closeDuplicateBrowser().catch(() => {});'));
+  assert.equal(changed.split('10_000').length, source.split('10_000').length, 'no new outer deadline');
+  for (const target of ['page', 'delayedPage']) {
+    const injection = duplicateInjection(target);
+    assert(injection.includes('duplicatePages.add('+target+')'));
+    assert(injection.includes('await '+target+'.evaluate('));
+    assert(injection.includes('app.response_maximum * 6 + 256'));
+  }
+  assert.throws(() => duplicateInjection('untrusted'));
+  assert.throws(() => duplicateOwnedDriver(source.replace('let primaryFailure;', '')));
+  assert.throws(() => duplicateOwnedDriver(source.replace('      const ownCleanup = operation =>', '')));
+});
+
+test('executed duplicate cleanup tail retires the actual registry/browser on rejected, failed and pending evaluation', async () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const changed = duplicateOwnedDriver(source);
+  const declaration = changed.slice(changed.indexOf('const duplicatePages = new Set();'), changed.indexOf('try {\nconst input = createInterface'));
+  const tail = changed.slice(changed.lastIndexOf('  let cleanupFailure;'), changed.lastIndexOf('\n}'));
+  const registrySource = source.slice(source.indexOf('function diagnosticRetirementRegistry()'), source.indexOf('// CDP observations are diagnostic only:'));
+  for (const fault of ['rejected', 'failed', 'pending']) {
+    let connected = true, closes = 0, destroyed = false, release;
+    const primary = new Error('original primary');
+    const diagnostics = [];
+    const browser = {isConnected: () => connected, async close() {closes++;connected = false;release?.({state: 'missing', pending: null, outcomes: []});}};
+    const target = {evaluate: () => fault === 'rejected' ? Promise.reject(new Error('private evaluation'))
+      : fault === 'pending' ? new Promise(resolve => {release = resolve;})
+      : Promise.resolve({state: 'joined', pending: 0, outcomes: [{status: 'failed'}]})};
+    const bounded = operation => Promise.race([operation, new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 10))]);
+    const run = runInNewContext(`(async () => {
+      ${registrySource}
+      const diagnosticCleanup = diagnosticRetirementRegistry();
+      ${declaration}
+      duplicatePages.add(target);
+      ${tail}
+    })()`, {assert, browser, target, bounded, primaryFailure: primary,
+      sanitizedFailure: error => error, failureKind: () => 'unexpected', emitDiagnostic: value => diagnostics.push(value),
+      process: {stdin: {destroy() {destroyed = true;}}}, setTimeout});
+    await assert.rejects(run, error => error === primary, 'cleanup must not replace the original primary failure');
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(closes, 1);assert.equal(connected, false);assert(destroyed);
+    assert(diagnostics.some(value => value.schema === 'prismpm/browser-cleanup-diagnostic/1'));
+    assert.equal(JSON.stringify(diagnostics).includes('private'), false);
+  }
+});
 
 test('completion evidence requires the actual correlated event and its exact closed schema', () => {
   const completed = {event: 'request-finished', invocation: true};
