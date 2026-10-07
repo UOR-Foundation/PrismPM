@@ -71,7 +71,7 @@ export function observationFailureDiagnostics(stderr){
  return observationSummary({submission_failures,cleanup_failures,submission_failures_truncated,cleanup_failures_truncated});
 }
 export function observationDriver(source,mode,trigger){
- assert(['observed','unobserved'].includes(mode),'closed observation mode required');
+ assert(['observed','unobserved','ordinary'].includes(mode),'closed observation mode required');
  assert(['click','keyboard'].includes(trigger),'closed observation trigger required');
  let driver=source;
  const entry='async function submit(vector, target = page, keyboard = false, {fillInputs = true} = {}) {';
@@ -79,7 +79,7 @@ export function observationDriver(source,mode,trigger){
  const acquisition='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
  driver=replacement(driver,acquisition,mode==='observed'
   ? acquisition+'\n    await network.ready; // Diagnostic-only witness preparation, not ordinary acceptance.'
-  : '    // Qualification omits only the read-only diagnostic collector.');
+  : mode==='ordinary' ? acquisition : '    // Qualification omits only the read-only diagnostic collector.');
  if(trigger==='keyboard'){
   driver=replacement(driver,'      await submit(vector);','      await submit(vector, page, true);');
   driver=replacement(driver,'    await submit(recovery, delayedPage, false, {fillInputs: false});',
@@ -94,7 +94,7 @@ export function observationDriver(source,mode,trigger){
     network.retire();${mode==='observed' ? '\n    await network.stop(); // Mandatory diagnostic qualification owns this join.' : ''}`);
 }
 export function requireObservationWitnesses(rows,mode,expected){
- assert(['observed','unobserved'].includes(mode));
+ assert(['observed','unobserved','ordinary'].includes(mode));
  assert(expected.length>0&&expected.length<=128,'complete bounded expected submission inventory required');
  assert.deepEqual(rows.map(({submission,journey,vectorIndex,keyboard})=>({submission,journey,vectorIndex,keyboard})),expected,
   'every expected real submission must have its own ordered witness');
@@ -106,16 +106,25 @@ export function requireObservationWitnesses(rows,mode,expected){
   if(mode==='observed'){
    assert.deepEqual(row.network,{state:'observed',requests:1,overflow:false});
    assert.equal(row.requests,1);assert.equal(row.responses,1);assert.equal(row.completions,1);
-  }else{
+  }else if(mode==='unobserved'||row.network.state==='unavailable'){
    assert.deepEqual(row.network,{state:'unavailable'});
    assert.equal(row.requests,0);assert.equal(row.responses,0);assert.equal(row.completions,0);
+  }else{
+   assert.deepEqual(Object.keys(row.network).sort(),['overflow','requests','state']);
+   assert.equal(row.network.state,'observed');assert.equal(row.network.overflow,false);
+   for(const count of [row.network.requests,row.requests,row.responses,row.completions])
+    assert(Number.isSafeInteger(count)&&count>=0&&count<=1,'ordinary diagnostics cannot invent or duplicate requests');
+   assert.equal(row.requests,row.network.requests);
+   assert(row.responses<=row.requests&&row.completions<=row.requests,'only a correlated observed request may contribute events');
   }
  }
+ if(mode==='ordinary')assert(rows.some(row=>row.network.state==='observed'&&row.requests===1),
+  'ordinary scheduling qualification must exercise an actual correlated diagnostic observation');
 }
 function main(){
  const [oracle,artifact,browser,mode,trigger,evidence,...extra]=process.argv.slice(2);
  assert.equal(extra.length,0);assert(oracle&&artifact&&browser&&evidence);
- assert(['observed','unobserved'].includes(mode));assert(['click','keyboard'].includes(trigger));
+ assert(['observed','unobserved','ordinary'].includes(mode));assert(['click','keyboard'].includes(trigger));
  const root=fileURLToPath(new URL('../',import.meta.url));
  const sourcePath=join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
  const source=readFileSync(sourcePath,'utf8'),matrixPath=join(root,'tests/data/portable-oracle-matrix.json');
