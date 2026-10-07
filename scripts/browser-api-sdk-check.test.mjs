@@ -225,13 +225,13 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26']);
- assert.equal(runSuites(root,launch,()=>{}).length,16);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-34']);
+ assert.equal(runSuites(root,launch,()=>{}).length,17);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
- const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,35);
- for(const [index,path] of view.files.entries())put(root,path,testSource(index===0?29:1));
- assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,'omitting the new source-stream regression must refuse34 tests');
+ const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,36);
+ for(const [index,path] of view.files.entries())put(root,path,testSource(index===0?30:1));
+ assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,'omitting the new driver-lookup regression must refuse35 tests');
  testFixtures(root);
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';
  put(root,path,testSource(1));put(root,second,testSource(1));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/);
@@ -284,7 +284,7 @@ test('owning release test kills a removed complete-TAP acceptance guard',t=>{
  const source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
  for(const [before,after,witness] of [
   ['const tests=verifyTap(output.stdout,suite.minimum)',"const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])",/Missing expected exception/],
-  ["{id:'DK-15',minimum:35","{id:'DK-15',minimum:34",/34 !== 35/],
+  ["{id:'DK-15',minimum:36","{id:'DK-15',minimum:35",/35 !== 36/],
  ]){
  const root=temporary(t);
  assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,after));

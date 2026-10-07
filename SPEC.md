@@ -2093,6 +2093,25 @@ This private presentation prerequisite leaves `PP2011`, credential custody,
 generated authorized dispatch, durable recovery and complete public application,
 Foundry and deployment gates unchanged.
 
+#### 12.11.2 Complete P-256 point admission
+
+DK-34 owns the bounded source-generated predicate in
+`Foundation.Crypto.P256.Model` and its private canonical CBOR verification
+boundary. Only SEC1 uncompressed P-256 points with exact coordinate widths,
+coordinates below the SEC2 prime and the complete curve equation are admitted.
+The cofactor-one subgroup implication is specific to this fixed domain.
+Malformed field representations are refused without reducing caller inputs.
+Fixed-limb intermediates are bounded below `u64`; no unbounded integer backend,
+handwritten host field arithmetic or provider-import validity assumption is used.
+
+Acceptance requires complete imported applicable NIST key-validation vectors,
+independent field/curve oracles, actual native/std/no_std/two-Wasm parity,
+all three pinned browser engines, exact artifact/source custody and genuine
+arithmetic/codec mutants. DK-33 account and DK-32 signer admission must use this
+source predicate and independently pass their complete owning journeys. This
+component grants no key possession, account authority, freshness, signature
+conformance, NIST certification or public application acceptance.
+
 ### 12.12 Private durable operation journal
 
 DK-24 owns source-generated local operation admission, canonical records and
@@ -2752,6 +2771,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. | §12 |
+| `DK-34` | `sdk` | Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

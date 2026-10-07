@@ -34,6 +34,8 @@ db207c9b98bff0b7c75c757305ed5ba1d7dfd490b2e82007aebcf1da95d7f22a  tests/browser-
 b63355d07d3c2952db5748c197de3f346401038c697eea2e3992abcf02a4b758  tests/browser-effects/driver/Cargo.lock
 cd971655426523e79de558c58706629b633f18f55b977f9441279879139b96b8  tests/browser-presentation/driver/Cargo.toml
 f6355ccb80b69a9d5859a03f2a54c9897c20ab8cf9c1ec4ab4ec4841a9cf2a3f  tests/browser-presentation/driver/Cargo.lock
+b0b774f35dc26abaf653abcd7e7b6b89d93d55d92131a71af83758f361d7f10a  tests/browser-p256/driver/Cargo.toml
+d528d36a8169af8db4bea14e553359cb20d06d5654b5d82cf67b978b0650a210  tests/browser-p256/driver/Cargo.lock
 5f597a966ad257bde250c2b71914bb943cc16ffbbb8cf16513d4d9c103fb3d06  tests/browser-session/driver/Cargo.toml
 1bc381d37d894ce5706413a0e3ae85fb5e98d9124b90f019c18c21664267f891  tests/browser-session/driver/Cargo.lock
 367929deb65c746365b59a6055c76f8e0ff97f334d08ca5382bc163474346213  tests/browser-custody/driver/Cargo.toml
@@ -72,6 +74,7 @@ for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/browser-view/driver/Cargo.toml \
   tests/browser-effects/driver/Cargo.toml \
   tests/browser-presentation/driver/Cargo.toml \
+  tests/browser-p256/driver/Cargo.toml \
   tests/browser-session/driver/Cargo.toml \
   tests/browser-custody/driver/Cargo.toml \
   tests/browser-operation-journal/driver/Cargo.toml \

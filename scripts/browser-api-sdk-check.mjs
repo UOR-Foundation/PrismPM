@@ -13,7 +13,7 @@ export const sourceRoots=Object.freeze([
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
- 'tests/browser-session',
+ 'tests/browser-session','tests/browser-p256',
  'tests/fixtures/library/native-library/project',
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
@@ -38,7 +38,7 @@ export const suites=Object.freeze([
  {id:'DK-12',minimum:13,files:['journal-model-test.mjs']},
  {id:'DK-13',minimum:12,files:['command-model-test.mjs']},
  {id:'DK-14',minimum:11,files:['query-model-test.mjs']},
- {id:'DK-15',minimum:35,files:['view-model-test.mjs','tests/browser-view/compiler-artifact.test.mjs','tests/browser-view/compiler-artifact-mutations.test.mjs','tests/browser-view/compiler-owner.test.mjs','tests/browser-view/compiler-runtime.test.mjs','tests/browser-view/compiler-runtime-mutations.test.mjs']},
+ {id:'DK-15',minimum:36,files:['view-model-test.mjs','tests/browser-view/compiler-artifact.test.mjs','tests/browser-view/compiler-artifact-mutations.test.mjs','tests/browser-view/compiler-owner.test.mjs','tests/browser-view/compiler-runtime.test.mjs','tests/browser-view/compiler-runtime-mutations.test.mjs']},
  {id:'DK-16',minimum:10,files:['view-host-test.mjs']},
  {id:'DK-19',minimum:14,files:['rs256.test.mjs','rs256.browser.test.mjs']},
  {id:'DK-20',minimum:18,files:['effects-wire.test.mjs','effects-module.test.mjs','effects-test.mjs']},
@@ -46,8 +46,9 @@ export const suites=Object.freeze([
  {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
  {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
  {id:'DK-26',minimum:38,files:['session-model-test.mjs','tests/browser-session/wire.test.mjs','tests/browser-session/provenance.test.mjs']},
+ {id:'DK-34',minimum:17,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-34'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};

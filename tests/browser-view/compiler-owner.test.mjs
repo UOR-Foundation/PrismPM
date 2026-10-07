@@ -6,6 +6,18 @@ import {join} from 'node:path';
 import {runInNewContext} from 'node:vm';
 import test from 'node:test';
 import {captureCompilerInputs, createCompilerOwner, requireCompilerOwner} from './compiler-owner.mjs';
+import {compilerDriverDirectory} from './compiler-owner-checks.mjs';
+
+test('driver substitution lookup includes P256 and rejects missing or ambiguous source inventory', () => {
+  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'publication-admission']) {
+    const path = 'tests/' + directory + '/driver/src/main.rs';
+    assert.equal(compilerDriverDirectory({[path]: 'not-authority'}), 'tests/' + directory + '/driver');
+  }
+  for (const paths of [[], ['tests/browser-p123/driver/src/main.rs'],
+    ['tests/browser-p256/driver/src/main.rs', 'tests/browser-session/driver/src/main.rs']])
+    assert.throws(() => compilerDriverDirectory(Object.fromEntries(paths.map(path => [path, 'not-authority']))),
+      /one source-bound family driver/);
+});
 
 test('verification-only source reads retain the complete descriptor and digest checks without whole-file buffers', t => {
   const root=fs.mkdtempSync(join(tmpdir(),'prismpm-source-stream-'));
@@ -51,7 +63,7 @@ test('compiler owner refuses malformed or incomplete input closures before build
     assert.throws(() => createCompilerOwner('view', inputs),
       /compiler input (map|path|digest|closure)/);
   assert.equal(called, false, 'input accessors cannot run before immutable capture');
-  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody']) {
+  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256']) {
     const inputs = captureCompilerInputs(name);
     for (const missing of ['tests/browser-view/compile.mjs', 'tests/browser-view/compiler-artifact.mjs', 'vendor/lean4-prod/lean.tar']) {
       const changed = {...inputs}; delete changed[missing];

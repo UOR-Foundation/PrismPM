@@ -4,6 +4,13 @@ import {chmodSync, copyFileSync, lstatSync, readFileSync, renameSync, unlinkSync
 import {join} from 'node:path';
 import {requireCompilerOwner} from './compiler-owner.mjs';
 
+// Inventory lookup only; callers must first validate the genuine family owner.
+export function compilerDriverDirectory(inputs) {
+  const paths = Object.keys(inputs).filter(path => /^tests\/(?:browser-(?:[a-z-]+|p256)|publication-admission)\/driver\/src\/main\.rs$/.test(path));
+  assert.equal(paths.length, 1, 'one source-bound family driver required');
+  return paths[0].slice(0, -'/src/main.rs'.length);
+}
+
 export function verifyCompilerOwnerSubstitutions(owner) {
   const name = owner.evidence.family;
   requireCompilerOwner(owner, name);
@@ -13,9 +20,7 @@ export function verifyCompilerOwnerSubstitutions(owner) {
   assert.throws(() => {owner.evidence.inputs['lean-toolchain'] = '0'.repeat(64);}, TypeError);
   assert.throws(() => {owner.runDriver = () => '';}, TypeError);
   const work = owner.evidence.work, observed = ['cloned-handle', 'cross-family-handle', 'immutable-owner'];
-  const driverSources = Object.keys(owner.evidence.inputs).filter(path => /^tests\/(?:browser-[a-z-]+|publication-admission)\/driver\/src\/main\.rs$/.test(path));
-  assert.equal(driverSources.length, 1, 'one source-bound family driver required');
-  const driverDirectory = driverSources[0].slice(0, -'/src/main.rs'.length);
+  const driverDirectory = compilerDriverDirectory(owner.evidence.inputs);
   const library = Object.keys(owner.evidence.exporterRuntime).find(path => path.endsWith('.olean'));
   assert.ok(library, 'actual compiled exporter runtime library required');
   const files = [
