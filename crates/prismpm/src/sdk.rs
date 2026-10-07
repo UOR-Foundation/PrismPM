@@ -1678,7 +1678,18 @@ mod tests {
                 Sha256::digest(raw.as_bytes())
             ));
             lock["sdk_index"] = json!(raw);
-            super::parse_lock(&super::encode_value(&lock)?)
+            let constructed =
+                super::CanonicalDocument::from_value("prismpm/sdk-lock/2", lock.clone());
+            let parsed = super::parse_lock(&super::encode_value(&lock)?);
+            assert_eq!(
+                constructed.is_ok(),
+                parsed.is_ok(),
+                "constructor and public runtime reader must agree"
+            );
+            if let (Ok(constructed), Ok(parsed)) = (&constructed, &parsed) {
+                assert_eq!(constructed.bytes(), parsed.bytes());
+            }
+            parsed
         };
         assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
         let raw = baseline["sdk_index"].as_str().unwrap();
