@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import test from 'node:test';
 import {CORPUS_CASES,corpus} from './corpus.mjs';
 import {mutations,mutateP256Source,canonical} from './mutations.mjs';
 import {verifyNativeParameters,parameters} from './parameters.mjs';
+import {coherentlyRehashedManifest} from './checks.mjs';
+
+test('coherent-rehash adversary preserves canonical manifest bytes including the final newline', () => {
+  const original = Buffer.from('{"files":[{"path":"src/lib.rs","sha256":"' + '0'.repeat(64) + '"}]}\n');
+  const library = Buffer.from('actual changed source fixture'), digest = createHash('sha256').update(library).digest('hex');
+  const changed = coherentlyRehashedManifest(original, library);
+  assert.deepEqual(changed, Buffer.from('{"files":[{"path":"src/lib.rs","sha256":"' + digest + '"}]}\n'));
+  assert.throws(() => coherentlyRehashedManifest(Buffer.from('{"files":[]}\n'), library), /one actual generated library/);
+});
 
 test('complete independent finite corpus and every named source counterexample are present',()=>{
   const rows=corpus();assert.equal(rows.length,CORPUS_CASES);assert.equal(mutations.length,22);

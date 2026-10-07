@@ -230,6 +230,7 @@ test('release acceptance actually invokes every closed owning suite and rejects 
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,36);
+ assert.equal(suites.find(row=>row.id==='DK-34').minimum,18);
  for(const [index,path] of view.files.entries())put(root,path,testSource(index===0?30:1));
  assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,'omitting the new driver-lookup regression must refuse35 tests');
  testFixtures(root);
@@ -285,6 +286,7 @@ test('owning release test kills a removed complete-TAP acceptance guard',t=>{
  for(const [before,after,witness] of [
   ['const tests=verifyTap(output.stdout,suite.minimum)',"const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])",/Missing expected exception/],
   ["{id:'DK-15',minimum:36","{id:'DK-15',minimum:35",/35 !== 36/],
+  ["{id:'DK-34',minimum:18","{id:'DK-34',minimum:17",/17 !== 18/],
  ]){
  const root=temporary(t);
  assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,after));

@@ -17,6 +17,14 @@ export function verifyNativeInventory(output, rows) {
   assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
     + `PASS ${rows.length} p256 vectors twice\n`, 'exact native case inventory');
 }
+// Preserve the current canonical manifest representation so this negative
+// actually reaches immutable-package custody, not a formatting failure.
+export function coherentlyRehashedManifest(original, library) {
+  const value = JSON.parse(original), rows = value.files.filter(row => row.path === 'src/lib.rs');
+  assert.equal(rows.length, 1, 'one actual generated library manifest member');
+  rows[0].sha256 = sha(library);
+  return Buffer.from(JSON.stringify(value) + '\n');
+}
 export function verifyComponents(compiler) {
   const build = prepareP256(compiler), rows = corpus();
   assert.equal(rows.length, CORPUS_CASES); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
@@ -27,8 +35,7 @@ export function verifyComponents(compiler) {
     try {
       if (mode === 'source' || mode === 'source-and-manifest') {
         writeFileSync(library, Buffer.concat([original, Buffer.from('\n// planted defect\n')]));
-        if (mode === 'source-and-manifest') {const value = JSON.parse(originalManifest);
-          value.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(library)); writeFileSync(manifest, JSON.stringify(value));}
+        if (mode === 'source-and-manifest') writeFileSync(manifest, coherentlyRehashedManifest(originalManifest, readFileSync(library)));
       } else if (mode === 'extra-file') writeFileSync(extra, 'unowned', {flag: 'wx'});
       else linkSync(library, extra);
       const refusal = mode === 'hard-link' ? /bounded single-link custody file/ : /generated package/;
