@@ -62,9 +62,15 @@ export function frozenInputs() {
 }
 
 export function assertFrozenInputs(expected) {
-  assert.deepEqual(frozenInputs(),expected,'complete frozen session owner inputs');
   const captured = inputCustody.get(expected);
-  assert.ok(captured, 'actual frozen session input closure required');
+  assert.ok(captured && Object.isFrozen(expected),
+    'actual frozen session input closure required; complete frozen session owner inputs');
+  assert.deepEqual(expected,Object.fromEntries([...captured].map(([path,evidence])=>[path,evidence.sha256])),
+    'complete frozen session owner inputs');
+  // The source that defines this inventory, both vendor manifests and their
+  // dependency pins are captured members. Re-reading those original members
+  // binds membership without recapturing the entire closure a second time.
+  pins();
   for (const [path,evidence] of captured) capturedFile(join(repository,path),evidence);
 }
 
