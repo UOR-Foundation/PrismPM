@@ -245,9 +245,13 @@ The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed
 payload-free observations and complete outcome inventories remain separate
-from proof/release evidence. The bundle is bounded to 256 files, 16 MiB per
+from proof/release evidence. The bundle is bounded to 272 files, 16 MiB per
 file and 32 MiB total, reserving two file slots and two bounded byte slots for
-index replacement. Closed source-owned journey identifiers are retained. Final
+index replacement. Its complete expanded inventory has 270 members: nine
+source/subject files, two files for each of the 78 cases, twelve controls,
+eight observation runs and 32 retirement runs, and one final outcome file.
+Per-file, aggregate and index byte limits and every execution deadline remain
+unchanged. Closed source-owned journey identifiers are retained. Final
 case inventories remain collectible after a copy failure, without changing the
 incomplete state. Retirement rechecks every observed member after bounded
 streaming enumeration; it does not claim an atomic filesystem snapshot.
