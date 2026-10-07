@@ -586,7 +586,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-presentation/provenance.test.mjs",
                 "sdk/browser/presentation.test.mjs",
             ],
-            37,
+            39,
         ),
         "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 28),
         "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
