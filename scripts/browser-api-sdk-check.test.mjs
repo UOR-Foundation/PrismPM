@@ -28,6 +28,7 @@ test('installed module inventory includes every accepted private browser prerequ
 
 test('installed browser closure includes complete new owning fixtures and actual Rust refusal owners', () => {
  for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody', 'tests/browser-operation-journal', 'tests/browser-session',
+  'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
   'tests/fixtures/library/native-library/project', 'tests/support/browser_application.rs',
   'crates/prismpm/src/browser_build.rs', 'crates/prismpm/src/browser_build',
   'crates/prismpm/src/holo/browser_application.rs', 'crates/prismpm/src/holo/browser_application',
@@ -113,8 +114,14 @@ test('current SDK source closure binds helper, compiler, suite and every selecte
  for(const path of['scripts/browser-api-sdk-check.mjs','sdk/browser/source.txt','vendor/lexlean/source.txt','tests/browser-api/source.txt',
   'tests/browser-effects/source.txt','tests/browser-presentation/source.txt','tests/browser-custody/source.txt',
   'tests/browser-operation-journal/source.txt','tests/support/browser_application.rs',
+  'sdk/oracles/package.json','sdk/oracles/package-lock.json',
   'crates/prismpm/src/browser_build.rs','scripts/fetch-oracle-cargo.sh']){
   const bytes=readFileSync(join(root,path));put(root,path,Buffer.concat([bytes,Buffer.from('x')]));assert.throws(()=>verifySource(root,expected));put(root,path,bytes);
+ }
+ for(const path of ['sdk/oracles/package.json','sdk/oracles/package-lock.json']){
+  assert.ok(expected.files.some(row=>row.path===path),'actual oracle dependency input captured: '+path);
+  const omitted=structuredClone(expected);omitted.files=omitted.files.filter(row=>row.path!==path);
+  assert.throws(()=>verifySource(root,omitted),/exact current source/,'omitted oracle dependency input: '+path);
  }
  for(const mutate of[
   value=>value.files.pop(),value=>value.files.push(value.files[0]),value=>value.extra=true,

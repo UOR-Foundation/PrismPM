@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 
 export const sourceRoots=Object.freeze([
  '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','model','language',
- 'stdlib/src','sdk/browser','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
+ 'stdlib/src','sdk/browser','sdk/oracles/package.json','sdk/oracles/package-lock.json','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
