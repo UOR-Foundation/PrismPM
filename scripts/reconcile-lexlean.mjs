@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {cpSync, lstatSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {basename, dirname, join, relative, resolve} from 'node:path';
+import {dirname, join, relative, resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
@@ -23,7 +23,7 @@ export function packageTreeManifest(root, crateName) {
       assert.ok(!st.isSymbolicLink(), `vendored package contains symlink ${path}`);
       if(st.isDirectory()) walk(path);
       else if(st.isFile()){
-        const rel=relative(root,path).replaceAll('\\\\','/');
+        const rel=relative(root,path).replaceAll('\\','/');
         assert.match(rel,/^[A-Za-z0-9_./-]+$/);
         rows.push([`\${sha(readFileSync(path))}`,rel]);
       } else throw new Error(`unsupported package entry ${path}`);
