@@ -81,6 +81,17 @@ fn fixture(root: &Path) -> Fixture {
         format!("{DIRECTORY}/lease-corpus.json"),
         "tests/native-lease/corpus.mjs".into(),
         "tests/native-lease/corpus.test.mjs".into(),
+        "tests/native-lease/rust-corpus.mjs".into(),
+        "tests/native-lease/rust-corpus.test.mjs".into(),
+        "tests/native-lease/package.mjs".into(),
+        "rust-toolchain.toml".into(),
+        "stdlib/generated/package/Cargo.lock".into(),
+        "stdlib/generated/package/Cargo.toml".into(),
+        "stdlib/generated/package/LICENSE-APACHE".into(),
+        "stdlib/generated/package/LICENSE-MIT".into(),
+        "stdlib/generated/package/README.md".into(),
+        "stdlib/generated/package/generation-manifest.json".into(),
+        "stdlib/generated/package/src/lib.rs".into(),
     ]
     .into_iter()
     .map(|name| {
@@ -297,8 +308,11 @@ pub(super) fn verify(root: &Path) {
     super::verify_node_suite(
         root,
         "DK-30",
-        &["tests/native-lease/corpus.test.mjs"],
-        3,
+        &[
+            "tests/native-lease/corpus.test.mjs",
+            "tests/native-lease/rust-corpus.test.mjs",
+        ],
+        8,
         "120000",
     );
     let fixture = fixture(root);
@@ -317,6 +331,24 @@ pub(super) fn verify(root: &Path) {
         }
     };
     accepted(&fixture, &verified);
+    let output = std::process::Command::new("node")
+        .arg("tests/native-lease/package.mjs")
+        .current_dir(root)
+        .output()
+        .expect("generated stdlib consumer executes");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    eprintln!("{stderr}");
+    assert!(output.status.success(), "{stderr}");
+    let receipt: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        receipt,
+        json!({
+            "scope": "generated-package-corpus-only", "cases": COUNT,
+            "signatures": METHODS.len(), "modes": ["std", "no_std"], "runtime_mutants": 1,
+            "package_manifest_sha256": content_id(&fixture.inputs["stdlib/generated/package/generation-manifest.json"]),
+            "corpus_sha256": content_id(&fixture.inputs[&format!("{DIRECTORY}/lease-corpus.json")]),
+        })
+    );
     let original_path = fixture
         .project
         .path()

@@ -638,6 +638,12 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+The source audit first checks both retained native-record sets against the
+shared golden tree using the same closed composition rules as the later native
+consistency tests. Missing, stale, substituted or extra records fail before
+expensive suites run. This check performs no native execution and supplies no
+cached acceptance; all subsequent tests and fresh verification gates remain.
+
 Formatting checks a closed inventory of authored test manifests and Rust inputs.
 Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
 
@@ -961,6 +967,12 @@ request bindings do not change during cancellation or unknown cleanup. Host-only
 terminal transitions require independently captured worker termination and
 handle cleanup. Matching model bytes do not prove those facts. The private host
 owns the session-relative monotonic nanosecond clock and all OS authority.
+The nine pure declarations have closed generated stdlib signatures in
+`model/stdlib-exports.toml`. Calling them on constructed values grants no host
+authority. Host-effect APIs must not accept caller-produced lane state,
+bindings, clocks, cancellation flags or cleanup evidence. The private binding
+retains its own state and fails closed on an outer generated `ComputeError`,
+which is not a modeled `NativeLeaseError` or evidence of cleanup.
 See `stdlib/src/Foundation/Native/Application/V1/Lease.md` for the complete
 conditional protocol. This kernel is not a filesystem binding, an executable
 native application profile, durable-effect idempotency or release acceptance.
