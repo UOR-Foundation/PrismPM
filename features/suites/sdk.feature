@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-33 @build
+  Scenario: Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority.
+    Given a source-owned immutable account genesis with a stable namespace and initial public key
+    When generated native, no_std and Wasm execution checks the complete canonical codec and digest projection
+    Then every malformed or substituted input rejects or changes its independently computed identifier and real source mutations fail
+    And actual browser hashing and curve validation establish only a content-addressed account declaration, not possession, mailbox verification, credential succession or organization permission
+
   @DK-34 @build
   Scenario: Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification.
     Given the exact SEC1 and SEC2 P-256 domain and complete imported authoritative P-256 public-key-validation sections

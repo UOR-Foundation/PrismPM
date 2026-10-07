@@ -464,6 +464,17 @@ pub fn run_at(root: &Path, id: &str) {
             39,
             "3600000",
         ),
+        "DK-33" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-account-genesis/corpus.test.mjs",
+                "tests/browser-account-genesis/bridge.test.mjs",
+                "tests/browser-account-genesis/owner.test.mjs",
+            ],
+            17,
+            "3600000",
+        ),
         "DK-34" => verify_node_suite(
             root,
             id,

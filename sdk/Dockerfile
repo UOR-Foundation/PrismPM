@@ -182,7 +182,7 @@ RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/devcontainer-cli \
     && chmod 0755 /opt/prismpm/devcontainer-cli/node_modules/@devcontainers/cli/devcontainer.js
 
 COPY --from=source_inputs /prepared/source/sdk/runtime/package.json /prepared/source/sdk/runtime/package-lock.json /prepared/source/sdk/runtime/profile.mjs /prepared/source/sdk/runtime/runtime.mjs /opt/prismpm/runtime/
-COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/browser/identity.mjs /prepared/source/sdk/browser/store.mjs /prepared/source/sdk/browser/peer.mjs /prepared/source/sdk/browser/journal.mjs /prepared/source/sdk/browser/commands.mjs /prepared/source/sdk/browser/queries.mjs /prepared/source/sdk/browser/view-host.mjs /prepared/source/sdk/browser/view-dom.mjs /prepared/source/sdk/browser/view-error.mjs /prepared/source/sdk/browser/rs256.mjs /prepared/source/sdk/browser/effects.mjs /prepared/source/sdk/browser/effects-wire.mjs /prepared/source/sdk/browser/effects-module.mjs /prepared/source/sdk/browser/presentation-wire.mjs /prepared/source/sdk/browser/presentation-dom.mjs /prepared/source/sdk/browser/credential-custody.mjs /prepared/source/sdk/browser/operation-journal.mjs /opt/prismpm/browser/
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/browser/identity.mjs /prepared/source/sdk/browser/store.mjs /prepared/source/sdk/browser/peer.mjs /prepared/source/sdk/browser/journal.mjs /prepared/source/sdk/browser/commands.mjs /prepared/source/sdk/browser/queries.mjs /prepared/source/sdk/browser/view-host.mjs /prepared/source/sdk/browser/view-dom.mjs /prepared/source/sdk/browser/view-error.mjs /prepared/source/sdk/browser/rs256.mjs /prepared/source/sdk/browser/effects.mjs /prepared/source/sdk/browser/effects-wire.mjs /prepared/source/sdk/browser/effects-module.mjs /prepared/source/sdk/browser/presentation-wire.mjs /prepared/source/sdk/browser/presentation-dom.mjs /prepared/source/sdk/browser/credential-custody.mjs /prepared/source/sdk/browser/operation-journal.mjs /prepared/source/sdk/browser/account-genesis.mjs /prepared/source/sdk/browser/account-genesis-binding.mjs /opt/prismpm/browser/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/runtime \
     && chmod 0444 /opt/prismpm/runtime/profile.mjs \
     && chmod 0555 /opt/prismpm/runtime/runtime.mjs
@@ -230,6 +230,8 @@ RUN cargo build --locked --release --package prismpm \
     && cargo fetch --locked \
     && cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
     && bash scripts/fetch-oracle-cargo.sh \
+    && mkdir -p /opt/prismpm/share \
+    && node sdk/generate-account-genesis.mjs install \
     && install -m 0755 target/release/prismpm /usr/local/bin/prismpm \
     && install -m 0755 target/release/prismpm-conformance /usr/local/bin/prismpm-conformance \
     && install -m 0755 target/release/prismpm-platform-equivalence /usr/local/bin/prismpm-platform-equivalence \

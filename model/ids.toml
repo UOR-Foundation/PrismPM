@@ -883,6 +883,12 @@ level = "build"
 statement = "The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance."
 
 [[id]]
+id = "DK-33"
+suite = "sdk"
+level = "build"
+statement = "Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority."
+
+[[id]]
 id = "DK-34"
 suite = "sdk"
 level = "build"
