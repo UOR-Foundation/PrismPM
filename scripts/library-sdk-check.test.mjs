@@ -161,6 +161,17 @@ test('captured seed lock requires both exact platforms and independently selecte
  for(const architecture of ['amd64','arm64']){
   const inventory=Buffer.from(lock.platforms.find(row=>row.platform==='linux/'+architecture).inventory_document);
   assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
+  for(const row of JSON.parse(readFileSync(new URL('../sdk/sdk-index-extensions.json',import.meta.url),'utf8'))){
+   const changed=structuredClone(lock),raw=lock.sdk_index;
+   changed.sdk_index=row.location==='root'?'{'+row.member+','+raw.slice(1)
+    :row.location==='descriptor'?raw.replace('"manifests":[{','"manifests":[{'+row.member+',')
+    :raw.replace('"platform":{','"platform":{'+row.member+',');
+   assert.notEqual(changed.sdk_index,raw,row.id);
+   changed.sdk_image=image.split('@')[0]+'@sha256:'+hash(changed.sdk_index);
+   const validate=()=>validateCapturedLock(Buffer.from(encode(changed)),changed.sdk_image,architecture,standards,inventory);
+   if(row.accepted){const actual=validate();assert.equal(actual.sdk_image,changed.sdk_image,row.id);}
+   else assert.throws(validate,row.id);
+  }
   const originalIndex=JSON.parse(lock.sdk_index);
   for(const alter of [index=>{index.SchemaVersion=2;},index=>{index.Manifeſts=[];},
    index=>{index.manifests[0].urls=[];},index=>{index.manifests[0].data=null;},

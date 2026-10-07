@@ -520,18 +520,20 @@ fn bounded_positive_integer(token: &str, maximum: usize) -> Option<usize> {
     exact.parse().ok()
 }
 
-// SDK-local lexical guard before Value decoding: reject decoded duplicate keys,
-// excessive nesting and inexact integral tokens without changing Holo's strict
-// no-float canonical decoder or serde's global feature graph. serde_json then
-// validates the complete syntax and the caller validates the decoded shape.
-fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
+// Decode only understood SDK fields, without interpreting opaque OCI extensions
+// as Rust strings or binary64 numbers. The original bytes remain the digest and
+// lock authority. Walk all members for duplicates/depth, then validate complete
+// JSON syntax independently, without serde's global raw-value/number features.
+fn decode_sdk_index(bytes: &[u8]) -> Option<serde_json::Value> {
     #[derive(Clone, Copy)]
     enum Focus {
         Index,
         Children,
         Child,
+        Platform,
         Schema,
         Size,
+        Scalar,
         Other,
     }
     fn white(bytes: &[u8], at: &mut usize) {
@@ -556,7 +558,85 @@ fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
             }
         }
     }
-    fn value(bytes: &[u8], at: &mut usize, focus: Focus, depth: usize) -> Option<()> {
+    // JSON object keys compare decoded UTF-16 units, including opaque unpaired
+    // surrogates. Do not collapse distinct invalid-scalar keys lossily, or reject
+    // a valid ignored extension merely because Rust String cannot represent it.
+    fn key_units(raw: &[u8]) -> Option<Vec<u16>> {
+        let text = std::str::from_utf8(raw.get(1..raw.len().checked_sub(1)?)?).ok()?;
+        let mut chars = text.chars();
+        let mut units = Vec::new();
+        while let Some(ch) = chars.next() {
+            if ch != '\\' {
+                units.extend_from_slice(ch.encode_utf16(&mut [0; 2]));
+                continue;
+            }
+            units.push(match chars.next()? {
+                '"' => b'"' as u16,
+                '\\' => b'\\' as u16,
+                '/' => b'/' as u16,
+                'b' => 8,
+                'f' => 12,
+                'n' => 10,
+                'r' => 13,
+                't' => 9,
+                'u' => {
+                    let mut code = 0;
+                    for _ in 0..4 {
+                        code = code * 16 + chars.next()?.to_digit(16)? as u16;
+                    }
+                    code
+                }
+                _ => return None,
+            });
+        }
+        Some(units)
+    }
+    fn names(focus: Focus) -> &'static [&'static str] {
+        match focus {
+            Focus::Index => &[
+                "schemaVersion",
+                "mediaType",
+                "manifests",
+                "annotations",
+                "subject",
+                "artifactType",
+            ],
+            Focus::Child => &[
+                "mediaType",
+                "digest",
+                "size",
+                "urls",
+                "data",
+                "annotations",
+                "platform",
+                "artifactType",
+            ],
+            Focus::Platform => &["architecture", "os", "os.version", "os.features", "variant"],
+            _ => &[],
+        }
+    }
+    fn member(focus: Focus, key: Option<&str>) -> Option<Focus> {
+        match (focus, key?) {
+            (Focus::Index, "schemaVersion") => Some(Focus::Schema),
+            (Focus::Index, "manifests") => Some(Focus::Children),
+            (Focus::Index | Focus::Child, "mediaType")
+            | (Focus::Child, "digest")
+            | (Focus::Platform, "architecture" | "os" | "variant") => Some(Focus::Scalar),
+            (Focus::Child, "size") => Some(Focus::Size),
+            (Focus::Child, "platform") => Some(Focus::Platform),
+            // These fields are forbidden even when their value is null.
+            (Focus::Child, "urls" | "data") | (Focus::Platform, "os.version" | "os.features") => {
+                Some(Focus::Other)
+            }
+            _ => None,
+        }
+    }
+    fn value(
+        bytes: &[u8],
+        at: &mut usize,
+        focus: Focus,
+        depth: usize,
+    ) -> Option<serde_json::Value> {
         if depth > 64 {
             return None;
         }
@@ -579,56 +659,87 @@ fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
                 std::str::from_utf8(bytes.get(start..*at)?).ok()?,
                 maximum,
             )?;
-            return (!matches!(focus, Focus::Schema) || integer == 2).then_some(());
+            return (!matches!(focus, Focus::Schema) || integer == 2)
+                .then(|| serde_json::Value::from(integer));
         }
         match first {
             b'"' => {
-                string(bytes, at)?;
+                let raw = string(bytes, at)?;
+                return if matches!(focus, Focus::Scalar) {
+                    serde_json::from_slice(raw).ok()
+                } else {
+                    Some(serde_json::Value::Null)
+                };
             }
             b'{' | b'[' => {
                 *at += 1;
                 let mut keys = BTreeSet::new();
+                let mut object = serde_json::Map::new();
+                let mut array = Vec::new();
                 let end = if first == b'{' { b'}' } else { b']' };
                 white(bytes, at);
                 if bytes.get(*at) == Some(&end) {
                     *at += 1;
-                    return Some(());
-                }
-                loop {
-                    white(bytes, at);
-                    let child = if first == b'{' {
-                        let key = string(bytes, at)?;
+                } else {
+                    loop {
                         white(bytes, at);
-                        if *bytes.get(*at)? != b':' {
-                            return None;
-                        }
-                        *at += 1;
-                        let key: String = serde_json::from_slice(key).ok()?;
-                        if !keys.insert(key.clone()) {
-                            return None;
-                        }
-                        match (focus, key.as_str()) {
-                            (Focus::Index, "schemaVersion") => Focus::Schema,
-                            (Focus::Index, "manifests") => Focus::Children,
-                            (Focus::Child, "size") => Focus::Size,
-                            _ => Focus::Other,
-                        }
-                    } else if matches!(focus, Focus::Children) {
-                        Focus::Child
-                    } else {
-                        Focus::Other
-                    };
-                    value(bytes, at, child, depth + 1)?;
-                    white(bytes, at);
-                    match *bytes.get(*at)? {
-                        byte if byte == end => {
+                        let (key, child) = if first == b'{' {
+                            let units = key_units(string(bytes, at)?)?;
+                            white(bytes, at);
+                            if *bytes.get(*at)? != b':' {
+                                return None;
+                            }
                             *at += 1;
-                            break;
+                            let key = String::from_utf16(&units).ok();
+                            if !keys.insert(units) {
+                                return None;
+                            }
+                            if let Some(key) = &key {
+                                let folded = key.to_uppercase().to_lowercase();
+                                if names(focus).iter().any(|name| {
+                                    folded == name.to_uppercase().to_lowercase() && key != name
+                                }) {
+                                    return None;
+                                }
+                            }
+                            let selected = member(focus, key.as_deref());
+                            (
+                                key.filter(|_| selected.is_some()),
+                                selected.unwrap_or(Focus::Other),
+                            )
+                        } else if matches!(focus, Focus::Children) {
+                            (None, Focus::Child)
+                        } else {
+                            (None, Focus::Other)
+                        };
+                        let decoded = value(bytes, at, child, depth + 1)?;
+                        if let Some(key) = key {
+                            object.insert(key, decoded);
+                        } else if first == b'[' && matches!(focus, Focus::Children) {
+                            array.push(decoded);
                         }
-                        b',' => *at += 1,
-                        _ => return None,
+                        white(bytes, at);
+                        match *bytes.get(*at)? {
+                            byte if byte == end => {
+                                *at += 1;
+                                break;
+                            }
+                            b',' => *at += 1,
+                            _ => return None,
+                        }
                     }
                 }
+                return Some(
+                    if first == b'{'
+                        && matches!(focus, Focus::Index | Focus::Child | Focus::Platform)
+                    {
+                        serde_json::Value::Object(object)
+                    } else if first == b'[' && matches!(focus, Focus::Children) {
+                        serde_json::Value::Array(array)
+                    } else {
+                        serde_json::Value::Null
+                    },
+                );
             }
             _ => {
                 while bytes
@@ -642,12 +753,21 @@ fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
                 }
             }
         }
-        Some(())
+        if matches!(focus, Focus::Scalar) {
+            serde_json::from_slice(bytes.get(start..*at)?).ok()
+        } else {
+            Some(serde_json::Value::Null)
+        }
     }
     let mut at = 0;
-    value(bytes, &mut at, Focus::Index, 0)?;
+    std::str::from_utf8(bytes).ok()?;
+    let decoded = value(bytes, &mut at, Focus::Index, 0)?;
     white(bytes, &mut at);
-    (at == bytes.len()).then_some(())
+    if at != bytes.len() {
+        return None;
+    }
+    serde_json::from_slice::<serde::de::IgnoredAny>(bytes).ok()?;
+    Some(decoded)
 }
 
 pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), PrismError> {
@@ -670,8 +790,7 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
     {
         return Err(fail());
     }
-    validate_index_number_tokens(bytes).ok_or_else(fail)?;
-    let index: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| fail())?;
+    let index = decode_sdk_index(bytes).ok_or_else(fail)?;
     let manifests = index["manifests"].as_array().ok_or_else(fail)?;
     let platforms = value["platforms"].as_array().ok_or_else(fail)?;
     if !oci_field_casing(
@@ -1563,6 +1682,31 @@ mod tests {
         };
         assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
         let raw = baseline["sdk_index"].as_str().unwrap();
+        let extension_cases: Value =
+            serde_json::from_str(include_str!("../sdk/sdk-index-extensions.json")).unwrap();
+        for case in extension_cases.as_array().unwrap() {
+            let member = case["member"].as_str().unwrap();
+            let changed = match case["location"].as_str().unwrap() {
+                "root" => format!("{{{member},{}", &raw[1..]),
+                "descriptor" => raw.replacen(
+                    "\"manifests\":[{",
+                    &format!("\"manifests\":[{{{member},"),
+                    1,
+                ),
+                "platform" => {
+                    raw.replacen("\"platform\":{", &format!("\"platform\":{{{member},"), 1)
+                }
+                _ => panic!("unknown corpus location"),
+            };
+            assert_ne!(changed, raw);
+            assert!(admit(raw.to_owned()).is_ok());
+            assert_eq!(
+                admit(changed).is_ok(),
+                case["accepted"].as_bool().unwrap(),
+                "{}",
+                case["id"]
+            );
+        }
         for spelling in ["2.0", "2e0", "2000e-3", "2.0000000000000000000000"] {
             assert!(admit(
                 raw.replace(

@@ -174,6 +174,24 @@ test('all platform-lock entry points reject coherently rehashed ambiguous OCI in
   const directory = await mkdtemp(join(tmpdir(), 'prismpm-strict-index-'));
   try {
     const {index, inventories} = await fixture(directory);
+    const extensionCases = JSON.parse(await readFile(new URL('./sdk-index-extensions.json', import.meta.url)));
+    for (const row of extensionCases) {
+      const raw = index.toString();
+      const changed = row.location === 'root' ? '{' + row.member + ',' + raw.slice(1)
+        : row.location === 'descriptor' ? raw.replace('"manifests":[{', '"manifests":[{' + row.member + ',')
+        : raw.replace('"platform":{', '"platform":{' + row.member + ',');
+      assert.notEqual(changed, raw, row.id);
+      const bytes = Buffer.from(changed), reference = `example.invalid/test-sdk@${sha(bytes)}`;
+      await writeFile(`${directory}/index.json`, bytes);
+      if (row.accepted) {
+        assert.equal(parseSdkIndex(bytes, reference).length, 2, row.id);
+        const lock = await createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64');
+        assert.equal(lock.sdk_index, changed, 'opaque bytes are not projected or reserialized');
+      } else {
+        assert.throws(() => parseSdkIndex(bytes, reference), row.id);
+        await assert.rejects(createPlatformLock(directory, reference, inventories.get('amd64'), standards, 'x64'));
+      }
+    }
     const pretty = Buffer.from(JSON.stringify(JSON.parse(index), null, 2) + '\n');
     assert.equal(parseSdkIndex(pretty, `example.invalid/test-sdk@${sha(pretty)}`).length, 2,
       'OCI index bytes are preserved, not required to use Prism canonical serialization');

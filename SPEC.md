@@ -1344,6 +1344,12 @@ Integral index fields are checked against their original decimal tokens before
 floating-point conversion. Fractional values that round to schema version 2 or
 to a permitted child size are rejected; equivalent exact integral decimal and
 exponent spellings and unrelated fractional extension values remain valid.
+Unknown OCI extension values and names remain opaque: valid JSON decimal
+numbers need not fit binary64, and ignored escaped UTF-16 units need not form
+Unicode scalar values. Readers validate complete original UTF-8 JSON syntax,
+all decoded-key duplicates (by UTF-16 units) and nesting before admitting the
+understood SDK fields. No extension is lossy-reencoded into the locked index;
+the exact original bytes and digest remain authoritative.
 These OCI rules are confined to SDK index admission. They do not change the
 Holo canonical decoder, its no-float contract, emitter semantics or golden bytes.
 The SDK acquisition profile `prismpm/sdk-metadata/1` is declared by the image
