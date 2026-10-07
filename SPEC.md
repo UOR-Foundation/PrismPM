@@ -1518,6 +1518,20 @@ retained separately and rechecked before publishing the internal execution
 record. A failure retains diagnostics but cannot produce completion evidence.
 Cancellation uses the existing diagnostic supervisor's cleanup boundary.
 
+Original source/native release command capture uses the private Linux
+`release-command-owner.py` subreaper. The application cannot inherit its
+receipt descriptor. A successful capture requires complete original streams,
+the original command status, a valid private owner protocol, and kernel
+`waitpid` exhaustion of all adopted descendants; pipe closure or a process
+snapshot is insufficient. Leader exit permits five seconds of trailing work,
+then cleanup uses a five-second TERM grace and a bounded one-second kill/reap
+phase. Group TERM is used while the original session leader remains owned;
+otherwise adopted direct children are signaled. Escaped descendants are
+adopted and retired within that same cleanup budget, not granted a new grace.
+No foreground execution
+deadline is added. Failed capture or uncertain retirement cannot be admitted
+from the retained command record, even when the original leader exited zero.
+
 The inner record does not establish physical native architecture, network
 isolation, the selected OCI image's identity, release acceptance or product
 readiness. An independent outer job must verify those facts and the retained
