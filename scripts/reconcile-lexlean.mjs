@@ -25,7 +25,7 @@ export function packageTreeManifest(root, crateName) {
       else if(st.isFile()){
         const rel=relative(root,path).replaceAll('\\','/');
         assert.match(rel,/^[A-Za-z0-9_./-]+$/);
-        rows.push([`\${sha(readFileSync(path))}`,rel]);
+        rows.push([sha(readFileSync(path)),rel]);
       } else throw new Error(`unsupported package entry ${path}`);
     }
   };
