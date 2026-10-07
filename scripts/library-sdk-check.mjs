@@ -9,6 +9,7 @@ import {verifyImage,verifyTap} from './browser-api-sdk-check.mjs';
 import {compilerRevision} from '../sdk/inventory-metadata.mjs';
 import {parseSdkIndex,validateInventory} from '../sdk/platform-lock.mjs';
 import {captureSdkMetadata,verifiedCommands} from '../sdk/metadata-cli.mjs';
+import {qualifyMigration,verifyMigration} from '../sdk/migration-qualification.mjs';
 export {verifyImage};
 
 export const sourceRoots=Object.freeze([
@@ -51,8 +52,8 @@ const hex=value=>{assert.equal(typeof value,'string');assert.match(value,/^[0-9a
 const canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]])):v);
 const same=(actual,expected,message)=>assert.ok(canonical(actual)===canonical(expected),message);
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value),'closed object');same(Object.keys(value).sort(),names.slice().sort(),'closed object fields');};
-function regularBytes(path){
- const before=lstatSync(path);assert.ok(before.isFile()&&!before.isSymbolicLink()&&before.size<=64*1024*1024,'bounded regular file: '+path);
+function regularBytes(path,maximum=64*1024*1024){
+ const before=lstatSync(path);assert.ok(before.isFile()&&!before.isSymbolicLink()&&before.size<=maximum,'bounded regular file: '+path);
  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
  try{
   const opened=fstatSync(fd);for(const key of ['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(opened[key],before[key],'file changed');
@@ -109,7 +110,7 @@ async function acquireLock(root,image){
  assert(standards.equals(regularBytes('/opt/prismpm/share/standards.lock')),'installed standards differ from captured source');
  const bytes=await captureSdkMetadata(image,'sha256:'+hash(standards),verifiedCommands(inventory));
  validateCapturedLock(bytes,image,{x64:'amd64',arm64:'arm64'}[process.arch],standards,regularBytes(inventory));
- return bytes;
+ return {lock:JSON.parse(bytes),migration:qualifyMigration(bytes)};
 }
 
 export function tree(root,selected=[''],aliases={}){
@@ -381,7 +382,7 @@ export function verifyResult(value,binding,sourceAuthority){
   verifyExporterProcess(manifest.processes[7],'prod-export',row.acquisition,binding,sourceAuthority);
  }
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,18),18,'complete owning gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,19),19,'complete owning gate test count');}
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
@@ -394,8 +395,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   {archive_sha256:hash(regularBytes(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),toolchain:regularBytes(new URL('../lean-toolchain',import.meta.url)).toString().trim()});
  else if(mode==='binding'&&args.length===5)console.log(JSON.stringify(validateCapturedLock(
   regularBytes(args[0]),args[1],args[2],regularBytes(args[3]),regularBytes(args[4]))));
- else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','sdk/exporter-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
- else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0]));
+ else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
+ else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(JSON.stringify(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
+ else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],192*1024*1024));keys(value,['lock','migration']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);verifyMigration(value.migration,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
  else if(mode==='run'&&args.length===1)console.log(JSON.stringify(run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
  else throw Error('closed installed native-library gate command');
 }

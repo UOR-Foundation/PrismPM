@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {capture} from './library-sdk-check.mjs';
 import {lockFixture,resultFixture,qualificationFixture} from './library-sdk-fixture.mjs';
+import {historicalLock,migrationChecks,expectedMigrationProcesses} from '../sdk/migration-qualification.mjs';
 
 const source=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const sourceAuthority={archive_sha256:createHash('sha256').update(readFileSync(join(source,'vendor/lean4-prod/lean.tar'))).digest('hex'),toolchain:readFileSync(join(source,'lean-toolchain'),'utf8').trim()};
@@ -30,7 +31,7 @@ if(args[0]==='container'&&args[1]==='cp'){
 }
 if(args[0]==='container'&&args[1]==='start'){
  const created=earlier.filter(row=>row[0]==='container'&&row[1]==='create').at(-1);
- if(created.includes('acquire-lock')){process.stdout.write(process.env.RECORDED_LOCK_OUTPUT===undefined?fs.readFileSync(process.env.RECORDED_LOCK):process.env.RECORDED_LOCK_OUTPUT);process.exit(Number(process.env.RECORDED_START_STATUS||0));}
+ if(created.includes('acquire-lock')){process.stdout.write(process.env.RECORDED_LOCK_OUTPUT===undefined?fs.readFileSync(process.env.RECORDED_ACQUISITION):process.env.RECORDED_LOCK_OUTPUT);process.exit(Number(process.env.RECORDED_START_STATUS||0));}
  if(created.includes('sdk/exporter-seed-custody.integration.mjs')){process.stdout.write(process.env.RECORDED_CUSTODY_OUTPUT===undefined?'{"scope":"filesystem-custody-only","checks":6,"status":"passed"}':process.env.RECORDED_CUSTODY_OUTPUT);process.exit(Number(process.env.RECORDED_CUSTODY_STATUS||0));}
  if(!fs.readFileSync(0).equals(fs.readFileSync(process.env.RECORDED_LOCK)))process.exit(66);
  if(created.includes('sdk/exporter-qualification.mjs')){process.stdout.write(process.env.RECORDED_COMPILER_OUTPUT===undefined?fs.readFileSync(process.env.RECORDED_COMPILER):process.env.RECORDED_COMPILER_OUTPUT);process.exit(Number(process.env.RECORDED_COMPILER_STATUS||0));}
@@ -48,13 +49,20 @@ function fixture(t){
  writeFileSync(join(root,'standards.lock'),sdk.standards);
  const architecture=process.arch==='x64'?'amd64':'arm64';
  writeFileSync(join(work,'lock.json'),sdk.bytes);
+ const historical=historicalLock();
+ writeFileSync(join(work,'acquisition.json'),JSON.stringify({lock:sdk.lock,migration:{
+  schema:'prismpm/installed-lock-migration/1',platform:'linux/'+architecture,
+  historical_sha256:historical.source.sha256,target_sha256:sdk.hash(sdk.bytes),checks:migrationChecks,
+  processes:expectedMigrationProcesses(sdk.lock,'linux/'+architecture).map(row=>({...row,stdout_sha256:'1'.repeat(64),stderr_sha256:'2'.repeat(64)})),
+  proposal:{schema:'prismpm/sdk-lock-migration/1',compatibility_review:'required',generated_output_diff:'required',security_review:'required',
+   patch:[{op:'test',path:'',value:JSON.parse(historical.document)},{op:'replace',path:'',value:sdk.lock}]}}}));
  writeFileSync(join(work,'inventory.json'),sdk.lock.platforms.find(row=>row.platform==='linux/'+architecture).inventory_document);
  writeFileSync(join(work,'compiler.json'),JSON.stringify(qualificationFixture(sdk.binding(architecture),sourceAuthority)));
  writeFileSync(join(work,'result.json'),JSON.stringify(resultFixture(sdk.binding(architecture),{
   archive_sha256:createHash('sha256').update(readFileSync(join(root,'vendor/lean4-prod/lean.tar'))).digest('hex'),toolchain:readFileSync(join(root,'lean-toolchain'),'utf8').trim()})));
  const bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerMock);chmodSync(join(bin,'docker'),0o755);
  writeFileSync(join(bin,'git'),'#!/usr/bin/env node\nconst args=process.argv.slice(2);if(args.includes("rev-parse"))console.log(process.env.RECORDED_REVISION);else if(!args.includes("status"))process.exit(64);\n');chmodSync(join(bin,'git'),0o755);
- return{work,root,env:{...process.env,DOCKER_CONFIG:join(work,'absent-credentials'),PATH:bin+':'+process.env.PATH,RECORDED_SOURCE:root,RECORDED_CALLS:join(work,'calls.jsonl'),RECORDED_IMAGE:image,RECORDED_REVISION:revision,RECORDED_LOCK:join(work,'lock.json'),RECORDED_INVENTORY:join(work,'inventory.json'),RECORDED_COMPILER:join(work,'compiler.json'),RECORDED_RESULT:join(work,'result.json')}};
+ return{work,root,env:{...process.env,DOCKER_CONFIG:join(work,'absent-credentials'),PATH:bin+':'+process.env.PATH,RECORDED_SOURCE:root,RECORDED_CALLS:join(work,'calls.jsonl'),RECORDED_IMAGE:image,RECORDED_REVISION:revision,RECORDED_LOCK:join(work,'lock.json'),RECORDED_ACQUISITION:join(work,'acquisition.json'),RECORDED_INVENTORY:join(work,'inventory.json'),RECORDED_COMPILER:join(work,'compiler.json'),RECORDED_RESULT:join(work,'result.json')}};
 }
 async function execute(context){
  try{
@@ -113,7 +121,7 @@ test('real shell invokes the confined Docker sequence and inspects actual termin
 
 test('real shell orchestration tests reject removed execution and changed runtime entrypoint mutants',async t=>{
  await cases([
-  ['docker container start --attach "$container" > "$sdk_work/lock.json"','true > "$sdk_work/lock.json"'],
+  ['docker container start --attach "$container" > "$sdk_work/acquisition.json"','true > "$sdk_work/acquisition.json"'],
   ['docker container start --attach --interactive "$container" < "$sdk_work/lock.json" > "$sdk_work/result.json"','true > "$sdk_work/result.json"'],
   ['docker container start --attach --interactive "$container" < "$sdk_work/lock.json" > "$sdk_work/compiler.json"','true > "$sdk_work/compiler.json"'],
   ['docker container start --attach "$container" > "$sdk_work/custody.json"','true > "$sdk_work/custody.json"'],

@@ -11,6 +11,7 @@ Feature: holo
     Given a composed application with its exact portable attachment assets
     When Chromium exercises modeled requests, transport failures, privacy, and lifecycle
     Then actual rendered results and complete profile-specific evidence are required
+    And the workspace interoperability owner qualifies both profiles and both triggers with the complete 78-case boundary inventory
 
   @HO-11 @build
   Scenario: The explicit text application profile projects to closed model-document/2, retaining legacy model-document/1 and rejecting invalid UTF-8 response, field, root, and byte-bound declarations.
