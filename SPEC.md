@@ -214,7 +214,9 @@ manifest, and its Linux subreaper must establish descendant cleanup before the
 next case. Construction uses isolated Cargo configuration and fresh Git checkouts
 from authenticated object downloads, with staged-source and toolchain custody.
 Delayed initialization uses the same correlated submission observer without
-refilling the retained draft. Payload-safe diagnostics preserve the first failure
+refilling the retained draft. Its owned module-delay route is removed after
+module completion and before the real intent, so setup interception does not
+remain active during response validation. Payload-safe diagnostics preserve the first failure
 even when cleanup also fails. They identify the owning journey and modeled-vector
 index, observed request completion, and only closed network-failure categories;
 arbitrary browser error text is not forwarded. These observations never replace
@@ -241,15 +243,40 @@ driver omits only diagnostic acquisition; all response-body, rendering, readines
 single-invocation and navigation checks remain. Exact drivers and closed failure
 witnesses are retained before assertions. These runs supplement all original cases
 and controls, without increasing their deadlines or claiming historical causality.
+Four additional whole-profile runs retain the ordinary observer schedule: neither
+acquisition nor per-submission detach is joined. Every modeled submission still
+has its exact ordered witness and all original body, rendering, single-invocation,
+readiness and navigation predicates. Optional CDP observations may be absent or
+partial, but cannot be invented, duplicated, overflowed or report failures. Each
+ordinary qualification run must observe at least one actual correlated request;
+an entirely unavailable or empty collector cannot qualify noninterference. Their
+complete application reports must equal the corresponding unobserved reports.
+The original eight serialized-observed/unobserved runs remain mandatory and
+retain their stricter complete CDP request/response/completion witnesses.
+Injected duplicate clients own and consume their actual response with the same
+modeled envelope bound. Their tasks are retained, rejection-observed, and joined
+within the original browser-cleanup deadline. A duplicate control requires one
+fully consumed successful duplicate response, zero pending tasks, and the
+unchanged primary `single-invocation` assertion with two actual invocations;
+unavailable bodies, abandoned tasks or unrelated failures cannot qualify it.
+This negative-control lifecycle is not a change to production body acceptance
+and does not establish the cause of historical browser failures.
 The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed
 payload-free observations and complete outcome inventories remain separate
-from proof/release evidence. The bundle is bounded to 272 files, 16 MiB per
+from proof/release evidence. The bundle is bounded to 284 files, 16 MiB per
 file and 32 MiB total, reserving two file slots and two bounded byte slots for
-index replacement. Its complete expanded inventory has 270 members: nine
+index replacement. Its complete expanded inventory has 282 members: nine
 source/subject files, two files for each of the 78 cases, twelve controls,
-eight observation runs and 32 retirement runs, and one final outcome file.
+twelve observation runs and 34 retirement runs, and one final outcome file.
+An admitted asynchronous task failure and synchronous registry admission refusal
+are separate full-profile controls. The refusal control starts actual registry
+closure before submissions; every acquisition and ready-task admission must
+refuse without starting a session. Source-bound witnesses require the exact
+ordered pair of refusals for every modeled submission, zero sessions, enables,
+detaches and unresolved work; aggregate counts cannot authorize matching omissions.
+The original admitted-task failure remains required with all actual sessions.
 Per-file, aggregate and index byte limits and every execution deadline remain
 unchanged. Closed source-owned journey identifiers are retained. Final
 case inventories remain collectible after a copy failure, without changing the

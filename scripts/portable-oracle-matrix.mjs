@@ -98,7 +98,7 @@ const environment = {PATH: `${toolchain}/bin:/usr/bin:/bin`, HOME: work,
   CARGO_INCREMENTAL: '0', LANG: 'C', LC_ALL: 'C', TMPDIR: work};
 function run(name, program, args, directory, seconds, selectedEnvironment = environment, expectedStatus = 0) {
   const cleanupReceipt = join(evidence, `${name}.cleanup.json`);
-  const observation=name.match(/^[01]-observation-(click|keyboard)-(observed|unobserved)$/);
+  const observation=name.match(/^[01]-observation-(click|keyboard)-(observed|unobserved|ordinary)$/);
   const retirement=name.match(/^[01]-retirement-(click|keyboard)-([a-z-]+)$/);
   const expectedDriverHash=observation?createHash('sha256').update(observationDriver(
     readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),observation[2],observation[1])).digest('hex'):
@@ -124,7 +124,7 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
       original_cleanup_sha256:createHash('sha256').update(cleanupBytes).digest('hex'),
       cleanup:{verified:cleanup.cleanup_verified===true,timed_out:cleanup.timed_out===true,interrupted:cleanup.interrupted===true},probe:summary});
   });
-  if(/^[01]-observation-(?:click|keyboard)-(?:observed|unobserved)$/.test(name))retainDiagnostic(diagnostics,()=>{
+  if(observation)retainDiagnostic(diagnostics,()=>{
     const driverPath=join(evidence,name,'driver.mjs');
     diagnostics.file('cases/'+name+'.driver.mjs',driverPath,expectedDriverHash);
     const receiptPath=join(evidence,name,'result.json');
@@ -294,7 +294,7 @@ try {
   // negative control, correlated body read or application predicate.
   for (const [index, profile] of matrix.profiles.entries()) for (const trigger of matrix.triggers) {
     const pair = [];
-    for (const mode of ['observed', 'unobserved']) {
+    for (const mode of ['observed', 'unobserved', 'ordinary']) {
       const id = `${index}-observation-${trigger}-${mode}`;
       for (const input of captured) input.verify();
       executable.verify();
@@ -312,6 +312,9 @@ try {
     assert.deepEqual(pair[0].report, pair[1].report, 'read-only observations must not change any real oracle acceptance');
     assert.equal(pair[0].submissions, pair[1].submissions);
     assert.equal(pair[0].keyboard_submissions, pair[1].keyboard_submissions);
+    assert.deepEqual(pair[2].report,pair[1].report,'actual nonjoining observer schedule must not change any real oracle acceptance');
+    assert.equal(pair[2].submissions,pair[1].submissions);
+    assert.equal(pair[2].keyboard_submissions,pair[1].keyboard_submissions);
     observationPairs.push({profile: profile.profile, trigger, status: 'passed', runs: pair});
   }
   assert.equal(observationPairs.length, 4, 'both profiles and triggers require observed/unobserved real runs');
@@ -334,7 +337,7 @@ try {
       executable.verify();for(const input of captured)input.verify();
     }
   }
-  assert.equal(retirementOutcomes.length,32,'both full profiles and every cleanup fault required');
+  assert.equal(retirementOutcomes.length,34,'both full profiles and every cleanup fault required');
   assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
   assert.equal(negativeControls.length, 12);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);
