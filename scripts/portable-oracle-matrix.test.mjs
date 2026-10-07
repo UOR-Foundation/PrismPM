@@ -58,9 +58,9 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 test('live observation qualification transforms only diagnostics and retains all original acceptance predicates',()=>{
  const source=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
  const call='    network = await submissionNetworkOwner(target, `${origin}/_hologram/intent`, expectedRequest, record, diagnosticCleanup);';
- for(const mode of ['observed','unobserved'])for(const trigger of ['click','keyboard']){
+ for(const mode of ['observed','unobserved','ordinary'])for(const trigger of ['click','keyboard']){
   const driver=observationDriver(source,mode,trigger);
-  assert.equal(driver.includes(call),mode==='observed');
+  assert.equal(driver.includes(call),mode!=='unobserved');
   assert.equal(driver.includes('await network.ready;'),mode==='observed');
   assert.equal(source.includes('await network.ready;'),false,'ordinary acceptance cannot join diagnostic setup');
   for(const point of ['try { replyBody = await bounded(reply.body()); }',
@@ -71,6 +71,10 @@ test('live observation qualification transforms only diagnostics and retains all
    assert(driver.includes(`await journey('${journey}'`));
   assert.equal(driver.split('network.retire();').length,source.split('network.retire();').length);
   assert.equal(driver.includes('await network.stop();'),mode==='observed');
+  if(mode==='ordinary'){
+   assert.equal(driver.split(call).length,source.split(call).length);
+   assert(!driver.includes('await network.ready;'));assert(!driver.includes('await network.stop();'));
+  }
   assert.equal(source.includes('await network.stop();'),false,'ordinary acceptance cannot join optional detach');
   assert.equal(driver.includes('await submit(vector, page, true);'),trigger==='keyboard');
  }
@@ -81,6 +85,8 @@ test('live observation qualification transforms only diagnostics and retains all
  assert(owner.includes("'scripts/portable-oracle-observation.mjs'"));
  assert(owner.includes("assert.equal(observationPairs.length, 4"));
  assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
+ assert(owner.includes("for (const mode of ['observed', 'unobserved', 'ordinary'])"));
+ assert(owner.includes('assert.deepEqual(pair[2].report,pair[1].report'));
  assert(owner.includes('assert.equal(outcomes.length, 78'));
  assert(owner.includes('assert.equal(negativeControls.length, 12'));
  assert.equal(retirementFaults.length,14);assert.equal(new Set(retirementFaults).size,14);
@@ -201,8 +207,8 @@ test('observation qualification owns every ordered modeled submission and reject
   assert.equal(expected.filter(row=>row.keyboard).length,trigger==='click'?1:profile.profile==='utf8-text'?5:17);
   const observed=expected.map(row=>({...row,schema:'prismpm/portable-observation-witness/1',phase:'completed-readiness',
    network:{state:'observed',requests:1,overflow:false},requests:1,responses:1,completions:1,failures:0,eventsTruncated:false}));
-  for(const mode of ['observed','unobserved']){
-   const rows=mode==='observed'?observed:observed.map(row=>({...row,network:{state:'unavailable'},requests:0,responses:0,completions:0}));
+  for(const mode of ['observed','unobserved','ordinary']){
+   const rows=mode!=='unobserved'?observed:observed.map(row=>({...row,network:{state:'unavailable'},requests:0,responses:0,completions:0}));
    assert.doesNotThrow(()=>requireObservationWitnesses(rows,mode,expected));
    for(let index=0;index<rows.length;index++){
     assert.throws(()=>requireObservationWitnesses(rows.filter((_,selected)=>selected!==index),mode,expected));
@@ -219,6 +225,30 @@ test('observation qualification owns every ordered modeled submission and reject
   }
  }
 });
+test('ordinary scheduling admits only honest optional observations while preserving all application predicates',()=>{
+ const base={schema:'prismpm/portable-observation-witness/1',submission:1,phase:'completed-readiness',
+  journey:'modeled-vectors',vectorIndex:0,keyboard:true,network:{state:'observed',requests:1,overflow:false},
+  requests:1,responses:1,completions:1,failures:0,eventsTruncated:false};
+ const expected=[{submission:1,journey:base.journey,vectorIndex:0,keyboard:true},
+  {submission:2,journey:base.journey,vectorIndex:0,keyboard:true}];
+ for(const row of [base,{...base,network:{state:'unavailable'},requests:0,responses:0,completions:0},
+  {...base,network:{state:'observed',requests:0,overflow:false},requests:0,responses:0,completions:0},
+  {...base,responses:0,completions:0},{...base,completions:0}])
+  assert.doesNotThrow(()=>requireObservationWitnesses([base,{...row,submission:2}],'ordinary',expected));
+ for(const patch of [{failures:1},{eventsTruncated:true},{requests:2},{requests:-1},{responses:2},{completions:2},
+  {requests:0},{responses:NaN},{completions:'1'},{network:{state:'observed',requests:1,overflow:true}},
+  {network:{state:'invented',requests:1,overflow:false}},{network:{state:'unavailable'}},
+  {network:{state:'observed',requests:1,overflow:false,extra:true}},{phase:'response-body'}])
+  assert.throws(()=>requireObservationWitnesses([base,{...base,...patch,submission:2}],'ordinary',expected));
+ const absent={...base,network:{state:'unavailable'},requests:0,responses:0,completions:0};
+ assert.throws(()=>requireObservationWitnesses([absent,{...absent,submission:2}],'ordinary',expected),/actual correlated/);
+ const empty={...base,network:{state:'observed',requests:0,overflow:false},requests:0,responses:0,completions:0};
+ assert.throws(()=>requireObservationWitnesses([empty,{...empty,submission:2}],'ordinary',expected),/actual correlated/);
+ const code=read('scripts/portable-oracle-observation.mjs');
+ for(const guard of ['assert.equal(result.status,0','assert.equal(actual.skipped,0)',
+  'assert.equal(actual.retries,0)','assert.deepEqual(actual.vector_indexes,profile.vector_indexes)',
+  'assert.deepEqual(actual.cases,profile.journeys'])assert(code.includes(guard));
+});
 test('observation failures retain only closed bounded witnesses and their executed driver before acceptance assertions',()=>{
  const summary=observationSummary({status:'private-text',driver_sha256:'a'.repeat(64),witnesses:[
   {journey:'private-journey',vectorIndex:'private-text',keyboard:true,phase:'private-phase',requests:-1,
@@ -232,7 +262,8 @@ test('observation failures retain only closed bounded witnesses and their execut
  assert(source.indexOf("writeFileSync(join(directory,'result.json')")<source.indexOf('assert.equal(result.status,0'));
  const owner=read('scripts/portable-oracle-matrix.mjs');
  assert(owner.includes('summary=observationSummary(JSON.parse(receiptBytes))'));
- const retention=owner.slice(owner.indexOf("if(/^[01]-observation-"));
+ const retentionStart=owner.indexOf('if(observation)retainDiagnostic');assert(retentionStart>=0);
+ const retention=owner.slice(retentionStart);
  assert(retention.indexOf("diagnostics.file('cases/'")<retention.indexOf('readDiagnosticFile(receiptPath'));
  assert(retention.includes('assert.equal(expectedDriverHash,summary.driver_sha256)'));
  assert(source.indexOf('const driverSubject=capture(driver)')<source.indexOf('const result=spawnSync'));
@@ -315,22 +346,23 @@ test('actual failure receipt construction retains collected facts and rejects ei
 });
 test('actual observation bundle retention copies executed drivers and closed failure receipts even when a receipt is missing',t=>{
  const source=read('scripts/portable-oracle-matrix.mjs');
- const start=source.indexOf('  if(/^[01]-observation-'),end=source.indexOf('  // Cleanup uncertainty',start);
+ const start=source.indexOf('  if(observation)retainDiagnostic'),end=source.indexOf('  // Cleanup uncertainty',start);
  assert(start>=0&&end>start);const branch=source.slice(start,end);
- for(const kind of ['observation','retirement'])for(const state of ['receipt','missing','changed']){
-  const missing=state==='missing',changed=state==='changed';
+ for(const kind of ['observation','ordinary','retirement'])for(const state of ['success','receipt','missing','changed']){
+  const missing=state==='missing',changed=state==='changed',successful=state==='success';
   const root=diagnosticRoot(t),evidence=join(root,'evidence'),name=kind==='observation'
-   ?'0-observation-keyboard-observed':'0-retirement-click-primary-body-failure';
+   ?'0-observation-keyboard-observed':kind==='ordinary'?'0-observation-keyboard-ordinary':'0-retirement-click-primary-body-failure';
   mkdirSync(join(evidence,name),{recursive:true});
   const original=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
-  const driver=kind==='observation'?observationDriver(original,'observed','keyboard'):retirementDriver(original,'primary-body-failure','click');
+  const driver=kind!=='retirement'?observationDriver(original,kind==='ordinary'?'ordinary':'observed','keyboard'):retirementDriver(original,'primary-body-failure','click');
   writeFileSync(join(evidence,name,'driver.mjs'),driver+(changed?'\n// changed after execution':''));
-  if(!missing)writeFileSync(join(evidence,name,'result.json'),JSON.stringify({status:'incomplete',driver_sha256:hash(driver),
+  if(!missing)writeFileSync(join(evidence,name,'result.json'),JSON.stringify({status:successful?'passed':'incomplete',driver_sha256:hash(driver),
    witnesses:[{journey:'private-journey',payload:'private-value'}],stderr:'private-value',
    submission_failures:[{phase:'response-body',failure:'response-body-failed',vector_index:2,keyboard:true}],
    cleanup_failures:[{resource:'browser',failure:'timeout'}]}));
   const diagnostics=new PortableDiagnosticBundle(root);
-  runInNewContext(branch,{name,evidence,result:{status:1},expectedStatus:0,expectedDriverHash:hash(driver),diagnostics,retainDiagnostic,
+  runInNewContext(branch,{name,evidence,result:{status:successful?0:1},expectedStatus:0,expectedDriverHash:hash(driver),diagnostics,retainDiagnostic,
+   observation:runInNewContext(/  const observation=(.+);/.exec(source)[1],{name}),
    retirement:name.match(/^[01]-retirement-(click|keyboard)-([a-z-]+)$/),
    join,createHash,readDiagnosticFile,observationSummary,retirementSummary,assert,JSON,Number});
   const index=JSON.parse(readFileSync(join(diagnostics.path,'index.json')));
@@ -340,7 +372,8 @@ test('actual observation bundle retention copies executed drivers and closed fai
   else{
    const receipt=readFileSync(join(diagnostics.path,'cases/'+name+'.json'),'utf8');
    assert(!receipt.includes('private-value'));assert(!receipt.includes('private-journey'));
-   assert.equal(JSON.parse(receipt).actual_exit_code,1);
+   assert.equal(JSON.parse(receipt).actual_exit_code,successful?0:1);
+   assert.equal(JSON.parse(receipt).status,successful?'passed':'incomplete');
    assert.equal(JSON.parse(receipt).submission_failures[0].failure,'response-body-failed');
    assert.equal(JSON.parse(receipt).submission_failures[0].vector_index,2);
    assert.deepEqual(JSON.parse(receipt).cleanup_failures,[{resource:'browser',failure:'timeout'}]);
@@ -842,14 +875,14 @@ test('the complete expanded matrix retains every diagnostic member and its final
   for(const control of ['wrong-status','noop'])cases.push(`${profile}-probe-control-${control}`);
   for(const trigger of matrix.triggers)for(const control of ['omit-finished','malformed-finished'])
    cases.push(`${profile}-probe-control-${control}-${trigger}`);
-  for(const trigger of matrix.triggers)for(const mode of ['observed','unobserved'])
+  for(const trigger of matrix.triggers)for(const mode of ['observed','unobserved','ordinary'])
    cases.push(`${profile}-observation-${trigger}-${mode}`);
   for(const fault of retirementFaults){
    const triggers=['pending-detach','rejected-detach','primary-body-failure'].includes(fault)?matrix.triggers:['click'];
    for(const trigger of triggers)cases.push(`${profile}-retirement-${trigger}-${fault}`);
   }
  }
- assert.equal(cases.length,78+12+8+34);assert.equal(new Set(cases).size,cases.length);
+ assert.equal(cases.length,78+12+12+34);assert.equal(new Set(cases).size,cases.length);
  // Exercise the actual bounded filesystem collector, not a success marker or
  // browser simulation. Real browser acceptance remains the complete owner.
  bundle.json('source-witnesses.json',{scope:'budget-regression-only'});
@@ -861,7 +894,7 @@ test('the complete expanded matrix retains every diagnostic member and its final
  }
  bundle.finish({scope:'budget-regression-only',cases},true);
  const index=JSON.parse(readFileSync(join(bundle.path,'index.json')));
- assert.equal(index.state,'completed');assert.equal(index.files.length,274);
+ assert.equal(index.state,'completed');assert.equal(index.files.length,282);
  assert.equal(diagnosticLimits.files,index.files.length+2,'retain exactly two reserved file slots');
  assert.equal(diagnosticLimits.fileBytes,16*1024**2);assert.equal(diagnosticLimits.totalBytes,32*1024**2);
  assert.equal(diagnosticLimits.indexBytes,128*1024);
@@ -871,7 +904,7 @@ test('the complete expanded matrix retains every diagnostic member and its final
  const limit=/files:\d+/.exec(original);assert(limit,'one actual file-count bound required');
  const directory=diagnosticRoot(t),mutant=join(directory,'under-budget.mjs');
  writeFileSync(mutant,original.replace(limit[0],'files:256'));
- const source=`import assert from 'node:assert/strict';import {PortableDiagnosticBundle} from ${JSON.stringify(new URL('file://'+mutant).href)};const bundle=new PortableDiagnosticBundle(process.argv[1]);for(let n=0;n<274;n++)bundle.bytes('row-'+n,Buffer.alloc(0));bundle.complete();assert.equal(bundle.state,'completed');`;
+ const source=`import assert from 'node:assert/strict';import {PortableDiagnosticBundle} from ${JSON.stringify(new URL('file://'+mutant).href)};const bundle=new PortableDiagnosticBundle(process.argv[1]);for(let n=0;n<282;n++)bundle.bytes('row-'+n,Buffer.alloc(0));bundle.complete();assert.equal(bundle.state,'completed');`;
  const child=spawnSync(process.execPath,['--input-type=module','-e',source,directory],{encoding:'utf8',timeout:10000,maxBuffer:65536});
  assert.ifError(child.error);assert.equal(child.signal,null);assert.equal(child.status,1);
  assert.match(child.stderr,/diagnostic byte or file limit/,'actual old-bound mutant cannot retain the complete matrix');

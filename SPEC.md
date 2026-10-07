@@ -241,15 +241,25 @@ driver omits only diagnostic acquisition; all response-body, rendering, readines
 single-invocation and navigation checks remain. Exact drivers and closed failure
 witnesses are retained before assertions. These runs supplement all original cases
 and controls, without increasing their deadlines or claiming historical causality.
+Four additional whole-profile runs retain the ordinary observer schedule: neither
+acquisition nor per-submission detach is joined. Every modeled submission still
+has its exact ordered witness and all original body, rendering, single-invocation,
+readiness and navigation predicates. Optional CDP observations may be absent or
+partial, but cannot be invented, duplicated, overflowed or report failures. Each
+ordinary qualification run must observe at least one actual correlated request;
+an entirely unavailable or empty collector cannot qualify noninterference. Their
+complete application reports must equal the corresponding unobserved reports.
+The original eight serialized-observed/unobserved runs remain mandatory and
+retain their stricter complete CDP request/response/completion witnesses.
 The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed
 payload-free observations and complete outcome inventories remain separate
-from proof/release evidence. The bundle is bounded to 276 files, 16 MiB per
+from proof/release evidence. The bundle is bounded to 284 files, 16 MiB per
 file and 32 MiB total, reserving two file slots and two bounded byte slots for
-index replacement. Its complete expanded inventory has 274 members: nine
+index replacement. Its complete expanded inventory has 282 members: nine
 source/subject files, two files for each of the 78 cases, twelve controls,
-eight observation runs and 34 retirement runs, and one final outcome file.
+twelve observation runs and 34 retirement runs, and one final outcome file.
 An admitted asynchronous task failure and synchronous registry admission refusal
 are separate full-profile controls. The refusal control starts actual registry
 closure before submissions; every acquisition and ready-task admission must

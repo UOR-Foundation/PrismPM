@@ -5,9 +5,9 @@ import {constants,closeSync,fstatSync,lstatSync,mkdirSync,mkdtempSync,openSync,o
 import {dirname,join,resolve} from 'node:path';
 
 // Nine subject/witness files, two members for each of 78 cases, 12 controls,
-// eight observation runs and 34 retirement runs, plus outcomes: 274 members.
+// twelve observation runs and 34 retirement runs, plus outcomes: 282 members.
 // Preserve two reserved slots; all per-file/aggregate/index byte bounds stay fixed.
-export const diagnosticLimits=Object.freeze({files:276,fileBytes:16*1024**2,totalBytes:32*1024**2,indexBytes:128*1024});
+export const diagnosticLimits=Object.freeze({files:284,fileBytes:16*1024**2,totalBytes:32*1024**2,indexBytes:128*1024});
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const canonical=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)
  ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
