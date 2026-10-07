@@ -140,6 +140,20 @@ test('both recipes normalize the complete pinned Lean toolchain before unprivile
       recipe.replace(`chmod -R a+rX,go-w ${root}`, `chmod -R a+rX,go-w ${root}/bin`),
     ]) assert.throws(() => check(changed));
   }
+  const checkDevelopmentShims = recipe => {
+    const commands = imageStages(recipe).get('development').instructions.map(command => command.replace(/\s+/g, ' '));
+    const environment = commands.indexOf('ENV CARGO_HOME=/home/vscode/.cargo ELAN_HOME=/home/vscode/.elan');
+    assert(environment >= 0, 'normal development home aliases must be configured');
+    for (const binary of ['lean', 'lake']) {
+      const probe = commands.findIndex(command => command.includes(
+        `runuser -u vscode -- env ELAN_TOOLCHAIN=${pin} ${binary} --version`));
+      assert(probe > environment, 'actual unprivileged shim probe must follow the final home configuration');
+    }
+  };
+  const development = readFileSync(new URL('../.devcontainer/Dockerfile', import.meta.url), 'utf8');
+  checkDevelopmentShims(development);
+  for (const binary of ['lean', 'lake']) assert.throws(() => checkDevelopmentShims(development.replace(
+    `runuser -u vscode -- env ELAN_TOOLCHAIN=${pin} ${binary} --version`, 'true')));
 });
 
 test('pinned tool layers exclude source inputs while the build retains both verified closure and policy', t => {

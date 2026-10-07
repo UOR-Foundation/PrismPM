@@ -165,7 +165,9 @@ ENV CARGO_HOME=/home/vscode/.cargo \
     ELAN_HOME=/home/vscode/.elan
 
 RUN bash /opt/prismpm/browser-environment/scripts/browser-environment-preflight.sh \
-    && runuser -u vscode -- bash /opt/prismpm/browser-environment/scripts/browser-environment-preflight.sh
+    && runuser -u vscode -- bash /opt/prismpm/browser-environment/scripts/browser-environment-preflight.sh \
+    && runuser -u vscode -- env ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lean --version \
+    && runuser -u vscode -- env ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lake --version
 
 WORKDIR /work
 ENTRYPOINT ["/usr/local/bin/prismpm-devcontainer-init"]
