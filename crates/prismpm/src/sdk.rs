@@ -1689,6 +1689,9 @@ mod tests {
             if let (Ok(constructed), Ok(parsed)) = (&constructed, &parsed) {
                 assert_eq!(constructed.bytes(), parsed.bytes());
             }
+            if let (Err(constructed), Err(parsed)) = (&constructed, &parsed) {
+                assert_eq!(constructed.code, parsed.code);
+            }
             parsed
         };
         assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
