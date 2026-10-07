@@ -1,6 +1,40 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {createHash} from 'node:crypto';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {runInNewContext} from 'node:vm';
 import test from 'node:test';
 import {captureCompilerInputs, createCompilerOwner, requireCompilerOwner} from './compiler-owner.mjs';
+
+test('verification-only source reads retain the complete descriptor and digest checks without whole-file buffers', t => {
+  const root=fs.mkdtempSync(join(tmpdir(),'prismpm-source-stream-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const path=join(root,'source'),bytes=Buffer.alloc(1024*1024,97);
+  fs.writeFileSync(path,bytes,{mode:0o600});
+  const source=fs.readFileSync(new URL('./compiler-owner.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf('function unchanged(before, after) {');
+  const end=source.indexOf('\n// A bounded filesystem observation',begin);
+  assert(begin>=0&&end>begin);
+  const allocations=[],alloc=Buffer.alloc.bind(Buffer);
+  const measuredBuffer={alloc(size){allocations.push(size);return alloc(size);}};
+  const file=runInNewContext('('+source.slice(begin,end)+'\nfile)',
+    {...fs,assert,createHash,Buffer:measuredBuffer});
+  const digest=createHash('sha256').update(bytes).digest('hex');
+  assert.equal(file(path,digest,false),undefined);
+  assert(Math.max(...allocations)<=65536,'verification streams rather than retaining the entire file');
+  assert.deepEqual(Buffer.from(file(path,digest)),bytes,'actual staging still receives the complete source bytes');
+  assert.throws(()=>file(path,'0'.repeat(64),false),/captured compiler source/);
+  fs.appendFileSync(path,'changed');
+  assert.throws(()=>file(path,digest,false),/captured compiler source/);
+  fs.writeFileSync(path,bytes);
+  const alias=join(root,'alias');fs.linkSync(path,alias);
+  assert.throws(()=>file(path,digest,false),/single-link/);
+  fs.unlinkSync(alias);fs.symlinkSync(path,alias);
+  assert.throws(()=>file(alias,digest,false),/unaliased/);
+  for(const anchor of ['file(join(repository, path), digest, false)', 'file(join(work, path), digest, false)'])
+    assert.equal(source.split(anchor).length,2,'both actual verification loops select streaming checks');
+});
 
 test('compiler owner refuses forged handles and unregistered tool families', () => {
   for (const value of [null, {}, {runDriver() {}, runExporter() {}, verify() {}}])

@@ -94,7 +94,7 @@ function inventory(directory, kind, inputIrSha256) {
         assert(expectedDirectories.has(child), 'complete generated package directory inventory'); visit(child);
       } else {
         assert(expectedFiles.includes(child), 'complete generated package file inventory');
-        files[child] = digest(fileBytes(absolute));
+        files[child] = captureFile(absolute).evidence.sha256;
       }
     }
   }

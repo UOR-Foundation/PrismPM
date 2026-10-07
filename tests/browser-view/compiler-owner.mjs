@@ -82,8 +82,8 @@ function observeFile(path, retain = false) {
     return {bytes, sha256: hash.digest('hex'), stat: before};
   } finally {closeSync(fd);}
 }
-function file(path, expected) {
-  const captured = observeFile(path, true);
+function file(path, expected, retain = true) {
+  const captured = observeFile(path, retain);
   if (expected !== undefined) assert.equal(captured.sha256, expected, 'captured compiler source ' + path);
   return captured.bytes;
 }
@@ -193,8 +193,8 @@ export function createCompilerOwner(name, selectedInputs = captureCompilerInputs
       assert.equal(closed, false, 'compiler owner closed');
       assert.equal(realpathSync(work), work, 'unaliased private compiler owner');
       assert.equal(lstatSync(work).mode & 0o077, 0, 'private compiler owner directory required');
-      for (const [path, digest] of Object.entries(inputs)) file(join(repository, path), digest);
-      for (const [path, digest] of staged) file(join(work, path), digest);
+      for (const [path, digest] of Object.entries(inputs)) file(join(repository, path), digest, false);
+      for (const [path, digest] of staged) file(join(work, path), digest, false);
       assert.deepEqual(captureCompilerRuntime(exporter.dir), runtime, 'immutable complete exporter runtime closure');
       exportArtifact.verify(); driver.verify();
     }
