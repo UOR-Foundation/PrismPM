@@ -36,6 +36,7 @@ const inputs = [
   'crates/prismpm/src/embedded/hologram-oracle.browser.mjs',
   'scripts/portable-oracle-matrix.mjs', 'scripts/portable-oracle-submission-probe.mjs',
   'scripts/portable-oracle-process-owner.py',
+  'scripts/portable-oracle-source.py',
   'scripts/portable-oracle-custody.mjs',
   'tests/data/portable-oracle-matrix.json', 'sdk/exporter-seed.mjs',
   'sdk/inventory-metadata.mjs',
@@ -110,7 +111,8 @@ try {
   }
   mkdirSync(join(work, 'hologram-live'));
   mkdirSync(join(work, 'harness/src'), {recursive: true});
-  run('source-extraction', '/usr/bin/tar', ['-xf', captured[0].path, '-C', join(work, 'hologram-live')], work, 30);
+  // Preserve pinned modes while assigning ownership to the local verifier.
+  run('source-extraction', '/usr/bin/tar', ['--no-same-owner', '--same-permissions', '-xf', captured[0].path, '-C', join(work, 'hologram-live')], work, 30);
   for (const path of ['Cargo.toml', 'Cargo.lock', 'src/main.rs']) {
     const target = join(work, 'harness', path);
     copyFileSync(join(root, 'tests/hologram-oracle', path), target);
@@ -128,7 +130,7 @@ try {
   for (const path of ['Cargo.toml', 'Cargo.lock', 'src/main.rs'])
     assert(readFileSync(join(work, 'harness', path)).equals(readFileSync(join(root, 'tests/hologram-oracle', path))),
       'staged harness differs from pinned source');
-  run('source-comparison', '/usr/bin/tar', ['--compare', '-f', captured[0].path, '-C', join(work, 'hologram-live')], work, 30);
+  run('source-comparison', '/usr/bin/python3', ['-I', '-B', join(root, 'scripts/portable-oracle-source.py'), captured[0].path, join(work, 'hologram-live')], work, 30);
   const compilerFiles = snapshotTree(toolchain, {toolchainAliases: true});
   for (const tree of staged) assert.deepEqual(snapshotSourceTree(tree.path, tree), tree.files, 'staged source changed');
   refuseCargoAncestorConfiguration(work);

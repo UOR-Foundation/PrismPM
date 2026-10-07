@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, renameSync, existsSync, realpathSync} from 'node:fs';
+import {readFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, renameSync, existsSync, realpathSync, chmodSync, linkSync, symlinkSync, copyFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -8,6 +8,105 @@ import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapsho
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('pinned archive comparison retains complete content and mode custody without requiring root ownership', () => {
+  const root = mkdtempSync(join(tmpdir(), 'portable-archive-test-'));
+  const archive = new URL('../vendor/hologram-live.tar', import.meta.url).pathname;
+  const verifier = new URL('./portable-oracle-source.py', import.meta.url).pathname;
+  const check = (source, directory) => {
+    const result = spawnSync('/usr/bin/python3', ['-I', '-B', verifier, source, directory], {encoding: 'utf8', timeout: 30000, maxBuffer: 65536});
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    return result;
+  };
+  const reject = (source, directory, message) => {
+    const result = check(source, directory);
+    assert.equal(result.status, 1, result.stderr);
+    assert(result.stderr.includes(message), result.stderr);
+  };
+  try {
+    for (const mask of ['0022', '0077']) {
+      const directory = join(root, mask);
+      mkdirSync(directory);
+      const extraction = spawnSync('/bin/sh', ['-c', 'umask "$1"; exec /usr/bin/tar --no-same-owner --same-permissions -xf "$2" -C "$3"', 'extract', mask, archive, directory], {timeout: 30000, maxBuffer: 65536});
+      assert.ifError(extraction.error);
+      assert.equal(extraction.signal, null);
+      assert.equal(extraction.status, 0);
+      assert.equal(check(archive, directory).status, 0);
+      // Yield an actual unexpected filesystem member first. The comparator
+      // must refuse it BEFORE asking the directory iterator for another row.
+      const streamControl=`import contextlib, os, runpy, sys
+source = runpy.run_path(sys.argv[1])
+scan = os.scandir
+@contextlib.contextmanager
+def guarded_scan(descriptor):
+    with scan(descriptor) as entries:
+        unexpected = next(entry for entry in entries if entry.name == "unexpected-stream-member")
+        def rows():
+            yield unexpected
+            raise RuntimeError("source enumeration continued after unexpected member")
+        yield rows()
+os.scandir = guarded_scan
+source["verify"](sys.argv[2], sys.argv[3])
+`;
+      writeFileSync(join(directory,'unexpected-stream-member'),'actual unexpected member');
+      try{
+        const comparator=readFileSync(verifier,'utf8');
+        const start=comparator.indexOf('                names = set()\n');
+        const end=comparator.indexOf('            for entry in sorted(names):\n',start);
+        assert(start>=0&&end>start,'actual streaming inventory guard exists');
+        const mutant=join(root,'buffered-source-comparator.py');
+        writeFileSync(mutant,comparator.slice(0,start)+'                names = sorted(entry.name for entry in entries)\n'+comparator.slice(end));
+        for(const [selected,expected] of [[verifier,'unexpected source entry'],[mutant,'source enumeration continued after unexpected member']]){
+          const result=spawnSync('/usr/bin/python3',['-I','-B','-c',streamControl,selected,archive,directory],
+            {encoding:'utf8',timeout:30000,maxBuffer:65536});
+          assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,1,result.stderr);
+          assert(result.stderr.includes(expected),result.stderr);
+          assert.equal(result.stderr.includes('source enumeration continued after unexpected member'),selected===mutant,
+            'the actual early-refusal assertion kills buffering-before-validation');
+        }
+      }finally {rmSync(join(directory,'unexpected-stream-member'));}
+      const selected = join(directory, 'Cargo.toml'), original = readFileSync(selected);
+      for (const mutation of ['bytes', 'missing', 'extra', 'mode', 'symlink', 'hardlink']) {
+        if (mutation === 'bytes') writeFileSync(selected, Buffer.concat([original, Buffer.from('\n')]));
+        if (mutation === 'missing') renameSync(selected, join(root, 'removed'));
+        if (mutation === 'extra') writeFileSync(join(directory, 'unexpected'), 'extra');
+        if (mutation === 'mode') chmodSync(selected, 0o764);
+        if (mutation === 'symlink') { renameSync(selected, join(root, 'removed')); symlinkSync(join(root, 'removed'), selected); }
+        if (mutation === 'hardlink') linkSync(selected, join(root, 'alias'));
+        reject(archive, directory, {bytes: 'source type, mode, size or bytes differ', missing: 'source inventory incomplete',
+          extra: 'unexpected source entry', mode: 'source type, mode, size or bytes differ', symlink: 'source alias or special file',
+          hardlink: 'source file alias or special file'}[mutation]);
+        if (mutation === 'bytes') writeFileSync(selected, original);
+        if (mutation === 'missing') renameSync(join(root, 'removed'), selected);
+        if (mutation === 'extra') rmSync(join(directory, 'unexpected'));
+        if (mutation === 'mode') chmodSync(selected, 0o664);
+        if (mutation === 'symlink') { rmSync(selected); renameSync(join(root, 'removed'), selected); }
+        if (mutation === 'hardlink') rmSync(join(root, 'alias'));
+        assert.equal(check(archive, directory).status, 0, 'restored ' + mutation);
+      }
+      const changedArchive = join(root, 'changed.tar');
+      copyFileSync(archive, changedArchive);
+      writeFileSync(changedArchive, Buffer.concat([readFileSync(changedArchive), Buffer.from('x')]));
+      reject(changedArchive, directory, 'source archive identity differs');
+      const archiveAlias = join(root, 'archive-alias');
+      symlinkSync(archive, archiveAlias);
+      reject(archiveAlias, directory, 'source file alias or special file');
+      rmSync(archiveAlias);
+      linkSync(changedArchive, archiveAlias);
+      reject(changedArchive, directory, 'source file alias or special file');
+      rmSync(archiveAlias);
+      const rootAlias = join(root, 'root-alias');
+      symlinkSync(directory, rootAlias);
+      reject(archive, rootAlias, 'source directory alias');
+      rmSync(rootAlias);
+      chmodSync(directory, 0o755);
+      reject(archive, directory, 'source root mode differs');
+      chmodSync(directory, 0o700);
+      assert.equal(check(archive, directory).status, 0);
+    }
+  } finally { rmSync(root, {recursive: true}); }
+});
 
 test('wrong-status control changes only its injected route, not other successful journeys', () => {
   const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
