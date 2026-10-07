@@ -208,6 +208,12 @@ test('all platform-lock entry points reject coherently rehashed ambiguous OCI in
     changes.push(Buffer.from(index.toString().replace('"size":100', '"size":1' + '0'.repeat(512 * 1024) + '1')));
     const extension = Buffer.from('{"extension":0.125,' + index.toString().slice(1));
     assert.equal(parseSdkIndex(extension, `example.invalid/test-sdk@${sha(extension)}`).length, 2);
+    const nestedExtension = Buffer.from('{"extension":{"size":0.5,"schemaVersion":2.0000000000000000001},' + index.toString().slice(1));
+    assert.equal(parseSdkIndex(nestedExtension, `example.invalid/test-sdk@${sha(nestedExtension)}`).length, 2);
+    const escapedVersion = Buffer.from(index.toString().replace('"schemaVersion":2', '"schema\\u0056ersion":2.0'));
+    assert.equal(parseSdkIndex(escapedVersion, `example.invalid/test-sdk@${sha(escapedVersion)}`).length, 2);
+    changes.push(Buffer.from(index.toString().replace('"schemaVersion":2', '"schema\\u0056ersion":2.0000000000000000001')));
+    changes.push(Buffer.from('{"extension":{"a":1,"\\u0061":2},' + index.toString().slice(1)));
     changes.unshift(Buffer.from(index.toString().replace('"architecture":"amd64"',
       '"architecture":"amd64","architec\\u0074ure":"amd64"')));
     for (const bytes of changes) {

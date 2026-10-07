@@ -520,8 +520,10 @@ fn bounded_positive_integer(token: &str, maximum: usize) -> Option<usize> {
     exact.parse().ok()
 }
 
-// Lexical pass over already duplicate/depth-validated JSON. Retain numeric
-// tokens without enabling serde_json features that alter global Value decoding.
+// SDK-local lexical guard before Value decoding: reject decoded duplicate keys,
+// excessive nesting and inexact integral tokens without changing Holo's strict
+// no-float canonical decoder or serde's global feature graph. serde_json then
+// validates the complete syntax and the caller validates the decoded shape.
 fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
     #[derive(Clone, Copy)]
     enum Focus {
@@ -585,6 +587,7 @@ fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
             }
             b'{' | b'[' => {
                 *at += 1;
+                let mut keys = BTreeSet::new();
                 let end = if first == b'{' { b'}' } else { b']' };
                 white(bytes, at);
                 if bytes.get(*at) == Some(&end) {
@@ -601,6 +604,9 @@ fn validate_index_number_tokens(bytes: &[u8]) -> Option<()> {
                         }
                         *at += 1;
                         let key: String = serde_json::from_slice(key).ok()?;
+                        if !keys.insert(key.clone()) {
+                            return None;
+                        }
                         match (focus, key.as_str()) {
                             (Focus::Index, "schemaVersion") => Focus::Schema,
                             (Focus::Index, "manifests") => Focus::Children,
@@ -664,8 +670,8 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
     {
         return Err(fail());
     }
-    let index = crate::holo::canonical::decode_json_unique(bytes).map_err(|_| fail())?;
     validate_index_number_tokens(bytes).ok_or_else(fail)?;
+    let index: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| fail())?;
     let manifests = index["manifests"].as_array().ok_or_else(fail)?;
     let platforms = value["platforms"].as_array().ok_or_else(fail)?;
     if !oci_field_casing(
@@ -1615,6 +1621,21 @@ mod tests {
             );
         }
         assert!(admit(format!("{{\"extension\":0.125,{}", &raw[1..])).is_ok());
+        assert!(admit(format!(
+            "{{\"extension\":{{\"size\":0.5,\"schemaVersion\":2.0000000000000000001}},{}",
+            &raw[1..]
+        ))
+        .is_ok());
+        assert!(admit(raw.replace("\"schemaVersion\":2", "\"schema\\u0056ersion\":2.0")).is_ok());
+        assert_eq!(
+            admit(raw.replace(
+                "\"schemaVersion\":2",
+                "\"schema\\u0056ersion\":2.0000000000000000001"
+            ))
+            .unwrap_err()
+            .code,
+            "PP5401"
+        );
         // No serde feature may reinterpret reserved-looking ordinary objects.
         assert_eq!(
             serde_json::from_str::<Value>(r#"{"$serde_json::private::RawValue":"1"}"#).unwrap(),
@@ -1622,6 +1643,7 @@ mod tests {
         );
         for duplicate in [
             format!("{{\"schemaVersion\":2,{}", &raw[1..]),
+            format!("{{\"extension\":{{\"a\":1,\"\\u0061\":2}},{}", &raw[1..]),
             raw.replace(
                 "\"architecture\":\"amd64\"",
                 "\"architecture\":\"amd64\",\"architec\\u0074ure\":\"amd64\"",

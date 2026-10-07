@@ -1344,6 +1344,8 @@ Integral index fields are checked against their original decimal tokens before
 floating-point conversion. Fractional values that round to schema version 2 or
 to a permitted child size are rejected; equivalent exact integral decimal and
 exponent spellings and unrelated fractional extension values remain valid.
+These OCI rules are confined to SDK index admission. They do not change the
+Holo canonical decoder, its no-float contract, emitter semantics or golden bytes.
 The SDK acquisition profile `prismpm/sdk-metadata/1` is declared by the image
 configuration label `org.prismpm.sdk.metadata`. Its last filesystem layer contains
 only `opt/`, `opt/prismpm/`, `opt/prismpm/share/`, and the exact installed
