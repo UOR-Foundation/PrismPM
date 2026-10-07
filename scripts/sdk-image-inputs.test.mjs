@@ -119,6 +119,29 @@ test('development and SDK recipes share the exact isolated pinned Rust tool cons
   }
 });
 
+test('both recipes normalize the complete pinned Lean toolchain before unprivileged use', () => {
+  const pin = 'leanprover/lean4:v4.32.1';
+  const root = '/usr/local/elan/toolchains/leanprover--lean4---v4.32.1';
+  const check = recipe => {
+    const commands = [...imageStages(recipe).values()].flatMap(stage => stage.instructions);
+    const installs = commands.filter(command => command.includes(`elan toolchain install ${pin}`));
+    assert.equal(installs.length, 1, 'exactly one pinned Lean construction');
+    assert.match(installs[0].replace(/\s+/g, ' '), new RegExp(`elan toolchain install ${pin.replaceAll('.', '\\.')} && chmod -R a\\+rX,go-w ${root.replaceAll('.', '\\.')}(?: &&|$)`),
+      'normalization must cover the entire pinned toolchain in its construction instruction');
+  };
+  for (const path of ['../sdk/Dockerfile', '../.devcontainer/Dockerfile']) {
+    const recipe = readFileSync(new URL(path, import.meta.url), 'utf8');
+    check(recipe);
+    for (const changed of [
+      recipe.replace(` && chmod -R a+rX,go-w ${root}`, ''),
+      recipe.replace(`    && chmod -R a+rX,go-w ${root}`, ''),
+      recipe.replace('chmod -R a+rX,go-w', 'chmod a+rX,go-w'),
+      recipe.replace('chmod -R a+rX,go-w', 'chmod -R a+rX'),
+      recipe.replace(`chmod -R a+rX,go-w ${root}`, `chmod -R a+rX,go-w ${root}/bin`),
+    ]) assert.throws(() => check(changed));
+  }
+});
+
 test('pinned tool layers exclude source inputs while the build retains both verified closure and policy', t => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
   const checkTopology = text => {
