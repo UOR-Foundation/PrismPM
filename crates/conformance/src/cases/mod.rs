@@ -461,7 +461,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-session/wire.test.mjs",
                 "tests/browser-session/provenance.test.mjs",
             ],
-            38,
+            39,
             "3600000",
         ),
         "DK-34" => verify_node_suite(
