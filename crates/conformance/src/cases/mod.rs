@@ -536,7 +536,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-view/compiler-runtime.test.mjs",
                 "tests/browser-view/compiler-runtime-mutations.test.mjs",
             ],
-            34,
+            35,
         ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (

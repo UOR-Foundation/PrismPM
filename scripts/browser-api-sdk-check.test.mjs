@@ -229,6 +229,10 @@ test('release acceptance actually invokes every closed owning suite and rejects 
  assert.equal(runSuites(root,launch,()=>{}).length,16);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
+ const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,35);
+ for(const [index,path] of view.files.entries())put(root,path,testSource(index===0?29:1));
+ assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,'omitting the new source-stream regression must refuse34 tests');
+ testFixtures(root);
  const path='sdk/browser/identity.test.mjs',second='sdk/browser/identity.browser.test.mjs';
  put(root,path,testSource(1));put(root,second,testSource(1));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/);
  put(root,path,testSource(10,true));put(root,second,testSource(10));assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete pass set|skipped/);
@@ -277,14 +281,19 @@ test('per-file completion evidence is exact, closed, successful and reconciled t
 });
 
 test('owning release test kills a removed complete-TAP acceptance guard',t=>{
- const root=temporary(t),source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
- const before='const tests=verifyTap(output.stdout,suite.minimum)',after="const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])";
+ const source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
+ for(const [before,after,witness] of [
+  ['const tests=verifyTap(output.stdout,suite.minimum)',"const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])",/Missing expected exception/],
+  ["{id:'DK-15',minimum:35","{id:'DK-15',minimum:34",/34 !== 35/],
+ ]){
+ const root=temporary(t);
  assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,after));
  put(root,'browser-api-sdk-check.test.mjs',readFileSync(new URL('./browser-api-sdk-check.test.mjs',import.meta.url)));
  put(root,'owning-node-reporter.mjs',readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)));
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
  const result=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=release acceptance actually',join(root,'browser-api-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
- assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,/Missing expected exception/);
+ assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,witness);
+ }
 });
 
 test('owning omission regression kills removal of actual per-file completion checks',t=>{

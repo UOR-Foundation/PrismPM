@@ -38,7 +38,7 @@ export const suites=Object.freeze([
  {id:'DK-12',minimum:13,files:['journal-model-test.mjs']},
  {id:'DK-13',minimum:12,files:['command-model-test.mjs']},
  {id:'DK-14',minimum:11,files:['query-model-test.mjs']},
- {id:'DK-15',minimum:34,files:['view-model-test.mjs','tests/browser-view/compiler-artifact.test.mjs','tests/browser-view/compiler-artifact-mutations.test.mjs','tests/browser-view/compiler-owner.test.mjs','tests/browser-view/compiler-runtime.test.mjs','tests/browser-view/compiler-runtime-mutations.test.mjs']},
+ {id:'DK-15',minimum:35,files:['view-model-test.mjs','tests/browser-view/compiler-artifact.test.mjs','tests/browser-view/compiler-artifact-mutations.test.mjs','tests/browser-view/compiler-owner.test.mjs','tests/browser-view/compiler-runtime.test.mjs','tests/browser-view/compiler-runtime-mutations.test.mjs']},
  {id:'DK-16',minimum:10,files:['view-host-test.mjs']},
  {id:'DK-19',minimum:14,files:['rs256.test.mjs','rs256.browser.test.mjs']},
  {id:'DK-20',minimum:18,files:['effects-wire.test.mjs','effects-module.test.mjs','effects-test.mjs']},
