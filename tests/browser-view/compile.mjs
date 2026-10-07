@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
+import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync,writeSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -90,6 +90,21 @@ function terminateOwnedGroup(pid) {
   }
   signal('SIGKILL');
 }
+// Diagnostics only: no command, argument, path, payload or environment is logged.
+export function compilerPhase(program,args) {
+  if (['cargo','rustc','lean','lake'].includes(program) && args[0]?.startsWith('--version')) return 'toolchain-check';
+  if (program === 'tar') return 'archive-extraction';
+  if (program === 'cargo') return 'rust-compilation';
+  if (program === 'lake') {
+    if (args[0] === 'update') return 'lake-update';
+    return args[1] === 'prod-export' ? 'exporter-construction' : 'generated-module-build';
+  }
+  if (program.endsWith('/prod-export')) return 'kernel-export';
+  if (args[0] === 'verify') return 'lexlean-verification';
+  if (args[0] === 'native') return 'native-code-generation';
+  if (['wasm','fixture','size','p256','point','pkce'].includes(args[0])) return 'wasm-code-generation';
+  return 'generated-execution';
+}
 function execute(program,args,cwd,env={}) {
   const childEnvironment = compilerEnvironment(env);
   const tools = {cargo:'/usr/local/cargo/bin/cargo',rustc:'/usr/local/cargo/bin/rustc',
@@ -99,14 +114,22 @@ function execute(program,args,cwd,env={}) {
     'compiler command must be SDK-owned or an exact generated executable');
   if (Object.hasOwn(env,'LEAN_PATH')) assert.ok(executable.endsWith('/prod-export'),
     'LEAN_PATH belongs only to the exact generated exporter');
-  const result = spawnSync('/usr/bin/timeout',
-    ['--signal=TERM','--kill-after=5s','360s',executable,...args],
-    {cwd,detached:true,encoding:'utf8',timeout:370000,killSignal:'SIGKILL',
-      maxBuffer:32*1024*1024,env:childEnvironment});
-  terminateOwnedGroup(result.pid);
-  assert.ifError(result.error);
-  assert.equal(result.status,0,program+' '+args.join(' ')+'\n'+result.stdout+'\n'+result.stderr);
-  return result.stdout;
+  const started = performance.now(); let success = false;
+  try {
+    const result = spawnSync('/usr/bin/timeout',
+      ['--signal=TERM','--kill-after=5s','360s',executable,...args],
+      {cwd,detached:true,encoding:'utf8',timeout:370000,killSignal:'SIGKILL',
+        maxBuffer:32*1024*1024,env:childEnvironment});
+    terminateOwnedGroup(result.pid);
+    assert.ifError(result.error);
+    assert.equal(result.status,0,program+' '+args.join(' ')+'\n'+result.stdout+'\n'+result.stderr);
+    success = true; return result.stdout;
+  } finally {
+    // A closed diagnostic stream cannot change the actual compiler outcome.
+    try { writeSync(2,'# prismpm-compiler-phase ' + JSON.stringify({
+      phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n'); }
+    catch { /* Diagnostic loss is not acceptance or a replacement failure. */ }
+  }
 }
 export function verifyCompilerTools() {
   const {rust, lean, triple} = toolchainPins();

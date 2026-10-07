@@ -8,6 +8,67 @@ use std::process::Command;
 const REPORTER: &[u8] = include_bytes!("../../../../scripts/owning-node-reporter.mjs");
 const FILE_PREFIX: &str = "# prismpm-owning-file ";
 
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PhaseSummary {
+    scope: String,
+    phases: Vec<PhaseTiming>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PhaseTiming {
+    phase: String,
+    calls: u64,
+    failures: u64,
+    elapsed_ms: u64,
+}
+
+// Diagnostic parsing is fail-closed but non-authoritative. Never forward child
+// prose, paths or additional fields, and never change a passing/failing owner.
+fn phase_summary(stdout: &[u8]) -> Option<PhaseSummary> {
+    const PREFIX: &str = "# prismpm-compiler-phase-summary ";
+    let text = std::str::from_utf8(stdout).ok()?;
+    let mut rows = text.lines().filter_map(|line| line.strip_prefix(PREFIX));
+    let line = rows.next()?;
+    if line.len() > 4096 || rows.next().is_some() {
+        return None;
+    }
+    let summary: PhaseSummary = serde_json::from_str(line).ok()?;
+    if summary.scope != "compiler-phase-diagnostic-not-acceptance"
+        || summary.phases.is_empty()
+        || summary.phases.len() > 11
+    {
+        return None;
+    }
+    let mut previous = None;
+    for row in &summary.phases {
+        if !matches!(
+            row.phase.as_str(),
+            "archive-extraction"
+                | "exporter-construction"
+                | "generated-execution"
+                | "generated-module-build"
+                | "kernel-export"
+                | "lake-update"
+                | "lexlean-verification"
+                | "native-code-generation"
+                | "rust-compilation"
+                | "toolchain-check"
+                | "wasm-code-generation"
+        ) || row.calls == 0
+            || row.calls > 1_000_000
+            || row.failures > row.calls
+            || row.elapsed_ms > row.calls * 600_000
+            || previous.is_some_and(|value: &str| value >= row.phase.as_str())
+        {
+            return None;
+        }
+        previous = Some(row.phase.as_str());
+    }
+    Some(summary)
+}
+
 fn failure_diagnostics(id: &str, reason: &str, stdout: &[u8], stderr: &[u8]) -> Vec<u8> {
     use std::io::Write;
     let mut bytes = Vec::new();
@@ -247,6 +308,10 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
         "elapsed_ms": elapsed_ms, "files": files.len(), "tests": tests
     });
     let mut stderr = std::io::stderr().lock();
+    if let Some(phases) = phase_summary(&output.stdout) {
+        let record = serde_json::json!({"scope":phases.scope,"owner":id,"phases":phases.phases});
+        let _ = writeln!(stderr, "# prismpm-compiler-phase-diagnostic {record}");
+    }
     // A broken diagnostic pipe cannot replace a successful owning result.
     let _ = writeln!(stderr, "# prismpm-node-owner-diagnostic {diagnostic}");
     let _ = stderr.flush();
@@ -256,6 +321,44 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
 mod tests {
     use super::{file_completions, selected_files, verify, FileCompletion, FILE_PREFIX};
     use std::path::PathBuf;
+
+    #[test]
+    fn compiler_phase_diagnostics_are_closed_bounded_and_not_acceptance() {
+        let record = serde_json::json!({"scope":"compiler-phase-diagnostic-not-acceptance",
+            "phases":[{"phase":"kernel-export","calls":2,"failures":1,"elapsed_ms":123}]});
+        let encode =
+            |value: &serde_json::Value| format!("# prismpm-compiler-phase-summary {value}\n");
+        assert!(super::phase_summary(encode(&record).as_bytes()).is_some());
+        for invalid in [
+            serde_json::json!({"scope":"acceptance","phases":record["phases"]}),
+            serde_json::json!({"scope":record["scope"],"phases":[],"secret":"credential"}),
+            serde_json::json!({"scope":record["scope"],"phases":[]}),
+        ] {
+            assert!(super::phase_summary(encode(&invalid).as_bytes()).is_none());
+        }
+        for (field, value) in [
+            ("phase", serde_json::json!("/private/path")),
+            ("calls", serde_json::json!(0)),
+            ("calls", serde_json::json!(1_000_001)),
+            ("failures", serde_json::json!(3)),
+            ("elapsed_ms", serde_json::json!(1_200_001)),
+            ("elapsed_ms", serde_json::json!(-1)),
+            ("elapsed_ms", serde_json::json!(0.5)),
+            ("extra", serde_json::json!("secret")),
+        ] {
+            let mut invalid = record.clone();
+            invalid["phases"][0][field] = value;
+            assert!(super::phase_summary(encode(&invalid).as_bytes()).is_none());
+        }
+        let mut duplicate = record.clone();
+        duplicate["phases"]
+            .as_array_mut()
+            .unwrap()
+            .push(record["phases"][0].clone());
+        assert!(super::phase_summary(encode(&duplicate).as_bytes()).is_none());
+        assert!(super::phase_summary(encode(&record).repeat(2).as_bytes()).is_none());
+        assert!(super::phase_summary(b"# prismpm-compiler-phase-summary malformed\n").is_none());
+    }
 
     #[test]
     fn failure_excerpts_are_bounded_and_preserve_both_stream_ends() {
