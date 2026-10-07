@@ -2,6 +2,25 @@ import assert from 'node:assert/strict';
 import {lstatSync, realpathSync, readdirSync, cpSync, mkdirSync, writeFileSync, symlinkSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {snapshotFile} from '../sdk/exporter-seed.mjs';
+import {redactor} from './ci-observe.mjs';
+
+export function reportChildFailure(name, result, expectedStatus, emit = bytes => process.stderr.write(bytes), environment = process.env) {
+  if (result.status === expectedStatus && result.signal === null && !result.error) return;
+  assert(/^[a-z0-9-]+$/.test(name), 'invalid oracle diagnostic stage');
+  emit(Buffer.from(`oracle stage ${name}: exit=${result.status}, signal=${result.signal}\n`));
+  for (const stream of ['stdout', 'stderr']) {
+    emit(Buffer.from(`${stream}:\n`));
+    let remaining = 32768;
+    const redact = redactor(environment, bytes => {
+      const selected = bytes.subarray(0, remaining);
+      if (selected.length) emit(selected);
+      remaining -= selected.length;
+    });
+    // Redact before truncation so a credential spanning the limit cannot leak.
+    redact(Buffer.from(result[stream] ?? ''), true);
+    emit(Buffer.from(remaining ? '\n' : '\n[diagnostic limit reached]\n'));
+  }
+}
 
 const fields = ['dev', 'ino', 'mode', 'size', 'nlink', 'mtimeNs', 'ctimeNs'];
 export function capture(selected) {

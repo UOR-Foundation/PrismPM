@@ -1602,6 +1602,13 @@ the corruption test fail (`0 !== 1`); restoring it retains the complete checks.
 The fresh compiler, 78 browser cases and four
 negative controls remain mandatory; these source tests are not their acceptance.
 
+Oracle child failures now emit independently bounded, credential-redacted
+stdout and stderr into the existing V&V observer log. A real failing child
+tests credential redaction across the truncation boundary; a second process
+test runs the actual observer, checks its retained `gate.log`, and preserves
+exit 19 in both the process and `gate-result.json`. All 14 custody tests pass
+non-root. These diagnostic receipts cannot substitute for acceptance evidence.
+
 The OCI corruption fixture now makes only its disposable blob writable;
 OpenID makes only copied scratch directories writable. Distribution provisions
 six confined report directories before running every oracle as UID 1000 with

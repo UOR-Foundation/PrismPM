@@ -8,7 +8,7 @@ import {join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {snapshotTree} from '../sdk/exporter-seed.mjs';
-import {capture, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads} from './portable-oracle-custody.mjs';
+import {capture, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, reportChildFailure} from './portable-oracle-custody.mjs';
 
 const root = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 assert.equal(process.argv.length, 6, 'two artifacts and their live Controller bindings required');
@@ -37,6 +37,7 @@ const inputs = [
   'scripts/portable-oracle-matrix.mjs', 'scripts/portable-oracle-submission-probe.mjs',
   'scripts/portable-oracle-process-owner.py',
   'scripts/portable-oracle-source.py',
+  'scripts/ci-observe.mjs',
   'scripts/portable-oracle-custody.mjs',
   'tests/data/portable-oracle-matrix.json', 'sdk/exporter-seed.mjs',
   'sdk/inventory-metadata.mjs',
@@ -83,6 +84,8 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
   for (const stream of ['stdout', 'stderr']) writeFileSync(join(evidence, `${name}.${stream}`), result[stream] ?? '', {flag: 'wx'});
   writeFileSync(join(evidence, `${name}.process.json`), JSON.stringify({program, args, cwd: directory,
     exit_code: result.status, signal: result.signal, execution_error: result.error ? String(result.error) : null}) + '\n', {flag: 'wx'});
+  // The outer V&V observer retains this bounded, redacted failure in its uploaded log.
+  reportChildFailure(name, result, expectedStatus);
   // Cleanup uncertainty aborts the matrix, including when the case also failed.
   const cleanup = JSON.parse(readFileSync(cleanupReceipt));
   assert.equal(cleanup.schema, 'prismpm/portable-process-owner/1');
