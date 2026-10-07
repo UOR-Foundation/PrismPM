@@ -2,7 +2,7 @@
 // image inspection records are never manufactured from parsed JSON.
 import assert from 'node:assert/strict';
 import {parseSdkIndex, validateInventory} from './platform-lock.mjs';
-import {caseKeys, decodeMetadataLayer, limits, parseConfig, parseJson, parseManifest, sha} from './metadata-layer.mjs';
+import {decodeMetadataLayer, limits, parseConfig, parseManifest, sha} from './metadata-layer.mjs';
 
 export async function captureMetadataLock(reference, standardsDigest, transport, observeRequest) {
   assert.equal(typeof transport, 'function', 'bounded SDK transport required');
@@ -32,10 +32,8 @@ export async function captureMetadataLock(reference, standardsDigest, transport,
     return bytes;
   };
   const indexBytes = await fetch('manifest', reference, limits.document);
-  // Refuse duplicate keys before the existing platform-lock parser observes
-  // the index. Platform metadata is checked again against each actual config.
-  const index = parseJson(indexBytes);
-  caseKeys(index, ['schemaVersion', 'mediaType', 'manifests', 'annotations', 'subject', 'artifactType']);
+  // All materialized, captured and retained locks use the same strict parser.
+  // Platform metadata is checked again against each actual config.
   const children = parseSdkIndex(indexBytes, reference);
   const platforms = [];
   let identities, standards;

@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {constants,closeSync,fstatSync,linkSync,lstatSync,mkdirSync,mkdtempSync,openSync,readSync,readdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {verifyImage,verifySource,validateCapturedLock,verifyResult} from './library-sdk-check.mjs';
+import {verifyImage,verifySource,validateAcquisitionBytes,validateCapturedLock,verifyResult} from './library-sdk-check.mjs';
 import {validateQualification} from '../sdk/exporter-qualification.mjs';
 import {verifyMigration} from '../sdk/migration-qualification.mjs';
 import {verifyMetadataEvidence,joinNativeMetadata} from '../sdk/metadata-evidence.mjs';
@@ -42,12 +42,13 @@ export async function captureLane(directory,root,context) {
   assert.equal(realpathSync(directory),directory);assert.equal(realpathSync(root),root);
   const files=new Map(names.map(name=>[name,regular(join(directory,name),bound(name))]));
   assert([...files.values()].reduce((total,bytes)=>total+bytes.length,0)<=512*1024*1024);
+  // Refuse malformed original bytes before expensive source-closure hashing.
+  // A valid record still passes every independent image/source/lock check.
+  const acquisition=validateAcquisitionBytes(files.get('acquisition.json'));
   const json=name=>JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(files.get(name)));
   verifyImage(json('image.json'),context.sdk_image,context.architecture,context.source_revision);
   assert.equal(json('source.json').revision,context.source_revision);verifySource(root,json('source.json'));
   assert(files.get('standards.lock').equals(regular(join(root,'standards.lock'),16*1024*1024)));
-  const acquisition=json('acquisition.json');
-  assert.deepEqual(Object.keys(acquisition).sort(),['lock','metadata','migration']);
   const lockBytes=Buffer.from(canonical(acquisition.lock));
   const binding=validateCapturedLock(lockBytes,context.sdk_image,context.architecture,
     files.get('standards.lock'),files.get('inventory.json'));
@@ -57,7 +58,7 @@ export async function captureLane(directory,root,context) {
   assert.equal(acquisition.migration.platform,binding.platform);
   const authority={archive_sha256:hash(regular(join(root,'vendor/lean4-prod/lean.tar'),64*1024*1024)),
     toolchain:regular(join(root,'lean-toolchain'),1024).toString().trim()};
-  validateQualification(json('compiler.json'),binding,authority);verifyResult(json('result.json'),binding,authority);
+  validateQualification(json('compiler.json'),binding,authority,files.get('inventory.json'));verifyResult(json('result.json'),binding,authority);
   assert.deepEqual(json('custody.json'),{scope:'filesystem-custody-only',checks:6,status:'passed'});
   const row={platform:binding.platform,sdk_image:context.sdk_image,source_revision:context.source_revision,
     inventory_document:files.get('inventory.json').toString(),standards_base64:files.get('standards.lock').toString('base64')};

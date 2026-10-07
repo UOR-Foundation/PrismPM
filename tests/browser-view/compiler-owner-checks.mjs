@@ -13,7 +13,7 @@ export function verifyCompilerOwnerSubstitutions(owner) {
   assert.throws(() => {owner.evidence.inputs['lean-toolchain'] = '0'.repeat(64);}, TypeError);
   assert.throws(() => {owner.runDriver = () => '';}, TypeError);
   const work = owner.evidence.work, observed = ['cloned-handle', 'cross-family-handle', 'immutable-owner'];
-  const driverSources = Object.keys(owner.evidence.inputs).filter(path => /^tests\/browser-[a-z-]+\/driver\/src\/main\.rs$/.test(path));
+  const driverSources = Object.keys(owner.evidence.inputs).filter(path => /^tests\/(?:browser-[a-z-]+|publication-admission)\/driver\/src\/main\.rs$/.test(path));
   assert.equal(driverSources.length, 1, 'one source-bound family driver required');
   const driverDirectory = driverSources[0].slice(0, -'/src/main.rs'.length);
   const library = Object.keys(owner.evidence.exporterRuntime).find(path => path.endsWith('.olean'));

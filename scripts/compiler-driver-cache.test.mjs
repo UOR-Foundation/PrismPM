@@ -181,10 +181,20 @@ test('all private driver callers retain locked offline builds and bounded resour
   // component run. Mutations demonstrate that dropping any option is detected.
   const callers = ['view', 'command', 'query', 'journal', 'custody', 'effects', 'presentation', 'operation-journal']
     .map(name => `tests/browser-${name}/compile.mjs`)
-    .concat(['sdk/browser/workspace-model-test.mjs', 'sdk/browser/envelope-model-test.mjs']);
-  const check = source => {
-    assert.match(source, /const driverTarget\s*=\s*createPrivateDriverTarget\(work\)/);
-    const calls = [...source.matchAll(/run\('cargo',\s*\[([^;]*?)\],\s*(?:repository|work),\s*\{CARGO_TARGET_DIR:\s*driverTarget\}\)/g)];
+    .concat(['sdk/browser/workspace-model-test.mjs', 'sdk/browser/envelope-model-test.mjs',
+      'tests/browser-session/compile.mjs','tests/publication-admission/compile.mjs']);
+  const sharedFamilies = new Map(['presentation', 'session']
+    .map(name => [`tests/browser-${name}/compile.mjs`, name])
+    .concat([['tests/publication-admission/compile.mjs','publication']]));
+  const registration = family => family === 'publication'
+    ? {directory:'publication-admission',executable:'publication-admission-driver'}
+    : {directory:'browser-'+family,executable:'browser-'+family+'-driver'};
+  const shared = readFileSync(join(repository, 'tests/browser-view/compiler-owner.mjs'), 'utf8');
+  const check = (source, target = 'driverTarget') => {
+    assert.ok(['driverTarget', 'target'].includes(target));
+    assert.match(source, new RegExp(`const ${target}\\s*=\\s*createPrivateDriverTarget\\(work\\)`));
+    const calls = [...source.matchAll(new RegExp(
+      `run\\('cargo',\\s*\\[([^;]*?)\\],\\s*(?:repository|work),\\s*\\{CARGO_TARGET_DIR:\\s*${target}\\}\\)`, 'g'))];
     assert.equal(calls.length, 1, 'one actual driver build call');
     const args = calls[0][1];
     assert.match(args, /^'build'/);
@@ -193,12 +203,103 @@ test('all private driver callers retain locked offline builds and bounded resour
       assert(new RegExp(`'${option}',\\s*'${value.replaceAll('.', '\\.')}'`).test(args), value);
     }
   };
-  for (const caller of callers) {
-    const source = readFileSync(join(repository, caller), 'utf8'); check(source);
-    for (const text of ['--locked', '--offline', '--jobs', 'profile.dev.debug=0', 'build.incremental=false']) {
-      const changed = source.replace(text, 'REMOVED'); assert.notEqual(changed, source);
-      assert.throws(() => check(changed), caller + ': ' + text);
+  const delegation = family => new RegExp(
+    `createCompilerOwner\\(\\s*'${family}'\\s*,\\s*captureCompilerInputs\\(\\s*'${family}'\\s*\\)\\s*\\)`);
+  const checkShared = (source, owner, family) => {
+    assert.match(source, /from '\.\.\/browser-view\/compiler-owner\.mjs'/);
+    assert.doesNotMatch(source, /\b(?:createPrivateDriverTarget|ensureProdExport)\s*\(/,
+      'shared callers cannot construct additional compiler tools');
+    const builds = [...source.matchAll(/run\('cargo',\s*\[([^;]*?)\],\s*[^;]*?\{CARGO_TARGET_DIR:\s*[^}]+\}\)/g)];
+    assert.equal(builds.length, (source.match(/\brun\('cargo'/g) ?? []).length,
+      'every direct Cargo invocation must be a generated product build');
+    for (const [, args] of builds) {
+      assert.match(args, /'--release'/, 'shared callers retain only generated product builds');
+      assert.doesNotMatch(args, /driver/, 'a release flag cannot disguise a direct compiler-driver build');
     }
+    assert.match(source, delegation(family), 'exact family and complete captured input delegation');
+    assert.match(source, new RegExp(`requireCompilerOwner\\(\\s*compilerOwner\\s*,\\s*'${family}'\\s*\\)`),
+      'borrowed owners require the same admitted family');
+    const selected=registration(family);
+    assert.match(owner, new RegExp(`${family}:\\s*Object\\.freeze\\(\\{\\s*directory:\\s*'${selected.directory}',\\s*executable:\\s*'${selected.executable}'\\s*\\}\\)`),
+      'registered family binds its exact driver directory and executable');
+    check(owner, 'target');
+  };
+  for (const caller of callers) {
+    const source = readFileSync(join(repository, caller), 'utf8'), family = sharedFamilies.get(caller);
+    if (family === undefined) check(source); else checkShared(source, shared, family);
+    for (const text of ['--locked', '--offline', '--jobs', 'profile.dev.debug=0', 'build.incremental=false']) {
+      const owningSource = family === undefined ? source : shared;
+      const changed = owningSource.replace(text, 'REMOVED'); assert.notEqual(changed, owningSource);
+      assert.throws(() => family === undefined ? check(changed) : checkShared(source, changed, family),
+        caller + ': ' + text);
+    }
+    if (family !== undefined) {
+      const call = delegation(family).exec(source)[0];
+      for (const changedCall of [call.replace('createCompilerOwner', 'REMOVED'),
+        call.replace('captureCompilerInputs', 'REMOVED'), call.replace(`'${family}'`, "'wrong-family'")]) {
+        const changed = source.replace(call, changedCall); assert.notEqual(changed, source);
+        assert.throws(() => checkShared(changed, shared, family), caller + ': owner delegation');
+      }
+      const missingTarget = shared.replace('createPrivateDriverTarget(work)', 'REMOVED(work)');
+      assert.notEqual(missingTarget, shared);
+      assert.throws(() => checkShared(source, missingTarget, family), caller + ': private target');
+      const wrongBorrowedFamily = source.replace(new RegExp(
+        `requireCompilerOwner\\(\\s*compilerOwner\\s*,\\s*'${family}'\\s*\\)`), "requireCompilerOwner(compilerOwner,'wrong-family')");
+      assert.notEqual(wrongBorrowedFamily, source);
+      assert.throws(() => checkShared(wrongBorrowedFamily, shared, family), caller + ': borrowed family');
+      for (const additional of ['createPrivateDriverTarget(work)', 'ensureProdExport(repository, work)',
+        `run('cargo', ['build', '--locked', '--offline', '--manifest-path', join(repository, 'tests/browser-${family}/driver/Cargo.toml')], work, {CARGO_TARGET_DIR: driverTarget})`,
+        `run('cargo', ['build', '--locked', '--offline', '--release', '--manifest-path', join(repository, 'tests/browser-${family}/driver/Cargo.toml')], work, {CARGO_TARGET_DIR: driverTarget})`]) {
+        assert.throws(() => checkShared(source + '\n' + additional + ';\n', shared, family),
+          caller + ': additional direct compiler construction');
+      }
+      for (const field of [`'${registration(family).directory}'`, `'${registration(family).executable}'`]) {
+        const changed = shared.replace(field, "'wrong-family'"); assert.notEqual(changed, shared);
+        assert.throws(() => checkShared(source, changed, family), caller + ': registered ' + field);
+      }
+    }
+  }
+  // Supplemental source guards only: the complete real OC09 owner and actual
+  // private-copy cleanup-interference controls establish runtime behavior.
+  // In particular, checking inputs before close does not cover cleanup itself.
+  const publication = readFileSync(join(repository, 'tests/publication-admission/compile.mjs'), 'utf8');
+  const publicationOwner = readFileSync(join(repository, 'tests/publication-admission/owner.test.mjs'), 'utf8');
+  const coldRetirement = "    const cacheRetirement = ownsCompiler ? compiler.close() : null;";
+  const coldInputs = "    assert.deepEqual(frozenInputs(), inputs, 'complete publication inputs changed during compiler retirement');";
+  const coldModels = "    for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'post-retirement source ' + module);";
+  const coldManifest = "    assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), manifestBytes);";
+  const coldAttestation = "    assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);";
+  const sharedRetirement = " retirementAttempted=true;const cacheRetirement=compiler.close();retired=true;";
+  const sharedInputs = " assert.deepEqual(frozenInputs(),inputs,'complete publication inputs changed during final compiler retirement');";
+  const checkRetirement = (source, owner) => {
+    const coldStart = source.indexOf(coldRetirement);
+    const coldEnd = source.indexOf('    completed = true;', coldStart);
+    assert(coldStart >= 0 && coldEnd > coldStart, 'cold cleanup precedes completed return');
+    const postClose = source.slice(coldStart, coldEnd);
+    for (const guard of [coldInputs, coldModels, coldManifest, coldAttestation]) {
+      assert(postClose.includes(guard), 'cold post-retirement source/proof check: ' + guard);
+    }
+    const sharedStart = owner.indexOf(sharedRetirement);
+    const sharedEnd = owner.indexOf(' const evidence=', sharedStart);
+    assert(sharedStart >= 0 && sharedEnd > sharedStart, 'shared cleanup precedes acceptance evidence');
+    assert(owner.slice(sharedStart, sharedEnd).includes(sharedInputs), 'shared complete inputs rechecked after cleanup');
+  };
+  checkRetirement(publication, publicationOwner);
+  for (const guard of [coldInputs, coldModels, coldManifest, coldAttestation]) {
+    // Manifest and attestation checks also exist before retirement. Removing
+    // or moving just the final one must refuse, not accept the earlier check.
+    const start = publication.indexOf(coldRetirement);
+    const prefix = publication.slice(0, start), suffix = publication.slice(start);
+    assert(suffix.includes(guard));
+    for (const changed of [prefix + suffix.replace(guard, ''), prefix + guard + '\n' + suffix.replace(guard, '')]) {
+      assert.notEqual(changed, publication);
+      assert.throws(() => checkRetirement(changed, publicationOwner), 'removed or pre-close cold guard');
+    }
+  }
+  for (const changed of [publicationOwner.replace(sharedInputs, ''),
+    publicationOwner.replace(sharedRetirement, sharedInputs + '\n' + sharedRetirement).replace(sharedRetirement + '\n' + sharedInputs, sharedRetirement)]) {
+    assert.notEqual(changed, publicationOwner);
+    assert.throws(() => checkRetirement(publication, changed), 'removed or pre-close shared guard');
   }
 });
 

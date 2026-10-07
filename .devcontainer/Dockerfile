@@ -121,7 +121,8 @@ RUN curl -sSfL https://github.com/leanprover/elan/releases/download/v4.2.3/elan-
     && mkdir -p /tmp/elan-bin && tar -xzf elan.tar.gz -C /tmp/elan-bin \
     && /tmp/elan-bin/elan-init -y --no-modify-path --default-toolchain none \
     && rm -rf elan.tar.gz /tmp/elan-bin \
-    && elan toolchain install leanprover/lean4:v4.32.1
+    && elan toolchain install leanprover/lean4:v4.32.1 \
+    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1
 
 RUN curl -sSfL https://github.com/casey/just/releases/download/1.57.0/just-1.57.0-x86_64-unknown-linux-musl.tar.gz -o just.tar.gz \
     && echo "45b548094283cb9739af8f13273b8cddeee869f5b4ef2bb631b1f311cb566155  just.tar.gz" | sha256sum -c - \
@@ -164,7 +165,9 @@ ENV CARGO_HOME=/home/vscode/.cargo \
     ELAN_HOME=/home/vscode/.elan
 
 RUN bash /opt/prismpm/browser-environment/scripts/browser-environment-preflight.sh \
-    && runuser -u vscode -- bash /opt/prismpm/browser-environment/scripts/browser-environment-preflight.sh
+    && runuser -u vscode -- bash /opt/prismpm/browser-environment/scripts/browser-environment-preflight.sh \
+    && runuser -u vscode -- env ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lean --version \
+    && runuser -u vscode -- env ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lake --version
 
 WORKDIR /work
 ENTRYPOINT ["/usr/local/bin/prismpm-devcontainer-init"]

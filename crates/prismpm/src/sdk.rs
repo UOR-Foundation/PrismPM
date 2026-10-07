@@ -473,6 +473,303 @@ pub fn parse_lock(bytes: &[u8]) -> Result<CanonicalDocument, PrismError> {
     CanonicalDocument::parse(schema, bytes)
 }
 
+fn oci_field_casing(value: &serde_json::Value, names: &[&str]) -> bool {
+    value.as_object().is_some_and(|object| {
+        object.keys().all(|key| {
+            let folded = key.to_uppercase().to_lowercase();
+            names
+                .iter()
+                .all(|name| folded != name.to_uppercase().to_lowercase() || key == name)
+        })
+    })
+}
+
+fn bounded_positive_integer(token: &str, maximum: usize) -> Option<usize> {
+    let (mantissa, exponent) = token.split_once(['e', 'E']).unwrap_or((token, "0"));
+    let exponent_digits = exponent
+        .trim_start_matches(['+', '-'])
+        .trim_start_matches('0');
+    if exponent_digits.len() > 7 {
+        return None;
+    }
+    let exponent = exponent.parse::<i64>().ok()?;
+    let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    if whole.is_empty()
+        || !whole
+            .bytes()
+            .chain(fraction.bytes())
+            .all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let coefficient = format!("{whole}{fraction}");
+    let digits = coefficient.trim_start_matches('0');
+    let significant = digits.trim_end_matches('0');
+    if significant.is_empty() {
+        return None;
+    }
+    let scale = exponent - fraction.len() as i64 + (digits.len() - significant.len()) as i64;
+    let maximum = maximum.to_string();
+    if scale < 0 || significant.len() as i64 + scale > maximum.len() as i64 {
+        return None;
+    }
+    let exact = format!("{significant}{}", "0".repeat(scale as usize));
+    if exact.len() == maximum.len() && exact > maximum {
+        return None;
+    }
+    exact.parse().ok()
+}
+
+// Decode only understood SDK fields, without interpreting opaque OCI extensions
+// as Rust strings or binary64 numbers. The original bytes remain the digest and
+// lock authority. Walk all members for duplicates/depth, then validate complete
+// JSON syntax independently, without serde's global raw-value/number features.
+fn decode_sdk_index(bytes: &[u8]) -> Option<serde_json::Value> {
+    #[derive(Clone, Copy)]
+    enum Focus {
+        Index,
+        Children,
+        Child,
+        Platform,
+        Schema,
+        Size,
+        Scalar,
+        Other,
+    }
+    fn white(bytes: &[u8], at: &mut usize) {
+        while bytes.get(*at).is_some_and(u8::is_ascii_whitespace) {
+            *at += 1;
+        }
+    }
+    fn string<'a>(bytes: &'a [u8], at: &mut usize) -> Option<&'a [u8]> {
+        let start = *at;
+        if *bytes.get(*at)? != b'"' {
+            return None;
+        }
+        *at += 1;
+        loop {
+            match *bytes.get(*at)? {
+                b'"' => {
+                    *at += 1;
+                    return bytes.get(start..*at);
+                }
+                b'\\' => *at += 2,
+                _ => *at += 1,
+            }
+        }
+    }
+    // JSON object keys compare decoded UTF-16 units, including opaque unpaired
+    // surrogates. Do not collapse distinct invalid-scalar keys lossily, or reject
+    // a valid ignored extension merely because Rust String cannot represent it.
+    fn key_units(raw: &[u8]) -> Option<Vec<u16>> {
+        let text = std::str::from_utf8(raw.get(1..raw.len().checked_sub(1)?)?).ok()?;
+        let mut chars = text.chars();
+        let mut units = Vec::new();
+        while let Some(ch) = chars.next() {
+            if ch != '\\' {
+                units.extend_from_slice(ch.encode_utf16(&mut [0; 2]));
+                continue;
+            }
+            units.push(match chars.next()? {
+                '"' => b'"' as u16,
+                '\\' => b'\\' as u16,
+                '/' => b'/' as u16,
+                'b' => 8,
+                'f' => 12,
+                'n' => 10,
+                'r' => 13,
+                't' => 9,
+                'u' => {
+                    let mut code = 0;
+                    for _ in 0..4 {
+                        code = code * 16 + chars.next()?.to_digit(16)? as u16;
+                    }
+                    code
+                }
+                _ => return None,
+            });
+        }
+        Some(units)
+    }
+    fn names(focus: Focus) -> &'static [&'static str] {
+        match focus {
+            Focus::Index => &[
+                "schemaVersion",
+                "mediaType",
+                "manifests",
+                "annotations",
+                "subject",
+                "artifactType",
+            ],
+            Focus::Child => &[
+                "mediaType",
+                "digest",
+                "size",
+                "urls",
+                "data",
+                "annotations",
+                "platform",
+                "artifactType",
+            ],
+            Focus::Platform => &["architecture", "os", "os.version", "os.features", "variant"],
+            _ => &[],
+        }
+    }
+    fn member(focus: Focus, key: Option<&str>) -> Option<Focus> {
+        match (focus, key?) {
+            (Focus::Index, "schemaVersion") => Some(Focus::Schema),
+            (Focus::Index, "manifests") => Some(Focus::Children),
+            (Focus::Index | Focus::Child, "mediaType")
+            | (Focus::Child, "digest")
+            | (Focus::Platform, "architecture" | "os" | "variant") => Some(Focus::Scalar),
+            (Focus::Child, "size") => Some(Focus::Size),
+            (Focus::Child, "platform") => Some(Focus::Platform),
+            // These fields are forbidden even when their value is null.
+            (Focus::Child, "urls" | "data") | (Focus::Platform, "os.version" | "os.features") => {
+                Some(Focus::Other)
+            }
+            _ => None,
+        }
+    }
+    fn value(
+        bytes: &[u8],
+        at: &mut usize,
+        focus: Focus,
+        depth: usize,
+    ) -> Option<serde_json::Value> {
+        if depth > 64 {
+            return None;
+        }
+        white(bytes, at);
+        let start = *at;
+        let first = *bytes.get(*at)?;
+        if matches!(focus, Focus::Schema | Focus::Size) {
+            while bytes
+                .get(*at)
+                .is_some_and(|byte| !b",]} \t\r\n".contains(byte))
+            {
+                *at += 1;
+            }
+            let maximum = if matches!(focus, Focus::Schema) {
+                2
+            } else {
+                SDK_INDEX_MAX_BYTES
+            };
+            let integer = bounded_positive_integer(
+                std::str::from_utf8(bytes.get(start..*at)?).ok()?,
+                maximum,
+            )?;
+            return (!matches!(focus, Focus::Schema) || integer == 2)
+                .then(|| serde_json::Value::from(integer));
+        }
+        match first {
+            b'"' => {
+                let raw = string(bytes, at)?;
+                return if matches!(focus, Focus::Scalar) {
+                    serde_json::from_slice(raw).ok()
+                } else {
+                    Some(serde_json::Value::Null)
+                };
+            }
+            b'{' | b'[' => {
+                *at += 1;
+                let mut keys = BTreeSet::new();
+                let mut object = serde_json::Map::new();
+                let mut array = Vec::new();
+                let end = if first == b'{' { b'}' } else { b']' };
+                white(bytes, at);
+                if bytes.get(*at) == Some(&end) {
+                    *at += 1;
+                } else {
+                    loop {
+                        white(bytes, at);
+                        let (key, child) = if first == b'{' {
+                            let units = key_units(string(bytes, at)?)?;
+                            white(bytes, at);
+                            if *bytes.get(*at)? != b':' {
+                                return None;
+                            }
+                            *at += 1;
+                            let key = String::from_utf16(&units).ok();
+                            if !keys.insert(units) {
+                                return None;
+                            }
+                            if let Some(key) = &key {
+                                let folded = key.to_uppercase().to_lowercase();
+                                if names(focus).iter().any(|name| {
+                                    folded == name.to_uppercase().to_lowercase() && key != name
+                                }) {
+                                    return None;
+                                }
+                            }
+                            let selected = member(focus, key.as_deref());
+                            (
+                                key.filter(|_| selected.is_some()),
+                                selected.unwrap_or(Focus::Other),
+                            )
+                        } else if matches!(focus, Focus::Children) {
+                            (None, Focus::Child)
+                        } else {
+                            (None, Focus::Other)
+                        };
+                        let decoded = value(bytes, at, child, depth + 1)?;
+                        if let Some(key) = key {
+                            object.insert(key, decoded);
+                        } else if first == b'[' && matches!(focus, Focus::Children) {
+                            array.push(decoded);
+                        }
+                        white(bytes, at);
+                        match *bytes.get(*at)? {
+                            byte if byte == end => {
+                                *at += 1;
+                                break;
+                            }
+                            b',' => *at += 1,
+                            _ => return None,
+                        }
+                    }
+                }
+                return Some(
+                    if first == b'{'
+                        && matches!(focus, Focus::Index | Focus::Child | Focus::Platform)
+                    {
+                        serde_json::Value::Object(object)
+                    } else if first == b'[' && matches!(focus, Focus::Children) {
+                        serde_json::Value::Array(array)
+                    } else {
+                        serde_json::Value::Null
+                    },
+                );
+            }
+            _ => {
+                while bytes
+                    .get(*at)
+                    .is_some_and(|byte| !b",]} \t\r\n".contains(byte))
+                {
+                    *at += 1;
+                }
+                if *at == start {
+                    return None;
+                }
+            }
+        }
+        if matches!(focus, Focus::Scalar) {
+            serde_json::from_slice(bytes.get(start..*at)?).ok()
+        } else {
+            Some(serde_json::Value::Null)
+        }
+    }
+    let mut at = 0;
+    std::str::from_utf8(bytes).ok()?;
+    let decoded = value(bytes, &mut at, Focus::Index, 0)?;
+    white(bytes, &mut at);
+    if at != bytes.len() {
+        return None;
+    }
+    serde_json::from_slice::<serde::de::IgnoredAny>(bytes).ok()?;
+    Some(decoded)
+}
+
 pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), PrismError> {
     let fail = || {
         PrismError::new(
@@ -493,10 +790,20 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
     {
         return Err(fail());
     }
-    let index: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| fail())?;
+    let index = decode_sdk_index(bytes).ok_or_else(fail)?;
     let manifests = index["manifests"].as_array().ok_or_else(fail)?;
     let platforms = value["platforms"].as_array().ok_or_else(fail)?;
-    if index["schemaVersion"] != 2
+    if !oci_field_casing(
+        &index,
+        &[
+            "schemaVersion",
+            "mediaType",
+            "manifests",
+            "annotations",
+            "subject",
+            "artifactType",
+        ],
+    ) || index["schemaVersion"].as_f64() != Some(2.0)
         || index["mediaType"] != "application/vnd.oci.image.index.v1+json"
         || manifests.len() != 2
         || platforms.len() != 2
@@ -522,11 +829,31 @@ pub(crate) fn validate_platform_lock(value: &serde_json::Value) -> Result<(), Pr
             return Err(fail());
         }
         let manifest = matching[0];
-        if manifest["digest"] != row["manifest_digest"]
+        let platform = &manifest["platform"];
+        if !oci_field_casing(
+            manifest,
+            &[
+                "mediaType",
+                "digest",
+                "size",
+                "urls",
+                "data",
+                "annotations",
+                "platform",
+                "artifactType",
+            ],
+        ) || !oci_field_casing(
+            platform,
+            &["architecture", "os", "os.version", "os.features", "variant"],
+        ) || manifest.get("urls").is_some()
+            || manifest.get("data").is_some()
+            || platform.get("os.version").is_some()
+            || platform.get("os.features").is_some()
+            || manifest["digest"] != row["manifest_digest"]
             || manifest["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
-            || manifest["size"].as_u64().is_none_or(|size| size == 0)
-            || !(manifest["platform"]["variant"].is_null()
-                || (architecture == "arm64" && manifest["platform"]["variant"] == "v8"))
+            || !manifest["size"].is_number()
+            || !(platform.get("variant").is_none()
+                || (architecture == "arm64" && platform["variant"] == "v8"))
         {
             return Err(fail());
         }
@@ -716,7 +1043,7 @@ pub(crate) fn exporter_seed_inventory(root: &Path) -> Result<Option<String>, Pri
             return Err(PrismError::new(
                 "PP5401",
                 "unsupported native exporter platform",
-            ))
+            ));
         }
     };
     let platform = format!("{}/{architecture}", std::env::consts::OS);
@@ -1337,6 +1664,177 @@ mod tests {
         json!({"schema":"prismpm/sdk-lock/2","sdk_version":"0.3.0",
             "sdk_image":format!("example.invalid/test-sdk@{}",digest(&index)),"sdk_index":index,
             "standards_lock":digest(generation),"platforms":platforms})
+    }
+
+    #[test]
+    fn platform_lock_rejects_rehashed_ambiguous_nested_indexes() {
+        let baseline = platform_fixture("strict-index");
+        let original: Value =
+            serde_json::from_str(baseline["sdk_index"].as_str().unwrap()).unwrap();
+        let admit = |raw: String| {
+            let mut lock = baseline.clone();
+            lock["sdk_image"] = json!(format!(
+                "example.invalid/test-sdk@sha256:{:x}",
+                Sha256::digest(raw.as_bytes())
+            ));
+            lock["sdk_index"] = json!(raw);
+            let constructed =
+                super::CanonicalDocument::from_value("prismpm/sdk-lock/2", lock.clone());
+            let parsed = super::parse_lock(&super::encode_value(&lock)?);
+            assert_eq!(
+                constructed.is_ok(),
+                parsed.is_ok(),
+                "constructor and public runtime reader must agree"
+            );
+            if let (Ok(constructed), Ok(parsed)) = (&constructed, &parsed) {
+                assert_eq!(constructed.bytes(), parsed.bytes());
+            }
+            if let (Err(constructed), Err(parsed)) = (&constructed, &parsed) {
+                assert_eq!(constructed.code, parsed.code);
+            }
+            parsed
+        };
+        assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
+        let raw = baseline["sdk_index"].as_str().unwrap();
+        let extension_cases: Value =
+            serde_json::from_str(include_str!("../sdk/sdk-index-extensions.json")).unwrap();
+        for case in extension_cases.as_array().unwrap() {
+            let member = case["member"].as_str().unwrap();
+            let changed = match case["location"].as_str().unwrap() {
+                "root" => format!("{{{member},{}", &raw[1..]),
+                "descriptor" => raw.replacen(
+                    "\"manifests\":[{",
+                    &format!("\"manifests\":[{{{member},"),
+                    1,
+                ),
+                "platform" => {
+                    raw.replacen("\"platform\":{", &format!("\"platform\":{{{member},"), 1)
+                }
+                _ => panic!("unknown corpus location"),
+            };
+            assert_ne!(changed, raw);
+            assert!(admit(raw.to_owned()).is_ok());
+            assert_eq!(
+                admit(changed).is_ok(),
+                case["accepted"].as_bool().unwrap(),
+                "{}",
+                case["id"]
+            );
+        }
+        for spelling in ["2.0", "2e0", "2000e-3", "2.0000000000000000000000"] {
+            assert!(admit(
+                raw.replace(
+                    "\"schemaVersion\":2",
+                    &format!("\"schemaVersion\":{spelling}")
+                )
+                .replace("\"size\":100", "\"size\":1e2")
+            )
+            .is_ok());
+        }
+        let nested = |depth| {
+            format!(
+                "{{\"extension\":{}0{},{}",
+                "[".repeat(depth),
+                "]".repeat(depth),
+                &raw[1..]
+            )
+        };
+        assert!(admit(nested(63)).is_ok());
+        assert_eq!(admit(nested(64)).unwrap_err().code, "PP5401");
+        for number in [
+            "0",
+            "-0",
+            "-1",
+            "0.5",
+            "100.1",
+            "1048577",
+            "9007199254740993",
+            "1e400",
+            "100.000000000000000001",
+            "1048576.00000000001",
+            "99.999999999999999999",
+            "1e-10000000",
+            "1e10000000",
+        ] {
+            assert_eq!(
+                admit(raw.replace("\"size\":100", &format!("\"size\":{number}")))
+                    .unwrap_err()
+                    .code,
+                "PP5401"
+            );
+        }
+        for number in [
+            "2.0000000000000000001",
+            "1.9999999999999999999",
+            "2.0000000000000000001e0",
+        ] {
+            assert_eq!(
+                admit(raw.replace(
+                    "\"schemaVersion\":2",
+                    &format!("\"schemaVersion\":{number}")
+                ))
+                .unwrap_err()
+                .code,
+                "PP5401"
+            );
+        }
+        assert!(admit(format!("{{\"extension\":0.125,{}", &raw[1..])).is_ok());
+        assert!(admit(format!(
+            "{{\"extension\":{{\"size\":0.5,\"schemaVersion\":2.0000000000000000001}},{}",
+            &raw[1..]
+        ))
+        .is_ok());
+        assert!(admit(raw.replace("\"schemaVersion\":2", "\"schema\\u0056ersion\":2.0")).is_ok());
+        assert_eq!(
+            admit(raw.replace(
+                "\"schemaVersion\":2",
+                "\"schema\\u0056ersion\":2.0000000000000000001"
+            ))
+            .unwrap_err()
+            .code,
+            "PP5401"
+        );
+        // No serde feature may reinterpret reserved-looking ordinary objects.
+        assert_eq!(
+            serde_json::from_str::<Value>(r#"{"$serde_json::private::RawValue":"1"}"#).unwrap(),
+            json!({"$serde_json::private::RawValue":"1"})
+        );
+        for duplicate in [
+            format!("{{\"schemaVersion\":2,{}", &raw[1..]),
+            format!("{{\"extension\":{{\"a\":1,\"\\u0061\":2}},{}", &raw[1..]),
+            raw.replace(
+                "\"architecture\":\"amd64\"",
+                "\"architecture\":\"amd64\",\"architec\\u0074ure\":\"amd64\"",
+            ),
+        ] {
+            assert!(admit(raw.to_owned()).is_ok());
+            assert_eq!(admit(duplicate).unwrap_err().code, "PP5401");
+        }
+        for mutation in 0..10 {
+            assert!(admit(raw.to_owned()).is_ok());
+            let mut index = original.clone();
+            match mutation {
+                0 => index["SchemaVersion"] = json!(2),
+                1 => index["Manifeſts"] = json!([]),
+                2 => {
+                    index["manifests"][0]["MediaType"] = index["manifests"][0]["mediaType"].clone()
+                }
+                3 => index["manifests"][0]["urls"] = json!([]),
+                4 => index["manifests"][0]["data"] = Value::Null,
+                5 => index["manifests"][0]["size"] = json!(super::SDK_INDEX_MAX_BYTES + 1),
+                6 => index["manifests"][0]["platform"]["OS"] = json!("linux"),
+                7 => index["manifests"][0]["platform"]["variant"] = Value::Null,
+                8 => index["manifests"][0]["platform"]["os.version"] = Value::Null,
+                _ => index["manifests"][1]["platform"]["os.features"] = json!([]),
+            }
+            assert_eq!(
+                admit(serde_json::to_string(&index).unwrap())
+                    .unwrap_err()
+                    .code,
+                "PP5401",
+                "mutation {mutation}"
+            );
+        }
     }
 
     #[test]

@@ -183,6 +183,7 @@ fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
 
 fn audit_all(root: &Path) -> Result<(), Fail> {
     audit::audit_retained_native_profiles(root)?;
+    audit::audit_shipped_standards_lock(root)?;
     command(
         root,
         "node",
@@ -199,13 +200,22 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-vv-inputs.test.mjs",
             "scripts/sdk-vv-run.test.mjs",
             "scripts/sdk-image-inputs.test.mjs",
+            "scripts/sdk-construction-workflow.test.mjs",
+            "scripts/sdk-construction-record.test.mjs",
             "scripts/sdk-vv-check.test.mjs",
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/browser-environment-preflight.test.mjs",
+            "scripts/rust-oracle-tools-inputs.test.mjs",
             "scripts/qualify-debian-browser-inputs.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
+            "scripts/compiler-phase-observation.test.mjs",
             "tests/browser-view/compiler-artifact.test.mjs",
+            "tests/browser-view/generated-package.test.mjs",
+            "tests/browser-view/file-custody.test.mjs",
+            "tests/browser-view/generated-wasm.test.mjs",
+            "tests/browser-presentation/provenance.test.mjs",
+            "tests/browser-presentation/replay.test.mjs",
             "tests/browser-view/compiler-artifact-mutations.test.mjs",
             "tests/browser-view/compiler-owner.test.mjs",
             "tests/browser-view/compiler-runtime.test.mjs",
@@ -415,12 +425,20 @@ fn mutated_sdk_command(
     Ok(output?)
 }
 
+fn validate_sdk_runtime_reference(image: &str) -> Result<(), Fail> {
+    prismpm::oci::validate_reference(image, true)
+        .map_err(|_| "SDK runtime boundary requires a valid immutable OCI SDK reference")?;
+    Ok(())
+}
+
 fn check_sdk_runtime_boundary() -> Result<(), Fail> {
     let image = std::env::var("PRISMPM_TEST_SDK_IMAGE")
         .map_err(|_| "PRISMPM_TEST_SDK_IMAGE is required for the SDK runtime boundary gate")?;
-    if !image.contains("@sha256:") {
-        return Err("SDK runtime boundary requires a digest-qualified image".into());
-    }
+    check_sdk_runtime_boundary_for_image(&image)
+}
+
+fn check_sdk_runtime_boundary_for_image(image: &str) -> Result<(), Fail> {
+    validate_sdk_runtime_reference(image)?;
 
     let infrastructure_tests = Command::new("docker")
         .args([
@@ -438,7 +456,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
             "/opt/prismpm/share/conformance-root",
             "--entrypoint",
             "node",
-            &image,
+            image,
             "--test",
             "scripts/sdk-candidate.test.mjs",
             "sdk/platform-lock.test.mjs",
@@ -448,7 +466,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         return Err("SDK candidate transport or platform-lock negative tests failed".into());
     }
 
-    let baseline = docker_sdk_command(&image, &[])?;
+    let baseline = docker_sdk_command(image, &[])?;
     if !baseline.status.success()
         || !String::from_utf8_lossy(&baseline.stdout)
             .contains("\"schema\":\"prismpm/completion-result/1\"")
@@ -463,7 +481,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
     }
 
     let override_attempt = docker_sdk_command(
-        &image,
+        image,
         &[
             "--env",
             "PRISMPM_SDK_INVENTORY=/tmp/attacker-inventory.json",
@@ -488,7 +506,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         std::fs::set_permissions(&planted_command, std::fs::Permissions::from_mode(0o755))?;
     }
     let injected = mutated_sdk_command(
-        &image,
+        image,
         Some("PATH=/planted:/usr/local/elan/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin"),
         planted.path(),
         "/planted",
@@ -502,7 +520,7 @@ fn check_sdk_runtime_boundary() -> Result<(), Fail> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(tampered.path(), std::fs::Permissions::from_mode(0o755))?;
     }
-    let changed = mutated_sdk_command(&image, None, tampered.path(), "/usr/local/bin/just")?;
+    let changed = mutated_sdk_command(image, None, tampered.path(), "/usr/local/bin/just")?;
     assert_sdk_inventory_rejection(&changed, "a changed declared executable")?;
 
     println!(
@@ -1110,6 +1128,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "sdk/browser/journal.mjs",
         "sdk/browser/commands.mjs",
         "sdk/browser/queries.mjs",
+        "sdk/sdk-index-extensions.json",
         "sdk/browser/view-host.mjs",
         "sdk/browser/view-dom.mjs",
         "sdk/browser/view-error.mjs",
@@ -1669,6 +1688,58 @@ mod golden_tests {
 #[cfg(test)]
 mod command_tests {
     #[test]
+    fn sdk_runtime_reference_rejects_malformed_digest_before_execution() {
+        let digest = "a".repeat(64);
+        for reference in [
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}"),
+            format!("127.0.0.1:5000/sdk@sha256:{digest}"),
+        ] {
+            super::validate_sdk_runtime_reference(&reference).unwrap();
+        }
+        for reference in [
+            String::new(),
+            "ghcr.io/uor-foundation/prismpm-sdk:latest".to_owned(),
+            "ghcr.io/uor-foundation/prismpm-sdk@sha256:".to_owned(),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "a".repeat(63)
+            ),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "a".repeat(65)
+            ),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "A".repeat(64)
+            ),
+            format!(
+                "ghcr.io/uor-foundation/prismpm-sdk@sha256:{}",
+                "g".repeat(64)
+            ),
+            format!("ghcr.io/uor-foundation/prismpm-sdk:tag@sha256:{digest}"),
+            format!("https://ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}"),
+            format!("ghcr.io/../prismpm-sdk@sha256:{digest}"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}\n"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}@sha256:{digest}"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}?secret=x"),
+            format!("ghcr.io/uor-foundation/prismpm-sdk@sha256:{digest}#fragment"),
+            format!("@sha256:{digest}"),
+        ] {
+            assert!(
+                super::validate_sdk_runtime_reference(&reference).is_err(),
+                "malformed SDK runtime reference must fail before Docker execution"
+            );
+            let error = super::check_sdk_runtime_boundary_for_image(&reference)
+                .expect_err("the actual runtime boundary must reject the same malformed input");
+            assert_eq!(
+                error.to_string(),
+                "SDK runtime boundary requires a valid immutable OCI SDK reference",
+                "the actual entry path must refuse before invoking Docker"
+            );
+        }
+    }
+
+    #[test]
     fn node_gate_does_not_inherit_cargo_loader_state() {
         super::command(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
@@ -1724,6 +1795,7 @@ mod package_tests {
             .arg(extracted.path())
             .arg("--")
             .arg(format!("{package}/standards/corpora/blake3-1.5.5"))
+            .arg(format!("{package}/sdk/sdk-index-extensions.json"))
             .output()
             .unwrap();
         assert!(
@@ -1732,6 +1804,11 @@ mod package_tests {
             String::from_utf8_lossy(&unpacked.stderr)
         );
         let packaged = extracted.path().join(package);
+        assert_eq!(
+            std::fs::read(packaged.join("sdk/sdk-index-extensions.json")).unwrap(),
+            std::fs::read(root.join("sdk/sdk-index-extensions.json")).unwrap(),
+            "actual Cargo archive must retain the exact runtime admission corpus"
+        );
         super::verify_packaged_blake3_corpus(&packaged).unwrap();
         std::fs::remove_file(packaged.join("standards/corpora/blake3-1.5.5/LICENSE_CC0")).unwrap();
         assert!(super::verify_packaged_blake3_corpus(&packaged).is_err());

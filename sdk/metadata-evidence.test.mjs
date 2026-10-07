@@ -88,8 +88,13 @@ test('SDK-owned HTTP acquisition retains exact original metadata bytes without c
 });
 
 test('private native evidence survives two-lane roundtrip and refuses missing changed aliased or swapped records',async t=>{
-  const {capture}=await import('../scripts/library-sdk-check.mjs');
-  const {writeLane,readLane,joinLanes,packLane}=await import('../scripts/library-sdk-metadata-evidence.mjs');
+  const {capture,validateAcquisitionBytes}=await import('../scripts/library-sdk-check.mjs');
+  // The exact bound reaches JSON validation; the next byte must fail before
+  // decoding/allocation. These are reader bounds, not usable SDK evidence.
+  const maximum=288*1024*1024,oversized=Buffer.alloc(maximum+1);
+  assert.throws(()=>validateAcquisitionBytes(oversized),/bounded original acquisition/);
+  assert.throws(()=>validateAcquisitionBytes(oversized.subarray(0,maximum)),SyntaxError);
+  const {captureLane,writeLane,readLane,joinLanes,packLane}=await import('../scripts/library-sdk-metadata-evidence.mjs');
   const {lockFixture,qualificationFixture,resultFixture}=await import('../scripts/library-sdk-fixture.mjs');
   const {historicalLock,migrationChecks,expectedMigrationProcesses}=await import('./migration-qualification.mjs');
   const source=resolve(dirname(fileURLToPath(import.meta.url)),'..'),revision='a'.repeat(40);
@@ -121,9 +126,25 @@ test('private native evidence survives two-lane roundtrip and refuses missing ch
         'org.opencontainers.image.version':'0.3.0'}}}],
       'acquisition.json':{lock:sdk.lock,metadata,migration},'compiler.json':qualificationFixture(binding,authority),
       'custody.json':{scope:'filesystem-custody-only',checks:6,status:'passed'},'result.json':resultFixture(binding,authority)};
-    for(const [name,value] of Object.entries(values))writeFileSync(join(directory,name),JSON.stringify(value));
+    for(const [name,value] of Object.entries(values))writeFileSync(join(directory,name),name==='acquisition.json'?canonical(value):JSON.stringify(value));
     writeFileSync(join(directory,'inventory.json'),sdk.lock.platforms.find(row=>row.platform===binding.platform).inventory_document);
     writeFileSync(join(directory,'standards.lock'),sdk.standards);
+    const acquisitionPath=join(directory,'acquisition.json'),raw=readFileSync(acquisitionPath);
+    for(const changed of [
+      Buffer.from('{"lock":{},'+raw.toString().slice(1)),
+      Buffer.from('{"\\u006cock":{},'+raw.toString().slice(1)),
+      Buffer.from(raw.toString().replace('"schema":"prismpm/sdk-lock/2"','"schema":"ignored","schema":"prismpm/sdk-lock/2"')),
+      Buffer.from(raw.toString().replace('"schema":"prismpm/sdk-lock/2"','"schema":"ignored","\\u0073chema":"prismpm/sdk-lock/2"')),
+      Buffer.from([0xff]),
+      Buffer.from(canonical({...values['acquisition.json'],extra:true})),
+      Buffer.from(JSON.stringify(values['acquisition.json'],null,2)),
+      Buffer.concat([raw,Buffer.from('\n')]),
+    ]) {
+      await captureLane(directory,root,context);
+      writeFileSync(acquisitionPath,changed);
+      await assert.rejects(captureLane(directory,root,context));
+      writeFileSync(acquisitionPath,raw);
+    }
     const output=join(root,'target/library-sdk-evidence/linux-'+architecture);
     await writeLane(directory,output,root,context);await readLane(output,root,context);
     await assert.rejects(writeLane(directory,output,root,context));
