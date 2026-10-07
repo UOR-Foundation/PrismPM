@@ -1678,7 +1678,7 @@ mod tests {
                 Sha256::digest(raw.as_bytes())
             ));
             lock["sdk_index"] = json!(raw);
-            super::CanonicalDocument::from_value("prismpm/sdk-lock/2", lock)
+            super::parse_lock(&super::encode_value(&lock)?)
         };
         assert!(admit(serde_json::to_string_pretty(&original).unwrap() + "\n").is_ok());
         let raw = baseline["sdk_index"].as_str().unwrap();
