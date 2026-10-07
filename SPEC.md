@@ -2103,10 +2103,11 @@ contains raw secret input; internal DOM failure terminates instead of rollback.
 Acceptance requires fresh generated native/no_std/Wasm parity, declared actual
 maxima and one-over negatives, real browser keyboard/focus/live/close journeys,
 native replay of observed generated transcripts and owning guard mutations.
-Maximum binary acceptance fixtures retain their exclusive creation descriptor,
-original file/parent identity and bounded streamed digest through both complete
-native consumers. After their final use, the owner verifies the entire original
-inventory, removes only those exact files and observes absence before browser
+Maximum binary acceptance fixtures are captured from their held exclusive
+creation descriptor; original file/parent identity and bounded streamed digest
+remain checked through both complete native consumers. After their final use,
+the owner verifies the entire original inventory, removes only those exact files
+and observes absence before browser
 execution. Changed/missing/aliased files, premature/omitted retirement or partial
 unlink failure cannot produce acceptance; remaining failure evidence is retained.
 This retires consumed fixture storage, not generated artifacts or acceptance
