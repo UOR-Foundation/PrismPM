@@ -116,5 +116,5 @@ test('source and installed session registration retain the entire original owner
   const owner=suites.find(row=>row.id==='DK-26');
   assert.deepEqual(owner.files,['sdk/browser/session-model-test.mjs',
     'tests/browser-session/wire.test.mjs','tests/browser-session/provenance.test.mjs']);
-  assert.equal(owner.minimum,37);assert.equal(owner.deadline,3600000);
+  assert.equal(owner.minimum,38);assert.equal(owner.deadline,3600000);
 });
