@@ -198,6 +198,10 @@ fresh source-bound oracle compiler: 18 interaction cases per profile and trigger
 plus three separately labeled infrastructure cases per profile (78 cases).
 Four additional live negative controls reject a no-op response probe and a
 wrong-status failure masquerading as envelope-validation evidence.
+Eight further live controls remove or corrupt the actual request-completion
+diagnostic listener for both profiles and both triggers; the completion predicate
+itself must refuse them. All twelve controls are mandatory and cannot weaken
+application-response acceptance.
 Every outcome is retained; no missing, failed, timed-out, or skipped case passes.
 Each case binds the live Controller-verified model, archive, Wasm and verification
 manifest, and its Linux subreaper must establish descendant cleanup before the
@@ -205,7 +209,10 @@ next case. Construction uses isolated Cargo configuration and fresh Git checkout
 from authenticated object downloads, with staged-source and toolchain custody.
 Delayed initialization uses the same correlated submission observer without
 refilling the retained draft. Payload-safe diagnostics preserve the first failure
-even when cleanup also fails. `HO-12` does not duplicate this integration run.
+even when cleanup also fails. They identify the owning journey and modeled-vector
+index, observed request completion, and only closed network-failure categories;
+arbitrary browser error text is not forwarded. These observations never replace
+the actual response-body or submission checks. `HO-12` does not duplicate this integration run.
 Readiness fault probes explicitly hold readiness after a real submission and
 release it only after actual result rendering. Body-loss probes close the actual
 target after correlated headers; method-rewrite probes separately retain the

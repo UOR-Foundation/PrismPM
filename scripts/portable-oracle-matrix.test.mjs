@@ -4,10 +4,64 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
-import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
+import {runInNewContext} from 'node:vm';
+import {capture, requireBoundaryCheck, requireRequestCompletion, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('completion evidence requires the actual correlated event and its exact closed schema', () => {
+  const completed = {event: 'request-finished', invocation: true};
+  for (const name of ['wrong-response', 'delayed-wrong-response']) {
+    requireRequestCompletion(name, {events: [completed]});
+    for (const events of [[], [completed, completed], [{...completed, invocation: false}],
+      [{...completed, unexpected: true}], [{event: 'request-finished'}]]) {
+      assert.throws(() => requireRequestCompletion(name, {events}),
+        error => error.code === 'PORTABLE_REQUEST_COMPLETION');
+    }
+  }
+  requireRequestCompletion('body-unavailable', {events: []});
+  const probe=read('scripts/portable-oracle-submission-probe.mjs');
+  const assignment=/failureCode = ([^\n]+);/.exec(probe);assert(assignment,'actual probe failure classification required');
+  const classify=runInNewContext('(error => ('+assignment[1]+'))');
+  for(const code of ['PORTABLE_WRONG_CHECK','PORTABLE_REQUEST_COMPLETION'])
+    assert.equal(classify({code}),code,'retain the actual refusal reason');
+  for(const code of ['UNRELATED',undefined,'__proto__'])assert.equal(classify({code}),'PROBE_ASSERTION');
+  for(const error of [null,undefined,42])assert.equal(classify(error),'PROBE_ASSERTION');
+  const owner = read('scripts/portable-oracle-matrix.mjs');
+  assert(owner.includes("for (const trigger of matrix.triggers) for (const control of ['omit-finished', 'malformed-finished'])"));
+  assert(owner.includes("assert.equal(receipt.failure_code, 'PORTABLE_REQUEST_COMPLETION')"));
+  assert(owner.includes('assert.equal(negativeControls.length, 12)'));
+});
+
+test('completion controls mutate only the real source listener and refuse missing or ambiguous targets', () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const listener = "target.on('requestfinished', onFinished);";
+  const event = "record({event: 'request-finished', invocation: true});";
+  assert.equal(applyNegativeControl(source, source, '', 'omit-finished'), source.replace(listener, ''));
+  assert.equal(applyNegativeControl(source, source, '', 'malformed-finished'),
+    source.replace(event, "record({event: 'request-finished', invocation: true, unexpected: true});"));
+  for (const [control, point] of [['omit-finished', listener], ['malformed-finished', event]]) {
+    assert.throws(() => applyNegativeControl(source.replace(point, ''), source, '', control), /must be unique/);
+    assert.throws(() => applyNegativeControl(source + point, source, '', control), /must be unique/);
+  }
+});
+
+test('browser request diagnostics expose only closed failure reasons, never raw private text', () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const start = source.indexOf('function requestFailureReason(value) {');
+  const end = source.indexOf('\nfunction failureKind(', start);
+  assert(start >= 0 && end > start, 'actual browser failure classifier required');
+  const classify = runInNewContext('(' + source.slice(start, end) + ')');
+  for (const code of ['ERR_ABORTED', 'ERR_FAILED', 'ERR_CONNECTION_RESET', 'ERR_CONNECTION_CLOSED',
+    'ERR_CONTENT_LENGTH_MISMATCH', 'ERR_INCOMPLETE_CHUNKED_ENCODING', 'ERR_INSUFFICIENT_RESOURCES',
+    'ERR_TIMED_OUT', 'ERR_BLOCKED_BY_CLIENT', 'ERR_BLOCKED_BY_RESPONSE']) {
+    assert.equal(classify('net::' + code), code);
+  }
+  assert.equal(classify(null), 'unavailable');
+  for (const value of [undefined, '', 'private-oracle-draft-71943', 'net::ERR_ABORTED private-oracle-draft-71943',
+    'net::ERR_PRIVATE_ORACLE_DRAFT_71943', '__proto__', {}, 1]) assert.equal(classify(value), 'other');
+});
 
 test('failed child diagnostics reach the retained gate stream with independent bounds and credential redaction', () => {
   const result = spawnSync(process.execPath, ['-e', 'process.stdout.write("x".repeat(32765)+"private-credential"+"y".repeat(32768)); process.stderr.write("source bytes differ private-credential"); process.exitCode=19;'],
