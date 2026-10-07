@@ -811,8 +811,15 @@ pub fn propose_lock_migration(
             "standards-lock digest is malformed",
         ));
     }
+    capture_migration(root, || capture_platform_update(sdk_image, standards_lock))
+}
+
+fn capture_migration(
+    root: &Path,
+    capture: impl FnOnce() -> Result<CanonicalDocument, PrismError>,
+) -> Result<serde_json::Value, PrismError> {
     let current = historical_migration_lock(root)?;
-    let proposed = capture_platform_update(sdk_image, standards_lock)?;
+    let proposed = capture()?;
     if historical_migration_lock(root)?.bytes() != current.bytes() {
         return Err(PrismError::new(
             "PP5401",
@@ -1379,6 +1386,44 @@ mod tests {
                     .as_bytes()
             )
             .is_err());
+        }
+    }
+
+    #[test]
+    fn migration_rechecks_actual_historical_file_after_target_capture() {
+        // Only the capture result is synthetic: this tests the public path's
+        // real pre/post file reads, not installed OCI acquisition qualification.
+        for mutate in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let path = root.path().join("prismpm.lock");
+            let original = super::CanonicalDocument::from_value(
+                "prismpm/sdk-lock/1",
+                legacy_migration_fixture(),
+            )
+            .unwrap();
+            std::fs::write(&path, original.bytes()).unwrap();
+            let mut changed = legacy_migration_fixture();
+            changed["standards_lock"] = json!(format!("sha256:{}", "c".repeat(64)));
+            let changed =
+                super::CanonicalDocument::from_value("prismpm/sdk-lock/1", changed).unwrap();
+            let target = platform_fixture("captured");
+            let result = super::capture_migration(root.path(), || {
+                assert_eq!(std::fs::read(&path).unwrap(), original.bytes());
+                if mutate {
+                    std::fs::write(&path, changed.bytes()).unwrap();
+                }
+                super::CanonicalDocument::from_value("prismpm/sdk-lock/2", target.clone())
+            });
+            if mutate {
+                let error = result.unwrap_err();
+                assert_eq!(error.code, "PP5401");
+                assert_eq!(error.message, "historical SDK lock changed during capture");
+                assert_eq!(std::fs::read(&path).unwrap(), changed.bytes());
+            } else {
+                assert_eq!(result.unwrap()["patch"][1]["value"], target);
+                assert_eq!(std::fs::read(&path).unwrap(), original.bytes());
+            }
+            assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
         }
     }
 
