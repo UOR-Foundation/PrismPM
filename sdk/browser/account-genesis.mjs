@@ -110,8 +110,9 @@ async function loadArtifact(binding, expectedDigest) {
     if (!same(digest, expectedDigest) || controller.signal.aborted) throw fail('artifact-mismatch');
     complete = true;
     return wire;
-  } catch (error) {
-    if (error instanceof AccountGenesisError) throw error;
+  } catch {
+    // Transport bytes are not caller input. In particular, copy() refuses an
+    // oversized chunk as invalid-input; acquisition must report artifact failure.
     throw fail('artifact-mismatch');
   } finally {
     clearTimeout(timer);
