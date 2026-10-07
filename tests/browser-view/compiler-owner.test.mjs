@@ -18,7 +18,7 @@ test('verification-only source reads retain the complete descriptor and digest c
   assert(begin>=0&&end>begin);
   const allocations=[],alloc=Buffer.alloc.bind(Buffer);
   const measuredBuffer={alloc(size){allocations.push(size);return alloc(size);}};
-  const file=runInNewContext('('+source.slice(begin,end)+'\nfile)',
+  const file=runInNewContext(source.slice(begin,end)+'\nfile;',
     {...fs,assert,createHash,Buffer:measuredBuffer});
   const digest=createHash('sha256').update(bytes).digest('hex');
   assert.equal(file(path,digest,false),undefined);
