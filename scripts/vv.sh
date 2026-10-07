@@ -11,7 +11,7 @@ if test "${1:-}" = --with-sdk; then
   exec {sdk_command_input}<&0
   exec </dev/null
 fi
-node --test scripts/devcontainer-init.test.mjs
+node --test scripts/devcontainer-init.test.mjs scripts/reconcile-lexlean.test.mjs
 bash scripts/bootstrap-verify.sh --check-source
 
 # The external-oracle corpus must execute in the SDK image, including on the
