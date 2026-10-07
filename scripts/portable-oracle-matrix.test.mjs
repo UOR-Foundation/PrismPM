@@ -75,7 +75,7 @@ test('live observation qualification transforms only diagnostics and retains all
  assert(owner.includes("assert.equal(observationPairs.length, 4"));
  assert(owner.includes('assert.deepEqual(pair[0].report, pair[1].report'));
  assert(owner.includes('assert.equal(outcomes.length, 78'));
- assert(owner.includes('assert.equal(negativeControls.length, 4'));
+ assert(owner.includes('assert.equal(negativeControls.length, 12'));
  assert.equal(retirementFaults.length,13);assert.equal(new Set(retirementFaults).size,13);
  for(const fault of retirementFaults)for(const trigger of ['click','keyboard']){
   const driver=retirementDriver(source,fault,trigger);
