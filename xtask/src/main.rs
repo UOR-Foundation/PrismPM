@@ -1127,6 +1127,7 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "sdk/browser/journal.mjs",
         "sdk/browser/commands.mjs",
         "sdk/browser/queries.mjs",
+        "sdk/sdk-index-extensions.json",
         "sdk/browser/view-host.mjs",
         "sdk/browser/view-dom.mjs",
         "sdk/browser/view-error.mjs",
@@ -1793,6 +1794,7 @@ mod package_tests {
             .arg(extracted.path())
             .arg("--")
             .arg(format!("{package}/standards/corpora/blake3-1.5.5"))
+            .arg(format!("{package}/sdk/sdk-index-extensions.json"))
             .output()
             .unwrap();
         assert!(
@@ -1801,6 +1803,11 @@ mod package_tests {
             String::from_utf8_lossy(&unpacked.stderr)
         );
         let packaged = extracted.path().join(package);
+        assert_eq!(
+            std::fs::read(packaged.join("sdk/sdk-index-extensions.json")).unwrap(),
+            std::fs::read(root.join("sdk/sdk-index-extensions.json")).unwrap(),
+            "actual Cargo archive must retain the exact runtime admission corpus"
+        );
         super::verify_packaged_blake3_corpus(&packaged).unwrap();
         std::fs::remove_file(packaged.join("standards/corpora/blake3-1.5.5/LICENSE_CC0")).unwrap();
         assert!(super::verify_packaged_blake3_corpus(&packaged).is_err());
