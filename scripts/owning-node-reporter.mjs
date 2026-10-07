@@ -34,11 +34,12 @@ export function phaseCollector() {
       for (const character of message) {
         if (character === '\n') { if (!stream.oversized) line(stream.text); stream.text=''; stream.oversized=false; }
         else if (!stream.oversized) {
-          if (stream.text.length === 256) {stream.text='';stream.oversized=true;}
+          if (stream.text.length + character.length > 256) {stream.text='';stream.oversized=true;}
           else stream.text += character;
         }
       }
     },
+    bufferedCodeUnits() { return [...streams.values()].reduce((total,stream)=>total+stream.text.length,0); },
     summary() { return {scope:'compiler-phase-diagnostic-not-acceptance',
       phases:[...totals.values()].sort((a,b)=>a.phase.localeCompare(b.phase))}; },
   };

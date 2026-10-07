@@ -44,6 +44,15 @@ test('stream inventory is bounded and an oversized record cannot hide the next v
   c.accept('file-0',prefix+' '.repeat(300)+JSON.stringify(row())+'\n'+encoded(row()));
   assert.equal(c.summary().phases[0].calls,1);
 });
+test('supplementary and fragmented surrogate characters cannot bypass the retained UTF-16 bound',()=>{
+  for(const chunks of [['x'.repeat(255),'😀','x'.repeat(10000)],
+    ['x'.repeat(255),'\ud83d','\ude00','x'.repeat(10000)]]){
+    const c=phaseCollector();
+    for(const chunk of chunks){c.accept('file',chunk);assert(c.bufferedCodeUnits()<=256);}
+    assert.equal(c.bufferedCodeUnits(),0);
+    c.accept('file','\n'+encoded(row()));assert.equal(c.summary().phases[0].calls,1);
+  }
+});
 test('actual Node reporter preserves complete passing and failing test results',t=>{
   const directory=mkdtempSync(join(tmpdir(),'prismpm-phase-reporter-'));t.after(()=>rmSync(directory,{recursive:true}));
   const reporter='data:text/javascript;base64,'+readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)).toString('base64');
