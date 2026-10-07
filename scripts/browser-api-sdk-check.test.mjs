@@ -50,7 +50,7 @@ test('new installed Node suites retain exact complete owning files and deadlines
  assert.deepEqual(effects?.files, ['sdk/browser/effects-wire.test.mjs', 'sdk/browser/effects-module.test.mjs', 'sdk/browser/effects-test.mjs']);
  assert.equal(effects?.minimum, 18);
  assert.deepEqual(view?.files, ['tests/browser-presentation/wire.test.mjs', 'tests/browser-presentation/dom.test.mjs', 'tests/browser-presentation/replay.test.mjs', 'tests/browser-presentation/provenance.test.mjs', 'sdk/browser/presentation.test.mjs']);
- assert.equal(view?.minimum, 37);
+ assert.equal(view?.minimum, 39);
  const owning = /"DK-23"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(sdkSource('crates/conformance/src/cases/mod.rs'));
  assert.ok(owning, 'actual registered Rust owning suite exists');
  assert.equal(Number(owning[2]), view.minimum, 'installed and source-owning minimum agree');
@@ -162,7 +162,7 @@ test('installed DK23 gate requires every wire, DOM, replay, provenance and full-
  const view = suites.find(row => row.id === 'DK-23');
  assert.equal(view.files.length, 5);
  // Real Node harness executions do not stand in for application acceptance.
- const counts = [5, 5, 2, 7, 18];
+ const counts = [7, 5, 2, 7, 18];
  for (const [index, count] of counts.entries()) put(root, view.files[index], testSource(count));
  for (const [index, count] of counts.entries()) {
   put(root, view.files[index], testSource(count - 1));
@@ -170,7 +170,7 @@ test('installed DK23 gate requires every wire, DOM, replay, provenance and full-
   put(root, view.files[index], testSource(count));
  }
  const accepted = runSuites(root, spawnSync, () => {}).find(row => row.id === 'DK-23');
- assert.deepEqual(accepted, {id: 'DK-23', tests: 37});
+ assert.deepEqual(accepted, {id: 'DK-23', tests: 39});
 });
 
 test('installed DK26 gate requires every session kernel, canonical wire and custody check',t=>{
