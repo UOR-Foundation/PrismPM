@@ -453,8 +453,19 @@ pub fn run_at(root: &Path, id: &str) {
             13,
             "3600000",
         ),
+        "DK-26" => verify_node_suite(
+            root,
+            id,
+            &[
+                "sdk/browser/session-model-test.mjs",
+                "tests/browser-session/wire.test.mjs",
+                "tests/browser-session/provenance.test.mjs",
+            ],
+            37,
+            "3600000",
+        ),
         "DK-18" => browser_effect::verify(root),
-        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 35, "120000"),
+        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 38, "120000"),
         "DK-28" => verify_node_suite(
             root,
             id,
@@ -462,6 +473,8 @@ pub fn run_at(root: &Path, id: &str) {
                 "sdk/platform-lock.test.mjs",
                 "sdk/metadata-layer.test.mjs",
                 "sdk/metadata-capture.test.mjs",
+                "sdk/metadata-evidence.test.mjs",
+                "sdk/metadata-embedded.test.mjs",
                 "sdk/metadata-transport.test.mjs",
                 "sdk/metadata-transport-tls.test.mjs",
                 "sdk/metadata-credentials.test.mjs",
@@ -469,7 +482,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "sdk/metadata-cli.test.mjs",
                 "sdk/metadata-publisher.test.mjs",
             ],
-            54,
+            60,
             "120000",
         ),
         "OC-07" => verify_browser_export(root),
@@ -545,9 +558,11 @@ fn verify_browser_host(root: &Path, id: &str) {
             &[
                 "tests/browser-presentation/wire.test.mjs",
                 "tests/browser-presentation/dom.test.mjs",
+                "tests/browser-presentation/replay.test.mjs",
+                "tests/browser-presentation/provenance.test.mjs",
                 "sdk/browser/presentation.test.mjs",
             ],
-            24,
+            37,
         ),
         "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 28),
         "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
@@ -3754,19 +3769,19 @@ mod node_suite_tests {
     fn exporter_seed_owning_gate_rejects_omitted_handoff_and_interruption_tests() {
         let root = tempfile::tempdir().unwrap();
         let suite = root.path().join("seed.mjs");
-        for count in [28, 29, 30, 31, 32, 33, 34, 35] {
+        for count in 28..=38 {
             std::fs::write(&suite, format!("import {{test}} from 'node:test'; for(let i=0;i<{count};i++)test('actual registered '+i,()=>{{}});")).unwrap();
             let result = std::panic::catch_unwind(|| {
-                verify_node_suite(root.path(), "DK-29", &["seed.mjs"], 35, "5000")
+                verify_node_suite(root.path(), "DK-29", &["seed.mjs"], 38, "5000")
             });
             assert_eq!(
                 result.is_ok(),
-                count == 35,
+                count == 38,
                 "incomplete owning gate accepted {count} tests"
             );
         }
         let owning_source = include_str!("mod.rs");
-        assert!(owning_source.lines().any(|line| line.trim() == "\"DK-29\" => verify_node_suite(root, id, &[\"sdk/exporter-seed.test.mjs\"], 35, \"120000\"),"));
+        assert!(owning_source.lines().any(|line| line.trim() == "\"DK-29\" => verify_node_suite(root, id, &[\"sdk/exporter-seed.test.mjs\"], 38, \"120000\"),"));
     }
 
     #[test]

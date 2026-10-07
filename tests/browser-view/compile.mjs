@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
+import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync,writeSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -90,6 +90,28 @@ function terminateOwnedGroup(pid) {
   }
   signal('SIGKILL');
 }
+// Diagnostics only: no command, argument, path, payload or environment is logged.
+export function compilerPhase(program,args) {
+  if (['cargo','rustc','lean','lake'].includes(program) && args[0]?.startsWith('--version')) return 'toolchain-check';
+  if (program === 'tar') return 'archive-extraction';
+  if (['cargo','lake'].includes(program) && args[0] === 'clean') return 'artifact-cleanup';
+  if (program === 'cargo') return args[0] === 'build' ? 'rust-compilation' : 'unclassified-execution';
+  if (program === 'lake') {
+    if (args[0] === 'update') return 'lake-update';
+    if (args[0] === 'build') return args[1] === 'prod-export' ? 'exporter-construction' : 'generated-module-build';
+    return 'unclassified-execution';
+  }
+  if (program.endsWith('/prod-export')) return 'kernel-export';
+  // The actual compiler artifact has this owner-created private basename.
+  // Never interpret arbitrary generated applications' payload as a tool mode.
+  if (program.endsWith('/driver-execution')) {
+    if (['verify','check'].includes(args[0])) return 'lexlean-verification';
+    if (['native','generate'].includes(args[0])) return 'native-code-generation';
+    if (['wasm','generate-wasm','fixture','size','p256','point','pkce','labels','intent','secret','route','sink',
+      'maxroute','maxsink','maxfield','maxsecret','progress','maxprogress'].includes(args[0])) return 'wasm-code-generation';
+  }
+  return 'unclassified-execution';
+}
 function execute(program,args,cwd,env={}) {
   const childEnvironment = compilerEnvironment(env);
   const tools = {cargo:'/usr/local/cargo/bin/cargo',rustc:'/usr/local/cargo/bin/rustc',
@@ -99,14 +121,22 @@ function execute(program,args,cwd,env={}) {
     'compiler command must be SDK-owned or an exact generated executable');
   if (Object.hasOwn(env,'LEAN_PATH')) assert.ok(executable.endsWith('/prod-export'),
     'LEAN_PATH belongs only to the exact generated exporter');
-  const result = spawnSync('/usr/bin/timeout',
-    ['--signal=TERM','--kill-after=5s','360s',executable,...args],
-    {cwd,detached:true,encoding:'utf8',timeout:370000,killSignal:'SIGKILL',
-      maxBuffer:32*1024*1024,env:childEnvironment});
-  terminateOwnedGroup(result.pid);
-  assert.ifError(result.error);
-  assert.equal(result.status,0,program+' '+args.join(' ')+'\n'+result.stdout+'\n'+result.stderr);
-  return result.stdout;
+  const started = performance.now(); let success = false;
+  try {
+    const result = spawnSync('/usr/bin/timeout',
+      ['--signal=TERM','--kill-after=5s','360s',executable,...args],
+      {cwd,detached:true,encoding:'utf8',timeout:370000,killSignal:'SIGKILL',
+        maxBuffer:32*1024*1024,env:childEnvironment});
+    terminateOwnedGroup(result.pid);
+    assert.ifError(result.error);
+    assert.equal(result.status,0,program+' '+args.join(' ')+'\n'+result.stdout+'\n'+result.stderr);
+    success = true; return result.stdout;
+  } finally {
+    // A closed diagnostic stream cannot change the actual compiler outcome.
+    try { writeSync(2,'# prismpm-compiler-phase ' + JSON.stringify({
+      phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n'); }
+    catch { /* Diagnostic loss is not acceptance or a replacement failure. */ }
+  }
 }
 export function verifyCompilerTools() {
   const {rust, lean, triple} = toolchainPins();
@@ -167,8 +197,14 @@ export function ensureProdExport(repo = repository, work = null) {
   mkdirSync(dir, {mode:0o700});
   const archive = join(dir, '.source-lean.tar');
   writeFileSync(archive, captured.get('vendor/lean4-prod/lean.tar'), {flag:'wx', mode:0o600});
-  run('tar', ['-xf', archive, '-C', dir], dir);
-  run('lake', ['build', 'prod-export'], dir);
+  // Archive modes describe upstream packaging, not this private executable
+  // owner. Construct under an owner-only mask instead of chmod'ing an adopted
+  // runtime after capture; restore the caller's mask even when construction fails.
+  const previousMask = process.umask(0o077);
+  try {
+    run('tar', ['--no-same-owner', '--no-same-permissions', '-xf', archive, '-C', dir], dir);
+    run('lake', ['build', 'prod-export'], dir);
+  } finally { process.umask(previousMask); }
   const bin = join(dir, '.lake/build/bin/prod-export');
   sourceFile(dir, '.lake/build/bin/prod-export');
   for (const [name, bytes] of captured) assert.deepEqual(sourceFile(repo, name), bytes,

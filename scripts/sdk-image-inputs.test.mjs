@@ -64,6 +64,13 @@ function fixture(t) {
 
 test('every source-derived image COPY consumes the verified committed source stage', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const checkLockAdmission = text => assert.match(text,
+    /RUN cargo build --locked --release --package prismpm \\\n    && target\/release\/prismpm --json --project \. authority resolve --locked \\\n    && cargo build --locked --release --package repo-conformance --bins/,
+    'actual newly built CLI must admit the shipped lock before further SDK compilation');
+  checkLockAdmission(recipe);
+  assert.throws(() => checkLockAdmission(recipe.replace('    && target/release/prismpm --json --project . authority resolve --locked \\\n', '')));
+  assert.throws(() => checkLockAdmission(recipe.replace('authority resolve --locked', 'authority resolve')));
+  assert.throws(() => checkLockAdmission(recipe.replace('--project . authority', '--project /tmp/unbound authority')));
   const unverified = recipe.split('\n').filter(line => line.startsWith('COPY ') && !line.includes('--from='));
   assert.deepEqual(unverified, [
     'COPY scripts/sdk-vv-inputs.mjs scripts/sdk-image-inputs.mjs /opt/input-policy/scripts/',
@@ -110,6 +117,43 @@ test('development and SDK recipes share the exact isolated pinned Rust tool cons
       recipe.replace('/rust-oracle-tools/bin/ /usr/local/cargo/bin/', '/rust-oracle-tools/ /usr/local/cargo/bin/'),
     ]) assert.throws(() => check(changed));
   }
+});
+
+test('both recipes normalize the complete pinned Lean toolchain before unprivileged use', () => {
+  const pin = 'leanprover/lean4:v4.32.1';
+  const root = '/usr/local/elan/toolchains/leanprover--lean4---v4.32.1';
+  const check = recipe => {
+    const commands = [...imageStages(recipe).values()].flatMap(stage => stage.instructions);
+    const installs = commands.filter(command => command.includes(`elan toolchain install ${pin}`));
+    assert.equal(installs.length, 1, 'exactly one pinned Lean construction');
+    assert.match(installs[0].replace(/\s+/g, ' '), new RegExp(`elan toolchain install ${pin.replaceAll('.', '\\.')} && chmod -R a\\+rX,go-w ${root.replaceAll('.', '\\.')}(?: &&|$)`),
+      'normalization must cover the entire pinned toolchain in its construction instruction');
+  };
+  for (const path of ['../sdk/Dockerfile', '../.devcontainer/Dockerfile']) {
+    const recipe = readFileSync(new URL(path, import.meta.url), 'utf8');
+    check(recipe);
+    for (const changed of [
+      recipe.replace(` && chmod -R a+rX,go-w ${root}`, ''),
+      recipe.replace(`    && chmod -R a+rX,go-w ${root}`, ''),
+      recipe.replace('chmod -R a+rX,go-w', 'chmod a+rX,go-w'),
+      recipe.replace('chmod -R a+rX,go-w', 'chmod -R a+rX'),
+      recipe.replace(`chmod -R a+rX,go-w ${root}`, `chmod -R a+rX,go-w ${root}/bin`),
+    ]) assert.throws(() => check(changed));
+  }
+  const checkDevelopmentShims = recipe => {
+    const commands = imageStages(recipe).get('development').instructions.map(command => command.replace(/\s+/g, ' '));
+    const environment = commands.indexOf('ENV CARGO_HOME=/home/vscode/.cargo ELAN_HOME=/home/vscode/.elan');
+    assert(environment >= 0, 'normal development home aliases must be configured');
+    for (const binary of ['lean', 'lake']) {
+      const probe = commands.findIndex(command => command.includes(
+        `runuser -u vscode -- env ELAN_TOOLCHAIN=${pin} ${binary} --version`));
+      assert(probe > environment, 'actual unprivileged shim probe must follow the final home configuration');
+    }
+  };
+  const development = readFileSync(new URL('../.devcontainer/Dockerfile', import.meta.url), 'utf8');
+  checkDevelopmentShims(development);
+  for (const binary of ['lean', 'lake']) assert.throws(() => checkDevelopmentShims(development.replace(
+    `runuser -u vscode -- env ELAN_TOOLCHAIN=${pin} ${binary} --version`, 'true')));
 });
 
 test('pinned tool layers exclude source inputs while the build retains both verified closure and policy', t => {

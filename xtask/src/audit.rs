@@ -6,6 +6,108 @@ use sha2::Digest;
 use std::collections::BTreeSet;
 use std::path::Path;
 
+/// Bind the shipped standards lock to the live embedded authority catalog.
+/// This compares exact bytes without refreshing, writing, or executing oracles.
+pub fn audit_shipped_standards_lock(root: &Path) -> Result<(), Fail> {
+    prismpm::authority::resolve(root, true)
+        .map_err(|error| format!("shipped standards.lock: {}: {}", error.code, error.message))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod shipped_standards_lock_tests {
+    use super::audit_shipped_standards_lock;
+    use repo_conformance::golden::platform::Platform;
+
+    #[test]
+    fn shipped_standards_lock_matches_live_catalog_and_rejects_drift_without_writes() {
+        let source = repo_model::repo_root();
+        let original = std::fs::read(source.join("standards.lock")).unwrap();
+        audit_shipped_standards_lock(&source).unwrap();
+        assert_eq!(
+            std::fs::read(source.join("standards.lock")).unwrap(),
+            original
+        );
+
+        let work = tempfile::tempdir().unwrap();
+        for platform in [
+            Platform::DevelopmentAmd64,
+            Platform::SdkAmd64,
+            Platform::SdkArm64,
+        ] {
+            for (relative, bytes) in crate::tree_files(&source.join(platform.directory())).unwrap()
+            {
+                let path = work.path().join(platform.directory()).join(relative);
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(path, bytes).unwrap();
+            }
+        }
+        let path = work.path().join("standards.lock");
+        assert!(audit_shipped_standards_lock(work.path())
+            .unwrap_err()
+            .to_string()
+            .contains("PP1101"));
+        assert!(!path.exists(), "locked admission created a missing lock");
+        assert!(crate::audit_all(work.path())
+            .unwrap_err()
+            .to_string()
+            .starts_with("shipped standards.lock: PP1101:"));
+        assert!(!path.exists(), "source audit created a missing lock");
+        std::fs::write(&path, &original).unwrap();
+        audit_shipped_standards_lock(work.path()).unwrap();
+        for mutation in ["wrapper", "catalog", "noncanonical", "malformed"] {
+            let mut value: serde_json::Value = serde_json::from_slice(&original).unwrap();
+            match mutation {
+                "wrapper" => {
+                    value["oracles"][0]["wrapper_sha256"] = "0".repeat(64).into();
+                }
+                "catalog" => {
+                    value["authorities"].as_array_mut().unwrap().pop();
+                }
+                "noncanonical" | "malformed" => {}
+                _ => unreachable!(),
+            }
+            // A self-consistent lock is not authority for a different catalog.
+            value.as_object_mut().unwrap().remove("lock_id");
+            value["lock_id"] = format!(
+                "sha256:{}",
+                prismpm::holo::canonical::content_id(
+                    &prismpm::holo::canonical::encode_value(&value).unwrap()
+                )
+            )
+            .into();
+            let bytes = match mutation {
+                "wrapper" | "catalog" => prismpm::contracts::CanonicalDocument::from_value(
+                    "prismpm/standards-lock/1",
+                    value,
+                )
+                .unwrap()
+                .bytes()
+                .to_vec(),
+                "noncanonical" => serde_json::to_vec_pretty(&value).unwrap(),
+                "malformed" => b"{invalid}\n".to_vec(),
+                _ => unreachable!(),
+            };
+            std::fs::write(&path, &bytes).unwrap();
+            assert!(audit_shipped_standards_lock(work.path())
+                .unwrap_err()
+                .to_string()
+                .contains("PP1101"));
+            // This fixture intentionally has no Node suites: losing the early
+            // admission must not turn their missing-input failure into a pass.
+            assert!(crate::audit_all(work.path())
+                .unwrap_err()
+                .to_string()
+                .starts_with("shipped standards.lock: PP1101:"));
+            assert_eq!(
+                std::fs::read(&path).unwrap(),
+                bytes,
+                "{mutation}: lock rewritten"
+            );
+        }
+    }
+}
+
 /// Reject inconsistent retained native records before expensive execution.
 /// This is source-review consistency, not fresh kernel or native execution.
 pub fn audit_retained_native_profiles(root: &Path) -> Result<(), Fail> {

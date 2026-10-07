@@ -21,7 +21,7 @@ function source(root){
  }
 }
 const result=value=>({status:0,signal:null,stdout:JSON.stringify(value),stderr:''});
-const error=(code,message)=>({status:code==='PP6101'?5:1,signal:null,stdout:JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code,message}}),stderr:''});
+const error=(code,message)=>({status:code==='PP6101'?5:1,signal:null,stdout:JSON.stringify({schema:'prismpm/error-result/1',diagnostic:{code,message,primary:null,labels:[],notes:[],help:[],causes:[]}}),stderr:''});
 
 test('closed shipped-library source binding includes implementation, fixtures, schemas and gate itself',t=>{
  const root=temporary(t);source(root);const expected=capture(root,revision);verifySource(root,expected);
@@ -75,6 +75,18 @@ test('negative CLI probes require the owning diagnostic and expected exit class'
  cli('/tmp/fixture',['verify'],{code:'PP5006'},()=>error('PP5006','modeled acceptance failed'));
  cli('/tmp/fixture',['build','--locked','-t','ghcr.io/uor-foundation/prismpm-library-probe:0.1.0'],{code:'PP6101'},()=>error('PP6101','native library cannot release'));
  for(const bad of [result({schema:'prismpm/error-result/1',diagnostic:{code:'PP2001',message:'facet closure is not exact'}}),error('PP1001','facet closure is not exact'),error('PP2001','different failure'),{...error('PP2001','facet closure is not exact'),status:101}])assert.throws(()=>cli('/tmp/fixture',['check'],{code:'PP2001',message:'facet closure is not exact'},()=>bad));
+ const root='LibraryProbe.Probe.acceptance',expected={code:'PP5006',assertion:root};
+ const panic="native-library-std-acceptance exited 101: stdout=\"\"; stderr=\"\\nthread 'main' (123) panicked at src/main.rs:4:1:\\n"+root+'\\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\\n"';
+ for(const message of [panic,panic.replace(' (123)','')])
+  cli('/tmp/fixture',['verify'],expected,()=>error('PP5006',message));
+ for(const message of ['native modeled acceptance transcript differs','native-library-std-acceptance timed out',
+  'native-library-std-acceptance exited 101: stdout=""; stderr="error[E0308]: could not compile"',
+  panic.replace(root,'wrongRoot'),panic.replace(root,'wrongRoot\\n'+root),
+  panic.replace('(123)','(not-a-pid)'),panic.replace('src/main.rs:4:1','src/other.rs:4:1'),
+  panic.replace('src/main.rs:4:1','src/main.rs:x:1'),panic.replace('exited 101','exited 1'),
+  panic.replace('std-acceptance','no_std-acceptance'),panic+' error[E0308]: could not compile'])
+  assert.throws(()=>cli('/tmp/fixture',['verify'],expected,()=>error('PP5006',message)),
+   'a build, transport, wrong-root or transcript failure cannot qualify the modeled assertion negative');
 });
 
 test('source mutation preserves canonical LexLean module structure and changes the real identity body',t=>{
@@ -97,7 +109,12 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  const verify=(value,authority=binding)=>verifyResult(value,authority,sourceAuthorityFixture);verify(value);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.build_id='mutable',
   v=>v.runs.pop(),v=>v.runs.reverse(),v=>v.runs[2].acquisition='cold',v=>v.runs[3].root=v.runs[2].root,
- v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64)]){
+  v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64),
+  v=>delete v.acceptance_rejection,v=>v.acceptance_rejection.root='Other.Root',
+  v=>v.acceptance_rejection.extra=true,v=>v.acceptance_rejection.result.diagnostic.code='PP5008',
+  v=>v.acceptance_rejection.result.diagnostic.message='native modeled acceptance transcript differs',
+  v=>v.acceptance_rejection.result.diagnostic.message=v.acceptance_rejection.result.diagnostic.message.replace('LibraryProbe.Probe.acceptance','Other.Root'),
+  v=>v.acceptance_rejection.result.diagnostic.causes.push({code:'unaccepted'})]){
   const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
  }
  for(const change of [v=>delete v.concurrency,v=>v.concurrency.runs.pop(),v=>v.concurrency.overlap.pop(),
@@ -135,8 +152,8 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  for(const row of resealed.runs){const manifest=JSON.parse(row.manifest);manifest.processes[7].exporter.source_archive_sha256='a'.repeat(64);if(row.acquisition==='sdk-seed')manifest.processes[7].exporter.acquisition.archive_sha256='a'.repeat(64);row.manifest=fixture.encode(manifest);row.manifest_sha256=fixture.hash(row.manifest);}
  assert.throws(()=>verify(resealed));assert.throws(()=>verifyResult(value));assert.throws(()=>verify(value,fixture.binding('arm64')));
  assert.throws(()=>verifyResult(value,binding));
- const tap='TAP version 13\n'+Array.from({length:24},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..24\n# tests 24\n# suites 0\n# pass 24\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
- testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 24','# tests 23')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const tap='TAP version 13\n'+Array.from({length:29},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..29\n# tests 29\n# suites 0\n# pass 29\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';
+ testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 29','# tests 28')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
 });
 
 test('captured seed lock requires both exact platforms and independently selected native bytes',()=>{
@@ -144,6 +161,32 @@ test('captured seed lock requires both exact platforms and independently selecte
  for(const architecture of ['amd64','arm64']){
   const inventory=Buffer.from(lock.platforms.find(row=>row.platform==='linux/'+architecture).inventory_document);
   assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
+  for(const row of JSON.parse(readFileSync(new URL('../sdk/sdk-index-extensions.json',import.meta.url),'utf8'))){
+   const changed=structuredClone(lock),raw=lock.sdk_index;
+   changed.sdk_index=row.location==='root'?'{'+row.member+','+raw.slice(1)
+    :row.location==='descriptor'?raw.replace('"manifests":[{','"manifests":[{'+row.member+',')
+    :raw.replace('"platform":{','"platform":{'+row.member+',');
+   assert.notEqual(changed.sdk_index,raw,row.id);
+   changed.sdk_image=image.split('@')[0]+'@sha256:'+hash(changed.sdk_index);
+   const validate=()=>validateCapturedLock(Buffer.from(encode(changed)),changed.sdk_image,architecture,standards,inventory);
+   if(row.accepted){const actual=validate();assert.equal(actual.sdk_image,changed.sdk_image,row.id);}
+   else assert.throws(validate,row.id);
+  }
+  const originalIndex=JSON.parse(lock.sdk_index);
+  for(const alter of [index=>{index.SchemaVersion=2;},index=>{index.Manifeſts=[];},
+   index=>{index.manifests[0].urls=[];},index=>{index.manifests[0].data=null;},
+   index=>{index.manifests[0].platform.variant=null;},index=>{index.manifests[0].platform.OS='linux';},
+   index=>{index.manifests[0].platform['os.version']=null;},index=>{index.manifests[1].platform['os.features']=[];},
+   index=>{index.manifests[0].size=1024*1024+1;},
+   ()=>'{"schemaVersion":2,'+lock.sdk_index.slice(1),
+   ...['2.0000000000000000001','1.9999999999999999999'].map(n=>()=>lock.sdk_index.replace('"schemaVersion":2','"schemaVersion":'+n)),
+   ...['100.000000000000000001','1048576.00000000001','99.999999999999999999'].map(n=>()=>lock.sdk_index.replace(/"size":\d+/, '"size":'+n))]){
+   assert.deepEqual(validateCapturedLock(bytes,image,architecture,standards,inventory),fixture.binding(architecture));
+   const changed=structuredClone(lock),index=structuredClone(originalIndex),raw=alter(index);
+   changed.sdk_index=typeof raw==='string'?raw:encode(index);
+   changed.sdk_image=image.split('@')[0]+'@sha256:'+hash(changed.sdk_index);
+   assert.throws(()=>validateCapturedLock(Buffer.from(encode(changed)),changed.sdk_image,architecture,standards,inventory));
+  }
   for(const bad of [Buffer.concat([bytes,Buffer.from('\n')]),Buffer.from([255]),Buffer.alloc(64*1024*1024+1)])
    assert.throws(()=>validateCapturedLock(bad,image,architecture,standards,inventory));
   assert.throws(()=>validateCapturedLock(bytes,image,architecture,Buffer.from('changed'),inventory));

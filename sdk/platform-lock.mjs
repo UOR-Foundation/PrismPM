@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import {boundedPositiveInteger, caseKeys, descriptor as ociDescriptor, limits, parseJson} from './metadata-layer.mjs';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const digest = /^sha256:[0-9a-f]{64}$/;
@@ -29,7 +30,13 @@ export function parseSdkIndex(bytes, reference) {
   const port = reference.split('/', 1)[0].split(':', 2)[1];
   assert.ok(port === undefined || (Number(port) >= 1 && Number(port) <= 65535));
   assert.equal(sha(bytes), reference.split('@')[1], 'SDK index bytes disagree with pinned digest');
-  const index = JSON.parse(bytes);
+  const index = parseJson(bytes, (token, path) => {
+    if (path.length === 1 && path[0] === 'schemaVersion')
+      assert.equal(boundedPositiveInteger(token, 2), 2, 'OCI schema version differs');
+    if (path.length === 3 && path[0] === 'manifests' && Number.isInteger(path[1]) && path[2] === 'size')
+      boundedPositiveInteger(token, limits.document);
+  });
+  caseKeys(index, ['schemaVersion', 'mediaType', 'manifests', 'annotations', 'subject', 'artifactType']);
   assert.equal(index.schemaVersion, 2);
   assert.equal(index.mediaType, 'application/vnd.oci.image.index.v1+json');
   assert.equal(index.manifests.length, 2, 'SDK index must have exactly the two supported native platforms');
@@ -38,9 +45,10 @@ export function parseSdkIndex(bytes, reference) {
       && row.platform.architecture === architecture);
     assert.equal(matching.length, 1, `SDK index must contain exactly one linux/${architecture}`);
     const descriptor = matching[0];
-    assert.equal(descriptor.mediaType, 'application/vnd.oci.image.manifest.v1+json');
-    assert.ok(Number.isSafeInteger(descriptor.size) && descriptor.size > 0);
-    assert.match(descriptor.digest, digest);
+    ociDescriptor(descriptor, limits.document, 'application/vnd.oci.image.manifest.v1+json');
+    caseKeys(descriptor.platform, ['architecture', 'os', 'os.version', 'os.features', 'variant']);
+    assert.ok(descriptor.platform['os.version'] === undefined && descriptor.platform['os.features'] === undefined,
+      'SDK platform requirements are unsupported');
     assert.ok(descriptor.platform.variant === undefined
       || (architecture === 'arm64' && descriptor.platform.variant === 'v8'));
     return {architecture, reference: `${reference.split('@')[0]}@${descriptor.digest}`, descriptor};

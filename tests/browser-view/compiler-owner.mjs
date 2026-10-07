@@ -13,9 +13,11 @@ const families = Object.freeze({
   view: Object.freeze({directory: 'browser-view', executable: 'browser-workspace-view-driver'}),
   effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),
   presentation: Object.freeze({directory: 'browser-presentation', executable: 'browser-presentation-driver'}),
+  session: Object.freeze({directory: 'browser-session', executable: 'browser-session-driver'}),
   'operation-journal': Object.freeze({directory: 'browser-operation-journal', executable: 'browser-operation-journal-driver'}),
   budget: Object.freeze({directory: 'browser-budget', executable: 'browser-budget-driver'}),
   custody: Object.freeze({directory: 'browser-custody', executable: 'browser-custody-driver'}),
+  publication: Object.freeze({directory: 'publication-admission', executable: 'publication-admission-driver'}),
 });
 const owners = new WeakMap();
 function family(name) {
@@ -97,7 +99,8 @@ export function captureCompilerRuntime(root) {
     assert.equal(realpathSync(path), path, 'unaliased exporter runtime closure');
     unchanged(stat, lstatSync(path, {bigint: true}));
     assert.equal(stat.uid, BigInt(process.getuid()), 'owned exporter runtime closure');
-    assert.equal(stat.mode & 0o7022n, 0n, 'exporter runtime cannot have special permissions or be group/other writable');
+    assert.equal(stat.mode & 0o7022n, 0n,
+      'exporter runtime cannot have special permissions or be group/other writable: ' + relative);
     if (relative !== '.' && relative !== './.source-lean.tar') {
       const kind = relative === './.lake' || relative.startsWith('./.lake/') ? 'build' : 'source';
       assert(counts[kind] < 4096, 'exporter runtime ' + kind + ' entry count exceeded');

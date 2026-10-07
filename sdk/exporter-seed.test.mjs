@@ -8,6 +8,85 @@ import {join} from 'node:path';
 import {boundedConstructionRoot, buildSeed, constructionEnvironment, createConstructionStage, publishSeedFiles, readSmall, runConstruction, runtimePaths, separateConstructionTrees, snapshotFile, snapshotTree, validateConstructionFilesystem} from './exporter-seed.mjs';
 import {decodeExporterSeed, encodeInventory, exporterArtifactBindings} from './inventory-metadata.mjs';
 import {bindSeedInventory, bindSeedManifest, stageSeedFiles, verifySeedFiles} from './exporter-seed-admission.mjs';
+import * as seedRuntime from './exporter-seed.mjs';
+import {closeSync, openSync} from 'node:fs';
+
+test('native ELF classification rejects malformed or foreign headers and never bypasses dynamic closure', async t => {
+  const root=fixture(t),path=join(root,'program');
+  const elf=(types=[1],machine=62)=>{
+    const bytes=Buffer.alloc(64+56*types.length);Buffer.from([127,69,76,70,2,1,1]).copy(bytes);
+    bytes.writeUInt16LE(2,16);bytes.writeUInt16LE(machine,18);bytes.writeUInt32LE(1,20);
+    bytes.writeBigUInt64LE(64n,32);bytes.writeUInt16LE(64,52);bytes.writeUInt16LE(56,54);bytes.writeUInt16LE(types.length,56);
+    for(const [index,type] of types.entries())bytes.writeUInt32LE(type,64+56*index);
+    return bytes;
+  };
+  const classify=(bytes,arch='x64',implementation=seedRuntime.elfRuntimeMode)=>{writeFileSync(path,bytes);const fd=openSync(path,'r');
+    try{return implementation(fd,bytes.length,arch);}finally{closeSync(fd);}};
+  assert.equal(classify(elf()),'static');assert.equal(classify(elf([1],183),'arm64'),'static');
+  for(const types of [[1,2],[1,3],[1,2,3]])assert.equal(classify(elf(types)),'dynamic');
+  assert.equal(classify(Buffer.from('#!/bin/sh\nexit 0\n')),null);
+  for(const mutation of [b=>b.subarray(0,63),b=>{b[4]=1;return b;},b=>{b[5]=2;return b;},
+    b=>{b[6]=0;return b;},b=>{b.writeUInt16LE(1,16);return b;},b=>{b.writeUInt32LE(0,20);return b;},
+    b=>{b.writeUInt16LE(63,52);return b;},b=>{b.writeUInt16LE(55,54);return b;},
+    b=>{b.writeUInt16LE(0,56);return b;},b=>{b.writeUInt16LE(65535,56);return b;},
+    b=>{b.writeBigUInt64LE(0xffffffffffffffffn,32);return b;},b=>{b.writeBigUInt64LE(0n,32);return b;},
+    b=>{b.writeBigUInt64LE(999999n,72);return b;},b=>{b.writeBigUInt64LE(1n,96);return b;},
+    b=>{b.writeUInt32LE(2,64);return b;},b=>{b.writeUInt32LE(5,64);return b;}])
+    assert.throws(()=>classify(mutation(elf())));
+  assert.throws(()=>classify(elf([1],183)));
+  assert.throws(()=>classify(elf(),'unknown'));
+  const unused=elf([1,0]);unused.fill(255,128);assert.equal(classify(unused),'static');
+  const source=readFileSync(new URL('./exporter-seed.mjs',import.meta.url),'utf8');
+  for(const [index,before,after,bytes,expectation] of [
+    [0,'if (type === 2 || type === 3) dynamic = true;','',elf([1,2]),'dynamic'],
+    [1,"assert.equal(header.readUInt16LE(18), machine, 'foreign ELF machine');",'',elf([1],183),'refuse'],
+    [2,"assert(start + size <= BigInt(length), 'ELF segment outside file');",'',
+      (()=>{const b=elf();b.writeBigUInt64LE(999999n,72);return b;})(),'refuse']]){
+    assert.equal(source.split(before).length,2);const module=join(root,'mutant-'+index+'.mjs');
+    writeFileSync(module,source.replace(before,after).replace("'./inventory-metadata.mjs'",JSON.stringify(new URL('./inventory-metadata.mjs',import.meta.url).href)));
+    const mutant=await import(new URL('file://'+module).href);
+    if(expectation==='refuse')assert.doesNotThrow(()=>classify(bytes,'x64',mutant.elfRuntimeMode));
+    else assert.notEqual(classify(bytes,'x64',mutant.elfRuntimeMode),expectation);
+  }
+});
+
+test('real compiler static and dynamic ELF closure agrees with GNU readelf and retains dynamic failures', t => {
+  const root=fixture(t),source=join(root,'source.c');writeFileSync(source,'int main(void){return 0;}\n');
+  const execute=(program,args)=>{const result=spawnSync(program,args,{encoding:'utf8',timeout:10000,maxBuffer:1024*1024});
+    assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);return result;};
+  for(const mode of ['static','dynamic']){
+    const program=join(root,mode);execute('/usr/bin/cc',[...(mode==='static'?['-static']:[]),source,'-o',program]);
+    const headers=execute('/usr/bin/readelf',['--program-headers','--wide',program]).stdout;
+    assert.equal(/\b(?:INTERP|DYNAMIC)\b/.test(headers),mode==='dynamic');
+    const closure=seedRuntime.runtimeClosure([program],join(root,'not-a-toolchain'),root,process.env);
+    if(mode==='static')assert.deepEqual(closure,[]);
+    else{assert(closure.length>=2);assert(closure.some(row=>row.selected.includes('libc.so')));
+      assert.throws(()=>seedRuntime.runtimeClosure([program],join(root,'not-a-toolchain'),root,process.env,
+        ()=>{throw new Error('actual dynamic dependency inspection failure');}),/dynamic dependency inspection failure/);}
+    if(mode==='dynamic'){
+      const bytes=readFileSync(program),name=Buffer.from('libc.so.6'),offset=bytes.indexOf(name);
+      assert(offset>=0);assert.equal(bytes.indexOf(name,offset+name.length),-1);
+      Buffer.from('nope.so.6').copy(bytes,offset);const broken=join(root,'missing-library');writeFileSync(broken,bytes,{mode:0o755});
+      assert.match(execute('/usr/bin/ldd',[broken]).stdout,/nope\.so\.6 => not found/);
+      assert.throws(()=>seedRuntime.runtimeClosure([broken],join(root,'not-a-toolchain'),root,process.env),/unresolved or unrecognized/);
+    }
+    const fd=openSync(program,'r');try{assert.equal(seedRuntime.elfRuntimeMode(fd,lstatSync(program).size),mode);}finally{closeSync(fd);}
+  }
+});
+
+test('runtime executable custody rejects aliases and changes during real dependency inspection', t => {
+  const root=fixture(t),program=join(root,'program'),source=join(root,'source.c');
+  writeFileSync(source,'int main(void){return 0;}\n');
+  const built=spawnSync('/usr/bin/cc',[source,'-o',program],{encoding:'utf8',timeout:10000});
+  assert.ifError(built.error);assert.equal(built.signal,null);assert.equal(built.status,0,built.stderr);
+  const linked=join(root,'linked');linkSync(program,linked);
+  assert.throws(()=>seedRuntime.runtimeClosure([program],root,root,process.env),/bounded runtime executable/);
+  rmSync(linked);symlinkSync(program,linked);
+  assert.throws(()=>seedRuntime.runtimeClosure([linked],root,root,process.env),/alias refused/);
+  assert.throws(()=>seedRuntime.runtimeClosure([program],root,root,process.env,()=>{
+    writeFileSync(program,readFileSync(program));return{stdout:'\tstatically linked\n'};
+  }),/compiler input changed/);
+});
 
 // Metadata-only fixture. Real construction and executable measurements are
 // tested separately by exporter-seed.integration.mjs inside the pinned SDK.

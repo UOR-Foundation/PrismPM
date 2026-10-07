@@ -224,6 +224,7 @@ RUN mkdir -p /opt/prismpm/share/standards/oracles \
     && cp standards/oracles/kubernetes-1.36.4-swagger.json \
       /opt/prismpm/share/standards/oracles/kubernetes-1.36.4-swagger.json
 RUN cargo build --locked --release --package prismpm \
+    && target/release/prismpm --json --project . authority resolve --locked \
     && cargo build --locked --release --package repo-conformance --bins \
     && cargo build --locked --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean \
     && cargo fetch --locked \

@@ -198,10 +198,11 @@ export function publicationNotes(revision) {
 
 export function assetNames() {
   return [
-    'SHA256SUMS', 'source-vv.tar',
+    'SHA256SUMS', 'source-vv.tar', 'sdk-metadata-native-join.json',
     ...['amd64', 'arm64'].flatMap(architecture => [
       `sdk-${architecture}-full-sdk-vv.tar`, `sdk-${architecture}-product-cli.tar`,
       `sdk-${architecture}-native-equivalence.tar`,
+      `sdk-${architecture}-native-metadata.tar`,
       `sdk-${architecture}-browser-sdk.log`, `sdk-${architecture}-library-sdk.log`,
     ]),
     ...['x86_64', 'aarch64'].flatMap(architecture => [

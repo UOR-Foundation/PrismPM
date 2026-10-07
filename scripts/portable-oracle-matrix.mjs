@@ -11,6 +11,7 @@ import {snapshotTree} from '../sdk/exporter-seed.mjs';
 import {capture, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, reportChildFailure} from './portable-oracle-custody.mjs';
 import {PortableDiagnosticBundle,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
 import {observationSummary,observationDriver} from './portable-oracle-observation.mjs';
+import {retirementFaults,retirementDriver,retirementSummary} from './portable-oracle-retirement.mjs';
 import {createHash} from 'node:crypto';
 
 const root = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
@@ -39,6 +40,7 @@ const inputs = [
   'crates/prismpm/src/embedded/hologram-oracle.browser.mjs',
   'scripts/portable-oracle-matrix.mjs', 'scripts/portable-oracle-submission-probe.mjs',
   'scripts/portable-oracle-observation.mjs',
+  'scripts/portable-oracle-retirement.mjs',
   'scripts/portable-oracle-process-owner.py',
   'scripts/portable-oracle-source.py',
   'scripts/ci-observe.mjs',
@@ -97,8 +99,11 @@ const environment = {PATH: `${toolchain}/bin:/usr/bin:/bin`, HOME: work,
 function run(name, program, args, directory, seconds, selectedEnvironment = environment, expectedStatus = 0) {
   const cleanupReceipt = join(evidence, `${name}.cleanup.json`);
   const observation=name.match(/^[01]-observation-(click|keyboard)-(observed|unobserved)$/);
+  const retirement=name.match(/^[01]-retirement-(click|keyboard)-([a-z-]+)$/);
   const expectedDriverHash=observation?createHash('sha256').update(observationDriver(
-    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),observation[2],observation[1])).digest('hex'):null;
+    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),observation[2],observation[1])).digest('hex'):
+    retirement?createHash('sha256').update(retirementDriver(
+    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),retirement[2],retirement[1])).digest('hex'):null;
   const result = spawnSync('/usr/bin/python3', ['-I', '-B', join(root, 'scripts/portable-oracle-process-owner.py'),
     String(seconds), cleanupReceipt, program, ...args],
     {cwd: directory, env: selectedEnvironment, encoding: 'utf8', timeout: (seconds + 10) * 1000, maxBuffer: 16 * 1024 ** 2});
@@ -129,6 +134,14 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
       actual_exit_code:Number.isInteger(result.status)?result.status:null,
       original_receipt_sha256:createHash('sha256').update(receiptBytes).digest('hex')});
   });
+  if(retirement)retainDiagnostic(diagnostics,()=>{
+    diagnostics.file('cases/'+name+'.driver.mjs',join(evidence,name,'driver.mjs'),expectedDriverHash);
+    const bytes=readDiagnosticFile(join(evidence,name,'result.json'),65536),summary=retirementSummary(JSON.parse(bytes));
+    assert.equal(summary.driver_sha256,expectedDriverHash);
+    diagnostics.json('cases/'+name+'.json',{...summary,stage:name,
+      original_receipt_sha256:createHash('sha256').update(bytes).digest('hex'),
+      expected_exit_code:expectedStatus,actual_exit_code:Number.isInteger(result.status)?result.status:null});
+  });
   // Cleanup uncertainty aborts the matrix, including when the case also failed.
   const cleanup = JSON.parse(readFileSync(cleanupReceipt));
   assert.equal(cleanup.schema, 'prismpm/portable-process-owner/1');
@@ -141,6 +154,7 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
 const outcomes = [];
 const negativeControls = [];
 const observationPairs = [];
+const retirementOutcomes = [];
 let matrixCompleted=false;
 try {
   mkdirSync(environment.CARGO_HOME);
@@ -277,15 +291,37 @@ try {
     observationPairs.push({profile: profile.profile, trigger, status: 'passed', runs: pair});
   }
   assert.equal(observationPairs.length, 4, 'both profiles and triggers require observed/unobserved real runs');
+  // Additional whole-profile cleanup faults use the same freshly constructed
+  // oracle and Controller-bound subjects. No original case or run is replaced.
+  for(const [index,profile] of matrix.profiles.entries())for(const fault of retirementFaults){
+    const triggers=['pending-detach','rejected-detach','primary-body-failure'].includes(fault)?matrix.triggers:['click'];
+    for(const trigger of triggers){
+      const id=`${index}-retirement-${trigger}-${fault}`;
+      for(const input of captured)input.verify();executable.verify();
+      const reference=join(evidence,`${index}-observation-${trigger}-unobserved`,'result.json');
+      const result=run(id,process.execPath,[join(root,'scripts/portable-oracle-retirement.mjs'),
+        executable.path,artifacts[index],browser,fault,trigger,reference,join(evidence,id)],root,130);
+      const receipt=JSON.parse(result.stdout.trim());
+      assert.equal(receipt.schema,'prismpm/portable-retirement-result/1');assert.equal(receipt.status,'passed');
+      assert.equal(receipt.fault,fault);assert.equal(receipt.trigger,trigger);assert.equal(receipt.profile,profile.profile);
+      assert.equal(receipt.oracle_sha256,executable.measurement.sha256);
+      for(const key of ['model_sha256','archive_sha256','wasm_sha256'])assert.equal(receipt[key],bindings[index][key]);
+      retirementOutcomes.push({id,status:'passed'});
+      executable.verify();for(const input of captured)input.verify();
+    }
+  }
+  assert.equal(retirementOutcomes.length,32,'both full profiles and every cleanup fault required');
   assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
   assert.equal(negativeControls.length, 4);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);
   matrixCompleted=true;
   console.log(JSON.stringify({schema: 'prismpm/portable-oracle-matrix-result/1', cases: outcomes.length,
-    profiles: matrix.profiles.map(profile => profile.profile), negative_controls: negativeControls, status: 'passed', evidence}));
+    profiles: matrix.profiles.map(profile => profile.profile), negative_controls: negativeControls,
+    retirement_faults:retirementOutcomes.length,status: 'passed', evidence}));
 } finally {
   if(diagnostics)try{
-    diagnostics.finish({cases:outcomes.map(({id,status})=>({id,status})),negative_controls:negativeControls},matrixCompleted);
+    diagnostics.finish({cases:outcomes.map(({id,status})=>({id,status})),negative_controls:negativeControls,
+      retirement_controls:retirementOutcomes},matrixCompleted);
   }catch{
     try{diagnostics.incomplete();}catch{/* unavailable diagnostics cannot establish acceptance */}
     try{process.stderr.write('portable oracle diagnostic bundle incomplete\n');}catch{/* preserve the original failure */}
@@ -293,6 +329,7 @@ try {
   writeFileSync(join(evidence, 'outcomes.json'), JSON.stringify(outcomes) + '\n', {flag: 'wx'});
   writeFileSync(join(evidence, 'negative-controls.json'), JSON.stringify(negativeControls) + '\n', {flag: 'wx'});
   writeFileSync(join(evidence, 'observation-pairs.json'), JSON.stringify(observationPairs) + '\n', {flag: 'wx'});
+  writeFileSync(join(evidence, 'retirement-outcomes.json'), JSON.stringify(retirementOutcomes) + '\n', {flag: 'wx'});
   const current = lstatSync(work);
   assert(current.isDirectory() && current.dev === owned.dev && current.ino === owned.ino
     && current.uid === owned.uid && (current.mode & 0o7777) === 0o700, 'private compiler owner replaced');
