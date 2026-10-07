@@ -253,7 +253,10 @@ incomplete state. Retirement rechecks every observed member after bounded
 streaming enumeration; it does not claim an atomic filesystem snapshot.
 Interrupted or failed collection
 is explicitly incomplete; it cannot replace the original failure, retry a case,
-establish acceptance or omit any of the 78 cases/four controls.
+establish acceptance or omit any of the 78 cases/twelve controls. The eight
+additional controls remove or corrupt the actual request-completion diagnostic
+listener for both profiles and both triggers; the completion predicate itself
+must refuse them without weakening application-response acceptance.
 Readiness fault probes explicitly hold readiness after a real submission and
 release it only after actual result rendering. Body-loss probes close the actual
 target after correlated headers; method-rewrite probes separately retain the

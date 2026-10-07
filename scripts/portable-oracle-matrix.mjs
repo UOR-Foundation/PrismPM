@@ -85,7 +85,7 @@ try{diagnostics=new PortableDiagnosticBundle(root);}catch{
 retainDiagnostic(diagnostics,()=>{
  diagnostics.json('source-witnesses.json',{schema:'prismpm/portable-oracle-diagnostic-source/1',scope:'diagnostics-only-not-acceptance',
   inputs:captured.map((row,index)=>({input:index,measurement:row.measurement})),
-  profiles:matrix.profiles.map(row=>row.profile),expected_cases:78,expected_negative_controls:4});
+  profiles:matrix.profiles.map(row=>row.profile),expected_cases:78,expected_negative_controls:12});
  for(const [index,profile] of matrix.profiles.entries())for(const [name,path] of Object.entries({
   model:join(artifacts[index],'model.prism.json'),archive:join(artifacts[index],profile.name+'.holo'),
   wasm:join(artifacts[index],'core-wasm',profile.cargo_name.replaceAll('-','_')+'_core_wasm.wasm'),verification:bindings[index].verification_manifest,
@@ -239,6 +239,30 @@ try {
       for (const input of captured) input.verify();
       negativeControls.push({id, status: 'refused-as-required'});
     }
+    // Execute actual upstream sessions with only the diagnostic listener
+    // removed/malformed. These must fail the completion predicate itself.
+    for (const trigger of matrix.triggers) for (const control of ['omit-finished', 'malformed-finished']) {
+      const id = `${index}-probe-control-${control}-${trigger}`;
+      for (const input of captured) input.verify();
+      executable.verify();
+      const result = run(id, process.execPath, [join(root, 'scripts/portable-oracle-submission-probe.mjs'),
+        executable.path, artifacts[index], browser, 'wrong-response', join(evidence, id), trigger, control],
+      root, 130, environment, 1);
+      const receipt = JSON.parse(result.stdout.trim());
+      assert.equal(receipt.control, control);
+      assert.equal(receipt.probe_passed, false);
+      assert.equal(receipt.failure_code, 'PORTABLE_REQUEST_COMPLETION');
+      assert.equal(receipt.oracle_sha256, executable.measurement.sha256);
+      for (const key of ['model_sha256', 'archive_sha256', 'wasm_sha256'])
+        assert.equal(receipt[key], bindings[index][key]);
+      assert.equal(receipt.diagnostics.length, 1);
+      assert.equal(receipt.diagnostics[0].check, 'response-envelope');
+      assert.equal(receipt.diagnostics[0].invocationCount, 1);
+      assert.equal(receipt.diagnostics[0].keyboard, trigger === 'keyboard');
+      executable.verify();
+      for (const input of captured) input.verify();
+      negativeControls.push({id, status: 'refused-as-required'});
+    }
     const rows = [...matrix.triggers.flatMap(trigger => matrix.interaction_cases.map(name => ({trigger, name}))),
       ...matrix.infrastructure_cases.map(name => ({trigger: 'click', name}))];
     for (const {trigger, name} of rows) {
@@ -312,7 +336,7 @@ try {
   }
   assert.equal(retirementOutcomes.length,32,'both full profiles and every cleanup fault required');
   assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
-  assert.equal(negativeControls.length, 4);
+  assert.equal(negativeControls.length, 12);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);
   matrixCompleted=true;
   console.log(JSON.stringify({schema: 'prismpm/portable-oracle-matrix-result/1', cases: outcomes.length,

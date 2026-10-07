@@ -49,12 +49,38 @@ export function requireBoundaryCheck(name, diagnostic) {
 
 export function applyNegativeControl(driver, source, injection, control) {
   if (control === 'noop') return source;
+  if (control === 'omit-finished' || control === 'malformed-finished') {
+    const point = control === 'omit-finished'
+      ? "target.on('requestfinished', onFinished);"
+      : "record({event: 'request-finished', invocation: true});";
+    assert.equal(driver.split(point).length, 2, 'completion-control mutation must be unique');
+    return driver.replace(point, control === 'omit-finished' ? ''
+      : "record({event: 'request-finished', invocation: true, unexpected: true});");
+  }
   if (control === 'wrong-status') {
     assert.equal(driver.split(injection).length, 2, 'negative-control injection must be unique');
     return driver.replace(injection, injection.replace('status: 200,', 'status: 503,'));
   }
   assert.equal(control, 'none');
   return driver;
+}
+
+export function requireRequestCompletion(name, diagnostic) {
+  try {
+    assert(Array.isArray(diagnostic.events), 'actual submission events required');
+    const completed = diagnostic.events.filter(event => event.event === 'request-finished');
+    for (const event of completed) {
+      assert.deepEqual(Object.keys(event).sort(), ['event', 'invocation']);
+      assert.equal(event.invocation, true);
+    }
+    if (name === 'wrong-response' || name === 'delayed-wrong-response') {
+      assert.equal(completed.length, 1, 'the body was read from exactly one completed invocation');
+    }
+  } catch {
+    const error = new Error('correlated request completion evidence differs');
+    error.code = 'PORTABLE_REQUEST_COMPLETION';
+    throw error;
+  }
 }
 
 export function refuseCargoAncestorConfiguration(directory) {

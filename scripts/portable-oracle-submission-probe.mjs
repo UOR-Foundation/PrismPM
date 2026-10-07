@@ -6,7 +6,7 @@ import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {requireBoundaryCheck, applyNegativeControl} from './portable-oracle-custody.mjs';
+import {requireBoundaryCheck, requireRequestCompletion, applyNegativeControl} from './portable-oracle-custody.mjs';
 
 const [oracle, artifactDirectory, browser, name, evidenceDirectory, trigger = 'click', control = 'none', ...extra] = process.argv.slice(2);
 assert.equal(extra.length, 0);
@@ -16,7 +16,7 @@ const matrixPath = fileURLToPath(new URL('../tests/data/portable-oracle-matrix.j
 const matrix = JSON.parse(readFileSync(matrixPath));
 assert.equal(matrix.schema, 'prismpm/portable-oracle-matrix/1');
 assert(matrix.triggers.includes(trigger), 'closed trigger required');
-assert(['none', 'wrong-status', 'noop'].includes(control), 'closed negative control required');
+assert(['none', 'wrong-status', 'noop', 'omit-finished', 'malformed-finished'].includes(control), 'closed negative control required');
 if (control !== 'none') assert.equal(name, 'wrong-response', 'negative controls qualify response probe only');
 assert([...matrix.interaction_cases, ...matrix.infrastructure_cases].includes(name), 'closed case required');
 if (matrix.infrastructure_cases.includes(name)) assert.equal(trigger, 'click', 'infrastructure probes do not claim keyboard execution');
@@ -237,6 +237,7 @@ try {
       assert(diagnostic.events.some(event => event.event === 'page-close'));
     }
     requireBoundaryCheck(name, diagnostic);
+    requireRequestCompletion(name, diagnostic);
     assert.equal(diagnostic.keyboard, trigger === 'keyboard');
     if (name === 'pretend-body-failure') {
       assert.equal(diagnostic.failure, 'unexpected');

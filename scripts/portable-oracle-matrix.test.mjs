@@ -6,7 +6,7 @@ import {join,dirname as actualDirname,resolve as actualResolve} from 'node:path'
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {capture, requireBoundaryCheck, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
+import {capture, requireBoundaryCheck, requireRequestCompletion, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, applyNegativeControl, reportChildFailure} from './portable-oracle-custody.mjs';
 import {PortableDiagnosticBundle,diagnosticLimits,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
 import {createHash} from 'node:crypto';
 import {EventEmitter} from 'node:events';
@@ -15,6 +15,36 @@ import {retirementFaults,retirementDriver,retirementSummary,requirePrimaryBodyFa
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const matrix = JSON.parse(read('tests/data/portable-oracle-matrix.json'));
+
+test('completion evidence requires the actual correlated event and its exact closed schema', () => {
+  const completed = {event: 'request-finished', invocation: true};
+  for (const name of ['wrong-response', 'delayed-wrong-response']) {
+    requireRequestCompletion(name, {events: [completed]});
+    for (const events of [[], [completed, completed], [{...completed, invocation: false}],
+      [{...completed, unexpected: true}], [{event: 'request-finished'}]]) {
+      assert.throws(() => requireRequestCompletion(name, {events}),
+        error => error.code === 'PORTABLE_REQUEST_COMPLETION');
+    }
+  }
+  requireRequestCompletion('body-unavailable', {events: []});
+  const owner = read('scripts/portable-oracle-matrix.mjs');
+  assert(owner.includes("for (const trigger of matrix.triggers) for (const control of ['omit-finished', 'malformed-finished'])"));
+  assert(owner.includes("assert.equal(receipt.failure_code, 'PORTABLE_REQUEST_COMPLETION')"));
+  assert(owner.includes('assert.equal(negativeControls.length, 12)'));
+});
+
+test('completion controls mutate only the real source listener and refuse missing or ambiguous targets', () => {
+  const source = read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const listener = "target.on('requestfinished', onFinished);";
+  const event = "record({event: 'request-finished', invocation: true});";
+  assert.equal(applyNegativeControl(source, source, '', 'omit-finished'), source.replace(listener, ''));
+  assert.equal(applyNegativeControl(source, source, '', 'malformed-finished'),
+    source.replace(event, "record({event: 'request-finished', invocation: true, unexpected: true});"));
+  for (const [control, point] of [['omit-finished', listener], ['malformed-finished', event]]) {
+    assert.throws(() => applyNegativeControl(source.replace(point, ''), source, '', control), /must be unique/);
+    assert.throws(() => applyNegativeControl(source + point, source, '', control), /must be unique/);
+  }
+});
 
 const diagnosticRoot=t=>{const root=mkdtempSync(join(tmpdir(),'portable-diagnostic-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const hash=value=>createHash('sha256').update(value).digest('hex');
