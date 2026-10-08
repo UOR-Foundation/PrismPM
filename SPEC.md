@@ -1620,6 +1620,16 @@ build wrapper refuses conflicting context, source, file or target arguments.
 This is image-input construction; full V&V execution, freshness, independent
 native-platform and immutable-image acceptance remain separate gates.
 
+Release reproducibility reads both complete local OCI layer closures, not just
+their index-selected manifests and configurations. Each declared layer must
+be an independent regular, unaliased file with its exact descriptor size and
+SHA-256 digest. Reads are streamed through EOF with fresh file and directory
+identity checks; no previous invocation supplies acceptance. Metadata is at
+most 16 MiB, individual layers 32 GiB, and a layout contains at most 4,096 layers
+and 128 GiB of declared layer bytes. Observed custody is not atomic filesystem
+isolation. Matching rebuilds must still equal the shipped platform manifest;
+this transport check grants neither installed-SDK nor application acceptance.
+
 ### 12.1 Browser host prerequisites
 
 `sdk/browser` contains generic host bindings, not a stateful application
