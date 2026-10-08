@@ -204,6 +204,7 @@ The three honesty levels:
 | `DK-28` | `build` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. |
 | `DK-29` | `build` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. |
 | `DK-30` | `build` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. |
+| `DK-33` | `build` | Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority. |
 | `DK-34` | `build` | Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification. |
 
 ## security

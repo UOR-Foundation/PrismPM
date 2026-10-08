@@ -82,6 +82,7 @@ const definitions = [
   ['asyncapi-website-adeo-schemas', 'test-corpus', '20a31a0396b41dd24b1bac877ab7ce3f58037c28', 'standards/oracles/asyncapi-website-20a31a03', 'tree'],
   ['build-base', 'base-image', 'rust-1.97.1-bookworm', null, 'sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97'],
   ['browser-host-primitives', 'adapter', '1', '/opt/prismpm/browser', 'tree'],
+  ['browser-account-genesis-construction', 'adapter', '1', '/opt/prismpm/share/account-genesis', 'tree'],
   ['bootstrap-historical-runtime', 'binary', '0.2.0-runner/1', '/opt/prismpm/bootstrap-0.2.0', 'tree'],
   ['bootstrap-historical-runner', 'binary', '0.2.0-runner/1', 'sdk/bootstrap/runner.mjs'],
   ['conformance-corpus', 'test-corpus', 'prismpm/ids/1', '/opt/prismpm/share/conformance-root', 'tree'],

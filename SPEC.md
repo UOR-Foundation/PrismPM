@@ -682,6 +682,11 @@ KILL grace period, and independent 16,777,216-byte stdout/stderr limits.
 Process records contain normalized arguments/output, exit status, and SHA-256
 of the executable bytes. Timeout, signal, overflow, malformed output, nonzero
 exit, or missing executable is a registered failure.
+Timeout-class failures retain the observed wrapper exit code and bounded
+normalized stdout/stderr excerpts (at most 2,048 UTF-8-aligned bytes from each
+end, with the omitted-byte count). Notes also bind the complete normalized
+streams by byte length and SHA-256. These diagnostics do not constitute
+successful process records; exit 137 alone does not establish the cause of a kill.
 Normalization replaces confined absolute roots with fixed tokens, converts
 line endings to LF, replaces Lake build durations with `<DURATION>`, removes
 Lake's schedule-dependent `[job/total]` progress ordinals, and sorts the
@@ -2135,6 +2140,55 @@ source predicate and independently pass their complete owning journeys. This
 component grants no key possession, account authority, freshness, signature
 conformance, NIST certification or public application acceptance.
 
+#### 12.11.3 Private stable account genesis
+
+DK-33 defines an immutable account declaration containing a stable namespace,
+creation nonce and initial uncompressed P-256 public key. Generated source owns
+canonical encoding, complete P-256 point admission, exact expected-namespace
+admission and the domain-separated identity preimage. Source admission checks
+SEC 1 uncompressed format, coordinate range and curve equation using the fixed
+SEC 2 secp256r1 parameters; its cofactor-one subgroup implication applies only
+to that curve. The browser performs actual key import and SHA-256; only
+its factory returns opaque captured facts. The resulting reference identifies
+this declaration, not a human, mailbox owner, organization role or current
+credential. Application updates and authorized credential rotation preserve the
+original genesis. Changing its namespace or any other field creates a different
+declaration, never transfers authority.
+
+`AccountGenesis.cddl` fixes the internal definite-CBOR frame: genesis 137 bytes,
+identity material 163, largest valid request 174 and response 409, with a 512-byte
+complete frame ceiling. Parsing consumes every byte. No caller hash, callback,
+verification flag or public constructor replaces generated admission or actual
+cryptography. The private bootstrap must bind the selected artifact to verified
+source/package provenance; a self-consistent module digest alone does not.
+The factory selects its fixed SDK-relative artifact using the generated portable
+model/IR/two-Wasm binding; legacy artifact arguments are assertions, not code
+selection. Each native SDK build reconstructs and checks the binding and bytes,
+retains platform-specific kernel construction proofs, and inventories them with
+the installed module. Same-origin credential-free acquisition refuses redirects,
+requires exact bounded bytes, EOF and SHA-256 within 30 seconds, and aborts and
+observes cancellation on failure before any verifier can be returned.
+Malformed bindings refuse before allocation or fetch. Cancellation rejection or
+non-settlement preserves refusal with a five-second cleanup bound, never grants
+a verifier or establishes platform quiescence. Installed SDK owners execute the
+actual shipped modules and Wasm and verify their unchanged identities against
+the fresh constructor. Inventory-verified construction-file integrity joins do
+not replace kernel, source, package, retirement or full-owner acceptance.
+
+Acceptance requires full generated kernel/native std/no_std/two-Wasm parity,
+canonical and malformed boundaries, actual maximum and one-over frames,
+all applicable original P-256 records in both complete pinned NIST CAVP/ACVP
+supplier files (including the explicitly labeled ACVP sample data), independent digest
+calculations, compiled source defects and three-engine
+capture/curve/hash/opaque-handle adversaries with exact native transcript replay.
+Complete imported-corpus execution is not exhaustive point enumeration or NIST
+algorithm certification. This is a private SDK prerequisite, not a public
+`prism-stdlib` crate export.
+Account allocation, proof of initial key possession, authenticated succession,
+mailbox verification, recovery, currentness and organization authority remain
+separate required integrations. This private component is not DID, VC, JOSE,
+COSE or application acceptance. `PP2011` remains closed.
+
 ### 12.12 Private durable operation journal
 
 DK-24 owns source-generated local operation admission, canonical records and
@@ -2794,6 +2848,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. | §12 |
+| `DK-33` | `sdk` | Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority. | §12 |
 | `DK-34` | `sdk` | Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
