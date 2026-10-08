@@ -4,7 +4,7 @@ binding = [reference, reference, reference, reference, reference, reference]
 context = [binding, origin: reference, purpose: 0..3, subject: reference,
   scope: reference, state: reference, request: reference,
   credential-epoch: 0..4294967295, challenge: reference]
-public-key = bstr .size 65 ; raw uncompressed P-256, prefix 04; host validates point
+public-key = bstr .size 65 ; raw uncompressed P-256, prefix 04; generated DK-34 validates point before provider import
 signature = bstr .size 64 ; P1363; host performs actual verification
 unsigned = [1, context, public-key]
 envelope = [1, context, public-key, signature]

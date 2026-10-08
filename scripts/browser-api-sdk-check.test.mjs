@@ -496,7 +496,7 @@ test('release acceptance actually invokes every closed owning suite and rejects 
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
  assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38']);
- assert.equal(runSuites(root,launch,()=>{}).length,22);
+ assert.equal(runSuites(root,launch,()=>{}).length,23);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,43);
