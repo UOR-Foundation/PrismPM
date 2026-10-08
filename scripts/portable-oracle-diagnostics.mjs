@@ -4,7 +4,10 @@ import {createHash} from 'node:crypto';
 import {constants,closeSync,fstatSync,lstatSync,mkdirSync,mkdtempSync,openSync,opendirSync,readSync,realpathSync,renameSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 
-export const diagnosticLimits=Object.freeze({files:256,fileBytes:16*1024**2,totalBytes:32*1024**2,indexBytes:128*1024});
+// Nine subject/witness files, two members for each of 78 cases, 12 controls,
+// twelve observation runs and 34 retirement runs, plus outcomes: 282 members.
+// Preserve two reserved slots; all per-file/aggregate/index byte bounds stay fixed.
+export const diagnosticLimits=Object.freeze({files:284,fileBytes:16*1024**2,totalBytes:32*1024**2,indexBytes:128*1024});
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const canonical=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)
  ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
@@ -153,7 +156,20 @@ export function probeSummary(value){
  assert(Array.isArray(value.diagnostics)&&value.diagnostics.length<=4);
  const diagnostics=value.diagnostics.map(row=>submissionDiagnosticSummary(row));
  return{hashes,exit_code:integer(value.exit_code,255),signal:choice(value.signal,[null,'SIGTERM','SIGKILL','SIGINT','SIGHUP']),
-  probe_passed:value.probe_passed===true,product_acceptance:'not-established',diagnostics};
+  probe_passed:value.probe_passed===true,product_acceptance:'not-established',diagnostics,
+  ...(Object.hasOwn(value,'duplicate_control')?{
+   duplicate_control_truncated:Array.isArray(value.duplicate_control)&&value.duplicate_control.length>1,
+   duplicate_control:
+   (Array.isArray(value.duplicate_control)?value.duplicate_control:[]).slice(0,1).map(row=>({
+    state:choice(row?.state,['joined','missing']),pending:integer(row?.pending,32),
+    outcomes_truncated:Array.isArray(row?.outcomes)&&row.outcomes.length>32,
+    outcome_count:Array.isArray(row?.outcomes)?integer(row.outcomes.length):null,
+    outcomes:(Array.isArray(row?.outcomes)?row.outcomes:[]).slice(0,32).map(outcome=>({
+     status:choice(outcome?.status,['passed','failed','overflow']),http_status:integer(outcome?.http_status,599),
+     bytes:integer(outcome?.bytes,16*1024**2),envelope:outcome?.envelope===true,
+    })),
+   }))}:{}),
+ };
 }
 
 // A diagnostic failure must not invent acceptance, retry a case, or replace the

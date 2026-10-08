@@ -6,7 +6,7 @@ import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {requireBoundaryCheck, applyNegativeControl} from './portable-oracle-custody.mjs';
+import {requireBoundaryCheck, requireRequestCompletion, applyNegativeControl, duplicateInjection, duplicateOwnedDriver, requireDuplicateWitness} from './portable-oracle-custody.mjs';
 
 const [oracle, artifactDirectory, browser, name, evidenceDirectory, trigger = 'click', control = 'none', ...extra] = process.argv.slice(2);
 assert.equal(extra.length, 0);
@@ -16,7 +16,7 @@ const matrixPath = fileURLToPath(new URL('../tests/data/portable-oracle-matrix.j
 const matrix = JSON.parse(readFileSync(matrixPath));
 assert.equal(matrix.schema, 'prismpm/portable-oracle-matrix/1');
 assert(matrix.triggers.includes(trigger), 'closed trigger required');
-assert(['none', 'wrong-status', 'noop'].includes(control), 'closed negative control required');
+assert(['none', 'wrong-status', 'noop', 'omit-finished', 'malformed-finished'].includes(control), 'closed negative control required');
 if (control !== 'none') assert.equal(name, 'wrong-response', 'negative controls qualify response probe only');
 assert([...matrix.interaction_cases, ...matrix.infrastructure_cases].includes(name), 'closed case required');
 if (matrix.infrastructure_cases.includes(name)) assert.equal(trigger, 'click', 'infrastructure probes do not claim keyboard execution');
@@ -87,10 +87,7 @@ const injections = {
     window.fetch = (url, options) => original(url, {...options, body:
       JSON.stringify({version: 1, name: 'application.invoke', payload: 'oracle-corrupted-payload'})});
   });`,
-  duplicate: `await page.evaluate(payload => document.querySelector('#application-form').addEventListener('submit', () => {
-    void fetch('/_hologram/intent', {method: 'POST', headers: {'content-type': 'application/json'},
-      body: JSON.stringify({version: 1, name: 'application.invoke', payload})});
-  }), decode.decode(Uint8Array.from(recovery.request)));`,
+  duplicate: duplicateInjection(),
   navigation: `await page.evaluate(() => document.querySelector('#application-form').addEventListener('submit', () => {
     location.assign('/index.html');
   }));`,
@@ -128,7 +125,8 @@ if (name === 'trigger-failure') {
 if (['delayed-duplicate', 'delayed-wrong-response', 'delayed-stuck-busy'].includes(name)) {
   const point = '    await submit(recovery, delayedPage, false, {fillInputs: false});';
   assert.equal(source.split(point).length, 2);
-  const injection = injections[name.slice('delayed-'.length)].replaceAll('await page.', 'await delayedPage.');
+  const injection = name === 'delayed-duplicate' ? duplicateInjection('delayedPage')
+    : injections[name.slice('delayed-'.length)].replaceAll('await page.', 'await delayedPage.');
   driverBytes = driverBytes.replace(point, `    ${injection}\n${point}`);
 }
 if (name === 'delayed-completion') {
@@ -160,6 +158,7 @@ if (name === 'body-unavailable' || name === 'body-plus-cleanup') {
   // Playwright's real body read. No fabricated exception is body evidence.
   driverBytes = driverBytes.replace(point, `      await target.close();\n${point}`);
 }
+if (name === 'duplicate' || name === 'delayed-duplicate') driverBytes = duplicateOwnedDriver(driverBytes);
 writeFileSync(driver, driverBytes, {flag: 'wx'});
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const subjects = {source: sourcePath, matrix: matrixPath, driver, oracle, model: modelPath, archive, wasm,
@@ -180,6 +179,10 @@ const cleanupDiagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
   try { const value = JSON.parse(line); return value.schema === 'prismpm/browser-cleanup-diagnostic/1' ? [value] : []; }
   catch { return []; }
 });
+const duplicateDiagnostics = (result.stderr ?? '').split('\n').flatMap(line => {
+  try { const value = JSON.parse(line); return value.schema === 'prismpm/duplicate-control/1' ? [value] : []; }
+  catch { return []; }
+});
 let accepted = false;
 let failure;
 let failureCode;
@@ -187,6 +190,10 @@ try {
   assert.equal(result.error, undefined, 'spawn, timeout or output-limit failure is not oracle evidence');
   assert.equal(result.signal, null, 'signal termination is not oracle evidence');
   assert.deepEqual(identities(), before, 'probe inputs changed during execution');
+  if (name === 'duplicate' || name === 'delayed-duplicate') {
+    assert.equal(duplicateDiagnostics.length, 1, 'actual duplicate response owner required');
+    requireDuplicateWitness(duplicateDiagnostics[0], model.application.response_maximum * 6 + 256);
+  } else assert.deepEqual(duplicateDiagnostics, []);
   if (name === 'positive' || name === 'delayed-completion') {
     assert.equal(result.status, 0);
     const report = JSON.parse(result.stdout.trim());
@@ -237,6 +244,7 @@ try {
       assert(diagnostic.events.some(event => event.event === 'page-close'));
     }
     requireBoundaryCheck(name, diagnostic);
+    requireRequestCompletion(name, diagnostic);
     assert.equal(diagnostic.keyboard, trigger === 'keyboard');
     if (name === 'pretend-body-failure') {
       assert.equal(diagnostic.failure, 'unexpected');
@@ -308,13 +316,15 @@ try {
   accepted = true;
 } catch (error) {
   failure = String(error);
-  failureCode = error.code === 'PORTABLE_WRONG_CHECK' ? error.code : 'PROBE_ASSERTION';
+  failureCode = ['PORTABLE_WRONG_CHECK', 'PORTABLE_REQUEST_COMPLETION'].includes(error?.code) ? error.code : 'PROBE_ASSERTION';
 }
 const receipt = {schema: 'prismpm/portable-oracle-probe/1', case: name, profile: fixture.profile, trigger, control,
   scope: matrix.infrastructure_cases.includes(name) ? 'infrastructure-fault' : 'interaction-boundary',
   ...before, node_version: process.version,
   exit_code: result.status, signal: result.signal, diagnostics, cleanup_diagnostics: cleanupDiagnostics,
-  probe_passed: accepted, product_acceptance: 'not-established', ...(failure ? {failure, failure_code: failureCode} : {})};
+  probe_passed: accepted, product_acceptance: 'not-established',
+  ...(duplicateDiagnostics.length ? {duplicate_control: duplicateDiagnostics} : {}),
+  ...(failure ? {failure, failure_code: failureCode} : {})};
 writeFileSync(join(evidence, 'result.json'), `${JSON.stringify(receipt)}\n`, {flag: 'wx'});
 console.log(JSON.stringify(receipt));
 if (!accepted) process.exitCode = 1;

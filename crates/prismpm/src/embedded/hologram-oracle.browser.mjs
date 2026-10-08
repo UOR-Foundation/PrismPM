@@ -552,7 +552,8 @@ async function journey(name, work) {
     const delayed = await browser.newContext();
     let release;
     const pending = new Promise(resolve => {release = resolve;});
-    await delayed.route('**/app.js', async route => {await pending; await route.continue();});
+    const delayModule = async route => {await pending; await route.continue();};
+    await delayed.route('**/app.js', delayModule);
     const delayedPage = await delayed.newPage();
     await delayedPage.goto(`${origin}/`, {waitUntil: 'commit'});
     await fill(recovery, delayedPage);
@@ -567,6 +568,9 @@ async function journey(name, work) {
     assert.equal(delayedPage.url(), `${origin}/`);
     release();
     await delayedPage.waitForLoadState('networkidle');
+    // The initialization fault has finished. Do not leave global Chromium
+    // Fetch interception active while validating actual intent responses.
+    await delayed.unroute('**/app.js', delayModule);
     const retained = await delayedPage.evaluate(selector => document.querySelector(selector).value, text ? '#request' : '#left');
     const expectedInput = decode.decode(Uint8Array.from(recovery.request));
     assert.equal(retained, text ? expectedInput : expectedInput.split('\t')[2]);

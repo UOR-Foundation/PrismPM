@@ -8,6 +8,7 @@ import {corpus, boundaries, maximumCorpus, combinedMaximumCorpus, secretMaximumC
 import {prerequisite} from '../browser-view/prerequisites.mjs';
 import {inspectEffectModule} from '../../sdk/browser/effects-module.mjs';
 import {encodeWire} from '../../sdk/browser/presentation-wire.mjs';
+import {ownFixtureFiles, consumeNativeFixtures} from './fixture-files.mjs';
 export {prerequisite};
 export const tsv = rows => rows.map(row => row.id + '\t' + Buffer.from(row.request).toString('hex') + '\t' + Buffer.from(row.response).toString('hex') + '\n').join('');
 
@@ -93,11 +94,12 @@ export async function verifyWire(t, compilerOwner = null) {
   const allRows = [...rows, ...intentRows, ...secretRows, ...progressRows];
   const path = join(build.work, 'vectors.tsv'); writeFileSync(path, tsv(allRows), {flag: 'wx'});
   const binaries = [];
+  const fixtureFiles = ownFixtureFiles(build.work);
   build.maximumFrames = [];
   const allMaxima = function* () { yield* maximum; yield* combinedMaximumCorpus(); };
   for (const row of allMaxima()) {
     const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
-    writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
+    fixtureFiles.write(row.id + '.request', row.request); fixtureFiles.write(row.id + '.response', row.response);
     binaries.push({input, output});
     if (row.request === row.response) build.maximumFrames.push({id: row.id,
       request: sha(row.request), response: sha(row.response), length: row.request.length});
@@ -106,25 +108,27 @@ export async function verifyWire(t, compilerOwner = null) {
   build.secretMaxima = [];
   for (const row of secretMaximumCorpus()) {
     const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
-    writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
+    fixtureFiles.write(row.id + '.request', row.request); fixtureFiles.write(row.id + '.response', row.response);
     secretBinaries.push({input, output, mode: row.mode});
     build.secretMaxima.push({id: row.id, request: sha(row.request), response: sha(row.response), length: row.request.length});
   }
   const progressBinaries = []; build.progressMaxima = [];
   for (const row of progressMaximumCorpus()) {
     const input = join(build.work, row.id + '.request'), output = join(build.work, row.id + '.response');
-    writeFileSync(input, row.request, {flag: 'wx'}); writeFileSync(output, row.response, {flag: 'wx'});
+    fixtureFiles.write(row.id + '.request', row.request); fixtureFiles.write(row.id + '.response', row.response);
     progressBinaries.push({input, output, mode: row.mode});
     build.progressMaxima.push({id: row.id, request: sha(row.request), response: sha(row.response), length: row.request.length});
   }
-  for (const standard of [true, false]) await prerequisite(t, 'complete generated ' + (standard ? 'std' : 'no_std') + ' corpus, all structural maxima and exact 64 MiB frame', () => {
+  const fixtureRetirement = await consumeNativeFixtures(fixtureFiles, standard => prerequisite(t, 'complete generated ' + (standard ? 'std' : 'no_std') + ' corpus, all structural maxima and exact 64 MiB frame', () => {
     const output = build.runNative(standard, [path]);
     assert.deepEqual([...output.matchAll(/^PASS ([A-Za-z0-9]+)$/gm)].map(row => row[1]), allRows.map(row => row.id));
     assert.match(output, new RegExp('PASS ' + allRows.length + ' complete presentation vectors twice'));
     for (const row of binaries) assert.equal(build.runNative(standard, ['--binary', row.input, row.output]), 'PASS binary complete presentation vector twice\n');
     for (const row of secretBinaries) assert.equal(build.runNative(standard, [row.mode === 'wasm' ? '--binary' : '--' + row.mode, row.input, row.output]), 'PASS binary complete presentation vector twice\n');
     for (const row of progressBinaries) assert.equal(build.runNative(standard, [row.mode === 'wasm' ? '--binary' : '--' + row.mode, row.input, row.output]), 'PASS binary complete presentation vector twice\n');
-  });
+  }));
+  assert.equal(fixtureRetirement.files.length, 2 * (binaries.length + secretBinaries.length + progressBinaries.length));
+  fixtureFiles.assertRetired();
   for (const standard of [true, false]) {
     const mode = standard ? 'std' : 'no-std';
     for (const observer of [build.compileNative(standard), join(build.work, 'native-target-' + mode, 'release/browser-presentation-runner')]) {
@@ -203,7 +207,10 @@ export async function verifyWire(t, compilerOwner = null) {
     ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), fixture: sha(build.fixtureBytes), labels: sha(build.labelsBytes),
     vectors: rows.length, maximum: build.maximum, frame: build.maximumFrame, secretMaxima: build.secretMaxima,
     progressMaximum: build.progressMaximum, progressMaxima: build.progressMaxima,
-    compiler: compiler.identity, compilerSubstitutions, sources: frozen}));
+    compiler: compiler.identity, compilerSubstitutions, fixtureRetirement, sources: frozen}));
+  // This check is deliberately separate from retirement: omitting or moving
+  // retirement must fail before any browser owner may execute.
+  fixtureFiles.assertRetired();
   return build;
 }
 

@@ -214,7 +214,9 @@ manifest, and its Linux subreaper must establish descendant cleanup before the
 next case. Construction uses isolated Cargo configuration and fresh Git checkouts
 from authenticated object downloads, with staged-source and toolchain custody.
 Delayed initialization uses the same correlated submission observer without
-refilling the retained draft. Payload-safe diagnostics preserve the first failure
+refilling the retained draft. Its owned module-delay route is removed after
+module completion and before the real intent, so setup interception does not
+remain active during response validation. Payload-safe diagnostics preserve the first failure
 even when cleanup also fails. They identify the owning journey and modeled-vector
 index, observed request completion, and only closed network-failure categories;
 arbitrary browser error text is not forwarded. These observations never replace
@@ -241,19 +243,51 @@ driver omits only diagnostic acquisition; all response-body, rendering, readines
 single-invocation and navigation checks remain. Exact drivers and closed failure
 witnesses are retained before assertions. These runs supplement all original cases
 and controls, without increasing their deadlines or claiming historical causality.
+Four additional whole-profile runs retain the ordinary observer schedule: neither
+acquisition nor per-submission detach is joined. Every modeled submission still
+has its exact ordered witness and all original body, rendering, single-invocation,
+readiness and navigation predicates. Optional CDP observations may be absent or
+partial, but cannot be invented, duplicated, overflowed or report failures. Each
+ordinary qualification run must observe at least one actual correlated request;
+an entirely unavailable or empty collector cannot qualify noninterference. Their
+complete application reports must equal the corresponding unobserved reports.
+The original eight serialized-observed/unobserved runs remain mandatory and
+retain their stricter complete CDP request/response/completion witnesses.
+Injected duplicate clients own and consume their actual response with the same
+modeled envelope bound. Their tasks are retained, rejection-observed, and joined
+within the original browser-cleanup deadline. A duplicate control requires one
+fully consumed successful duplicate response, zero pending tasks, and the
+unchanged primary `single-invocation` assertion with two actual invocations;
+unavailable bodies, abandoned tasks or unrelated failures cannot qualify it.
+This negative-control lifecycle is not a change to production body acceptance
+and does not establish the cause of historical browser failures.
 The matrix incrementally retains a source-bound, nonacceptance diagnostic bundle
 under the existing uploaded `target/ci-diagnostics/` path. Exact original
 generated subjects and executed drivers, receipt/cleanup digests, closed
 payload-free observations and complete outcome inventories remain separate
-from proof/release evidence. The bundle is bounded to 256 files, 16 MiB per
+from proof/release evidence. The bundle is bounded to 284 files, 16 MiB per
 file and 32 MiB total, reserving two file slots and two bounded byte slots for
-index replacement. Closed source-owned journey identifiers are retained. Final
+index replacement. Its complete expanded inventory has 282 members: nine
+source/subject files, two files for each of the 78 cases, twelve controls,
+twelve observation runs and 34 retirement runs, and one final outcome file.
+An admitted asynchronous task failure and synchronous registry admission refusal
+are separate full-profile controls. The refusal control starts actual registry
+closure before submissions; every acquisition and ready-task admission must
+refuse without starting a session. Source-bound witnesses require the exact
+ordered pair of refusals for every modeled submission, zero sessions, enables,
+detaches and unresolved work; aggregate counts cannot authorize matching omissions.
+The original admitted-task failure remains required with all actual sessions.
+Per-file, aggregate and index byte limits and every execution deadline remain
+unchanged. Closed source-owned journey identifiers are retained. Final
 case inventories remain collectible after a copy failure, without changing the
 incomplete state. Retirement rechecks every observed member after bounded
 streaming enumeration; it does not claim an atomic filesystem snapshot.
 Interrupted or failed collection
 is explicitly incomplete; it cannot replace the original failure, retry a case,
-establish acceptance or omit any of the 78 cases/four controls.
+establish acceptance or omit any of the 78 cases/twelve controls. The eight
+additional controls remove or corrupt the actual request-completion diagnostic
+listener for both profiles and both triggers; the completion predicate itself
+must refuse them without weakening application-response acceptance.
 Readiness fault probes explicitly hold readiness after a real submission and
 release it only after actual result rendering. Body-loss probes close the actual
 target after correlated headers; method-rewrite probes separately retain the
@@ -1102,6 +1136,18 @@ retained executables through bounded, stable descriptor reads and their full
 captured identities. These checks are custody, not compiler provenance or
 atomic filesystem isolation; fresh pinned compilation remains required.
 
+Each synchronous compiler verification barrier takes a fresh complete content
+measurement for every runtime member and executable. Overlapping runtime and
+artifact roles may share that immutable measurement only within that barrier,
+after applying their independent admission predicates and freshly checking the
+pathname, ancestry and full native metadata. Every observed name is checked
+again on completion, including failure. Nested execution boundaries first check
+and permanently clear suspended observations; pre-child and post-child checks
+take independent fresh measurements. No measurement is retained between
+barriers, even when an action fails. This is a single content measurement per
+declared barrier, not atomic protection against concurrent same-user writes or
+equivalence for every possible interleaving of repeated content reads.
+
 Runtime capture enumerates one directory iterator with a one-entry buffer,
 charges each member before queueing descendants, and hashes files in at most
 64 KiB chunks. Source and build closures independently admit 4,096 members
@@ -1510,6 +1556,20 @@ canonical, exact-commit, complete 15-gate evidence; both original records are
 retained separately and rechecked before publishing the internal execution
 record. A failure retains diagnostics but cannot produce completion evidence.
 Cancellation uses the existing diagnostic supervisor's cleanup boundary.
+
+Original source/native release command capture uses the private Linux
+`release-command-owner.py` subreaper. The application cannot inherit its
+receipt descriptor. A successful capture requires complete original streams,
+the original command status, a valid private owner protocol, and kernel
+`waitpid` exhaustion of all adopted descendants; pipe closure or a process
+snapshot is insufficient. Leader exit permits five seconds of trailing work,
+then cleanup uses a five-second TERM grace and a bounded one-second kill/reap
+phase. Group TERM is used while the original session leader remains owned;
+otherwise adopted direct children are signaled. Escaped descendants are
+adopted and retired within that same cleanup budget, not granted a new grace.
+No foreground execution
+deadline is added. Failed capture or uncertain retirement cannot be admitted
+from the retained command record, even when the original leader exited zero.
 
 The inner record does not establish physical native architecture, network
 isolation, the selected OCI image's identity, release acceptance or product
@@ -2082,9 +2142,37 @@ contains raw secret input; internal DOM failure terminates instead of rollback.
 Acceptance requires fresh generated native/no_std/Wasm parity, declared actual
 maxima and one-over negatives, real browser keyboard/focus/live/close journeys,
 native replay of observed generated transcripts and owning guard mutations.
+Maximum binary acceptance fixtures are captured from their held exclusive
+creation descriptor; original file/parent identity and bounded streamed digest
+remain checked through both complete native consumers. After their final use,
+the owner verifies the entire original inventory, removes only those exact files
+and observes absence before browser
+execution. Changed/missing/aliased files, premature/omitted retirement or partial
+unlink failure cannot produce acceptance; remaining failure evidence is retained.
+This retires consumed fixture storage, not generated artifacts or acceptance
+cases, and does not increase memory limits or execution deadlines.
 This private presentation prerequisite leaves `PP2011`, credential custody,
 generated authorized dispatch, durable recovery and complete public application,
 Foundry and deployment gates unchanged.
+
+#### 12.11.2 Complete P-256 point admission
+
+DK-34 owns the bounded source-generated predicate in
+`Foundation.Crypto.P256.Model` and its private canonical CBOR verification
+boundary. Only SEC1 uncompressed P-256 points with exact coordinate widths,
+coordinates below the SEC2 prime and the complete curve equation are admitted.
+The cofactor-one subgroup implication is specific to this fixed domain.
+Malformed field representations are refused without reducing caller inputs.
+Fixed-limb intermediates are bounded below `u64`; no unbounded integer backend,
+handwritten host field arithmetic or provider-import validity assumption is used.
+
+Acceptance requires complete imported applicable NIST key-validation vectors,
+independent field/curve oracles, actual native/std/no_std/two-Wasm parity,
+all three pinned browser engines, exact artifact/source custody and genuine
+arithmetic/codec mutants. DK-33 account and DK-32 signer admission must use this
+source predicate and independently pass their complete owning journeys. This
+component grants no key possession, account authority, freshness, signature
+conformance, NIST certification or public application acceptance.
 
 ### 12.12 Private durable operation journal
 
@@ -2745,6 +2833,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. | §12 |
+| `DK-34` | `sdk` | Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

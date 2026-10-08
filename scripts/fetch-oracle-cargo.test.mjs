@@ -29,6 +29,8 @@ const pinned = [
   'tests/browser-effects/driver/Cargo.lock',
   'tests/browser-presentation/driver/Cargo.toml',
   'tests/browser-presentation/driver/Cargo.lock',
+  'tests/browser-p256/driver/Cargo.toml',
+  'tests/browser-p256/driver/Cargo.lock',
   'tests/browser-session/driver/Cargo.toml',
   'tests/browser-session/driver/Cargo.lock',
   'tests/browser-custody/driver/Cargo.toml',
@@ -66,7 +68,7 @@ test('oracle acquisition inputs match reviewed pins and embedded verifier inputs
   const revision = /^revision = "([a-f0-9]{40})"$/m.exec(upstream)?.[1];
   assert.ok(digest && revision);
   assert.ok(script.includes(`${digest}  crates/prismpm/vendor/hologram-live.tar`));
-  for (const family of ['browser-session', 'browser-operation-journal', 'publication-admission', 'browser-budget']) for (const file of ['Cargo.toml', 'Cargo.lock']) {
+  for (const family of ['browser-p256', 'browser-session', 'browser-operation-journal', 'publication-admission', 'browser-budget']) for (const file of ['Cargo.toml', 'Cargo.lock']) {
     const path = `tests/${family}/driver/${file}`;
     assert.ok(script.includes('  ' + path + '\n'), 'closed owning acquisition pin: ' + path);
   }

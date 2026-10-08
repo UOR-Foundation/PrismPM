@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-34 @build
+  Scenario: Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification.
+    Given the exact SEC1 and SEC2 P-256 domain and complete imported authoritative P-256 public-key-validation sections
+    When generated native, no_std, Wasm and all pinned browser engines execute canonical decoding, field arithmetic and point validation
+    Then malformed encodings, out-of-range coordinates and off-curve points reject independently of provider import behavior
+    And actual arithmetic and source mutations plus altered browser transcripts fail without replacing signature, possession, currentness or account authorization checks
+
   @DK-26 @build
   Scenario: The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance.
     Given source-owned session wrappers and the complete bounded session protocol
