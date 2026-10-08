@@ -68,6 +68,21 @@ test('fresh independent drivers pin hash optimization without changing construct
     '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
     '--manifest-path','/actual-private-owner/driver/Cargo.toml'],
     '/actual-private-owner',{CARGO_TARGET_DIR:'/actual-fresh-target'}]]);
+  for(const family of ['view','command','query']){
+    const source=fs.readFileSync(new URL('../browser-'+family+'/compile.mjs',import.meta.url),'utf8');
+    const begin=source.indexOf("run('cargo',['build','--locked','--offline','--jobs','1',");
+    const suffix="],repository,{CARGO_TARGET_DIR:driverTarget});";
+    const end=source.indexOf(suffix,begin);
+    assert(begin>=0&&end>begin,'actual fallback construction '+family);
+    const calls=[];
+    runInNewContext(source.slice(begin,end+suffix.length),{run(...args){calls.push(args);},join,
+      draft:'/actual-source/tests/browser-'+family,repository:'/actual-source',driverTarget:'/actual-fresh-'+family});
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['cargo',[
+      'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+      '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+      '--manifest-path','/actual-source/tests/browser-'+family+'/driver/Cargo.toml'],
+      '/actual-source',{CARGO_TARGET_DIR:'/actual-fresh-'+family}]]);
+  }
 });
 
 test('compiler owner refuses malformed or incomplete input closures before building', () => {

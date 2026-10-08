@@ -193,7 +193,8 @@ test('all private driver callers retain locked offline builds and bounded resour
     ? {directory:'publication-admission',executable:'publication-admission-driver'}
     : {directory:'browser-'+family,executable:'browser-'+family+'-driver'};
   const shared = readFileSync(join(repository, 'tests/browser-view/compiler-owner.mjs'), 'utf8');
-  const check = (source, target = 'driverTarget') => {
+  const optimized = new Set(['view','command','query'].map(name=>`tests/browser-${name}/compile.mjs`));
+  const check = (source, target = 'driverTarget', hashOptimized = false) => {
     assert.ok(['driverTarget', 'target'].includes(target));
     assert.match(source, new RegExp(`const ${target}\\s*=\\s*createPrivateDriverTarget\\(work\\)`));
     const calls = [...source.matchAll(new RegExp(
@@ -204,6 +205,11 @@ test('all private driver callers retain locked offline builds and bounded resour
     for (const option of ['--locked', '--offline']) assert(args.includes(`'${option}'`), option);
     for (const [option, value] of [['--jobs', '1'], ['--config', 'profile.dev.debug=0'], ['--config', 'build.incremental=false']]) {
       assert(new RegExp(`'${option}',\\s*'${value.replaceAll('.', '\\.')}'`).test(args), value);
+    }
+    if(hashOptimized){
+      const setting="'--config','profile.dev.package.sha2.opt-level=3'";
+      assert.equal(args.split(setting).length,2,'one fixed SHA-256 package override');
+      assert.doesNotMatch(args,/profile\.(?:dev|test)\.opt-level/,'no broad optimization override');
     }
   };
   const delegation = family => new RegExp(
@@ -229,12 +235,19 @@ test('all private driver callers retain locked offline builds and bounded resour
   };
   for (const caller of callers) {
     const source = readFileSync(join(repository, caller), 'utf8'), family = sharedFamilies.get(caller);
-    if (family === undefined) check(source); else checkShared(source, shared, family);
+    if (family === undefined) check(source,'driverTarget',optimized.has(caller)); else checkShared(source, shared, family);
     for (const text of ['--locked', '--offline', '--jobs', 'profile.dev.debug=0', 'build.incremental=false']) {
       const owningSource = family === undefined ? source : shared;
       const changed = owningSource.replace(text, 'REMOVED'); assert.notEqual(changed, owningSource);
-      assert.throws(() => family === undefined ? check(changed) : checkShared(source, changed, family),
+      assert.throws(() => family === undefined ? check(changed,'driverTarget',optimized.has(caller)) : checkShared(source, changed, family),
         caller + ': ' + text);
+    }
+    if(optimized.has(caller)){
+      for(const replacement of ['REMOVED','profile.dev.package.sha2.opt-level=2','profile.dev.opt-level=3']){
+        const changed=source.replace('profile.dev.package.sha2.opt-level=3',replacement);
+        assert.notEqual(changed,source);
+        assert.throws(()=>check(changed,'driverTarget',true),caller+': '+replacement);
+      }
     }
     if (family !== undefined) {
       const call = delegation(family).exec(source)[0];

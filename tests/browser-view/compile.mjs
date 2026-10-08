@@ -271,7 +271,7 @@ export function prepare(mutation=null,compilerOwner=null){
     if(shared)invokeDriver=args=>shared.runDriver(args,repository);
     else{
       const driverTarget=createPrivateDriverTarget(work);
-      run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+      run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
       const driver=join(driverTarget,'debug/browser-workspace-view-driver');
       invokeDriver=args=>run(driver,args,repository);
     }
