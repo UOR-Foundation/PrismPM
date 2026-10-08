@@ -782,7 +782,8 @@ test('pinned Buildx pushes a genuine two-platform OCI index by digest without cr
           assert.throws(() => verifyReproducibility(`ghcr.io/uor-foundation/prismpm-sdk@${digest}`,
             index, platform, revision, join(directory, `${platform}-a`), join(directory, `${platform}-b`)),
           undefined, `actual ${platform}/${side} ${damage} must refuse`);
-          rmSync(path); writeFileSync(path, original);
+          if (damage !== 'missing') rmSync(path);
+          writeFileSync(path, original);
         }
       }
     }
