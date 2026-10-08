@@ -3,6 +3,21 @@
 Status: **incomplete; not accepted**. No SDK image, public Browser runtime,
 account, mailbox, organization or Foundry release is accepted by this work.
 
+## Current integration — 2026-10-08
+
+DK-32 is restored beside the current DK-29/DK-33/DK-34/DK-37/DK-38 owners.
+Its complete five-file minimum is 21, including the original generated owner,
+all three engines, 24 source mutants, original WPT and two new custody checks.
+Compiler-family binding and original/private native execution use the current
+fresh-source custody API. Captured inputs reject copied authority and changed
+file identity; Cargo updates only the current vendored dependency graph.
+
+Normal model/archive generation and readback plus 13 isolated source/oracle
+checks passed in the pinned container during integration. They are not complete
+generated-owner acceptance. Current full owner, source audit, native records,
+SDK integration and unchanged raw-provider acceptance remain required.
+The historical receipts below do not qualify the current source closure.
+
 Pinned Noble SDK/devcontainer image:
 `sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21`.
 Rust 1.97.1, Lean 4.32.1, Node 22.23.2, Playwright/core 1.62.1.
