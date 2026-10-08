@@ -1,9 +1,32 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {Readable} from 'node:stream';
+import {spawnSync} from 'node:child_process';
 import {fixture,sha} from './sdk-construction-archive-fixture.mjs';
 import {verifyConstructionArchiveStream,resolveStoredZip64,validateStoredDataDescriptor} from './sdk-construction-archive.mjs';
 const input=(b,step=257)=>Readable.from((function*(){for(let p=0;p<b.length;p+=step)yield b.subarray(p,p+step);})());
+test('consumed archive chunks are collectible while the original stream and deadline remain active',()=>{
+ const script=`import assert from 'node:assert/strict';
+ import {Readable} from 'node:stream';
+ import {fixture} from ${JSON.stringify(new URL('./sdk-construction-archive-fixture.mjs',import.meta.url).href)};
+ import {verifyConstructionArchiveStream} from ${JSON.stringify(new URL('./sdk-construction-archive.mjs',import.meta.url).href)};
+ const f=fixture({indexPadding:262144}),references=[];let measured=0;
+ const stream=Readable.from((async function*(){
+  for(let at=0;at<f.bytes.length;at+=512){
+   const chunk=Buffer.from(f.bytes.subarray(at,at+512));references.push(new WeakRef(chunk));yield chunk;
+   if(references.length===256){
+    for(let i=0;i<3;i++){await new Promise(r=>setImmediate(r));global.gc();}
+    const retained=references.filter(ref=>ref.deref()).length;
+    assert(retained<=4,'deadline ownership retained consumed chunks: '+retained);measured++;
+   }
+  }
+ })());
+ const result=await verifyConstructionArchiveStream(stream,f.plan);
+ assert.equal(measured,1);assert(result.transport_closed);assert.equal(result.artifact.digest,f.plan.artifact.digest);
+ console.log(JSON.stringify({scope:'tiny real-byte unit retention only; not SDK or resource qualification',consumed:references.length,measured}));`;
+ const result=spawnSync(process.execPath,['--expose-gc','--input-type=module','-e',script],{encoding:'utf8',timeout:20000,maxBuffer:65536});
+ assert.ifError(result.error);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).measured,1);
+});
 function checksum(b,p=0){b.fill(32,p+148,p+156);const sum=b.subarray(p,p+512).reduce((n,x)=>n+x,0);b.write(sum.toString(8).padStart(6,'0')+'\0 ',p+148);}
 test('complete original stored ZIP and OCI graph integrity across every parser boundary',async()=>{
  for(const step of[1,7,257,65536])for(const wide of[false,true]){
