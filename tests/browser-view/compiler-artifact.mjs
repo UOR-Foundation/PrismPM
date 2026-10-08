@@ -8,6 +8,39 @@ import {dirname, join, relative, resolve, sep} from 'node:path';
 import {run} from './compile.mjs';
 
 const maximum = 268435456, owners = new WeakSet();
+let observations;
+
+function sweep(rows) {
+  for (const [path, row] of rows) {
+    stable(row.stat, lstatSync(path, {bigint: true}), row.native);
+    assert.equal(realpathSync(path), path, 'compiler source ancestry changed');
+  }
+}
+
+function stable(before, after, native) {
+  assert.ok(after.isFile(), 'compiler replaced during capture');
+  for (const key of ['dev', 'ino', 'uid', 'gid', 'nlink', 'size', 'mode', 'mtimeNs', 'ctimeNs'])
+    assert.equal(after[key], before[key], native ? 'stable compiler capture ' + key : 'stable compiler source');
+}
+
+// One synchronous, freshly read filesystem barrier. This is not an acceptance
+// cache: no observation survives the call, and every name is rechecked even
+// when the action fails. A child always receives distinct pre/post barriers.
+export function compilerReadBarrier(action) {
+  assert.equal(typeof action, 'function');
+  const previous = observations, current = new Map();
+  // A nested execution boundary must never revive pre-child observations.
+  // Check the suspended scope, then permanently discard its measurements.
+  if (previous) {try {sweep(previous);} finally {previous.clear();}}
+  observations = current;
+  try {
+    const result = action();
+    assert.ok(!result || typeof result.then !== 'function', 'compiler read barrier must be synchronous');
+    return result;
+  } finally {
+    try {sweep(current);} finally {current.clear(); observations = previous;}
+  }
+}
 function directory(path, privateOwner = false) {
   assert.equal(resolve(path), path, 'normalized absolute compiler directory');
   assert.equal(realpathSync(path), path, 'unaliased compiler directory');
@@ -17,41 +50,66 @@ function directory(path, privateOwner = false) {
     privateOwner ? 'private compiler owner directory required' : 'compiler directory cannot be group/other writable');
 }
 
-function read(path, links = null, retainBytes = false) {
-  directory(dirname(path));
-  assert.equal(realpathSync(path), path, 'unaliased compiler executable');
+function observe(path, links, retainBytes, native) {
+  if (native) directory(dirname(path));
+  assert.equal(realpathSync(path), path, native ? 'unaliased compiler executable' : 'unaliased compiler source required');
+  function admit(before) {
+    if (native) {
+      assert.ok(before.isFile() && before.uid === BigInt(process.getuid())
+        && before.size >= 4n && before.size <= BigInt(maximum), 'bounded owned regular compiler required');
+      assert.ok((before.mode & 0o100n) !== 0n && (before.mode & 0o7022n) === 0n,
+        'owned executable without group/other write access required');
+      if (links !== null) assert.equal(before.nlink, links, 'compiler link count');
+    } else {
+      assert.ok(before.isFile() && before.nlink === 1n && before.size <= BigInt(maximum),
+        'bounded single-link compiler source required');
+    }
+  }
+  if (!retainBytes && observations?.has(path)) {
+    const row = observations.get(path);
+    stable(row.stat, lstatSync(path, {bigint: true}), native);
+    assert.equal(realpathSync(path), path, 'compiler source ancestry changed');
+    admit(row.stat);
+    return row;
+  }
+  if (!retainBytes && observations) assert.ok(observations.size < 16384, 'compiler observation barrier entry bound');
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = fstatSync(fd, {bigint: true});
-    assert.ok(before.isFile() && before.uid === BigInt(process.getuid())
-      && before.size >= 4n && before.size <= BigInt(maximum), 'bounded owned regular compiler required');
-    assert.ok((before.mode & 0o100n) !== 0n && (before.mode & 0o7022n) === 0n,
-      'owned executable without group/other write access required');
-    if (links !== null) assert.equal(before.nlink, links, 'compiler link count');
+    admit(before);
     // Verification still freshly hashes every byte. Only initial capture needs
     // a complete buffer for the separately owned exclusive executable copy.
     const size = Number(before.size), bytes = retainBytes ? Buffer.alloc(size) : undefined;
-    const chunk = Buffer.alloc(Math.min(size, 65536)), header = Buffer.alloc(4);
+    const chunk = Buffer.alloc(Math.min(Math.max(1, size), 65536)), header = Buffer.alloc(4);
     const digest = createHash('sha256');
     for (let offset = 0; offset < size;) {
       const count = readSync(fd, chunk, 0, Math.min(chunk.length, size - offset), null);
-      assert.ok(count > 0, 'compiler shortened during capture');
+      assert.ok(count > 0, native ? 'compiler shortened during capture' : 'compiler source shortened');
       if (offset < 4) chunk.copy(header, offset, 0, Math.min(count, 4 - offset));
       if (bytes) chunk.copy(bytes, offset, 0, count);
       digest.update(chunk.subarray(0, count)); offset += count;
     }
-    assert.equal(readSync(fd, Buffer.alloc(1), 0, 1, null), 0, 'compiler grew during capture');
-    for (const after of [fstatSync(fd, {bigint: true}), lstatSync(path, {bigint: true})]) {
-      assert.ok(after.isFile(), 'compiler replaced during capture');
-      for (const key of ['dev', 'ino', 'uid', 'gid', 'nlink', 'size', 'mode', 'mtimeNs', 'ctimeNs'])
-        assert.equal(after[key], before[key], 'stable compiler capture ' + key);
-    }
-    assert.deepEqual(header, Buffer.from([0x7f, 0x45, 0x4c, 0x46]),
-      'native Linux compiler artifact required');
-    return {bytes, identity: Object.freeze({device: before.dev.toString(), inode: before.ino.toString(),
-      uid: before.uid.toString(), gid: before.gid.toString(), mode: Number(before.mode),
-      links: before.nlink.toString(), size, sha256: digest.digest('hex')})};
+    assert.equal(readSync(fd, Buffer.alloc(1), 0, 1, null), 0,
+      native ? 'compiler grew during capture' : 'compiler source grew');
+    for (const after of [fstatSync(fd, {bigint: true}), lstatSync(path, {bigint: true})]) stable(before, after, native);
+    assert.equal(realpathSync(path), path, 'compiler source ancestry changed');
+    const row = Object.freeze({bytes, stat: Object.freeze(before), header: header.toString('hex'),
+      sha256: digest.digest('hex'), native});
+    if (!retainBytes && observations) observations.set(path, row);
+    return row;
   } finally {closeSync(fd);}
+}
+
+export function observeCompilerRuntimeFile(path) {
+  return observe(path, null, false, false);
+}
+
+function read(path, links = null, retainBytes = false) {
+  const row = observe(path, links, retainBytes, true), before = row.stat;
+  assert.equal(row.header, '7f454c46', 'native Linux compiler artifact required');
+  return {bytes: row.bytes, identity: Object.freeze({device: before.dev.toString(), inode: before.ino.toString(),
+    uid: before.uid.toString(), gid: before.gid.toString(), mode: Number(before.mode),
+    links: before.nlink.toString(), size: Number(before.size), sha256: row.sha256})};
 }
 
 export function captureCompilerArtifact(work, original, name) {
@@ -90,8 +148,8 @@ export function captureCompilerArtifact(work, original, name) {
   }
   const owner = Object.freeze({path, evidence, verify,
     run(arguments_, cwd, environment = {}) {
-      verify();
-      try {return run(path, arguments_, cwd, environment);} finally {verify();}
+      compilerReadBarrier(verify);
+      try {return run(path, arguments_, cwd, environment);} finally {compilerReadBarrier(verify);}
     }});
   owners.add(owner); verify(); return owner;
 }

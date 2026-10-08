@@ -1136,6 +1136,18 @@ retained executables through bounded, stable descriptor reads and their full
 captured identities. These checks are custody, not compiler provenance or
 atomic filesystem isolation; fresh pinned compilation remains required.
 
+Each synchronous compiler verification barrier takes a fresh complete content
+measurement for every runtime member and executable. Overlapping runtime and
+artifact roles may share that immutable measurement only within that barrier,
+after applying their independent admission predicates and freshly checking the
+pathname, ancestry and full native metadata. Every observed name is checked
+again on completion, including failure. Nested execution boundaries first check
+and permanently clear suspended observations; pre-child and post-child checks
+take independent fresh measurements. No measurement is retained between
+barriers, even when an action fails. This is a single content measurement per
+declared barrier, not atomic protection against concurrent same-user writes or
+equivalence for every possible interleaving of repeated content reads.
+
 Runtime capture enumerates one directory iterator with a one-entry buffer,
 charges each member before queueing descendants, and hashes files in at most
 64 KiB chunks. Source and build closures independently admit 4,096 members
