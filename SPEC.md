@@ -1663,6 +1663,24 @@ checked before opaque in-process handles can compose a deterministic native
 OCI index. Such handles and index bytes establish neither archive/blob integrity,
 registry availability, installed execution, full V&V nor release acceptance.
 
+`scripts/sdk-construction-archive.mjs` checks the original stored-ZIP transport
+after independent provider authentication and metadata admission. It snapshots
+the selected descriptors and eleven metadata files before asynchronous reads,
+then streams every original member, CRC, SHA-256, ZIP64 directory and descriptor.
+The fixed twelve-member inventory, complete provider digest and archive digest
+must match. The unexpanded OCI USTAR layout must contain precisely its bounded
+manifest/configuration/layer graph, with every blob length and digest checked;
+duplicate members, links, special entries, extra paths and incomplete termination
+are rejected. No archive path is materialized and no layer is expanded. Reads
+are bounded to 1 MiB chunks, metadata to 96 MiB, OCI documents to 4 MiB, layers
+to 256 and the archive to 64 GiB. A caller may lower the thirty-minute execution
+budget; actual transport closure is required within a separate five-second
+cleanup budget, preserving verification and cleanup failures. This establishes
+original archive/blob integrity only, not provider authentication, expanded
+filesystem semantics, registry availability, installed SDK execution, full V&V
+or release acceptance. Tiny synthetic archive fixtures test this internal
+boundary; they are not SDK, application or product qualification.
+
 `scripts/sdk-image-inputs.mjs` binds SDK image construction to this closure.
 The committed `sdk/vv-inputs.lock.json` selects the reviewed RustSec snapshot;
 the expected source revision is an independent build argument. The image's
