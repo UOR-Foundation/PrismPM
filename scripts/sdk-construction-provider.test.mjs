@@ -46,8 +46,14 @@ test('uncertain transport cleanup retains original cancellation and fails closed
  assert(!stream.closed);
 });
 test('invalid credentials are rejected without network or inclusion in diagnostics',()=>{
- for(const credential of['','unit-only\nAuthorization: secret','x'.repeat(513)]){
+ for(const credential of['','unit-only\nAuthorization: secret','x'.repeat(1024),'unit-only\0header-value','unit-only credential space']){
   assert.throws(()=>constructionProvider(credential),e=>e.message==='valid GitHub credential form required');
+ }
+});
+test('opaque variable-length installation bearer tokens are transported without local JWT interpretation',async()=>{
+ // Deliberately not a valid signed JWT or credential; only format compatibility.
+ for(const token of ['ghs_123_'+['a'.repeat(190),'b'.repeat(190),'c'.repeat(190)].join('.'),'x'.repeat(1023)]){
+  const provider=constructionProvider(token);assert.equal((await provider.close()).active_requests,0);
  }
 });
 test('an unused provider closes its owned resources and cannot be reused',async()=>{

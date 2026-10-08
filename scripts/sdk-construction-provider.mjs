@@ -46,7 +46,9 @@ export async function collectConstructionResponse(res,limit,signal){
 }
 
 export function constructionProvider(token){
- assert(typeof token==='string'&&/^[A-Za-z0-9_-]{20,512}$/.test(token),'valid GitHub credential form required');
+ // Treat credentials as opaque RFC6750 bearer values, including GitHub's
+ // variable-length stateless installation tokens. Do not interpret their JWT.
+ assert(typeof token==='string'&&token.length>=20&&token.length<1024&&/^[A-Za-z0-9._~+/-]+=*$/.test(token),'valid GitHub credential form required');
  const agent=new https.Agent({keepAlive:true,family:4,maxSockets:2}),requests=new Set(),controller=new AbortController();let apiCount=0;
  async function request(url,headers,profile,signal=controller.signal){
   assert(!controller.signal.aborted&&!signal.aborted,'provider already closed or cancelled');
