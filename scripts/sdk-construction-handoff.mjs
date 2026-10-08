@@ -17,6 +17,12 @@ const nativeSteps=['Set up job','Validate immutable construction input',`Run ${c
  'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
  `Post Run ${buildx}`,`Post Run ${node}`,`Post Run ${checkout}`,'Complete job'];
 const metadataLimit=96*1024**2;
+// Independently selected source workflow bytes, not the provider's returned
+// job count, decide the complete inventory. Unknown workflows fail closed.
+const workflowProfiles=new Map([
+ ['sha256:50d8165fbab57b4022c0475d3cb9b80ad63ba1644bc7182089b1525f5f920043',6],
+ ['sha256:bbfbd47a2ec3131cb00912c496f8c627e48f6e067937b9042f241764beb38a15',7]
+]);
 const authorities=new WeakMap(),metadata=new WeakMap();
 const sha=bytes=>'sha256:'+createHash('sha256').update(bytes).digest('hex');
 const keys=(value,expected)=>{assert(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),expected.slice().sort());};
@@ -53,7 +59,9 @@ function completeSteps(job,expected,runStart,runEnd,declared=expected.length){
 // The caller must acquire these original provider responses through the fixed
 // authenticated GitHub endpoint and preserve them. Expected IDs/revision/attempt
 // are independently selected inputs, never inferred from a latest/name lookup.
-export function validateConstructionAuthority(bytes,expected,now){
+export function validateConstructionAuthority(bytes,expected,now,workflowBytes){
+ assert(Buffer.isBuffer(workflowBytes)&&workflowBytes.length>0&&workflowBytes.length<=262144,'independently selected source workflow bytes required');
+ const jobCount=workflowProfiles.get(sha(workflowBytes));assert(jobCount,'unreviewed source workflow profile');
  keys(expected,['revision','run_id','run_attempt','artifact_ids']);
  assert.match(expected.revision,/^[0-9a-f]{40}$/);positive(expected.run_id);positive(expected.run_attempt);
  keys(expected.artifact_ids,['amd64','arm64']);for(const id of Object.values(expected.artifact_ids))positive(id);
@@ -68,10 +76,14 @@ export function validateConstructionAuthority(bytes,expected,now){
  assert.equal(run.event,'workflow_dispatch');assert.equal(run.status,'completed');assert.equal(run.conclusion,'success');
  const created=timestamp(run.created_at),started=timestamp(run.run_started_at),ended=timestamp(run.updated_at);
  assert(created<=started&&started<=ended&&ended<=now,'completed provider run cannot be future or unordered');
- assert(Array.isArray(jobs)&&jobs.length===6,'complete original no-publication construction job inventory required');
- assert.equal(new Set(jobs.map(j=>j.id)).size,6);
+ assert(Array.isArray(jobs)&&jobs.length===jobCount,'complete original no-publication construction job inventory required');
+ assert.equal(new Set(jobs.map(j=>j.id)).size,jobs.length);
  const expectedJobs=new Map([['input-policy','success'],['policy','skipped'],['build','skipped'],['publish','skipped'],
   ['Unpublished native SDK construction (amd64)','success'],['Unpublished native SDK construction (arm64)','success']]);
+ // Older source workflows have six jobs. The additive read-only integrity
+ // owner must be skipped during genuine construction; no arbitrary job or
+ // successful integrity-only run can substitute for either native builder.
+ if(jobCount===7)expectedJobs.set('construction-integrity','skipped');
  for(const job of jobs){
   positive(job.id);assert.equal(job.run_id,run.id);assert.equal(job.run_attempt,run.run_attempt);
   assert.equal(job.head_sha,source);assert(expectedJobs.has(job.name),'unexpected or duplicate construction job');

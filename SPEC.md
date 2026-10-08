@@ -1681,6 +1681,36 @@ filesystem semantics, registry availability, installed SDK execution, full V&V
 or release acceptance. Tiny synthetic archive fixtures test this internal
 boundary; they are not SDK, application or product qualification.
 
+The additive `construction_integrity` workflow mode authenticates fixed GitHub
+API responses and selects an explicit source/run/attempt/two-artifact tuple.
+It is mutually exclusive with construction and publication. Older construction
+workflows have six jobs; newer ones additionally require the integrity owner to
+be skipped when admitting genuine native construction. Independently Git-selected
+source workflow bytes select a closed reviewed digest profile and its exact job
+inventory; unknown profiles or omitted jobs fail closed. The acquisition owner
+reads only bounded original stored-ZIP metadata ranges, admits source standards,
+then verifies both complete original archive streams. Signed HTTPS storage URLs
+and credentials remain in memory; bearer credentials are not forwarded to
+storage. Original provider bytes, small metadata, source/runtime hashes, resource
+observations and terminal ownership cleanup are retained. The interpreter is
+the digest-pinned official Node 22.23.2 container, not an SDK qualification target.
+Its nonroot, read-only, one-CPU, 512 MiB/no-swap container stores no SDK archives;
+at least 1.5 GiB host storage reserve is required. Metadata range acquisition
+shares a fifteen-minute budget across both platforms, each original stream
+retains its thirty-minute bound, and the outer diagnostic is bounded to 5000
+seconds, including Docker startup, with a separate sixty-second terminal cleanup
+allowance. Evidence destinations are resolved through their real parent directory
+and must remain outside the real source checkout. Provider response/request/socket
+closure and actual owned-container absence are observed before completion.
+The observer separately reads back the bounded original small files, native
+receipt references, source inputs and resource observations; missing, substituted,
+duplicate or symlinked retained evidence fails. This custody check does not replay
+archive streams or independently authenticate provider responses.
+Unit request transports and workflow policy mutations are not authenticated
+provider or SDK evidence. Successful acquisition establishes original transport
+and blob integrity only; registry serving, installed SDK/full V&V, downstream
+consumption and production acceptance remain independent mandatory obligations.
+
 `scripts/sdk-image-inputs.mjs` binds SDK image construction to this closure.
 The committed `sdk/vv-inputs.lock.json` selects the reviewed RustSec snapshot;
 the expected source revision is an independent build argument. The image's

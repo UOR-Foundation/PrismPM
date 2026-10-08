@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
 import {validateConstructionAuthority,validateConstructionMetadata,composeConstructionIndex} from './sdk-construction-handoff.mjs';
 const sha=b=>'sha256:'+createHash('sha256').update(b).digest('hex');
 const bytes=v=>Buffer.from(JSON.stringify(v));
@@ -60,8 +61,8 @@ function fixture(runId=123,attempt=1){
    unclaimed:['full-vv','installed-dual-native-sdk-qualification','signing','release','product-readiness']};
   return {files,record};
  }
- const f={expected,authority,standards,lanes:{amd64:lane('amd64'),arm64:lane('arm64')}};
- f.admit=()=>validateConstructionAuthority(bytes(f.authority),f.expected,now);
+ const f={expected,authority,standards,workflow:readFileSync(new URL('../tests/sdk-construction/sdk-candidate-six.yml',import.meta.url)),lanes:{amd64:lane('amd64'),arm64:lane('arm64')}};
+ f.admit=()=>validateConstructionAuthority(bytes(f.authority),f.expected,now,f.workflow);
  f.metadata=(handle,arch)=>validateConstructionMetadata(handle,arch,bytes(f.lanes[arch].record),f.lanes[arch].files,f.standards);
  return f;
 }
@@ -90,6 +91,17 @@ test('both exact native metadata handoffs compose a deterministic explicitly unq
  assert.deepEqual(JSON.parse(index.bytes).manifests.map(m=>m.platform),[{os:'linux',architecture:'amd64'},{os:'linux',architecture:'arm64'}]);
  assert.equal(authority.scope,'provider-response-metadata-only-not-authentication');assert.equal(a.scope,'construction-metadata-only-not-archive-or-sdk-acceptance');
  assert.equal(index.scope,'composed-index-only-not-registry-or-installed-qualification');assert.equal(index.status,undefined);
+});
+test('additive integrity owner must be skipped and cannot replace original native construction',()=>{
+ const f=fixture();f.workflow=readFileSync(new URL('../.github/workflows/sdk-candidate.yml',import.meta.url));
+ f.authority.jobs.push({...f.authority.jobs[3],id:7,name:'construction-integrity'});assert.doesNotThrow(()=>f.admit());
+ const omitted=fixture();omitted.workflow=f.workflow;assert.throws(()=>omitted.admit(),/complete original/);
+ const unknown=fixture();unknown.workflow=Buffer.concat([unknown.workflow,Buffer.from('\n')]);assert.throws(()=>unknown.admit(),/unreviewed source workflow/);
+ const extra=fixture();extra.authority.jobs.push({...extra.authority.jobs[3],id:7,name:'construction-integrity'});assert.throws(()=>extra.admit(),/complete original/);
+ for(const mutate of[j=>j.name='foreign-owner',j=>j.conclusion='success',j=>j.id=6,j=>j.run_attempt=2]){
+  const g=fixture();g.workflow=f.workflow;g.authority.jobs.push({...g.authority.jobs[3],id:7,name:'construction-integrity'});mutate(g.authority.jobs[6]);assert.throws(()=>g.admit());
+ }
+ const g=fixture();g.authority.jobs[5]={...g.authority.jobs[3],id:6,name:'construction-integrity'};assert.throws(()=>g.admit());
 });
 test('provider admission rejects wrong repository workflow source run attempt and failed native jobs',()=>{
  for(const mutate of [f=>f.authority.run.repository.full_name='other/repo',f=>f.authority.run.head_repository.id=2,
@@ -218,9 +230,9 @@ test('tighter per-kind limits reject before the first JSON parse',()=>{
 });
 test('oversized malformed and invalid UTF-8 authority and construction bytes are refused',()=>{
  const f=fixture();for(const b of [Buffer.alloc(0),Buffer.from([255]),Buffer.from('{'),Buffer.alloc(16*1024**2+1)])
-  assert.throws(()=>validateConstructionAuthority(b,f.expected,now));
+  assert.throws(()=>validateConstructionAuthority(b,f.expected,now,f.workflow));
  const h=f.admit(),l=f.lanes.amd64;
  for(const b of [Buffer.alloc(0),Buffer.from([255]),Buffer.from('{'),Buffer.alloc(65537)])
   assert.throws(()=>validateConstructionMetadata(h,'amd64',b,l.files,f.standards));
- assert.throws(()=>validateConstructionAuthority(bytes(f.authority),f.expected,NaN));
+ assert.throws(()=>validateConstructionAuthority(bytes(f.authority),f.expected,NaN,f.workflow));
 });

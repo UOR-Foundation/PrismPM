@@ -14,11 +14,6 @@ on:
         required: false
         type: string
         default: ""
-      construction_integrity:
-        description: Closed JSON selection for read-only original archive integrity (revision, run_id, run_attempt, artifact_ids amd64/arm64); not SDK acceptance
-        required: false
-        type: string
-        default: ""
 
 permissions: {}
 concurrency:
@@ -36,17 +31,12 @@ jobs:
           SOURCE_REVISION: ${{ inputs.construction_source_revision }}
           DEVELOPMENT_ONLY: ${{ inputs.development_only }}
           WORKFLOW_REVISION: ${{ github.workflow_sha }}
-          INTEGRITY_SELECTION: ${{ inputs.construction_integrity }}
         run: |
           [[ "$DEVELOPMENT_ONLY" = true || "$DEVELOPMENT_ONLY" = false ]]
           if test -n "$SOURCE_REVISION"; then
             [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
             test "$DEVELOPMENT_ONLY" = false
             test "$SOURCE_REVISION" = "$WORKFLOW_REVISION"
-          fi
-          if test -n "$INTEGRITY_SELECTION"; then
-            test "$DEVELOPMENT_ONLY" = false
-            test -z "$SOURCE_REVISION"
           fi
   policy:
     needs: input-policy
@@ -313,40 +303,3 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
-
-  construction-integrity:
-    needs: input-policy
-    if: github.repository == 'UOR-Foundation/PrismPM' && github.event_name == 'workflow_dispatch' && inputs.construction_integrity != '' && !inputs.development_only && inputs.construction_source_revision == ''
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: 22.23.2
-      - name: Verify original artifact integrity without local archive storage
-        env:
-          INTEGRITY_SELECTION: ${{ inputs.construction_integrity }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -z "$(git status --porcelain)"
-          printf '%s' "$GH_TOKEN" | env -u GH_TOKEN node scripts/sdk-construction-observe.mjs \
-            "$INTEGRITY_SELECTION" "$GITHUB_SHA" "$RUNNER_TEMP/construction-integrity"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -z "$(git status --porcelain)"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: original-sdk-integrity-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/construction-integrity/
-          if-no-files-found: error
-          compression-level: 6
-          retention-days: 14
