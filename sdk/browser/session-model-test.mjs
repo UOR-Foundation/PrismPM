@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {lstatSync,readFileSync} from 'node:fs';
+import {join,relative} from 'node:path';
 import test from 'node:test';
 import {verifyVectors,verifyMaxima,verifySizeMaxima,verifyModelMutation,verifyInventory,verifyArtifactSubstitutions,frozenInputs,prerequisite} from '../../tests/browser-session/checks.mjs';
 import {mutations} from '../../tests/browser-session/mutations.mjs';
@@ -9,6 +10,40 @@ import {verifyCompilerOwnerSubstitutions} from '../../tests/browser-view/compile
 
 const source = name => JSON.parse(/\\semanticdata\{(.*)\}/.exec(readFileSync(
   new URL('../../stdlib/src/Foundation/Browser/Application/V1/' + name + '.lex.tex', import.meta.url), 'utf8'))[1]);
+
+function retainedProducts(inventory,builds) {
+ assert.equal(inventory.scope,'original-test-products-only');
+ assert.equal(inventory.snapshots.length,22,'actual baseline and all21 independently generated mutants');
+ assert.equal(builds.length,22);assert.equal(new Set(inventory.snapshots.map(row=>row.source)).size,22);
+ for(const build of builds) {
+  const capture=build.workspaceRetirement.productCapture;
+  assert.deepEqual(inventory.snapshots.find(row=>row.source===capture.source),capture,'every actual retirement joined');
+  assert.equal(lstatSync(capture.source,{throwIfNoEntry:false}),undefined,'original workspace genuinely deleted');
+  const bytes=readFileSync(join(capture.directory,'capture.json'));
+  assert.equal(sha(bytes),capture.manifest_sha256,'actual retained manifest bytes');
+  const manifest=JSON.parse(bytes);assert.equal(manifest.source,capture.source);
+  const rows=new Map(manifest.original.rows.map(row=>[row.path,row]));
+  function file(path,digest,length) {
+   const row=rows.get(path);assert.equal(row?.kind,'file',path);assert.equal(row.sha256,digest,path);
+   if(length!==undefined) assert.equal(row.identity.size,String(length),path);
+   return row;
+  }
+  file('export/kernel.ir',build.ir);
+  const verified=relative(capture.source,build.provenance.verified.root);
+  assert(verified&&!verified.startsWith('..')&&!verified.startsWith('/'),'verified kernel belongs to actual workspace');
+  for(const [path,evidence] of [['build-manifest.json',build.provenance.manifest],['attestation.json',build.provenance.attestation]])
+   file(verified+'/'+path,evidence.sha256,evidence.byte_length);
+  for(const row of build.provenance.sources) file('project/'+row.path,row.sha256,row.byte_length);
+  for(const row of build.provenance.outputs) file(verified+'/'+row.path,row.sha256,row.byte_length);
+  for(const [label,files] of Object.entries(build.generatedPackages))
+   for(const [path,digest] of Object.entries(files)) file((label==='native'?'generated':'guest-'+label)+'/'+path,digest);
+  for(const artifact of [...Object.values(build.native),...Object.values(build.wasmArtifacts),
+   ...Object.values(build.observers??{}).map(row=>row.evidence)]) for(const evidence of [artifact.original,artifact.private]) {
+    const row=file(evidence.path,evidence.sha256,evidence.size);
+    for(const [field,key] of [['dev','device'],['ino','inode'],['nlink','links']]) assert.equal(row.identity[field],evidence[key]);
+  }
+ }
+}
 
 test('DK-26 declares source-owned transitions and a closed canonical byte entry', () => {
   const model = source('Session'), wire = source('SessionWire');
@@ -44,6 +79,8 @@ test('DK-26 actual source-owned session kernel, complete limits and guard mutati
  assert.equal(Object.keys(observers).length,12,'all actual grant, aggregate, domain and writer observers retained until retirement');
  retirementAttempted=true;
  const workspaceRetirement=build.close(true),cacheRetirement=workspaceRetirement.compilerRetirement;retired=true;
+ retainedProducts(workspaceRetirement.productInventory,[...mutants,{ir:build.generation.ir_sha256,
+  provenance:build.provenance,generatedPackages:build.generatedPackages,native,wasmArtifacts,observers,workspaceRetirement}]);
  assert.equal(cacheRetirement.status,'retired');assert.equal(cacheRetirement.compiler,compiler.identity);
  assert.throws(()=>requireCompilerOwner(compiler,'session'),/compiler owner closed/);
  assert.throws(()=>compiler.close(),/compiler owner closed/);
