@@ -1617,6 +1617,13 @@ closure at `/opt/prismpm/share/vv-inputs` and the closed expected policy at
 bytes and helper/policy identities. Generated Git stores, caller configuration,
 credentials, caches and untracked source do not enter the image. The shared
 build wrapper refuses conflicting context, source, file or target arguments.
+Docker receives a private recipe context containing only the five bootstrap
+files reconstructed from the verified source closure, never the caller's
+mutable checkout. Their exact bytes and private path identities, the closed
+directory inventory and the complete sealed input closure are freshly checked
+before and after Docker, including failed construction. Source drift detected
+after acquisition refuses invocation. This observed-custody boundary does not
+claim atomic isolation against a same-user filesystem attacker.
 This is image-input construction; full V&V execution, freshness, independent
 native-platform and immutable-image acceptance remain separate gates.
 
