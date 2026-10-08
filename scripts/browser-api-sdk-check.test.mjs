@@ -487,7 +487,7 @@ test('release acceptance actually invokes every closed owning suite and rejects 
  assert.equal(runSuites(root,launch,()=>{}).length,22);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
- const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,37);
+ const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,43);
  assert.equal(suites.find(row=>row.id==='DK-34').minimum,18);
  assert.equal(suites.find(row=>row.id==='DK-33').minimum,17);
  for(const [index,path] of view.files.entries())put(root,path,testSource(index===0?31:1));
@@ -544,7 +544,7 @@ test('owning release test kills a removed complete-TAP acceptance guard',t=>{
  const source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
  for(const [before,after,witness] of [
   ['const tests=verifyTap(output.stdout,suite.minimum)',"const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])",/Missing expected exception/],
-  ["{id:'DK-15',minimum:37","{id:'DK-15',minimum:36",/36 !== 37/],
+  ["{id:'DK-15',minimum:43","{id:'DK-15',minimum:42",/42 !== 43/],
   ["{id:'DK-34',minimum:18","{id:'DK-34',minimum:17",/17 !== 18/],
   ["{id:'DK-33',minimum:17","{id:'DK-33',minimum:16",/16 !== 17/],
  ]){
