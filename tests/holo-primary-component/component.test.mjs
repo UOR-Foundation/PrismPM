@@ -1,12 +1,45 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
-import {repository, sourceClosure, frozenInputs, requirePreparedComponent, run, verifyFrozenInputs,
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {dirname, join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {repository, sourceClosure, frozenInputs, requirePreparedComponent, run, sha, verifyFrozenInputs,
   assertComponentCompilerInputs} from './compile.mjs';
 import {mutations, mutateSource, mutationProbes} from './mutations.mjs';
-import {inputClosureAdversaries} from './adversaries.mjs';
+import {inputClosureAdversaries, matchingPackageManifest} from './adversaries.mjs';
 import {profileLinkCases} from './profile-links.mjs';
+import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
+
+test('matching manifest probes reach captured identity instead of failing canonical encoding', t => {
+  // Synthetic generator output tests the actual package guard, not a compiler
+  // substitute or evidence for the separately required complete HO15 owner.
+  const work = mkdtempSync(join(tmpdir(), 'prismpm-primary-manifest-probe-'));
+  t.after(() => rmSync(work, {recursive:true, force:true}));
+  const paths = ['Cargo.lock', 'Cargo.toml', 'LICENSE-APACHE', 'LICENSE-MIT', 'README.md', 'src/lib.rs'];
+  const files = paths.map(path => {
+    const bytes = Buffer.from('synthetic package fixture: ' + path + '\n');
+    mkdirSync(dirname(join(work, path)), {recursive:true}); writeFileSync(join(work, path), bytes, {flag:'wx'});
+    return {path,sha256:sha(bytes)};
+  });
+  const inputIrSha256 = sha(Buffer.from('synthetic test IR'));
+  // Deliberately unsorted keys verify recursive canonical serialization.
+  const manifest = {schema:'lean4-prod/cargo-package-manifest/1', module:'Fixture',
+    input_ir_sha256:inputIrSha256, files, dependencies:[]};
+  const original = matchingPackageManifest(Buffer.from(JSON.stringify(manifest)), 'src/lib.rs', readFileSync(join(work, 'src/lib.rs')));
+  const path = join(work, 'generation-manifest.json'); writeFileSync(path, original, {flag:'wx'});
+  const captured = captureGeneratedPackage(work, {kind:'native', inputIrSha256}); captured.verify();
+  const changed = Buffer.from('coherently substituted generated source\n');
+  writeFileSync(join(work, 'src/lib.rs'), changed);
+  const forged = matchingPackageManifest(original, 'src/lib.rs', changed); writeFileSync(path, forged);
+  captureGeneratedPackage(work, {kind:'native', inputIrSha256}).verify();
+  assert.throws(() => captured.verify(), /immutable generated package captured immediately after code generation/);
+  writeFileSync(path, forged.subarray(0, forged.length - 1));
+  assert.throws(() => captured.verify(), /canonical generated manifest bytes/);
+  assert.throws(() => matchingPackageManifest(original, 'omitted', changed), /one declared substitution target/);
+  const duplicated = JSON.parse(original); duplicated.files.push(duplicated.files.find(row => row.path === 'src/lib.rs'));
+  assert.throws(() => matchingPackageManifest(Buffer.from(JSON.stringify(duplicated)), 'src/lib.rs', changed),
+    /one declared substitution target/);
+});
 
 test('component uses exact source modules and cannot adopt a caller receipt', () => {
   const sources = sourceClosure();

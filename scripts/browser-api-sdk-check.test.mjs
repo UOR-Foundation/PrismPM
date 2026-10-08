@@ -14,7 +14,7 @@ const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'querie
  'session-retention-wire','session-storage','session-payloads','session-operation-capture','pkce'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const additionalOwners = [
- {id:'HO-15',minimum:10,deadline:3600000,files:['tests/holo-primary-component/component.test.mjs','tests/holo-primary-component/owner.test.mjs']},
+ {id:'HO-15',minimum:11,deadline:3600000,files:['tests/holo-primary-component/component.test.mjs','tests/holo-primary-component/owner.test.mjs']},
  {id:'ST-17',minimum:21,deadline:3600000,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
  {id:'DK-27',minimum:13,deadline:3600000,files:['sdk/browser/budget-model-test.mjs']},
  {id:'DK-37',minimum:24,deadline:3600000,files:['sdk/browser/contextual-effects.test.mjs']},

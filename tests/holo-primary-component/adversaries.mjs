@@ -90,6 +90,17 @@ function substitute(owner, path, replacement, check) {
   }
 }
 const poisoned = bytes => Buffer.concat([bytes, Buffer.from('\nsource substitution\n')]);
+// A coherent forgery must pass the producer's canonical encoding/digest checks
+// before the original captured-package identity rejects it.
+export function matchingPackageManifest(bytes, path, replacement) {
+  const manifest = JSON.parse(bytes);
+  const rows = manifest.files.filter(row => row.path === path);
+  assert.equal(rows.length, 1, 'one declared substitution target');
+  rows[0].sha256 = sha(replacement);
+  return Buffer.from(JSON.stringify(manifest, (_key, value) =>
+    value && !Array.isArray(value) && typeof value === 'object'
+      ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value) + '\n');
+}
 function missing(owner, path, check) {
   ownedFile(owner, path); const held = path + '.missing-held';
   assert.equal(existsSync(held), false); renameSync(path, held);
@@ -110,9 +121,8 @@ export function artifactAdversaries(owner) {
       assert.equal(existsSync(runner), false, 'refusal precedes first Cargo invocation');
     }); passed('first-native-' + standard + '-source-substitution');
     substitute(owner, generated, poisoned(original), () => {
-      const declaration = JSON.parse(readFileSync(manifest));
-      declaration.files.find(file => file.path === 'src/lib.rs').sha256 = sha(poisoned(original));
-      substitute(owner, manifest, Buffer.from(JSON.stringify(declaration)), () => {
+      const declaration = matchingPackageManifest(readFileSync(manifest), 'src/lib.rs', poisoned(original));
+      substitute(owner, manifest, declaration, () => {
         assert.throws(() => owner.compileNative(standard), /immutable generated package/);
         assert.equal(existsSync(runner), false);
       });

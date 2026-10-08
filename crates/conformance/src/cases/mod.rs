@@ -403,7 +403,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/holo-primary-component/component.test.mjs",
                 "tests/holo-primary-component/owner.test.mjs",
             ],
-            10,
+            11,
             "3600000",
         ),
 

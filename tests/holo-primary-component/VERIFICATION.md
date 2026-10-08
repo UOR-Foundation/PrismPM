@@ -3,9 +3,18 @@
 ## Current integration
 
 Historical HO-14 below denotes this component, not the current BLAKE3 owner.
-HO-15 retains its complete eight-check owner and adds two custody guards.
+HO-15 retains its complete eight-check owner, two custody guards and the
+canonical coherent-manifest regression (11 registered checks).
 Current compiler/provenance binding, full owner, source audit, native CI,
 installed SDK and integrated V&V remain unaccepted until actually verified.
+
+The current integration's first full owner refused a malformed negative probe:
+its rewritten manifest omitted the producer's canonical newline, so rejection
+preceded the intended immutable-package check. The corrected probe preserves
+canonical encoding and coherent source hashes; the immutable-package predicate,
+all 30 adversaries and original deadlines are unchanged. A real package-guard
+regression distinguishes coherent identity refusal from noncanonical refusal.
+The failed run is retained; complete corrected-owner execution remains required.
 
 ## Historical evidence
 

@@ -67,7 +67,7 @@ export const suites=Object.freeze([
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
  {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
  {id:'ST-17',minimum:21,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
- {id:'HO-15',minimum:10,files:['tests/holo-primary-component/component.test.mjs','tests/holo-primary-component/owner.test.mjs']},
+ {id:'HO-15',minimum:11,files:['tests/holo-primary-component/component.test.mjs','tests/holo-primary-component/owner.test.mjs']},
 ].map(row=>Object.freeze({...row,
  deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38','ST-17','HO-15'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
