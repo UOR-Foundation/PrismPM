@@ -83,6 +83,58 @@ test('fresh independent drivers pin hash optimization without changing construct
       '--manifest-path','/actual-source/tests/browser-'+family+'/driver/Cargo.toml'],
       '/actual-source',{CARGO_TARGET_DIR:'/actual-fresh-'+family}]]);
   }
+  const remaining = [
+    ...['budget','custody','dynamic-choice','effects','operation-journal','semantic-presentation']
+      .map(family=>({path:'tests/browser-'+family+'/compile.mjs',manifest:'/captured-compiler/Cargo.toml',cwd:'/actual-work'})),
+    {path:'tests/browser-journal/compile.mjs',manifest:'/actual-draft/driver/Cargo.toml',cwd:'/actual-source'},
+    ...['session-journal','session-payloads','session-recovery-frames']
+      .map(family=>({path:'tests/browser-'+family+'/compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work'})),
+    {path:'tests/browser-session-journal/reservation-compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work'},
+    {path:'tests/browser-session-journal-recovery/compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work',program:'/pinned-cargo',target:'/actual-owned-target'},
+    {path:'sdk/browser/workspace-model-test.mjs',manifest:'/actual-source/tests/browser-workspace/Cargo.toml',cwd:'/actual-source'},
+    {path:'sdk/browser/envelope-model-test.mjs',manifest:'/actual-fixture/driver/Cargo.toml',cwd:'/actual-source'},
+  ];
+  assert.equal(remaining.length,14);assert.equal(new Set(remaining.map(row=>row.path)).size,14);
+  for(const row of remaining){
+    const source=fs.readFileSync(new URL('../../'+row.path,import.meta.url),'utf8');
+    const check = text => {
+      const fresh=row.path==='tests/browser-budget/compile.mjs'
+        ? /const driverTarget\s*=\s*join\(work,\s*'driver-target'\)/
+        : row.program ? /const target\s*=\s*createPrivateDriverTarget\(work\)/
+        : /const driverTarget\s*=\s*createPrivateDriverTarget\(work\)/;
+      assert.match(text,fresh,'original fresh owned target '+row.path);
+      const calls=[];
+      const selected=[...text.matchAll(/run\((?:'cargo'|toolchain\.programs\.cargo\.path),\s*\['build',\s*'--locked',\s*'--offline',\s*'--jobs',\s*'1',[\s\S]*?\],\s*(?:repository|work),\s*\{CARGO_TARGET_DIR:\s*(?:driverTarget|target)\}\)/g)];
+      assert.equal(selected.length,1,'one actual private driver construction '+row.path);
+      runInNewContext(selected[0][0],{run(...args){calls.push(args);},join,
+        compiler:{manifest:'/captured-compiler/Cargo.toml'},manifest:'/captured-manifest/Cargo.toml',
+        draft:'/actual-draft',fixture:'/actual-fixture',repository:'/actual-source',work:'/actual-work',
+        driverTarget:'/actual-fresh-target',target:'/actual-owned-target',toolchain:{programs:{cargo:{path:'/pinned-cargo'}}}});
+      assert.deepEqual(JSON.parse(JSON.stringify(calls)),[[row.program??'cargo',[
+        'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+        '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+        '--manifest-path',row.manifest],row.cwd,{CARGO_TARGET_DIR:row.target??'/actual-fresh-target'}]]);
+    };
+    check(source);
+    const setting=/'--config',\s*'profile\.dev\.package\.sha2\.opt-level=3'/;
+    assert.equal([...source.matchAll(new RegExp(setting.source,'g'))].length,1);
+    for(const replacement of ['',"'--config', 'profile.dev.package.sha2.opt-level=2'",
+      "'--config', 'profile.dev.opt-level=3'","'--config', 'profile.test.package.sha2.opt-level=3'",
+      "$&,$&","$&,'--config','profile.dev.package.sha2.opt-level=0'"]){
+      const changed=source.replace(setting,replacement);assert.notEqual(changed,source);
+      assert.throws(()=>check(changed),row.path+': '+replacement);
+    }
+    for(const [from,to]of [["'--locked'","'REMOVED'"],["'--offline'","'REMOVED'"],
+      ["'--jobs', '1'","'--jobs', '2'"],["'profile.dev.debug=0'","'profile.dev.debug=2'"],
+      ["'build.incremental=false'","'build.incremental=true'"]]){
+      const expression=new RegExp(from.replaceAll('.', '\\.').replaceAll(', ', ',\\s*'));
+      const changed=source.replace(expression,to);assert.notEqual(changed,source);
+      assert.throws(()=>check(changed),row.path+': '+from);
+    }
+    const changed=source.replace(row.path==='tests/browser-budget/compile.mjs'
+      ? "join(work, 'driver-target')" : 'createPrivateDriverTarget(work)', "'/unproved-shared-target'");
+    assert.notEqual(changed,source);assert.throws(()=>check(changed),row.path+': fresh target substitution');
+  }
 });
 
 test('compiler owner refuses malformed or incomplete input closures before building', () => {

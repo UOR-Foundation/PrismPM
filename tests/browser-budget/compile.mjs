@@ -147,7 +147,7 @@ export function prepare(mutation, inputs, compilerOwner = null) {
       const driverTarget = join(work, 'driver-target');
       compiler = stageCompiler(work, inputs);
       run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
-        '--config', 'build.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
+        '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
       const driver = join(driverTarget, 'debug/browser-budget-driver');
       invokeDriver = args => run(driver, args, repository);
     }

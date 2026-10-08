@@ -912,6 +912,10 @@ level 3. Complete per-invocation SDK inventory and executable byte checks,
 native golden write/repeat commands and deadlines remain unchanged; caller
 compiler/profile environment overrides do not enter the native review container.
 
+Private browser compiler-driver builds use that same fixed SHA2-only setting.
+Locked/offline construction, fresh owned targets, source custody, all owning
+executions and their original resource/deadline bounds remain mandatory.
+
 The review container explicitly selects a private Cargo home, seeded only from
 the selected image's immutable cache before generation. Copying is bounded to
 250,000 regular files/directories, depth 32, 256 MiB per file, 2 GiB total and
