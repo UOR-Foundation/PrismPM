@@ -39,6 +39,7 @@ export function frozenInputs() {
     files.add('tests/browser-session-operation/' + path);
   for (const path of ['tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
     'tests/browser-view/kernel-provenance.test.mjs', 'tests/browser-view/local-module-inputs.test.mjs',
+    'tests/browser-view/file-custody.test.mjs',
     'scripts/owning-node-reporter.mjs', 'crates/conformance/src/cases/node_suite.rs',
     'tests/browser-session/wire.mjs', 'tests/browser-session/corpus.mjs',
     'tests/browser-session/maxima.mjs', 'tests/browser-session/budget.mjs',
