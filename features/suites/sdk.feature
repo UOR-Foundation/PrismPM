@@ -13,6 +13,12 @@ Feature: sdk
     When generated native, no_std, Wasm and all pinned browser engines execute canonical decoding, field arithmetic and point validation
     Then malformed encodings, out-of-range coordinates and off-curve points reject independently of provider import behavior
     And actual arithmetic and source mutations plus altered browser transcripts fail without replacing signature, possession, currentness or account authorization checks
+  @DK-31 @build
+  Scenario: Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority.
+    Given source-generated text choices alongside unchanged catalogue-based choices
+    When complete native, no_std, Wasm and browser owners exercise text and aggregate maxima, selection, reordering and semantic annotations
+    Then duplicate identifiers, missing selections, oversized names and stale contexts reject while hostile text remains plain text
+    And rebuilt source and renderer mutations fail without granting organization authority or public application acceptance
 
   @DK-26 @build
   Scenario: The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance.
@@ -43,6 +49,19 @@ Feature: sdk
     When bounded registry transport and verified credential helpers capture both native platform inventories
     Then malformed graphs, ambiguous metadata, unsafe authentication, changed helpers and exceeded resource limits fail closed
     And real registry and image materialization checks preserve exact bytes without manufacturing SDK qualification
+  @DK-37 @build
+  Scenario: Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance.
+    Given independently bound generated effect artifacts and private credential custody
+    When exact source-generated requests pass the existing modeled admission and the private release is consumed once
+    Then stale contexts, substituted bindings, concurrent admissions and altered caller buffers cannot relabel or prematurely execute a primitive
+    And actual browser completions replay in native std and no_std while existing effect and journal owners remain mandatory
+
+  @DK-38 @build
+  Scenario: Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance.
+    Given immutable source-bound label and design catalogues and typed semantic presentations
+    When native, no_std, Wasm and actual browser oracles execute complete envelopes, limits and human-interface behavior
+    Then malformed, stale, substituted and inaccessible presentations reject and source or adapter mutants fail
+    And public application acceptance still requires complete independently verified product journeys
 
   @DK-27 @build
   Scenario: Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds.

@@ -883,6 +883,12 @@ level = "build"
 statement = "The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance."
 
 [[id]]
+id = "DK-31"
+suite = "sdk"
+level = "build"
+statement = "Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority."
+
+[[id]]
 id = "DK-33"
 suite = "sdk"
 level = "build"
@@ -893,6 +899,18 @@ id = "DK-34"
 suite = "sdk"
 level = "build"
 statement = "Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification."
+
+[[id]]
+id = "DK-37"
+suite = "sdk"
+level = "build"
+statement = "Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance."
+
+[[id]]
+id = "DK-38"
+suite = "sdk"
+level = "build"
+statement = "Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance."
 
 [[id]]
 id = "OC-01"
@@ -947,6 +965,12 @@ id = "OC-09"
 suite = "oci"
 level = "build"
 statement = "A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment."
+
+[[id]]
+id = "OC-10"
+suite = "oci"
+level = "build"
+statement = "Private publication context linkage projects a unique source-owned declaration and binds generated canonical preimages to the complete captured release and tool closure without inventing absent identities, authenticating caller facts, or authorizing deployment."
 
 [[id]]
 id = "LC-01"

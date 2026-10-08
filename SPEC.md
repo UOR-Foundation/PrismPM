@@ -709,6 +709,11 @@ KILL grace period, and independent 16,777,216-byte stdout/stderr limits.
 Process records contain normalized arguments/output, exit status, and SHA-256
 of the executable bytes. Timeout, signal, overflow, malformed output, nonzero
 exit, or missing executable is a registered failure.
+Timeout-class failures retain the observed wrapper exit code and bounded
+normalized stdout/stderr excerpts (at most 2,048 UTF-8-aligned bytes from each
+end, with the omitted-byte count). Notes also bind the complete normalized
+streams by byte length and SHA-256. These diagnostics do not constitute
+successful process records; exit 137 alone does not establish the cause of a kill.
 Normalization replaces confined absolute roots with fixed tokens, converts
 line endings to LF, replaces Lake build durations with `<DURATION>`, removes
 Lake's schedule-dependent `[job/total]` progress ordinals, and sorts the
@@ -2210,6 +2215,58 @@ Account allocation, proof of initial key possession, authenticated succession,
 mailbox verification, recovery, currentness and organization authority remain
 separate required integrations. This private component is not DID, VC, JOSE,
 COSE or application acceptance. `PP2011` remains closed.
+#### 12.11.1 Private semantic presentation
+
+DK-38 owns the separate `SemanticPresentation/1` envelope, `Design`,
+`DesignWire`, `Semantics` and `SemanticsWire` LexLean sources. Its closed contract
+is `stdlib/src/Foundation/View/Browser/V1/Semantics.md` and `SemanticsWire.cddl`.
+DK-23 Presentation/Intent bytes, limits and secret routing remain unchanged.
+Sorted annotations bind typed input purposes, help/error labels, landmarks and
+layout to exact nodes and the complete revision/lifecycle. A unique Main and
+local skip target are required except in an empty Closed frame. Immutable
+source-bound light/dark design catalogues admit only bounded numeric tokens and
+closed font families; raw CSS, HTML, URLs and arbitrary attributes remain refused.
+
+The generic adapter preserves exact input bytes, native labels, autofill/paste,
+reading order, focus visibility, responsive reflow and forced-color overrides.
+Secret metadata changes clear prior drafts. Complete metadata/catalogue preflight
+precedes DOM mutation; a changed equal-revision envelope cannot replace context.
+Shape validity is neither authority nor contrast/usability evidence.
+
+Acceptance requires independent complete source/kernel/native/no_std/Wasm
+corpora, 64 MiB combined maxima, one-over negatives, generated browser transcripts
+replayed natively, real keyboard/reflow/error/secret journeys and source/adapter
+mutants. The pinned axe-core oracle executes on rendered output and must detect
+real broken-label/contrast controls. Adapter mutation evidence requires a complete
+pristine baseline, including that oracle, and an assertion-owned counterexample
+at the mutation's exact expected journey and semantic check. Missing tooling,
+browser failures, surviving mutations and different failures cannot count as
+detected mutants; actual negative tests enforce each boundary. Its automated
+subset is not complete WCAG
+conformance, manual usability assessment, a brand approval or Foundry acceptance.
+The private tokens do not claim Design Tokens Community Group conformance.
+
+#### 12.11.1 Dynamic plain-text choices
+
+DK-31 adds the private `Content.TextSelect` presentation prerequisite to DK-23.
+Wire tag 11 is `[11,label,enabled,required,selected,[[id,text],...],draftEpoch]`.
+Option identifiers are distinct nonzero uint32 values in source-chosen display
+order. Names are nonempty strict UTF-8 text of at most 4096 bytes each; duplicate
+names are allowed. Selection is zero or an existing identifier, never an index
+or display name. The 256-option aggregate includes both tag 7 and tag 11.
+Every existing tag, catalogue reference, epoch, lifecycle, intent, parent,
+structural limit and 64 MiB aggregate frame contract remains unchanged.
+DK-38 helper/error annotations apply to the new field, but its option text is
+not a catalogue index. No control or selected identifier grants authority.
+
+Acceptance requires complete generated native/std/no_std/Wasm parity, actual
+browser selection and accessible-name observations, mixed aggregate and text
+maxima, unchanged DK-23/DK-38 owners, and actual source/renderer mutations.
+Source order, filtered options, duplicate names, preserved edits, epoch resets,
+stale revisions and hostile plain text are owning cases. Nonempty text alone
+does not establish useful accessible naming or human-centered design. Foundry
+journeys, organization authority and public application acceptance remain
+separate requirements; `PP2011` remains mandatory.
 
 ### 12.12 Private durable operation journal
 
@@ -2320,6 +2377,28 @@ accept a public application. Atomic initial state, authenticated contextual
 history, effect acknowledgments, safe checkpoint/segment rotation, rollback
 witnesses and private secret-to-nonsecret evidence composition remain separately
 required SessionJournal/runtime obligations. `PP2011` and Holo/1 are unchanged.
+
+### Private contextual effect staging
+
+DK-37 extends only private SDK composition over DK-18's existing generated
+effect admission. Its separate factory observes copied application, manifest,
+execution and next-operation bindings; observations reserve no counter, grant
+no authority and contain no signing key. The caller cannot choose an execution
+identifier. Exact canonical requests reach the generated reducer unchanged;
+stale or substituted fields cannot be repaired by relabeling them.
+
+Admitted requests execute only through a private single-use release. Its result
+binds the originally captured request to the actual modeled primitive result,
+never a caller completion. Close and unknown outcomes cannot authorize retries
+or manufacture durable receipts. Existing DK-20 and DK-24 interfaces, custody
+checks, queue bounds and acceptance remain unchanged and mandatory.
+
+The owner exercises all primitive families, stale and competing observations,
+cross-execution reuse, input/output aliasing, malformed frames, queue exhaustion,
+unknown/close races and planted host defects in real browsers, with native
+std/no_std replay of actual generated transcripts. This is not SessionJournal,
+source-wrapper authorization, per-resource budget composition or public runtime
+acceptance; it does not open PP2011 or establish a deployable Foundry.
 
 ### Private per-resource admission
 
@@ -2870,8 +2949,11 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. | §12 |
+| `DK-31` | `sdk` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. | §12 |
 | `DK-33` | `sdk` | Private source-owned account genesis preserves an immutable namespace, nonce and initial key in canonical domain-separated identity bytes without conflating account identity with signatures, current credentials, deployment revisions or authority. | §12 |
 | `DK-34` | `sdk` | Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification. | §12 |
+| `DK-37` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
+| `DK-38` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
@@ -2881,6 +2963,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `OC-07` | `oci` | Browser export replays the immutable release closure without source or execution and atomically copies only its exact browser artifacts without granting publication authority. | §13 |
 | `OC-08` | `oci` | Browser publication integrity replays the source-free release and compares its complete browser closure at one explicit canonical HTTPS base, rejecting redirects and bounded transport failures without claiming deployment authorization or product acceptance. | §13 |
 | `OC-09` | `oci` | A private source-modeled publication reducer binds complete stage obligations, immutable subjects, scoped authorization and distinct deployment evidence without treating conditional facts as authentication or enabling public deployment. | §13 |
+| `OC-10` | `oci` | Private publication context linkage projects a unique source-owned declaration and binds generated canonical preimages to the complete captured release and tool closure without inventing absent identities, authenticating caller facts, or authorizing deployment. | §13 |
 | `LC-01` | `lifecycle` | The Controller owns fetch, build, push, pull, inspect, run, plan, deploy, status, rollback, and explicit destroy operations. | §14 |
 | `LC-02` | `lifecycle` | Build, push, run, and deploy accept Docker-simple command forms and return stable pipe-safe canonical result values. | §14 |
 | `LC-03` | `lifecycle` | Local run uses unmodified OCI, container, Compose, and Hologram runtimes with modeled isolation, readiness, acceptance, signals, and shutdown. | §14 |

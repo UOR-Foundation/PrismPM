@@ -118,7 +118,10 @@ function fixture(t, prefix = 'prismpm-publication-', owner = 'publication') {
   const work = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(work, {recursive:true, force:true}));
   const directory = {publication:'publication-admission', effects:'browser-effects', custody:'browser-custody',
+    'session-payloads':'browser-session-payloads',
     'operation-journal':'browser-operation-journal', presentation:'browser-presentation',
+    'semantic-presentation':'browser-semantic-presentation',
+    'dynamic-choice':'browser-dynamic-choice',
     view:'browser-view', journal:'browser-journal', query:'browser-query', command:'browser-command'}[owner];
   assert.ok(directory);
   const executable = (['view','journal','query','command'].includes(owner) ? 'browser-workspace-' + owner : directory) + '-driver';
@@ -303,8 +306,8 @@ test('all private driver callers retain locked offline builds and bounded resour
   }
 });
 
-test('completed effects and custody tool caches retire under their exact owning paths', t => {
-  for (const owner of ['effects', 'custody']) {
+test('completed effects, custody and session-payload tool caches retire under their exact owning paths', t => {
+  for (const owner of ['effects', 'custody', 'session-payloads']) {
     const f = fixture(t, 'prismpm-' + owner + '-', owner);
     const path = join(f.target, 'debug', f.executable), bytes = readFileSync(path);
     const receipt = retireCompletedCompilerCaches(f.work, owner);
@@ -319,7 +322,7 @@ test('completed effects and custody tool caches retire under their exact owning 
 });
 
 test('all remaining retained browser fixtures retire only their exact tool caches', t => {
-  for (const owner of ['operation-journal','presentation','view','journal','query','command']) {
+  for (const owner of ['operation-journal','presentation','semantic-presentation','dynamic-choice','view','journal','query','command']) {
     const f = fixture(t, 'prismpm-' + owner + '-', owner);
     const source = join(repository, 'tests/browser-' + owner + '/driver/Cargo.toml');
     const original = readFileSync(source);
