@@ -9,7 +9,7 @@ import {captureCompilerInputs, createCompilerOwner, requireCompilerOwner} from '
 import {compilerDriverDirectory} from './compiler-owner-checks.mjs';
 
 test('driver substitution lookup includes P256 and rejects missing or ambiguous source inventory', () => {
-  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'publication-admission', 'publication-context-linkage', 'browser-session-journal-retention']) {
+  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'browser-signed-context', 'publication-admission', 'publication-context-linkage', 'browser-session-journal-retention']) {
     const path = 'tests/' + directory + '/driver/src/main.rs';
     assert.equal(compilerDriverDirectory({[path]: 'not-authority'}), 'tests/' + directory + '/driver');
   }
@@ -63,7 +63,7 @@ test('compiler owner refuses malformed or incomplete input closures before build
     assert.throws(() => createCompilerOwner('view', inputs),
       /compiler input (map|path|digest|closure)/);
   assert.equal(called, false, 'input accessors cannot run before immutable capture');
-  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256', 'session-retention', 'publication-linkage']) {
+  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256', 'signed-context', 'session-retention', 'publication-linkage']) {
     const inputs = captureCompilerInputs(name);
     for (const missing of ['tests/browser-view/compile.mjs', 'tests/browser-view/compiler-artifact.mjs', 'vendor/lean4-prod/lean.tar']) {
       const changed = {...inputs}; delete changed[missing];
