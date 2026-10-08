@@ -1674,7 +1674,9 @@ duplicate members, links, special entries, extra paths and incomplete terminatio
 are rejected. No archive path is materialized and no layer is expanded. Reads
 are bounded to 1 MiB chunks, metadata to 96 MiB, OCI documents to 4 MiB, layers
 to 256 and the archive to 64 GiB. A caller may lower the thirty-minute execution
-budget; actual transport closure is required within a separate five-second
+budget. Each asynchronous read owns one deadline-abort listener, detached on
+settlement; a shared pending timeout promise must not retain consumed chunks.
+Actual transport closure is required within a separate five-second
 cleanup budget, preserving verification and cleanup failures. This establishes
 original archive/blob integrity only, not provider authentication, expanded
 filesystem semantics, registry availability, installed SDK execution, full V&V

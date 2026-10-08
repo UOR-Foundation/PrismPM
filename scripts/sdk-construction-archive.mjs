@@ -125,9 +125,19 @@ async function verifyStream(stream,plan,timeout){
  expected.set('sdk.oci.tar',{size:archive.byte_length,digest:archive.digest});
  const tar=tarVerifier(members.get('evidence/manifest.json'),members.get('evidence/config.json'));
  const end=performance.now()+timeout,iterator=stream[Symbol.asyncIterator](),hash=createHash('sha256');
- let expire;const expired=new Promise((_,reject)=>{expire=reject;});expired.catch(()=>{});
- const timer=setTimeout(()=>{const error=Error('construction stream deadline exceeded');stream.destroy(error);expire(error);},timeout);
- const next=()=>Promise.race([iterator.next(),expired]);
+ const deadline=new AbortController();
+ const timer=setTimeout(()=>{const error=Error('construction stream deadline exceeded');deadline.abort(error);stream.destroy(error);},timeout);
+ // A shared pending Promise.race loser retains every settled chunk. Own only
+ // one abort listener, and detach it on each read's settlement instead.
+ const next=()=>new Promise((resolve,reject)=>{
+  let settled=false;
+  const finish=(error,item)=>{if(settled)return;settled=true;deadline.signal.removeEventListener('abort',abort);
+   if(error)reject(error);else resolve(item);};
+  const abort=()=>finish(deadline.signal.reason);
+  deadline.signal.addEventListener('abort',abort,{once:true});
+  if(deadline.signal.aborted)abort();
+  else {try{Promise.resolve(iterator.next()).then(item=>finish(null,item),error=>finish(error));}catch(error){finish(error);}}
+ });
  let current=Buffer.alloc(0),position=0,done=false,completed=false;
  async function consume(length,observe){
   assert(Number.isSafeInteger(length)&&length>=0&&position+length<=artifact.byte_length,'bounded complete ZIP span required');
