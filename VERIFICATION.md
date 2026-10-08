@@ -1,5 +1,20 @@
 # PrismPM falsifiability and verification record
 
+## Integrated source release binding (2026-10-08)
+
+The current 117-root generated package binds IR
+`66b27a91e72cf6d82a5991149c85f5038773e79ef0203e7b086fb988857b5163`.
+Normal offline Cargo packaging and verification produce archive
+`31795eac06fbf1d64c77ffe66b5492964c069e1f2fea41efbf6a17054cf369d7`,
+sealed to semantic identity
+`fcc30c57c1c30e8024afb6d73a6d72caa7de7f4b909670c6a484304560a962b1`.
+Native run `37716977593` at `ee207ff1` passes both architectures, including
+38 exporter-seed controls and separate 411-file golden comparisons. Six
+original native records and the Cargo archive/seal were independently reviewed
+before import. These are source-generation and packaging results, not installed
+SDK, full V&V or release acceptance. Earlier sections retain historical runs;
+their identities do not describe this integration.
+
 Control integration mapping: incoming contextual-effects DK-28 is DK-37;
 incoming semantic-presentation DK-29 is DK-38. Existing SDK acquisition DK-28
 and exporter-seed DK-29 are unchanged. Historical receipts retain their original
