@@ -1646,6 +1646,23 @@ SDK jobs, independent of image rebuild jobs and mandatory before publication.
 The two-run execution remains bounded to four hours; operational fit must be
 measured on the actual selected image, not inferred from source or unit runs.
 
+`scripts/sdk-construction-handoff.mjs` is an internal metadata-admission boundary.
+Independently selected source, run, attempt and artifact IDs bind the complete
+original construction job inventory, successful ordered steps, declared native
+runner assignments,
+input-policy dependency and artifact upload windows. Its caller must acquire
+and retain the provider responses through authenticated GitHub endpoints;
+passing bytes to this validator does not authenticate their origin. Expired,
+future or incomplete metadata, and mismatched bound identities or bytes, fail
+closed. Original construction
+and smoke metadata have a 96 MiB aggregate budget per platform; construction
+and candidate records are limited to 64 KiB, configuration and manifest JSON
+to 4 MiB, and other smoke files to 64 MiB each. Hashes, fatal UTF-8 decoding,
+smoke schemas, source labels and independently selected source standards are
+checked before opaque in-process handles can compose a deterministic native
+OCI index. Such handles and index bytes establish neither archive/blob integrity,
+registry availability, installed execution, full V&V nor release acceptance.
+
 `scripts/sdk-image-inputs.mjs` binds SDK image construction to this closure.
 The committed `sdk/vv-inputs.lock.json` selects the reviewed RustSec snapshot;
 the expected source revision is an independent build argument. The image's
