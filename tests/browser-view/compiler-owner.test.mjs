@@ -55,6 +55,21 @@ test('compiler owner refuses forged handles and unregistered tool families', () 
     assert.throws(() => createCompilerOwner(name, {}), /registered compiler family/);
 });
 
+test('fresh independent drivers pin hash optimization without changing construction or acceptance',()=>{
+  // Construction-argument unit only. Full owning executions remain required.
+  const source=fs.readFileSync(new URL('./compiler-owner.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf("    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',");
+  const end=source.indexOf('\n    const driverBuildMs',begin);
+  assert(begin>=0&&end>begin);const calls=[];
+  runInNewContext(source.slice(begin,end),{run(...args){calls.push(args);},join,
+    work:'/actual-private-owner',manifest:'driver/Cargo.toml',target:'/actual-fresh-target'});
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['cargo',[
+    'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+    '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+    '--manifest-path','/actual-private-owner/driver/Cargo.toml'],
+    '/actual-private-owner',{CARGO_TARGET_DIR:'/actual-fresh-target'}]]);
+});
+
 test('compiler owner refuses malformed or incomplete input closures before building', () => {
   let called = false;
   const accessor = {get malicious() {called = true; return '0'.repeat(64);}};

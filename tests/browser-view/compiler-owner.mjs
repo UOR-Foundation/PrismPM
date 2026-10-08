@@ -190,7 +190,8 @@ export function createCompilerOwner(name, selectedInputs = captureCompilerInputs
     const exportArtifact = captureCompilerArtifact(work, exporter.bin, 'exporter');
     const target = createPrivateDriverTarget(work), driverStarted = performance.now();
     run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
-      '--config', 'build.incremental=false', '--manifest-path', join(work, manifest)], work, {CARGO_TARGET_DIR: target});
+      '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3',
+      '--manifest-path', join(work, manifest)], work, {CARGO_TARGET_DIR: target});
     const driverBuildMs = performance.now() - driverStarted;
     const driver = captureCompilerArtifact(work, join(target, 'debug', selected.executable), 'driver');
     const evidence = Object.freeze({scope: 'fresh-owner-scoped-compiler-tools', family: name, work, inputs,
