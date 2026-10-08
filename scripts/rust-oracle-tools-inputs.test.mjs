@@ -129,3 +129,43 @@ test('actual workflow keeps source tests unconditional and the complete native g
     original.replace('node --test scripts/sdk-image-inputs.test.mjs','true'),
     original.replace('assert.equal(steps.length, 4','assert.equal(steps.length, 3')])assert.throws(()=>check(mutant));
 });
+test('actual tool verifier requires fresh construction before within-job reuse',t=>{
+  const workflow=originals.get('.github/workflows/rust-oracle-tools.yml');
+  const start=workflow.indexOf("          import assert from 'node:assert/strict';");
+  const end=workflow.indexOf('\n          JS',start);
+  assert(start>=0&&end>start);
+  const verifier=workflow.slice(start,end).replace(/^          /gm,'');
+  const root=mkdtempSync(join(tmpdir(),'rust-tool-construction-'));
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  mkdirSync(join(root,'target/rust-oracle-tools'),{recursive:true});
+  const trace=cached=>Array.from({length:4},(_,index)=>{
+    const id=`#${index+10}`;
+    return `${id} [rust_oracle_tools ${index+2}/5] RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools tool-${index}\n${id} ${cached?'CACHED':'DONE 123.4s'}`;
+  }).join('\n');
+  const run=(development,sdk)=>{
+    for(const [image,log] of [['development',development],['sdk',sdk]])
+      writeFileSync(join(root,`target/rust-oracle-tools/${image}.log`),log);
+    return execFileSync(process.execPath,['--input-type=module','--eval',verifier],
+      {cwd:root,encoding:'utf8',timeout:5000,stdio:'pipe'});
+  };
+  const cold=trace(false),warm=trace(true);
+  run(cold,warm);
+  for(const [development,sdk] of [[warm,warm],[cold,cold],[cold.replace('#10 DONE 123.4s','#10 ERROR failed'),warm],
+    [cold,warm.replace('#10 CACHED','#10 DONE 1.0s')],[cold.replaceAll('#11','#10'),warm],
+    [cold.split('\n').slice(0,-2).join('\n'),warm],[cold,'']])
+    assert.throws(()=>run(development,sdk));
+  const check=source=>{
+    const gate=source.slice(source.indexOf('      - name: Build both exact tool stages'),source.indexOf('      - uses: actions/upload-artifact'));
+    assert.equal(gate.split('--no-cache-filter rust_oracle_tools').length,2);
+    assert(gate.indexOf('--no-cache-filter rust_oracle_tools')<gate.indexOf('--file .devcontainer/Dockerfile'));
+    assert(!source.includes('actions/cache@'),'untrusted cross-run tool caches cannot substitute fresh construction');
+    assert(!gate.includes('--cache-from'),'external executable cache cannot substitute fresh construction');
+    assert(gate.includes("[['development', false], ['sdk', true]]"));
+  };
+  check(workflow);
+  for(const mutant of [workflow.replace(' --no-cache-filter rust_oracle_tools',''),
+    workflow.replace('--file .devcontainer/Dockerfile','--cache-from type=gha --file .devcontainer/Dockerfile'),
+    workflow+'\n      - uses: actions/cache@untrusted\n',
+    workflow.replace("[['development', false], ['sdk', true]]","[['sdk', true]]")])
+    assert.throws(()=>check(mutant));
+});
