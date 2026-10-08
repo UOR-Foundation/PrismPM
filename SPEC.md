@@ -682,6 +682,11 @@ KILL grace period, and independent 16,777,216-byte stdout/stderr limits.
 Process records contain normalized arguments/output, exit status, and SHA-256
 of the executable bytes. Timeout, signal, overflow, malformed output, nonzero
 exit, or missing executable is a registered failure.
+Timeout-class failures retain the observed wrapper exit code and bounded
+normalized stdout/stderr excerpts (at most 2,048 UTF-8-aligned bytes from each
+end, with the omitted-byte count). Notes also bind the complete normalized
+streams by byte length and SHA-256. These diagnostics do not constitute
+successful process records; exit 137 alone does not establish the cause of a kill.
 Normalization replaces confined absolute roots with fixed tokens, converts
 line endings to LF, replaces Lake build durations with `<DURATION>`, removes
 Lake's schedule-dependent `[job/total]` progress ordinals, and sorts the

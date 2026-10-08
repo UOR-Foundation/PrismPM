@@ -1005,6 +1005,29 @@ fn pipe<R: Read>(mut reader: R, limit: usize) -> std::io::Result<Vec<u8>> {
     Ok(saved)
 }
 
+// Keep both ends of a failed child's progress without enlarging the process
+// output allowance, retaining decoded source graphs, or changing its deadline.
+fn failure_excerpt(output: &str) -> String {
+    const END_BYTES: usize = 2048;
+    if output.len() <= 2 * END_BYTES {
+        return output.to_owned();
+    }
+    let mut prefix = END_BYTES;
+    while !output.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let mut suffix = output.len() - END_BYTES;
+    while !output.is_char_boundary(suffix) {
+        suffix += 1;
+    }
+    format!(
+        "{}\n[{} bytes omitted]\n{}",
+        &output[..prefix],
+        suffix - prefix,
+        &output[suffix..]
+    )
+}
+
 pub(crate) fn run_process(
     tool: &str,
     program: &Path,
@@ -1153,7 +1176,27 @@ pub(crate) fn run_process_limited_allowed(
     let stdout = normalized(&String::from_utf8_lossy(&stdout), replacements);
     let stderr = normalized(&String::from_utf8_lossy(&stderr), replacements);
     if matches!(exit_code, 124 | 137) {
-        return Err(PrismError::new("PP5007", format!("{tool} timed out")));
+        let mut error = PrismError::new("PP5007", format!("{tool} timed out"));
+        // The observed wrapper exit is evidence, not a claim that exit 137
+        // identifies a timeout rather than an external resource kill.
+        for message in [
+            format!("observed process exit code: {exit_code}"),
+            format!("stdout: {}", failure_excerpt(&stdout)),
+            format!("stderr: {}", failure_excerpt(&stderr)),
+            format!(
+                "normalized child streams: stdout_bytes={}, stdout_sha256={:x}; stderr_bytes={}, stderr_sha256={:x}",
+                stdout.len(),
+                Sha256::digest(stdout.as_bytes()),
+                stderr.len(),
+                Sha256::digest(stderr.as_bytes())
+            ),
+        ] {
+            error.notes.push(crate::error::PrismNote {
+                message,
+                span: None,
+            });
+        }
+        return Err(error);
     }
     if !allowed_exit_codes.contains(&exit_code) {
         return Err(PrismError::new(
@@ -3318,6 +3361,58 @@ mod tests {
         let error = limited("sleep", &["2"], "0.05", 16);
         assert_eq!(error.code, "PP5007");
         assert_eq!(error.message, "test-child timed out");
+        assert_eq!(error.notes[0].message, "observed process exit code: 124");
+        assert_eq!(error.notes[1].message, "stdout: ");
+        assert_eq!(error.notes[2].message, "stderr: ");
+    }
+
+    #[test]
+    fn child_timeout_preserves_both_actual_progress_streams() {
+        let error = limited(
+            "sh",
+            &["-c", "printf 'first stdout\\nlast stdout\\n'; printf 'first stderr\\nlast stderr\\n' >&2; sleep 2"],
+            "1",
+            128,
+        );
+        assert_eq!(error.code, "PP5007");
+        assert_eq!(error.message, "test-child timed out");
+        assert_eq!(error.notes.len(), 4);
+        assert_eq!(
+            error.notes[1].message,
+            "stdout: first stdout\nlast stdout\n"
+        );
+        assert_eq!(
+            error.notes[2].message,
+            "stderr: first stderr\nlast stderr\n"
+        );
+        assert_eq!(
+            error.notes[3].message,
+            format!(
+                "normalized child streams: stdout_bytes=25, stdout_sha256={:x}; stderr_bytes=25, stderr_sha256={:x}",
+                Sha256::digest(b"first stdout\nlast stdout\n"),
+                Sha256::digest(b"first stderr\nlast stderr\n")
+            )
+        );
+        assert!(error.notes.iter().all(|note| note.span.is_none()));
+    }
+
+    #[test]
+    fn failed_process_excerpts_are_bounded_at_utf8_boundaries() {
+        for value in [
+            String::new(),
+            "x".repeat(4096),
+            format!("start{}end", "é🙂".repeat(2000)),
+        ] {
+            let excerpt = failure_excerpt(&value);
+            if value.len() <= 4096 {
+                assert_eq!(excerpt, value);
+            } else {
+                assert!(excerpt.starts_with("start"));
+                assert!(excerpt.ends_with("end"));
+                assert!(excerpt.len() < 4160);
+                assert!(excerpt.contains(" bytes omitted]\n"));
+            }
+        }
     }
 
     #[test]
