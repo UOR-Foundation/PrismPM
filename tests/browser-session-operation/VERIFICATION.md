@@ -2,11 +2,17 @@
 
 ## Current compiler integration
 
-The current port preserves the complete original owner and adds two source-custody
-checks (92 required checks). It uses the closed compiler-family API, descriptor-bound
+The current port preserves the complete original owner, restores all six parser
+checks for always-fresh parsing, and adds two source-custody and four descriptor
+checks (96 required checks). It uses the closed compiler-family API, descriptor-bound
 input custody and branded original/private native artifacts. All source, browser,
 payload, mutation, native CI and installed-SDK obligations remain required. The
 historical evidence below does not accept this integration.
+
+The initial current port incorrectly counted six parser checks while selecting
+the newer two-check file. The omitted source-reread, relative-resolution,
+executable-custody and complete large-closure guarantees are restored without
+caching parse acceptance. The four descriptor checks are additional coverage.
 
 Historical references to a DK-30 session host predate the current register;
 DK-30 now identifies the native-lane reducer. Current receipts identify the
@@ -32,7 +38,7 @@ authenticated retained history, freshness, succession and durable publication.
 Run in the pinned devcontainer:
 
 ```sh
-node --test tests/browser-session-operation/boundary.test.mjs tests/browser-view/kernel-provenance.test.mjs tests/browser-view/local-module-inputs.test.mjs
+node --test tests/browser-session-operation/boundary.test.mjs tests/browser-view/kernel-provenance.test.mjs tests/browser-view/local-module-inputs.test.mjs tests/browser-view/file-custody.test.mjs
 node --test tests/browser-session-operation/owner.test.mjs
 ```
 

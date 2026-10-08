@@ -2,11 +2,16 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {dirname, relative, resolve} from 'node:path';
+import {captureFile, capturedFile} from './file-custody.mjs';
 
 export function localModuleInputs(repository, entries, readSource) {
   repository = resolve(repository);
-  const captured = new Map(), pending = [...entries], environment = {...process.env};
-  delete environment.NODE_OPTIONS; delete environment.NODE_PATH;
+  const executable = process.execPath, parserPath = resolve(executable);
+  const identity = captureFile(parserPath).evidence;
+  assert(BigInt(identity.size) > 0n && (BigInt(identity.mode) & 0o111n) !== 0n,
+    'bounded executable static ESM parser');
+  const captured = new Map(), pending = [...entries];
+  const environment = Object.freeze({NODE_NO_WARNINGS: '1', TZ: 'UTC'});
   const parser = 'import {SourceTextModule} from "node:vm";import {readFileSync} from "node:fs";'
     + 'const source=readFileSync(0,"utf8");const module=new SourceTextModule(source);'
     + 'process.stdout.write(JSON.stringify(module.dependencySpecifiers));';
@@ -24,7 +29,7 @@ export function localModuleInputs(repository, entries, readSource) {
     const dynamicImport = new RegExp('\\bim' + 'port(?:\\s|/\\*[\\s\\S]*?\\*/|//[^\\n]*(?:\\n|$))*\\(');
     assert.ok(!dynamicImport.test(source),
       'dynamic imports require a separately registered owning closure');
-    const parsed = spawnSync(process.execPath, ['--experimental-vm-modules', '--input-type=module', '-e', parser],
+    const parsed = spawnSync(parserPath, ['--experimental-vm-modules', '--input-type=module', '-e', parser],
       {input: bytes, encoding: 'utf8', env: environment, timeout: 10000, maxBuffer: 1048576});
     assert.equal(parsed.error, undefined); assert.equal(parsed.signal, null);
     assert.equal(parsed.status, 0, 'actual static ESM parsing: ' + path + '\n' + parsed.stderr);
@@ -39,5 +44,7 @@ export function localModuleInputs(repository, entries, readSource) {
       pending.push(selected);
     }
   }
+  assert.equal(process.execPath, executable, 'static ESM parser selection changed during closure capture');
+  capturedFile(parserPath, identity);
   return new Map([...captured].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
 }
