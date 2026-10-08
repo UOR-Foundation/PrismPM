@@ -1,4 +1,13 @@
-# HO-14 primary component verification
+# HO-15 primary component verification
+
+## Current integration
+
+Historical HO-14 below denotes this component, not the current BLAKE3 owner.
+HO-15 retains its complete eight-check owner and adds two custody guards.
+Current compiler/provenance binding, full owner, source audit, native CI,
+installed SDK and integrated V&V remain unaccepted until actually verified.
+
+## Historical evidence
 
 Status: current standalone component owner passed; registered combined gate pending.
 

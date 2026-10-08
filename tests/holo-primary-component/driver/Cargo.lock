@@ -68,18 +68,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "holo-primary-component-driver"
-version = "0.1.0"
-dependencies = [
- "camino",
- "lexlean",
- "prod-codegen",
- "prod-ir",
- "serde_json",
- "sha2",
-]
-
-[[package]]
 name = "camino"
 version = "1.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -232,6 +220,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "holo-primary-component-driver"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "lexlean",
+ "prod-codegen",
+ "prod-ir",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -331,7 +331,11 @@ name = "prod-codegen"
 version = "0.1.0"
 dependencies = [
  "prod-ir",
+ "serde_json",
  "sha2",
+ "unicode-ident",
+ "unicode-normalization",
+ "wasmparser",
 ]
 
 [[package]]
@@ -576,6 +580,15 @@ checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.245.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f08c9adee0428b7bddf3890fc27e015ac4b761cc608c822667102b8bfd6995e"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]

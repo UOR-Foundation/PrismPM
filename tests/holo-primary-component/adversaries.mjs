@@ -6,7 +6,8 @@ import {basename, dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {frozenInputs, repository, requirePreparedComponent, run, sha, verifyFrozenInputs} from './compile.mjs';
 
-function substitutePrivateInputs(inputs) {
+function substitutePrivateInputs(initialInputs) {
+  let inputs = initialInputs;
   assert.equal(dirname(repository), realpathSync(tmpdir()), 'private input-copy parent');
   assert.match(basename(repository), /^prismpm-primary-input-checks-[A-Za-z0-9]+$/);
   assert.equal(realpathSync(repository), resolve(repository));
@@ -20,23 +21,27 @@ function substitutePrivateInputs(inputs) {
   assert.equal(sha(bytes), inputs[relativePath]);
   const omitted = {...inputs}; delete omitted[relativePath];
   assert.throws(() => verifyFrozenInputs(omitted), /actual complete captured input inventory/);
-  const held = path + '.ho14-input-held'; assert.equal(existsSync(held), false);
+  const held = path + '.ho15-input-held'; assert.equal(existsSync(held), false);
   renameSync(path, held);
   try {assert.throws(() => verifyFrozenInputs(inputs), /ENOENT/);}
   finally {renameSync(held, path);}
-  verifyFrozenInputs(inputs);
+  // Restored bytes are not restoration of the old captured inode/timestamps.
+  // Capture a fresh test-only graph after each mutation; never revive a token.
+  inputs = frozenInputs(); assert.deepEqual(inputs, initialInputs); verifyFrozenInputs(inputs);
   const changed = Buffer.concat([bytes, Buffer.from('\n// planted transitive input change\n')]);
   try {
     writeFileSync(path, changed);
-    assert.throws(() => verifyFrozenInputs(inputs), /immutable captured input closure/);
+    assert.throws(() => verifyFrozenInputs(inputs), /immutable captured file custody/);
     assert.throws(() => verifyFrozenInputs({...inputs, [relativePath]: sha(changed)}),
       /actual complete captured input inventory/);
   } finally {writeFileSync(path, bytes);}
-  verifyFrozenInputs(inputs);
+  assert.throws(() => verifyFrozenInputs(inputs), /immutable captured file custody/);
+  inputs = frozenInputs(); assert.deepEqual(inputs, initialInputs); verifyFrozenInputs(inputs);
   linkSync(path, held);
-  try {assert.throws(() => verifyFrozenInputs(inputs), /regular singly linked compiler input/);}
+  try {assert.throws(() => verifyFrozenInputs(inputs), /bounded single-link custody file/);}
   finally {unlinkSync(held);}
-  verifyFrozenInputs(inputs);
+  assert.throws(() => verifyFrozenInputs(inputs), /immutable captured file custody/);
+  inputs = frozenInputs(); assert.deepEqual(inputs, initialInputs); verifyFrozenInputs(inputs);
   return ['omitted-transitive-map', 'missing-transitive-file', 'changed-transitive-file',
     'forged-matching-transitive-map', 'hard-linked-transitive-file'];
 }
@@ -74,8 +79,15 @@ function ownedFile(owner, path) {
 }
 function substitute(owner, path, replacement, check) {
   const stat = ownedFile(owner, path), bytes = readFileSync(path);
-  try {chmodSync(path, 0o600); writeFileSync(path, replacement); return check();}
-  finally {writeFileSync(path, bytes); chmodSync(path, stat.mode & 0o777);}
+  try {
+    chmodSync(path, (stat.mode & 0o777) | 0o200); writeFileSync(path, replacement);
+    chmodSync(path, stat.mode & 0o777);
+    return check();
+  }
+  finally {
+    chmodSync(path, (stat.mode & 0o777) | 0o200);
+    try {writeFileSync(path, bytes);} finally {chmodSync(path, stat.mode & 0o777);}
+  }
 }
 const poisoned = bytes => Buffer.concat([bytes, Buffer.from('\nsource substitution\n')]);
 function missing(owner, path, check) {
@@ -128,7 +140,7 @@ export function artifactAdversaries(owner) {
     const path = owner.compileNative(standard), bytes = readFileSync(path);
     const sentinel = join(owner.work, 'must-not-execute-' + standard);
     substitute(owner, path, poisoned(bytes), () => {
-      assert.throws(() => owner.runNative(standard, ['capabilities', sentinel]), /immutable generated native observer/);
+      assert.throws(() => owner.runNative(standard, ['capabilities', sentinel]), /immutable private compiler/);
       assert.equal(existsSync(sentinel), false);
     }); passed('native-' + standard + '-substitution');
     missing(owner, path, () => {

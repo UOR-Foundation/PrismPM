@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {repository, sourceClosure, frozenInputs, requirePreparedComponent, run, verifyFrozenInputs} from './compile.mjs';
+import {repository, sourceClosure, frozenInputs, requirePreparedComponent, run, verifyFrozenInputs,
+  assertComponentCompilerInputs} from './compile.mjs';
 import {mutations, mutateSource, mutationProbes} from './mutations.mjs';
 import {inputClosureAdversaries} from './adversaries.mjs';
 import {profileLinkCases} from './profile-links.mjs';
@@ -74,4 +75,17 @@ test('independent profile-link negative inventory retains all reference and sour
     'application_kappa','source equality','source facts','module input closure','IR equality',
     'package closure equality','metadata shape','provenance shape','authority revisions','guest SHA-256'])
     assert.ok(profileLinkCases.some(row=>row.expected===expected),expected);
+});
+
+test('primary component input custody refuses copied maps and missing transitive files', () => {
+  const inputs = frozenInputs(); verifyFrozenInputs(inputs);
+  assert.throws(() => verifyFrozenInputs(Object.freeze({...inputs})), /actual complete captured input inventory/);
+  const omitted = {...inputs}; delete omitted['tests/browser-view/compiler-owner.mjs'];
+  assert.throws(() => verifyFrozenInputs(Object.freeze(omitted)), /actual complete captured input inventory/);
+});
+
+test('primary component compiler binding refuses fabricated handles before execution', () => {
+  for (const owner of [null, {}, {evidence: {family: 'holo-primary-component', inputs: {}}},
+    {runDriver() {throw Error('caller compiler executed');}}])
+    assert.throws(() => assertComponentCompilerInputs(owner, {}), /actual fresh compiler owner/);
 });

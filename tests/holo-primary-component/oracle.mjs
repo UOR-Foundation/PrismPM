@@ -1,11 +1,13 @@
 // Pinned, source-built independent oracle; no adopted target/executable cache.
 import assert from 'node:assert/strict';
-import {chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync,
+import {existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync,
   realpathSync, statfsSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {run, sha} from '../browser-view/compile.mjs';
+import {captureCompilerArtifact, requireCompilerArtifact} from '../browser-view/compiler-artifact.mjs';
+import {captureFile, capturedFile} from '../browser-view/file-custody.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sourcePaths = [
@@ -13,12 +15,7 @@ const sourcePaths = [
   'tests/hologram-oracle/Cargo.toml', 'tests/hologram-oracle/Cargo.lock',
   'tests/holo-primary-component/oracle.rs', 'tests/holo-primary-component/oracle.mjs',
 ];
-const read = path => {
-  assert.equal(realpathSync(path), path, 'unaliased oracle input');
-  const stat = lstatSync(path);
-  assert.ok(stat.isFile() && stat.nlink === 1, 'singly linked regular oracle input');
-  return readFileSync(path);
-};
+const read = path => captureFile(path).bytes;
 function tree(root) {
   const files = {};
   function visit(relative) {
@@ -34,20 +31,9 @@ function tree(root) {
   }
   visit(''); return files;
 }
-function binaryIdentity(path, expectedLinks = null) {
-  assert.equal(realpathSync(path), path, 'unaliased oracle executable');
-  const before = lstatSync(path, {bigint: true});
-  assert.ok(before.isFile() && before.uid === BigInt(process.getuid()) && before.size > 0n
-    && before.size <= 512n * 1024n ** 2n, 'bounded owned oracle executable');
-  if (expectedLinks !== null) assert.equal(before.nlink, expectedLinks);
-  const bytes = readFileSync(path), after = lstatSync(path, {bigint: true});
-  for (const key of ['dev', 'ino', 'nlink', 'size', 'mode', 'uid', 'mtimeNs', 'ctimeNs'])
-    assert.equal(before[key], after[key], 'stable executable ' + key);
-  return {bytes, identity: {device: before.dev.toString(), inode: before.ino.toString(),
-    links: before.nlink.toString(), bytes: bytes.length, sha256: sha(bytes)}};
-}
 export function prepareOracle() {
-  const captured = new Map(sourcePaths.map(path => [path, read(join(repository, path))]));
+  const captures = new Map(sourcePaths.map(path => [path, captureFile(join(repository, path))]));
+  const captured = new Map([...captures].map(([path, row]) => [path, row.bytes]));
   const text = path => captured.get(path).toString('utf8');
   const dependency = text('model/dependencies.toml').split('[[dependency]]').slice(1)
     .filter(section => /^id = "hologram-live"$/m.test(section));
@@ -81,7 +67,7 @@ export function prepareOracle() {
   put('hologram-oracle/src/main.rs', captured.get('tests/holo-primary-component/oracle.rs'));
   const upstreamFiles = tree(upstream), harnessFiles = tree(harness);
   function unchanged() {
-    for (const [path, bytes] of captured) assert.deepEqual(read(join(repository, path)), bytes, 'frozen oracle source ' + path);
+    for (const [path, row] of captures) capturedFile(join(repository, path), row.evidence);
     assert.deepEqual(tree(upstream), upstreamFiles, 'complete pinned upstream source unchanged');
     assert.deepEqual(tree(harness), harnessFiles, 'complete executing oracle source unchanged');
     assert.deepEqual(read(archive), captured.get('vendor/hologram-live.tar'));
@@ -93,23 +79,20 @@ export function prepareOracle() {
     {CARGO_TARGET_DIR: target});
   } finally {unchanged();}
   const originalPath = join(target, 'debug/prismpm-hologram-oracle');
-  const original = binaryIdentity(originalPath);
-  const executable = put('primary-live-oracle', original.bytes); chmodSync(executable, 0o500);
-  const private_ = binaryIdentity(executable, 1n);
-  assert.equal(private_.identity.sha256, original.identity.sha256);
+  const artifact = captureCompilerArtifact(work, originalPath, 'primary-live-oracle');
+  const executable = artifact.path, privateIdentity = captureFile(executable).evidence;
   let retired = false;
   function verify() {
     assert.equal(retired, false, 'completed independent oracle is closed');
     unchanged();
-    assert.deepEqual(binaryIdentity(originalPath, BigInt(original.identity.links)).identity, original.identity);
-    assert.deepEqual(binaryIdentity(executable, 1n).identity, private_.identity);
+    requireCompilerArtifact(artifact);
   }
   return Object.freeze({work, verify,
     evidence: {revision, inputs: Object.fromEntries([...captured].map(([path, bytes]) => [path, sha(bytes)])),
-      upstreamFiles, harnessFiles, original: original.identity, private: private_.identity},
+      upstreamFiles, harnessFiles, ...artifact.evidence},
     call(args) {
       verify();
-      try {return JSON.parse(run(executable, args, work));}
+      try {return JSON.parse(artifact.run(args, work));}
       finally {verify();}
     },
     retire() {
@@ -119,11 +102,11 @@ export function prepareOracle() {
       assert.equal(readFileSync(join(target, 'CACHEDIR.TAG'), 'utf8').split('\n')[0],
         'Signature: 8a477f597d28d172789f06886806bc55');
       const receipt = {scope:'completed-private-upstream-cargo-cache-only',
-        original:original.identity, preservedExecutable:private_.identity,
+        original:artifact.evidence.original, preservedExecutable:artifact.evidence.private,
         upstreamFiles, harnessFiles};
       run('cargo', ['clean', '--manifest-path', join(harness, 'Cargo.toml'), '--target-dir', target], work);
       assert.equal(existsSync(originalPath), false);
-      unchanged(); assert.deepEqual(binaryIdentity(executable, 1n).identity, private_.identity);
+      unchanged(); capturedFile(executable, privateIdentity);
       retired = true;
       writeFileSync(join(work, 'oracle-cache-retirement.json'), JSON.stringify(receipt) + '\n', {flag:'wx',mode:0o444});
       return receipt;

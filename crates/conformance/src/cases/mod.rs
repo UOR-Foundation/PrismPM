@@ -398,12 +398,12 @@ pub fn run_at(root: &Path, id: &str) {
         }
         "HO-15" => verify_node_suite(
             root,
-            "HO-15",
+            id,
             &[
                 "tests/holo-primary-component/component.test.mjs",
                 "tests/holo-primary-component/owner.test.mjs",
             ],
-            8,
+            10,
             "3600000",
         ),
 

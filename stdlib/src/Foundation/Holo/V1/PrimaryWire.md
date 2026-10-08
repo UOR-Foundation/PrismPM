@@ -17,7 +17,7 @@ and binary execution through pinned `hologram-live`. Structural acceptance alone
 does not establish any of these facts. A source receipt supplied with arbitrary
 replacement bytes is not provenance.
 
-HO-14 is private component-format and binary interoperability evidence. It does
+HO-15 is private component-format and binary interoperability evidence. It does
 not accept a Browser application, UI, service, SDK release or deployment; the
 public Browser runtime stays fail-closed. The portable and Browser View profiles,
 their transport bounds and their acceptance obligations remain unchanged.

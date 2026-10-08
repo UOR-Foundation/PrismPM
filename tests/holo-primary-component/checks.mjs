@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {lstatSync, mkdirSync, readFileSync, realpathSync, statfsSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {prepareComponent, requirePreparedComponent, sha} from './compile.mjs';
+import {createComponentCompiler, frozenInputs, prepareComponent, requirePreparedComponent, sha} from './compile.mjs';
+import {verifyCompilerOwnerSubstitutions} from '../browser-view/compiler-owner-checks.mjs';
 import {prepareOracle} from './oracle.mjs';
 import {codecCorpus, codecTsv} from './corpus.mjs';
 import {mutations, mutationProbes} from './mutations.mjs';
@@ -207,7 +208,9 @@ function archiveNegatives(component, owner, oracle) {
 }
 
 export async function verifyComponent() {
-  const owner = prepareComponent(), inputNegatives = inputClosureAdversaries(owner.inputs);
+  const inputs = frozenInputs(), compiler = createComponentCompiler(inputs);
+  const owner = prepareComponent(compiler, inputs), inputNegatives = inputClosureAdversaries(owner.inputs);
+  const compilerNegatives = verifyCompilerOwnerSubstitutions(compiler);
   const artifactNegatives = artifactAdversaries(owner);
   owner.compileNative(true); owner.compileNative(false); owner.unchanged();
   const oracle = prepareOracle(), fixture = oracle.call(['synthetic']), codec = codecCorpus(fixture);
@@ -238,7 +241,7 @@ export async function verifyComponent() {
   for (const [index, mutation] of mutations.entries()) {
     const disk = statfsSync(owner.work, {bigint:true});
     assert.ok(disk.bavail * disk.bsize >= 12n * 1024n ** 3n, '12 GiB owner reserve before every real source mutant');
-    const changed = prepareComponent(owner.inputs, mutation.id);
+    const changed = prepareComponent(compiler, owner.inputs, mutation.id);
     const probe = [probes[index]];
     const path = join(changed.work, 'probe.tsv'); writeFileSync(path, codecTsv(probe), {flag:'wx'});
     for (const standard of [true, false]) {
@@ -251,20 +254,24 @@ export async function verifyComponent() {
     mutationReceipts.push({id:mutation.id,probe:mutation.probe,work:changed.work,source:changed.verified.source_id,
       attestation:changed.verified.attestation_id,ir:changed.generation.ir_sha256,native:changed.nativeEvidence(),
       packages:changed.generatedPackages,wasm:changed.wasm.session.map(value => value.evidence),
-      input_sha256:sha(readFileSync(path)),cacheRetirement:changed.cacheRetirement});
+      input_sha256:sha(readFileSync(path)),compiler:changed.compiler,
+      nativeArtifacts:changed.nativeArtifacts(),provenance:changed.provenance});
     process.stdout.write('PASS actual primary source mutant ' + mutation.id + '\n');
   }
   assert.equal(mutationReceipts.length, 7);
   owner.unchanged(); oracle.verify(); component.verify();
   const oracleRetirement = oracle.retire();
+  const native = owner.nativeEvidence(), nativeArtifacts = owner.nativeArtifacts();
+  const compilerRetirement = compiler.close();
   const evidence = {schema:'prismpm/primary-component-owner/1',scope:'private-component-format-and-binary-interoperability',
     componentAccepted:true,publicApplicationAccepted:false,source:owner.verified,inputs:owner.inputs,
     proof:owner.verificationEvidence,ir:owner.generation.ir_sha256,packages:owner.generatedPackages,
-    native:owner.nativeEvidence(),wasm:owner.wasm.session.map(value => value.evidence),
+    native,nativeArtifacts,compiler:owner.compiler,compilerNegatives,
+    provenance:owner.provenance,wasm:owner.wasm.session.map(value => value.evidence),
     upstream:oracle.evidence,codecCount:codec.length,finiteCount:finite.length,maximumCount:ordinal,profileNegatives,
     archive:component.expected,archive_kappa:component.archiveId.kappa,application_kappa:component.applicationId.kappa,
     observations,inputNegatives,artifactNegatives,componentNegatives,upstreamNegatives,
-    mutations:mutationReceipts,cacheRetirement:owner.cacheRetirement,oracleRetirement};
+    mutations:mutationReceipts,compilerRetirement,oracleRetirement};
   const receipt = join(owner.work, 'primary-component-evidence.json');
   writeFileSync(receipt, json(evidence), {flag:'wx'}); return {receipt,sha256:sha(readFileSync(receipt))};
 }

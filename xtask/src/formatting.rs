@@ -12,6 +12,10 @@ const COMPILERS: &[&str] = &[
 ];
 const HARNESSES: &[(&str, &str)] = &[
     (
+        "tests/holo-primary-component/driver/Cargo.toml",
+        "tests/holo-primary-component/driver/src/main.rs",
+    ),
+    (
         "tests/browser-workspace/Cargo.toml",
         "tests/browser-workspace/src/main.rs",
     ),
@@ -129,6 +133,8 @@ const HARNESSES: &[(&str, &str)] = &[
     ),
 ];
 const SOURCES: &[&str] = &[
+    "tests/holo-primary-component/runner.rs",
+    "tests/holo-primary-component/oracle.rs",
     "tests/browser-workspace/runner.rs",
     "tests/support/browser_application.rs",
     "tests/browser-envelope/runner.rs",
