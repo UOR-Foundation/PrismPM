@@ -1,4 +1,4 @@
-// Private DK-30 prerequisite only: no authenticated journal, effects or release.
+// Private DK-35 session-host prerequisite: no authenticated journal, effects or release.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync, writeFileSync} from 'node:fs';
@@ -29,7 +29,7 @@ test('operation capture component: actual source, native, Wasm, browser and all 
   let complete = false;
   try {
     const compilerSubstitutions = await required(t, 'fresh compiler source/executable/owner substitution refusal',
-      () => verifyCompilerOwnerSubstitutions(compiler, inputs));
+      () => verifyCompilerOwnerSubstitutions(compiler));
     const {build, evidence} = await required(t, 'actual kernel and complete independent native/no_std/Wasm corpus',
       () => verifyComponents(compiler, inputs));
     const phases = [];
@@ -89,7 +89,7 @@ test('operation capture component: actual source, native, Wasm, browser and all 
     }
     assert.equal(hostDefects.length, 9); assert.equal(sourceDefects.length, 8);
     build.unchanged();
-    const receipt = {...evidence, scope: 'private-DK-35-operation-capture-prerequisite', requiredBy: 'DK-30',
+    const receipt = {...evidence, scope: 'private-DK-35-operation-capture-prerequisite', requiredBy: 'source-owned-browser-session-host',
       authenticatedCurrentState: false, effectsReleased: false, publicationAccepted: false,
       compilerSubstitutions, browsers, boundaries, maxima, hostDefects, sourceDefects, phases};
     const path = join(build.work, 'operation-capture-evidence.json'); writeFileSync(path, JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'});

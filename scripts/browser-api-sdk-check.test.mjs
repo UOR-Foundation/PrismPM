@@ -10,13 +10,15 @@ import * as browserGate from './browser-api-sdk-check.mjs';
 const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'queries',
  'view-host', 'view-dom', 'view-error', 'rs256', 'effects', 'effects-wire',
  'effects-module', 'presentation-wire', 'presentation-dom', 'semantic-presentation-wire',
- 'semantic-presentation-style', 'credential-custody', 'operation-journal','account-genesis','account-genesis-binding','signed-context'];
+ 'semantic-presentation-style', 'credential-custody', 'operation-journal','account-genesis','account-genesis-binding','signed-context',
+ 'session-retention-wire','session-storage','session-payloads','session-operation-capture'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const additionalOwners = [
  {id:'DK-27',minimum:13,deadline:3600000,files:['sdk/browser/budget-model-test.mjs']},
  {id:'DK-37',minimum:24,deadline:3600000,files:['sdk/browser/contextual-effects.test.mjs']},
  {id:'DK-31',minimum:8,deadline:3600000,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','sdk/browser/dynamic-choice.test.mjs']},
  {id:'DK-32',minimum:21,deadline:3600000,files:['tests/browser-signed-context/corpus.test.mjs','tests/browser-signed-context/bridge.test.mjs','tests/browser-signed-context/wpt.test.mjs','tests/browser-signed-context/aggregate.test.mjs','sdk/browser/signed-context-test.mjs']},
+ {id:'DK-35',minimum:92,deadline:7200000,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-session-operation/owner.test.mjs']},
 ];
 function registeredAdditionalOwner(source,id) {
  const files=text=>[...text.matchAll(/"([^"]+)"/g)].map(row=>row[1]);
@@ -43,12 +45,12 @@ test('private prerequisites retain exact registered source files minima deadline
 });
 
 test('private prerequisite source closure includes complete fixture directories and shared compiler lifecycle',()=>{
- for(const path of ['tests/browser-budget','tests/browser-contextual-effects','tests/browser-dynamic-choice','tests/browser-signed-context','tests/browser-view','stdlib/src'])
+ for(const path of ['tests/browser-budget','tests/browser-contextual-effects','tests/browser-dynamic-choice','tests/browser-signed-context','tests/browser-session-operation','tests/browser-view','stdlib/src'])
   assert.ok(sourceRoots.includes(path),'required installed private prerequisite source '+path);
 });
 
 test('installed source roots cover every actual frozen private prerequisite compiler input',async()=>{
- for(const path of ['tests/browser-budget/compile.mjs','tests/browser-contextual-effects/checks.mjs','tests/browser-dynamic-choice/compile.mjs','tests/browser-signed-context/compile.mjs']){
+ for(const path of ['tests/browser-budget/compile.mjs','tests/browser-contextual-effects/checks.mjs','tests/browser-dynamic-choice/compile.mjs','tests/browser-signed-context/compile.mjs','tests/browser-session-operation/compile.mjs']){
   const {frozenInputs}=await import(new URL('../'+path,import.meta.url));
   for(const input of Object.keys(frozenInputs()))
    assert.ok(sourceRoots.some(root=>input===root||input.startsWith(root+'/')),'unbound actual private prerequisite input '+input);
@@ -63,7 +65,7 @@ test('private prerequisite comparisons reject actual registered file minimum and
   assert.ok(minimum.test(source),'exact registered minimum for '+owner.id);
   const changedMinimum=source.replace(minimum,(_,before,after)=>before+(owner.minimum-1)+after);
   for(const changed of [source.replace(owner.files[0],owner.files[0]+'.changed'),
-   changedMinimum,source.replaceAll('"3600000"','"3599999"')])
+   changedMinimum,source.replaceAll('"'+owner.deadline+'"','"'+(owner.deadline-1)+'"')])
    assert.throws(()=>assert.deepEqual(registeredAdditionalOwner(changed,owner.id),owner));
  }
 });
@@ -93,7 +95,7 @@ test('installed browser closure includes complete new owning fixtures and actual
   'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
   'tests/browser-budget', 'tests/browser-contextual-effects','tests/browser-semantic-presentation','tests/browser-dynamic-choice',
   'tests/browser-session-journal','tests/browser-session-journal-retention','tests/browser-session-journal-recovery',
-  'tests/browser-session-payloads','tests/browser-session-recovery-frames','tests/publication-context-linkage',
+  'tests/browser-session-payloads','tests/browser-session-operation','tests/browser-session-recovery-frames','tests/publication-context-linkage',
   'tests/fixtures/library/native-library/project', 'tests/support/browser_application.rs',
   'crates/prismpm/src/browser_build.rs', 'crates/prismpm/src/browser_build',
   'crates/prismpm/src/holo/browser_application.rs', 'crates/prismpm/src/holo/browser_application',
@@ -103,7 +105,7 @@ test('installed browser closure includes complete new owning fixtures and actual
   assert.ok(sourceRoots.includes(path), 'required installed source: ' + path);
  }
  const source = sdkSource('crates/conformance/tests/conformance.rs');
- for (const id of [21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 33, 34, 37, 38]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
+ for (const id of [21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 37, 38]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
  assert.match(sdkSource('crates/prismpm/src/holo/browser_application.rs'), /Err\(PrismError::new\("PP2011"/);
  assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
  const workflow = sdkSource('.github/workflows/release.yml');
@@ -318,7 +320,7 @@ test('private prerequisite actual Node owners reject below-minimum and empty sib
    assert.throws(()=>runSuites(root,spawnSync,()=>{}),/nonempty registered tests|complete selected test file summaries|complete sequential outer test numbering/);restore();
   }
  }
- assert.equal(runSuites(root,spawnSync,()=>{}).length,23);
+ assert.equal(runSuites(root,spawnSync,()=>{}).length,24);
 });
 
 test('semantic suite refuses missing or empty siblings even with surplus real passing tests', t => {
@@ -340,7 +342,7 @@ test('semantic registry regression kills owner, minimum and deadline substitutio
  const changes = [row.replace('minimum:29', 'minimum:28'),
   row.replace('wire.test.mjs', 'substitute.test.mjs')];
  const mutated = changes.map(changed => original.replace(row, changed));
- const deadline = "deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000";
+ const deadline = "deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000";
  assert.equal(original.split(deadline).length, 2);
  mutated.push(original.replace(deadline, deadline.replace(", 'DK-38'", '').replace(",'DK-38'", '')));
  for (const source of mutated) {
@@ -495,8 +497,8 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38']);
- assert.equal(runSuites(root,launch,()=>{}).length,23);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-35','DK-37','DK-38']);
+ assert.equal(runSuites(root,launch,()=>{}).length,24);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,43);

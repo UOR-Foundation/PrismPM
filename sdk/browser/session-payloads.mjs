@@ -1,4 +1,4 @@
-// Private DK-30 transport. Generated DK-24 partition/descriptor admission and
+// Private browser session transport. Generated DK-24 partition/descriptor admission and
 // generated retention own the protocols. This supplies hashing and storage only.
 import {bytesCopy} from './identity.mjs';
 import {inspectEffectArtifactBudget, inspectEffectModule} from './effects-module.mjs';

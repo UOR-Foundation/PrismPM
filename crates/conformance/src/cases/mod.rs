@@ -536,7 +536,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-view/local-module-inputs.test.mjs",
                 "tests/browser-session-operation/owner.test.mjs",
             ],
-            90,
+            92,
             "7200000",
         ),
         "OC-07" => verify_browser_export(root),

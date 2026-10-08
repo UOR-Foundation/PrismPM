@@ -2453,7 +2453,8 @@ Matching captured artifact bytes to caller digests is not artifact authority.
 SDK assembly must supply independently accepted artifacts. Neither a derived
 predecessor nor a generated successor observation is authenticated current or
 committed state. This component signs nothing, releases no effects and does not
-complete the DK-30 session host or bypass `PP2011`.
+complete the source-owned browser session host or bypass `PP2011`. Current
+DK-30 is the separate native-lane reducer, not that session-host obligation.
 
 Acceptance requires fresh kernel/native/no_std/paired-Wasm verification,
 kernel-manifest/generated-Lean linkage, original/private artifact custody,

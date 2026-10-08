@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createSessionOperationCapture} from '../../sdk/browser/session-operation-capture.mjs';
 import {operationCorpus} from './corpus.mjs';
-import {frozenInputs, sourceClosure, assertCapturedOperationSources} from './compile.mjs';
+import {frozenInputs, verifyFrozenInputs, sourceClosure, assertCapturedOperationSources,
+  assertOperationCompilerInputs} from './compile.mjs';
 
 const roles = ['predecessor', 'session', 'observation', 'partition', 'descriptor'];
 const options = () => Object.fromEntries(roles.map(role => [role, {bytes: new Uint8Array(8), sha256: new Uint8Array(32)}]));
@@ -39,4 +40,18 @@ test('private owner captures complete source and transitive local harness closur
     'tests/browser-view/compiler-owner.mjs', 'tests/browser-view/compiler-artifact.mjs']) assert.ok(inputs[path]);
   sources.delete('Foundation.Bytes');
   assert.throws(() => assertCapturedOperationSources(inputs, sources), /source module inventory/);
+});
+
+test('operation input custody refuses copied maps and omitted transitive inputs', () => {
+  const inputs = frozenInputs(); verifyFrozenInputs(inputs);
+  assert.throws(() => verifyFrozenInputs(Object.freeze({...inputs})), /actual complete captured operation inputs/);
+  const missing = {...inputs}; delete missing['tests/browser-view/compiler-owner.mjs'];
+  assert.throws(() => verifyFrozenInputs(Object.freeze(missing)), /actual complete captured operation inputs/);
+  assert.ok(Object.isFrozen(inputs));
+});
+
+test('operation compiler binding rejects fabricated and copied owner handles before execution', () => {
+  for (const owner of [null, {}, {evidence: {family: 'session-operation', inputs: {}}},
+    {runDriver() {throw Error('caller compiler executed');}}])
+    assert.throws(() => assertOperationCompilerInputs(owner, {}), /actual fresh compiler owner/);
 });

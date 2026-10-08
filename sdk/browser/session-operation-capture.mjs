@@ -1,4 +1,4 @@
-// Private DK-35 operation observation for DK-30, not journal admission or authority.
+// Private DK-35 session-host prerequisite, not journal admission or authority.
 // The eventual SDK assembler must supply independently accepted artifacts;
 // matching caller-supplied digests alone cannot establish their authority.
 import {bytesCopy} from './identity.mjs';

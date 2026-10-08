@@ -1,5 +1,19 @@
 # DK-35 private operation capture
 
+## Current compiler integration
+
+The current port preserves the complete original owner and adds two source-custody
+checks (92 required checks). It uses the closed compiler-family API, descriptor-bound
+input custody and branded original/private native artifacts. All source, browser,
+payload, mutation, native CI and installed-SDK obligations remain required. The
+historical evidence below does not accept this integration.
+
+Historical references to a DK-30 session host predate the current register;
+DK-30 now identifies the native-lane reducer. Current receipts identify the
+still-required source-owned browser session-host integration explicitly.
+
+## Historical component evidence
+
 The complete registered gate passed on 28 September 2026: 90 mandatory checks,
 no skipped checks, 3,626.66 seconds including the unchanged payload owner.
 DK-35 is a prerequisite of the separate full DK-30 session host, not its completion.
