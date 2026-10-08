@@ -3,7 +3,8 @@ import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {createPkceS256, PkceError} from '../../sdk/browser/pkce.mjs';
 import {corpus, officialExample, RFC_SHA256} from './corpus.mjs';
-import {frozenInputs, sourceClosure, assertCapturedPkceSources} from './compile.mjs';
+import {frozenInputs, verifyFrozenInputs, sourceClosure, assertCapturedPkceSources,
+  assertPkceCompilerInputs} from './compile.mjs';
 
 test('RFC source and exact independent corpus cannot be omitted', () => {
   assert.equal(officialExample().verifier, 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
@@ -37,4 +38,18 @@ test('source custody captures the exact complete module and oracle graph', () =>
   for (const name of ['sdk/browser/pkce.mjs', 'sdk/browser/identity.mjs', 'tests/browser-pkce/oracles/rfc7636.txt',
     'tests/browser-view/kernel-provenance.mjs', 'tests/browser-view/compiler-artifact.mjs']) assert.ok(inputs[name]);
   sources.delete('Foundation.Bytes'); assert.throws(() => assertCapturedPkceSources(inputs, sources), /source module inventory/);
+});
+
+test('PKCE input custody refuses copied maps and missing transitive inputs', () => {
+  const inputs = frozenInputs(); verifyFrozenInputs(inputs);
+  assert.throws(() => verifyFrozenInputs(Object.freeze({...inputs})), /actual complete captured PKCE inputs/);
+  const missing = {...inputs}; delete missing['tests/browser-view/compiler-owner.mjs'];
+  assert.throws(() => verifyFrozenInputs(Object.freeze(missing)), /actual complete captured PKCE inputs/);
+  assert.ok(Object.isFrozen(inputs));
+});
+
+test('PKCE compiler binding refuses fabricated and copied owner handles before execution', () => {
+  for (const owner of [null, {}, {evidence: {family: 'pkce', inputs: {}}},
+    {runDriver() {throw Error('caller compiler executed');}}])
+    assert.throws(() => assertPkceCompilerInputs(owner, {}), /actual fresh compiler owner/);
 });

@@ -29,7 +29,7 @@ test('ST-17 complete generated PKCE and real browser S256', {timeout: 3500000}, 
     build = result.build;
     const evidence = {scope: 'private-pkce-s256-component', authenticatedMailbox: false, deploymentAccepted: false, ...result.evidence};
     evidence.substitutions = await required(t, 'actual compiler and generated Wasm substitutions refuse', () => ({
-      compiler: verifyCompilerOwnerSubstitutions(compiler, inputs), wasm: verifyWasmArtifactSubstitutions(build),
+      compiler: verifyCompilerOwnerSubstitutions(compiler), wasm: verifyWasmArtifactSubstitutions(build),
     }));
     // Compile behavioral defects before expensive complete browser corpora.
     evidence.sourceMutations = [];

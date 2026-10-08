@@ -9,12 +9,12 @@ import {pathToFileURL} from 'node:url';
 import {verifyAccountGenesisConstruction} from '../sdk/account-genesis-artifact.mjs';
 
 export const sourceRoots=Object.freeze([
- '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','model','language',
+ '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','features/suites/stdlib.feature','model','language',
  'stdlib/src','sdk/browser','sdk/oracles/package.json','sdk/oracles/package-lock.json','sdk/stdlib-sources.tar','sdk/devcontainer-init.sh','sdk/Dockerfile',
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
- 'tests/browser-session','tests/browser-signed-context','tests/browser-account-genesis','tests/browser-p256',
+ 'tests/browser-session','tests/browser-signed-context','tests/browser-account-genesis','tests/browser-p256','tests/browser-pkce',
  'tests/browser-budget','tests/browser-contextual-effects','tests/browser-semantic-presentation','tests/browser-dynamic-choice',
  'tests/browser-session-journal','tests/browser-session-journal-retention','tests/browser-session-journal-recovery',
  'tests/browser-session-payloads','tests/browser-session-operation','tests/browser-session-recovery-frames','tests/publication-context-linkage',
@@ -38,7 +38,7 @@ export const hostModules=Object.freeze(['identity','store','peer','journal','com
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
  'presentation-wire','presentation-dom','semantic-presentation-wire','semantic-presentation-style',
  'credential-custody','operation-journal','account-genesis','account-genesis-binding','signed-context',
- 'session-retention-wire','session-storage','session-payloads','session-operation-capture']);
+ 'session-retention-wire','session-storage','session-payloads','session-operation-capture','pkce']);
 export const hostArtifacts=Object.freeze(['account-genesis.wasm']);
 export const suites=Object.freeze([
  {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
@@ -65,8 +65,9 @@ export const suites=Object.freeze([
  {id:'DK-35',minimum:92,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-session-operation/owner.test.mjs']},
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
  {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
+ {id:'ST-17',minimum:21,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000,
+ deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38','ST-17'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};

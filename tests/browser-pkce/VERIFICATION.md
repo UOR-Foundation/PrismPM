@@ -1,5 +1,15 @@
 # ST-17 PKCE S256
 
+## Current compiler integration
+
+The current port retains the complete original owner and adds two input-custody
+checks (21 required checks). The closed compiler-family input join, bounded
+descriptor custody and branded original/private native artifacts are mandatory.
+Current full owner, source audit, native CI and installed-SDK obligations are
+unaccepted until verified; historical receipts below do not qualify this port.
+
+## Historical component evidence
+
 The complete registered component owner passed on 28 September 2026: 19
 mandatory checks, no skips, 731.97 seconds. The source-defined verifier and
 base64url operations compile through the pinned LexLean/lean4-prod toolchain;

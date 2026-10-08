@@ -11,10 +11,10 @@ const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'querie
  'view-host', 'view-dom', 'view-error', 'rs256', 'effects', 'effects-wire',
  'effects-module', 'presentation-wire', 'presentation-dom', 'semantic-presentation-wire',
  'semantic-presentation-style', 'credential-custody', 'operation-journal','account-genesis','account-genesis-binding','signed-context',
- 'session-retention-wire','session-storage','session-payloads','session-operation-capture'];
+ 'session-retention-wire','session-storage','session-payloads','session-operation-capture','pkce'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const additionalOwners = [
- {id:'ST-17',minimum:19,deadline:3600000,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
+ {id:'ST-17',minimum:21,deadline:3600000,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
  {id:'DK-27',minimum:13,deadline:3600000,files:['sdk/browser/budget-model-test.mjs']},
  {id:'DK-37',minimum:24,deadline:3600000,files:['sdk/browser/contextual-effects.test.mjs']},
  {id:'DK-31',minimum:8,deadline:3600000,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','sdk/browser/dynamic-choice.test.mjs']},
@@ -46,12 +46,12 @@ test('private prerequisites retain exact registered source files minima deadline
 });
 
 test('private prerequisite source closure includes complete fixture directories and shared compiler lifecycle',()=>{
- for(const path of ['tests/browser-budget','tests/browser-contextual-effects','tests/browser-dynamic-choice','tests/browser-signed-context','tests/browser-session-operation','tests/browser-view','stdlib/src'])
+ for(const path of ['tests/browser-budget','tests/browser-contextual-effects','tests/browser-dynamic-choice','tests/browser-signed-context','tests/browser-session-operation','tests/browser-pkce','tests/browser-view','stdlib/src'])
   assert.ok(sourceRoots.includes(path),'required installed private prerequisite source '+path);
 });
 
 test('installed source roots cover every actual frozen private prerequisite compiler input',async()=>{
- for(const path of ['tests/browser-budget/compile.mjs','tests/browser-contextual-effects/checks.mjs','tests/browser-dynamic-choice/compile.mjs','tests/browser-signed-context/compile.mjs','tests/browser-session-operation/compile.mjs']){
+ for(const path of ['tests/browser-budget/compile.mjs','tests/browser-contextual-effects/checks.mjs','tests/browser-dynamic-choice/compile.mjs','tests/browser-signed-context/compile.mjs','tests/browser-session-operation/compile.mjs','tests/browser-pkce/compile.mjs']){
   const {frozenInputs}=await import(new URL('../'+path,import.meta.url));
   for(const input of Object.keys(frozenInputs()))
    assert.ok(sourceRoots.some(root=>input===root||input.startsWith(root+'/')),'unbound actual private prerequisite input '+input);
@@ -321,7 +321,7 @@ test('private prerequisite actual Node owners reject below-minimum and empty sib
    assert.throws(()=>runSuites(root,spawnSync,()=>{}),/nonempty registered tests|complete selected test file summaries|complete sequential outer test numbering/);restore();
   }
  }
- assert.equal(runSuites(root,spawnSync,()=>{}).length,24);
+ assert.equal(runSuites(root,spawnSync,()=>{}).length,25);
 });
 
 test('semantic suite refuses missing or empty siblings even with surplus real passing tests', t => {
@@ -343,7 +343,7 @@ test('semantic registry regression kills owner, minimum and deadline substitutio
  const changes = [row.replace('minimum:29', 'minimum:28'),
   row.replace('wire.test.mjs', 'substitute.test.mjs')];
  const mutated = changes.map(changed => original.replace(row, changed));
- const deadline = "deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38'].includes(row.id)?3600000:1500000";
+ const deadline = "deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38','ST-17'].includes(row.id)?3600000:1500000";
  assert.equal(original.split(deadline).length, 2);
  mutated.push(original.replace(deadline, deadline.replace(", 'DK-38'", '').replace(",'DK-38'", '')));
  for (const source of mutated) {
@@ -498,8 +498,8 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-35','DK-37','DK-38']);
- assert.equal(runSuites(root,launch,()=>{}).length,24);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-35','DK-37','DK-38','ST-17']);
+ assert.equal(runSuites(root,launch,()=>{}).length,25);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,43);

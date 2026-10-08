@@ -6,7 +6,8 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {run, sha} from '../browser-view/compile.mjs';
 import {createCompilerOwner, requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
-import {captureCompilerArtifact} from '../browser-view/compiler-artifact.mjs';
+import {captureCompilerArtifact, requireCompilerArtifact} from '../browser-view/compiler-artifact.mjs';
+import {captureFile, capturedFile} from '../browser-view/file-custody.mjs';
 import {captureKernelProvenance} from '../browser-view/kernel-provenance.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
@@ -18,11 +19,9 @@ export const repository = resolve(draft, '../..');
 export const roles = Object.freeze(['pkce']);
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
 const freeze = value => {if (value && typeof value === 'object') {Object.values(value).forEach(freeze); Object.freeze(value);} return value;};
+const capturedInputs = new WeakMap();
 function read(path) {
-  const absolute = join(repository, path), stat = lstatSync(absolute);
-  assert.equal(realpathSync(absolute), absolute, 'unaliased compiler input ' + path);
-  assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked compiler input ' + path);
-  return readFileSync(absolute);
+  return captureFile(join(repository, path)).bytes;
 }
 export function sourceClosure() {
   const sources = new Map();
@@ -69,9 +68,18 @@ export function frozenInputs() {
       const input = tree + '/' + relative; assert.equal(sha(read(input)), digest); files.add(input);
     }
   }
-  const inputs = Object.freeze(Object.fromEntries([...files].sort().map(path => [path, sha(read(path))])));
+  const captures = new Map([...files].sort().map(path => [path, captureFile(join(repository, path))]));
+  const inputs = Object.freeze(Object.fromEntries([...captures].map(([path, row]) => [path, row.evidence.sha256])));
   for (const [path, bytes] of modules) assert.equal(sha(bytes), inputs[path], 'captured static module ' + path);
+  capturedInputs.set(inputs, new Map([...captures].map(([path, row]) => [path, row.evidence])));
   return inputs;
+}
+export function verifyFrozenInputs(inputs) {
+  const captured = capturedInputs.get(inputs);
+  assert.ok(captured && Object.isFrozen(inputs), 'actual complete captured PKCE inputs required');
+  assert.deepEqual(inputs, Object.fromEntries([...captured].map(([path, row]) => [path, row.sha256])),
+    'complete captured PKCE source inventory');
+  for (const [path, evidence] of captured) capturedFile(join(repository, path), evidence);
 }
 export function assertCapturedPkceSources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
@@ -80,13 +88,23 @@ export function assertCapturedPkceSources(inputs, sources) {
   for (const [name, bytes] of sources) assert.equal(sha(bytes), inputs[modulePath(name)],
     'actual captured source must match original snapshot ' + name);
 }
-export function createPkceCompiler(inputs = frozenInputs()) {return createCompilerOwner('pkce', inputs);}
+export function assertPkceCompilerInputs(owner, inputs) {
+  const compiler = requireCompilerOwner(owner, 'pkce');
+  for (const [path, digest] of Object.entries(compiler.evidence.inputs))
+    assert.equal(inputs[path], digest, 'PKCE owner and model share the exact captured compiler input ' + path);
+  return compiler;
+}
+export function createPkceCompiler(inputs = frozenInputs()) {
+  verifyFrozenInputs(inputs);
+  const compiler = createCompilerOwner('pkce');
+  try {return assertPkceCompilerInputs(compiler, inputs);}
+  catch (error) {compiler.close(); throw error;}
+}
 export function preparePkce(compilerOwner, expectedInputs, mutationId = null) {
   for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_PKCE_'), 'no owner bypass');
   const inputs = frozenInputs(), sources = sourceClosure();
   assert.deepEqual(inputs, expectedInputs, 'one immutable complete PKCE owner closure');
-  const compiler = requireCompilerOwner(compilerOwner, inputs);
-  assert.equal(compiler.evidence.family, 'pkce');
+  const compiler = assertPkceCompilerInputs(compilerOwner, inputs);
   assertCapturedPkceSources(inputs, sources);
   const originals = new Map(sources);
   const mutation = mutationId === null ? null : mutatePkceSource(sources, mutationId);
@@ -173,7 +191,7 @@ export function preparePkce(compilerOwner, expectedInputs, mutationId = null) {
     Object.freeze(wasm); Object.freeze(wasmOwners); Object.freeze(wasmArtifacts);
     const generatedWasm = Object.freeze(Object.fromEntries(Object.entries(wasmArtifacts).map(([name, owner]) => [name, owner.evidence])));
     const nativePrograms = new Map();
-    function checkedNative(record) {record.verify(); return record.path;}
+    function checkedNative(record) {return requireCompilerArtifact(record).path;}
     function compileNative(standard) {
       assert.equal(typeof standard, 'boolean');
       // Once compiled, execution consumes only the exact original/private ELF.
@@ -202,11 +220,11 @@ export function preparePkce(compilerOwner, expectedInputs, mutationId = null) {
       }));
     }
     function unchanged() {
-      requireCompilerOwner(compiler, inputs);
+      assertPkceCompilerInputs(compiler, inputs);
       for (const capturedPackage of generatedPackages) capturedPackage.verify();
       for (const artifact of Object.values(wasmArtifacts)) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
-      assert.deepEqual(frozenInputs(), inputs);
+      verifyFrozenInputs(inputs);
       for (const [path, digest] of staged) assert.equal(sha(readFileSync(join(work, path))), digest, 'immutable captured input ' + path);
       assert.deepEqual(readFileSync(join(verified.root, 'attestation.json')), attestationBytes);
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), buildManifest);

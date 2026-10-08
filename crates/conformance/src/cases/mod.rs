@@ -419,7 +419,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-pkce/guards.test.mjs",
                 "tests/browser-pkce/owner.test.mjs",
             ],
-            19,
+            21,
             "3600000",
         ),
 
