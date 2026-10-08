@@ -6,6 +6,29 @@ import {oraclePoints} from '../browser-p256/oracles.mjs';
 import {nativePointValid} from '../browser-p256/corpus.mjs';
 import {parameters} from '../browser-p256/parameters.mjs';
 import {mutations, mutateSignedContextSource} from './mutations.mjs';
+import {coherentlyRehashedManifest} from './checks.mjs';
+import {frozenInputs, verifyFrozenInputs, sourceClosure, assertCapturedSignedContextSources, assertSignedContextCompilerInputs} from './compile.mjs';
+
+test('coherent manifest adversary reaches package custody with canonical trailing newline', () => {
+  const original = Buffer.from('{"files":[{"path":"src/lib.rs","sha256":"' + '0'.repeat(64) + '"}]}\n');
+  const changed = coherentlyRehashedManifest(original, Buffer.from('changed library'));
+  assert.equal(changed.at(-1), 10);
+  assert.notDeepEqual(changed, original);
+  assert.throws(() => coherentlyRehashedManifest(Buffer.from('{"files":[]}\n'), Buffer.from('changed')), /one actual generated library/);
+});
+
+test('signed-context closure rejects copied input authority and mismatched source maps before compilation', () => {
+  const inputs = frozenInputs(), sources = sourceClosure();
+  verifyFrozenInputs(inputs); assertCapturedSignedContextSources(inputs, sources);
+  assert.throws(() => verifyFrozenInputs({...inputs}), /actual complete captured signed-context inputs/);
+  const changed = new Map(sources), name = changed.keys().next().value;
+  changed.set(name, Buffer.concat([changed.get(name), Buffer.from('\n// changed source\n')]));
+  assert.throws(() => assertCapturedSignedContextSources(inputs, changed), /actual captured source/);
+  changed.delete(name);
+  assert.throws(() => assertCapturedSignedContextSources(inputs, changed), /complete captured source module inventory/);
+  assert.throws(() => assertSignedContextCompilerInputs({evidence:{family:'signed-context',inputs}}, inputs), /actual fresh compiler owner/);
+  verifyFrozenInputs(inputs);
+});
 
 test('independent signed-context exact wire bounds and complete finite inventory', () => {
   assert.equal(encode(context()).length, 416);

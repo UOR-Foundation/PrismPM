@@ -2177,7 +2177,7 @@ This private presentation prerequisite leaves `PP2011`, credential custody,
 generated authorized dispatch, durable recovery and complete public application,
 Foundry and deployment gates unchanged.
 
-#### 12.11.2 Complete P-256 point admission
+#### 12.11.1 Complete P-256 point admission
 
 DK-34 owns the bounded source-generated predicate in
 `Foundation.Crypto.P256.Model` and its private canonical CBOR verification
@@ -2196,7 +2196,7 @@ source predicate and independently pass their complete owning journeys. This
 component grants no key possession, account authority, freshness, signature
 conformance, NIST certification or public application acceptance.
 
-#### 12.11.3 Private stable account genesis
+#### 12.11.2 Private stable account genesis
 
 DK-33 defines an immutable account declaration containing a stable namespace,
 creation nonce and initial uncompressed P-256 public key. Generated source owns
@@ -2244,7 +2244,7 @@ Account allocation, proof of initial key possession, authenticated succession,
 mailbox verification, recovery, currentness and organization authority remain
 separate required integrations. This private component is not DID, VC, JOSE,
 COSE or application acceptance. `PP2011` remains closed.
-#### 12.11.1 Private semantic presentation
+#### 12.11.3 Private semantic presentation
 
 DK-38 owns the separate `SemanticPresentation/1` envelope, `Design`,
 `DesignWire`, `Semantics` and `SemanticsWire` LexLean sources. Its closed contract
@@ -2275,7 +2275,7 @@ subset is not complete WCAG
 conformance, manual usability assessment, a brand approval or Foundry acceptance.
 The private tokens do not claim Design Tokens Community Group conformance.
 
-#### 12.11.1 Dynamic plain-text choices
+#### 12.11.4 Dynamic plain-text choices
 
 DK-31 adds the private `Content.TextSelect` presentation prerequisite to DK-23.
 Wire tag 11 is `[11,label,enabled,required,selected,[[id,text],...],draftEpoch]`.
@@ -2297,7 +2297,7 @@ does not establish useful accessible naming or human-centered design. Foundry
 journeys, organization authority and public application acceptance remain
 separate requirements; `PP2011` remains mandatory.
 
-#### 12.11.2 Private signed contexts
+#### 12.11.5 Private signed contexts
 
 DK-32 binds the unchanged six-reference `SourceSessionBinding`, origin,
 source-owned purpose, subject, scope, state, request, credential epoch and
@@ -2329,25 +2329,6 @@ replay, the complete pinned original WPT ECDSA entry in Window and
 DedicatedWorker, and independent native cryptographic verification. This
 selected suite is not whole Web Cryptography, DID/VC/JOSE/COSE, identity,
 application or installed-SDK acceptance. `PP2011` remains closed.
-
-#### 12.11.3 Complete P-256 point admission
-
-DK-34 owns the bounded source-generated predicate in
-`Foundation.Crypto.P256.Model` and its private canonical CBOR verification
-boundary. Only SEC1 uncompressed P-256 points with exact coordinate widths,
-coordinates below the SEC2 prime and the complete curve equation are admitted.
-The cofactor-one subgroup implication is specific to this fixed domain.
-Malformed field representations are refused without reducing caller inputs.
-Fixed-limb intermediates are bounded below `u64`; no unbounded integer backend,
-handwritten host field arithmetic or provider-import validity assumption is used.
-
-Acceptance requires complete imported applicable NIST key-validation vectors,
-independent field/curve oracles, actual native/std/no_std/two-Wasm parity,
-all three pinned browser engines, exact artifact/source custody and genuine
-arithmetic/codec mutants. DK-33 account and DK-32 signer admission must use this
-source predicate and independently pass their complete owning journeys. This
-component grants no key possession, account authority, freshness, signature
-conformance, NIST certification or public application acceptance.
 
 ### 12.12 Private durable operation journal
 

@@ -1,6 +1,6 @@
 // Private test orchestration; no host implementation of modeled transitions.
 import assert from 'node:assert/strict';
-import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -9,18 +9,17 @@ import {requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
+import {captureCompilerArtifact, requireCompilerArtifact} from '../browser-view/compiler-artifact.mjs';
+import {captureFile, capturedFile} from '../browser-view/file-custody.mjs';
 import {mutateSignedContextSource} from './mutations.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
 const projection = 'Foundation.Browser.Application.V1.SignedContextWire';
 const modulePath = name => 'stdlib/src/' + name.replaceAll('.', '/') + '.lex.tex';
-const capturedInputs = new WeakSet();
+const capturedInputs = new WeakMap();
 function read(path) {
-  const absolute = join(repository, path), stat = lstatSync(absolute);
-  assert.equal(realpathSync(absolute), absolute, 'unaliased compiler input ' + path);
-  assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked compiler input ' + path);
-  return readFileSync(absolute);
+  return captureFile(join(repository, path)).bytes;
 }
 export function sourceClosure() {
   const sources = new Map();
@@ -71,17 +70,20 @@ export function frozenInputs() {
       const input = tree + '/' + relative; assert.equal(sha(read(input)), digest); files.add(input);
     }
   }
-  const inputs = Object.fromEntries([...files].sort().map(path => [path, sha(read(path))]));
+  const captures = new Map([...files].sort().map(path => [path, captureFile(join(repository, path))]));
+  const inputs = Object.fromEntries([...captures].map(([path, row]) => [path, row.evidence.sha256]));
   for (const [path, bytes] of capturedModules) assert.equal(sha(bytes), inputs[path], 'actual parsed module snapshot ' + path);
-  Object.freeze(inputs); capturedInputs.add(inputs); return inputs;
+  Object.freeze(inputs); capturedInputs.set(inputs, new Map([...captures].map(([path, row]) => [path, row.evidence]))); return inputs;
 }
 export function verifyFrozenInputs(inputs) {
-  assert.ok(capturedInputs.has(inputs), 'actual complete captured signed-context inputs required');
+  const captured = capturedInputs.get(inputs);
+  assert.ok(captured && Object.isFrozen(inputs), 'actual complete captured signed-context inputs required');
   // The complete static graph was parsed during capture. Every original file
   // remains checked on every use: changed import edges necessarily change one
   // of these bytes. Do not reparse an identical graph in child Node processes.
-  for (const [path, digest] of Object.entries(inputs))
-    assert.equal(sha(read(path)), digest, 'immutable captured signed-context input ' + path);
+  assert.deepEqual(inputs, Object.fromEntries([...captured].map(([path, evidence]) => [path, evidence.sha256])),
+    'complete captured signed-context source inventory');
+  for (const [path, evidence] of captured) capturedFile(join(repository, path), evidence);
 }
 export function assertCapturedSignedContextSources(inputs, sources) {
   assert.deepEqual([...sources.keys()].map(modulePath).sort(),
@@ -90,12 +92,18 @@ export function assertCapturedSignedContextSources(inputs, sources) {
   for (const [name, bytes] of sources) assert.equal(sha(bytes), inputs[modulePath(name)],
     'actual captured source must match original snapshot ' + name);
 }
+export function assertSignedContextCompilerInputs(compilerOwner, inputs) {
+  const compiler = requireCompilerOwner(compilerOwner, 'signed-context');
+  for (const [path, digest] of Object.entries(compiler.evidence.inputs))
+    assert.equal(inputs[path], digest, 'signed-context owner and model share the exact captured compiler input ' + path);
+  return compiler;
+}
 export function prepareSignedContext(compilerOwner, mutationId = null, expectedInputs = null) {
   const startedAt = performance.now();
   for (const name of Object.keys(process.env)) assert.ok(!name.startsWith('PRISMPM_SIGNED_CONTEXT_'), 'no owner bypass');
   const inputs = frozenInputs(), sources = sourceClosure();
   if (expectedInputs) assert.deepEqual(inputs, expectedInputs, 'one immutable complete owner closure');
-  const compiler = requireCompilerOwner(compilerOwner, inputs);
+  const compiler = assertSignedContextCompilerInputs(compilerOwner, inputs);
   assertCapturedSignedContextSources(inputs, sources);
   const mutation = mutationId === null ? null : mutateSignedContextSource(sources, mutationId);
   const captured = path => { const bytes = read(path); assert.equal(sha(bytes), inputs[path], 'frozen input ' + path); return bytes; };
@@ -177,11 +185,7 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
     const generatedWasm = Object.freeze(Object.fromEntries(Object.entries(wasmArtifacts).map(([name, owner]) => [name, owner.evidence])));
     const nativePrograms = new Map();
     function checkedNative(record) {
-      const stat = lstatSync(record.binary);
-      assert.equal(realpathSync(record.binary), record.binary, 'unaliased private native executable');
-      assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked private native executable');
-      assert.equal(sha(readFileSync(record.binary)), record.sha256, 'private native executable changed after genuine compilation');
-      return record.binary;
+      return requireCompilerArtifact(record).path;
     }
     function compileNative(standard) {
       nativePackage.verify();
@@ -192,25 +196,27 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
       stage('runner-' + name + '/Cargo.lock', 'version = 4\n[[package]]\nname = "browser-signed-context-core-probe"\nversion = "0.1.0"\n[[package]]\nname = "browser-signed-context-runner"\nversion = "0.1.0"\ndependencies = ["browser-signed-context-core-probe"]\n');
       run('cargo', ['build', '--locked', '--offline', '--release'], runner, {CARGO_TARGET_DIR: join(runner, 'target')});
       nativePackage.verify();
-      // Cargo links its output to a dependency artifact. Capture the just-built
-      // bytes into a distinct private executable, not a mutable Cargo alias.
-      const binary = stage('native-' + name + '-runner', readFileSync(join(runner, 'target/release/browser-signed-context-runner')));
-      chmodSync(binary, 0o700);
-      const record = {binary, sha256: sha(readFileSync(binary))};
+      // Bind the genuine Cargo output and its distinct private execution copy.
+      const record = captureCompilerArtifact(work, join(runner, 'target/release/browser-signed-context-runner'), 'signed-context-native-' + name);
       nativePrograms.set(standard, record); return checkedNative(record);
     }
     function runNative(standard, arguments_) {
-      const program = compileNative(standard);
-      try {return run(program, arguments_, work);}
-      finally {checkedNative(nativePrograms.get(standard));}
+      compileNative(standard); unchanged();
+      try {return nativePrograms.get(standard).run(arguments_, work);}
+      finally {unchanged();}
     }
     function nativeEvidence() {
       return Object.fromEntries([...nativePrograms].map(([standard, record]) => {
-        checkedNative(record); return [standard ? 'std' : 'no-std', record.sha256];
+        checkedNative(record); return [standard ? 'std' : 'no-std', record.evidence.private.sha256];
       }));
     }
+    function nativeArtifactEvidence() {
+      return Object.freeze(Object.fromEntries([...nativePrograms].map(([standard, record]) => {
+        checkedNative(record); return [standard ? 'std' : 'no-std', record.evidence];
+      })));
+    }
     function unchanged() {
-      requireCompilerOwner(compiler, inputs);
+      assertSignedContextCompilerInputs(compiler, inputs);
       for (const package_ of packages.values()) package_.verify();
       for (const artifact of Object.values(wasmArtifacts)) artifact.verify();
       for (const record of nativePrograms.values()) checkedNative(record);
@@ -227,7 +233,7 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
       return [name, package_.files];
     })));
     return Object.freeze({work, sources, verified, generation, wasm, wasmOwners, wasmArtifacts, generatedWasm,
-      compileNative, runNative, nativeEvidence, unchanged, inputs, mutation, generatedPackages,
+      compileNative, runNative, nativeEvidence, nativeArtifactEvidence, unchanged, inputs, mutation, generatedPackages,
       compilerOwner: compiler, compilerTools: compiler.evidence, preparationMs: performance.now() - startedAt});
   } finally { if (!complete) process.stderr.write('Retained incomplete signed-context diagnostic build ' + work + '\n'); }
 }

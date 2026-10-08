@@ -538,7 +538,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-signed-context/aggregate.test.mjs",
                 "sdk/browser/signed-context-test.mjs",
             ],
-            17,
+            21,
             "3600000",
         ),
         "OC-08" => browser_publication::verify(root),

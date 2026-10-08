@@ -1,6 +1,6 @@
 // Private complete owner. All behavior originates in genuinely compiled source.
 import assert from 'node:assert/strict';
-import {existsSync, linkSync, readFileSync, unlinkSync, writeFileSync} from 'node:fs';
+import {chmodSync, copyFileSync, existsSync, linkSync, lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {frozenInputs, prepareSignedContext, sha} from './compile.mjs';
 import {corpus} from './corpus.mjs';
@@ -19,6 +19,12 @@ export function verifyNativeInventory(output, rows) {
   assert.equal(output, rows.map(row => 'PASS ' + row.id + '\n').join('')
     + `PASS ${rows.length} signed context vectors twice\n`, 'exact native case inventory');
 }
+export function coherentlyRehashedManifest(original, library) {
+  const value = JSON.parse(original), rows = value.files.filter(row => row.path === 'src/lib.rs');
+  assert.equal(rows.length, 1, 'one actual generated library manifest member');
+  rows[0].sha256 = sha(library);
+  return Buffer.from(JSON.stringify(value) + '\n');
+}
 export function verifyComponents(compiler) {
   const build = prepareSignedContext(compiler), rows = corpus();
   assert.equal(rows.length, 1573); assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
@@ -29,15 +35,15 @@ export function verifyComponents(compiler) {
     try {
       if (mode === 'source' || mode === 'source-and-manifest') {
         writeFileSync(library, Buffer.concat([original, Buffer.from('\n// planted defect\n')]));
-        if (mode === 'source-and-manifest') {const value = JSON.parse(originalManifest);
-          value.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(library)); writeFileSync(manifest, JSON.stringify(value));}
+        if (mode === 'source-and-manifest') writeFileSync(manifest, coherentlyRehashedManifest(originalManifest, readFileSync(library)));
       } else if (mode === 'extra-file') writeFileSync(extra, 'unowned', {flag: 'wx'});
       else linkSync(library, extra);
+      const refusal = mode === 'hard-link' ? /bounded single-link custody file/ : /generated package/;
       for (const standard of [true, false]) {
-        assert.throws(() => build.compileNative(standard), /generated package/);
+        assert.throws(() => build.compileNative(standard), refusal);
         assert.ok(!existsSync(join(build.work, standard ? 'runner-std' : 'runner-no-std')));
       }
-      assert.throws(() => build.unchanged(), /generated package/);
+      assert.throws(() => build.unchanged(), refusal);
     } finally {
       if (mode === 'source' || mode === 'source-and-manifest') {writeFileSync(library, original); writeFileSync(manifest, originalManifest);}
       else unlinkSync(extra);
@@ -51,7 +57,7 @@ export function verifyComponents(compiler) {
   const evidence = {scope: 'private-signed-context-generated-component', publicApplicationAccepted: false,
     source: build.verified.source_id, attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
     wasm: artifact.evidence.original.sha256, cases: rows.length, observed: wasm,
-    native: build.nativeEvidence(), inputs: build.inputs, generatedPackages: build.generatedPackages,
+    native: build.nativeEvidence(), nativeArtifacts: build.nativeArtifactEvidence(), inputs: build.inputs, generatedPackages: build.generatedPackages,
     generatedWasm: build.generatedWasm, compiler: build.compilerTools,
     actualValidMaximum: 1037, frameMaximum: 2048, frameOverflow: 2049};
   writeFileSync(join(build.work, 'signed-context-component.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
@@ -74,14 +80,14 @@ export function verifyCompiledMutation(mutation, baseline) {
   build.unchanged(); baseline.unchanged();
   const evidence = {mutation: build.mutation, source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: artifact.evidence.original.sha256,
-    request: sha(row.request), response: sha(row.response), native: build.nativeEvidence(),
+    request: sha(row.request), response: sha(row.response), native: build.nativeEvidence(), nativeArtifacts: build.nativeArtifactEvidence(),
     generatedPackages: build.generatedPackages, generatedWasm: build.generatedWasm};
   writeFileSync(join(build.work, 'signed-context-mutation.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   console.log(JSON.stringify({mutation: mutation.id, work: build.work, status: 'actual compiled defect detected'}));
   return evidence;
 }
 export async function verifySignedContext(t) {
-  const inputs = frozenInputs(), compiler = createCompilerOwner('signed-context', inputs);
+  const inputs = frozenInputs(), compiler = createCompilerOwner('signed-context');
   const required = createRequiredChecks(['generated', 'artifact-custody', 'chromium', 'firefox', 'webkit', 'source-mutants', 'final-closure']);
   let build, evidence, wpt;
   const step = async (id, name, body, fatal = false) => {
@@ -92,13 +98,30 @@ export async function verifySignedContext(t) {
     ({build, evidence} = verifyComponents(compiler));
   }, true);
   await step('artifact-custody', 'actual package/compiler/native/Wasm capture substitutions are refused', () => {
-    evidence.compilerSubstitutions = verifyCompilerOwnerSubstitutions(compiler, inputs);
+    evidence.compilerSubstitutions = verifyCompilerOwnerSubstitutions(compiler);
     evidence.wasmSubstitutions = verifyWasmArtifactSubstitutions(build);
     for (const standard of [true, false]) {
-      const path = build.compileNative(standard), original = readFileSync(path);
-      try {writeFileSync(path, Buffer.concat([original, Buffer.from([0])]));
-        assert.throws(() => build.runNative(standard, ['signed-context', join(build.work, 'corpus.tsv')]), /private native executable changed/);
-      } finally {writeFileSync(path, original);}
+      build.compileNative(standard);
+      const artifacts = build.nativeArtifactEvidence()[standard ? 'std' : 'no-std'];
+      for (const side of ['original', 'private']) {
+        const path = join(build.work, artifacts[side].path), original = readFileSync(path), mode = lstatSync(path).mode & 0o777;
+        const refusal = /immutable (original|private) compiler|compiler link count/;
+        try {
+          chmodSync(path, mode | 0o200); writeFileSync(path, Buffer.concat([original, Buffer.from([0])]));
+          assert.throws(() => build.runNative(standard, ['signed-context', join(build.work, 'corpus.tsv')]), refusal);
+        } finally {writeFileSync(path, original); chmodSync(path, mode);}
+        build.unchanged();
+        const saved = path + '.original-inode'; renameSync(path, saved);
+        try {
+          copyFileSync(saved, path); chmodSync(path, mode);
+          assert.throws(() => build.runNative(standard, ['signed-context', join(build.work, 'corpus.tsv')]), refusal);
+        } finally {unlinkSync(path); renameSync(saved, path);}
+        build.unchanged();
+        const alias = path + '.unaccepted-link'; linkSync(path, alias);
+        try {assert.throws(() => build.runNative(standard, ['signed-context', join(build.work, 'corpus.tsv')]), /compiler link count/);}
+        finally {unlinkSync(alias);}
+        build.unchanged();
+      }
     }
     build.unchanged(); wpt = captureWpt(); evidence.independentNativeCrypto = verifyNativeWpt(wpt);
   }, true);
