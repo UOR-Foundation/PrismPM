@@ -485,7 +485,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-p256/owner.test.mjs",
                 "tests/browser-view/local-module-inputs.test.mjs",
             ],
-            18,
+            22,
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
