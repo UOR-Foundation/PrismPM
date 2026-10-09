@@ -94,9 +94,13 @@ test ! -e "$evidence/tools.id"
 build_attempted=1
 controlled tools-build 1200 buildx build --iidfile "$evidence/tools.id" --file "$root/sdk/Dockerfile" --target registry_qualification_tools \
   --platform "linux/$architecture" --load --tag "$tag" "$root"
-image_id=$(controlled tools-id 10 image inspect "$tag" --format '{{.Id}}')
-[[ $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-test "$(cat "$evidence/tools.id")" = "$image_id"
+recorded_image=$(cat "$evidence/tools.id")
+[[ $recorded_image =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+# Authority comes from the original build receipt, never from a substituted
+# tag discovered while checking that receipt.
+image_id=$recorded_image
+observed_image=$(controlled tools-id 10 image inspect "$tag" --format '{{.Id}}')
+test "$observed_image" = "$image_id"
 controlled tools-inspect 10 image inspect "$image_id" >/dev/null
 socket_group=$(stat -c '%g' /var/run/docker.sock)
 # Only successful prior-absence and this actual create attempt confer authority

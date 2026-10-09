@@ -54,7 +54,8 @@ case "$1:$2" in
       esac
     else echo "Error: No such container: $reference" >&2; exit 1; fi ;;
   image:inspect)
-    if test -f "$UNIT_ROOT/image.exists"; then printf '%s\n' "$iid"
+    if test -f "$UNIT_ROOT/image.exists"; then
+      if test "$UNIT_MODE" = build-wrong-tag; then printf 'sha256:'; printf 'f%.0s' {1..64}; printf '\n'; else printf '%s\n' "$iid"; fi
     else echo "Error: No such image: $3" >&2; exit 1; fi ;;
   buildx:build)
     shift 2; file= tag=
@@ -62,7 +63,11 @@ case "$1:$2" in
       case "$1" in --iidfile) file=$2; shift 2 ;; --tag) tag=$2; shift 2 ;; *) shift ;; esac
     done
     test -n "$file"; test -n "$tag"; touch "$UNIT_ROOT/image.exists"
-    if test "$UNIT_MODE" != build-missing-id; then printf '%s\n' "$iid" > "$file"; fi
+    case "$UNIT_MODE" in
+      build-missing-id|build-success-missing-id) ;;
+      build-malformed-id) echo malformed > "$file" ;;
+      *) printf '%s\n' "$iid" > "$file" ;;
+    esac
     case "$UNIT_MODE" in build-partial|build-missing-id) echo partial; exit 1 ;; esac ;;
   container:create)
     shift 2; file= owner=
@@ -94,7 +99,8 @@ export -f git df stat cat
 /bin/bash root-a/scripts/sdk-vv-outer.sh "$UNIT_IMAGE" "$UNIT_REVISION" "$UNIT_ARCH" "sdk-$UNIT_ARCH-full-sdk-vv"
 `;
   for (const mode of ['complete', 'foreign-container', 'foreign-tag', 'create-partial', 'create-missing-id',
-    'wrong-label', 'wrong-id', 'build-partial', 'build-missing-id']) {
+    'wrong-label', 'wrong-id', 'build-partial', 'build-missing-id', 'build-success-missing-id',
+    'build-malformed-id', 'build-wrong-tag']) {
     const dir = mkdtempSync(join(tmpdir(), 'prismpm-outer-lifecycle-unit-'));
     t.after(() => rmSync(dir, {recursive: true, force: true}));
     mkdirSync(join(dir, 'bin')); mkdirSync(join(dir, 'root-a/scripts'), {recursive: true});
