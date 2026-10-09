@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {frozenInputs, assertFrozenInputs, assertBaselineSources, prepare, modules, repository, sha} from './compile.mjs';
 import {sourceRoots} from '../../scripts/browser-api-sdk-check.mjs';
 import {PresentationError, encodeWire} from '../../sdk/browser/presentation-wire.mjs';
@@ -85,6 +87,60 @@ test('owner completion refuses omitted duplicate or reordered browser and mutant
 
 test('whole-owner closure binds every source, compiler input and exact mutation baseline', () => {
   const inputs = frozenInputs(), sources = new Map();
+  const helpers = ['tests/browser-view/file-custody.mjs', 'tests/browser-view/compiler-owner.mjs',
+    'tests/browser-view/compiler-artifact.mjs', 'tests/browser-view/compiler-owner-checks.mjs',
+    'tests/browser-view/generated-wasm.mjs', 'tests/browser-presentation/provenance.mjs',
+    'tests/browser-presentation/fixture-files.mjs'];
+  // Parse real static imports without linking or executing project modules.
+  // Browser-context dynamic imports remain bound by the complete SDK inventory.
+  const parser = String.raw`
+    import assert from 'node:assert/strict';
+    import {readFileSync} from 'node:fs';
+    import {createHash} from 'node:crypto';
+    import {dirname, relative, resolve} from 'node:path';
+    import {SourceTextModule} from 'node:vm';
+    const {root, inputs} = JSON.parse(readFileSync(0, 'utf8'));
+    const pending = ['sdk/browser/semantic-presentation.test.mjs', 'tests/browser-semantic-presentation/checks.mjs'];
+    const visited = new Set();
+    while (pending.length) {
+      const path = pending.pop(); if (visited.has(path)) continue;
+      assert(visited.size < 256, 'bounded owning static module graph');
+      assert(Object.hasOwn(inputs, path), 'captured local module input: ' + path);
+      const bytes = readFileSync(resolve(root, path));
+      assert(bytes.length <= 4194304, 'bounded owning static module');
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), inputs[path], 'captured module hash: ' + path);
+      const source = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
+      const declarations = new SourceTextModule(source).dependencySpecifiers;
+      visited.add(path);
+      for (const specifier of declarations) {
+        if (specifier.startsWith('node:')) continue;
+        assert(specifier.startsWith('./') || specifier.startsWith('../'), 'closed local import');
+        const dependency = relative(root, resolve(root, dirname(path), specifier));
+        assert(dependency.endsWith('.mjs') && dependency.split('/').every(part =>
+          /^[A-Za-z0-9_.-]+$/.test(part) && part !== '.' && part !== '..'), 'confined local import');
+        pending.push(dependency);
+      }
+    }
+    process.stdout.write(JSON.stringify([...visited].sort()));
+  `;
+  const inspect = captured => spawnSync(process.execPath,
+    ['--experimental-vm-modules', '--input-type=module', '-e', parser], {
+      input: JSON.stringify({root: fileURLToPath(new URL('../../', import.meta.url)), inputs: captured}),
+      encoding: 'utf8', env: {NODE_NO_WARNINGS: '1', TZ: 'UTC'}, timeout: 10000, maxBuffer: 1048576,
+    });
+  const complete = inspect(inputs);
+  assert.ifError(complete.error); assert.equal(complete.signal, null); assert.equal(complete.status, 0, complete.stderr);
+  const graph = JSON.parse(complete.stdout);
+  for (const path of helpers) {
+    assert(graph.includes(path), 'actual imported helper: ' + path);
+    const omitted = {...inputs}; delete omitted[path];
+    const refused = inspect(omitted);
+    assert.ifError(refused.error); assert.equal(refused.signal, null); assert.equal(refused.status, 1);
+    assert(refused.stderr.includes('captured local module input: ' + path), refused.stderr);
+    assert.throws(() => assertFrozenInputs(omitted), /complete frozen semantic presentation owner inputs/);
+    assert.throws(() => assertFrozenInputs({...inputs, [path]: '0'.repeat(64)}),
+      /complete frozen semantic presentation owner inputs/);
+  }
   for (const path of Object.keys(inputs)) assert.ok(sourceRoots.some(root => path === root || path.startsWith(root + '/')),
     'installed SDK closure covers every owning input: ' + path);
   for (const module of modules) {
