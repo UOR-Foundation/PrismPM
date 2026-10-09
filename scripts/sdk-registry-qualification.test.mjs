@@ -189,8 +189,9 @@ test('native qualification keeps pinned real actors, complete negative controls 
     assert(processOwner.includes(`['scripts/${path}.test.mjs', ${count}]`));
   }
   assert(workflow.includes('- scripts/sdk-construction-*.mjs'));
-  assert(processOwner.includes("verifyTap(result.stdout.toString(), 17)"));
-  assert(processOwner.includes("verifyFileCompletions(result.stdout.toString(), [resolve('scripts/sdk-vv-check.test.mjs')], 17)"));
+  assert(processOwner.includes('verifyFileCompletions(tap, [...owners.keys()].map(path => resolve(path)), 71)'));
+  assert(processOwner.includes('new Map([...owners].map(([path, count]) => [resolve(path), count]))'));
+  assert(processOwner.includes("assert.equal(row.tests, expected.get(row.file), 'complete original owning-file count required')"));
   assert(processOwner.includes('captureQualificationFiles(paths), inputs'));
   assert(!processOwner.includes('test-name-pattern'));
   assert(workflow.includes('mkdir -m 2770 "$RUNNER_TEMP/registry-qualification"'));
