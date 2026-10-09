@@ -202,7 +202,7 @@ test('an executed additive stale-group signal is detected independently of senti
   const check = async extra => {
     const f = await fixture(t), log = join(f.root, 'group-signals.jsonl');
     const run = await mutant(t, original => {
-      const observer = `def observe_group(pid, signum):\n    try:\n        owned = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None\n    except ChildProcessError:\n        owned = False\n    with open(${JSON.stringify(log)}, "a") as stream:\n        stream.write(json.dumps({"pid":pid,"owned_unreaped":owned})+"\\n")\n    try:\n        os.killpg(pid, signum)\n    except ProcessLookupError:\n        pass\n\n\n`;
+      const observer = `def observe_group(pid, signum):\n    try:\n        owned = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None\n    except ChildProcessError:\n        owned = False\n    with open(${JSON.stringify(log)}, "a") as stream:\n        stream.write(json.dumps({"pid":pid,"owned_unreaped":owned})+"\\n")\n    if not owned:\n        return  # observed mutant attempt; never signal an unowned identifier\n    try:\n        os.killpg(pid, signum)\n    except ProcessLookupError:\n        pass\n\n\n`;
       let source = original.replace('os.killpg(pid, signum)', 'observe_group(pid, signum)').replace('class Owner:', observer + 'class Owner:');
       if (extra) source = source.replace('emit({"event": "leader-exited", **self.leader})',
         'emit({"event": "leader-exited", **self.leader})\n                observe_group(self.process.pid, signal.SIGKILL)  # executed stale-PGID mutation');

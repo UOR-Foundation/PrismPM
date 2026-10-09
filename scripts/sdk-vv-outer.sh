@@ -16,10 +16,16 @@ test "$destination" = "sdk-$architecture-full-sdk-vv"
 test ! -e "$workspace/$destination"
 evidence="$workspace/$destination-outer-owner"
 mkdir -m 0700 "$evidence"
-owner="prism-sdk-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture"
-tag="prism-sdk-outer-tools:$revision-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture"
+# Kernel-generated invocation namespace, not a reusable run label. Collision
+# checks remain mandatory; a label alone never authenticates a created object.
+invocation=$(cat /proc/sys/kernel/random/uuid)
+[[ $invocation =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || exit 1
+owner="prism-sdk-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture-$invocation"
+tag="prism-sdk-outer-tools:$revision-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture-$invocation"
 label=org.uor.prismpm.sdk-outer
-container_id= image_id= create_attempted=0 cleaning=0 cleanup_deadline=0
+printf '%s\n' "$owner" >"$evidence/owner.name"
+printf '%s\n' "$tag" >"$evidence/tools.tag"
+container_id= image_id= create_attempted=0 build_attempted=0 cleaning=0 cleanup_deadline=0
 controlled() {
   local name=$1 bound=$2 status remaining
   shift 2
@@ -33,36 +39,45 @@ controlled() {
   return "$status"
 }
 absent() {
-  local name=$1 reference=$2 status diagnostic
-  if controlled "$name" 10 container inspect "$reference"; then return 1; else status=$?; fi
+  local name=$1 reference=$2 kind=${3:-container} status diagnostic
+  if controlled "$name" 10 "$kind" inspect "$reference"; then return 1; else status=$?; fi
   test "$status" = 1 || return 1
   diagnostic=$(cat "$evidence/$name.stderr")
-  [[ $diagnostic =~ [Nn]o[[:space:]]such[[:space:]](object|container) ]]
+  [[ $diagnostic =~ [Nn]o[[:space:]]such[[:space:]](object|container|image) ]]
+}
+cleanup_owned() {
+  local actual
+  # Docker's private CID file, not a matching name/label or partial stdout,
+  # authenticates a creation whose CLI response was lost.
+  if (( create_attempted )) && controlled survivor 10 container inspect "$owner"; then
+    test -f "$evidence/container.id" || return 1
+    actual=$(cat "$evidence/container.id")
+    [[ $actual =~ ^[a-f0-9]{64}$ ]] || return 1
+    if test -n "$container_id"; then test "$actual" = "$container_id" || return 1; fi
+    container_id=$actual
+    test "$(controlled survivor-id 10 container inspect "$owner" --format '{{.Id}}')" = "$container_id" || return 1
+    test "$(controlled survivor-label 10 container inspect "$container_id" --format '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')" = "$owner" || return 1
+    controlled removal 10 container rm --force --volumes "$container_id" || return 1
+  fi
+  absent name-absence "$owner" || return 1
+  if test -n "$container_id"; then absent id-absence "$container_id" || return 1; fi
+  if (( build_attempted )) && test -z "$image_id" && test -f "$evidence/tools.id"; then
+    image_id=$(cat "$evidence/tools.id")
+    [[ $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
+  fi
+  if test -n "$image_id"; then
+    test "$(controlled tag-identity 10 image inspect "$tag" --format '{{.Id}}')" = "$image_id" || return 1
+    controlled tag-removal 10 image rm "$tag" || return 1
+  fi
+  absent tag-absence "$tag" image || return 1
 }
 cleanup() {
-  local status=$? actual
+  local status=$? cleanup_status=0
   trap - EXIT
   cleaning=1 cleanup_deadline=$((SECONDS+60))
-  # Reconcile a lost create response by its unique label, then use the actual
-  # immutable container ID. Never remove an unrelated replacement by name.
-  if (( create_attempted )) && controlled survivor 10 container inspect "$owner"; then
-    actual=$(controlled survivor-id 10 container inspect "$owner" --format '{{.Id}}')
-    [[ $actual =~ ^[a-f0-9]{64}$ ]] || exit 1
-    test "$(controlled survivor-label 10 container inspect "$actual" --format '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')" = "$owner" || exit 1
-    if test -f "$evidence/container.id"; then
-      container_id=$(cat "$evidence/container.id")
-      [[ $container_id =~ ^[a-f0-9]{64}$ ]] || exit 1
-    fi
-    if test -n "$container_id"; then test "$actual" = "$container_id" || exit 1; fi
-    container_id=$actual
-    controlled removal 10 container rm --force --volumes "$container_id" || exit 1
-  fi
-  absent name-absence "$owner" || exit 1
-  if test -n "$container_id"; then absent id-absence "$container_id" || exit 1; fi
-  if test -n "$image_id"; then
-    test "$(controlled tag-identity 10 image inspect "$tag" --format '{{.Id}}')" = "$image_id" || exit 1
-    controlled tag-removal 10 image rm "$tag" || exit 1
-  fi
+  if cleanup_owned; then cleanup_status=0; else cleanup_status=1; fi
+  printf '%s\n' "$cleanup_status" >"$evidence/cleanup-owned.status"
+  if test "$cleanup_status" != 0; then status=1; fi
   printf '%s\n' "$status" >"$evidence/cleanup.status"
   exit "$status"
 }
@@ -70,14 +85,18 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 absent prior "$owner"
+absent prior-tag "$tag" image
 # This infrastructure stage is source-independent and small. Keep the original
 # 12GiB SDK reserve plus a separate16GiB build allowance BEFORE construction.
 available=$(df --output=avail -B1 "$workspace" | tail -n 1)
 (( available >= 28*1024*1024*1024 )) || { echo 'insufficient space for tools and original SDK reserve' >&2; exit 1; }
-controlled tools-build 1200 buildx build --file "$root/sdk/Dockerfile" --target registry_qualification_tools \
+test ! -e "$evidence/tools.id"
+build_attempted=1
+controlled tools-build 1200 buildx build --iidfile "$evidence/tools.id" --file "$root/sdk/Dockerfile" --target registry_qualification_tools \
   --platform "linux/$architecture" --load --tag "$tag" "$root"
 image_id=$(controlled tools-id 10 image inspect "$tag" --format '{{.Id}}')
 [[ $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+test "$(cat "$evidence/tools.id")" = "$image_id"
 controlled tools-inspect 10 image inspect "$image_id" >/dev/null
 socket_group=$(stat -c '%g' /var/run/docker.sock)
 # Only successful prior-absence and this actual create attempt confer authority

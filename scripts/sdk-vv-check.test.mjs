@@ -30,6 +30,101 @@ test('platform selection binds actual index bytes and rejects duplicate or wrong
   assert.throws(() => selectPlatform(duplicated, digest(duplicated), 'amd64'));
 });
 
+test('the actual outer shell refuses foreign ownership and reconciles only authenticated creation files', async t => {
+  // Explicit Docker boundary units, not image/SDK/full-VV qualification. The
+  // shipped wrapper itself executes in Bash; only the daemon is a fixture.
+  const docker = String.raw`#!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$UNIT_ROOT/docker.commands"
+cid=$(printf 'd%.0s' {1..64}); iid=sha256:$(printf 'e%.0s' {1..64})
+case "$1:$2" in
+  container:inspect)
+    reference=$3
+    if test -f "$UNIT_ROOT/container.exists"; then
+      format=; if test "$#" -ge 5; then format=$5; fi
+      case "$format" in
+        '{{.Id}}') printf '%s\n' "$cid" ;;
+        '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')
+          if test "$UNIT_MODE" = wrong-label; then echo foreign; else cat "$UNIT_ROOT/owner"; fi ;;
+        '{{.State.Running}}') echo false ;;
+        '{{.State.ExitCode}}') echo 0 ;;
+        '{{.State.OOMKilled}}') echo false ;;
+        '') echo '[{"unit_only":true}]' ;;
+        *) exit 99 ;;
+      esac
+    else echo "Error: No such container: $reference" >&2; exit 1; fi ;;
+  image:inspect)
+    if test -f "$UNIT_ROOT/image.exists"; then printf '%s\n' "$iid"
+    else echo "Error: No such image: $3" >&2; exit 1; fi ;;
+  buildx:build)
+    shift 2; file= tag=
+    while test "$#" -gt 0; do
+      case "$1" in --iidfile) file=$2; shift 2 ;; --tag) tag=$2; shift 2 ;; *) shift ;; esac
+    done
+    test -n "$file"; test -n "$tag"; touch "$UNIT_ROOT/image.exists"
+    if test "$UNIT_MODE" != build-missing-id; then printf '%s\n' "$iid" > "$file"; fi
+    case "$UNIT_MODE" in build-partial|build-missing-id) echo partial; exit 1 ;; esac ;;
+  container:create)
+    shift 2; file= owner=
+    while test "$#" -gt 0; do
+      case "$1" in --cidfile) file=$2; shift 2 ;; --name) owner=$2; shift 2 ;; *) shift ;; esac
+    done
+    printf '%s\n' "$owner" > "$UNIT_ROOT/owner"; touch "$UNIT_ROOT/container.exists"
+    if test "$UNIT_MODE" != create-missing-id; then
+      if test "$UNIT_MODE" = wrong-id; then printf 'f%.0s' {1..64} > "$file"; printf '\n' >> "$file"
+      else printf '%s\n' "$cid" > "$file"; fi
+    fi
+    case "$UNIT_MODE" in create-partial|create-missing-id) echo partial; exit 1 ;; esac
+    printf '%s\n' "$cid" ;;
+  container:start) test "$3" = --attach ;;
+  container:rm)
+    test "$3" = --force; test "$4" = --volumes; test "$5" = "$cid"
+    rm "$UNIT_ROOT/container.exists" ;;
+  image:rm) rm "$UNIT_ROOT/image.exists" ;;
+  *) exit 99 ;;
+esac
+`;
+  const script = String.raw`set -euo pipefail
+cd "$UNIT_ROOT"
+git() { case "$*" in *'rev-parse HEAD') printf '%s\n' "$UNIT_REVISION" ;; *'status --porcelain') ;; *) return 99 ;; esac; }
+df() { printf 'Avail\n30064771072\n'; }
+stat() { printf '1000\n'; }
+cat() { if test "$*" = /proc/sys/kernel/random/uuid; then echo 01234567-89ab-cdef-0123-456789abcdef; else command cat "$@"; fi; }
+export -f git df stat cat
+/bin/bash root-a/scripts/sdk-vv-outer.sh "$UNIT_IMAGE" "$UNIT_REVISION" "$UNIT_ARCH" "sdk-$UNIT_ARCH-full-sdk-vv"
+`;
+  for (const mode of ['complete', 'foreign-container', 'foreign-tag', 'create-partial', 'create-missing-id',
+    'wrong-label', 'wrong-id', 'build-partial', 'build-missing-id']) {
+    const dir = mkdtempSync(join(tmpdir(), 'prismpm-outer-lifecycle-unit-'));
+    t.after(() => rmSync(dir, {recursive: true, force: true}));
+    mkdirSync(join(dir, 'bin')); mkdirSync(join(dir, 'root-a/scripts'), {recursive: true});
+    writeFileSync(join(dir, 'bin/docker'), docker, {mode: 0o700});
+    writeFileSync(join(dir, 'root-a/scripts/sdk-vv-outer.sh'), readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url)));
+    if (mode === 'foreign-container') {writeFileSync(join(dir, 'container.exists'), ''); writeFileSync(join(dir, 'owner'), 'foreign');}
+    if (mode === 'foreign-tag') writeFileSync(join(dir, 'image.exists'), '');
+    const architecture = process.arch === 'x64' ? 'amd64' : 'arm64';
+    const result = await execute('/bin/bash', ['--noprofile', '--norc', '-c', script], {timeout: 10000,
+      environment: {...process.env, PATH: join(dir, 'bin') + ':' + process.env.PATH, UNIT_ROOT: dir,
+        UNIT_MODE: mode, UNIT_REVISION: revision, UNIT_IMAGE: image, UNIT_ARCH: architecture,
+        GITHUB_RUN_ID: '12345', GITHUB_RUN_ATTEMPT: '1'}});
+    assert.equal(result.signal, null, mode);
+    assert.equal(result.status, mode === 'complete' ? 0 : 1, mode + ': ' + result.stderr);
+    const commands = readFileSync(join(dir, 'docker.commands'), 'utf8');
+    const containerRemoved = /^container rm /m.test(commands), imageRemoved = /^image rm /m.test(commands);
+    assert.equal(containerRemoved, ['complete', 'create-partial'].includes(mode), mode + ': immutable container authority');
+    assert.equal(imageRemoved, ['complete', 'create-partial', 'build-partial'].includes(mode), mode + ': immutable image authority');
+    if (mode.startsWith('foreign-')) assert(!/^buildx build /m.test(commands), 'collision must be refused before building');
+    const evidence = join(dir, `sdk-${architecture}-full-sdk-vv-outer-owner`);
+    assert.equal(readFileSync(join(evidence, 'cleanup.status'), 'utf8').trim(), String(result.status));
+    if (['complete', 'create-partial', 'build-partial'].includes(mode)) {
+      assert.equal(readFileSync(join(evidence, 'cleanup-owned.status'), 'utf8').trim(), '0');
+      assert(!existsSync(join(dir, 'container.exists'))); assert(!existsSync(join(dir, 'image.exists')));
+    } else {
+      assert.equal(readFileSync(join(evidence, 'cleanup-owned.status'), 'utf8').trim(), '1');
+    }
+  }
+});
+
 test('isolation refuses uplinks and all IPv4 or IPv6 egress routes', () => {
   const isolated = { identity: 'net:[123]', interfaces: ['lo', 'docker0', 'br-123456789abc'], ipv4: 'Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\ndocker0 000011AC 00000000 0001 0 0 0 0000FFFF 0 0 0\n', ipv6: '00000000000000000000000000000000 00 00000000000000000000000000000000 00 00000000000000000000000000000000 ffffffff 00000001 00000000 00200200 lo\n' };
   validateIsolation(isolated);
@@ -537,11 +632,11 @@ test('executed omission mutants cannot satisfy the owning orchestration contract
 });
 
 test('owning TAP completeness rejects skipped, reduced and failed successful-shell output', () => {
-  const tap = ['TAP version 13', ...Array.from({length: 19}, (_, index) => `ok ${index + 1} - case ${index + 1}`),
-    '1..19', '# tests 19', '# suites 0', '# pass 19', '# fail 0', '# cancelled 0', '# skipped 0', '# todo 0'].join('\n');
+  const tap = ['TAP version 13', ...Array.from({length: 20}, (_, index) => `ok ${index + 1} - case ${index + 1}`),
+    '1..20', '# tests 20', '# suites 0', '# pass 20', '# fail 0', '# cancelled 0', '# skipped 0', '# todo 0'].join('\n');
   const value = stdout => ({status: 0, signal: null, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0)});
   validateOwningTests(value(tap));
-  for (const text of ['', tap.replace('# skipped 0', '# skipped 1'), tap.replace('# tests 19', '# tests 18'),
+  for (const text of ['', tap.replace('# skipped 0', '# skipped 1'), tap.replace('# tests 20', '# tests 19'),
     tap.replace('ok 1 - case 1', 'ok 1 - case 1 # SKIP'), tap.replace('# fail 0', '# fail 1')]) assert.throws(() => validateOwningTests(value(text)));
   assert.throws(() => validateOwningTests({...value(tap), status: 1}));
 });

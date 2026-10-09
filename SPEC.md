@@ -1664,7 +1664,8 @@ source readbacks, command output, terminal state and exact-ID cleanup are
 retained alongside—not substituted for—the original two full V&V records.
 The existing native registry CI reuses its immutable thin tools image for the
 complete original 71 process/construction cases, two new normal-exit cases,
-twelve real supervisor controls and all 17 registry-process cases on both native platforms, with the
+one complete outer-launcher lifecycle unit, twelve real supervisor controls and
+all 17 registry-process cases on both native platforms, with the
 original file deadline, source readbacks, raw results, cgroup observations and
 observed owned-container/network retirement. These unit results do not qualify
 an installed SDK or release acceptance. Descendant adoption is qualified only

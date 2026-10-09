@@ -495,7 +495,7 @@ export async function runOuter({image, revision, arch, destination, source, regi
 
 export function validateOwningTests(result) {
   successful(result, 'owning orchestrator tests');
-  assert.equal(verifyTap(result.stdout.toString(), 19), 19, 'exact complete owning test set');
+  assert.equal(verifyTap(result.stdout.toString(), 20), 20, 'exact complete owning test set');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
