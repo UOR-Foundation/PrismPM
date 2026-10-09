@@ -90,7 +90,7 @@ test('whole-owner closure binds every source, compiler input and exact mutation 
   const helpers = ['tests/browser-view/file-custody.mjs', 'tests/browser-view/compiler-owner.mjs',
     'tests/browser-view/compiler-artifact.mjs', 'tests/browser-view/compiler-owner-checks.mjs',
     'tests/browser-view/generated-wasm.mjs', 'tests/browser-presentation/provenance.mjs',
-    'tests/browser-presentation/fixture-files.mjs'];
+    'tests/browser-presentation/fixture-files.mjs', 'sdk/account-genesis-artifact.mjs'];
   // Parse real static imports without linking or executing project modules.
   // Browser-context dynamic imports remain bound by the complete SDK inventory.
   const parser = String.raw`
@@ -100,7 +100,8 @@ test('whole-owner closure binds every source, compiler input and exact mutation 
     import {dirname, relative, resolve} from 'node:path';
     import {SourceTextModule} from 'node:vm';
     const {root, inputs} = JSON.parse(readFileSync(0, 'utf8'));
-    const pending = ['sdk/browser/semantic-presentation.test.mjs', 'tests/browser-semantic-presentation/checks.mjs'];
+    const pending = ['sdk/browser/semantic-presentation.test.mjs',
+      'tests/browser-semantic-presentation/wire.test.mjs', 'tests/browser-semantic-presentation/dom.test.mjs'];
     const visited = new Set();
     while (pending.length) {
       const path = pending.pop(); if (visited.has(path)) continue;

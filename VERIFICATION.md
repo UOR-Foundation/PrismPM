@@ -22,8 +22,8 @@ IDs and revisions; they are not qualification of the combined implementation.
 
 ## Semantic-presentation artifact custody correction
 
-The DK-38 input map includes seven previously omitted static dependencies.
-Its existing closure test parses the real owner import graph and rejects each
+The DK-38 input map includes eight previously omitted static dependencies.
+Its existing closure test parses all three original group entry graphs and rejects each
 omitted helper and substituted helper hash. It does not execute imported code
 or treat browser-context dynamic imports as static imports.
 
