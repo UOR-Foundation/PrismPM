@@ -1658,6 +1658,10 @@ The fixed interpreter is admitted from each digest-pinned image: Bookworm
 Python 3.11.2 or Noble Python 3.12.3, using isolated execution with no host
 fallback. Source binding includes both private supervisor files. Original
 command, file, actor and two-run deadlines remain unchanged.
+The release's outer SDK owner executes in the existing source-independent thin
+tools stage, not host Python. Its current image ID, original Docker metadata,
+source readbacks, command output, terminal state and exact-ID cleanup are
+retained alongside—not substituted for—the original two full V&V records.
 The existing native registry CI reuses its immutable thin tools image for the
 complete original 71 process/construction cases, two new normal-exit cases,
 eleven real supervisor controls and all 17 registry-process cases on both native platforms, with the

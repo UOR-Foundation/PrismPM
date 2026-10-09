@@ -169,7 +169,7 @@ function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
     [name, name === 'dind' ? {reference: row.reference, source: 'https://github.com/docker-library/docker', source_revision: revision, version: '28.4.0-dind'} : {reference: row.reference}]))};
   writeFileSync(join(source, 'sdk/vv-runtime.lock.json'), canonical(lock) + '\n');
   for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence', 'sdk-registry-reader']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
-  for (const name of ['sdk-command-owner.mjs', 'sdk-command-owner.py']) writeFileSync(join(source, 'scripts', name), `# unit-only binding fixture: ${name}\n`);
+  for (const name of ['sdk-command-owner.mjs', 'sdk-command-owner.py', 'sdk-vv-outer.sh']) writeFileSync(join(source, 'scripts', name), `# unit-only binding fixture: ${name}\n`);
   const policy = Buffer.from(canonical({source_revision: revision, advisory_revision: '2'.repeat(40)})), inventory = Buffer.from('unit inventory'), inputManifest = Buffer.from('unit input manifest'), cli = Buffer.from('unit CLI bytes');
   const raw = Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, gates: Array.from({length: 15}, (_, i) => i + 1), status: 'passed'}));
   const record = {schema: 'prismpm/sdk-vv-execution/1', scope: 'two-full-vv-executions-only', source_revision: revision, image_reference: images.sdk.reference,
@@ -565,7 +565,7 @@ test('native release matrix executes the additional exact-image gate and preserv
     const firstNode = job.indexOf(command);
     assert(firstNode > job.indexOf(setupNode), 'pinned Node must precede the first source helper');
   };
-  for (const [text, command] of [[job, 'node root-a/scripts/sdk-vv-check.mjs tests'], [repro, 'node "$root/scripts/sdk-image-inputs.mjs"']]) {
+  for (const [text, command] of [[job, 'node root-a/scripts/product-sdk-check.mjs tests'], [repro, 'node "$root/scripts/sdk-image-inputs.mjs"']]) {
     hostPrerequisite(text, command);
     assert.throws(() => hostPrerequisite(text.replace(setupNode, ''), command));
     assert.throws(() => hostPrerequisite(text.replace('node-version: 22.23.2', 'node-version: 20'), command));
@@ -578,10 +578,19 @@ test('native release matrix executes the additional exact-image gate and preserv
   const step = /^        shell: bash\n        env:\n          RESULT_NAME: sdk-\$\{\{ matrix.arch \}\}\n          NATIVE_PLATFORM: linux\/\$\{\{ matrix.arch \}\}\n        run: \|\n((?:          .*\n)+)$/.exec(steps[0][1]);
   assert(step, 'closed mandatory SDK step required');
   const run = step[1].split('\n').map(line => line.slice(10)).join('\n');
+  const wrapper = readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url), 'utf8');
+  const inner = /  '(node root-a\/scripts\/sdk-vv-check\.mjs tests; node root-a\/scripts\/sdk-vv-check\.mjs run [^'\n]+)'/.exec(wrapper);
+  assert(inner, 'both original owning and installed operations must execute inside the pinned image');
+  assert(wrapper.includes('--target registry_qualification_tools'));
+  assert(wrapper.includes('--read-only --user "$(id -u):$(id -g)"'));
+  assert(wrapper.includes('test "$(controlled actor-running 10 container inspect "$container_id" --format'));
+  assert(wrapper.includes('absent id-absence "$container_id"'));
   assert(repro.includes('browser-api-sdk-check.sh')); assert(repro.includes('library-sdk-check.sh'));
   const dir = mkdtempSync(join(tmpdir(), 'prismpm-vv-workflow-unit-')); t.after(() => rmSync(dir, {recursive:true, force:true}));
   mkdirSync(join(dir, '.shipped-image')); writeFileSync(join(dir, '.shipped-image/sdk-image.txt'), image + '\n');
-  const script = `cd "$UNIT_ROOT"\nnode() { printf '%s\\n' "$*" >> "$UNIT_ROOT/commands"; [ "\${UNIT_FAIL:-}" != "$2" ]; }\n` + run;
+  // Explicit workflow units, not real Docker/image/SDK acceptance. Execute the
+  // actual job command and its exact image-owned inner command in real shells.
+  const script = `cd "$UNIT_ROOT"\nnode() { printf '%s\\n' "$*" >> "$UNIT_ROOT/commands"; [ "\${UNIT_FAIL:-}" != "$2" ]; }; export -f node\nbash() { test "$1" = root-a/scripts/sdk-vv-outer.sh; shift; test "$#" = 4; /bin/bash --noprofile --norc -euo pipefail -c ${JSON.stringify(inner[1])} sdk-outer "$@"; }\n` + run;
   const env = {PATH:process.env.PATH, UNIT_ROOT:dir, RESULT_NAME:'sdk-unit', NATIVE_PLATFORM:'linux/amd64', GITHUB_SHA:revision};
   const result = await execute('/bin/bash', ['-c', script], {environment:env}); assert.equal(result.status,0);
   assert.deepEqual(readFileSync(join(dir, 'commands'), 'utf8').trim().split('\n'), [
