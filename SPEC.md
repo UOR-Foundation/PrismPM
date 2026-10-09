@@ -1639,21 +1639,32 @@ After acquisition, only the owned daemon's resolver is replaced with the
 recorded loopback-only configuration; nested containers use that same DNS
 policy. Effective resolver bytes, a live external bootstrap control, blocked
 literal-address access and blocked default DNS resolution are checked before
-and after execution. Bounded command groups and owner-checked cleanup retain
-raw diagnostics without accepting interrupted runs. The outer command transport
-rejects within a separate fixed five-second retirement bound after its original
-timeout, output overflow or interruption. It preserves actual leader exit and
-pipe-close observations, truncates each stream at the original output bound,
-and snapshots uncertain retirement before releasing held pipe handles. Group
-absence does not prove escaped-descendant retirement; this watchdog neither
-adopts descendants nor replaces the release subreaper's exhaustion protocol.
-Uncertain retirement is retained with the failed command and prohibits
-acceptance. Original command and two-run deadlines remain unchanged.
+and after execution. Each command has a private Linux subreaper established
+before spawning, with one exclusive waiter. Actual `waitpid` exhaustion, the
+original leader result, complete streams, a closed bounded private protocol and
+successful supervisor termination are all required for completion. FD3 receipts
+and FD4 cancellation are not inherited by the command. Natural trailing work
+may finish within the original command deadline. After timeout, output overflow
+or interruption, the outer transport immediately kills owned work within one
+fixed five-second retirement budget; registry qualification retains its distinct
+TERM/four-second KILL/five-second retirement policy. A process group is signaled
+only while its original session leader remains directly owned and unreaped.
+After reaping, adopted direct children are individually signaled under unreaped
+ownership; old numeric PGIDs never authorize signals. Streams remain bounded.
+Observation, protocol or supervision failure prohibits acceptance even if later
+cleanup succeeds. Timed-out retirement is snapshotted before releasing handles;
+descriptor disposal or enclosing-container removal is not timely reaping.
+The fixed interpreter is admitted from each digest-pinned image: Bookworm
+Python 3.11.2 or Noble Python 3.12.3, using isolated execution with no host
+fallback. Source binding includes both private supervisor files. Original
+command, file, actor and two-run deadlines remain unchanged.
 The existing native registry CI reuses its immutable thin tools image for the
-complete original 17 process-owner tests on both native platforms, with the
+complete original 71 process/construction cases, two new normal-exit cases,
+nine real supervisor controls and all 17 registry-process cases on both native platforms, with the
 original file deadline, source readbacks, raw results, cgroup observations and
 observed owned-container/network retirement. These unit results do not qualify
-an installed SDK or prove escaped-process adoption.
+an installed SDK or release acceptance. Descendant adoption is qualified only
+by the real process controls and actual per-command exhaustion receipts.
 The release gate requires
 the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.

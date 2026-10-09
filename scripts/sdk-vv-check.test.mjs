@@ -169,6 +169,7 @@ function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
     [name, name === 'dind' ? {reference: row.reference, source: 'https://github.com/docker-library/docker', source_revision: revision, version: '28.4.0-dind'} : {reference: row.reference}]))};
   writeFileSync(join(source, 'sdk/vv-runtime.lock.json'), canonical(lock) + '\n');
   for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence', 'sdk-registry-reader']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
+  for (const name of ['sdk-command-owner.mjs', 'sdk-command-owner.py']) writeFileSync(join(source, 'scripts', name), `# unit-only binding fixture: ${name}\n`);
   const policy = Buffer.from(canonical({source_revision: revision, advisory_revision: '2'.repeat(40)})), inventory = Buffer.from('unit inventory'), inputManifest = Buffer.from('unit input manifest'), cli = Buffer.from('unit CLI bytes');
   const raw = Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, gates: Array.from({length: 15}, (_, i) => i + 1), status: 'passed'}));
   const record = {schema: 'prismpm/sdk-vv-execution/1', scope: 'two-full-vv-executions-only', source_revision: revision, image_reference: images.sdk.reference,
@@ -401,14 +402,14 @@ test('actual process transport preserves failures and rejects timeout or oversiz
     assert(Date.now() - escapedStarted < 7500, 'a new session retaining pipes must not defeat the fixed five-second retirement bound');
     assert.equal(failure.result.status, 0, 'retain the actual observed leader exit, not a fabricated timeout status');
     assert.equal(failure.result.signal, null);
-    assert.equal(failure.result.retirement.close_observed, false);
-    assert.equal(failure.result.retirement.group_absent, true, 'absence of the original group does not prove pipe-holder retirement');
-    assert.equal(failure.result.retirement.scope, 'owned-group-and-pipes-only');
-    assert.match(failure.result.retirement.uncertainty, /within five seconds/);
+    assert.equal(failure.result.retirement.close_observed, true);
+    assert.equal(failure.result.retirement.descendants_absent, true, 'actual subreaper exhaustion must include the escaped pipe holder');
+    assert.equal(failure.result.retirement.scope, 'private-linux-subreaper-exhaustion');
+    assert.equal(failure.result.retirement.uncertainty, null);
     assert.equal(failure.result.stdout.toString(), 'escaped-ready\n');
+    assert(!existsSync(`/proc/${JSON.parse(readFileSync(marker)).pid}`), 'escaped fixture must already have been adopted and reaped by production owner');
   } finally {
-    // Retire only this test's independently identified escaped fixture. The
-    // production watchdog must not claim it adopted or retired that process.
+    // The production owner must prove absence BEFORE this safety cleanup.
     const child = JSON.parse(readFileSync(marker));
     assert.deepEqual(Object.keys(child).sort(), ['pid', 'token']);
     assert.equal(child.token, token); assert(Number.isSafeInteger(child.pid) && child.pid > 1);
@@ -534,11 +535,11 @@ test('executed omission mutants cannot satisfy the owning orchestration contract
 });
 
 test('owning TAP completeness rejects skipped, reduced and failed successful-shell output', () => {
-  const tap = ['TAP version 13', ...Array.from({length: 17}, (_, index) => `ok ${index + 1} - case ${index + 1}`),
-    '1..17', '# tests 17', '# suites 0', '# pass 17', '# fail 0', '# cancelled 0', '# skipped 0', '# todo 0'].join('\n');
+  const tap = ['TAP version 13', ...Array.from({length: 19}, (_, index) => `ok ${index + 1} - case ${index + 1}`),
+    '1..19', '# tests 19', '# suites 0', '# pass 19', '# fail 0', '# cancelled 0', '# skipped 0', '# todo 0'].join('\n');
   const value = stdout => ({status: 0, signal: null, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0)});
   validateOwningTests(value(tap));
-  for (const text of ['', tap.replace('# skipped 0', '# skipped 1'), tap.replace('# tests 17', '# tests 16'),
+  for (const text of ['', tap.replace('# skipped 0', '# skipped 1'), tap.replace('# tests 19', '# tests 18'),
     tap.replace('ok 1 - case 1', 'ok 1 - case 1 # SKIP'), tap.replace('# fail 0', '# fail 1')]) assert.throws(() => validateOwningTests(value(text)));
   assert.throws(() => validateOwningTests({...value(tap), status: 1}));
 });
