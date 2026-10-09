@@ -210,7 +210,8 @@ export function execute(command, args, { environment, timeout = 120000, limit = 
         catch (error) { if (error.code === 'ESRCH') absent = true; }
       }
       return {scope: 'owned-group-and-pipes-only', leader_exit_observed: exited !== undefined,
-        close_observed: closeObserved, group_absent: absent, uncertainty};
+        close_observed: closeObserved, group_absent: absent, uncertainty,
+        ...(failure?.kill_error ? {kill_error: failure.kill_error} : {})};
     };
     const result = () => ({...(exited ?? {status: null, signal: null}),
       stdout: Buffer.concat(streams[0]), stderr: Buffer.concat(streams[1])});
