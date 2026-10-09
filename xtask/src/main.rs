@@ -281,6 +281,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-construction-record.test.mjs",
             "scripts/sdk-construction-handoff.test.mjs",
             "scripts/sdk-construction-archive.test.mjs",
+            "scripts/sdk-construction-stage.test.mjs",
             "scripts/sdk-construction-metadata.test.mjs",
             "scripts/sdk-construction-provider.test.mjs",
             "scripts/sdk-construction-acquire.test.mjs",

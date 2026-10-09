@@ -1724,6 +1724,31 @@ filesystem semantics, registry availability, installed SDK execution, full V&V
 or release acceptance. Tiny synthetic archive fixtures test this internal
 boundary; they are not SDK, application or product qualification.
 
+The private `stageConstructionArchiveStream` path writes only the original
+`sdk.oci.tar` payload to an exclusive, randomly named file anchored by a held
+Linux directory descriptor. It never extracts archive member paths or layers.
+The caller-owned directory is unaliased and mode0700. Admission reserves the
+complete original tar length plus12GiB on its filesystem; that reserve remains
+mandatory after staging. Writes apply backpressure with at most one1MiB copied
+transport chunk and64KiB file operations. Publication additionally requires the
+complete original ZIP/OCI verification, actual transport closure, unchanged
+directory/file identities, a singly linked mode0400 file, and a full original
+tar digest readback within the original thirty-minute budget. Only a genuine
+in-process whole-stream receipt can mint an opaque stage handle. Copied records
+and guessed handles cannot substitute for that authority.
+
+Stage consumers receive copied64KiB chunks, never a pathname or descriptor.
+Consumption rechecks exact file custody and the complete original digest;
+consumer waits have their own bounded, at-most-thirty-minute deadline. A timeout
+does not assert that arbitrary consumer code stopped or a registry import was
+retired. Owned-file retirement is anchored to the original held directory and
+requires exact file identity before unlinking, observed absence and descriptor
+closure. Replacement files and aliased inodes are not deleted; uncertain cleanup
+fails. These primitives do not yet make the read-only acquisition mode an import
+or qualify provider authentication, registry availability, expanded filesystem
+semantics, SDK execution, fullVV, release or product readiness. Those acceptance
+requirements remain unchanged.
+
 The additive `construction_integrity` workflow mode authenticates fixed GitHub
 API responses and selects an explicit source/run/attempt/two-artifact tuple.
 It is mutually exclusive with construction and publication. Older construction
