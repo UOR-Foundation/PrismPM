@@ -44,8 +44,8 @@ async function hashFile(row,end,onChunk){
 }
 function dispose(row){
  const errors=[];let absent=false;
- // The held directory descriptor anchors deletion even if its original pathname
- // has been replaced. Never remove a replacement file or traverse its tree.
+ // The held directory anchors deletion after pathname substitution. Refuse an
+ // observed replacement; check-then-unlink is not immune to owner/host races.
  try{const before=fileCustody(row);unlinkSync(row.file);const after=fstatSync(row.fd,{bigint:true});
   equal(after,before,['dev','ino','mode','uid','gid','size','mtimeNs']);assert.equal(after.nlink,0n,'original staged inode still linked');
   assert.equal(lstatSync(row.file,{throwIfNoEntry:false}),undefined);fsyncSync(row.root);absent=true;}
@@ -61,7 +61,13 @@ function dispose(row){
 export function beginConstructionStage(parent,archive,end){
  assert.equal(process.platform,'linux');assert(typeof parent==='string'&&parent.length<4096&&parent!== '/');
  const now=performance.now();assert(Number.isFinite(end)&&end>now&&end-now<=1800000,'bounded original stage deadline required');
- assert.deepEqual(Object.keys(archive).sort(),['byte_length','digest']);bounded(archive.byte_length);digest(archive.digest);deadline(end);
+ assert(archive&&typeof archive==='object'&&!Array.isArray(archive));
+ assert.deepEqual(Object.keys(archive).sort(),['byte_length','digest']);
+ const descriptors=Object.getOwnPropertyDescriptors(archive);
+ for(const key of ['byte_length','digest'])assert(descriptors[key]&&Object.hasOwn(descriptors[key],'value'),'primitive data-only archive descriptor required');
+ // All fallible caller-property work precedes acquisition of owned resources.
+ const expected=Object.freeze({byte_length:descriptors.byte_length.value,digest:descriptors.digest.value});
+ bounded(expected.byte_length);digest(expected.digest);deadline(end);
  const path=resolve(parent);assert.equal(realpathSync(path),path);
  const directory=lstatSync(path,{bigint:true});
  assert(directory.isDirectory()&&directory.uid===BigInt(process.geteuid())&&(directory.mode&0o7777n)===0o700n,'private caller-owned staging directory required');
@@ -69,10 +75,10 @@ export function beginConstructionStage(parent,archive,end){
  let row;
  try{
   equal(fstatSync(root,{bigint:true}),directory);
-  assert(available(root)>=BigInt(archive.byte_length+reserve),'original OCI bytes plus12GiB staging reserve required');
+  assert(available(root)>=BigInt(expected.byte_length+reserve),'original OCI bytes plus12GiB staging reserve required');
   const name='.prismpm-oci-'+randomBytes(16).toString('hex'),file='/proc/self/fd/'+root+'/'+name;
   const fd=openSync(file,constants.O_CREAT|constants.O_EXCL|constants.O_RDWR|constants.O_NOFOLLOW|constants.O_NONBLOCK,0o600);
-  row={path,directory,root,file,fd,archive:Object.freeze({...archive}),written:0};
+  row={path,directory,root,file,fd,archive:expected,written:0};
   row.created=fstatSync(fd,{bigint:true});
   assert(row.created.isFile()&&row.created.nlink===1n&&row.created.size===0n);fileCustody(row);rootCustody(row);
   return {
