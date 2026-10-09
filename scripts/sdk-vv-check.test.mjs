@@ -433,9 +433,11 @@ for (const detached of [false, true]) test(`normal leader exit cannot accept an 
   const parent = `const fs=require("node:fs");const child=require("node:child_process").spawn(process.execPath,["-e",${JSON.stringify(holder)},${JSON.stringify(marker)},${JSON.stringify(token)}],{detached:${detached},stdio:"ignore"});const ready=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(ready);child.unref();process.exit(0);}},10);setTimeout(()=>process.exit(98),3000).unref();`;
   const started = Date.now();
   try {
-    let result;
+    let result, failure;
     try { result = await execute(process.execPath, ['-e', parent], {timeout:1000, limit:1024}); }
-    catch (error) { result = error.result; }
+    catch (error) { failure = error; result = error.result; }
+    assert(failure, 'a still-running descendant must cause rejection at the original command deadline');
+    assert.match(failure.message, /bounded process timed out/);
     assert(result, 'retain original process result even if supervision rejects');
     assert.equal(result.status, 0, 'do not fabricate the observed normal leader status');
     assert.equal(result.signal, null);

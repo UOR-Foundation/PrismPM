@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
-import {closeSync, constants, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -140,24 +140,41 @@ test('one bounded reap pass cannot be mistaken for exhaustion; executed omission
   }, 'the real-process absence oracle must reject premature exhaustion');
 });
 
-test('foreground expiry after supervisor exit remains failure while a real outside writer delays stream close', async () => {
-  let held, timer;
-  try {
-    await assert.rejects(executeOwnedSdkCommand(process.execPath, ['-e', "process.stdout.write('PID '+process.pid+'\\n');setTimeout(()=>process.exit(0),30)"],
-      {...options, timeout: 200, onOutput: (_, bytes) => {
-        const match = /^PID ([1-9][0-9]*)\n$/.exec(bytes.toString());
-        if (match) {
-          // Real outside writer, not a fake child/event adapter. It intentionally
-          // holds the ORIGINAL pipe after the owner has exhausted its tree.
-          held = openSync(`/proc/${match[1]}/fd/1`, constants.O_WRONLY | constants.O_NONBLOCK);
-          timer = setTimeout(() => {closeSync(held); held = undefined;}, 350);
-        }
-      }}), error => {
-        assert.match(error.message, /timed out/); assert.equal(error.result.status, 0);
-        assert.equal(error.result.timedOut, true); assert.equal(error.result.retirement.supervisor_status, 0);
-        assert.equal(error.result.retirement.close_observed, true); return true;
-      });
-  } finally {clearTimeout(timer); if (held !== undefined) closeSync(held);}
+test('foreground expiry after supervisor exit remains failure while a real outside writer delays stream close', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'prism-sdk-external-writer-'));
+  t.after(() => rmSync(root, {recursive: true}));
+  const socket = join(root, 'private.sock');
+  // Node's original child streams are socketpairs, not reopenable /proc pipes.
+  // Pass the REAL original stdout via SCM_RIGHTS to an unrelated, test-owned
+  // receiver. No event/child adapter fabricates supervisor exit or stream close.
+  const receiver = String.raw`import array,os,socket,sys,time
+s=socket.socket(socket.AF_UNIX);s.bind(sys.argv[1]);s.listen(1)
+print("LISTEN",flush=True)
+c,_=s.accept();raw,anc,flags,_=c.recvmsg(1,socket.CMSG_SPACE(array.array("i").itemsize))
+assert raw==b"F" and flags==0 and len(anc)==1
+level,kind,bytes_=anc[0];assert level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS
+fds=array.array("i");fds.frombytes(bytes_);assert len(fds)==1
+time.sleep(.35);os.close(fds[0]);c.close();s.close()
+`;
+  const outside = spawn('/usr/bin/python3', ['-I', '-B', '-c', receiver, socket], {stdio: ['ignore', 'pipe', 'pipe']});
+  const closed = new Promise(resolve => outside.once('close', (status, signal) => resolve({status, signal})));
+  t.after(async () => {if (outside.exitCode === null && outside.signalCode === null) outside.kill('SIGKILL'); await closed;});
+  await new Promise((resolve, reject) => {
+    outside.once('error', reject); outside.stdout.once('data', bytes => {
+      try {assert.equal(bytes.toString(), 'LISTEN\n'); resolve();} catch (error) {reject(error);}
+    });
+  });
+  const sender = String.raw`import array,os,socket,sys
+s=socket.socket(socket.AF_UNIX);s.connect(sys.argv[1])
+assert s.sendmsg([b"F"],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,array.array("i",[1]))])==1
+s.close()
+`;
+  await assert.rejects(executeOwnedSdkCommand('/usr/bin/python3', ['-I', '-B', '-c', sender, socket], {...options, timeout: 200}), error => {
+    assert.match(error.message, /timed out/); assert.equal(error.result.status, 0);
+    assert.equal(error.result.timedOut, true); assert.equal(error.result.retirement.supervisor_status, 0);
+    assert.equal(error.result.retirement.close_observed, true); return true;
+  });
+  assert.deepEqual(await closed, {status: 0, signal: null});
 });
 
 test('direct supervisor interruption is never repaired by subsequent descendant reaping', async t => {
