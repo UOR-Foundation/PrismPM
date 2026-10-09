@@ -170,6 +170,12 @@ test('native qualification keeps pinned real actors, complete negative controls 
     assert(workflow.includes('os: ' + os)); assert(workflow.includes('arch: ' + arch));
   }
   assert(workflow.includes('--target registry_qualification_tools'));
+  assert(source.includes('await allocateQualificationNetwork({own, docker, owned, prefix, nonce})'));
+  assert(source.includes("['network', 'create', '--subnet', subnet,"));
+  assert(source.indexOf('entry.retired = true') > source.indexOf("await docker(['network', 'rm', probe.Id])"));
+  assert(source.indexOf("const actual = await own('network', name") > source.indexOf('entry.retired = true'));
+  assert(source.includes('for (const reference of [probe.Id, probeName])'));
+  assert(source.includes('for (const reference of [row.id, row.name])'));
   assert(!/setup-qemu|--network[ =]host|secrets\.|contents: write/.test(workflow));
   assert(recipe.includes('FROM input_tools AS registry_qualification_tools'));
   assert(recipe.includes('COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker'));

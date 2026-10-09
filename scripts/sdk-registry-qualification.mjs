@@ -188,6 +188,28 @@ export function qualificationRegistryAddress(subnet) {
   return [24, 16, 8, 0].map(bits => Math.floor(address / 2 ** bits) % 256).join('.');
 }
 
+export async function allocateQualificationNetwork({own, docker, owned, prefix, nonce}) {
+  const probeName = prefix + '-allocation', name = prefix + '-network';
+  const probe = await own('network', probeName, ['network', 'create', '--label', OWNER + '=' + nonce, probeName]);
+  assert.equal(probe.Driver, 'bridge'); assert.equal(probe.IPAM.Config.length, 1);
+  const subnet = probe.IPAM.Config[0].Subnet; qualificationRegistryAddress(subnet);
+  assert.deepEqual(probe.Containers, {});
+  assert.equal(probe.Labels[OWNER], nonce);
+  const entry = owned.find(row => row.kind === 'network' && row.name === probeName);
+  assert(entry && entry.id === probe.Id);
+  await docker(['network', 'rm', probe.Id]);
+  for (const reference of [probe.Id, probeName]) {
+    const absent = await docker(['network', 'inspect', reference], {allowFailure: true});
+    assert.notEqual(absent.status, 0); assert.match(absent.stderr.toString(), /No such|not found/i);
+  }
+  entry.retired = true;
+  const actual = await own('network', name, ['network', 'create', '--subnet', subnet,
+    '--label', OWNER + '=' + nonce, name]);
+  assert.equal(actual.Driver, 'bridge'); assert.equal(actual.IPAM.Config.length, 1);
+  assert.equal(actual.IPAM.Config[0].Subnet, subnet); assert.deepEqual(actual.Containers, {});
+  return {probe, actual, subnet, probe_name_and_id_absent: true};
+}
+
 export function validateSanFailure(result) {
   assert.equal(result.signal, null); assert.notEqual(result.status, 0);
   assert.match(result.stderr.toString(), /x509:.*(?:cannot validate|not valid for|doesn't contain|is valid for .+, not )/);
@@ -367,7 +389,9 @@ async function run(destination) {
         bytes: bytes.length, sha256: hash(bytes)}) + '\n', {flag: 'wx'});
     }
     network = prefix + '-network';
-    const networkRow = await own('network', network, ['network', 'create', '--label', OWNER + '=' + nonce, network]);
+    const allocation = await allocateQualificationNetwork({own, docker, owned, prefix, nonce});
+    writeFileSync(join(publicRoot, 'network-allocation.json'), JSON.stringify(allocation) + '\n', {flag: 'wx'});
+    const networkRow = allocation.actual;
     assert.equal(networkRow.IPAM.Config.length, 1);
     const ip = qualificationRegistryAddress(networkRow.IPAM.Config[0].Subnet);
     // Mark uncertain connection before dispatch; cleanup checks the actual graph.
@@ -558,6 +582,14 @@ async function run(destination) {
     }
     for (const row of owned.slice().reverse().filter(row => row.kind !== 'container')) {
       try {
+        if (row.retired) {
+          assert.equal(row.kind, 'network'); assert(row.id);
+          for (const reference of [row.id, row.name]) {
+            const absent = await docker(['network', 'inspect', reference], {allowFailure: true, cleaning: true});
+            assert.notEqual(absent.status, 0); assert.match(absent.stderr.toString(), /No such|not found/i);
+          }
+          continue;
+        }
         const actual = JSON.parse((await docker([row.kind, 'inspect', row.name], {cleaning: true})).stdout)[0];
         assert.equal(actual.Labels?.[OWNER], nonce);
         if (row.id) assert.equal(row.kind === 'volume' ? actual.Name : actual.Id, row.id);
