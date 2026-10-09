@@ -1,0 +1,74 @@
+name: Qualify owned SDK registry TLS
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/sdk-registry-qualification.yml
+      - scripts/sdk-registry-qualification.mjs
+      - scripts/sdk-registry-qualification.test.mjs
+      - scripts/sdk-registry-reader.mjs
+      - scripts/sdk-vv-check.mjs
+      - scripts/sdk-candidate.sh
+      - sdk/Dockerfile
+      - sdk/vv-runtime.lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-registry-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transport:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=docker.io/moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Build only pinned native transport tools
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          docker buildx build --file sdk/Dockerfile --target registry_qualification_tools \
+            --platform linux/${{ matrix.arch }} --load --tag prism-registry-tools:$SOURCE_REVISION .
+      - name: Qualify real registry and fresh native daemons
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          QUALIFICATION_ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/registry-qualification"
+          image=$(docker image inspect prism-registry-tools:$SOURCE_REVISION --format '{{.Id}}')
+          docker run --rm --init --stop-timeout 180 --read-only --cpus 2 --memory 1g --memory-swap 1g \
+            --label org.uor.prismpm.registry-qualification-tools=$SOURCE_REVISION \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=256m,mode=1777 \
+            --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+            --mount type=bind,source=$PWD,target=/source,readonly \
+            --mount type=bind,source=$RUNNER_TEMP/registry-qualification,target=$RUNNER_TEMP/registry-qualification \
+            --workdir /source \
+            --env GITHUB_ACTIONS --env RUNNER_ENVIRONMENT --env RUNNER_OS --env RUNNER_ARCH \
+            --env GITHUB_RUN_ID --env GITHUB_RUN_ATTEMPT --env SOURCE_REVISION --env QUALIFICATION_ARCH \
+            "$image" node scripts/sdk-registry-qualification.mjs "$RUNNER_TEMP/registry-qualification"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: sdk-registry-qualification-${{ matrix.arch }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/registry-qualification/public/
+          if-no-files-found: error
+          retention-days: 14

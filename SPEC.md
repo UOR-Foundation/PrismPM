@@ -1663,6 +1663,16 @@ provenance: independently admitted artifact/index digests and fresh images
 constructed from the final source are still required. Existing constructed
 images cannot be relabeled or patched to satisfy that source boundary.
 
+Native transport qualification uses the same two-read acquisition function,
+actual pinned Distribution and fresh pinned Docker daemons, with original OCI
+fixture bytes and exact authority CA readback. Its scratch transport fixture is
+not an SDK and is never executed. Negative TLS, CA-path and HTTP pulls retain
+actual daemon failures and zero-image state. Real redirect controls prove a
+reachable target receives no contacts at the shared acquisition boundary;
+they do not assert that Docker itself refuses redirects. Command evidence,
+source bytes, public certificates and owner-checked cleanup are retained on
+both native platforms. This qualifier cannot replace installed SDK V&V.
+
 `scripts/sdk-construction-handoff.mjs` is an internal metadata-admission boundary.
 Independently selected source, run, attempt and artifact IDs bind the complete
 original construction job inventory, successful ordered steps, declared native

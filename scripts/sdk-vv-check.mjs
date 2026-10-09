@@ -240,6 +240,15 @@ export async function acquireImageMetadata(call, image, arch) {
   return validateImageMetadata(index, manifest, image, arch);
 }
 
+// Shared by the real installed-SDK orchestrator and native transport qualifier.
+// This is acquisition only: the caller must separately retire the actual reader.
+export async function acquireOwnedImageMetadata(reader, image, arch) {
+  const index = await readSdkRegistryManifest(reader, image);
+  const child = selectPlatform(index, image.split('@')[1], arch);
+  const manifest = await readSdkRegistryManifest(reader, image.split('@')[0] + '@' + child.digest);
+  return {index, manifest, metadata: validateImageMetadata(index, manifest, image, arch)};
+}
+
 export function validateImageMetadata(index, manifest, image, arch) {
   reference(image); architecture(arch);
   const child = selectPlatform(index, image.split('@')[1], arch);
@@ -337,10 +346,7 @@ export async function runOuter({image, revision, arch, destination, source, regi
       assert.deepEqual(regular(join(registryDirectory, 'ca.crt'), 65536), registryCa);
     }
     const ownedMetadata = async () => {
-      const index = await readSdkRegistryManifest(registryReader, image);
-      const child = selectPlatform(index, image.split('@')[1], arch);
-      const manifest = await readSdkRegistryManifest(registryReader, image.split('@')[0] + '@' + child.digest);
-      const metadata = validateImageMetadata(index, manifest, image, arch);
+      const {index, manifest, metadata} = await acquireOwnedImageMetadata(registryReader, image, arch);
       registryEvidence = {authority: registryReader.authority, ca_sha256: registryReader.ca_sha256,
         ca_pem: registryCa.toString('ascii'), original_index_base64: index.toString('base64'),
         original_manifest_base64: manifest.toString('base64'),
@@ -527,6 +533,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       resolve(dirname(process.argv[1]), 'sdk-registry-reader.test.mjs')], {environment, timeout: 150000, limit: 16 * 1024 * 1024});
     process.stdout.write(tls.stdout); process.stderr.write(tls.stderr); successful(tls, 'SDK registry transport owning tests');
     assert.equal(verifyTap(tls.stdout.toString(), 10), 10, 'complete SDK registry transport owning test set');
+    const qualification = await execute(process.execPath, ['--test', '--test-concurrency=1', '--test-reporter=tap', '--test-timeout=120000',
+      resolve(dirname(process.argv[1]), 'sdk-registry-qualification.test.mjs')], {environment, timeout: 150000, limit: 16 * 1024 * 1024});
+    process.stdout.write(qualification.stdout); process.stderr.write(qualification.stderr); successful(qualification, 'SDK registry qualification owning tests');
+    assert.equal(verifyTap(qualification.stdout.toString(), 17), 17, 'complete SDK registry qualification owning test set');
   } else {
     assert(['run', 'run-owned-registry'].includes(operation));
     assert(image && revision && arch && destination && extra.length === (operation === 'run' ? 0 : 1),
