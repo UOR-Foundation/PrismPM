@@ -1742,9 +1742,13 @@ Consumption rechecks exact file custody and the complete original digest;
 consumer waits have their own bounded, at-most-thirty-minute deadline. A timeout
 does not assert that arbitrary consumer code stopped or a registry import was
 retired. Owned-file retirement is anchored to the original held directory and
-requires exact file identity before unlinking, observed absence and descriptor
-closure. Replacement files and aliased inodes are not deleted; uncertain cleanup
-fails. These primitives do not yet make the read-only acquisition mode an import
+requires exact file identity before unlinking, actual held-inode zero link count,
+observed pathname absence and descriptor closure. Observed replacement files and
+aliased inodes are refused; uncertain cleanup fails. The caller owns this private
+directory. Check-then-unlink is not an atomic conditional inode deletion: this
+boundary does not claim immunity to concurrent namespace changes by that owner
+or a privileged host process. Such a race cannot establish retirement merely
+from pathname absence. These primitives do not yet make the read-only acquisition mode an import
 or qualify provider authentication, registry availability, expanded filesystem
 semantics, SDK execution, fullVV, release or product readiness. Those acceptance
 requirements remain unchanged.

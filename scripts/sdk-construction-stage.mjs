@@ -26,7 +26,7 @@ function fileCustody(row){
  assert(actual.isFile()&&actual.nlink===1n,'single owned regular OCI stage required');
  equal(lstatSync(row.file,{bigint:true}),actual);
  if(row.sealed)equal(actual,row.sealed);
- else equal(actual,row.created,['dev','ino','uid','gid','nlink']);
+ else if(row.created)equal(actual,row.created,['dev','ino','uid','gid','nlink']);
  return actual;
 }
 function owned(handle){const row=stages.get(handle);assert(row&&!row.retired&&!row.active,'live exclusive OCI stage handle required');rootCustody(row);fileCustody(row);return row;}
@@ -46,7 +46,9 @@ function dispose(row){
  const errors=[];let absent=false;
  // The held directory descriptor anchors deletion even if its original pathname
  // has been replaced. Never remove a replacement file or traverse its tree.
- try{fileCustody(row);unlinkSync(row.file);assert.equal(lstatSync(row.file,{throwIfNoEntry:false}),undefined);absent=true;}
+ try{const before=fileCustody(row);unlinkSync(row.file);const after=fstatSync(row.fd,{bigint:true});
+  equal(after,before,['dev','ino','mode','uid','gid','size','mtimeNs']);assert.equal(after.nlink,0n,'original staged inode still linked');
+  assert.equal(lstatSync(row.file,{throwIfNoEntry:false}),undefined);fsyncSync(row.root);absent=true;}
  catch(error){errors.push(error);}
  for(const key of ['fd','root'])if(row[key]!==undefined){try{closeSync(row[key]);}catch(error){errors.push(error);}row[key]=undefined;}
  row.retired=true;
@@ -58,6 +60,7 @@ function dispose(row){
 // may publish the handle. Caller-supplied metadata alone never mints authority.
 export function beginConstructionStage(parent,archive,end){
  assert.equal(process.platform,'linux');assert(typeof parent==='string'&&parent.length<4096&&parent!== '/');
+ const now=performance.now();assert(Number.isFinite(end)&&end>now&&end-now<=1800000,'bounded original stage deadline required');
  assert.deepEqual(Object.keys(archive).sort(),['byte_length','digest']);bounded(archive.byte_length);digest(archive.digest);deadline(end);
  const path=resolve(parent);assert.equal(realpathSync(path),path);
  const directory=lstatSync(path,{bigint:true});
@@ -69,26 +72,36 @@ export function beginConstructionStage(parent,archive,end){
   assert(available(root)>=BigInt(archive.byte_length+reserve),'original OCI bytes plus12GiB staging reserve required');
   const name='.prismpm-oci-'+randomBytes(16).toString('hex'),file='/proc/self/fd/'+root+'/'+name;
   const fd=openSync(file,constants.O_CREAT|constants.O_EXCL|constants.O_RDWR|constants.O_NOFOLLOW|constants.O_NONBLOCK,0o600);
-  row={path,directory,root,file,fd,archive:Object.freeze({...archive}),written:0,created:fstatSync(fd,{bigint:true})};
+  row={path,directory,root,file,fd,archive:Object.freeze({...archive}),written:0};
+  row.created=fstatSync(fd,{bigint:true});
   assert(row.created.isFile()&&row.created.nlink===1n&&row.created.size===0n);fileCustody(row);rootCustody(row);
   return {
    async write(part){
+    assert(!row.writing&&!row.sealing,'exclusive stage operation required; in-flight operation refused');
     assert(!row.retired&&!row.published&&!row.sealed,'unsealed live stage required');
     assert(Buffer.isBuffer(part)&&part.length>0&&part.length<=1024**2);assert(row.written+part.length<=row.archive.byte_length);
-    // Copy before yielding: the transport cannot mutate an admitted queued view.
-    const bytes=Buffer.from(part);
-    for(let at=0;at<bytes.length;){deadline(end);fileCustody(row);const n=writeSync(fd,bytes,at,Math.min(65536,bytes.length-at),row.written);
-     assert(n>0);at+=n;row.written+=n;await yieldTurn();}
+    row.writing=true;
+    try{
+     // Copy before yielding: the transport cannot mutate an admitted queued view.
+     const bytes=Buffer.from(part);
+     for(let at=0;at<bytes.length;){deadline(end);fileCustody(row);const n=writeSync(fd,bytes,at,Math.min(65536,bytes.length-at),row.written);
+      assert(n>0);at+=n;row.written+=n;await yieldTurn();}
+    }finally{row.writing=false;}
    },
    async seal(integrity){
+    assert(!row.writing&&!row.sealing,'exclusive stage operation required; in-flight operation refused');
     assert(!row.retired&&!row.published&&!row.sealed,'stage publication is single-use');
     assert.deepEqual(constructionIntegrityArchive(integrity),row.archive,'original verified archive authority differs');
-    assert.equal(row.written,row.archive.byte_length);deadline(end);fileCustody(row);fsyncSync(fd);fchmodSync(fd,0o400);
-    row.sealed=fstatSync(fd,{bigint:true});assert.equal(row.sealed.size,BigInt(row.archive.byte_length));assert.equal(row.sealed.mode&0o7777n,0o400n);
-    await hashFile(row,end);assert(available(root)>=BigInt(reserve),'12GiB staging reserve lost');
-    const handle=Object.freeze({});stages.set(handle,row);row.published=true;return handle;
+    row.sealing=true;
+    try{
+     assert.equal(row.written,row.archive.byte_length);deadline(end);fileCustody(row);fsyncSync(fd);fchmodSync(fd,0o400);
+     row.sealed=fstatSync(fd,{bigint:true});assert.equal(row.sealed.size,BigInt(row.archive.byte_length));assert.equal(row.sealed.mode&0o7777n,0o400n);
+     await hashFile(row,end);assert(available(root)>=BigInt(reserve),'12GiB staging reserve lost');
+     rootCustody(row);fileCustody(row);deadline(end);
+     const handle=Object.freeze({});stages.set(handle,row);row.published=true;return handle;
+    }finally{row.sealing=false;}
    },
-   retire(){assert(!row.retired&&!row.published,'unpublished live stage required');return dispose(row);}
+   retire(){assert(!row.writing&&!row.sealing,'exclusive stage operation required; in-flight operation refused');assert(!row.retired&&!row.published,'unpublished live stage required');return dispose(row);}
   };
  }catch(error){
   try{if(row)dispose(row);else closeSync(root);}catch(cleanup){throw new AggregateError([error,cleanup],'stage admission and cleanup failed');}throw error;
