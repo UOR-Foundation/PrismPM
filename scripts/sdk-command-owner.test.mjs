@@ -98,7 +98,7 @@ test('real escaped output overflow is bounded and reaped before the failed resul
 });
 
 test('actual subreaper admission refusal prevents the command from running', async t => {
-  const f = await fixture(t), run = await mutant(t, s => s.replace('libc.prctl(36, 1, 0, 0, 0) != 0', 'True'));
+  const f = await fixture(t), run = await mutant(t, s => s.replace('libc.prctl(36, 1, 0, 0, 0) != 0', 'libc.prctl(-1, 1, 0, 0, 0) != 0'));
   await assert.rejects(run(process.execPath, ['-e', f.holder, f.marker, f.token], options), error => {
     assert.equal(error.result.retirement.descendants_absent, false); assert.equal(error.result.status, null); return true;
   });
@@ -196,4 +196,24 @@ test('direct supervisor interruption is never repaired by subsequent descendant 
         assert.equal(error.result.retirement.descendants_absent, false); absent(f.pid()); return true;
       });
   } finally {clearTimeout(timer);}
+});
+
+test('an executed additive stale-group signal is detected independently of sentinel survival', async t => {
+  const check = async extra => {
+    const f = await fixture(t), log = join(f.root, 'group-signals.jsonl');
+    const run = await mutant(t, original => {
+      const observer = `def observe_group(pid, signum):\n    try:\n        owned = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None\n    except ChildProcessError:\n        owned = False\n    with open(${JSON.stringify(log)}, "a") as stream:\n        stream.write(json.dumps({"pid":pid,"owned_unreaped":owned})+"\\n")\n    try:\n        os.killpg(pid, signum)\n    except ProcessLookupError:\n        pass\n\n\n`;
+      let source = original.replace('os.killpg(pid, signum)', 'observe_group(pid, signum)').replace('class Owner:', observer + 'class Owner:');
+      if (extra) source = source.replace('emit({"event": "leader-exited", **self.leader})',
+        'emit({"event": "leader-exited", **self.leader})\n                observe_group(self.process.pid, signal.SIGKILL)  # executed stale-PGID mutation');
+      return source;
+    });
+    await assert.rejects(run(process.execPath, ['-e', f.parent('setTimeout(()=>{},15000);')], {...options, timeout: 300}), error => {
+      assert.match(error.message, /timed out/); assert.equal(error.result.retirement.descendants_absent, true); absent(f.pid()); return true;
+    });
+    const rows = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse) : [];
+    for (const row of rows) assert.equal(row.owned_unreaped, true, 'actual waitid observer prohibits post-reap numeric group authority');
+  };
+  await check(false);
+  await assert.rejects(check(true), /actual waitid observer/, 'executed additive group-signal mutant must be rejected, even when ESRCH leaves every sentinel unaffected');
 });
