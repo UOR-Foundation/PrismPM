@@ -41,7 +41,7 @@ export async function acquireConstruction(selection,standardsPath,workflowPath,d
   String(selection.expected.artifact_ids.amd64),String(selection.expected.artifact_ids.arm64),selection.qualifier]);
  const out=resolve(destination);mkdirSync(out,{mode:0o700});
  const source=dirname(fileURLToPath(import.meta.url)),runtimeFiles=['sdk-construction-acquire.mjs','sdk-construction-provider.mjs','sdk-construction-metadata.mjs',
-  'sdk-construction-archive.mjs','sdk-construction-handoff.mjs','sdk-candidate.mjs','sdk-candidate-sbom.mjs'];
+  'sdk-construction-archive.mjs','sdk-construction-stage.mjs','sdk-construction-handoff.mjs','sdk-candidate.mjs','sdk-candidate-sbom.mjs'];
  const inputs=runtimeFiles.map(path=>({path,sha256:sha(readFileSync(join(source,path)))}));
  const originalStandards=standardsBytes(standardsPath),originalWorkflow=standardsBytes(workflowPath),provider=constructionProvider(token);let sequence=0,failure,result,cleanup;
  const write=(path,bytes)=>{writeFileSync(join(out,path),bytes,{flag:'wx',mode:0o444});return {path,bytes:bytes.length,sha256:sha(bytes)};};

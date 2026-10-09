@@ -1650,11 +1650,52 @@ recorded loopback-only configuration; nested containers use that same DNS
 policy. Effective resolver bytes, a live external bootstrap control, blocked
 literal-address access and blocked default DNS resolution are checked before
 and after execution. Bounded command groups and owner-checked cleanup retain
-raw diagnostics without accepting interrupted runs. The release gate requires
+raw diagnostics without accepting interrupted runs. The outer command transport
+rejects within a separate fixed five-second retirement bound after its original
+timeout, output overflow or interruption. It preserves actual leader exit and
+pipe-close observations, truncates each stream at the original output bound,
+and snapshots uncertain retirement before releasing held pipe handles. Group
+absence does not prove escaped-descendant retirement; this watchdog neither
+adopts descendants nor replaces the release subreaper's exhaustion protocol.
+Uncertain retirement is retained with the failed command and prohibits
+acceptance. Original command and two-run deadlines remain unchanged.
+The existing native registry CI reuses its immutable thin tools image for the
+complete original 17 process-owner tests on both native platforms, with the
+original file deadline, source readbacks, raw results, cgroup observations and
+observed owned-container/network retirement. These unit results do not qualify
+an installed SDK or prove escaped-process adoption.
+The release gate requires
 the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.
 The two-run execution remains bounded to four hours; operational fit must be
 measured on the actual selected image, not inferred from source or unit runs.
+
+The private `run-owned-registry` acquisition path additionally accepts one
+explicit PEM CA for a non-loopback, private IPv4 registry. A private HTTPS
+agent reads only digest-addressed SDK metadata at that exact authority and
+repository, without ambient proxies, default roots, credentials or redirects.
+Both metadata reads share a 45-second deadline and the original 4 MiB document
+bound; request/socket retirement has a separate five-second bound. Original
+index/child bytes and actual TLS peer and retirement observations are retained.
+The selected child still passes the same OCI graph checks. The held CA is
+read back from the exact authority's read-only mount in the fresh daemon before
+the SDK pull and after execution. Its system roots plus named CA are not the
+outer reader's CA-only root set. Other image acquisition, disconnection controls
+and both unchanged full V&V runs remain mandatory. The reader itself joins the
+installed/source byte comparison. TLS proves server identity, not construction
+provenance: independently admitted artifact/index digests and fresh images
+constructed from the final source are still required. Existing constructed
+images cannot be relabeled or patched to satisfy that source boundary.
+
+Native transport qualification uses the same two-read acquisition function,
+actual pinned Distribution and fresh pinned Docker daemons, with original OCI
+fixture bytes and exact authority CA readback. Its scratch transport fixture is
+not an SDK and is never executed. Negative TLS, CA-path and HTTP pulls retain
+actual daemon failures and zero-image state. Real redirect controls prove a
+reachable target receives no contacts at the shared acquisition boundary;
+they do not assert that Docker itself refuses redirects. Command evidence,
+source bytes, public certificates and owner-checked cleanup are retained on
+both native platforms. This qualifier cannot replace installed SDK V&V.
 
 `scripts/sdk-construction-handoff.mjs` is an internal metadata-admission boundary.
 Independently selected source, run, attempt and artifact IDs bind the complete
@@ -1692,6 +1733,35 @@ original archive/blob integrity only, not provider authentication, expanded
 filesystem semantics, registry availability, installed SDK execution, full V&V
 or release acceptance. Tiny synthetic archive fixtures test this internal
 boundary; they are not SDK, application or product qualification.
+
+The private `stageConstructionArchiveStream` path writes only the original
+`sdk.oci.tar` payload to an exclusive, randomly named file anchored by a held
+Linux directory descriptor. It never extracts archive member paths or layers.
+The caller-owned directory is unaliased and mode0700. Admission reserves the
+complete original tar length plus12GiB on its filesystem; that reserve remains
+mandatory after staging. Writes apply backpressure with at most one1MiB copied
+transport chunk and64KiB file operations. Publication additionally requires the
+complete original ZIP/OCI verification, actual transport closure, unchanged
+directory/file identities, a singly linked mode0400 file, and a full original
+tar digest readback within the original thirty-minute budget. Only a genuine
+in-process whole-stream receipt can mint an opaque stage handle. Copied records
+and guessed handles cannot substitute for that authority.
+
+Stage consumers receive copied64KiB chunks, never a pathname or descriptor.
+Consumption rechecks exact file custody and the complete original digest;
+consumer waits have their own bounded, at-most-thirty-minute deadline. A timeout
+does not assert that arbitrary consumer code stopped or a registry import was
+retired. Owned-file retirement is anchored to the original held directory and
+requires exact file identity before unlinking, actual held-inode zero link count,
+observed pathname absence and descriptor closure. Observed replacement files and
+aliased inodes are refused; uncertain cleanup fails. The caller owns this private
+directory. Check-then-unlink is not an atomic conditional inode deletion: this
+boundary does not claim immunity to concurrent namespace changes by that owner
+or a privileged host process. Such a race cannot establish retirement merely
+from pathname absence. These primitives do not yet make the read-only acquisition mode an import
+or qualify provider authentication, registry availability, expanded filesystem
+semantics, SDK execution, fullVV, release or product readiness. Those acceptance
+requirements remain unchanged.
 
 The additive `construction_integrity` workflow mode authenticates fixed GitHub
 API responses and selects an explicit source/run/attempt/two-artifact tuple.

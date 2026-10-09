@@ -140,7 +140,7 @@ function retainedFixture(){
  const directory=fs.mkdtempSync(os.tmpdir()+'/construction-retention-');
  const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),standards=Buffer.from('unit-only standards'),workflow=Buffer.from('unit-only workflow');
  const selection={expected:{revision:source,run_id:123,run_attempt:1,artifact_ids:{amd64:12,arm64:13}},qualifier};
- const names=['acquire','provider','metadata','archive','handoff'].map(n=>'sdk-construction-'+n+'.mjs').concat(['sdk-candidate.mjs','sdk-candidate-sbom.mjs']);
+ const names=['acquire','provider','metadata','archive','stage','handoff'].map(n=>'sdk-construction-'+n+'.mjs').concat(['sdk-candidate.mjs','sdk-candidate-sbom.mjs']);
  const inputs=names.map(path=>({path:'scripts/'+path,sha256:sha(path)}));
  const write=(path,bytes)=>{bytes=Buffer.from(bytes);fs.writeFileSync(directory+'/'+path,bytes);return {path,bytes:bytes.length,sha256:sha(bytes)};};
  const result={scope:'authenticated original ZIP/OCI/blob integrity only; no expanded filesystem, registry, installed SDK, fullVV, release or product acceptance',
@@ -165,6 +165,11 @@ function retainedFixture(){
 }
 function withRetention(run){const f=retainedFixture();try{return run(f);}finally{fs.rmSync(f.directory,{recursive:true});}}
 test('small-file readback binds all original retained references without claiming archive replay',()=>withRetention(f=>{
+ const actualAcquire=fs.readFileSync(new URL('./sdk-construction-acquire.mjs',import.meta.url),'utf8');
+ const actualObserver=fs.readFileSync(new URL('./sdk-construction-observe.mjs',import.meta.url),'utf8');
+ assert(actualAcquire.includes("'sdk-construction-stage.mjs'"));
+ assert(actualObserver.includes("['acquire','provider','metadata','archive','stage','handoff']"));
+ assert(actualObserver.includes("['observe','acquire','provider','metadata','archive','stage','handoff']"));
  const receipt=verifyConstructionRetention(f.directory,f.result,f.outer);assert.equal(receipt.scope,'retained-small-file-custody-only');assert.equal(receipt.files,34);
 }));
 test('missing changed or coherently resealed cross-source retained evidence is rejected',()=>{
@@ -173,6 +178,8 @@ test('missing changed or coherently resealed cross-source retained evidence is r
   f=>f.write('amd64/evidence/cli.json','changed unit bytes'),
   f=>{f.result.expected={...f.result.expected,run_attempt:2};},
   f=>{f.result.inputs[0].sha256='0'.repeat(64);},
+  f=>{f.result.inputs=f.result.inputs.filter(row=>row.path!=='sdk-construction-stage.mjs');},
+  f=>{f.outer.inputs=f.outer.inputs.filter(row=>row.path!=='scripts/sdk-construction-stage.mjs');},
   f=>{const path='original-amd64-integrity.json',receipt=JSON.parse(fs.readFileSync(f.directory+'/'+path));receipt.artifact_id=99;f.result.results[0]=f.write(path,JSON.stringify(receipt));},
   f=>{f.result.standards_sha256=f.write('source-standards.lock','coherently changed source').sha256;}
  ])withRetention(f=>{mutate(f);assert.throws(()=>verifyConstructionRetention(f.directory,f.result,f.outer));});

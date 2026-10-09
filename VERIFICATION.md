@@ -20,6 +20,36 @@ incoming semantic-presentation DK-29 is DK-38. Existing SDK acquisition DK-28
 and exporter-seed DK-29 are unchanged. Historical receipts retain their original
 IDs and revisions; they are not qualification of the combined implementation.
 
+## Semantic-presentation artifact custody correction
+
+The DK-38 input map includes eight previously omitted static dependencies.
+Its existing closure test parses all three original group entry graphs and rejects each
+omitted helper and substituted helper hash. It does not execute imported code
+or treat browser-context dynamic imports as static imports.
+
+Actual generated Wasm owners bind each original Cargo artifact, its private
+copy and execution bytes. Compiled selections and guard methods are immutable;
+only the existing evidence/progress fields remain mutable. The original owner
+adds 28 real selection, artifact and byte substitution controls before its
+unchanged corpus, maximum, three-engine journey and mutation checks. Retained
+archives include the original artifacts and their custody evidence.
+
+Fresh complete DK-38 execution, current source checks, both native CI lanes and
+independent review are required; this source correction is not acceptance of
+DK-38, an installed SDK, full V&V or any public application.
+
+## Session and installed source closure correction
+
+Session group custody includes the helper imported by its provenance test via
+the SDK checker. Its existing wire test parses all three registered entry
+graphs and rejects a missing helper or substituted expected hash. Installed SDK
+source roots retain the presentation owner's mandatory SDK-checker test input.
+The existing installed-input regression now covers presentation, session and
+semantic-presentation maps as well as its original seven maps. No original
+owner, input, test count, deadline or installed-SDK qualification is removed.
+Fresh complete affected owners, source/native checks and independent review
+remain required; these source corrections do not qualify an installed SDK.
+
 ## Native golden source preflight
 
 Native SDK platforms now reject stale shared source paths, bytes or descriptors

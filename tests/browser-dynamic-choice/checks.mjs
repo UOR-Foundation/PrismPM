@@ -84,12 +84,14 @@ function verifyArtifactSubstitutions(build) {
         const changed = Buffer.concat([original, Buffer.from('\n// actual package substitution\n')]); writeFileSync(source, changed);
         if (kind === 'forged-manifest') {
           const changedManifest = JSON.parse(originalManifest); changedManifest.files.find(row => row.path === 'src/lib.rs').sha256 = sha(changed);
-          writeFileSync(manifest, JSON.stringify(changedManifest));
+          writeFileSync(manifest, JSON.stringify(changedManifest, (_key, value) =>
+            value && !Array.isArray(value) && typeof value === 'object'
+              ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value) + '\n');
         }
       } else if (kind === 'extra-file') writeFileSync(extra, 'extra', {flag: 'wx'});
       else linkSync(source, extra);
       assert.throws(() => build.compileNative(standard), ({source: /manifest digest/, 'forged-manifest': /immutable generated package/,
-        'extra-file': /complete generated package file inventory/, hardlink: /singly linked generated package/})[kind]);
+        'extra-file': /complete generated package file inventory/, hardlink: /bounded single-link custody file/})[kind]);
       assert.equal(lstatSync(join(build.work, 'native-' + mode + '-observer'), {throwIfNoEntry: false}), undefined);
       assert.equal(lstatSync(join(build.work, 'native-' + mode), {throwIfNoEntry: false}), undefined);
       names.push(mode + ':' + kind);
@@ -201,7 +203,7 @@ export async function verifyDynamicChoice(t) {
     const inputSnapshot = snapshotInputs(build), artifactSubstitutions = verifyArtifactSubstitutions(build);
     // No new diagnostic codes or weakened legacy code ownership.
     const registry = JSON.parse(readFileSync(join(repository, 'model/browser-semantic-presentation-diagnostics.json')));
-    assert.equal(registry.capability, 'DK-29'); assert.equal(registry.error_class, 'PresentationError');
+    assert.equal(registry.capability, 'DK-38'); assert.equal(registry.error_class, 'PresentationError');
     const sources = ['presentation-wire', 'presentation-dom', 'semantic-presentation-wire', 'semantic-presentation-style']
       .map(name => readFileSync(join(repository, 'sdk/browser/' + name + '.mjs'), 'utf8')).join('\n');
     for (const match of sources.matchAll(/(?:fail|PresentationError)\('([a-z-]+)'\)/g)) assert.ok(registry.errors.includes(match[1]));
@@ -241,7 +243,7 @@ export async function verifyDynamicChoice(t) {
       packages: build.generatedPackages, memory, maxima, browser: {cases: browser.cases, calls: browser.calls.length,
         audits: browser.audits, maximum: maximumBrowser.results, rendererMutants: rendererMutants.names}, sourceMutants, artifactSubstitutions,
       frozenInputs: {files: Object.keys(inputs).length, sha256: sha(Buffer.from(JSON.stringify(inputs)))},
-      obligations: ['unchanged DK-23, DK-26 and DK-29 full owners', 'installed SDK/source archive regeneration',
+      obligations: ['unchanged DK-23, DK-26 and DK-38 full owners', 'installed SDK/source archive regeneration',
         'application authorization, meaningful option names and human usability/accessibility assessment']};
     const evidence = retain(build, result, inputSnapshot);
     t.diagnostic(JSON.stringify({evidence, scope: result.scope, corpus: rows.length, sourceMutants, artifactSubstitutions}));

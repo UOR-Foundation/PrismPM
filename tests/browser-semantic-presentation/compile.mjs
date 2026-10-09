@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
 import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
+import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -25,14 +26,17 @@ export function frozenInputs() {
       'browser.mjs', 'wire.test.mjs', 'dom.test.mjs', 'driver/Cargo.toml', 'driver/Cargo.lock',
       'driver/src/main.rs', 'runner.rs'].map(path => 'tests/browser-semantic-presentation/' + path),
     ...readdirSync(join(repository, 'sdk/browser')).filter(path => path.endsWith('.mjs')).map(path => 'sdk/browser/' + path),
-    ...['compile.mjs', 'checks.mjs', 'corpus.mjs', 'maximum-fixtures.mjs'].map(path => 'tests/browser-presentation/' + path),
+    ...['compile.mjs', 'checks.mjs', 'corpus.mjs', 'maximum-fixtures.mjs',
+      'provenance.mjs', 'fixture-files.mjs'].map(path => 'tests/browser-presentation/' + path),
     ...['compile.mjs', 'driver-cache.mjs', 'prerequisites.mjs', 'generated-package.mjs',
-      'generated-package.test.mjs'].map(path => 'tests/browser-view/' + path),
+      'generated-package.test.mjs', 'file-custody.mjs', 'compiler-owner.mjs',
+      'compiler-artifact.mjs', 'compiler-owner-checks.mjs', 'generated-wasm.mjs']
+      .map(path => 'tests/browser-view/' + path),
     'tests/fixtures/library/native-library/project/lexlean.toml', 'model/authorities.toml',
     'model/dependencies.toml', 'rust-toolchain.toml', 'lean-toolchain', 'LICENSE-MIT', 'LICENSE-APACHE',
     'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
     'model/browser-semantic-presentation-oracles.json', 'model/browser-semantic-presentation-diagnostics.json',
-    'scripts/browser-api-sdk-check.mjs', 'scripts/owning-node-reporter.mjs',
+    'scripts/browser-api-sdk-check.mjs', 'sdk/account-genesis-artifact.mjs', 'scripts/owning-node-reporter.mjs',
     'vendor/lean4-prod/lean.tar', 'vendor/lean4-prod/rust/MANIFEST.sha256', 'vendor/lexlean/MANIFEST.sha256',
   ]);
   for (const tree of ['vendor/lexlean', 'vendor/lean4-prod/rust']) {
@@ -236,13 +240,7 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
       assertFrozenInputs(inputs); compiler.unchanged();
       for (const capturedPackage of generatedPackages) capturedPackage.verify();
       for (const record of nativeBinaries.values()) checkedNative(record);
-      for (const {path, sha256, bytes} of wasmArtifacts.values()) {
-        const stat = lstatSync(path);
-        assert.equal(realpathSync(path), path, 'unaliased private generated Wasm');
-        assert.ok(stat.isFile() && stat.nlink === 1, 'regular singly linked private generated Wasm');
-        assert.equal(sha(readFileSync(path)), sha256, 'immutable actual generated Wasm artifact');
-        assert.equal(sha(bytes), sha256, 'immutable actual generated Wasm execution bytes');
-      }
+      for (const owner of wasmArtifacts.values()) owner.verify();
       assert.equal(sha(readFileSync(join(runner, 'src/main.rs'))), inputs['tests/browser-semantic-presentation/runner.rs'], 'exact staged native observer');
       assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), manifestBytes);
@@ -282,11 +280,21 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
       const target = join(work, 'guest-' + label + '-target');
       try {run('cargo', ['build', '--locked', '--offline', '--release'], guest, {CARGO_TARGET_DIR: target});}
       finally {capturedPackage.verify();}
-      const bytes = readFileSync(join(target, 'wasm32-unknown-unknown/release/browser_semantic_presentation_' + (mode === 'wasm' ? 'wire' : mode) + '_probe.wasm'));
-      const artifact = join(work, 'guest-' + label + '.wasm'); writeFileSync(artifact, bytes, {flag: 'wx'});
-      wasmArtifacts.set(label, {path: artifact, sha256: sha(bytes), bytes}); guests.push(bytes);
+      const artifact = captureGeneratedWasm(work,
+        join(target, 'wasm32-unknown-unknown/release/browser_semantic_presentation_' + (mode === 'wasm' ? 'wire' : mode) + '_probe.wasm'),
+        'guest-' + label);
+      wasmArtifacts.set(label, artifact); guests.push(artifact.bytes);
     }
     assert.deepEqual(guests[0], guests[1], 'two independent generated Core-Wasm packages');
+    function withWasm(role, operation) {
+      assert.ok(wasmArtifacts.has(role), 'closed semantic presentation guest role');
+      return wasmArtifacts.get(role).run(operation);
+    }
+    function wasmEvidence() {
+      return Object.freeze(Object.fromEntries([...wasmArtifacts].map(([role, owner]) => {
+        owner.verify(); return [role, owner.evidence];
+      })));
+    }
     pins(); compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
     for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'frozen source ' + module);
     const cacheRetirement = retireCompletedCompilerCaches(work, 'semantic-presentation');
@@ -298,8 +306,18 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
     for (const path of ['LICENSE-MIT', 'LICENSE-APACHE']) assert.equal(sha(readFileSync(join(licenses, path))), inputs[path], 'unchanged staged license');
     assert.equal(sha(readFileSync(join(exporter, '.source-lean.tar'))), inputs['vendor/lean4-prod/lean.tar'], 'unchanged actual exporter archive');
     unchanged(); completed = true;
-    return {work, sources, verified, generation, compileNative, runNative, nativeEvidence, unchanged, runner, wasmBytes: guests[0],
-      fixtureBytes: guests[2], labelsBytes: guests[3], designsBytes: guests[4], predicatesBytes: guests[5], cacheRetirement, inputs,
-      generatedPackages: generatedPackages.map(({directory, kind, files}) => ({path: directory.slice(work.length + 1), kind, files}))};
+    // Evidence accumulation is mutable; compiled inputs, selected artifacts and
+    // their guards are not. Byte mutation is additionally rejected by each
+    // captured owner before/after consumption and by unchanged().
+    const fixed = {work, sources, verified, generation, compileNative, runNative, nativeEvidence,
+      unchanged, runner, withWasm, wasmEvidence, wasmBytes: guests[0], fixtureBytes: guests[2],
+      labelsBytes: guests[3], designsBytes: guests[4], predicatesBytes: guests[5], cacheRetirement, inputs,
+      generatedPackages: Object.freeze(generatedPackages.map(({directory, kind, files}) =>
+        Object.freeze({path: directory.slice(work.length + 1), kind, files})))};
+    return Object.seal(Object.defineProperties({complete: false, artifactSubstitutions: null, maximum: null, maxima: null,
+      evidenceDirectory: null, positiveArchive: null, mutationEvidence: null,
+      browserEvidence: null, browserMutationEvidence: null}, Object.fromEntries(
+      Object.entries(fixed).map(([name, value]) => [name,
+        {value, enumerable: true, writable: false, configurable: false}]))));
   } finally { if (!completed) process.stderr.write('Retained incomplete presentation diagnostic build ' + work + '\n'); }
 }

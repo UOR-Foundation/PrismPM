@@ -34,6 +34,23 @@ RUN node /opt/input-policy/scripts/sdk-image-inputs.mjs stage \
     && chmod 0444 /opt/prismpm/share/vv-input-policy.json
 
 FROM docker.io/library/docker:28.4.0-cli@sha256:6a73c9433f2ba4279815be1e60f5739288b939dda1e48151d8c393537802de37 AS docker_cli
+FROM input_tools AS registry_qualification_tools
+ARG TARGETARCH
+COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+RUN case "$TARGETARCH" in \
+      amd64) oras_arch=amd64; oras_sha=6cdc692f929100feb08aa8de584d02f7bcc30ec7d88bc2adc2054d782db57c64 ;; \
+      arm64) oras_arch=arm64; oras_sha=7649738b48fde10542bcc8b0e9b460ba83936c75fb5be01ee6d4443764a14352 ;; \
+      *) exit 64 ;; \
+    esac \
+    && curl --fail --location --silent --show-error "https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_${oras_arch}.tar.gz" --output /tmp/oras.tar.gz \
+    && echo "${oras_sha}  /tmp/oras.tar.gz" | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/oras.tar.gz --directory /usr/local/bin oras \
+    && rm /tmp/oras.tar.gz \
+    && openssl version \
+    && docker buildx version \
+    && test "$(node --version)" = v22.23.2
+
 FROM docker.io/library/golang:1.19.7-alpine3.17@sha256:04065e607052705ede1ac6308ce56aec4715b0fafb1f0c2f4c2333aab9d84442 AS upstream_oracles
 COPY --from=source_inputs /prepared/source/standards/oracles/oci-distribution-1.1.1 /src/distribution
 COPY --from=source_inputs /prepared/source/standards/oracles/oci-runtime-1.3.0 /src/runtime

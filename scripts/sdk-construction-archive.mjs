@@ -5,8 +5,11 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {crc32} from 'node:zlib';
+import {beginConstructionStage} from './sdk-construction-stage.mjs';
 
 const sha=b=>'sha256:'+createHash('sha256').update(b).digest('hex');
+const verifiedArchives=new WeakMap();
+export function constructionIntegrityArchive(receipt){const archive=verifiedArchives.get(receipt);assert(archive,'actual whole-stream integrity authority required');return {...archive};}
 const integer=(n,max)=>assert(Number.isSafeInteger(n)&&n>0&&n<=max);
 const digest=d=>assert.match(d,/^sha256:[0-9a-f]{64}$/);
 const utf8=b=>new TextDecoder('utf-8',{fatal:true}).decode(b);
@@ -99,7 +102,7 @@ function tarVerifier(manifestBytes,configBytes){
  };
 }
 
-async function verifyStream(stream,plan,timeout){
+async function verifyStream(stream,plan,timeout,stage){
  assert(stream instanceof Readable,'owned bounded Node readable transport required');
  keys(plan,['artifact','archive','members']);
  for(const row of[plan.artifact,plan.archive])keys(row,['byte_length','digest']);
@@ -144,7 +147,7 @@ async function verifyStream(stream,plan,timeout){
   while(length){assert(performance.now()<=end,'construction stream deadline exceeded');
    if(!current.length){const item=await next();assert(!item.done,'truncated original ZIP');
     assert(Buffer.isBuffer(item.value)&&item.value.length>0&&item.value.length<=1024**2,'bounded original stream chunks required');current=item.value;}
-   const n=Math.min(length,current.length),part=current.subarray(0,n);hash.update(part);observe?.(part);position+=n;length-=n;current=current.subarray(n);
+   const n=Math.min(length,current.length),part=current.subarray(0,n);hash.update(part);await observe?.(part);position+=n;length-=n;current=current.subarray(n);
   }
  }
  async function read(n){assert(n<=262144);const b=Buffer.alloc(n);let at=0;await consume(n,part=>{part.copy(b,at);at+=part.length;});return b;}
@@ -157,7 +160,7 @@ async function verifyStream(stream,plan,timeout){
    integer(nl,256);assert(el<=4096);const name=utf8(await read(nl)),extra=extras(await read(el));
    assert(expected.has(name)&&!locals.some(x=>x.name===name),'closed unique construction ZIP inventory required');
    const row=expected.get(name);let checksum=0;const memberHash=createHash('sha256');
-   await consume(row.size,part=>{checksum=crc32(part,checksum);memberHash.update(part);if(name==='sdk.oci.tar')tar.feed(part);});
+   await consume(row.size,async part=>{checksum=crc32(part,checksum);memberHash.update(part);if(name==='sdk.oci.tar'){tar.feed(part);if(stage)await stage.write(part);}});
    assert.equal('sha256:'+memberHash.digest('hex'),row.digest,'original construction member digest differs');
    const zip64=row.size>0xffffffff,check=(n,want)=>assert((flags&8)?n===0||n===want:n===want,'ZIP local/actual member differs');
    check(h.readUInt32LE(14),checksum);const {compressed,expanded}=resolveStoredZip64({compressed:h.readUInt32LE(18),expanded:h.readUInt32LE(22),offset:null},extra.get(1));
@@ -197,9 +200,9 @@ async function verifyStream(stream,plan,timeout){
  }finally{clearTimeout(timer);if(!completed)stream.destroy();}
 }
 
-export async function verifyConstructionArchiveStream(stream,plan,timeout=1800000){
+async function verifyAndClose(stream,plan,timeout,stage){
  assert(stream instanceof Readable,'owned bounded Node readable transport required');
- let result,failure;try{result=await verifyStream(stream,plan,timeout);}catch(error){failure=error;}
+ let result,failure;try{result=await verifyStream(stream,plan,timeout,stage);}catch(error){failure=error;}
  // Destroy is a request, not a close observation. Keep a separate fixed cleanup
  // budget, retain the original failure, and never issue output on uncertain close.
  try{
@@ -211,5 +214,23 @@ export async function verifyConstructionArchiveStream(stream,plan,timeout=180000
    stream.on('error',onError);stream.once('close',onClose);stream.destroy();
   });
  }catch(error){if(failure)throw new AggregateError([failure,error],'artifact verification and transport cleanup failed');throw error;}
- if(failure)throw failure;assert(stream.closed,'actual original transport closure required');return {...result,transport_closed:true};
+ if(failure)throw failure;assert(stream.closed,'actual original transport closure required');
+ const receipt={...result,transport_closed:true};verifiedArchives.set(receipt,Object.freeze({...result.archive}));return receipt;
+}
+
+export async function verifyConstructionArchiveStream(stream,plan,timeout=1800000){return verifyAndClose(stream,plan,timeout);}
+
+export async function stageConstructionArchiveStream(stream,plan,parent,timeout=1800000){
+ let stage;
+ try{
+  assert(stream instanceof Readable);integer(timeout,1800000);
+  const end=performance.now()+timeout;stage=beginConstructionStage(parent,plan.archive,end);
+  const integrity=await verifyAndClose(stream,plan,timeout,stage);
+  const handle=await stage.seal(integrity);return {integrity,handle};
+ }catch(error){
+  let cleanup;try{if(stage)stage.retire();}catch(e){cleanup=e;}
+  // Admission can fail before the verifier takes transport ownership.
+  if(stream instanceof Readable&&!stream.closed){try{await verifyAndClose(stream,{invalid:true},1);}catch(e){if(!stream.closed)cleanup=cleanup?new AggregateError([cleanup,e]):e;}}
+  if(cleanup)throw new AggregateError([error,cleanup],'archive staging and retirement failed');throw error;
+ }
 }

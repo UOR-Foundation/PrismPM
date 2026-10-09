@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepare, run, sha, repository, frozenInputs} from './compile.mjs';
 import {corpus, predicates, fixture, labels, designs} from './corpus.mjs';
@@ -36,6 +36,7 @@ function archive(build, directory, name, extras) {
   run('tar', ['-czf', path, '-C', build.work, 'project/src', 'project/lexlean.toml',
     'project/.lexlean/verified', 'export', 'generated', ...extras,
     ...['a', 'b', 'fixture', 'labels', 'designs', 'predicates'].flatMap(label => ['guest-' + label, 'guest-' + label + '.wasm']),
+    ...Object.values(build.wasmEvidence()).map(record => record.original.path),
     'native-std-observer', 'native-no_std-observer'], build.work);
   build.unchanged(); return {file: name + '.tar.gz', sha256: sha(readFileSync(path))};
 }
@@ -46,6 +47,46 @@ export function nativeReplay(build, rows, stem) {
   for (const standard of [true, false]) {
     verifyNativeInventory(build.runNative(standard, [path]), rows);
   }
+}
+
+function verifyArtifactSubstitutions(build) {
+  const names = [], selected = {wasmBytes: 'a', fixtureBytes: 'fixture', labelsBytes: 'labels',
+    designsBytes: 'designs', predicatesBytes: 'predicates'};
+  for (const [key, role] of Object.entries(selected)) {
+    const original = build[key], descriptor = Object.getOwnPropertyDescriptor(build, key);
+    assert.equal(descriptor.value, original); assert.equal(descriptor.writable, false);
+    assert.equal(descriptor.configurable, false); assert.equal(descriptor.get, undefined);
+    const replacement = build.withWasm(role === 'fixture' ? 'a' : 'fixture', bytes => bytes);
+    assert.notEqual(sha(replacement), sha(original), 'actual different generated selection');
+    assert.throws(() => {build[key] = replacement;}, TypeError);
+    names.push(key + ':replacement');
+    assert.throws(() => Object.defineProperty(build, key, {get: () => replacement}), TypeError);
+    names.push(key + ':redefinition');
+    assert.equal(build[key], original); build.unchanged();
+  }
+  for (const [role, evidence] of Object.entries(build.wasmEvidence())) {
+    for (const side of ['original', 'private']) {
+      const path = join(build.work, evidence[side].path), original = readFileSync(path), changed = Buffer.from(original);
+      changed[8] ^= 1; const mode = lstatSync(path).mode & 0o777; let called = false;
+      try {
+        chmodSync(path, 0o600); writeFileSync(path, changed);
+        assert.throws(() => build.withWasm(role, () => {called = true;}), new RegExp('immutable ' + side + ' generated Wasm'));
+        assert.equal(called, false, 'substituted generated artifact cannot reach consumption');
+        assert.throws(() => build.unchanged(), new RegExp('immutable ' + side + ' generated Wasm'));
+        names.push(role + ':' + side);
+      } finally {writeFileSync(path, original); chmodSync(path, mode);}
+      build.unchanged();
+    }
+    let buffer, original;
+    try {
+      assert.throws(() => build.withWasm(role, bytes => {buffer = bytes; original = bytes[8]; bytes[8] ^= 1;}),
+        /immutable execution Wasm buffer/);
+      assert.throws(() => build.unchanged(), /immutable execution Wasm buffer/);
+      names.push(role + ':buffer');
+    } finally {if (buffer) buffer[8] = original;}
+    build.unchanged();
+  }
+  assert.equal(names.length, 28); return Object.freeze(names);
 }
 
 export function verifyWire(t) {
@@ -66,6 +107,7 @@ export function verifyWire(t) {
     assert.throws(() => build.unchanged(), /generated package manifest digest/);
   } finally {writeFileSync(generatedSource, generatedBytes);}
   build.unchanged();
+  build.artifactSubstitutions = verifyArtifactSubstitutions(build);
   // Diagnostic inventory only. Executed corpus, browser journeys and mutants
   // below establish behavior; matching source tokens never establishes it.
   const registry = JSON.parse(readFileSync(join(repository, 'model/browser-semantic-presentation-diagnostics.json')));
@@ -95,9 +137,10 @@ export function verifyWire(t) {
     } finally { writeFileSync(path, original); }
     assert.equal(build.compileNative(standard), path);
   }
-  build.maximum = executeWasm(build.wasmBytes, rows);
-  executeWasm(build.predicatesBytes, typed, 32);
-  for (const [index, key] of ['fixtureBytes', 'labelsBytes', 'designsBytes'].entries()) executeWasm(build[key], [samples[index]], 32);
+  build.maximum = build.withWasm('a', bytes => executeWasm(bytes, rows));
+  build.withWasm('predicates', bytes => executeWasm(bytes, typed, 32));
+  for (const [index, role] of ['fixture', 'labels', 'designs'].entries())
+    build.withWasm(role, bytes => executeWasm(bytes, [samples[index]], 32));
   build.maxima = [];
   function* boundedCases() {
     yield* maximumCorpus();
@@ -111,10 +154,12 @@ export function verifyWire(t) {
       assert.equal(build.runNative(standard, ['--binary', input, output]), 'PASS binary complete semantic vector twice\n');
     }
     if (row.id === 'EnvelopeOneOver') {
-      const instance = new WebAssembly.Instance(new WebAssembly.Module(build.wasmBytes), {});
-      assert.throws(() => instance.exports.holo_alloc(row.request.length), WebAssembly.RuntimeError);
+      build.withWasm('a', bytes => {
+        const instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), {});
+        assert.throws(() => instance.exports.holo_alloc(row.request.length), WebAssembly.RuntimeError);
+      });
     } else {
-      const maximum = executeWasm(build.wasmBytes, [row]);
+      const maximum = build.withWasm('a', bytes => executeWasm(bytes, [row]));
       build.maxima.push({id: row.id, length: row.request.length,
         request: sha(row.request), response: sha(row.response), ...maximum});
     }
@@ -131,7 +176,8 @@ export function verifyWire(t) {
     attestation: build.verified.attestation_id, ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes),
     corpus: rows.length, typed: typed.length, maxima: build.maxima,
     inputs: {files: Object.keys(before).length, sha256: sha(Buffer.from(JSON.stringify(before)))},
-    generatedPackages: build.generatedPackages, native: build.nativeEvidence(),
+    generatedPackages: build.generatedPackages, wasmArtifacts: build.wasmEvidence(),
+    artifactSubstitutions: build.artifactSubstitutions, native: build.nativeEvidence(),
     evidenceDirectory: build.evidenceDirectory, archive: build.positiveArchive}));
   return build;
 }
@@ -172,19 +218,20 @@ export function verifyMutation(kind, baseline) {
     assert.notEqual(build.verified.source_id, baseline.verified.source_id);
     assert.notEqual(build.verified.attestation_id, baseline.verified.attestation_id);
     assert.notEqual(build.generation.ir_sha256, baseline.generation.ir_sha256);
-    const guest = ['design', 'catalogue'].includes(kind) ? 'predicatesBytes' : 'wasmBytes';
-    assert.notEqual(sha(build[guest]), sha(baseline[guest]));
+    const role = ['design', 'catalogue'].includes(kind) ? 'predicates' : 'a';
+    const wasmSha = build.withWasm(role, sha);
+    assert.notEqual(wasmSha, baseline.withWasm(role, sha));
     const path = join(build.work, 'mutation.tsv'); writeFileSync(path, tsv([row]), {flag: 'wx'});
     for (const standard of [true, false]) {
       assert.throws(() => build.runNative(standard, [path]), /native output mismatch/, kind);
     }
-    assert.throws(() => executeWasm(build[guest], [row],
-      ['design', 'catalogue'].includes(kind) ? 32 : 67108864), /generated Wasm output mismatch/, kind);
+    assert.throws(() => build.withWasm(role, bytes => executeWasm(bytes, [row],
+      ['design', 'catalogue'].includes(kind) ? 32 : 67108864)), /generated Wasm output mismatch/, kind);
     const artifacts = archive(build, baseline.evidenceDirectory, kind + '-artifacts', ['mutation.tsv']);
     const receipt = {kind, probe: row.id, request: sha(row.request), response: sha(row.response),
       source: build.verified.source_id, attestation: build.verified.attestation_id,
-      ir: build.generation.ir_sha256, wasm: sha(build[guest]), native: build.nativeEvidence(),
-      generatedPackages: build.generatedPackages, archive: artifacts};
+      ir: build.generation.ir_sha256, wasm: wasmSha, native: build.nativeEvidence(),
+      generatedPackages: build.generatedPackages, wasmArtifacts: build.wasmEvidence(), archive: artifacts};
     writeFileSync(join(baseline.evidenceDirectory, kind + '.json'), JSON.stringify(receipt) + '\n', {flag: 'wx'});
     baseline.mutationEvidence.push(receipt); complete = true;
   } finally {
@@ -210,7 +257,8 @@ export function completeEvidence(build) {
   const receipt = {scope: 'private-semantic-component-only', publicApplicationAccepted: false,
     source: build.verified.source_id, attestation: build.verified.attestation_id,
     ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), native: build.nativeEvidence(),
-    generatedPackages: build.generatedPackages, inputs: build.inputs, maxima: build.maxima,
+    generatedPackages: build.generatedPackages, wasmArtifacts: build.wasmEvidence(),
+    artifactSubstitutions: build.artifactSubstitutions, inputs: build.inputs, maxima: build.maxima,
     mutations: build.mutationEvidence, browsers:build.browserEvidence,
     browserMutations:build.browserMutationEvidence, archive: build.positiveArchive,
     finalArchive: archive(build, build.evidenceDirectory, 'completed-artifacts',

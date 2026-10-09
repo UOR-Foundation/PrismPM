@@ -29,10 +29,19 @@ native and two Wasm packages for its affected root, not unrelated roots.
 The fixture's imported axe 4.13.0 audit reported no violations or incomplete
 checks; this is component evidence, not complete accessibility or usability.
 
-Integration still requires unchanged DK-23/DK-26/DK-29 owners, source-package
+Current integration registers semantic presentation as DK-38; DK-29 owns
+native exporter acquisition, not presentation diagnostics. Integration still
+requires unchanged DK-23/DK-26/DK-38 owners, source-package
 regeneration and installed SDK checks. Route/history and transient secret-output SDK
 prerequisites, Foundry journeys/authority, production design and human assessment
 remain separate application obligations. This capability claims none of them.
+
+The frozen owner map includes all six transitive compiler, package-custody and
+presentation helpers. The registration regression parses the actual owning
+entry/checks static import graph without evaluating modules, rejects each omitted
+helper, and rejects omitted or changed helper hashes in the actual input guard.
+Browser-context dynamic imports remain bound by the complete browser module
+inventory. Unrelated SDK test files in that inventory are not executed by DK-31.
 
 The owner retains every failed build. Successful baseline/mutant owners
 retain source, kernel evidence, IR, packages, original/private Wasm, native

@@ -1,10 +1,13 @@
 // These unit adapters validate orchestration, never installed SDK acceptance.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
+import {createServer as createTlsServer} from 'node:https';
+import {execFileSync} from 'node:child_process';
+import {networkInterfaces} from 'node:os';
 import test from 'node:test';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 import { selectPlatform, validateIsolation, validateLoadedImage, validateExecution,
@@ -144,7 +147,7 @@ test('runtime image authority has exact fixed members and no floating references
   assert.throws(() => readRuntimeLock(Buffer.from(canonical(changed) + '\n')));
 });
 
-function orchestrationFixture(t, fault, store = 'classic') {
+function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
   const root = mkdtempSync(join(tmpdir(), 'prismpm-vv-orchestration-unit-'));
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const source = join(root, 'source'); mkdirSync(source); mkdirSync(join(source, 'scripts')); mkdirSync(join(source, 'sdk'));
@@ -156,16 +159,16 @@ function orchestrationFixture(t, fault, store = 'classic') {
     const annotation = name === 'dind' ? {'org.opencontainers.image.revision': revision, 'org.opencontainers.image.version': '28.4.0-dind'} : {};
     const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{digest: digest(manifest), size: manifest.length, mediaType: 'application/vnd.oci.image.manifest.v1+json',
       platform: {os: 'linux', architecture: arch}, annotations: annotation}]}));
-    const reference = `fixture.invalid/${name}@${digest(index)}`;
+    const reference = `${name === 'sdk' && registryEndpoint ? registryEndpoint.authority : 'fixture.invalid'}/${name}@${digest(index)}`;
     images[name] = {reference, configuration,
       index_descriptor: {mediaType: 'application/vnd.oci.image.index.v1+json', digest: digest(index), size: index.length},
       child_descriptor: {mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: digest(manifest), size: manifest.length}};
-    metadata.set(reference, index); metadata.set(`fixture.invalid/${name}@${digest(manifest)}`, manifest);
+    metadata.set(reference, index); metadata.set(reference.split('@')[0] + '@' + digest(manifest), manifest);
   }
   const lock = {schema: 'prismpm/sdk-vv-runtime-inputs/1', images: Object.fromEntries(Object.entries(images).filter(([name]) => name !== 'sdk').map(([name, row]) =>
     [name, name === 'dind' ? {reference: row.reference, source: 'https://github.com/docker-library/docker', source_revision: revision, version: '28.4.0-dind'} : {reference: row.reference}]))};
   writeFileSync(join(source, 'sdk/vv-runtime.lock.json'), canonical(lock) + '\n');
-  for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
+  for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence', 'sdk-registry-reader']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
   const policy = Buffer.from(canonical({source_revision: revision, advisory_revision: '2'.repeat(40)})), inventory = Buffer.from('unit inventory'), inputManifest = Buffer.from('unit input manifest'), cli = Buffer.from('unit CLI bytes');
   const raw = Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, gates: Array.from({length: 15}, (_, i) => i + 1), status: 'passed'}));
   const record = {schema: 'prismpm/sdk-vv-execution/1', scope: 'two-full-vv-executions-only', source_revision: revision, image_reference: images.sdk.reference,
@@ -253,6 +256,11 @@ function orchestrationFixture(t, fault, store = 'classic') {
       const label = args[args.indexOf('--label') + 1], name = args[0] === 'create' ? args[args.indexOf('--name') + 1] : args.at(-1);
       const [key, value] = label.split('='); resources.set(name, {labels: {[key]: value}});
       if (name.endsWith('-daemon')) daemon = name;
+      if (name.endsWith('-daemon') && registryEndpoint) {
+        const trust = args.filter((_, index) => args[index - 1] === '--mount').filter(value => value.includes('/etc/docker/certs.d/'));
+        assert.deepEqual(trust, [`type=bind,source=${destination}/docker/registry-trust,target=/etc/docker/certs.d/${registryEndpoint.authority},readonly`]);
+        assert(!args.some(value => value.includes('insecure-registry')));
+      }
       if (name.endsWith('-control')) assert.equal(args[args.indexOf('--tmpfs') + 1], '/var/lib/docker:rw,nosuid,nodev,size=16777216,mode=0700');
       if (fault === 'interrupted' && name.endsWith('-daemon')) process.emit('SIGHUP');
       if (fault === 'create-timeout' && name.endsWith('-daemon')) {
@@ -278,14 +286,72 @@ function orchestrationFixture(t, fault, store = 'classic') {
       return disconnected ? bad(1) : ok('prismpm-network-control');
     }
     assert.equal(args[2], 'cat');
+    if (registryEndpoint && args[3] === `/etc/docker/certs.d/${registryEndpoint.authority}/ca.crt`)
+      return ok(fault === 'registry-ca' ? Buffer.from('wrong CA') : registryEndpoint.ca);
     if (args[3] === '/etc/resolv.conf') return ok(isolatedResolver);
     return ok(args[3] === '/proc/net/dev' ? 'header\nheader\nlo: 0\ndocker0: 0\n' : args[3] === '/proc/net/route' ? namespace.ipv4 : namespace.ipv6);
   };
   const destination = join(root, 'output');
   const environment = {PATH: process.env.PATH, GITHUB_ACTIONS: 'true', GITHUB_SHA: revision, RUNNER_ENVIRONMENT: 'github-hosted',
     RUNNER_OS: 'Linux', RUNNER_ARCH: arch === 'amd64' ? 'X64' : 'ARM64', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1'};
-  return {destination, calls, resources, run: (run = runOuter) => run({image: images.sdk.reference, revision, arch, source, destination}, transport, environment)};
+  return {destination, calls, resources, metadata, images, run: (run = runOuter) => run({image: images.sdk.reference, revision, arch, source, destination,
+    ...(registryEndpoint ? {registryCertificate: registryEndpoint.ca} : {})}, transport, environment)};
 }
+
+test('owned-registry orchestration uses real TLS metadata and bound daemon CA without changing unrelated acquisition or installed gates', async t => {
+  // Docker/SDK responses below remain explicit orchestration units, never real
+  // installed SDK acceptance. Only the HTTPS metadata transport is actual.
+  const directory = mkdtempSync(join(tmpdir(), 'prismpm-outer-tls-unit-'));
+  t.after(() => rmSync(directory, {recursive: true, force: true}));
+  const cert = join(directory, 'ca.pem'), key = join(directory, 'ca.key');
+  const host = Object.values(networkInterfaces()).flat().find(row => row.family === 'IPv4' && !row.internal)?.address;
+  assert(host, 'actual private container address required');
+  execFileSync('/usr/bin/openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=SDK outer unit CA',
+    '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'subjectAltName=IP:' + host, '-keyout', key, '-out', cert],
+  {timeout: 15000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe']});
+  const ca = readFileSync(cert); let fixture, requests = 0;
+  const sockets = new Set(), server = createTlsServer({key: readFileSync(key), cert: ca}, (req, res) => {
+    requests++; assert.equal(req.headers.authorization, undefined);
+    const reference = `${host}:${server.address().port}/sdk@` + req.url.split('/').at(-1);
+    const bytes = fixture.metadata.get(reference); assert(bytes, 'fixed original SDK graph endpoint'); res.end(bytes);
+  });
+  server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
+  await new Promise(resolve => server.listen(0, host, resolve));
+  t.after(async () => {
+    const closed = [...sockets].map(socket => new Promise(resolve => socket.once('close', resolve)));
+    for (const socket of sockets) socket.destroy();
+    let deadline;
+    try {
+      await Promise.race([Promise.all([...closed, new Promise(resolve => server.close(resolve))]),
+        new Promise((_, reject) => { deadline = setTimeout(() => reject(Error('outer TLS unit server retirement deadline exceeded')), 5000); })]);
+    } finally { clearTimeout(deadline); }
+    assert.equal(sockets.size, 0);
+  });
+  const authority = host + ':' + server.address().port;
+  for (const fault of [undefined, 'registry-ca']) {
+    fixture = orchestrationFixture(t, fault, 'classic', {authority, ca});
+    if (fault) {
+      await assert.rejects(fixture.run(), /isolated daemon SDK registry CA differs/);
+      assert(!existsSync(join(fixture.destination, 'acceptance.json')));
+      assert.equal(fixture.calls.filter(args => args.includes('pull') && args.at(-1).startsWith(authority + '/')).length, 0);
+    } else {
+      const result = await fixture.run(), evidence = result.sdk_registry_transport;
+      assert.equal(evidence.authority, authority); assert.equal(evidence.ca_pem, ca.toString());
+      assert.equal(evidence.ca_sha256, digest(ca).slice(7)); assert.equal(evidence.daemon_ca_sha256, evidence.ca_sha256);
+      assert.equal(evidence.daemon_ca_path, `/etc/docker/certs.d/${authority}/ca.crt`);
+      assert.equal(evidence.outer_roots, 'explicit-ca-only'); assert.equal(evidence.daemon_roots, 'system-roots-plus-exact-authority-ca');
+      assert.equal(evidence.transport.requests, 2); assert(evidence.transport.agent_retired);
+      assert.equal(digest(Buffer.from(evidence.original_index_base64, 'base64')), fixture.images.sdk.reference.split('@')[1]);
+      assert.equal(digest(Buffer.from(evidence.original_manifest_base64, 'base64')), fixture.images.sdk.child_descriptor.digest);
+      const buildx = fixture.calls.filter(args => args[0] === 'buildx');
+      assert.equal(buildx.length, 8); assert(buildx.every(args => !args.at(-1).startsWith(authority + '/')));
+      assert.deepEqual(result.phases, ['exact-native-images-acquired', 'external-network-disconnected', 'isolated-native-sdk-probed',
+        'both-full-vv-records-verified', 'owned-resources-removed']);
+    }
+    assert.equal(fixture.resources.size, 0);
+  }
+  assert.equal(requests, 4);
+});
 
 test('complete orchestration executes acquisition, disconnection, owning runner and cleanup in order', async t => {
   for (const store of ['classic', 'containerd']) {
@@ -321,6 +387,42 @@ test('actual process transport preserves failures and rejects timeout or oversiz
     'require("node:child_process").spawn(process.execPath,["-e","setTimeout(()=>{},1200)"],{stdio:["ignore",1,2]});process.exit(0)'],
   {...options, timeout: 100}), /timed out/);
   assert(Date.now() - started < 900, 'descendant-held pipes must not defeat bounded cleanup');
+  const root = mkdtempSync(join(tmpdir(), 'prismpm-sdk-escaped-pipes-'));
+  const marker = join(root, 'child.json'), token = randomBytes(16).toString('hex');
+  const holder = 'const fs=require("node:fs");fs.writeFileSync(process.argv[1],JSON.stringify({pid:process.pid,token:process.argv[2]}),{flag:"wx"});process.stdout.write("escaped-ready\\n");setTimeout(()=>{},15000);';
+  const parent = `const fs=require("node:fs");const child=require("node:child_process").spawn(process.execPath,["-e",${JSON.stringify(holder)},${JSON.stringify(marker)},${JSON.stringify(token)}],{detached:true,stdio:["ignore",1,2]});const ready=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(ready);child.unref();process.exit(0);}},10);setTimeout(()=>process.exit(98),3000).unref();`;
+  const escapedStarted = Date.now();
+  try {
+    let failure;
+    try { await execute(process.execPath, ['-e', parent], {...options, timeout: 1000}); }
+    catch (error) { failure = error; }
+    assert(failure, 'escaped pipe holder must prohibit acceptance');
+    assert.match(failure.message, /bounded process timed out/);
+    assert(Date.now() - escapedStarted < 7500, 'a new session retaining pipes must not defeat the fixed five-second retirement bound');
+    assert.equal(failure.result.status, 0, 'retain the actual observed leader exit, not a fabricated timeout status');
+    assert.equal(failure.result.signal, null);
+    assert.equal(failure.result.retirement.close_observed, false);
+    assert.equal(failure.result.retirement.group_absent, true, 'absence of the original group does not prove pipe-holder retirement');
+    assert.equal(failure.result.retirement.scope, 'owned-group-and-pipes-only');
+    assert.match(failure.result.retirement.uncertainty, /within five seconds/);
+    assert.equal(failure.result.stdout.toString(), 'escaped-ready\n');
+  } finally {
+    // Retire only this test's independently identified escaped fixture. The
+    // production watchdog must not claim it adopted or retired that process.
+    const child = JSON.parse(readFileSync(marker));
+    assert.deepEqual(Object.keys(child).sort(), ['pid', 'token']);
+    assert.equal(child.token, token); assert(Number.isSafeInteger(child.pid) && child.pid > 1);
+    const processPath = `/proc/${child.pid}`;
+    if (existsSync(processPath)) {
+      const command = readFileSync(processPath + '/cmdline', 'utf8').split('\0');
+      assert.deepEqual(command, [process.execPath, '-e', holder, marker, token, '']);
+      process.kill(child.pid, 'SIGKILL');
+      const deadline = Date.now() + 5000;
+      while (existsSync(processPath) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+      assert(!existsSync(processPath), 'test-owned escaped fixture must actually retire');
+    }
+    rmSync(root, {recursive: true});
+  }
 });
 
 test('real native-header and TCP controls execute rather than accepting command success alone', async () => {
@@ -392,11 +494,11 @@ test('executed omission mutants cannot satisfy the owning orchestration contract
 });
 
 test('owning TAP completeness rejects skipped, reduced and failed successful-shell output', () => {
-  const tap = ['TAP version 13', ...Array.from({length: 16}, (_, index) => `ok ${index + 1} - case ${index + 1}`),
-    '1..16', '# tests 16', '# suites 0', '# pass 16', '# fail 0', '# cancelled 0', '# skipped 0', '# todo 0'].join('\n');
+  const tap = ['TAP version 13', ...Array.from({length: 17}, (_, index) => `ok ${index + 1} - case ${index + 1}`),
+    '1..17', '# tests 17', '# suites 0', '# pass 17', '# fail 0', '# cancelled 0', '# skipped 0', '# todo 0'].join('\n');
   const value = stdout => ({status: 0, signal: null, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0)});
   validateOwningTests(value(tap));
-  for (const text of ['', tap.replace('# skipped 0', '# skipped 1'), tap.replace('# tests 16', '# tests 15'),
+  for (const text of ['', tap.replace('# skipped 0', '# skipped 1'), tap.replace('# tests 17', '# tests 16'),
     tap.replace('ok 1 - case 1', 'ok 1 - case 1 # SKIP'), tap.replace('# fail 0', '# fail 1')]) assert.throws(() => validateOwningTests(value(text)));
   assert.throws(() => validateOwningTests({...value(tap), status: 1}));
 });

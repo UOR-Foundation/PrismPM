@@ -89,8 +89,8 @@ async function setup(page, baseURL, frame = fixture()) {
     globalThis.semanticTest = {view, root, frame, calls, wire, dom, observed, originalView,
       observe: bytes => { if (generated) execute('wire', bytes); return bytes; }, settle: bytes => settle(bytes)};
   }, {frame, labels, designs, generated: active.build ? {
-    wire: [...active.build.wasmBytes], fixture: [...active.build.fixtureBytes], labels: [...active.build.labelsBytes],
-    designs: [...active.build.designsBytes], baseline: fixture(),
+    ...Object.fromEntries([['wire', 'a'], ['fixture', 'fixture'], ['labels', 'labels'], ['designs', 'designs']]
+      .map(([name, role]) => [name, active.build.withWasm(role, bytes => [...bytes])])), baseline: fixture(),
   } : null});
 }
 
@@ -527,7 +527,7 @@ export async function verifyMaximum(t, build) {
             if (!rejected || root.querySelector(shape.selector) !== content) throw Error('maximum overrun atomic refusal');
             return {id, length, request: requestHash, response: responseHash, maximumBytes: memory.buffer.byteLength, modelChecked: true};
           } finally { view.close(); root.remove(); }
-        }, {id, wasm: [...build.wasmBytes], designs}),
+        }, {id, wasm: build.withWasm('a', bytes => [...bytes]), designs}),
           new Promise((_, reject) => { timer = setTimeout(() => reject(Error('semantic maximum deadline')), 180000); })]));
       } finally { clearTimeout(timer); await page.close(); }
     }

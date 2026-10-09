@@ -27,7 +27,7 @@ export const sourceRoots=Object.freeze([
  'crates/conformance/src/cases/mod.rs','crates/conformance/src/cases/scheduling.rs',
  'crates/conformance/src/cases/node_suite.rs','schemas/model-document-v4.schema.json',
  'vendor/lexlean','vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust',
- 'scripts/browser-api-sdk-check.mjs','scripts/browser-api-sdk-check.sh','scripts/owning-node-reporter.mjs',
+ 'scripts/browser-api-sdk-check.mjs','scripts/browser-api-sdk-check.test.mjs','scripts/browser-api-sdk-check.sh','scripts/owning-node-reporter.mjs',
  'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
  'sdk/account-genesis-artifact.mjs','sdk/generate-account-genesis.mjs',
 ]);
