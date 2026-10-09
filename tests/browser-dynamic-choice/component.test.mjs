@@ -44,5 +44,12 @@ test('dynamic owning test remains registered and cannot report component checks 
   assert.match(owner, /verifyDynamicChoice/);
   assert.match(readFileSync(new URL('model/ids.toml', root), 'utf8'), /id = "DK-31"/);
   assert.match(readFileSync(new URL('crates/conformance/tests/conformance.rs', root), 'utf8'), /conformance_dk_31/);
+  const registry = JSON.parse(readFileSync(new URL('model/browser-semantic-presentation-diagnostics.json', root)));
+  assert.equal(registry.capability, 'DK-38');
+  assert.equal(registry.error_class, 'PresentationError');
+  const checks = readFileSync(new URL('tests/browser-dynamic-choice/checks.mjs', root), 'utf8');
+  assert.match(checks, /assert\.equal\(registry\.capability, 'DK-38'\)/);
+  assert.match(checks, /unchanged DK-23, DK-26 and DK-38 full owners/);
+  assert.doesNotMatch(checks, /DK-29/);
   assert.ok(fileURLToPath(root).endsWith('/'));
 });
