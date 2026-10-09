@@ -1,6 +1,8 @@
 // Real small ZIP/OCI and filesystem adversaries only, not installed SDK proof.
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test,{mock} from 'node:test';
+import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
 import {Readable} from 'node:stream';
 import {chmodSync,existsSync,linkSync,mkdtempSync,mkdirSync,readdirSync,readFileSync,
  renameSync,rmSync,symlinkSync,writeFileSync} from 'node:fs';
@@ -85,4 +87,29 @@ test('overrun deadline and wrong archive length cannot publish a sealed handle',
  await assert.rejects(stage.write(Buffer.concat([f.archive,Buffer.alloc(1)])));stage.retire();
  const stream=new Readable({read(){}});await assert.rejects(stageConstructionArchiveStream(stream,f.plan,root,10),/deadline exceeded/);
  assert(stream.closed);assert.deepEqual(readdirSync(root),[]);
+}));
+test('stage constructor cannot replace the original thirty-minute deadline with an unbounded future',async()=>temporary(async root=>{
+ const f=fixture();for(const end of [Infinity,NaN,performance.now()-1,performance.now()+1800001]){
+  assert.throws(()=>beginConstructionStage(root,f.plan.archive,end));assert.deepEqual(readdirSync(root),[]);
+ }
+}));
+test('only one bounded write may hold copied bytes and no publication or retirement can race it',async()=>temporary(async root=>{
+ const f=fixture({indexPadding:2*1024**2}),stage=beginConstructionStage(root,f.plan.archive,performance.now()+10000);
+ const writing=stage.write(f.archive.subarray(0,1024**2));
+ try{
+  await assert.rejects(stage.write(f.archive.subarray(1024**2,2*1024**2)),/exclusive|in.flight/);
+  await assert.rejects(stage.seal({}),/exclusive|in.flight/);
+  assert.throws(()=>stage.retire(),/exclusive|in.flight/);
+ }finally{await writing;stage.retire();}assert.deepEqual(readdirSync(root),[]);
+}));
+test('actual delayed final filesystem admission cannot publish after its original deadline',async()=>temporary(async root=>{
+ const f=fixture(),integrity=await verifyConstructionArchiveStream(input(f.bytes),f.plan);
+ const stage=beginConstructionStage(root,f.plan.archive,performance.now()+100);
+ await stage.write(f.archive);const original=fs.statfsSync;
+ // Unit scheduling fault only: retain the real statfs result and actual clock.
+ // No SDK, provider, filesystem or product qualification is claimed here.
+ mock.method(fs,'statfsSync',function(...args){const result=original.apply(this,args),until=performance.now()+150;while(performance.now()<until){}return result;});
+ syncBuiltinESMExports();
+ try{await assert.rejects(stage.seal(integrity),/deadline exceeded/);}
+ finally{mock.restoreAll();syncBuiltinESMExports();stage.retire();}assert.deepEqual(readdirSync(root),[]);
 }));
