@@ -36,6 +36,13 @@ regeneration and installed SDK checks. Route/history and transient secret-output
 prerequisites, Foundry journeys/authority, production design and human assessment
 remain separate application obligations. This capability claims none of them.
 
+The frozen owner map includes all six transitive compiler, package-custody and
+presentation helpers. The registration regression parses the actual owning
+entry/checks static import graph without evaluating modules, rejects each omitted
+helper, and rejects omitted or changed helper hashes in the actual input guard.
+Browser-context dynamic imports remain bound by the complete browser module
+inventory. Unrelated SDK test files in that inventory are not executed by DK-31.
+
 The owner retains every failed build. Successful baseline/mutant owners
 retain source, kernel evidence, IR, packages, original/private Wasm, native
 observers, exact replay files and a rehashed receipt; complete input bytes are
