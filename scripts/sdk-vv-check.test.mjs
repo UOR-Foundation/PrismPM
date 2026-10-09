@@ -1,6 +1,6 @@
 // These unit adapters validate orchestration, never installed SDK acceptance.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -387,6 +387,42 @@ test('actual process transport preserves failures and rejects timeout or oversiz
     'require("node:child_process").spawn(process.execPath,["-e","setTimeout(()=>{},1200)"],{stdio:["ignore",1,2]});process.exit(0)'],
   {...options, timeout: 100}), /timed out/);
   assert(Date.now() - started < 900, 'descendant-held pipes must not defeat bounded cleanup');
+  const root = mkdtempSync(join(tmpdir(), 'prismpm-sdk-escaped-pipes-'));
+  const marker = join(root, 'child.json'), token = randomBytes(16).toString('hex');
+  const holder = 'const fs=require("node:fs");fs.writeFileSync(process.argv[1],JSON.stringify({pid:process.pid,token:process.argv[2]}),{flag:"wx"});process.stdout.write("escaped-ready\\n");setTimeout(()=>{},15000);';
+  const parent = `const fs=require("node:fs");const child=require("node:child_process").spawn(process.execPath,["-e",${JSON.stringify(holder)},${JSON.stringify(marker)},${JSON.stringify(token)}],{detached:true,stdio:["ignore",1,2]});const ready=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(ready);child.unref();process.exit(0);}},10);setTimeout(()=>process.exit(98),3000).unref();`;
+  const escapedStarted = Date.now();
+  try {
+    let failure;
+    try { await execute(process.execPath, ['-e', parent], {...options, timeout: 1000}); }
+    catch (error) { failure = error; }
+    assert(failure, 'escaped pipe holder must prohibit acceptance');
+    assert.match(failure.message, /bounded process timed out/);
+    assert(Date.now() - escapedStarted < 7500, 'a new session retaining pipes must not defeat the fixed five-second retirement bound');
+    assert.equal(failure.result.status, 0, 'retain the actual observed leader exit, not a fabricated timeout status');
+    assert.equal(failure.result.signal, null);
+    assert.equal(failure.result.retirement.close_observed, false);
+    assert.equal(failure.result.retirement.group_absent, true, 'absence of the original group does not prove pipe-holder retirement');
+    assert.equal(failure.result.retirement.scope, 'owned-group-and-pipes-only');
+    assert.match(failure.result.retirement.uncertainty, /within five seconds/);
+    assert.equal(failure.result.stdout.toString(), 'escaped-ready\n');
+  } finally {
+    // Retire only this test's independently identified escaped fixture. The
+    // production watchdog must not claim it adopted or retired that process.
+    const child = JSON.parse(readFileSync(marker));
+    assert.deepEqual(Object.keys(child).sort(), ['pid', 'token']);
+    assert.equal(child.token, token); assert(Number.isSafeInteger(child.pid) && child.pid > 1);
+    const processPath = `/proc/${child.pid}`;
+    if (existsSync(processPath)) {
+      const command = readFileSync(processPath + '/cmdline', 'utf8').split('\0');
+      assert.deepEqual(command, [process.execPath, '-e', holder, marker, token, '']);
+      process.kill(child.pid, 'SIGKILL');
+      const deadline = Date.now() + 5000;
+      while (existsSync(processPath) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+      assert(!existsSync(processPath), 'test-owned escaped fixture must actually retire');
+    }
+    rmSync(root, {recursive: true});
+  }
 });
 
 test('real native-header and TCP controls execute rather than accepting command success alone', async () => {
