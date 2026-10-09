@@ -46,8 +46,23 @@ try {
 } catch (error) { failure = error; }
 finally {
   const memory = Object.fromEntries(['memory.current', 'memory.peak', 'memory.events',
-    'memory.swap.current', 'memory.swap.peak', 'memory.swap.events']
+    'memory.max', 'memory.swap.max', 'memory.swap.current', 'memory.swap.peak', 'memory.swap.events',
+    'cpu.max', 'pids.max']
     .map(key => [key, readFileSync('/sys/fs/cgroup/' + key, 'utf8')]));
+  try {
+    assert.equal(memory['memory.max'].trim(), '1073741824');
+    assert.equal(memory['memory.swap.max'].trim(), '0');
+    assert.equal(memory['memory.swap.current'].trim(), '0');
+    assert.equal(memory['memory.swap.peak'].trim(), '0');
+    assert.equal(memory['pids.max'].trim(), '256');
+    const [quota, period] = memory['cpu.max'].trim().split(/\s+/).map(Number);
+    assert(Number.isSafeInteger(quota) && quota > 0 && Number.isSafeInteger(period) && period > 0);
+    assert.equal(quota, 2 * period);
+    for (const key of ['memory.events', 'memory.swap.events']) {
+      const events = Object.fromEntries(memory[key].trim().split('\n').map(line => line.split(/\s+/)));
+      for (const [name, count] of Object.entries(events)) { assert.match(count, /^\d+$/); assert.equal(Number(count), 0, name); }
+    }
+  } catch (error) { failure ??= error; }
   write('completed.json', {source, architecture: process.arch, status: result?.status ?? null,
     signal: result?.signal ?? null, passed: !failure, source_unchanged: sourceUnchanged, memory,
     ...(result ? {stdout_sha256: hash(result.stdout), stderr_sha256: hash(result.stderr),

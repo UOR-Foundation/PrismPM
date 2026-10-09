@@ -171,6 +171,17 @@ test('native qualification keeps pinned real actors, complete negative controls 
   assert(workflow.includes('--read-only --cpus 2 --memory 1g --memory-swap 1g --pids-limit 256'));
   assert(workflow.includes('--tmpfs /tmp:rw,exec,nosuid,nodev,size=16g,mode=1777'));
   assert(workflow.includes('native-outer-process-owner-${{ matrix.arch }}-'));
+  assert(workflow.indexOf('trap cleanup EXIT') < workflow.indexOf('network_id=$(controlled network-create'));
+  assert(workflow.includes('test "$status" = 1 || return 1'));
+  assert(workflow.includes('cleaning=1 cleanup_deadline=$((SECONDS + 60))'));
+  assert(workflow.includes('timeout --signal=TERM --kill-after=2s "${bound}s" docker'));
+  assert(workflow.includes('test "$id" = "$container_id" || exit 1'));
+  assert(workflow.includes('test "$id" = "$network_id" || exit 1'));
+  assert(workflow.includes('--mount type=bind,source=$out/results,target=/evidence'));
+  assert(workflow.includes('container_id=$(controlled container-create create --rm --init'));
+  assert(processOwner.includes("assert.equal(memory['memory.max'].trim(), '1073741824')"));
+  assert(processOwner.includes("assert.equal(memory['memory.swap.max'].trim(), '0')"));
+  assert(processOwner.includes('assert.equal(quota, 2 * period)'));
   assert(processOwner.includes("'--test-timeout=120000'"));
   assert(processOwner.includes("verifyTap(result.stdout.toString(), 17)"));
   assert(processOwner.includes("verifyFileCompletions(result.stdout.toString(), [resolve('scripts/sdk-vv-check.test.mjs')], 17)"));
