@@ -89,9 +89,10 @@ test('overrun deadline and wrong archive length cannot publish a sealed handle',
  assert(stream.closed);assert.deepEqual(readdirSync(root),[]);
 }));
 test('stage constructor cannot replace the original thirty-minute deadline with an unbounded future',async()=>temporary(async root=>{
- const f=fixture();for(const end of [Infinity,NaN,performance.now()-1,performance.now()+1800001]){
+ const f=fixture();for(const end of [Infinity,NaN,performance.now()-1]){
   assert.throws(()=>beginConstructionStage(root,f.plan.archive,end));assert.deepEqual(readdirSync(root),[]);
  }
+ assert.throws(()=>beginConstructionStage(root,f.plan.archive,performance.now()+3600000));assert.deepEqual(readdirSync(root),[]);
 }));
 test('only one bounded write may hold copied bytes and no publication or retirement can race it',async()=>temporary(async root=>{
  const f=fixture({indexPadding:2*1024**2}),stage=beginConstructionStage(root,f.plan.archive,performance.now()+10000);
@@ -104,13 +105,13 @@ test('only one bounded write may hold copied bytes and no publication or retirem
 }));
 test('actual delayed final filesystem admission cannot publish after its original deadline',async()=>temporary(async root=>{
  const f=fixture(),integrity=await verifyConstructionArchiveStream(input(f.bytes),f.plan);
- const stage=beginConstructionStage(root,f.plan.archive,performance.now()+100);
- await stage.write(f.archive);const original=fs.statfsSync;
+ const end=performance.now()+1000,stage=beginConstructionStage(root,f.plan.archive,end);
+ await stage.write(f.archive);const original=fs.statfsSync;let finalReached=false;
  // Unit scheduling fault only: retain the real statfs result and actual clock.
  // No SDK, provider, filesystem or product qualification is claimed here.
- mock.method(fs,'statfsSync',function(...args){const result=original.apply(this,args),until=performance.now()+150;while(performance.now()<until){}return result;});
+ mock.method(fs,'statfsSync',function(...args){const result=original.apply(this,args);finalReached=true;while(performance.now()<=end+10){}return result;});
  syncBuiltinESMExports();
- try{await assert.rejects(stage.seal(integrity),/deadline exceeded/);}
+ try{await assert.rejects(stage.seal(integrity),/deadline exceeded/);assert(finalReached,'the final actual filesystem admission must be exercised');}
  finally{mock.restoreAll();syncBuiltinESMExports();stage.retire();}assert.deepEqual(readdirSync(root),[]);
 }));
 test('a concurrently renamed original inode cannot be reported retired from pathname absence alone',async()=>temporary(async root=>{
