@@ -132,3 +132,14 @@ test('failure immediately after exclusive file open cannot leak its original fil
   assert.throws(()=>original(failedFd),{code:'EBADF'});assert.deepEqual(readdirSync(root),[]);
  }finally{mock.restoreAll();syncBuiltinESMExports();}
 }));
+test('caller archive accessors cannot throw after file acquisition and leave an unowned descriptor',async()=>temporary(async root=>{
+ const f=fixture(),original=fs.openSync;let reads=0,openedFd;
+ const archive={get byte_length(){if(++reads===3)throw Error('unit-only post-open getter failure');return f.plan.archive.byte_length;},digest:f.plan.archive.digest};
+ mock.method(fs,'openSync',function(path,flags,...args){const fd=original.call(this,path,flags,...args);if(flags&fs.constants.O_CREAT)openedFd=fd;return fd;});
+ syncBuiltinESMExports();
+ try{
+  assert.throws(()=>beginConstructionStage(root,archive,performance.now()+10000));
+  if(openedFd!==undefined)assert.throws(()=>fs.fstatSync(openedFd),{code:'EBADF'});
+  assert.deepEqual(readdirSync(root),[]);
+ }finally{mock.restoreAll();syncBuiltinESMExports();}
+}));
