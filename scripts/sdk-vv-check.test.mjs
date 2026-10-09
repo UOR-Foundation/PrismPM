@@ -425,6 +425,46 @@ test('actual process transport preserves failures and rejects timeout or oversiz
   }
 });
 
+for (const detached of [false, true]) test(`normal leader exit cannot accept an unreaped ${detached ? 'escaped-session' : 'same-group'} descendant`, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'prismpm-sdk-normal-descendant-'));
+  const marker = join(root, 'child.json'), token = randomBytes(16).toString('hex');
+  const holder = 'const fs=require("node:fs");fs.writeFileSync(process.argv[1],JSON.stringify({pid:process.pid,token:process.argv[2]}),{flag:"wx"});setTimeout(()=>{},15000);';
+  const parent = `const fs=require("node:fs");const child=require("node:child_process").spawn(process.execPath,["-e",${JSON.stringify(holder)},${JSON.stringify(marker)},${JSON.stringify(token)}],{detached:${detached},stdio:"ignore"});const ready=setInterval(()=>{if(fs.existsSync(${JSON.stringify(marker)})){clearInterval(ready);child.unref();process.exit(0);}},10);setTimeout(()=>process.exit(98),3000).unref();`;
+  const started = Date.now();
+  try {
+    let result;
+    try { result = await execute(process.execPath, ['-e', parent], {timeout:1000, limit:1024}); }
+    catch (error) { result = error.result; }
+    assert(result, 'retain original process result even if supervision rejects');
+    assert.equal(result.status, 0, 'do not fabricate the observed normal leader status');
+    assert.equal(result.signal, null);
+    assert(Date.now() - started < 7500, 'normal-close supervision must remain bounded');
+    const child = JSON.parse(readFileSync(marker));
+    assert.deepEqual(Object.keys(child).sort(), ['pid', 'token']);
+    assert.equal(child.token, token); assert(Number.isSafeInteger(child.pid) && child.pid > 1);
+    assert(!existsSync(`/proc/${child.pid}`), 'normal-close completion must actually retire the original descendant');
+    assert.equal(result.retirement?.descendants_absent, true, 'require genuine descendant retirement, not leader/pipes/group absence alone');
+  } finally {
+    // This fallback retires only the independently identified test fixture. It
+    // cannot qualify production adoption, reaping or process-group authority.
+    if (existsSync(marker)) {
+      const child = JSON.parse(readFileSync(marker));
+      assert.deepEqual(Object.keys(child).sort(), ['pid', 'token']);
+      assert.equal(child.token, token); assert(Number.isSafeInteger(child.pid) && child.pid > 1);
+      const processPath = `/proc/${child.pid}`;
+      if (existsSync(processPath)) {
+        assert.deepEqual(readFileSync(processPath + '/cmdline', 'utf8').split('\0'),
+          [process.execPath, '-e', holder, marker, token, '']);
+        process.kill(child.pid, 'SIGKILL');
+        const end = Date.now() + 5000;
+        while (existsSync(processPath) && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 10));
+        assert(!existsSync(processPath), 'test-owned descendant fixture must actually retire');
+      }
+    }
+    rmSync(root, {recursive:true});
+  }
+});
+
 test('real native-header and TCP controls execute rather than accepting command success alone', async () => {
   assert.equal(inspectNativeExecutable(process.execPath).process_architecture, process.arch);
   const server = createServer(socket => socket.end());
