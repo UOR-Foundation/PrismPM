@@ -164,6 +164,8 @@ test('native qualification keeps pinned real actors, complete negative controls 
   const source = readFileSync(new URL('./sdk-registry-qualification.mjs', import.meta.url), 'utf8');
   const orchestrator = readFileSync(new URL('./sdk-vv-check.mjs', import.meta.url), 'utf8');
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  assert(workflow.includes('mkdir -m 2770 "$RUNNER_TEMP/registry-qualification"'));
+  assert(workflow.includes('--user 0:0 --group-add "$(id -g)"'));
   for (const [os, arch] of [['ubuntu-24.04', 'amd64'], ['ubuntu-24.04-arm', 'arm64']]) {
     assert(workflow.includes('os: ' + os)); assert(workflow.includes('arch: ' + arch));
   }
