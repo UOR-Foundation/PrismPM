@@ -84,12 +84,14 @@ function verifyArtifactSubstitutions(build) {
         const changed = Buffer.concat([original, Buffer.from('\n// actual package substitution\n')]); writeFileSync(source, changed);
         if (kind === 'forged-manifest') {
           const changedManifest = JSON.parse(originalManifest); changedManifest.files.find(row => row.path === 'src/lib.rs').sha256 = sha(changed);
-          writeFileSync(manifest, JSON.stringify(changedManifest));
+          writeFileSync(manifest, JSON.stringify(changedManifest, (_key, value) =>
+            value && !Array.isArray(value) && typeof value === 'object'
+              ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value) + '\n');
         }
       } else if (kind === 'extra-file') writeFileSync(extra, 'extra', {flag: 'wx'});
       else linkSync(source, extra);
       assert.throws(() => build.compileNative(standard), ({source: /manifest digest/, 'forged-manifest': /immutable generated package/,
-        'extra-file': /complete generated package file inventory/, hardlink: /singly linked generated package/})[kind]);
+        'extra-file': /complete generated package file inventory/, hardlink: /bounded single-link custody file/})[kind]);
       assert.equal(lstatSync(join(build.work, 'native-' + mode + '-observer'), {throwIfNoEntry: false}), undefined);
       assert.equal(lstatSync(join(build.work, 'native-' + mode), {throwIfNoEntry: false}), undefined);
       names.push(mode + ':' + kind);
