@@ -1,7 +1,7 @@
 // These unit adapters validate orchestration, never installed SDK acceptance.
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -261,9 +261,17 @@ function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
   const source = join(root, 'source'); mkdirSync(source); mkdirSync(join(source, 'scripts')); mkdirSync(join(source, 'sdk'));
   const images = {}, metadata = new Map(), loaded = new Set(), resources = new Map(), calls = [];
   const arch = process.arch === 'x64' ? 'amd64' : 'arm64';
+  // Actual filesystem pressure, not a replaced statfs result. Docker/OCI
+  // metadata below remains an explicit orchestration unit, not an SDK image.
+  const pressure = ['late-space-pressure', 'space-bound-positive'].includes(fault);
+  const current = pressure ? statfsSync(root) : undefined;
+  const compressed = pressure ? Math.floor((current.bavail * current.bsize - 12 * 1024 ** 3 - 16 * 1024 ** 2) / 4) : 0;
+  if (pressure) assert(compressed > 0, 'original12GiB reserve and positive boundary headroom required');
   for (const name of ['dind', 'zot', 'buildkit', 'distribution', 'sdk']) {
     const configuration = digest(Buffer.from(`unit-only ${name} config`));
-    const manifest = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config: {digest: configuration, size: 100}, layers: []}));
+    const layers = name === 'sdk' && pressure ? [{digest: digest(Buffer.from('unit-only compressed layer descriptor')),
+      size: compressed, mediaType: 'application/vnd.oci.image.layer.v1.tar+gzip'}] : [];
+    const manifest = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.manifest.v1+json', config: {digest: configuration, size: 100}, layers}));
     const annotation = name === 'dind' ? {'org.opencontainers.image.revision': revision, 'org.opencontainers.image.version': '28.4.0-dind'} : {};
     const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{digest: digest(manifest), size: manifest.length, mediaType: 'application/vnd.oci.image.manifest.v1+json',
       platform: {os: 'linux', architecture: arch}, annotations: annotation}]}));
@@ -349,7 +357,13 @@ function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
     assert.equal(command, 'docker'); assert.deepEqual(arguments_.slice(0, 3), ['--host', 'unix:///var/run/docker.sock', '--config']);
     assert.deepEqual(Object.keys(options.environment).sort(), ['DOCKER_CONFIG', 'HOME', 'LANG', 'LC_ALL', 'PATH']);
     const args = arguments_.slice(4); calls.push(args);
-    if (args[0] === 'buildx') { const bytes = metadata.get(args.at(-1)); assert(bytes); return ok(bytes); }
+    if (args[0] === 'buildx') {
+      const bytes = metadata.get(args.at(-1)); assert(bytes);
+      if (fault === 'late-space-pressure' && args.at(-1) === images.sdk.reference.split('@')[0] + '@' + images.sdk.child_descriptor.digest) {
+        writeFileSync(join(root, 'actual-filesystem-pressure'), Buffer.alloc(32 * 1024 ** 2), {flag: 'wx'});
+      }
+      return ok(bytes);
+    }
     if (args[0] === 'pull') { assert.deepEqual(args, ['pull', '--platform', `linux/${arch}`, images.dind.reference]); return ok('pulled'); }
     if (args[0] === 'image') return store === 'classic' && args.includes('--platform') ? bad(125) : ok(loadedImage(args.at(-1), args.includes('--platform')));
     if (args[1] === 'inspect') {
@@ -642,6 +656,21 @@ test('executed omission mutants cannot satisfy the owning orchestration contract
       await f.run(module.runOuter); assert.equal(f.resources.size, 0, 'all owned resources must actually be removed');
     }, undefined, `omission mutant ${index}`);
   }
+  const positive = orchestrationFixture(t, 'space-bound-positive');
+  await positive.run(); assert.equal(positive.resources.size, 0);
+  const pressure = orchestrationFixture(t, 'late-space-pressure');
+  await assert.rejects(pressure.run(), /insufficient disk for isolated image closure and reserve/);
+  assert(!pressure.calls.some(args => args.includes('pull')), 'late reserve loss must refuse before any image acquisition');
+  assert.equal(pressure.resources.size, 0);
+  assert(!existsSync(join(pressure.destination, 'acceptance.json')));
+  const stale = original.replace('const imageSpace = statfsSync(dirname(destination));', 'const imageSpace = space;');
+  assert.notEqual(stale, original, 'actual stale-admission mutant must be planted');
+  const module = await import('data:text/javascript;base64,' + Buffer.from(absoluteImports(stale)).toString('base64'));
+  const bypass = orchestrationFixture(t, 'late-space-pressure');
+  await assert.rejects(async () => {
+    await assert.rejects(bypass.run(module.runOuter), /insufficient disk for isolated image closure and reserve/);
+  }, /Missing expected rejection/, 'the executed stale-sample mutant must fail its owning late-pressure check');
+  assert.equal(bypass.resources.size, 0);
 });
 
 test('owning TAP completeness rejects skipped, reduced and failed successful-shell output', () => {
