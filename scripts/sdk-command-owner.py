@@ -39,6 +39,10 @@ class Owner:
             self.stopping = time.monotonic()
             self.orphaned = self.leader is not None and not self.cleaned
 
+    def interrupted(self, _signum, _frame):
+        self.error = self.error or "supervisor-interrupted"
+        self.stop()
+
     def discover(self):
         fd = os.open(self.child_path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
         try:
@@ -123,7 +127,7 @@ class Owner:
         os.set_inheritable(4, False)
         os.set_blocking(4, False)
         for signum in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
-            signal.signal(signum, self.stop)
+            signal.signal(signum, self.interrupted)
         libc = ctypes.CDLL(None, use_errno=True)
         if libc.prctl(36, 1, 0, 0, 0) != 0:
             raise RuntimeError("subreaper unavailable")

@@ -33,7 +33,7 @@ write('interpreter.json', {path: '/usr/bin/python3', version: '3.11.2', bytes: i
   sha256: hash(interpreter), process_retirement: python.retirement});
 const owners = new Map([
   ['scripts/sdk-vv-check.test.mjs', 19],
-  ['scripts/sdk-command-owner.test.mjs', 9],
+  ['scripts/sdk-command-owner.test.mjs', 11],
   ['scripts/sdk-registry-qualification.test.mjs', 17],
   ['scripts/sdk-construction-archive.test.mjs', 14],
   ['scripts/sdk-construction-stage.test.mjs', 17],
@@ -57,8 +57,8 @@ try {
   if (failure) throw failure;
   assert.equal(result.status, 0); assert.equal(result.signal, null);
   const tap = result.stdout.toString();
-  assert.equal(verifyTap(tap, 99), 99);
-  verifyFileCompletions(tap, [...owners.keys()].map(path => resolve(path)), 99);
+  assert.equal(verifyTap(tap, 101), 101);
+  verifyFileCompletions(tap, [...owners.keys()].map(path => resolve(path)), 101);
   const expected = new Map([...owners].map(([path, count]) => [resolve(path), count]));
   for (const line of tap.split(/\r?\n/).filter(line => line.startsWith('# prismpm-owning-file '))) {
     const row = JSON.parse(line.slice('# prismpm-owning-file '.length));

@@ -30,6 +30,7 @@ export function executeOwnedSdkCommand(command, args, {profile, environment, tim
       descendants_absent: completed?.descendants_absent === true && closeObserved
         && ownerExited?.status === 0 && ownerExited.signal === null && !protocolFailure && !uncertainty,
       uncertainty, supervisor_status: ownerExited?.status ?? null, supervisor_signal: ownerExited?.signal ?? null,
+      owner_error: completed?.error ?? null, protocol_failure: protocolFailure ?? null,
       python_version: started?.python_version ?? null});
     const result = uncertainty => ({...(leader ?? {status: null, signal: null}), pid: started?.pid ?? null,
       stdout: Buffer.concat(chunks[0]), stderr: Buffer.concat(chunks[1]), timedOut, overflow, aborted,
@@ -50,8 +51,9 @@ export function executeOwnedSdkCommand(command, args, {profile, environment, tim
       reject(error);
     };
     const stop = (error, operational = false) => {
-      if (settled || retirementDeadline !== undefined) {if (operational) failure ??= error; return;}
+      if (settled) return;
       if (profile === 'vv' || operational) failure ??= error;
+      if (retirementDeadline !== undefined) return;
       retirementDeadline = performance.now() + 5000;
       retirementTimer = setTimeout(() => fail('owned descendant retirement unproven within five seconds'), 5000);
       // FD4 is an owned channel, not a PID/PGID that could be reused after exit.

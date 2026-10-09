@@ -1660,7 +1660,7 @@ fallback. Source binding includes both private supervisor files. Original
 command, file, actor and two-run deadlines remain unchanged.
 The existing native registry CI reuses its immutable thin tools image for the
 complete original 71 process/construction cases, two new normal-exit cases,
-nine real supervisor controls and all 17 registry-process cases on both native platforms, with the
+eleven real supervisor controls and all 17 registry-process cases on both native platforms, with the
 original file deadline, source readbacks, raw results, cgroup observations and
 observed owned-container/network retirement. These unit results do not qualify
 an installed SDK or release acceptance. Descendant adoption is qualified only

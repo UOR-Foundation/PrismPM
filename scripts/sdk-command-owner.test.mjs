@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
-import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {closeSync, constants, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -138,4 +138,45 @@ test('one bounded reap pass cannot be mistaken for exhaustion; executed omission
     const result = await early(process.execPath, ['-e', bad.parent('setTimeout(()=>{},15000);')], options);
     assert.equal(result.retirement.descendants_absent, true); absent(bad.pid());
   }, 'the real-process absence oracle must reject premature exhaustion');
+});
+
+test('foreground expiry after supervisor exit remains failure while a real outside writer delays stream close', async () => {
+  let held, timer;
+  try {
+    await assert.rejects(executeOwnedSdkCommand(process.execPath, ['-e', "process.stdout.write('PID '+process.pid+'\\n');setTimeout(()=>process.exit(0),30)"],
+      {...options, timeout: 200, onOutput: (_, bytes) => {
+        const match = /^PID ([1-9][0-9]*)\n$/.exec(bytes.toString());
+        if (match) {
+          // Real outside writer, not a fake child/event adapter. It intentionally
+          // holds the ORIGINAL pipe after the owner has exhausted its tree.
+          held = openSync(`/proc/${match[1]}/fd/1`, constants.O_WRONLY | constants.O_NONBLOCK);
+          timer = setTimeout(() => {closeSync(held); held = undefined;}, 350);
+        }
+      }}), error => {
+        assert.match(error.message, /timed out/); assert.equal(error.result.status, 0);
+        assert.equal(error.result.timedOut, true); assert.equal(error.result.retirement.supervisor_status, 0);
+        assert.equal(error.result.retirement.close_observed, true); return true;
+      });
+  } finally {clearTimeout(timer); if (held !== undefined) closeSync(held);}
+});
+
+test('direct supervisor interruption is never repaired by subsequent descendant reaping', async t => {
+  const f = await fixture(t); let timer;
+  const program = "process.stdout.write('SUPERVISOR '+process.ppid+'\\n');" + f.parent('setTimeout(()=>{},15000);');
+  try {
+    await assert.rejects(executeOwnedSdkCommand(process.execPath, ['-e', program], {...options,
+      onOutput: (_, bytes) => {
+        const match = /^SUPERVISOR ([1-9][0-9]*)\n$/.exec(bytes.toString());
+        if (match) timer = setTimeout(() => {
+          const command = readFileSync(`/proc/${match[1]}/cmdline`, 'utf8').split('\0');
+          assert(command.some(argument => argument.endsWith('/sdk-command-owner.py')));
+          assert(command.includes(program), 'interrupt only the actual private test invocation');
+          process.kill(Number(match[1]), 'SIGTERM');
+        }, 250);
+      }}), error => {
+        assert.equal(error.result.status, 0); assert.equal(error.result.retirement.supervisor_status, 125);
+        assert.equal(error.result.retirement.owner_error, 'supervisor-interrupted');
+        assert.equal(error.result.retirement.descendants_absent, false); absent(f.pid()); return true;
+      });
+  } finally {clearTimeout(timer);}
 });
