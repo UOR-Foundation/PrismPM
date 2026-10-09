@@ -341,7 +341,10 @@ export async function runOuter({image, revision, arch, destination, source, regi
     // Expanded layers and independent Cargo/build roots need additional space;
     // this deliberately conservative bound is not permission to exhaust disk.
     const imageBytes = Object.values(expected).reduce((sum, row) => sum + row.compressed_bytes, 0);
-    assert(space.bavail * space.bsize >= imageBytes * 4 + 12 * 1024 ** 3, 'insufficient disk for isolated image closure and reserve');
+    // Metadata acquisition is asynchronous; its earlier admission cannot
+    // authorize image expansion after another writer consumes this filesystem.
+    const imageSpace = statfsSync(dirname(destination));
+    assert(imageSpace.bavail * imageSpace.bsize >= imageBytes * 4 + 12 * 1024 ** 3, 'insufficient disk for isolated image closure and reserve');
     writeFileSync(join(destination, 'image-plan.json'), canonical(expected), {flag: 'wx'});
     await outer(['pull', '--platform', `linux/${arch}`, lock.images.dind.reference], {timeout: 1200000});
     await inspectLoadedImage(call, expected.dind, arch);

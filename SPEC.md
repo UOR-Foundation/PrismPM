@@ -1675,6 +1675,10 @@ the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.
 The two-run execution remains bounded to four hours; operational fit must be
 measured on the actual selected image, not inferred from source or unit runs.
+Image-capacity admission re-samples the destination filesystem after all
+asynchronous metadata reads and before the first pull. The initial12GiB
+reserve sample cannot authorize later expansion; the unchanged four-times
+compressed image closure plus12GiB must fit the current available bytes.
 
 The private `run-owned-registry` acquisition path additionally accepts one
 explicit PEM CA for a non-loopback, private IPv4 registry. A private HTTPS
