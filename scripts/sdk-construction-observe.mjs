@@ -59,7 +59,7 @@ export function verifyConstructionRetention(directory,result,{selection,inputs,s
  assert.deepEqual(result.expected,selection.expected);assert.equal(result.qualifier_source,selection.qualifier);
  assert.equal(result.archives_stored,false);assert.equal(result.cleanup.active_requests,0);assert.equal(result.cleanup.all_sockets_closed,true);
  assert.equal(result.standards_sha256,sha(standards));assert.equal(result.workflow_sha256,sha(workflow));
- const names=['acquire','provider','metadata','archive','handoff'].map(n=>'sdk-construction-'+n+'.mjs').concat(['sdk-candidate.mjs','sdk-candidate-sbom.mjs']);
+ const names=['acquire','provider','metadata','archive','stage','handoff'].map(n=>'sdk-construction-'+n+'.mjs').concat(['sdk-candidate.mjs','sdk-candidate-sbom.mjs']);
  assert.deepEqual(result.inputs,names.map(path=>({path,sha256:inputs.find(row=>row.path==='scripts/'+path)?.sha256})));
  const budget={bytes:0,limit:256*1024**2},seen=new Set();
  const read=(path,limit=64*1024**2)=>{
@@ -107,7 +107,7 @@ export async function observeConstruction(args,destination,timeoutMs=5000000){
  assert(workflow.length>0&&workflow.length<=262144);
  fs.writeFileSync(out+'/source-standards.lock',standards,{flag:'wx',mode:0o444});
  fs.writeFileSync(out+'/source-workflow.yml',workflow,{flag:'wx',mode:0o444});
- const files=['.github/workflows/sdk-candidate.yml',...['observe','acquire','provider','metadata','archive','handoff'].map(n=>'scripts/sdk-construction-'+n+'.mjs'),
+ const files=['.github/workflows/sdk-candidate.yml',...['observe','acquire','provider','metadata','archive','stage','handoff'].map(n=>'scripts/sdk-construction-'+n+'.mjs'),
   'scripts/sdk-candidate.mjs','scripts/sdk-candidate-sbom.mjs'];
  const inputs=files.map(path=>({path,sha256:sha(fs.readFileSync(root+'/'+path))}));
  const command=['run','--interactive','--rm','--init','--name',name,'--label',owner+'='+nonce,'--user',`${process.getuid()}:${process.getgid()}`,
