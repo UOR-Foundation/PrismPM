@@ -40,12 +40,17 @@ cid=$(printf 'd%.0s' {1..64}); iid=sha256:$(printf 'e%.0s' {1..64})
 case "$1:$2" in
   container:inspect)
     reference=$3
+    if test "$UNIT_MODE" = create-renamed && test "$reference" != "$cid"; then
+      echo "Error: No such container: $reference" >&2; exit 1
+    fi
     if test -f "$UNIT_ROOT/container.exists"; then
       format=; if test "$#" -ge 5; then format=$5; fi
       case "$format" in
         '{{.Id}}') printf '%s\n' "$cid" ;;
         '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')
-          if test "$UNIT_MODE" = wrong-label; then echo foreign; else cat "$UNIT_ROOT/owner"; fi ;;
+          if test "$UNIT_MODE" = wrong-label; then echo foreign
+          elif test "$UNIT_MODE" = foreign-matching-label; then cat "$UNIT_ROOT/sdk-$UNIT_ARCH-full-sdk-vv-outer-owner/owner.name"
+          else cat "$UNIT_ROOT/owner"; fi ;;
         '{{.State.Running}}') echo false ;;
         '{{.State.ExitCode}}') echo 0 ;;
         '{{.State.OOMKilled}}') echo false ;;
@@ -79,7 +84,7 @@ case "$1:$2" in
       if test "$UNIT_MODE" = wrong-id; then printf 'f%.0s' {1..64} > "$file"; printf '\n' >> "$file"
       else printf '%s\n' "$cid" > "$file"; fi
     fi
-    case "$UNIT_MODE" in create-partial|create-missing-id) echo partial; exit 1 ;; esac
+    case "$UNIT_MODE" in create-partial|create-missing-id|create-renamed) echo partial; exit 1 ;; esac
     printf '%s\n' "$cid" ;;
   container:start) test "$3" = --attach ;;
   container:rm)
@@ -98,7 +103,7 @@ cat() { if test "$*" = /proc/sys/kernel/random/uuid; then echo 01234567-89ab-cde
 export -f git df stat cat
 /bin/bash root-a/scripts/sdk-vv-outer.sh "$UNIT_IMAGE" "$UNIT_REVISION" "$UNIT_ARCH" "sdk-$UNIT_ARCH-full-sdk-vv"
 `;
-  for (const mode of ['complete', 'foreign-container', 'foreign-tag', 'create-partial', 'create-missing-id',
+  for (const mode of ['complete', 'foreign-container', 'foreign-matching-label', 'foreign-tag', 'create-partial', 'create-renamed', 'create-missing-id',
     'wrong-label', 'wrong-id', 'build-partial', 'build-missing-id', 'build-success-missing-id',
     'build-malformed-id', 'build-wrong-tag']) {
     const dir = mkdtempSync(join(tmpdir(), 'prismpm-outer-lifecycle-unit-'));
@@ -106,7 +111,7 @@ export -f git df stat cat
     mkdirSync(join(dir, 'bin')); mkdirSync(join(dir, 'root-a/scripts'), {recursive: true});
     writeFileSync(join(dir, 'bin/docker'), docker, {mode: 0o700});
     writeFileSync(join(dir, 'root-a/scripts/sdk-vv-outer.sh'), readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url)));
-    if (mode === 'foreign-container') {writeFileSync(join(dir, 'container.exists'), ''); writeFileSync(join(dir, 'owner'), 'foreign');}
+    if (['foreign-container', 'foreign-matching-label'].includes(mode)) {writeFileSync(join(dir, 'container.exists'), ''); writeFileSync(join(dir, 'owner'), 'foreign');}
     if (mode === 'foreign-tag') writeFileSync(join(dir, 'image.exists'), '');
     const architecture = process.arch === 'x64' ? 'amd64' : 'arm64';
     const result = await execute('/bin/bash', ['--noprofile', '--norc', '-c', script], {timeout: 10000,
@@ -117,12 +122,14 @@ export -f git df stat cat
     assert.equal(result.status, mode === 'complete' ? 0 : 1, mode + ': ' + result.stderr);
     const commands = readFileSync(join(dir, 'docker.commands'), 'utf8');
     const containerRemoved = /^container rm /m.test(commands), imageRemoved = /^image rm /m.test(commands);
-    assert.equal(containerRemoved, ['complete', 'create-partial'].includes(mode), mode + ': immutable container authority');
-    assert.equal(imageRemoved, ['complete', 'create-partial', 'build-partial'].includes(mode), mode + ': immutable image authority');
+    assert.equal(containerRemoved, ['complete', 'create-partial', 'create-renamed'].includes(mode), mode + ': immutable container authority');
+    assert.equal(imageRemoved, ['complete', 'create-partial', 'create-renamed', 'build-partial'].includes(mode), mode + ': immutable image authority');
     if (mode.startsWith('foreign-')) assert(!/^buildx build /m.test(commands), 'collision must be refused before building');
+    if (['foreign-container', 'foreign-matching-label'].includes(mode)) assert(existsSync(join(dir, 'container.exists')), 'rejected foreign container must survive');
+    if (mode === 'foreign-tag') assert(existsSync(join(dir, 'image.exists')), 'rejected foreign tag must survive');
     const evidence = join(dir, `sdk-${architecture}-full-sdk-vv-outer-owner`);
     assert.equal(readFileSync(join(evidence, 'cleanup.status'), 'utf8').trim(), String(result.status));
-    if (['complete', 'create-partial', 'build-partial'].includes(mode)) {
+    if (['complete', 'create-partial', 'create-renamed', 'build-partial'].includes(mode)) {
       assert.equal(readFileSync(join(evidence, 'cleanup-owned.status'), 'utf8').trim(), '0');
       assert(!existsSync(join(dir, 'container.exists'))); assert(!existsSync(join(dir, 'image.exists')));
     } else {

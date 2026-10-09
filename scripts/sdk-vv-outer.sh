@@ -49,15 +49,19 @@ cleanup_owned() {
   local actual
   # Docker's private CID file, not a matching name/label or partial stdout,
   # authenticates a creation whose CLI response was lost.
-  if (( create_attempted )) && controlled survivor 10 container inspect "$owner"; then
+  if (( create_attempted )); then
     test -f "$evidence/container.id" || return 1
     actual=$(cat "$evidence/container.id")
     [[ $actual =~ ^[a-f0-9]{64}$ ]] || return 1
     if test -n "$container_id"; then test "$actual" = "$container_id" || return 1; fi
     container_id=$actual
-    test "$(controlled survivor-id 10 container inspect "$owner" --format '{{.Id}}')" = "$container_id" || return 1
-    test "$(controlled survivor-label 10 container inspect "$container_id" --format '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')" = "$owner" || return 1
-    controlled removal 10 container rm --force --volumes "$container_id" || return 1
+    if controlled survivor 10 container inspect "$container_id"; then
+      test "$(controlled survivor-id 10 container inspect "$container_id" --format '{{.Id}}')" = "$container_id" || return 1
+      test "$(controlled survivor-label 10 container inspect "$container_id" --format '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')" = "$owner" || return 1
+      controlled removal 10 container rm --force --volumes "$container_id" || return 1
+    else
+      absent survivor-id-absence "$container_id" || return 1
+    fi
   fi
   absent name-absence "$owner" || return 1
   if test -n "$container_id"; then absent id-absence "$container_id" || return 1; fi
