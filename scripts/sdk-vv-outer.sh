@@ -19,7 +19,7 @@ mkdir -m 0700 "$evidence"
 owner="prism-sdk-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture"
 tag="prism-sdk-outer-tools:$revision-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$architecture"
 label=org.uor.prismpm.sdk-outer
-container_id= image_id= cleaning=0 cleanup_deadline=0
+container_id= image_id= create_attempted=0 cleaning=0 cleanup_deadline=0
 controlled() {
   local name=$1 bound=$2 status remaining
   shift 2
@@ -45,10 +45,14 @@ cleanup() {
   cleaning=1 cleanup_deadline=$((SECONDS+60))
   # Reconcile a lost create response by its unique label, then use the actual
   # immutable container ID. Never remove an unrelated replacement by name.
-  if controlled survivor 10 container inspect "$owner"; then
+  if (( create_attempted )) && controlled survivor 10 container inspect "$owner"; then
     actual=$(controlled survivor-id 10 container inspect "$owner" --format '{{.Id}}')
     [[ $actual =~ ^[a-f0-9]{64}$ ]] || exit 1
     test "$(controlled survivor-label 10 container inspect "$actual" --format '{{index .Config.Labels "org.uor.prismpm.sdk-outer"}}')" = "$owner" || exit 1
+    if test -f "$evidence/container.id"; then
+      container_id=$(cat "$evidence/container.id")
+      [[ $container_id =~ ^[a-f0-9]{64}$ ]] || exit 1
+    fi
     if test -n "$container_id"; then test "$actual" = "$container_id" || exit 1; fi
     container_id=$actual
     controlled removal 10 container rm --force --volumes "$container_id" || exit 1
@@ -76,7 +80,11 @@ image_id=$(controlled tools-id 10 image inspect "$tag" --format '{{.Id}}')
 [[ $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
 controlled tools-inspect 10 image inspect "$image_id" >/dev/null
 socket_group=$(stat -c '%g' /var/run/docker.sock)
-container_id=$(controlled create 30 container create --init --name "$owner" --cidfile "$evidence/container.id" \
+# Only successful prior-absence and this actual create attempt confer authority
+# to reconcile a lost response. Partial stdout is not a container identity.
+test ! -e "$evidence/container.id"
+create_attempted=1
+created=$(controlled create 30 container create --init --name "$owner" --cidfile "$evidence/container.id" \
   --label "$label=$owner" --pull=never --platform "linux/$architecture" \
   --read-only --user "$(id -u):$(id -g)" --group-add "$socket_group" \
   --cpus 2 --memory 1g --memory-swap 1g --pids-limit 256 --cap-drop ALL --security-opt no-new-privileges \
@@ -89,7 +97,8 @@ container_id=$(controlled create 30 container create --init --name "$owner" --ci
   --noprofile --norc -euo pipefail -c \
   'node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run "$1" "$2" "$3" "$4"' \
   sdk-outer "$sdk_image" "$revision" "$architecture" "$destination")
-[[ $container_id =~ ^[a-f0-9]{64}$ ]] || exit 1
+[[ $created =~ ^[a-f0-9]{64}$ ]] || exit 1
+container_id=$created
 test "$(cat "$evidence/container.id")" = "$container_id"
 # The original360-minute job and inner two-run4-hour deadline remain unchanged.
 if docker container start --attach "$container_id" >"$evidence/actor.stdout" 2>"$evidence/actor.stderr"; then attached=0; else attached=$?; fi
