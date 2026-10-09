@@ -113,3 +113,12 @@ test('actual delayed final filesystem admission cannot publish after its origina
  try{await assert.rejects(stage.seal(integrity),/deadline exceeded/);}
  finally{mock.restoreAll();syncBuiltinESMExports();stage.retire();}assert.deepEqual(readdirSync(root),[]);
 }));
+test('a concurrently renamed original inode cannot be reported retired from pathname absence alone',async()=>temporary(async root=>{
+ const f=fixture(),r=await stageConstructionArchiveStream(input(f.bytes),f.plan,root),original=fs.unlinkSync;
+ // Unit namespace fault at the actual unlink boundary. The trusted directory
+ // owner can mutate it; this cannot prove immunity to same-owner host races.
+ mock.method(fs,'unlinkSync',function(path){renameSync(path,join(root,'renamed-original'));writeFileSync(path,'unit-only replacement');return original.call(this,path);});
+ syncBuiltinESMExports();
+ try{assert.throws(()=>retireConstructionStage(r.handle),/retirement unproven/);assert(existsSync(join(root,'renamed-original')));}
+ finally{mock.restoreAll();syncBuiltinESMExports();}
+}));
