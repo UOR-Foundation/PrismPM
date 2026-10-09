@@ -1640,7 +1640,16 @@ recorded loopback-only configuration; nested containers use that same DNS
 policy. Effective resolver bytes, a live external bootstrap control, blocked
 literal-address access and blocked default DNS resolution are checked before
 and after execution. Bounded command groups and owner-checked cleanup retain
-raw diagnostics without accepting interrupted runs. The release gate requires
+raw diagnostics without accepting interrupted runs. The outer command transport
+rejects within a separate fixed five-second retirement bound after its original
+timeout, output overflow or interruption. It preserves actual leader exit and
+pipe-close observations, truncates each stream at the original output bound,
+and snapshots uncertain retirement before releasing held pipe handles. Group
+absence does not prove escaped-descendant retirement; this watchdog neither
+adopts descendants nor replaces the release subreaper's exhaustion protocol.
+Uncertain retirement is retained with the failed command and prohibits
+acceptance. Original command and two-run deadlines remain unchanged.
+The release gate requires
 the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.
 The two-run execution remains bounded to four hours; operational fit must be

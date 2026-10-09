@@ -196,31 +196,69 @@ export function validateExecution(bytes, originals, image, revision, arch) {
 
 // Fixed CLI transport. Injection below is available only to owning unit tests.
 export function execute(command, args, { environment, timeout = 120000, limit = 8 * 1024 * 1024 } = {}) {
+  assert(Number.isSafeInteger(timeout) && timeout > 0);
+  assert(Number.isSafeInteger(limit) && limit > 0);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { env: environment, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    const streams = [[], []], lengths = [0, 0]; let failure;
+    const streams = [[], []], lengths = [0, 0];
+    let failure, exited, retirementTimer, settled = false, closeObserved = false;
+    child.once('exit', (status, signal) => { exited = {status, signal}; });
+    const retirement = uncertainty => {
+      let absent = null;
+      if (child.pid) {
+        try { process.kill(-child.pid, 0); absent = false; }
+        catch (error) { if (error.code === 'ESRCH') absent = true; }
+      }
+      return {scope: 'owned-group-and-pipes-only', leader_exit_observed: exited !== undefined,
+        close_observed: closeObserved, group_absent: absent, uncertainty};
+    };
+    const result = () => ({...(exited ?? {status: null, signal: null}),
+      stdout: Buffer.concat(streams[0]), stderr: Buffer.concat(streams[1])});
+    const clean = () => {
+      clearTimeout(timer); clearTimeout(retirementTimer);
+      for (const [signal, handler] of handlers) process.removeListener(signal, handler);
+    };
     const stop = error => {
+      if (settled || failure) return;
       failure ??= error;
+      // Keep the original command deadline. Pipe holders cannot extend
+      // rejection beyond this separate, fixed retirement bound.
+      retirementTimer = setTimeout(() => {
+        if (settled) return;
+        failure.result = {...result(), retirement: retirement('owned process close retirement unproven within five seconds')};
+        settled = true; clean();
+        // Snapshot first: releasing our handles is not descendant reaping.
+        child.stdout.destroy(); child.stderr.destroy(); reject(failure);
+      }, 5000);
       // Docker CLI plugins can outlive their parent and keep its pipes open.
       // Kill only this invocation's private process group, including plugins.
       if (child.pid) {
         try { process.kill(-child.pid, 'SIGKILL'); }
-        catch (error) { if (error.code !== 'ESRCH') failure = error; }
+        catch (error) { if (error.code !== 'ESRCH') failure.kill_error = String(error); }
       }
     };
     const timer = setTimeout(() => stop(Error('bounded process timed out')), timeout);
     const handlers = ['SIGHUP', 'SIGINT', 'SIGTERM'].map(signal => [signal, () => stop(Error(`interrupted by ${signal}`))]);
     for (const [signal, handler] of handlers) process.on(signal, handler);
     for (const [index, stream] of [child.stdout, child.stderr].entries()) stream.on('data', bytes => {
-      const remaining = Math.max(0, limit - lengths[index]); streams[index].push(bytes.subarray(0, remaining));
+      if (settled) return;
+      const remaining = Math.max(0, limit - lengths[index]);
+      if (remaining > 0) streams[index].push(Buffer.from(bytes.subarray(0, remaining)));
       lengths[index] += bytes.length;
       if (lengths[index] > limit) stop(Error('bounded process output exceeded'));
     });
-    const clean = () => { clearTimeout(timer); for (const [signal, handler] of handlers) process.removeListener(signal, handler); };
-    child.once('error', error => { clean(); reject(error); });
+    child.once('error', error => {
+      if (settled) return;
+      settled = true; clean(); failure ??= error;
+      failure.result = {...result(), retirement: retirement('owned process spawn failed')};
+      child.stdout.destroy(); child.stderr.destroy(); reject(failure);
+    });
     child.once('close', (status, signal) => {
-      clean(); const result = {status, signal, stdout: Buffer.concat(streams[0]), stderr: Buffer.concat(streams[1])};
-      if (failure) { failure.result = result; reject(failure); } else resolve(result);
+      if (settled) return;
+      closeObserved = true; settled = true; clean();
+      const observed = {...result(), status, signal};
+      if (failure) { failure.result = {...observed, retirement: retirement(null)}; reject(failure); }
+      else resolve(observed);
     });
   });
 }
@@ -310,7 +348,8 @@ export async function runOuter({image, revision, arch, destination, source, regi
     writeFileSync(join(destination, `${number}.stdout`), result.stdout, {flag: 'wx', mode: 0o600});
     writeFileSync(join(destination, `${number}.stderr`), result.stderr, {flag: 'wx', mode: 0o600});
     writeFileSync(join(destination, `${number}.json`), canonical({arguments: args, status: result.status, signal: result.signal,
-      stdout_sha256: hash(result.stdout), stderr_sha256: hash(result.stderr)}), {flag: 'wx', mode: 0o600});
+      stdout_sha256: hash(result.stdout), stderr_sha256: hash(result.stderr),
+      ...(result.retirement ? {process_retirement: result.retirement} : {})}), {flag: 'wx', mode: 0o600});
     if (failure) throw failure;
     if (interrupted && !cleaning) throw interrupted;
     assert.equal(result.signal, null, 'Docker transport interrupted');
