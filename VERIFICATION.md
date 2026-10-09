@@ -38,6 +38,18 @@ Fresh complete DK-38 execution, current source checks, both native CI lanes and
 independent review are required; this source correction is not acceptance of
 DK-38, an installed SDK, full V&V or any public application.
 
+## Session and installed source closure correction
+
+Session group custody includes the helper imported by its provenance test via
+the SDK checker. Its existing wire test parses all three registered entry
+graphs and rejects a missing helper or substituted expected hash. Installed SDK
+source roots retain the presentation owner's mandatory SDK-checker test input.
+The existing installed-input regression now covers presentation, session and
+semantic-presentation maps as well as its original seven maps. No original
+owner, input, test count, deadline or installed-SDK qualification is removed.
+Fresh complete affected owners, source/native checks and independent review
+remain required; these source corrections do not qualify an installed SDK.
+
 ## Native golden source preflight
 
 Native SDK platforms now reject stale shared source paths, bytes or descriptors
