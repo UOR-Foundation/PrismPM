@@ -1646,6 +1646,23 @@ SDK jobs, independent of image rebuild jobs and mandatory before publication.
 The two-run execution remains bounded to four hours; operational fit must be
 measured on the actual selected image, not inferred from source or unit runs.
 
+The private `run-owned-registry` acquisition path additionally accepts one
+explicit PEM CA for a non-loopback, private IPv4 registry. A private HTTPS
+agent reads only digest-addressed SDK metadata at that exact authority and
+repository, without ambient proxies, default roots, credentials or redirects.
+Both metadata reads share a 45-second deadline and the original 4 MiB document
+bound; request/socket retirement has a separate five-second bound. Original
+index/child bytes and actual TLS peer and retirement observations are retained.
+The selected child still passes the same OCI graph checks. The held CA is
+read back from the exact authority's read-only mount in the fresh daemon before
+the SDK pull and after execution. Its system roots plus named CA are not the
+outer reader's CA-only root set. Other image acquisition, disconnection controls
+and both unchanged full V&V runs remain mandatory. The reader itself joins the
+installed/source byte comparison. TLS proves server identity, not construction
+provenance: independently admitted artifact/index digests and fresh images
+constructed from the final source are still required. Existing constructed
+images cannot be relabeled or patched to satisfy that source boundary.
+
 `scripts/sdk-construction-handoff.mjs` is an internal metadata-admission boundary.
 Independently selected source, run, attempt and artifact IDs bind the complete
 original construction job inventory, successful ordered steps, declared native
