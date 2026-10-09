@@ -122,3 +122,13 @@ test('a concurrently renamed original inode cannot be reported retired from path
  try{assert.throws(()=>retireConstructionStage(r.handle),/retirement unproven/);assert(existsSync(join(root,'renamed-original')));}
  finally{mock.restoreAll();syncBuiltinESMExports();}
 }));
+test('failure immediately after exclusive file open cannot leak its original file descriptor',async()=>temporary(async root=>{
+ const f=fixture(),original=fs.fstatSync;let failedFd;
+ mock.method(fs,'fstatSync',function(fd,...args){const actual=original.call(this,fd,...args);
+  if(actual.isFile()&&failedFd===undefined){failedFd=fd;throw Error('unit-only initial fstat failure');}return actual;});
+ syncBuiltinESMExports();
+ try{
+  assert.throws(()=>beginConstructionStage(root,f.plan.archive,performance.now()+10000));assert(Number.isInteger(failedFd));
+  assert.throws(()=>original(failedFd),{code:'EBADF'});assert.deepEqual(readdirSync(root),[]);
+ }finally{mock.restoreAll();syncBuiltinESMExports();}
+}));
