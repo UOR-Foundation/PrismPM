@@ -164,6 +164,18 @@ test('native qualification keeps pinned real actors, complete negative controls 
   const source = readFileSync(new URL('./sdk-registry-qualification.mjs', import.meta.url), 'utf8');
   const orchestrator = readFileSync(new URL('./sdk-vv-check.mjs', import.meta.url), 'utf8');
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const processOwner = readFileSync(new URL('./sdk-process-qualification.mjs', import.meta.url), 'utf8');
+  assert(workflow.includes('name: Verify complete native outer process owner'));
+  assert(workflow.includes('240s node scripts/sdk-process-qualification.mjs'));
+  assert(workflow.includes('--network "$network"'));
+  assert(workflow.includes('--read-only --cpus 2 --memory 1g --memory-swap 1g --pids-limit 256'));
+  assert(workflow.includes('--tmpfs /tmp:rw,exec,nosuid,nodev,size=16g,mode=1777'));
+  assert(workflow.includes('native-outer-process-owner-${{ matrix.arch }}-'));
+  assert(processOwner.includes("'--test-timeout=120000'"));
+  assert(processOwner.includes("verifyTap(result.stdout.toString(), 17)"));
+  assert(processOwner.includes("verifyFileCompletions(result.stdout.toString(), [resolve('scripts/sdk-vv-check.test.mjs')], 17)"));
+  assert(processOwner.includes('captureQualificationFiles(paths), inputs'));
+  assert(!processOwner.includes('test-name-pattern'));
   assert(workflow.includes('mkdir -m 2770 "$RUNNER_TEMP/registry-qualification"'));
   assert(workflow.includes('--user 0:0 --group-add "$(id -g)"'));
   for (const [os, arch] of [['ubuntu-24.04', 'amd64'], ['ubuntu-24.04-arm', 'arm64']]) {

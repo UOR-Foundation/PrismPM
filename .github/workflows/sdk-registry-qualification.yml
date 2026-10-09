@@ -8,6 +8,8 @@ on:
       - scripts/sdk-registry-qualification.test.mjs
       - scripts/sdk-registry-reader.mjs
       - scripts/sdk-vv-check.mjs
+      - scripts/sdk-vv-check.test.mjs
+      - scripts/sdk-process-qualification.mjs
       - scripts/sdk-candidate.sh
       - sdk/Dockerfile
       - sdk/vv-runtime.lock.json
@@ -47,6 +49,60 @@ jobs:
         run: |
           docker buildx build --file sdk/Dockerfile --target registry_qualification_tools \
             --platform linux/${{ matrix.arch }} --load --tag prism-registry-tools:$SOURCE_REVISION .
+      - name: Verify complete native outer process owner
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          QUALIFICATION_ARCH: ${{ matrix.arch }}
+        run: |
+          out="$RUNNER_TEMP/outer-process-owner"
+          mkdir -m 0700 "$out"
+          owner="prism-outer-owner-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.arch }}"
+          network="$owner-network"
+          ! docker network inspect "$network" >"$out/prior-network.stdout" 2>"$out/prior-network.stderr"
+          network_id=$(docker network create --label "org.uor.prismpm.outer-owner=$owner" "$network")
+          printf '%s\n' "$network_id" >"$out/network.id"
+          cleanup() {
+            status=$?
+            trap - EXIT
+            if docker container inspect "$owner" >"$out/container-survivor.json" 2>"$out/container-survivor.stderr"; then
+              actual=$(docker container inspect "$owner" --format '{{index .Config.Labels "org.uor.prismpm.outer-owner"}}')
+              test "$actual" = "$owner" || exit 1
+              container_id=$(docker container inspect "$owner" --format '{{.Id}}')
+              docker container rm --force --volumes "$container_id" >"$out/container-removal.stdout"
+              status=1
+            fi
+            for reference in "$(cat "$out/container.id")" "$owner"; do
+              ! docker container inspect "$reference" >>"$out/container-absence.stdout" 2>>"$out/container-absence.stderr" || exit 1
+            done
+            actual=$(docker network inspect "$network_id" --format '{{index .Labels "org.uor.prismpm.outer-owner"}}')
+            test "$actual" = "$owner" || exit 1
+            docker network rm "$network_id" >"$out/network-removal.stdout"
+            for reference in "$network_id" "$network"; do
+              ! docker network inspect "$reference" >>"$out/network-absence.stdout" 2>>"$out/network-absence.stderr" || exit 1
+            done
+            exit "$status"
+          }
+          trap cleanup EXIT
+          image=$(docker image inspect prism-registry-tools:$SOURCE_REVISION --format '{{.Id}}')
+          printf '%s\n' "$image" >"$out/image.id"
+          docker run --rm --init --name "$owner" --cidfile "$out/container.id" \
+            --label "org.uor.prismpm.outer-owner=$owner" --network "$network" \
+            --read-only --cpus 2 --memory 1g --memory-swap 1g --pids-limit 256 \
+            --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=16g,mode=1777 \
+            --mount type=bind,source=$PWD,target=/source,readonly \
+            --mount type=bind,source=$out,target=/evidence --workdir /source \
+            --env GITHUB_ACTIONS --env RUNNER_ENVIRONMENT --env RUNNER_OS --env RUNNER_ARCH \
+            --env SOURCE_REVISION --env QUALIFICATION_ARCH --entrypoint timeout \
+            "$image" --signal=TERM --kill-after=5s 240s node scripts/sdk-process-qualification.mjs \
+            >"$out/docker.stdout" 2>"$out/docker.stderr"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-outer-process-owner-${{ matrix.arch }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/outer-process-owner/
+          if-no-files-found: error
+          retention-days: 14
       - name: Qualify real registry and fresh native daemons
         env:
           SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}

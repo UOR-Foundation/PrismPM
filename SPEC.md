@@ -1649,6 +1649,11 @@ absence does not prove escaped-descendant retirement; this watchdog neither
 adopts descendants nor replaces the release subreaper's exhaustion protocol.
 Uncertain retirement is retained with the failed command and prohibits
 acceptance. Original command and two-run deadlines remain unchanged.
+The existing native registry CI reuses its immutable thin tools image for the
+complete original 17 process-owner tests on both native platforms, with the
+original file deadline, source readbacks, raw results, cgroup observations and
+observed owned-container/network retirement. These unit results do not qualify
+an installed SDK or prove escaped-process adoption.
 The release gate requires
 the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.
