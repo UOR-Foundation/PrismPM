@@ -17,7 +17,7 @@ export function frozenInputs() {
   pins();
   const files = new Set([
     ...modules.map(modulePath),
-    ...['checks.mjs','corpus.mjs','compile.mjs','runner.rs','driver/Cargo.toml','driver/Cargo.lock','driver/src/main.rs'].map(path=>'tests/browser-budget/'+path),
+    ...['checks.mjs','corpus.mjs','compile.mjs','fallback-owner.test.mjs','runner.rs','driver/Cargo.toml','driver/Cargo.lock','driver/src/main.rs'].map(path=>'tests/browser-budget/'+path),
     'sdk/browser/budget-model-test.mjs','sdk/browser/effects-module.mjs','sdk/browser/effects-wire.mjs','sdk/browser/identity.mjs',
     'crates/prismpm/src/holo/browser_application.rs',
     'tests/browser-view/compile.mjs','tests/browser-view/driver-cache.mjs','tests/browser-view/prerequisites.mjs',
