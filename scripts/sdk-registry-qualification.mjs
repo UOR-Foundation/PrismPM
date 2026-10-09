@@ -382,10 +382,13 @@ async function run(destination) {
     assert.equal(self.Config.Labels?.['org.uor.prismpm.registry-qualification-tools'], revision);
     writeFileSync(join(publicRoot, 'tool-container.json'), JSON.stringify(self) + '\n', {flag: 'wx'});
     assert.equal((await execute('docker', ['version', '--format', '{{.Client.Version}}'])).stdout.toString().trim(), '28.4.0');
+    const buildx = await execute('docker', ['buildx', 'version']);
+    assert.match(buildx.stdout.toString().trim(), /^github\.com\/docker\/buildx v0\.28\.0 b1281b81bba797b21d9eaf256e6a13eb14419836$/);
     await execute('oras', ['version']); await execute('openssl', ['version']);
-    for (const tool of ['node', 'docker', 'oras']) {
-      const bytes = readFileSync('/usr/local/bin/' + tool);
-      writeFileSync(join(publicRoot, tool + '-identity.json'), JSON.stringify({path: '/usr/local/bin/' + tool,
+    for (const [tool, path] of [['node', '/usr/local/bin/node'], ['docker', '/usr/local/bin/docker'],
+      ['oras', '/usr/local/bin/oras'], ['docker-buildx', '/usr/local/libexec/docker/cli-plugins/docker-buildx']]) {
+      const bytes = readFileSync(path);
+      writeFileSync(join(publicRoot, tool + '-identity.json'), JSON.stringify({path,
         bytes: bytes.length, sha256: hash(bytes)}) + '\n', {flag: 'wx'});
     }
     network = prefix + '-network';
