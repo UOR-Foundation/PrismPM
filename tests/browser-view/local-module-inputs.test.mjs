@@ -57,7 +57,13 @@ test('a changed or nonexecutable actual parser cannot borrow earlier parse succe
   const directory = mkdtempSync(join(tmpdir(), 'static-parser-negative-')), executable = join(directory, 'refuse-parser');
   const original = process.execPath;
   try {
-    writeFileSync(executable, '#!/bin/sh\nexit 37\n', {flag: 'wx', mode: 0o700});
+    // Consume the actual source input before intentionally refusing it. An
+    // immediate exit can race the parent's write and test EPIPE instead.
+    writeFileSync(executable, '#!/bin/sh\nwhile IFS= read -r line; do :; done\nexit 37\n', {flag: 'wx', mode: 0o700});
+    const refusal = childProcess.spawnSync(executable, [], {input: Buffer.from(files['tests/a.mjs']),
+      encoding: 'utf8', env: {NODE_NO_WARNINGS: '1', TZ: 'UTC'}, timeout: 10000, maxBuffer: 1048576});
+    assert.equal(refusal.error, undefined); assert.equal(refusal.signal, null);
+    assert.equal(refusal.status, 37, 'actual substituted parser deliberately refuses consumed input');
     process.execPath = executable;
     assert.throws(() => capture(files), /actual static ESM parsing/);
     chmodSync(executable, 0o600);
