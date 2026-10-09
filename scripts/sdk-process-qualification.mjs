@@ -1,4 +1,4 @@
-// Complete real native process-owner units; never installed-SDK acceptance.
+// Complete native process/staging units; never installed-SDK acceptance.
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -25,10 +25,17 @@ const inputs = captureQualificationFiles(paths);
 const write = (name, value) => writeFileSync(output + '/' + name, JSON.stringify(value) + '\n', {flag: 'wx'});
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 write('inputs.json', {source, files: inputs});
+const owners = new Map([
+  ['scripts/sdk-vv-check.test.mjs', 17],
+  ['scripts/sdk-construction-archive.test.mjs', 14],
+  ['scripts/sdk-construction-stage.test.mjs', 17],
+  ['scripts/sdk-construction-acquire.test.mjs', 6],
+  ['scripts/sdk-construction-observe.test.mjs', 17],
+]);
 const args = ['--test', '--test-concurrency=1', '--test-timeout=120000',
-  '--test-reporter=./scripts/owning-node-reporter.mjs', 'scripts/sdk-vv-check.test.mjs'];
+  '--test-reporter=./scripts/owning-node-reporter.mjs', ...owners.keys()];
 write('command.json', {source, program: process.execPath, args, timeout_ms: 150000,
-  architecture: process.arch, scope: 'complete original17 process-owner units only'});
+  architecture: process.arch, owners: [...owners], scope: 'original17 process-owner and complete54 construction/staging units only'});
 let result, failure, sourceUnchanged = false;
 try {
   try { result = await execute(process.execPath, args, {timeout: 150000, limit: 16 * 1024 ** 2}); }
@@ -41,8 +48,14 @@ try {
   sourceUnchanged = true;
   if (failure) throw failure;
   assert.equal(result.status, 0); assert.equal(result.signal, null);
-  assert.equal(verifyTap(result.stdout.toString(), 17), 17);
-  verifyFileCompletions(result.stdout.toString(), [resolve('scripts/sdk-vv-check.test.mjs')], 17);
+  const tap = result.stdout.toString();
+  assert.equal(verifyTap(tap, 71), 71);
+  verifyFileCompletions(tap, [...owners.keys()].map(path => resolve(path)), 71);
+  const expected = new Map([...owners].map(([path, count]) => [resolve(path), count]));
+  for (const line of tap.split(/\r?\n/).filter(line => line.startsWith('# prismpm-owning-file '))) {
+    const row = JSON.parse(line.slice('# prismpm-owning-file '.length));
+    assert.equal(row.tests, expected.get(row.file), 'complete original owning-file count required');
+  }
 } catch (error) { failure = error; }
 finally {
   const memory = Object.fromEntries(['memory.current', 'memory.peak', 'memory.events',
@@ -68,6 +81,6 @@ finally {
     ...(result ? {stdout_sha256: hash(result.stdout), stderr_sha256: hash(result.stderr),
       ...(result.retirement ? {process_retirement: result.retirement} : {})} : {}),
     failure: failure ? String(failure) : null,
-    scope: 'native whole process-owner units only; no SDK/fullVV/escaped adoption or release acceptance'});
+    scope: 'native whole process and construction/staging units only; no original remote archive staging/import/SDK/fullVV/escaped adoption or release acceptance'});
 }
 if (failure) throw failure;

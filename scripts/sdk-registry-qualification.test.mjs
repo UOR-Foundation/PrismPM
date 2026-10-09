@@ -183,6 +183,12 @@ test('native qualification keeps pinned real actors, complete negative controls 
   assert(processOwner.includes("assert.equal(memory['memory.swap.max'].trim(), '0')"));
   assert(processOwner.includes('assert.equal(quota, 2 * period)'));
   assert(processOwner.includes("'--test-timeout=120000'"));
+  assert(processOwner.includes('assert.equal(verifyTap(tap, 71), 71)'));
+  for (const [path, count] of [['sdk-vv-check', 17], ['sdk-construction-archive', 14],
+    ['sdk-construction-stage', 17], ['sdk-construction-acquire', 6], ['sdk-construction-observe', 17]]) {
+    assert(processOwner.includes(`['scripts/${path}.test.mjs', ${count}]`));
+  }
+  assert(workflow.includes('- scripts/sdk-construction-*.mjs'));
   assert(processOwner.includes("verifyTap(result.stdout.toString(), 17)"));
   assert(processOwner.includes("verifyFileCompletions(result.stdout.toString(), [resolve('scripts/sdk-vv-check.test.mjs')], 17)"));
   assert(processOwner.includes('captureQualificationFiles(paths), inputs'));
