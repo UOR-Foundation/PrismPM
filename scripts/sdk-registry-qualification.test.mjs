@@ -179,6 +179,13 @@ test('native qualification keeps pinned real actors, complete negative controls 
   assert(!/setup-qemu|--network[ =]host|secrets\.|contents: write/.test(workflow));
   assert(recipe.includes('FROM input_tools AS registry_qualification_tools'));
   assert(recipe.includes('COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker'));
+  const tools = recipe.split('FROM input_tools AS registry_qualification_tools\n')[1].split('\nFROM ')[0];
+  assert(tools.includes('COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx'),
+    'thin qualification tools must retain the actual pinned native Buildx plugin, not depend on a host plugin');
+  assert(tools.includes('&& docker buildx version'));
+  assert(source.includes("await execute('docker', ['buildx', 'version'])"));
+  assert(source.includes("assert.match(buildx.stdout.toString().trim(), /^github\\.com\\/docker\\/buildx v0\\.28\\.0 b1281b81bba797b21d9eaf256e6a13eb14419836$/)"));
+  assert(source.includes("['docker-buildx', '/usr/local/libexec/docker/cli-plugins/docker-buildx']"));
   assert(source.includes('await acquireOwnedImageMetadata(reader, image, arch)'));
   assert(orchestrator.includes('await acquireOwnedImageMetadata(registryReader, image, arch)'));
   for (const id of ['positive-real-registry-and-daemon', 'missing-ca', 'wrong-ca', 'wrong-authority-ca-path',
