@@ -28,18 +28,23 @@ export function verifyRetentionComponents(compilerOwner) {
   const library = join(build.work, 'generated/src/lib.rs'), manifest = join(build.work, 'generated/generation-manifest.json');
   const original = readFileSync(library), originalManifest = readFileSync(manifest);
   for (const mode of ['source', 'source-and-manifest', 'extra-file', 'hard-link']) {
+    const refusal = {source: /generated package manifest digest src\/lib\.rs/,
+      'source-and-manifest': /immutable generated package captured immediately after code generation/,
+      'extra-file': /complete generated package file inventory/, 'hard-link': /bounded single-link custody file/}[mode];
     const extra = mode === 'hard-link' ? join(build.work, 'linked-generated-source') : join(build.work, 'generated/unexpected');
     try {
       if (mode === 'source' || mode === 'source-and-manifest') {
         writeFileSync(library, Buffer.concat([original, Buffer.from('\n// planted generated-source change\n')]));
-        if (mode === 'source-and-manifest') {const value = JSON.parse(originalManifest); value.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(library)); writeFileSync(manifest, JSON.stringify(value));}
+        if (mode === 'source-and-manifest') {const value = JSON.parse(originalManifest); value.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(library));
+          writeFileSync(manifest, JSON.stringify(value, (_key, child) => child && !Array.isArray(child) && typeof child === 'object'
+            ? Object.fromEntries(Object.keys(child).sort().map(key => [key, child[key]])) : child) + '\n');}
       } else if (mode === 'extra-file') writeFileSync(extra, 'planted extra package input', {flag: 'wx'});
       else linkSync(library, extra);
       for (const standard of [true, false]) {
-        assert.throws(() => build.compileNative(standard), /generated package/);
+        assert.throws(() => build.compileNative(standard), refusal);
         assert.ok(!existsSync(join(build.work, standard ? 'runner-std' : 'runner-no-std')), 'changed source refused before first observer/compiler creation');
       }
-      assert.throws(() => build.unchanged(), /generated package/);
+      assert.throws(() => build.unchanged(), refusal);
     } finally {
       if (mode === 'source' || mode === 'source-and-manifest') {writeFileSync(library, original); writeFileSync(manifest, originalManifest);}
       else unlinkSync(extra);

@@ -18,6 +18,16 @@ Historical references to a DK-30 session host predate the current register;
 DK-30 now identifies the native-lane reducer. Current receipts identify the
 still-required source-owned browser session-host integration explicitly.
 
+Exact989 owner779 stopped after26 completions (23 pass/3 fail) before its
+required96-case inventory. Payload and operation forged manifests lacked their
+required terminal newline, reaching canonical-format refusal rather than the
+intended immutable-package guard. Retention had the same fixture defect;
+payload/retention hard-link fixtures also required the wrong rejection message.
+Corrected fixtures preserve canonical JSON plus newline and require the exact
+immutable-package, digest, complete-inventory or single-link refusal. Generator,
+custody guard, corpora and bounds are unchanged. Historical and failed outcomes
+cannot accept the corrected source; complete current owners remain mandatory.
+
 ## Historical component evidence
 
 The complete registered gate passed on 28 September 2026: 90 mandatory checks,
