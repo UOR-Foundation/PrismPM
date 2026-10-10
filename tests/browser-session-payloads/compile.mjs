@@ -9,6 +9,7 @@ import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm} from '../browser-view/generated-wasm.mjs';
+import {ownPayloadTranscripts} from './transcript-retention.mjs';
 export {run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
 export const repository = resolve(draft, '../..');
@@ -33,7 +34,7 @@ export function sourceClosure() {
 }
 export function frozenInputs() {
   const files = new Set([...sourceClosure().keys()].map(modulePath));
-  for (const path of ['compile.mjs', 'checks.mjs', 'component.test.mjs', 'owner.test.mjs', 'runtime.mjs', 'browser.mjs', 'journeys.mjs', 'mutations.mjs', 'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
+  for (const path of ['compile.mjs', 'checks.mjs', 'component.test.mjs', 'transcript-retention.test.mjs', 'owner.test.mjs', 'runtime.mjs', 'browser.mjs', 'journeys.mjs', 'mutations.mjs', 'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
     files.add('tests/browser-session-payloads/' + path);
   for (const path of ['tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
     'sdk/browser/session-payloads.mjs', 'sdk/browser/session-storage.mjs',
@@ -216,6 +217,7 @@ export function preparePayloads(expectedInputs = null) {
       assert.ok(Object.isFrozen(package_.files));return [name, package_.files];
     })));
     return Object.freeze({work, sources, verified, generation, wasm, wasmOwners, wasmArtifacts, generatedWasm,
-      compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, generatedPackages});
+      compileNative, runNative, nativeEvidence, unchanged, inputs, cacheRetirement, generatedPackages,
+      transcripts: ownPayloadTranscripts(work)});
   } finally { if (!complete) process.stderr.write('Retained incomplete session-journal diagnostic build ' + work + '\n'); }
 }
