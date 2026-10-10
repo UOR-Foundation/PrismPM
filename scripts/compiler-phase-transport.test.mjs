@@ -40,6 +40,73 @@ for(const fixture of sources)for(const outcome of ['success','exit-failure','spa
   });
 }
 
+// Evaluate the exact source hook with instrumented I/O, not a replacement
+// compiler. The actual dual-stream and closed-pipe tests below remain owners
+// of real OS pipe behavior.
+function diagnosticHook(write,clock=()=>1234) {
+  const source=readFileSync(new URL('../tests/browser-view/compile.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf('export function observeCompilerPhase(');
+  const end=source.indexOf('function execute(',begin);
+  assert(begin>=0&&end>begin);
+  const waits=[];
+  const hook=runInNewContext('('+source.slice(begin+'export '.length,end).trim()+')',{
+    Buffer,Number,Int32Array,SharedArrayBuffer,
+    performance:{now:clock},compilerPhase:()=> 'lexlean-verification',writeSync:write,
+    Atomics:{wait(...args){waits.push(args);}},
+  });
+  return {hook,waits};
+}
+test('diagnostic transport preserves every byte through short writes and transient errors',()=>{
+  const bytes=[],steps=['EINTR','EAGAIN',3,'EWOULDBLOCK',7,Infinity];let calls=0;
+  const {hook,waits}=diagnosticHook((fd,record,offset,length)=>{
+    assert.equal(fd,2);assert(Buffer.isBuffer(record));assert.equal(length,record.length-offset);
+    const step=steps[calls++];assert.notEqual(step,undefined);
+    if(typeof step==='string')throw Object.assign(new Error('transport'),{code:step});
+    const count=Math.min(length,step);bytes.push(Buffer.from(record.subarray(offset,offset+count)));return count;
+  });
+  assert.doesNotThrow(()=>hook('driver',['verify'],1222,true));
+  assert.equal(calls,steps.length);assert.equal(waits.length,2);
+  for(const [array,index,expected,timeout]of waits){assert.equal(array.length,1);assert.equal(index,0);assert.equal(expected,0);assert.equal(timeout,1);}
+  assert.equal(Buffer.concat(bytes).toString(),
+    '# prismpm-compiler-phase {"phase":"lexlean-verification","elapsed_ms":12,"success":true}\n');
+});
+for(const code of ['EINTR','EAGAIN','EWOULDBLOCK']) {
+  test('permanent '+code+' is bounded and cannot change the real outcome',()=>{
+    let calls=0;const {hook,waits}=diagnosticHook(()=>{calls++;throw Object.assign(new Error('transport'),{code});});
+    assert.doesNotThrow(()=>hook('driver',['verify'],1234,false));
+    assert.equal(calls,64);assert.equal(waits.length,code==='EINTR'?0:64);
+  });
+}
+test('diagnostic deadline is measured after compiler elapsed and stops transient retries',()=>{
+  let ticks=0,calls=0;
+  const {hook}=diagnosticHook(()=>{calls++;throw Object.assign(new Error('transport'),{code:'EAGAIN'});},
+    ()=>1234+50*ticks++);
+  assert.doesNotThrow(()=>hook('driver',['verify'],1200,true));
+  assert.equal(calls,1);
+});
+for(const result of ['EPIPE','EBADF','throw',0,-1,0.5,NaN,Infinity,257]) {
+  test('unavailable or invalid diagnostic progress is fail-open: '+result,()=>{
+    let calls=0;const {hook}=diagnosticHook(()=>{
+      calls++;
+      if(typeof result==='string')throw Object.assign(new Error('transport'),result==='throw'?{}:{code:result});
+      return result;
+    });
+    assert.doesNotThrow(()=>hook('driver',['verify'],1234,false));assert.equal(calls,1);
+  });
+}
+test('partial progress cannot exceed the fixed attempt bound',()=>{
+  let calls=0;const {hook}=diagnosticHook(()=>{calls++;return 1;});
+  assert.doesNotThrow(()=>hook('driver',['verify'],1234,true));assert.equal(calls,64);
+});
+test('compiler elapsed excludes diagnostic retries',()=>{
+  let ticks=0,calls=0,record;
+  const {hook}=diagnosticHook((_fd,bytes,_offset,length)=>{
+    record=Buffer.from(bytes);if(calls++===0)throw Object.assign(new Error('transport'),{code:'EINTR'});return length;
+  },()=>1234+ticks++);
+  hook('driver',['verify'],1222,true);assert.equal(calls,2);
+  assert.equal(JSON.parse(record.toString().slice('# prismpm-compiler-phase '.length)).elapsed_ms,12);
+});
+
 test('actual diagnostic hook preserves valid bounded JSON while stdout and stderr are active',()=>{
   const program=`import{writeSync}from'node:fs';
     import{observeCompilerPhase}from ${JSON.stringify(new URL('../tests/browser-view/compile.mjs',import.meta.url).href)};

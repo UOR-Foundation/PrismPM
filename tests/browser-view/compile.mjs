@@ -118,8 +118,30 @@ export function compilerPhase(program,args) {
 }
 export function observeCompilerPhase(program,args,started,success) {
   // Diagnostic loss cannot change the actual compiler or test outcome.
-  try { writeSync(2,'# prismpm-compiler-phase ' + JSON.stringify({
-    phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n'); }
+  try {
+    const record=Buffer.from('# prismpm-compiler-phase ' + JSON.stringify({
+      phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n');
+    if(record.length>256)return;
+    // Pipes may briefly reject a write even while their reader is active.
+    // Account for byte progress and yield on transient backpressure, with
+    // fixed attempt/time bounds; never wait indefinitely for diagnostics.
+    const deadline=performance.now()+100;
+    let offset=0,wait=null;
+    for(let attempt=0;attempt<64&&offset<record.length;attempt++) {
+      if(performance.now()>=deadline)return;
+      try {
+        const written=writeSync(2,record,offset,record.length-offset);
+        if(!Number.isSafeInteger(written)||written<=0||written>record.length-offset)return;
+        offset+=written;
+      } catch(error) {
+        if(!['EINTR','EAGAIN','EWOULDBLOCK'].includes(error?.code))return;
+        if(error.code!=='EINTR') {
+          wait??=new Int32Array(new SharedArrayBuffer(4));
+          Atomics.wait(wait,0,0,1);
+        }
+      }
+    }
+  }
   catch { /* No acceptance depends on this optional observation. */ }
 }
 function execute(program,args,cwd,env={}) {
