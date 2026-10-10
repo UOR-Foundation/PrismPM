@@ -1726,6 +1726,61 @@ ABI is enabled by this typed prerequisite. The owning generated native,
 no_std and Wasm tests cover all resource families, actual maxima, malformed
 binding/coverage and planted source guards; public `PP2011` remains unchanged.
 
+### 12.14 BinaryProgram package profile
+
+`Foundation.Binary.V1.Model.BinaryProgram` is the distinct closed
+`prismpm/binary-program/1` package profile, projected as model-document/5.
+It is mutually exclusive with an application, NativeLibrary, system release,
+architecture facets, `.holo`, browser View and deployment acceptance. Schemas
+1–4 retain their existing meaning and bytes when no program is present.
+
+The source supplies package metadata, strictly ordered executable export roots,
+an exact exported monomorphic `Bytes -> Bytes` entry, nonzero bounded request
+and response byte maxima, Core-Wasm maximum pages, complete finite acceptance
+vectors, and the mandatory closed `prismpm/raw-file-cli/1` descriptor. Source
+vector bytes have no UTF-8 validity requirement. Core-Wasm uses the existing
+import-free byte ABI, `holo_alloc(i32) -> i32`, `binary_run(i32,i32) -> i64`
+(pointer in the high 32 bits, length in the low 32), and exported memory. These
+historical allocation-symbol names do not establish Hologram acceptance.
+
+All three targets are mandatory: generated native core package, Core-Wasm, and
+raw file/stdin/stdout CLI package. The CLI depends on the exact generated core
+archive via an isolated offline registry, with no path, Git or dev dependency.
+Its sole grammar is `--input PATH --output PATH`, in that order; `-` selects the
+corresponding standard stream. It neither decodes text nor appends a newline,
+selects behavior through environment variables, invokes a shell, nor interprets
+a domain container format. File destinations use no-clobber creation.
+
+The adapter reads at most the checked request maximum plus one byte and uses
+fallible reservation for its own input buffer. It rejects oversized input
+before invoking the core, and rejects oversized output before publishing.
+The closed source-owned adapter errors are InvalidArguments, InputOpen,
+InputType, InputRead, InputLimit, AdapterAllocation, ComputeFailure, OutputLimit,
+OutputExists, OutputOpen and OutputWrite. Failure before output opening has
+NotPublished outcome. Failed writing, flushing or synchronization has Unknown
+outcome because a partial file or stream may exist; no rollback is promised.
+Successful completion is Published. Diagnostics are stderr-only
+`Failure:PublicationOutcome` lines with failure exit status. Core internal
+allocation failures, panics, aborts, signals and Wasm traps remain failed executions;
+this contract does not promise recoverable core OOM or detailed trap classes.
+
+Verification audits every selected source declaration and its exact axiom
+policy, requires the attested generated Lean closure, independently regenerates
+and byte-compares the complete binary artifact set, checks exact named export
+coverage and IR signatures, and executes every source vector in native std,
+no_std, Core-Wasm and CLI standard/file/mixed transports. Native output bytes
+are independently compared with the source vector. Core-Wasm executes in a real
+engine with exact memory-bound and ABI checks. Each invocation uses a fresh
+instance. Transport failures and first-over request limits execute against the
+real generated adapters in the supported Linux SDK. Mandatory `io_coverage`
+records the Linux platform and whether the OutputWrite negative was executed;
+profiles whose entire corpus has empty responses explicitly record
+`not-exercised-empty-responses` instead of claiming that failure was measured.
+`binary-acceptance.json` and its manifest record only
+binary-package acceptance, with no application, browser, Holo, product release
+or deployment implication. Installed SDK qualification on native amd64 and
+arm64 is additional mandatory evidence, not inferred from source checks.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -2282,3 +2337,4 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `TM-04` | `template-ci` | Least-privilege jobs build once and pass the exact digest through protected signing, publication, deployment, and verification boundaries. | §17 |
 | `TM-05` | `template-ci` | Template checks are read-only and explicit updates produce reviewable downstream patches or pull requests without hidden branch mutation. | §17 |
 | `TM-06` | `template-ci` | All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates. | §17 |
+| `DK-29` | `sdk` | Closed BinaryProgram packages preserve arbitrary bytes through native std, no_std, Core-Wasm and generated bounded raw file and stdio adapters, independently replayed without application or deployment claims. | §12 |

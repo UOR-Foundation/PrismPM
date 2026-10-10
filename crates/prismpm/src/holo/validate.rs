@@ -80,7 +80,9 @@ fn contains_index<T>(rows: &[T], index: u64) -> bool {
 
 /// Validate a model-document DTO before encoding or after strict decoding.
 pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
-    let expected_schema = if doc.library.is_some() {
+    let expected_schema = if doc.program.is_some() {
+        "prismpm/model-document/5"
+    } else if doc.library.is_some() {
         "prismpm/model-document/3"
     } else if matches!(&doc.application, Some(Application::Browser(_))) {
         "prismpm/model-document/4"
@@ -103,6 +105,22 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
     )?;
     digest(&doc.provenance.snapshot_id, "snapshot_id")?;
     digest(&doc.provenance.emitter_semantics_id, "emitter_semantics_id")?;
+    if let Some(program) = &doc.program {
+        if doc.application.is_some()
+            || doc.library.is_some()
+            || !doc.standards_profile.is_empty()
+            || !doc.provenance.facet_packages.is_empty()
+            || doc.architecture != Default::default()
+            || doc.security != Default::default()
+            || doc.quality != Default::default()
+        {
+            return Err(PrismError::new(
+                "PP4004",
+                "binary programs cannot declare application, library or facet records",
+            ));
+        }
+        return super::binary_program::validate(program);
+    }
     if let Some(library) = &doc.library {
         if doc.application.is_some()
             || !doc.standards_profile.is_empty()

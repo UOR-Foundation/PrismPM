@@ -29,6 +29,19 @@ pub struct ModelDocument {
         deserialize_with = "present_library"
     )]
     pub library: Option<ModelLibrary>,
+    /// Closed arbitrary-byte package; mutually exclusive with application/library.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_program"
+    )]
+    pub program: Option<super::binary_program::BinaryProgram>,
+}
+
+fn present_program<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<super::binary_program::BinaryProgram>, D::Error> {
+    super::binary_program::BinaryProgram::deserialize(deserializer).map(Some)
 }
 
 fn present_library<'de, D: serde::Deserializer<'de>>(

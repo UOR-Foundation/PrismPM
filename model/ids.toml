@@ -1091,3 +1091,9 @@ id = "TM-06"
 suite = "template-ci"
 level = "build"
 statement = "All in-scope UOR and Prism repositories use the common SDK bootstrap while preserving their repository-specific acceptance gates."
+
+[[id]]
+id = "DK-29"
+suite = "sdk"
+level = "build"
+statement = "Closed BinaryProgram packages preserve arbitrary bytes through native std, no_std, Core-Wasm and generated bounded raw file and stdio adapters, independently replayed without application or deployment claims."

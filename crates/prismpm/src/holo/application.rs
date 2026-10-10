@@ -191,7 +191,7 @@ fn boolean(fields: &BTreeMap<&str, (&str, &Value)>, name: &str) -> Result<bool, 
         .ok_or_else(|| PrismError::new("PP2001", format!("application field {name} is malformed")))
 }
 
-fn unsigned(
+pub(super) fn unsigned(
     fields: &BTreeMap<&str, (&str, &Value)>,
     name: &str,
     representation: &str,
@@ -360,7 +360,7 @@ fn operation_list(
     }
 }
 
-fn bytes(value: &Value, field: &str) -> Result<Vec<u8>, PrismError> {
+pub(super) fn bytes(value: &Value, field: &str) -> Result<Vec<u8>, PrismError> {
     if value.get("kind").and_then(Value::as_str) != Some("bytes") {
         return Err(PrismError::new(
             "PP2001",
@@ -677,6 +677,7 @@ fn projected_document(
         quality: QualityModel::default(),
         application: Some(application),
         library: None,
+        program: None,
     };
     super::validate::validate(&document)?;
     Ok(Some(document))
