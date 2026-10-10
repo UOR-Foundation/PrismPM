@@ -20,7 +20,7 @@ if(args[0]==='image'&&args[1]==='inspect'){console.log(JSON.stringify([{Os:'linu
 if(args[0]==='container'&&args[1]==='create'){console.log(id);process.exit(0);}
 if(args[0]==='container'&&args[1]==='cp'){
  const from=args[2].split(':').slice(1).join(':'),prefix='/opt/prismpm/share/conformance-root/';
- if(from==='/tmp/prismpm-binary-evidence'){fs.cpSync(process.env.RECORDED_PROOF,args[3],{recursive:true});process.exit(0);}
+ if(from.startsWith('/tmp/')){console.error('Docker archive API cannot read tmpfs');process.exit(66);}
  if(from==='/opt/prismpm/share/inventory.json'){fs.copyFileSync(process.env.RECORDED_INVENTORY,args[3]);process.exit(0);}
  const input=from.startsWith(prefix)?path.join(root,from.slice(prefix.length)):from==='/usr/local/bin/prismpm-devcontainer-init'?path.join(root,'sdk/devcontainer-init.sh'):null;
  if(!input)process.exit(65);fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
@@ -29,7 +29,9 @@ if(args[0]==='container'&&args[1]==='start'){
  const fixture=require('node:child_process').spawnSync(process.execPath,[path.join(root,'scripts/binary-sdk-check-fixtures.mjs'),process.env.RECORDED_PROOF],{encoding:'utf8'});if(fixture.status!==0){process.stderr.write(fixture.stderr);process.exit(65);}const receipt=JSON.parse(fixture.stdout);
  const runtime=earlier.filter(row=>row[0]==='container'&&row[1]==='create').at(-1),last=runtime.slice(-4);
  const value={schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:last[0],source_revision:last[1],source_sha256:last[2],inventory_sha256:last[3],architecture:process.arch==='x64'?'amd64':'arm64',build_id:receipt.build_id,attestation_id:receipt.attestation_id,checks:JSON.parse(process.env.RECORDED_CHECKS),unclaimed:JSON.parse(process.env.RECORDED_UNCLAIMED)};
- process.stdout.write(process.env.RECORDED_OUTPUT===undefined?JSON.stringify(value):process.env.RECORDED_OUTPUT);process.exit(Number(process.env.RECORDED_START_STATUS||0));
+ const exportRoot=path.join(path.dirname(process.env.RECORDED_PROOF),'export');fs.mkdirSync(exportRoot);fs.writeFileSync(path.join(exportRoot,'binary-result.json'),process.env.RECORDED_OUTPUT===undefined?JSON.stringify(value):process.env.RECORDED_OUTPUT);fs.cpSync(process.env.RECORDED_PROOF,path.join(exportRoot,'prismpm-binary-evidence'),{recursive:true});
+ if(process.env.RECORDED_ARCHIVE==='missing-proof'){require('node:child_process').spawnSync('tar',['-c','-C',exportRoot,'binary-result.json'],{stdio:['ignore','inherit','inherit']});}else if(process.env.RECORDED_ARCHIVE==='truncated'){process.stdout.write('broken archive');}else{const packed=require('node:child_process').spawnSync('tar',['-c','-C',exportRoot,'binary-result.json','prismpm-binary-evidence'],{stdio:['ignore','inherit','inherit']});if(packed.status!==0)process.exit(67);}
+ process.exit(Number(process.env.RECORDED_START_STATUS||0));
 }
 if(args[0]==='container'&&args[1]==='inspect'){console.log(process.env.RECORDED_EXIT_STATUS||'0');process.exit(0);}
 if(args[0]==='container'&&args[1]==='rm')process.exit(0);
@@ -59,18 +61,20 @@ function accepted(context){
  const created=calls.filter(row=>row[0]==='container'&&row[1]==='create');assert.equal(created.length,2);
  const runtime=created[1];for(const arg of ['--read-only','--network','none','--user','1000:1000','--cap-drop','ALL','--security-opt','no-new-privileges','--tmpfs','/tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','CARGO_NET_OFFLINE=true'])assert.ok(runtime.includes(arg),arg);
  assert.ok(!runtime.includes('--mount')&&!runtime.includes('--volume')&&!runtime.includes('--entrypoint'));
- assert.deepEqual(runtime.slice(-8,-4),[image,'node','scripts/binary-sdk-check.mjs','run']);
+ assert.deepEqual(runtime.slice(-9,-6),[image,'/bin/sh','-ec']);assert.match(runtime.at(-6),/node scripts\/binary-sdk-check\.mjs run "\$@" > \/tmp\/binary-result\.json/);assert.match(runtime.at(-6),/exec tar -c -C \/tmp binary-result\.json prismpm-binary-evidence/);assert.equal(runtime.at(-5),'binary-sdk');
  assert.deepEqual(runtime.slice(-4),[image,revision,hash(canonical(capture(context.root,revision))),hash(readFileSync(context.env.RECORDED_INVENTORY))]);
  const start=calls.findIndex(row=>row[0]==='container'&&row[1]==='start');assert.ok(start>=0,'runtime must actually start');
  const inspected=calls.findIndex(row=>row[0]==='container'&&row[1]==='inspect');assert.ok(inspected>start,'runtime exit must be inspected after execution');
  assert.equal(calls.filter(row=>row[0]==='container'&&row[1]==='start').length,1);
  assert.ok(calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].endsWith('/scripts/binary-sdk-check.test.mjs')));
+ assert.ok(!calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].includes(':/tmp/')));
  assert.match(result.stdout,/binary-package SDK closure passed/);
 }
 
 test('real shell invokes the confined Docker sequence and inspects actual terminal status',t=>{
  accepted(fixture(t));
  for(const field of ['RECORDED_START_STATUS','RECORDED_EXIT_STATUS']){const context=fixture(t);context.env[field]='7';const {result}=execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);}
+ for(const archive of ['missing-proof','truncated']){const context=fixture(t);context.env.RECORDED_ARCHIVE=archive;assert.notEqual(execute(context).result.status,0);}
  for(const output of ['', 'TAP version 13\n1..0 # SKIP\n','{}']){const context=fixture(t);context.env.RECORDED_OUTPUT=output;const {result}=execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);}
 });
 

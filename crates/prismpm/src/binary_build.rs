@@ -2,16 +2,21 @@
 use crate::error::PrismError;
 use crate::holo::canonical::content_id;
 use crate::holo::model_document::ModelDocument;
-use crate::library_build::{regular_bytes, sha256, validate_export_identity, write, relative};
+use crate::library_build::{regular_bytes, relative, sha256, validate_export_identity, write};
 use crate::verification::{executable, run_process, ProcessRecord};
-use prod_codegen::{generate_cargo_package, generate_core_wasm_package, CargoPackageSpec, CoreWasmSpec};
+use prod_codegen::{
+    generate_cargo_package, generate_core_wasm_package, CargoPackageSpec, CoreWasmSpec,
+};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 use std::path::Path;
 const LEAN4_PROD_ARCHIVE: &[u8] = include_bytes!("../vendor/lean4-prod/lean.tar");
 pub(crate) type BinaryArtifact = (String, Vec<u8>);
-pub(crate) struct GeneratedBinary { pub(crate) artifacts: Vec<BinaryArtifact>, pub(crate) processes: Vec<ProcessRecord> }
+pub(crate) struct GeneratedBinary {
+    pub(crate) artifacts: Vec<BinaryArtifact>,
+    pub(crate) processes: Vec<ProcessRecord>,
+}
 
 /// Generate unaccepted native artifacts; verification owns acceptance evidence.
 pub(crate) fn generate(
@@ -179,7 +184,8 @@ pub(crate) fn generate_recorded(
         .iter()
         .find(|(path, _)| path == "binary/kernel.ir")
         .expect("kernel recorded")
-        .1.clone();
+        .1
+        .clone();
     let text = std::str::from_utf8(&kernel)
         .map_err(|error| PrismError::new("PP5004", error.to_string()))?;
     let module = crate::verification::parse_kernel(text)?;
@@ -200,10 +206,22 @@ pub(crate) fn generate_recorded(
         &program.export_roots,
         &[],
     )?;
-    let entry = program.entry_root.rsplit('.').next().ok_or_else(|| PrismError::new("PP2001", "binary entry is absent"))?;
-    let entry_definition = module.find_def(entry).ok_or_else(|| PrismError::new("PP5004", "binary entry is absent from IR"))?;
-    if entry_definition.params.len() != 1 || entry_definition.params[0].1 != prod_ir::Type::Bytes || entry_definition.ret != prod_ir::Type::Bytes {
-        return Err(PrismError::new("PP5004", "binary entry IR signature must be Bytes to Bytes"));
+    let entry = program
+        .entry_root
+        .rsplit('.')
+        .next()
+        .ok_or_else(|| PrismError::new("PP2001", "binary entry is absent"))?;
+    let entry_definition = module
+        .find_def(entry)
+        .ok_or_else(|| PrismError::new("PP5004", "binary entry is absent from IR"))?;
+    if entry_definition.params.len() != 1
+        || entry_definition.params[0].1 != prod_ir::Type::Bytes
+        || entry_definition.ret != prod_ir::Type::Bytes
+    {
+        return Err(PrismError::new(
+            "PP5004",
+            "binary entry IR signature must be Bytes to Bytes",
+        ));
     }
     let package = generate_cargo_package(
         &module,
@@ -253,51 +271,110 @@ pub(crate) fn generate_recorded(
     artifacts.push((format!("binary/{archive_name}"), crate_bytes));
     // The CLI consumes the exact generated core archive through an isolated offline registry.
     let consumer = workspace.join("consumer");
-    std::fs::create_dir(&consumer).map_err(|error| PrismError::new("PP4002",error.to_string()))?;
-    let consumer_home = crate::library_verification::registry_cargo_home(&consumer, &program.metadata(), &core_archive)?;
+    std::fs::create_dir(&consumer).map_err(|error| PrismError::new("PP4002", error.to_string()))?;
+    let consumer_home = crate::library_verification::registry_cargo_home(
+        &consumer,
+        &program.metadata(),
+        &core_archive,
+    )?;
     let cargo_env = BTreeMap::from([
-        ("CARGO_HOME".to_owned(), consumer_home.to_string_lossy().into_owned()),
+        (
+            "CARGO_HOME".to_owned(),
+            consumer_home.to_string_lossy().into_owned(),
+        ),
         ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
-        ("RUSTFLAGS".to_owned(), format!("--remap-path-prefix={}=$BINARY_WORK", workspace.display())),
+        (
+            "RUSTFLAGS".to_owned(),
+            format!("--remap-path-prefix={}=$BINARY_WORK", workspace.display()),
+        ),
     ]);
     let cli = crate::binary_cli::generate(program)?;
     let cli_root = workspace.join("cli");
     for file in cli.files {
-        relative(&file.path)?; write(&cli_root.join(&file.path), &file.bytes)?;
-        artifacts.push((format!("binary/cli/{}",file.path), file.bytes));
+        relative(&file.path)?;
+        write(&cli_root.join(&file.path), &file.bytes)?;
+        artifacts.push((format!("binary/cli/{}", file.path), file.bytes));
     }
-    for (tool,args) in [
-        ("binary-cli-lock", vec!["generate-lockfile","--offline"]),
-        ("binary-cli-build", vec!["build","--locked","--offline","--release"]),
-        ("binary-cli-package", vec!["package","--locked","--offline","--allow-dirty"]),
+    for (tool, args) in [
+        ("binary-cli-lock", vec!["generate-lockfile", "--offline"]),
+        (
+            "binary-cli-build",
+            vec!["build", "--locked", "--offline", "--release"],
+        ),
+        (
+            "binary-cli-package",
+            vec!["package", "--locked", "--offline", "--allow-dirty"],
+        ),
     ] {
-        processes.push(run_process(tool,&executable("cargo")?,&args.into_iter().map(str::to_owned).collect::<Vec<_>>(),&cli_root,&cargo_env,&replacements,"PP4102")?);
+        processes.push(run_process(
+            tool,
+            &executable("cargo")?,
+            &args.into_iter().map(str::to_owned).collect::<Vec<_>>(),
+            &cli_root,
+            &cargo_env,
+            &replacements,
+            "PP4102",
+        )?);
     }
-    artifacts.push(("binary/cli/Cargo.lock".into(),std::fs::read(cli_root.join("Cargo.lock")).map_err(|error| PrismError::new("PP4102",error.to_string()))?));
-    let cli_archive = format!("{}-cli-{}.crate",program.cargo_name,program.cargo_version);
-    artifacts.push((format!("binary/{cli_archive}"), std::fs::read(cli_root.join("target/package").join(cli_archive)).map_err(|error| PrismError::new("PP4102",error.to_string()))?));
+    artifacts.push((
+        "binary/cli/Cargo.lock".into(),
+        std::fs::read(cli_root.join("Cargo.lock"))
+            .map_err(|error| PrismError::new("PP4102", error.to_string()))?,
+    ));
+    let cli_archive = format!("{}-cli-{}.crate", program.cargo_name, program.cargo_version);
+    artifacts.push((
+        format!("binary/{cli_archive}"),
+        std::fs::read(cli_root.join("target/package").join(cli_archive))
+            .map_err(|error| PrismError::new("PP4102", error.to_string()))?,
+    ));
     // A generated executable is platform-specific. Record reproducible source and exact lock,
     // and build/run the adapter independently during acceptance instead of publishing a host ELF.
-    let core = generate_core_wasm_package(&module,&CoreWasmSpec {
-        crate_name:format!("{}-core-wasm",program.cargo_name),entry:entry.to_owned(),export_name:"binary_run".into(),
-        input_allocation_cap:program.request_maximum,output_allocation_cap:program.response_maximum,
-        maximum_pages:program.memory_pages,input_ir_sha256:sha256(&kernel),
-    }).map_err(|error| PrismError::new("PP5101",error.to_string()))?;
+    let core = generate_core_wasm_package(
+        &module,
+        &CoreWasmSpec {
+            crate_name: format!("{}-core-wasm", program.cargo_name),
+            entry: entry.to_owned(),
+            export_name: "binary_run".into(),
+            input_allocation_cap: program.request_maximum,
+            output_allocation_cap: program.response_maximum,
+            maximum_pages: program.memory_pages,
+            input_ir_sha256: sha256(&kernel),
+        },
+    )
+    .map_err(|error| PrismError::new("PP5101", error.to_string()))?;
     let core_root = workspace.join("core-wasm");
     for file in core.files {
-        relative(&file.path)?; write(&core_root.join(&file.path), &file.bytes)?;
-        artifacts.push((format!("binary/core-wasm/{}",file.path),file.bytes));
+        relative(&file.path)?;
+        write(&core_root.join(&file.path), &file.bytes)?;
+        artifacts.push((format!("binary/core-wasm/{}", file.path), file.bytes));
     }
     // Do not override generated target rustflags: they bind exported memory and maximum pages.
     let wasm_env = BTreeMap::from([
-        ("CARGO_HOME".to_owned(),consumer_home.to_string_lossy().into_owned()),
-        ("CARGO_NET_OFFLINE".to_owned(),"true".to_owned()),
+        (
+            "CARGO_HOME".to_owned(),
+            consumer_home.to_string_lossy().into_owned(),
+        ),
+        ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
     ]);
-    processes.push(run_process("binary-core-wasm-build",&executable("cargo")?,
-        &["build","--locked","--offline","--release"].map(str::to_owned),&core_root,&wasm_env,&replacements,"PP5101")?);
-    let wasm = std::fs::read(core_root.join("target/wasm32-unknown-unknown/release").join(format!("{}_core_wasm.wasm",program.cargo_name.replace('-',"_"))))
-        .map_err(|error| PrismError::new("PP5101",error.to_string()))?;
-    artifacts.push(("binary/core.wasm".into(),wasm));
+    processes.push(run_process(
+        "binary-core-wasm-build",
+        &executable("cargo")?,
+        &["build", "--locked", "--offline", "--release"].map(str::to_owned),
+        &core_root,
+        &wasm_env,
+        &replacements,
+        "PP5101",
+    )?);
+    let wasm = std::fs::read(
+        core_root
+            .join("target/wasm32-unknown-unknown/release")
+            .join(format!(
+                "{}_core_wasm.wasm",
+                program.cargo_name.replace('-', "_")
+            )),
+    )
+    .map_err(|error| PrismError::new("PP5101", error.to_string()))?;
+    artifacts.push(("binary/core.wasm".into(), wasm));
     artifacts.push((
         "binary/model-binding.json".to_owned(),
         crate::contracts::CanonicalDocument::from_value(
@@ -311,8 +388,14 @@ pub(crate) fn generate_recorded(
         .bytes()
         .to_vec(),
     ));
-    artifacts.push(("binary/acceptance-runner.mjs".into(),include_bytes!("binary_verification/runner.mjs").to_vec()));
-    artifacts.push(("binary/memory-inspector.mjs".into(),include_bytes!("binary_verification/memory-inspector.mjs").to_vec()));
+    artifacts.push((
+        "binary/acceptance-runner.mjs".into(),
+        include_bytes!("binary_verification/runner.mjs").to_vec(),
+    ));
+    artifacts.push((
+        "binary/memory-inspector.mjs".into(),
+        include_bytes!("binary_verification/memory-inspector.mjs").to_vec(),
+    ));
     artifacts.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(GeneratedBinary {
         artifacts,

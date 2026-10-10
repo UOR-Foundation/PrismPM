@@ -106,10 +106,18 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
     digest(&doc.provenance.snapshot_id, "snapshot_id")?;
     digest(&doc.provenance.emitter_semantics_id, "emitter_semantics_id")?;
     if let Some(program) = &doc.program {
-        if doc.application.is_some() || doc.library.is_some() || !doc.standards_profile.is_empty()
-            || !doc.provenance.facet_packages.is_empty() || doc.architecture != Default::default()
-            || doc.security != Default::default() || doc.quality != Default::default() {
-            return Err(PrismError::new("PP4004", "binary programs cannot declare application, library or facet records"));
+        if doc.application.is_some()
+            || doc.library.is_some()
+            || !doc.standards_profile.is_empty()
+            || !doc.provenance.facet_packages.is_empty()
+            || doc.architecture != Default::default()
+            || doc.security != Default::default()
+            || doc.quality != Default::default()
+        {
+            return Err(PrismError::new(
+                "PP4004",
+                "binary programs cannot declare application, library or facet records",
+            ));
         }
         return super::binary_program::validate(program);
     }

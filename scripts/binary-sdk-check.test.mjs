@@ -5,7 +5,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symli
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,verifySource,sourceRoots,sourceAliases,cli,checkAccepted,mutateModule,tree,verifyImage,verifyResult,testOutput,hash,canonical,fixtureProgram,modes,processTools,binaryPaths,completedChecks,unclaimed,inventoryEvidence,regularBytes,rejectChangedEvidence} from './binary-sdk-check.mjs';
+import {capture,validateGenerationWorkflow,verifySource,sourceRoots,sourceAliases,cli,checkAccepted,mutateModule,tree,verifyImage,verifyResult,testOutput,hash,canonical,fixtureProgram,modes,processTools,binaryPaths,completedChecks,unclaimed,inventoryEvidence,regularBytes,rejectChangedEvidence} from './binary-sdk-check.mjs';
 import {inventory,parserFixture} from './binary-sdk-check-fixtures.mjs';
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-binary-gate-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
@@ -94,7 +94,7 @@ test('outer result requires current image inventory source and every non-skipped
  const sourceSha='1'.repeat(64),inventorySha='2'.repeat(64),args=[image,revision,'amd64',sourceSha,inventorySha];
  const value={schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:image,source_revision:revision,source_sha256:sourceSha,inventory_sha256:inventorySha,architecture:'amd64',build_id:'3'.repeat(64),attestation_id:'4'.repeat(64),checks:[...completedChecks],unclaimed:[...unclaimed]};verifyResult(value,...args);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.inventory_sha256='9'.repeat(64),v=>v.source_revision='9'.repeat(40),v=>v.architecture='arm64']){const bad=structuredClone(value);change(bad);assert.throws(()=>verifyResult(bad,...args));}
- const tap='TAP version 13\n'+Array.from({length:16},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..16\n# tests 16\n# suites 0\n# pass 16\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 16','# tests 14')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const tap='TAP version 13\n'+Array.from({length:17},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..17\n# tests 17\n# suites 0\n# pass 17\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 17','# tests 14')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
 });
 test('release retains existing mandatory gates and adds binary on both native platforms',()=>{
  const workflow=readFileSync(new URL('../.github/workflows/release.yml',import.meta.url),'utf8');
@@ -106,12 +106,22 @@ test('release retains existing mandatory gates and adds binary on both native pl
  for(const required of ['branches: [work/binary-program-prerequisite]','branches: [main, work/compression-m0-reconcile]','runner: ubuntu-24.04','runner: ubuntu-24.04-arm','contents: read','persist-credentials: false','needs: source-format','bash scripts/binary-sdk-format.sh','include-hidden-files: true','ref: ${{ github.event.pull_request.head.sha || github.sha }}','node scripts/binary-sdk-check.mjs tests','node scripts/sdk-image-inputs.mjs build','bash scripts/binary-sdk-qualify.sh'])assert.ok(qualification.includes(required),required);
  for(const forbidden of ['packages: write','contents: write','--push','push: true','continue-on-error'])assert.ok(!qualification.includes(forbidden),forbidden);
  const formatter=readFileSync(new URL('./binary-sdk-format.sh',import.meta.url),'utf8');
- for(const required of ['ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21','--user 1000:1000 --read-only --network none','--tmpfs /tmp:rw,exec,nosuid,nodev,size=4g','PRISMPM_EPHEMERAL_HOME=1',': > /tmp/prismpm-format-ready; exec sleep infinity','docker exec "$container" test -f /tmp/prismpm-format-ready','cargo fmt --all --check','if test -s "$evidence/format.patch"; then'])assert.ok(formatter.includes(required),required);
+ for(const required of ['ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21','--user 1000:1000 --read-only --network none','--tmpfs /tmp:rw,exec,nosuid,nodev,size=4g','PRISMPM_EPHEMERAL_HOME=1',': > /tmp/prismpm-format-ready; exec sleep infinity','docker exec "$container" test -f /tmp/prismpm-format-ready','cargo fmt --check','if test -s "$evidence/format.patch"; then'])assert.ok(formatter.includes(required),required);
+ assert.ok(!formatter.includes('cargo fmt --all'));
  assert.ok(!formatter.includes('--mount')&&!formatter.includes('--volume')&&!formatter.includes('--entrypoint')&&!formatter.includes('git push'));
  const transport=readFileSync(new URL('./binary-sdk-qualify.sh',import.meta.url),'utf8');
  for(const required of ['--publish 127.0.0.1::5000','--from-oci-layout --to-plain-http','"$endpoint/sdk@$digest"','"$root/scripts/binary-sdk-check.sh" "$image" "$revision" "$evidence/accepted"'])assert.ok(transport.includes(required),required);
  for(const name of ['ci-parallel','reproducibility'])assert.match(readFileSync(new URL('../.github/workflows/'+name+'.yml',import.meta.url),'utf8'),/pull_request:\n    branches: \[main, work\/compression-m0-reconcile\]/);
  const xtask=readFileSync(new URL('../xtask/src/main.rs',import.meta.url),'utf8');for(const path of ['scripts/binary-sdk-check.test.mjs','scripts/binary-sdk-check-shell.test.mjs'])assert.ok(xtask.includes('"'+path+'"'));
+});
+test('generated review is deliberate, exact-source, writer-owned and never acceptance',()=>{
+ const workflow=readFileSync(new URL('../.github/workflows/binary-generated-review.yml',import.meta.url),'utf8');validateGenerationWorkflow(workflow);
+ for(const [before,after] of [
+  ['work/binary-generated-review','work/binary-program-prerequisite'],['contents: read','contents: write'],
+  ['test "$SOURCE_REVISION" = "$GITHUB_SHA"','true'],['just golden-check','echo skipped golden'],
+  ['just stdlib-package-check','echo skipped stdlib'],['just check-fixtures','echo skipped fixtures'],
+  ['push: never','push: always'],['devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca','devcontainers/ci@main'],
+ ]){assert.ok(workflow.includes(before));assert.throws(()=>validateGenerationWorkflow(workflow.replace(before,after)));}
 });
 test('owning parser tests kill an omitted process-exit guard',t=>{
  const root=temporary(t),module=readFileSync(new URL('./binary-sdk-check.mjs',import.meta.url),'utf8'),guard='assert.equal(row.exit_code,0);';assert.equal(module.split(guard).length,2);

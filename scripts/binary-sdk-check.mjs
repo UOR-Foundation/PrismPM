@@ -15,6 +15,7 @@ export const sourceRoots=Object.freeze([...libraryRoots,
  'tests/fixtures/binary/binary-program/project','scripts/binary-sdk-check.mjs',
  'scripts/binary-sdk-check.sh','scripts/binary-sdk-check.test.mjs',
  'scripts/binary-sdk-check-fixtures.mjs','scripts/binary-sdk-check-shell.test.mjs','scripts/binary-sdk-check.md','scripts/binary-sdk-qualify.sh','scripts/binary-sdk-format.sh','scripts/binary-sdk-format-shell.test.mjs','scripts/sdk-candidate.sh','scripts/sdk-candidate.mjs','scripts/sdk-candidate-sbom.mjs','Justfile',
+ '.devcontainer','xtask','crates/conformance/src/golden.rs','crates/conformance/src/golden','scripts/reconcile-lexlean.mjs','scripts/package-release-crates.sh','.github/workflows/binary-generated-review.yml',
  '.github/workflows/binary-sdk-qualification.yml','.github/workflows/ci-parallel.yml','.github/workflows/reproducibility.yml',
 ].sort());
 export const modes=Object.freeze(['std','no_std','core-wasm','cli-stdio','cli-file','cli-mixed']);
@@ -169,7 +170,29 @@ export function verifyResult(value,image,sourceRevision,architecture,sourceSha25
  assert.match(image,imagePattern);revision(sourceRevision);assert.ok(['amd64','arm64'].includes(architecture));hex(sourceSha256);hex(inventorySha256);hex(value.build_id);hex(value.attestation_id);
  same(value,{schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:image,source_revision:sourceRevision,source_sha256:sourceSha256,inventory_sha256:inventorySha256,architecture,build_id:value.build_id,attestation_id:value.attestation_id,checks:completedChecks,unclaimed},'complete installed binary result');
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,16),16,'complete owning binary gate test count');}
+export function validateGenerationWorkflow(workflow){
+ for(const required of [
+  'branches: [work/binary-generated-review]','  workflow_dispatch:',
+  '  contents: read','    runs-on: ubuntu-24.04','          ref: ${{ github.sha }}',
+  '          persist-credentials: false','          node-version: 22.23.2',
+  'test "$SOURCE_REVISION" = "$GITHUB_SHA"','test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"',
+  'test -z "$(git status --porcelain)"','node scripts/binary-sdk-check.mjs tests',
+  'uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca','          push: never',
+  'git rev-parse HEAD^{tree}','cp model/dependencies.toml','cp Cargo.lock',
+  'Review-only generated-source proposal. Not SDK acceptance or a release.',
+  '          include-hidden-files: true','          if-no-files-found: error',
+ ])assert.ok(workflow.includes(required),'generated review boundary: '+required);
+ for(const forbidden of ['work/binary-program-prerequisite','pull_request:','pull_request_target:',': write','continue-on-error','git push','--push','docker/login-action','/etc/os-release','LD_PRELOAD'])assert.ok(!workflow.includes(forbidden),'generated review forbidden: '+forbidden);
+ let previous=-1;
+ for(const command of [
+  'just codegen','just fixtures-write','just golden-write "BinaryProgram prerequisite PR #186: exact source $source_revision"',
+  'just stdlib-package-write','CARGO_NET_OFFLINE=true cargo package --locked --offline --target-dir target',
+  'just golden-check','just stdlib-package-check','just check-fixtures','just package-release-crates-check',
+  'node scripts/reconcile-lexlean.mjs --validate-generated','git diff --binary HEAD',
+ ]){const next=workflow.indexOf(command);assert.ok(next>previous,'complete ordered owning generation: '+command);previous=next;}
+ assert.ok(workflow.indexOf('if: always()')>previous,'failure diagnostics must not admit a partial patch');
+}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,17),17,'complete owning binary gate test count');}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
  if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));
@@ -181,7 +204,7 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  else if(mode==='result'&&args.length===6)verifyResult(JSON.parse(readFileSync(args[0])),...args.slice(1));
  else if(mode==='evidence'&&args.length===2){const receipt=document(join(args[0],'receipt.json')),result=JSON.parse(readFileSync(args[1]));assert.equal(receipt.build_id,result.build_id);assert.equal(receipt.attestation_id,result.attestation_id);checkAccepted(args[0],receipt);}
  else if(mode==='format-image'&&args.length===2){const value=JSON.parse(readFileSync(args[0]));assert.equal(args[1],'ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21');verifyImage(value,args[1],'amd64',value[0]?.Config?.Labels?.['org.opencontainers.image.revision']);}
- else if(mode==='format-evidence'&&args.length===3){const [directory,sourceRevision,image]=args;revision(sourceRevision);assert.match(image,imagePattern);const inventory=regularBytes(join(directory,'inventory.json'));validateInventory(inventory);const patch=regularBytes(join(directory,'format.patch')),paths=regularBytes(join(directory,'changed-paths.txt')).toString().trim().split('\n').filter(Boolean);assert.ok(paths.every(path=>!path.startsWith('/')&&!path.split('/').some(part=>['','..','.'].includes(part))&&path.endsWith('.rs')),'formatter changed non-Rust source');assert.equal(patch.length===0,paths.length===0);writeFileSync(join(directory,'format-result.json'),canonical({schema:'prismpm/source-format-review/1',scope:'source-format-only',source_revision:sourceRevision,sdk_image:image,inventory_sha256:hash(inventory),patch_sha256:hash(patch),formatter_log_sha256:hash(regularBytes(join(directory,'formatter.log'))),changed_paths:paths,status:patch.length?'review-required':'passed',unclaimed:['compilation','proof-verification','binary-package-acceptance','sdk-release','deployment']}));}
+ else if(mode==='format-evidence'&&args.length===3){const [directory,sourceRevision,image]=args;revision(sourceRevision);assert.match(image,imagePattern);const inventory=regularBytes(join(directory,'inventory.json'));validateInventory(inventory);const patch=regularBytes(join(directory,'format.patch')),paths=regularBytes(join(directory,'changed-paths.txt')).toString().trim().split('\n').filter(Boolean);assert.ok(paths.every(path=>!path.startsWith('/')&&!path.split('/').some(part=>['','..','.'].includes(part))&&/^(?:crates\/[^/]+\/|xtask\/).+\.rs$/.test(path)),'formatter changed non-owned Rust source');assert.equal(patch.length===0,paths.length===0);writeFileSync(join(directory,'format-result.json'),canonical({schema:'prismpm/source-format-review/1',scope:'source-format-only',source_revision:sourceRevision,sdk_image:image,inventory_sha256:hash(inventory),patch_sha256:hash(patch),formatter_log_sha256:hash(regularBytes(join(directory,'formatter.log'))),changed_paths:paths,status:patch.length?'review-required':'passed',unclaimed:['compilation','proof-verification','binary-package-acceptance','sdk-release','deployment']}));}
  else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/binary-sdk-check.test.mjs','scripts/binary-sdk-check-shell.test.mjs','scripts/binary-sdk-format-shell.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
  else if(mode==='run'&&args.length===4)console.log(canonical(run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),...args)));
  else throw Error('closed installed binary gate command');

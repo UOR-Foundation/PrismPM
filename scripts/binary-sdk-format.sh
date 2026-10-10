@@ -63,10 +63,11 @@ docker exec "$container" /usr/local/bin/prismpm-devcontainer-init /bin/bash -euo
   cd /tmp/source
   rustfmt --version
   cargo --version
-  cargo fmt --all
-  cargo fmt --all --check
+  cargo fmt
+  cargo fmt --check
 ' > "$evidence/formatter.log" 2>&1
-docker container cp "$container:/tmp/source/." "$scratch/source/"
+# Stream from the live mount namespace: Docker archive APIs cannot read tmpfs.
+docker exec "$container" tar -c -C /tmp/source . | tar -x -C "$scratch/source" --no-same-owner --no-same-permissions
 test -z "$(git -C "$scratch/source" ls-files --others)"
 git -C "$scratch/source" diff --binary > "$evidence/format.patch"
 git -C "$scratch/source" diff --name-only > "$evidence/changed-paths.txt"

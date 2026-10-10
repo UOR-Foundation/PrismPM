@@ -146,8 +146,9 @@ fn audit_lexlean_adapter_provenance(root: &Path) -> Result<(), Fail> {
         }
     }
     audit_dependencies(root)?;
-    let register: toml::Value =
-        toml::from_str(&std::fs::read_to_string(root.join("model/dependencies.toml"))?)?;
+    let register: toml::Value = toml::from_str(&std::fs::read_to_string(
+        root.join("model/dependencies.toml"),
+    )?)?;
     let dependency = register
         .get("dependency")
         .and_then(toml::Value::as_array)
@@ -912,6 +913,7 @@ pub fn audit_tools_ci(root: &Path) -> Result<(), Fail> {
         return Err("devcontainer base image is not digest-pinned".into());
     }
     for workflow in [
+        ".github/workflows/binary-generated-review.yml",
         ".github/workflows/binary-sdk-qualification.yml",
         ".github/workflows/ci-parallel.yml",
         ".github/workflows/honesty.yml",

@@ -1,5 +1,6 @@
 //! Conformance test cases verifying every registered capability.
 
+mod binary_program;
 #[path = "../../../../tests/support/browser_application.rs"]
 mod browser_application;
 mod browser_bootstrap;
@@ -11,7 +12,6 @@ mod cbor_primitive;
 mod holo_browser;
 mod mailbox_admission;
 mod native_library;
-mod binary_program;
 mod node_suite;
 mod organization_lifecycle;
 mod saved_recovery;

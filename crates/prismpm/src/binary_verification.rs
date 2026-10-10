@@ -2,18 +2,26 @@
 use crate::controller::VerifyResult;
 use crate::error::PrismError;
 use crate::holo::binary_program::BinaryProgram;
-use crate::holo::canonical::{content_id,encode_value};
-use crate::library_build::{sha256,write};
-use crate::verification::{executable,run_process};
-use serde_json::{json,Value};
-use std::collections::{BTreeMap,BTreeSet};
+use crate::holo::canonical::{content_id, encode_value};
+use crate::library_build::{sha256, write};
+use crate::verification::{executable, run_process};
+use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 
-fn acceptance_manifest(program:&BinaryProgram,enabled:bool)->String {
-    let features=if enabled { ", features = [\"std\"]" } else { "" };
+fn acceptance_manifest(program: &BinaryProgram, enabled: bool) -> String {
+    let features = if enabled {
+        ", features = [\"std\"]"
+    } else {
+        ""
+    };
     format!("[package]\nname = \"prism-binary-acceptance\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[dependencies]\nprism_binary_core = {{ package = \"{}\", version = \"={}\", default-features = false{} }}\n",program.cargo_name,program.cargo_version,features)
 }
-fn acceptance_harness(program:&BinaryProgram)->Result<String,PrismError> {
-    let entry=program.entry_root.rsplit('.').next().ok_or_else(|| PrismError::new("PP2001","binary entry is absent"))?;
+fn acceptance_harness(program: &BinaryProgram) -> Result<String, PrismError> {
+    let entry = program
+        .entry_root
+        .rsplit('.')
+        .next()
+        .ok_or_else(|| PrismError::new("PP2001", "binary entry is absent"))?;
     let mut source=String::from("trait Computed { fn computed(self)->Vec<u8>; } impl Computed for Vec<u8> {fn computed(self)->Vec<u8>{self}} impl<E:core::fmt::Debug> Computed for Result<Vec<u8>,E>{fn computed(self)->Vec<u8>{self.expect(\"core computation failed\")}} fn main(){ let mut results=Vec::new();\n");
     for vector in &program.acceptance_vectors {
         source.push_str(&format!("let actual=Computed::computed(prism_binary_core::{entry}(vec!{:?})); assert_eq!(actual,vec!{:?}); results.push(actual);\n",vector.request,vector.response));
@@ -22,7 +30,9 @@ fn acceptance_harness(program:&BinaryProgram)->Result<String,PrismError> {
     Ok(source)
 }
 
-pub(crate) fn run(mut context: crate::library_verification::LibraryVerification<'_>) -> Result<VerifyResult, PrismError> {
+pub(crate) fn run(
+    mut context: crate::library_verification::LibraryVerification<'_>,
+) -> Result<VerifyResult, PrismError> {
     let program = context.model.program.as_ref().ok_or_else(|| {
         PrismError::new("PP9001", "binary verification requires a program profile")
     })?;
@@ -86,7 +96,11 @@ pub(crate) fn run(mut context: crate::library_verification::LibraryVerification<
         .find(|(path, _)| path == &format!("binary/{archive_name}"))
         .ok_or_else(|| PrismError::new("PP4102", "generated library archive is absent"))?
         .1;
-    let cargo_home = crate::library_verification::registry_cargo_home(work.path(), &program.metadata(), archive)?;
+    let cargo_home = crate::library_verification::registry_cargo_home(
+        work.path(),
+        &program.metadata(),
+        archive,
+    )?;
     let environment = BTreeMap::from([
         (
             "CARGO_HOME".to_owned(),
@@ -108,53 +122,154 @@ pub(crate) fn run(mut context: crate::library_verification::LibraryVerification<
     ];
     let cargo = executable("cargo")?;
     let mut executions = Vec::new();
-    for (mode, enabled) in [("std",true),("no_std",false)] {
+    for (mode, enabled) in [("std", true), ("no_std", false)] {
         let consumer = work.path().join(format!("consumer-{mode}"));
-        write(&consumer.join("Cargo.toml"),acceptance_manifest(program,enabled).as_bytes())?;
-        write(&consumer.join("src/main.rs"),acceptance_harness(program)?.as_bytes())?;
-        context.processes.push(run_process(&format!("binary-{mode}-lock"),&cargo,
-            &["generate-lockfile","--offline"].map(str::to_owned),&consumer,&environment,&replacements,"PP4102")?);
-        let record = run_process(&format!("binary-{mode}-acceptance"),&cargo,
-            &["run","--locked","--offline","--quiet"].map(str::to_owned),&consumer,&environment,&replacements,"PP5006")?;
-        let expected = serde_json::to_string(&program.acceptance_vectors.iter().map(|v| &v.response).collect::<Vec<_>>())
-            .map_err(|error| PrismError::new("PP9001",error.to_string()))?;
+        write(
+            &consumer.join("Cargo.toml"),
+            acceptance_manifest(program, enabled).as_bytes(),
+        )?;
+        write(
+            &consumer.join("src/main.rs"),
+            acceptance_harness(program)?.as_bytes(),
+        )?;
+        context.processes.push(run_process(
+            &format!("binary-{mode}-lock"),
+            &cargo,
+            &["generate-lockfile", "--offline"].map(str::to_owned),
+            &consumer,
+            &environment,
+            &replacements,
+            "PP4102",
+        )?);
+        let record = run_process(
+            &format!("binary-{mode}-acceptance"),
+            &cargo,
+            &["run", "--locked", "--offline", "--quiet"].map(str::to_owned),
+            &consumer,
+            &environment,
+            &replacements,
+            "PP5006",
+        )?;
+        let expected = serde_json::to_string(
+            &program
+                .acceptance_vectors
+                .iter()
+                .map(|v| &v.response)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
         if record.stdout != format!("{expected}\n") || !record.stderr.is_empty() {
-            return Err(PrismError::new("PP5006","binary native transcript differs from source-owned exact bytes"));
+            return Err(PrismError::new(
+                "PP5006",
+                "binary native transcript differs from source-owned exact bytes",
+            ));
         }
-        executions.push(json!({"mode":mode,"vector_count":program.acceptance_vectors.len(),"status":"passed"}));
+        executions.push(
+            json!({"mode":mode,"vector_count":program.acceptance_vectors.len(),"status":"passed"}),
+        );
         context.processes.push(record);
     }
     let cli_root = work.path().join("cli");
-    for (path,bytes) in &replay.artifacts {
-        if let Some(relative) = path.strip_prefix("binary/cli/") { write(&cli_root.join(relative),bytes)?; }
+    for (path, bytes) in &replay.artifacts {
+        if let Some(relative) = path.strip_prefix("binary/cli/") {
+            write(&cli_root.join(relative), bytes)?;
+        }
     }
-    let allocation = run_process("binary-cli-allocation-acceptance",&cargo,
-        &["test","--locked","--offline","--release","--","--exact","tests::adapter_allocation_maps_real_capacity_overflow"].map(str::to_owned),
-        &cli_root,&environment,&replacements,"PP5006")?;
-    if !allocation.stdout.contains("test tests::adapter_allocation_maps_real_capacity_overflow ... ok")
-        || !allocation.stdout.contains("1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out") {
-        return Err(PrismError::new("PP5006","generated adapter allocation negative did not execute exactly once"));
+    let allocation = run_process(
+        "binary-cli-allocation-acceptance",
+        &cargo,
+        &[
+            "test",
+            "--locked",
+            "--offline",
+            "--release",
+            "--",
+            "--exact",
+            "tests::adapter_allocation_maps_real_capacity_overflow",
+        ]
+        .map(str::to_owned),
+        &cli_root,
+        &environment,
+        &replacements,
+        "PP5006",
+    )?;
+    if !allocation
+        .stdout
+        .contains("test tests::adapter_allocation_maps_real_capacity_overflow ... ok")
+        || !allocation
+            .stdout
+            .contains("1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out")
+    {
+        return Err(PrismError::new(
+            "PP5006",
+            "generated adapter allocation negative did not execute exactly once",
+        ));
     }
     context.processes.push(allocation);
-    context.processes.push(run_process("binary-cli-acceptance-build",&cargo,
-        &["build","--locked","--offline","--release"].map(str::to_owned),&cli_root,&environment,&replacements,"PP4102")?);
+    context.processes.push(run_process(
+        "binary-cli-acceptance-build",
+        &cargo,
+        &["build", "--locked", "--offline", "--release"].map(str::to_owned),
+        &cli_root,
+        &environment,
+        &replacements,
+        "PP4102",
+    )?);
     let runner = work.path().join("runner.mjs");
-    write(&runner,include_bytes!("binary_verification/runner.mjs"))?;
-    write(&work.path().join("memory-inspector.mjs"),include_bytes!("binary_verification/memory-inspector.mjs"))?;
-    let program_value = serde_json::to_value(program).map_err(|error| PrismError::new("PP9001",error.to_string()))?;
-    write(&work.path().join("program.json"), &encode_value(&program_value)?)?;
-    let cli_binary = cli_root.join("target/release").join(format!("{}-cli",program.cargo_name));
-    let record=run_process("binary-transports-acceptance",&executable("node")?,&[
-        runner.to_string_lossy().into_owned(),work.path().join("program.json").to_string_lossy().into_owned(),
-        context.build_root.join("binary/core.wasm").to_string_lossy().into_owned(),
-        cli_binary.to_string_lossy().into_owned(),work.path().join("transports").to_string_lossy().into_owned(),
-    ],work.path(),&BTreeMap::new(),&replacements,"PP5006")?;
-    let observed:Value=serde_json::from_str(&record.stdout).map_err(|error| PrismError::new("PP5006",error.to_string()))?;
+    write(&runner, include_bytes!("binary_verification/runner.mjs"))?;
+    write(
+        &work.path().join("memory-inspector.mjs"),
+        include_bytes!("binary_verification/memory-inspector.mjs"),
+    )?;
+    let program_value = serde_json::to_value(program)
+        .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+    write(
+        &work.path().join("program.json"),
+        &encode_value(&program_value)?,
+    )?;
+    let cli_binary = cli_root
+        .join("target/release")
+        .join(format!("{}-cli", program.cargo_name));
+    let record = run_process(
+        "binary-transports-acceptance",
+        &executable("node")?,
+        &[
+            runner.to_string_lossy().into_owned(),
+            work.path()
+                .join("program.json")
+                .to_string_lossy()
+                .into_owned(),
+            context
+                .build_root
+                .join("binary/core.wasm")
+                .to_string_lossy()
+                .into_owned(),
+            cli_binary.to_string_lossy().into_owned(),
+            work.path()
+                .join("transports")
+                .to_string_lossy()
+                .into_owned(),
+        ],
+        work.path(),
+        &BTreeMap::new(),
+        &replacements,
+        "PP5006",
+    )?;
+    let observed: Value = serde_json::from_str(&record.stdout)
+        .map_err(|error| PrismError::new("PP5006", error.to_string()))?;
     let expected = ["core-wasm","cli-stdio","cli-file","cli-mixed"].iter().map(|mode|
         json!({"mode":mode,"vector_count":program.acceptance_vectors.len(),"status":"passed"})).collect::<Vec<_>>();
-    let io_coverage=json!({"platform":"linux","output_write":if program.acceptance_vectors.iter().any(|vector|!vector.response.is_empty()) {"passed"} else {"not-exercised-empty-responses"}});
-    if observed != json!({"executions":expected,"io_coverage":io_coverage}) || !record.stderr.is_empty() { return Err(PrismError::new("PP5006","binary transport transcript or scoped I/O coverage differs")); }
-    executions.extend(expected);context.processes.push(record);
+    let io_coverage = json!({"platform":"linux","output_write":if program.acceptance_vectors.iter().any(|vector|!vector.response.is_empty()) {"passed"} else {"not-exercised-empty-responses"}});
+    if observed != json!({"executions":expected,"io_coverage":io_coverage})
+        || !record.stderr.is_empty()
+    {
+        return Err(PrismError::new(
+            "PP5006",
+            "binary transport transcript or scoped I/O coverage differs",
+        ));
+    }
+    executions.extend(expected);
+    context.processes.push(record);
     let bindings = replay
         .artifacts
         .iter()

@@ -46,12 +46,20 @@ container=$(docker container create --user 1000:1000 --read-only --network none 
   --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \
   --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \
   --workdir /opt/prismpm/share/conformance-root "$image" \
-  node scripts/binary-sdk-check.mjs run "$image" "$revision" "$source_sha256" "$inventory_sha256")
+  /bin/sh -ec '
+    node scripts/binary-sdk-check.mjs run "$@" > /tmp/binary-result.json
+    exec tar -c -C /tmp binary-result.json prismpm-binary-evidence
+  ' binary-sdk "$image" "$revision" "$source_sha256" "$inventory_sha256")
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
-docker container start --attach "$container" > "$sdk_work/result.json"
+# Export result and proof in the process stdout while tmpfs is still mounted.
+# The normal initialized command must pass before tar runs; its final exit is
+# checked before anything is extracted or accepted by the outer verifier.
+docker container start --attach "$container" > "$sdk_work/evidence.tar"
 test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" = 0
+tar -x -f "$sdk_work/evidence.tar" -C "$sdk_work" --no-same-owner --no-same-permissions binary-result.json prismpm-binary-evidence
+mv "$sdk_work/binary-result.json" "$sdk_work/result.json"
+mv "$sdk_work/prismpm-binary-evidence" "$sdk_work/proof"
 node "$helper" result "$sdk_work/result.json" "$image" "$revision" "$architecture" "$source_sha256" "$inventory_sha256"
-docker container cp "$container:/tmp/prismpm-binary-evidence" "$sdk_work/proof"
 node "$helper" evidence "$sdk_work/proof" "$sdk_work/result.json"
 if test -n "$evidence"; then
   mkdir "$evidence"
