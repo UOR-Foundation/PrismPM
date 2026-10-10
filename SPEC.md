@@ -728,6 +728,12 @@ The existing workspace-model and journal process wrappers report the same
 closed phase observations without changing their process contracts. Successful
 Rust diagnostic records are formatted before transport and bounded to 4096
 UTF-8 bytes; diagnostic loss is never inferred to be a successful measurement.
+Rust conformance owners separately report compiler-slot admission wait and
+subsequent owner-body wall time, including unwinding. These closed numeric
+diagnostics are not CPU timings, acceptance receipts or final test outcomes.
+Later shared-initialization waits and nested owners remain within body time;
+optional diagnostic transport contention is excluded. Original assertions,
+panic payloads, scheduling, full-gate commands and qualification remain intact.
 
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
