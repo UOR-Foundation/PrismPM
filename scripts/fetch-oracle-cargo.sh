@@ -48,6 +48,24 @@ d833db76924bdf573f4d0cd47a24b585bb454879be0ff668670629688277039f  tests/publicat
 8733132f1980bf72e1b7cf43cc54b385ddd626683531a21b22922442a83593f5  tests/publication-admission/driver/Cargo.lock
 fc49c5659bded9db17612c76d47370fd715e4fa900f2b0aa8617e77a0fb13581  tests/browser-budget/driver/Cargo.toml
 d4d57c5c7b105950aa2293f86a259284de6d332d18490123b759ac9fe04f777e  tests/browser-budget/driver/Cargo.lock
+a8291f5d959eecad36132347f4fca977e269f480a29035cc6d83c01f7a541601  tests/browser-dynamic-choice/driver/Cargo.toml
+a19d3191cf8444d44beca016f0563491eee6a57847e2ec3a4117d67b83e88c57  tests/browser-dynamic-choice/driver/Cargo.lock
+554299f7adcdd1d795ffcbf9b361644cd2408f97b3a5ce6b4fe12c57c196ca19  tests/browser-semantic-presentation/driver/Cargo.toml
+493f066e8cba981178f6ca8dab970f0a2bfb2ffd7ef5705fe6d2fe5e6ecfa45c  tests/browser-semantic-presentation/driver/Cargo.lock
+0d45a369833e299f051bc7cbd1089f01985d281932abedcbbf318767a3b9d40d  tests/browser-session-journal/driver/Cargo.toml
+e71dfed25f3f602c81c23e8b8ff1739ddb00174ecaf67ec25125731887cec10f  tests/browser-session-journal/driver/Cargo.lock
+0d45a369833e299f051bc7cbd1089f01985d281932abedcbbf318767a3b9d40d  tests/browser-session-journal/reservation-driver/Cargo.toml
+e71dfed25f3f602c81c23e8b8ff1739ddb00174ecaf67ec25125731887cec10f  tests/browser-session-journal/reservation-driver/Cargo.lock
+c62b9b7e736fd1180e9883a1a87695822c0915d163297a7a547f9fcda324824f  tests/browser-session-journal-retention/driver/Cargo.toml
+66114c3086f68622472e8968a162286d3366c395542663bc634876dce61a266f  tests/browser-session-journal-retention/driver/Cargo.lock
+96d3d1ae6d8d06c70d3ea07b049ffa583bb2da837429e65cc910d6638aeefce1  tests/browser-session-journal-recovery/driver/Cargo.toml
+24f7db3c63fd5b3e4bc1fdc6bfd6b40d3cf7d2150cdd4f0453a17843938436bc  tests/browser-session-journal-recovery/driver/Cargo.lock
+22871f6a98106fc729773a850574a71cd19821a575000d92e38233581e54e9fb  tests/browser-session-payloads/driver/Cargo.toml
+2850bdb363552eeebdf96e373ca143784f4c9be7d694ffd721f5468c0b4f691a  tests/browser-session-payloads/driver/Cargo.lock
+f3f8226238c13d68103452ec38a5a8c86e53b1aede0a0af2792d60b0caabd03e  tests/browser-session-recovery-frames/driver/Cargo.toml
+f3f20365df2abb017f07449f3bc1b157be3eea8f5da61dcdd770be8c238b29ef  tests/browser-session-recovery-frames/driver/Cargo.lock
+4e28d2bb5acc49e2464a01d168c15644fcc6922eda263b6225c4fa6cd45a41f0  tests/publication-context-linkage/driver/Cargo.toml
+ce6bc5b421d76948c62d4f630e91ec0a64d298730c09b5d98324d6c33dc9e9b8  tests/publication-context-linkage/driver/Cargo.lock
 63e9f1793c48cddffd4c8378fe230ea1972a128ded41a2dda5814e841fefc2f4  vendor/lean4-prod/rust/Cargo.toml
 5e16d324b08b942c476099b6c10235f4ddd58bca28aaf69514b8a88c9252c88f  vendor/lean4-prod/rust/Cargo.lock
 CHECKSUMS
@@ -83,6 +101,15 @@ for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/browser-operation-journal/driver/Cargo.toml \
   tests/publication-admission/driver/Cargo.toml \
   tests/browser-budget/driver/Cargo.toml \
+  tests/browser-dynamic-choice/driver/Cargo.toml \
+  tests/browser-semantic-presentation/driver/Cargo.toml \
+  tests/browser-session-journal/driver/Cargo.toml \
+  tests/browser-session-journal/reservation-driver/Cargo.toml \
+  tests/browser-session-journal-retention/driver/Cargo.toml \
+  tests/browser-session-journal-recovery/driver/Cargo.toml \
+  tests/browser-session-payloads/driver/Cargo.toml \
+  tests/browser-session-recovery-frames/driver/Cargo.toml \
+  tests/publication-context-linkage/driver/Cargo.toml \
   vendor/lean4-prod/rust/Cargo.toml; do
   cargo fetch --locked --manifest-path "$manifest"
   cargo metadata --locked --offline --format-version 1 --manifest-path "$manifest" >/dev/null

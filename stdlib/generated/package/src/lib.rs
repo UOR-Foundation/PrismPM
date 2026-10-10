@@ -14,6 +14,32 @@ pub enum ComputeError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationServicesChunk {
+    pub entries: alloc::vec::Vec<crate::PublicationService>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationTarget {
+    pub url: alloc::string::String,
+    pub publisher: alloc::string::String,
+    pub environment: alloc::string::String,
+    pub adapter: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageGroupsPublicationFiles {
+    pub chunks: alloc::vec::Vec<crate::PublicationFilesChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationTarget {
+    pub value: crate::PublicationTarget,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lifecycle {
     pub backup: alloc::string::String,
     pub drift: alloc::string::String,
@@ -22,6 +48,16 @@ pub struct Lifecycle {
     pub retirement: alloc::string::String,
     pub rollback: alloc::string::String,
     pub rollout: alloc::string::String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProofRequirement {
+    pub theorem: crate::PublicationMember,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationFacts {
+    pub chunks: alloc::vec::Vec<crate::PublicationFactChunk>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,9 +72,69 @@ pub struct ScalingPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadOptionPublicationTrustFact {
+    pub value: Option<crate::PublicationTrustFact>,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationRequirement {
+    pub value: crate::PublicationRequirement,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationClosure {
+    pub value: crate::PublicationClosure,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControlOrigin {
     Local,
     Inherited { field_0: u64, field_1: alloc::vec::Vec<u8>, field_2: alloc::vec::Vec<u8> },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationOutcome {
+    pub value: crate::PublicationOutcome,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationDeployment {
+    pub value: crate::PublicationDeployment,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationObligation {
+    pub id: u64,
+    pub moment: crate::PublicationMoment,
+    pub assurance: crate::PublicationAssurance,
+    pub authority: alloc::vec::Vec<u8>,
+    pub scope: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageBatchPublicationIds {
+    pub items: alloc::vec::Vec<alloc::string::String>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationBitMarks {
+    pub word0: u64,
+    pub word1: u64,
+    pub word2: u64,
+    pub word3: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWirePrimitive {
+    pub value: crate::CborValue,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +167,17 @@ pub struct Component {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationFactChunk {
+    pub items: alloc::vec::Vec<crate::PublicationFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationServices {
+    pub value: crate::PublicationServices,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Persistence {
     pub id: alloc::string::String,
     pub owner: alloc::string::String,
@@ -84,11 +191,73 @@ pub struct Persistence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CborPayload {
+    pub bytes: alloc::vec::Vec<u8>,
+    pub cursor: crate::BoundedCursor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationRecord {
+    pub id: alloc::string::String,
+    pub digest: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageBatchPublicationServices {
+    pub items: alloc::vec::Vec<crate::PublicationService>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CborError {
+    BadLimits = 0,
+    BadCursor = 1,
+    Truncated = 2,
+    WrongType = 3,
+    UnsupportedHead = 4,
+    NonCanonical = 5,
+    ValueLimit = 6,
+    InvalidUtf8 = 7,
+    TrailingInput = 8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationAssurance {
+    pub value: crate::PublicationAssurance,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationContext {
+    pub value: crate::PublicationContext,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIdsChunk {
+    pub entries: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationMember {
+    pub value: crate::PublicationMember,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackupRecovery {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
     pub value: alloc::string::String,
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationIds {
+    pub value: crate::PublicationIds,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +269,27 @@ pub struct Acceptance {
     pub command: alloc::vec::Vec<alloc::string::String>,
     pub evidence: alloc::string::String,
     pub bounded: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationFiles {
+    pub chunks: alloc::vec::Vec<crate::PublicationFilesChunk>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationObligationChunk {
+    pub items: alloc::vec::Vec<crate::PublicationObligation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationRecordsChunk {
+    pub entries: alloc::vec::Vec<crate::PublicationRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationFile {
+    pub path: alloc::string::String,
+    pub digest: alloc::vec::Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,6 +314,37 @@ pub struct Topology {
     pub platformRequirements: alloc::vec::Vec<alloc::string::String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CborLimits {
+    pub maximumInput: u64,
+    pub maximumOutput: u64,
+    pub maximumBytes: u64,
+    pub maximumText: u64,
+    pub maximumArrayItems: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageGroupsPublicationIds {
+    pub chunks: alloc::vec::Vec<crate::PublicationIdsChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PublicationOperation {
+    Prepare { field_0: crate::PublicationTrustFact, field_1: crate::PublicationFacts, field_2: alloc::vec::Vec<u8> },
+    Authorize { field_0: crate::PublicationDecision },
+    Observe { field_0: crate::PublicationDeployment, field_1: crate::PublicationIntegrity },
+    Accept { field_0: crate::PublicationFacts },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireListOutcomeListPublicationFact {
+    pub value: alloc::vec::Vec<crate::PublicationFact>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceByteView {
     pub bytes: alloc::vec::Vec<u8>,
@@ -144,6 +365,20 @@ pub struct ControlObligation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundedCursor {
+    pub bytes: alloc::vec::Vec<u8>,
+    pub offset: u64,
+    pub limit: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageGroupsPublicationRequirements {
+    pub chunks: alloc::vec::Vec<crate::PublicationRequirementsChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeLeaseBinding {
     pub application: alloc::vec::Vec<u8>,
     pub manifest: alloc::vec::Vec<u8>,
@@ -152,6 +387,46 @@ pub struct NativeLeaseBinding {
     pub operation: u64,
     pub requestDigest: alloc::vec::Vec<u8>,
     pub deadline: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationFile {
+    pub value: crate::PublicationFile,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireInput {
+    pub bytes: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationContext {
+    pub declaration: crate::PublicationDeclaration,
+    pub declarationIdentity: alloc::vec::Vec<u8>,
+    pub subject: crate::PublicationSubject,
+    pub instance: alloc::vec::Vec<u8>,
+    pub publisherRevision: alloc::vec::Vec<u8>,
+    pub publisherRef: alloc::string::String,
+    pub digest: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationMoment {
+    pub value: crate::PublicationMoment,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationInputSelector {
+    pub value: crate::PublicationInputSelector,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireListCountedListPublicationFact {
+    pub count: u64,
+    pub tail: alloc::vec::Vec<crate::PublicationFact>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,6 +440,12 @@ pub struct Control {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationRecord {
+    pub value: crate::PublicationRecord,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sli {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
@@ -175,12 +456,42 @@ pub struct Sli {
     pub windowSeconds: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationMoment {
+    PrePublication = 0,
+    DeploymentOnly = 1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Capability {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
     pub value: alloc::string::String,
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationTrustFact {
+    pub context: alloc::vec::Vec<u8>,
+    pub authority: alloc::vec::Vec<u8>,
+    pub receipt: alloc::vec::Vec<u8>,
+    pub status: crate::PublicationTrust,
+    pub from: u64,
+    pub until: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationMember {
+    pub module: alloc::string::String,
+    pub name: alloc::string::String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireListOutcomeListPublicationObligation {
+    pub value: alloc::vec::Vec<crate::PublicationObligation>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,6 +509,38 @@ pub enum WorkspaceCommandError {
     InvalidResult = 9,
     UnknownOperation = 10,
     InvalidPending = 11,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadOptionPublicationDeployment {
+    pub value: Option<crate::PublicationDeployment>,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationAssurance {
+    SourceProof = 0,
+    Oracle = 1,
+    ReproducibleBuild = 2,
+    BrowserJourney = 3,
+    FaultRecovery = 4,
+    HumanAssessment = 5,
+    LiveJourney = 6,
+    OperationalAssessment = 7,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationClock {
+    pub domain: alloc::vec::Vec<u8>,
+    pub authority: alloc::vec::Vec<u8>,
+    pub receipt: alloc::vec::Vec<u8>,
+    pub tick: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationRequirementsChunk {
+    pub entries: alloc::vec::Vec<crate::PublicationRequirement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -243,12 +586,53 @@ pub struct TransactionalCommandView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationDecision {
+    pub context: alloc::vec::Vec<u8>,
+    pub authority: alloc::vec::Vec<u8>,
+    pub refAuthority: alloc::vec::Vec<u8>,
+    pub decision: alloc::vec::Vec<u8>,
+    pub refEvidence: alloc::vec::Vec<u8>,
+    pub ready: alloc::vec::Vec<u8>,
+    pub publisherRevision: alloc::vec::Vec<u8>,
+    pub publisherRef: alloc::string::String,
+    pub refKind: crate::PublicationRefKind,
+    pub from: u64,
+    pub until: u64,
+    pub outcome: crate::PublicationOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
     pub value: alloc::string::String,
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
     pub compatibility: alloc::string::String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationSubject {
+    pub value: crate::PublicationSubject,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageGroupsPublicationRecords {
+    pub chunks: alloc::vec::Vec<crate::PublicationRecordsChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationDeclaration {
+    pub value: crate::PublicationDeclaration,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireListCountedListPublicationObligation {
+    pub count: u64,
+    pub tail: alloc::vec::Vec<crate::PublicationObligation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -264,12 +648,30 @@ pub struct ControlContribution {
     pub origin: crate::ControlOrigin,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationService {
+    pub value: crate::PublicationService,
+    pub cursor: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LiveMode {
     Off = 0,
     Polite = 1,
     Assertive = 2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationFilesChunk {
+    pub entries: alloc::vec::Vec<crate::PublicationFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationScan {
+    pub valid: bool,
+    pub previous: alloc::string::String,
+    pub count: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,6 +691,26 @@ pub struct WorkspaceEnvelope {
     pub publicKey: alloc::vec::Vec<u8>,
     pub signature: alloc::vec::Vec<u8>,
     pub eventBytes: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationRefKind {
+    ProtectedBranch = 0,
+    ProtectedTag = 1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssessmentRequirement {
+    pub criterion: alloc::string::String,
+    pub subject: alloc::string::String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PublicationInputSelector {
+    BuildFile { field_0: alloc::string::String },
+    SourceMember { field_0: crate::PublicationMember },
+    Target,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -317,6 +739,12 @@ pub struct IdentityRequirement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationObligation {
+    pub value: crate::PublicationObligation,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interface {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
@@ -326,6 +754,32 @@ pub struct Interface {
     pub protocol: alloc::string::String,
     pub errors: alloc::vec::Vec<alloc::string::String>,
     pub acceptance: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationFact {
+    pub context: alloc::vec::Vec<u8>,
+    pub obligation: u64,
+    pub assurance: crate::PublicationAssurance,
+    pub authority: alloc::vec::Vec<u8>,
+    pub scope: alloc::vec::Vec<u8>,
+    pub evidence: alloc::vec::Vec<u8>,
+    pub deployment: Option<alloc::vec::Vec<u8>>,
+    pub from: u64,
+    pub until: u64,
+    pub outcome: crate::PublicationOutcome,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationTrust {
+    pub value: crate::PublicationTrust,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationService {
+    pub id: alloc::string::String,
+    pub components: crate::PublicationIds,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -341,6 +795,12 @@ pub struct Call {
     pub timeoutMillis: u64,
     pub retryPolicy: alloc::string::String,
     pub idempotency: alloc::string::String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationPhase {
+    pub value: crate::PublicationPhase,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -364,6 +824,13 @@ pub struct ArchitectureBinding {
     pub viewpoint: alloc::string::String,
     pub verifies: alloc::vec::Vec<alloc::string::String>,
     pub measurement: Option<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageBatchPublicationRequirements {
+    pub items: alloc::vec::Vec<crate::PublicationRequirement>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -457,6 +924,36 @@ pub struct SystemModel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadOptionBytes {
+    pub value: Option<alloc::vec::Vec<u8>>,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationOperation {
+    pub value: crate::PublicationOperation,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationTrust {
+    Candidate = 0,
+    Accepted = 1,
+    Rejected = 2,
+    Unknown = 3,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CborValue {
+    Unsigned { field_0: u64 },
+    ByteString { field_0: alloc::vec::Vec<u8> },
+    TextString { field_0: alloc::string::String },
+    Boolean { field_0: bool },
+    Null,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Slo {
     pub id: alloc::string::String,
     pub kind: alloc::string::String,
@@ -470,9 +967,67 @@ pub struct Slo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CborHead {
+    pub argument: u64,
+    pub cursor: crate::BoundedCursor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationRelation {
     pub bound: u64,
     pub values: alloc::vec::Vec<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationSubject {
+    pub producer: alloc::string::String,
+    pub source: alloc::vec::Vec<u8>,
+    pub release: alloc::vec::Vec<u8>,
+    pub model: alloc::vec::Vec<u8>,
+    pub build: alloc::vec::Vec<u8>,
+    pub services: alloc::vec::Vec<u8>,
+    pub controls: alloc::vec::Vec<u8>,
+    pub dependencies: alloc::vec::Vec<u8>,
+    pub sdk: alloc::vec::Vec<u8>,
+    pub compiler: alloc::vec::Vec<u8>,
+    pub runtime: alloc::vec::Vec<u8>,
+    pub oracles: alloc::vec::Vec<u8>,
+    pub tree: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PUnit {
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationState {
+    pub value: crate::PublicationState,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationCapture {
+    pub sourceLink: crate::PublicationSourceLink,
+    pub components: crate::PublicationRecords,
+    pub controls: crate::PublicationRecords,
+    pub provenance: alloc::vec::Vec<u8>,
+    pub dependencies: crate::PublicationRecords,
+    pub sdkLock: alloc::vec::Vec<u8>,
+    pub standardsLock: alloc::vec::Vec<u8>,
+    pub lexleanBuildManifest: alloc::vec::Vec<u8>,
+    pub lexleanAttestation: alloc::vec::Vec<u8>,
+    pub buildManifest: alloc::vec::Vec<u8>,
+    pub verificationManifest: alloc::vec::Vec<u8>,
+    pub verificationFiles: crate::PublicationFiles,
+    pub browserFiles: crate::PublicationFiles,
+    pub releaseValidation: alloc::vec::Vec<u8>,
+    pub oracleAttestations: crate::PublicationFiles,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationRequirementValue {
+    pub value: crate::PublicationRequirementValue,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -483,11 +1038,58 @@ pub struct Rollback {
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PublicationRequirementValue {
+    Proof { field_0: crate::ProofRequirement },
+    Execution { field_0: crate::ExecutionRequirement },
+    Assessment { field_0: crate::AssessmentRequirement },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireListWrittenListPublicationFact {
+    pub value: alloc::vec::Vec<u8>,
+    pub tail: alloc::vec::Vec<crate::PublicationFact>,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadNat {
+    pub value: u64,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageGroupsPublicationServices {
+    pub chunks: alloc::vec::Vec<crate::PublicationServicesChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationRequirement {
+    pub obligation: u64,
+    pub member: crate::PublicationMember,
+    pub requirement: crate::PublicationRequirementValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireFlatOutcomePublicationFacts {
+    pub chunks: alloc::vec::Vec<crate::PublicationFactChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FocusBehavior {
     RetainFocus = 0,
     MoveFocusToResult = 1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationRefKind {
+    pub value: crate::PublicationRefKind,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -496,6 +1098,98 @@ pub struct Migration {
     pub kind: alloc::string::String,
     pub value: alloc::string::String,
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationDeclaration {
+    pub stage: alloc::string::String,
+    pub policy: alloc::vec::Vec<u8>,
+    pub target: crate::PublicationTarget,
+    pub clock: alloc::vec::Vec<u8>,
+    pub clockAuthority: alloc::vec::Vec<u8>,
+    pub trustAuthority: alloc::vec::Vec<u8>,
+    pub decisionAuthority: alloc::vec::Vec<u8>,
+    pub refAuthority: alloc::vec::Vec<u8>,
+    pub deploymentAuthority: alloc::vec::Vec<u8>,
+    pub integrityAuthority: alloc::vec::Vec<u8>,
+    pub minimumTrust: crate::PublicationTrust,
+    pub refKind: crate::PublicationRefKind,
+    pub obligations: crate::PublicationObligations,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionRequirement {
+    pub oracle: alloc::string::String,
+    pub input: crate::PublicationInputSelector,
+    pub suite: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationObligations {
+    pub chunks: alloc::vec::Vec<crate::PublicationObligationChunk>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationPhase {
+    Unready = 0,
+    ProducerReady = 1,
+    DeploymentAuthorized = 2,
+    Accepted = 3,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationRequirements {
+    pub value: crate::PublicationRequirements,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationRecords {
+    pub value: crate::PublicationRecords,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageBatchPublicationRecords {
+    pub items: alloc::vec::Vec<crate::PublicationRecord>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadOptionPublicationDecision {
+    pub value: Option<crate::PublicationDecision>,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIntegrity {
+    pub context: alloc::vec::Vec<u8>,
+    pub authority: alloc::vec::Vec<u8>,
+    pub receipt: alloc::vec::Vec<u8>,
+    pub release: alloc::vec::Vec<u8>,
+    pub model: alloc::vec::Vec<u8>,
+    pub build: alloc::vec::Vec<u8>,
+    pub tree: alloc::vec::Vec<u8>,
+    pub url: alloc::string::String,
+    pub deployment: alloc::vec::Vec<u8>,
+    pub observed: u64,
+    pub from: u64,
+    pub until: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireListWrittenListPublicationObligation {
+    pub value: alloc::vec::Vec<u8>,
+    pub tail: alloc::vec::Vec<crate::PublicationObligation>,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationCapture {
+    pub value: crate::PublicationCapture,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -604,6 +1298,19 @@ pub struct ApplicationErrorBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireFlatOutcomePublicationObligations {
+    pub chunks: alloc::vec::Vec<crate::PublicationObligationChunk>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIndexBatch {
+    pub indices: alloc::vec::Vec<u64>,
+    pub valid: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Product {
     pub id: alloc::string::String,
     pub owner: alloc::string::String,
@@ -621,6 +1328,24 @@ pub struct SecretReference {
     pub rotation: alloc::string::String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationClock {
+    pub value: crate::PublicationClock,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PublicationWireHeader {
+    pub count: u64,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationSourceLink {
+    pub value: crate::PublicationSourceLink,
+    pub cursor: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum WorkspaceAction {
@@ -636,6 +1361,22 @@ pub enum WorkspaceAction {
 pub enum ControlRequirementMode {
     LocalRequired = 0,
     InheritedRequired = 1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationObligations {
+    pub value: crate::PublicationObligations,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationClosure {
+    pub system: crate::PublicationMember,
+    pub target: alloc::string::String,
+    pub declaration: crate::PublicationDeclaration,
+    pub services: crate::PublicationServices,
+    pub controls: crate::PublicationIds,
+    pub requirements: crate::PublicationRequirements,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -680,9 +1421,27 @@ pub struct StandardsProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationIntegrity {
+    pub value: crate::PublicationIntegrity,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlPolicy {
     pub digest: alloc::vec::Vec<u8>,
     pub obligations: alloc::vec::Vec<crate::ControlObligation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationFact {
+    pub value: crate::PublicationFact,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationDecision {
+    pub value: crate::PublicationDecision,
+    pub cursor: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -723,6 +1482,30 @@ pub struct Rollout {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageBatchPublicationFiles {
+    pub items: alloc::vec::Vec<crate::PublicationFile>,
+    pub cursor: u64,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationFacts {
+    pub value: crate::PublicationFacts,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationServices {
+    pub chunks: alloc::vec::Vec<crate::PublicationServicesChunk>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireOutput {
+    pub value: alloc::vec::Vec<u8>,
+    pub cause: Option<crate::CborError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageClass {
     pub id: alloc::string::String,
     pub accessModes: alloc::vec::Vec<alloc::string::String>,
@@ -734,8 +1517,54 @@ pub struct StorageClass {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationDeployment {
+    pub context: alloc::vec::Vec<u8>,
+    pub decision: alloc::vec::Vec<u8>,
+    pub authority: alloc::vec::Vec<u8>,
+    pub receipt: alloc::vec::Vec<u8>,
+    pub publisherRevision: alloc::vec::Vec<u8>,
+    pub deploymentRevision: alloc::vec::Vec<u8>,
+    pub deploymentId: alloc::string::String,
+    pub observed: u64,
+    pub from: u64,
+    pub until: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationLinkageReadPublicationFiles {
+    pub value: crate::PublicationFiles,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoverageOctetConstant {
     pub octets: alloc::vec::Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CborDecoded {
+    pub value: crate::CborValue,
+    pub cursor: crate::BoundedCursor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadText {
+    pub value: alloc::string::String,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadBytes {
+    pub value: alloc::vec::Vec<u8>,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationOutcome {
+    Satisfied = 0,
+    Rejected = 1,
+    Unknown = 2,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -746,6 +1575,26 @@ pub struct Retirement {
     pub dependsOn: alloc::vec::Vec<alloc::string::String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationError {
+    BadDeclaration = 0,
+    BadSubject = 1,
+    BadContext = 2,
+    BadClock = 3,
+    BadState = 4,
+    ContextChanged = 5,
+    StaleRevision = 6,
+    ClockRollback = 7,
+    WrongPhase = 8,
+    BadTrust = 9,
+    IncompleteReadiness = 10,
+    BadAuthorization = 11,
+    BadDeployment = 12,
+    BadIntegrity = 13,
+    IncompleteLiveAssessment = 14,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Observability {
     pub logs: alloc::vec::Vec<alloc::string::String>,
@@ -754,6 +1603,24 @@ pub struct Observability {
     pub alerts: alloc::vec::Vec<alloc::string::String>,
     pub slos: alloc::vec::Vec<alloc::string::String>,
     pub redactedFields: alloc::vec::Vec<alloc::string::String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationSourceLink {
+    pub snapshot: alloc::vec::Vec<u8>,
+    pub source: alloc::vec::Vec<u8>,
+    pub semantic: alloc::vec::Vec<u8>,
+    pub compiler: alloc::vec::Vec<u8>,
+    pub closureMember: crate::PublicationMember,
+    pub moduleSource: alloc::vec::Vec<u8>,
+    pub systemMember: crate::PublicationMember,
+    pub system: alloc::vec::Vec<u8>,
+    pub target: alloc::string::String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationRequirements {
+    pub chunks: alloc::vec::Vec<crate::PublicationRequirementsChunk>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -802,10 +1669,59 @@ pub struct PlatformRequirement {
     pub capabilities: alloc::vec::Vec<alloc::string::String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PublicationLinkageError {
+    InvalidMetadata = 0,
+    SourceMismatch = 1,
+    InventoryMismatch = 2,
+    RequirementMismatch = 3,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationRecords {
+    pub chunks: alloc::vec::Vec<crate::PublicationRecordsChunk>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationIds {
+    pub chunks: alloc::vec::Vec<crate::PublicationIdsChunk>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationState {
+    pub context: crate::PublicationContext,
+    pub revision: u64,
+    pub phase: crate::PublicationPhase,
+    pub clock: crate::PublicationClock,
+    pub readyAt: u64,
+    pub authorizedAt: u64,
+    pub observedAt: u64,
+    pub trust: Option<crate::PublicationTrustFact>,
+    pub readiness: crate::PublicationFacts,
+    pub ready: Option<alloc::vec::Vec<u8>>,
+    pub decision: Option<crate::PublicationDecision>,
+    pub deployment: Option<crate::PublicationDeployment>,
+    pub integrity: Option<crate::PublicationIntegrity>,
+    pub live: crate::PublicationFacts,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceTransition {
     Accepted { field_0: crate::WorkspaceState },
     Rejected { field_0: crate::WorkspaceError },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadPublicationTrustFact {
+    pub value: crate::PublicationTrustFact,
+    pub cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicationWireReadOptionPublicationIntegrity {
+    pub value: Option<crate::PublicationIntegrity>,
+    pub cursor: u64,
 }
 
 pub fn applyWorkspaceAction(state: &crate::WorkspaceState, event: &crate::AuthenticatedEvent) -> Result<crate::WorkspaceTransition, crate::ComputeError> {
@@ -4550,6 +5466,1285 @@ fn __prod_borrowed_compareBytes(left: &[u8], right: &[u8]) -> core::cmp::Orderin
 
 pub fn sliceBytes(value: alloc::vec::Vec<u8>, start: u64, count: u64) -> Option<alloc::vec::Vec<u8>> {
     { let _x_2 = { let __start = usize::try_from(start).ok(); let __count = usize::try_from(count).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (value).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; _x_2 }
+}
+
+pub fn cborCursorValid(cursor: &crate::BoundedCursor, limits: crate::CborLimits) -> bool {
+    { let _x_32 = &(cursor).bytes; { let _x_33 = (_x_32).len() as u64; { let _x_34 = (limits).maximumInput; { let _x_35 = (_x_33 <= _x_34); match _x_35 {
+        false => _x_35,
+        true => { let _x_57 = (cursor).limit; { let _x_59 = &(cursor).bytes; { let _x_60 = (_x_59).len() as u64; { let _x_61 = (_x_57 <= _x_60); match _x_61 {
+        false => _x_61,
+        true => { let _x_65 = (cursor).offset; { let _x_66 = (cursor).limit; { let _x_67 = (_x_65 <= _x_66); _x_67 } } },
+    } } } } },
+    } } } } }
+}
+
+pub fn cborHeadWidth(value: u64) -> u64 {
+    { let _x_43 = 24; { let _x_46 = (value < _x_43); match _x_46 {
+        false => { let _x_77 = 255; { let _x_78 = (value <= _x_77); match _x_78 {
+        false => { let _x_83 = 65535; { let _x_84 = (value <= _x_83); match _x_84 {
+        false => { let _x_86 = 5; _x_86 },
+        true => { let _x_88 = 3; _x_88 },
+    } } },
+        true => { let _x_82 = 2; _x_82 },
+    } } },
+        true => { let _x_69 = 1; _x_69 },
+    } } }
+}
+
+pub fn cborLimitsValid(limits: crate::CborLimits) -> bool {
+    { let _x_59 = (limits).maximumInput; { let _x_60 = 4294967295; { let _x_63 = (_x_59 <= _x_60); match _x_63 {
+        false => _x_63,
+        true => { let _x_110 = (limits).maximumOutput; { let _x_111 = 4294967295; { let _x_112 = (_x_110 <= _x_111); match _x_112 {
+        false => _x_112,
+        true => { let _x_128 = (limits).maximumBytes; { let _x_129 = 4294967295; { let _x_130 = (_x_128 <= _x_129); match _x_130 {
+        false => _x_130,
+        true => { let _x_139 = (limits).maximumText; { let _x_140 = 4294967295; { let _x_141 = (_x_139 <= _x_140); match _x_141 {
+        false => _x_141,
+        true => { let _x_145 = (limits).maximumArrayItems; { let _x_146 = 4294967295; { let _x_147 = (_x_145 <= _x_146); _x_147 } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn cborOctetBytes(value: u64) -> alloc::vec::Vec<u8> {
+    { let _x_247 = 256; { let _x_250 = (value < _x_247); match _x_250 {
+        false => { let _x_327 = crate::PUnit {  }; { let _x_252 = { let prod_local_0 = _x_327; alloc::vec::Vec::<u8>::new() }; _x_252 } },
+        true => { let _x_428 = 128; { let _x_429 = (value < _x_428); match _x_429 {
+        false => { let _x_487 = 192; { let _x_488 = (value < _x_487); match _x_488 {
+        false => { let _x_507 = 224; { let _x_508 = (value < _x_507); match _x_508 {
+        false => { let _x_513 = 240; { let _x_514 = (value < _x_513); match _x_514 {
+        false => { let _x_516 = cborOctetTable15(); { let _y_431 = _x_516; { let _x_433 = 16; { let _x_434 = 0; { let _x_435 = if _x_433 == 0 { _x_434 } else { value % _x_433 }; { let _x_436 = 1; { let _x_437 = { let __start = usize::try_from(_x_435).ok(); let __count = usize::try_from(_x_436).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (_y_431).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_437 {
+        None => { let _x_438 = crate::PUnit {  }; { let _x_439 = { let prod_local_1 = _x_438; alloc::vec::Vec::<u8>::new() }; _x_439 } },
+        Some(val_440) => val_440,
+    } } } } } } } },
+        true => { let _x_518 = cborOctetTable14(); { let prod_local_4 = _x_518; { let prod_local_6 = 16; { let prod_local_7 = 0; { let prod_local_8 = if prod_local_6 == 0 { prod_local_7 } else { value % prod_local_6 }; { let prod_local_9 = 1; { let prod_local_10 = { let __start = usize::try_from(prod_local_8).ok(); let __count = usize::try_from(prod_local_9).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_4).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_10 {
+        None => { let prod_local_11 = crate::PUnit {  }; { let prod_local_15 = { let prod_local_12 = prod_local_11; alloc::vec::Vec::<u8>::new() }; prod_local_15 } },
+        Some(prod_local_16) => prod_local_16,
+    } } } } } } } },
+    } } },
+        true => { let _x_519 = 208; { let _x_520 = (value < _x_519); match _x_520 {
+        false => { let _x_522 = cborOctetTable13(); { let prod_local_17 = _x_522; { let prod_local_19 = 16; { let prod_local_20 = 0; { let prod_local_21 = if prod_local_19 == 0 { prod_local_20 } else { value % prod_local_19 }; { let prod_local_22 = 1; { let prod_local_23 = { let __start = usize::try_from(prod_local_21).ok(); let __count = usize::try_from(prod_local_22).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_17).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_23 {
+        None => { let prod_local_24 = crate::PUnit {  }; { let prod_local_28 = { let prod_local_25 = prod_local_24; alloc::vec::Vec::<u8>::new() }; prod_local_28 } },
+        Some(prod_local_29) => prod_local_29,
+    } } } } } } } },
+        true => { let _x_524 = cborOctetTable12(); { let prod_local_30 = _x_524; { let prod_local_32 = 16; { let prod_local_33 = 0; { let prod_local_34 = if prod_local_32 == 0 { prod_local_33 } else { value % prod_local_32 }; { let prod_local_35 = 1; { let prod_local_36 = { let __start = usize::try_from(prod_local_34).ok(); let __count = usize::try_from(prod_local_35).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_30).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_36 {
+        None => { let prod_local_37 = crate::PUnit {  }; { let prod_local_41 = { let prod_local_38 = prod_local_37; alloc::vec::Vec::<u8>::new() }; prod_local_41 } },
+        Some(prod_local_42) => prod_local_42,
+    } } } } } } } },
+    } } },
+    } } },
+        true => { let _x_539 = 160; { let _x_540 = (value < _x_539); match _x_540 {
+        false => { let _x_545 = 176; { let _x_546 = (value < _x_545); match _x_546 {
+        false => { let _x_548 = cborOctetTable11(); { let prod_local_43 = _x_548; { let prod_local_45 = 16; { let prod_local_46 = 0; { let prod_local_47 = if prod_local_45 == 0 { prod_local_46 } else { value % prod_local_45 }; { let prod_local_48 = 1; { let prod_local_49 = { let __start = usize::try_from(prod_local_47).ok(); let __count = usize::try_from(prod_local_48).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_43).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_49 {
+        None => { let prod_local_50 = crate::PUnit {  }; { let prod_local_54 = { let prod_local_51 = prod_local_50; alloc::vec::Vec::<u8>::new() }; prod_local_54 } },
+        Some(prod_local_55) => prod_local_55,
+    } } } } } } } },
+        true => { let _x_550 = cborOctetTable10(); { let prod_local_56 = _x_550; { let prod_local_58 = 16; { let prod_local_59 = 0; { let prod_local_60 = if prod_local_58 == 0 { prod_local_59 } else { value % prod_local_58 }; { let prod_local_61 = 1; { let prod_local_62 = { let __start = usize::try_from(prod_local_60).ok(); let __count = usize::try_from(prod_local_61).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_56).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_62 {
+        None => { let prod_local_63 = crate::PUnit {  }; { let prod_local_67 = { let prod_local_64 = prod_local_63; alloc::vec::Vec::<u8>::new() }; prod_local_67 } },
+        Some(prod_local_68) => prod_local_68,
+    } } } } } } } },
+    } } },
+        true => { let _x_551 = 144; { let _x_552 = (value < _x_551); match _x_552 {
+        false => { let _x_554 = cborOctetTable9(); { let prod_local_69 = _x_554; { let prod_local_71 = 16; { let prod_local_72 = 0; { let prod_local_73 = if prod_local_71 == 0 { prod_local_72 } else { value % prod_local_71 }; { let prod_local_74 = 1; { let prod_local_75 = { let __start = usize::try_from(prod_local_73).ok(); let __count = usize::try_from(prod_local_74).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_69).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_75 {
+        None => { let prod_local_76 = crate::PUnit {  }; { let prod_local_80 = { let prod_local_77 = prod_local_76; alloc::vec::Vec::<u8>::new() }; prod_local_80 } },
+        Some(prod_local_81) => prod_local_81,
+    } } } } } } } },
+        true => { let _x_556 = cborOctetTable8(); { let prod_local_82 = _x_556; { let prod_local_84 = 16; { let prod_local_85 = 0; { let prod_local_86 = if prod_local_84 == 0 { prod_local_85 } else { value % prod_local_84 }; { let prod_local_87 = 1; { let prod_local_88 = { let __start = usize::try_from(prod_local_86).ok(); let __count = usize::try_from(prod_local_87).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_82).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_88 {
+        None => { let prod_local_89 = crate::PUnit {  }; { let prod_local_93 = { let prod_local_90 = prod_local_89; alloc::vec::Vec::<u8>::new() }; prod_local_93 } },
+        Some(prod_local_94) => prod_local_94,
+    } } } } } } } },
+    } } },
+    } } },
+    } } },
+        true => { let _x_601 = 64; { let _x_602 = (value < _x_601); match _x_602 {
+        false => { let _x_621 = 96; { let _x_622 = (value < _x_621); match _x_622 {
+        false => { let _x_627 = 112; { let _x_628 = (value < _x_627); match _x_628 {
+        false => { let _x_630 = cborOctetTable7(); { let prod_local_95 = _x_630; { let prod_local_97 = 16; { let prod_local_98 = 0; { let prod_local_99 = if prod_local_97 == 0 { prod_local_98 } else { value % prod_local_97 }; { let prod_local_100 = 1; { let prod_local_101 = { let __start = usize::try_from(prod_local_99).ok(); let __count = usize::try_from(prod_local_100).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_95).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_101 {
+        None => { let prod_local_102 = crate::PUnit {  }; { let prod_local_106 = { let prod_local_103 = prod_local_102; alloc::vec::Vec::<u8>::new() }; prod_local_106 } },
+        Some(prod_local_107) => prod_local_107,
+    } } } } } } } },
+        true => { let _x_632 = cborOctetTable6(); { let prod_local_108 = _x_632; { let prod_local_110 = 16; { let prod_local_111 = 0; { let prod_local_112 = if prod_local_110 == 0 { prod_local_111 } else { value % prod_local_110 }; { let prod_local_113 = 1; { let prod_local_114 = { let __start = usize::try_from(prod_local_112).ok(); let __count = usize::try_from(prod_local_113).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_108).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_114 {
+        None => { let prod_local_115 = crate::PUnit {  }; { let prod_local_119 = { let prod_local_116 = prod_local_115; alloc::vec::Vec::<u8>::new() }; prod_local_119 } },
+        Some(prod_local_120) => prod_local_120,
+    } } } } } } } },
+    } } },
+        true => { let _x_633 = 80; { let _x_634 = (value < _x_633); match _x_634 {
+        false => { let _x_636 = cborOctetTable5(); { let prod_local_121 = _x_636; { let prod_local_123 = 16; { let prod_local_124 = 0; { let prod_local_125 = if prod_local_123 == 0 { prod_local_124 } else { value % prod_local_123 }; { let prod_local_126 = 1; { let prod_local_127 = { let __start = usize::try_from(prod_local_125).ok(); let __count = usize::try_from(prod_local_126).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_121).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_127 {
+        None => { let prod_local_128 = crate::PUnit {  }; { let prod_local_132 = { let prod_local_129 = prod_local_128; alloc::vec::Vec::<u8>::new() }; prod_local_132 } },
+        Some(prod_local_133) => prod_local_133,
+    } } } } } } } },
+        true => { let _x_638 = cborOctetTable4(); { let prod_local_134 = _x_638; { let prod_local_136 = 16; { let prod_local_137 = 0; { let prod_local_138 = if prod_local_136 == 0 { prod_local_137 } else { value % prod_local_136 }; { let prod_local_139 = 1; { let prod_local_140 = { let __start = usize::try_from(prod_local_138).ok(); let __count = usize::try_from(prod_local_139).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_134).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_140 {
+        None => { let prod_local_141 = crate::PUnit {  }; { let prod_local_145 = { let prod_local_142 = prod_local_141; alloc::vec::Vec::<u8>::new() }; prod_local_145 } },
+        Some(prod_local_146) => prod_local_146,
+    } } } } } } } },
+    } } },
+    } } },
+        true => { let _x_653 = 32; { let _x_654 = (value < _x_653); match _x_654 {
+        false => { let _x_659 = 48; { let _x_660 = (value < _x_659); match _x_660 {
+        false => { let _x_662 = cborOctetTable3(); { let prod_local_147 = _x_662; { let prod_local_149 = 16; { let prod_local_150 = 0; { let prod_local_151 = if prod_local_149 == 0 { prod_local_150 } else { value % prod_local_149 }; { let prod_local_152 = 1; { let prod_local_153 = { let __start = usize::try_from(prod_local_151).ok(); let __count = usize::try_from(prod_local_152).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_147).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_153 {
+        None => { let prod_local_154 = crate::PUnit {  }; { let prod_local_158 = { let prod_local_155 = prod_local_154; alloc::vec::Vec::<u8>::new() }; prod_local_158 } },
+        Some(prod_local_159) => prod_local_159,
+    } } } } } } } },
+        true => { let _x_664 = cborOctetTable2(); { let prod_local_160 = _x_664; { let prod_local_162 = 16; { let prod_local_163 = 0; { let prod_local_164 = if prod_local_162 == 0 { prod_local_163 } else { value % prod_local_162 }; { let prod_local_165 = 1; { let prod_local_166 = { let __start = usize::try_from(prod_local_164).ok(); let __count = usize::try_from(prod_local_165).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_160).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_166 {
+        None => { let prod_local_167 = crate::PUnit {  }; { let prod_local_171 = { let prod_local_168 = prod_local_167; alloc::vec::Vec::<u8>::new() }; prod_local_171 } },
+        Some(prod_local_172) => prod_local_172,
+    } } } } } } } },
+    } } },
+        true => { let _x_665 = 16; { let _x_666 = (value < _x_665); match _x_666 {
+        false => { let _x_668 = cborOctetTable1(); { let prod_local_173 = _x_668; { let prod_local_175 = 16; { let prod_local_176 = 0; { let prod_local_177 = if prod_local_175 == 0 { prod_local_176 } else { value % prod_local_175 }; { let prod_local_178 = 1; { let prod_local_179 = { let __start = usize::try_from(prod_local_177).ok(); let __count = usize::try_from(prod_local_178).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_173).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_179 {
+        None => { let prod_local_180 = crate::PUnit {  }; { let prod_local_184 = { let prod_local_181 = prod_local_180; alloc::vec::Vec::<u8>::new() }; prod_local_184 } },
+        Some(prod_local_185) => prod_local_185,
+    } } } } } } } },
+        true => { let _x_670 = cborOctetTable0(); { let prod_local_186 = _x_670; { let prod_local_188 = 16; { let prod_local_189 = 0; { let prod_local_190 = if prod_local_188 == 0 { prod_local_189 } else { value % prod_local_188 }; { let prod_local_191 = 1; { let prod_local_192 = { let __start = usize::try_from(prod_local_190).ok(); let __count = usize::try_from(prod_local_191).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_186).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_192 {
+        None => { let prod_local_193 = crate::PUnit {  }; { let prod_local_197 = { let prod_local_194 = prod_local_193; alloc::vec::Vec::<u8>::new() }; prod_local_197 } },
+        Some(prod_local_198) => prod_local_198,
+    } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } }
+}
+
+pub fn cborOctetNat(value: u8) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_4 = 0; { let _x_212 = 1; { let _x_21 = (value & _x_212); { let _x_22 = (_x_21 == _x_212); match _x_22 {
+        false => { let _y_27 = _x_4; { let _x_219 = 2; { let _x_38 = (value & _x_219); { let _x_39 = (_x_38 == _x_219); match _x_39 {
+        false => { let _y_44 = _x_4; { let _x_222 = core::convert::identity::<u64>(_y_27).checked_add(_y_44).ok_or(crate::ComputeError::AddOverflow)?; { let _x_226 = 4; { let _x_55 = (value & _x_226); { let _x_56 = (_x_55 == _x_226); match _x_56 {
+        false => { let _y_61 = _x_4; { let _x_229 = core::convert::identity::<u64>(_x_222).checked_add(_y_61).ok_or(crate::ComputeError::AddOverflow)?; { let _x_233 = 8; { let _x_72 = (value & _x_233); { let _x_73 = (_x_72 == _x_233); match _x_73 {
+        false => { let _y_78 = _x_4; { let _x_236 = core::convert::identity::<u64>(_x_229).checked_add(_y_78).ok_or(crate::ComputeError::AddOverflow)?; { let _x_240 = 16; { let _x_89 = (value & _x_240); { let _x_90 = (_x_89 == _x_240); match _x_90 {
+        false => { let _y_95 = _x_4; { let _x_243 = core::convert::identity::<u64>(_x_236).checked_add(_y_95).ok_or(crate::ComputeError::AddOverflow)?; { let _x_247 = 32; { let _x_106 = (value & _x_247); { let _x_107 = (_x_106 == _x_247); match _x_107 {
+        false => { let _y_112 = _x_4; { let _x_250 = core::convert::identity::<u64>(_x_243).checked_add(_y_112).ok_or(crate::ComputeError::AddOverflow)?; { let _x_254 = 64; { let _x_123 = (value & _x_254); { let _x_124 = (_x_123 == _x_254); match _x_124 {
+        false => { let _y_129 = _x_4; { let _x_257 = core::convert::identity::<u64>(_x_250).checked_add(_y_129).ok_or(crate::ComputeError::AddOverflow)?; { let _x_261 = 128; { let _x_140 = (value & _x_261); { let _x_141 = (_x_140 == _x_261); match _x_141 {
+        false => _x_257,
+        true => { let _x_272 = 128; { let _x_273 = core::convert::identity::<u64>(_x_257).checked_add(_x_272).ok_or(crate::ComputeError::AddOverflow)?; _x_273 } },
+    } } } } } },
+        true => { let _x_278 = 64; { let prod_local_0 = _x_278; { let prod_local_1 = core::convert::identity::<u64>(_x_250).checked_add(prod_local_0).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_2 = 128; { let prod_local_3 = (value & prod_local_2); { let prod_local_4 = (prod_local_3 == prod_local_2); match prod_local_4 {
+        false => prod_local_1,
+        true => { let prod_local_5 = 128; { let prod_local_6 = core::convert::identity::<u64>(prod_local_1).checked_add(prod_local_5).ok_or(crate::ComputeError::AddOverflow)?; prod_local_6 } },
+    } } } } } } },
+    } } } } } },
+        true => { let _x_283 = 32; { let prod_local_7 = _x_283; { let prod_local_8 = core::convert::identity::<u64>(_x_243).checked_add(prod_local_7).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_9 = 64; { let prod_local_10 = (value & prod_local_9); { let prod_local_11 = (prod_local_10 == prod_local_9); match prod_local_11 {
+        false => { let prod_local_13 = _x_4; { let prod_local_14 = core::convert::identity::<u64>(prod_local_8).checked_add(prod_local_13).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_15 = 128; { let prod_local_16 = (value & prod_local_15); { let prod_local_17 = (prod_local_16 == prod_local_15); match prod_local_17 {
+        false => prod_local_14,
+        true => { let prod_local_18 = 128; { let prod_local_19 = core::convert::identity::<u64>(prod_local_14).checked_add(prod_local_18).ok_or(crate::ComputeError::AddOverflow)?; prod_local_19 } },
+    } } } } } },
+        true => { let prod_local_20 = 64; { let prod_local_21 = prod_local_20; { let prod_local_22 = core::convert::identity::<u64>(prod_local_8).checked_add(prod_local_21).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_23 = 128; { let prod_local_24 = (value & prod_local_23); { let prod_local_25 = (prod_local_24 == prod_local_23); match prod_local_25 {
+        false => prod_local_22,
+        true => { let prod_local_26 = 128; { let prod_local_27 = core::convert::identity::<u64>(prod_local_22).checked_add(prod_local_26).ok_or(crate::ComputeError::AddOverflow)?; prod_local_27 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let _x_288 = 16; { let prod_local_28 = _x_288; { let prod_local_29 = core::convert::identity::<u64>(_x_236).checked_add(prod_local_28).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_30 = 32; { let prod_local_31 = (value & prod_local_30); { let prod_local_32 = (prod_local_31 == prod_local_30); match prod_local_32 {
+        false => { let prod_local_34 = _x_4; { let prod_local_35 = core::convert::identity::<u64>(prod_local_29).checked_add(prod_local_34).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_36 = 64; { let prod_local_37 = (value & prod_local_36); { let prod_local_38 = (prod_local_37 == prod_local_36); match prod_local_38 {
+        false => { let prod_local_40 = _x_4; { let prod_local_41 = core::convert::identity::<u64>(prod_local_35).checked_add(prod_local_40).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_42 = 128; { let prod_local_43 = (value & prod_local_42); { let prod_local_44 = (prod_local_43 == prod_local_42); match prod_local_44 {
+        false => prod_local_41,
+        true => { let prod_local_45 = 128; { let prod_local_46 = core::convert::identity::<u64>(prod_local_41).checked_add(prod_local_45).ok_or(crate::ComputeError::AddOverflow)?; prod_local_46 } },
+    } } } } } },
+        true => { let prod_local_47 = 64; { let prod_local_48 = prod_local_47; { let prod_local_49 = core::convert::identity::<u64>(prod_local_35).checked_add(prod_local_48).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_50 = 128; { let prod_local_51 = (value & prod_local_50); { let prod_local_52 = (prod_local_51 == prod_local_50); match prod_local_52 {
+        false => prod_local_49,
+        true => { let prod_local_53 = 128; { let prod_local_54 = core::convert::identity::<u64>(prod_local_49).checked_add(prod_local_53).ok_or(crate::ComputeError::AddOverflow)?; prod_local_54 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_55 = 32; { let prod_local_56 = prod_local_55; { let prod_local_57 = core::convert::identity::<u64>(prod_local_29).checked_add(prod_local_56).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_58 = 64; { let prod_local_59 = (value & prod_local_58); { let prod_local_60 = (prod_local_59 == prod_local_58); match prod_local_60 {
+        false => { let prod_local_62 = _x_4; { let prod_local_63 = core::convert::identity::<u64>(prod_local_57).checked_add(prod_local_62).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_64 = 128; { let prod_local_65 = (value & prod_local_64); { let prod_local_66 = (prod_local_65 == prod_local_64); match prod_local_66 {
+        false => prod_local_63,
+        true => { let prod_local_67 = 128; { let prod_local_68 = core::convert::identity::<u64>(prod_local_63).checked_add(prod_local_67).ok_or(crate::ComputeError::AddOverflow)?; prod_local_68 } },
+    } } } } } },
+        true => { let prod_local_69 = 64; { let prod_local_70 = prod_local_69; { let prod_local_71 = core::convert::identity::<u64>(prod_local_57).checked_add(prod_local_70).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_72 = 128; { let prod_local_73 = (value & prod_local_72); { let prod_local_74 = (prod_local_73 == prod_local_72); match prod_local_74 {
+        false => prod_local_71,
+        true => { let prod_local_75 = 128; { let prod_local_76 = core::convert::identity::<u64>(prod_local_71).checked_add(prod_local_75).ok_or(crate::ComputeError::AddOverflow)?; prod_local_76 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let _x_293 = 8; { let prod_local_77 = _x_293; { let prod_local_78 = core::convert::identity::<u64>(_x_229).checked_add(prod_local_77).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_79 = 16; { let prod_local_80 = (value & prod_local_79); { let prod_local_81 = (prod_local_80 == prod_local_79); match prod_local_81 {
+        false => { let prod_local_83 = _x_4; { let prod_local_84 = core::convert::identity::<u64>(prod_local_78).checked_add(prod_local_83).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_85 = 32; { let prod_local_86 = (value & prod_local_85); { let prod_local_87 = (prod_local_86 == prod_local_85); match prod_local_87 {
+        false => { let prod_local_89 = _x_4; { let prod_local_90 = core::convert::identity::<u64>(prod_local_84).checked_add(prod_local_89).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_91 = 64; { let prod_local_92 = (value & prod_local_91); { let prod_local_93 = (prod_local_92 == prod_local_91); match prod_local_93 {
+        false => { let prod_local_95 = _x_4; { let prod_local_96 = core::convert::identity::<u64>(prod_local_90).checked_add(prod_local_95).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_97 = 128; { let prod_local_98 = (value & prod_local_97); { let prod_local_99 = (prod_local_98 == prod_local_97); match prod_local_99 {
+        false => prod_local_96,
+        true => { let prod_local_100 = 128; { let prod_local_101 = core::convert::identity::<u64>(prod_local_96).checked_add(prod_local_100).ok_or(crate::ComputeError::AddOverflow)?; prod_local_101 } },
+    } } } } } },
+        true => { let prod_local_102 = 64; { let prod_local_103 = prod_local_102; { let prod_local_104 = core::convert::identity::<u64>(prod_local_90).checked_add(prod_local_103).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_105 = 128; { let prod_local_106 = (value & prod_local_105); { let prod_local_107 = (prod_local_106 == prod_local_105); match prod_local_107 {
+        false => prod_local_104,
+        true => { let prod_local_108 = 128; { let prod_local_109 = core::convert::identity::<u64>(prod_local_104).checked_add(prod_local_108).ok_or(crate::ComputeError::AddOverflow)?; prod_local_109 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_110 = 32; { let prod_local_111 = prod_local_110; { let prod_local_112 = core::convert::identity::<u64>(prod_local_84).checked_add(prod_local_111).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_113 = 64; { let prod_local_114 = (value & prod_local_113); { let prod_local_115 = (prod_local_114 == prod_local_113); match prod_local_115 {
+        false => { let prod_local_117 = _x_4; { let prod_local_118 = core::convert::identity::<u64>(prod_local_112).checked_add(prod_local_117).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_119 = 128; { let prod_local_120 = (value & prod_local_119); { let prod_local_121 = (prod_local_120 == prod_local_119); match prod_local_121 {
+        false => prod_local_118,
+        true => { let prod_local_122 = 128; { let prod_local_123 = core::convert::identity::<u64>(prod_local_118).checked_add(prod_local_122).ok_or(crate::ComputeError::AddOverflow)?; prod_local_123 } },
+    } } } } } },
+        true => { let prod_local_124 = 64; { let prod_local_125 = prod_local_124; { let prod_local_126 = core::convert::identity::<u64>(prod_local_112).checked_add(prod_local_125).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_127 = 128; { let prod_local_128 = (value & prod_local_127); { let prod_local_129 = (prod_local_128 == prod_local_127); match prod_local_129 {
+        false => prod_local_126,
+        true => { let prod_local_130 = 128; { let prod_local_131 = core::convert::identity::<u64>(prod_local_126).checked_add(prod_local_130).ok_or(crate::ComputeError::AddOverflow)?; prod_local_131 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_132 = 16; { let prod_local_133 = prod_local_132; { let prod_local_134 = core::convert::identity::<u64>(prod_local_78).checked_add(prod_local_133).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_135 = 32; { let prod_local_136 = (value & prod_local_135); { let prod_local_137 = (prod_local_136 == prod_local_135); match prod_local_137 {
+        false => { let prod_local_139 = _x_4; { let prod_local_140 = core::convert::identity::<u64>(prod_local_134).checked_add(prod_local_139).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_141 = 64; { let prod_local_142 = (value & prod_local_141); { let prod_local_143 = (prod_local_142 == prod_local_141); match prod_local_143 {
+        false => { let prod_local_145 = _x_4; { let prod_local_146 = core::convert::identity::<u64>(prod_local_140).checked_add(prod_local_145).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_147 = 128; { let prod_local_148 = (value & prod_local_147); { let prod_local_149 = (prod_local_148 == prod_local_147); match prod_local_149 {
+        false => prod_local_146,
+        true => { let prod_local_150 = 128; { let prod_local_151 = core::convert::identity::<u64>(prod_local_146).checked_add(prod_local_150).ok_or(crate::ComputeError::AddOverflow)?; prod_local_151 } },
+    } } } } } },
+        true => { let prod_local_152 = 64; { let prod_local_153 = prod_local_152; { let prod_local_154 = core::convert::identity::<u64>(prod_local_140).checked_add(prod_local_153).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_155 = 128; { let prod_local_156 = (value & prod_local_155); { let prod_local_157 = (prod_local_156 == prod_local_155); match prod_local_157 {
+        false => prod_local_154,
+        true => { let prod_local_158 = 128; { let prod_local_159 = core::convert::identity::<u64>(prod_local_154).checked_add(prod_local_158).ok_or(crate::ComputeError::AddOverflow)?; prod_local_159 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_160 = 32; { let prod_local_161 = prod_local_160; { let prod_local_162 = core::convert::identity::<u64>(prod_local_134).checked_add(prod_local_161).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_163 = 64; { let prod_local_164 = (value & prod_local_163); { let prod_local_165 = (prod_local_164 == prod_local_163); match prod_local_165 {
+        false => { let prod_local_167 = _x_4; { let prod_local_168 = core::convert::identity::<u64>(prod_local_162).checked_add(prod_local_167).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_169 = 128; { let prod_local_170 = (value & prod_local_169); { let prod_local_171 = (prod_local_170 == prod_local_169); match prod_local_171 {
+        false => prod_local_168,
+        true => { let prod_local_172 = 128; { let prod_local_173 = core::convert::identity::<u64>(prod_local_168).checked_add(prod_local_172).ok_or(crate::ComputeError::AddOverflow)?; prod_local_173 } },
+    } } } } } },
+        true => { let prod_local_174 = 64; { let prod_local_175 = prod_local_174; { let prod_local_176 = core::convert::identity::<u64>(prod_local_162).checked_add(prod_local_175).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_177 = 128; { let prod_local_178 = (value & prod_local_177); { let prod_local_179 = (prod_local_178 == prod_local_177); match prod_local_179 {
+        false => prod_local_176,
+        true => { let prod_local_180 = 128; { let prod_local_181 = core::convert::identity::<u64>(prod_local_176).checked_add(prod_local_180).ok_or(crate::ComputeError::AddOverflow)?; prod_local_181 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let _x_298 = 4; { let prod_local_182 = _x_298; { let prod_local_183 = core::convert::identity::<u64>(_x_222).checked_add(prod_local_182).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_184 = 8; { let prod_local_185 = (value & prod_local_184); { let prod_local_186 = (prod_local_185 == prod_local_184); match prod_local_186 {
+        false => { let prod_local_188 = _x_4; { let prod_local_189 = core::convert::identity::<u64>(prod_local_183).checked_add(prod_local_188).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_190 = 16; { let prod_local_191 = (value & prod_local_190); { let prod_local_192 = (prod_local_191 == prod_local_190); match prod_local_192 {
+        false => { let prod_local_194 = _x_4; { let prod_local_195 = core::convert::identity::<u64>(prod_local_189).checked_add(prod_local_194).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_196 = 32; { let prod_local_197 = (value & prod_local_196); { let prod_local_198 = (prod_local_197 == prod_local_196); match prod_local_198 {
+        false => { let prod_local_200 = _x_4; { let prod_local_201 = core::convert::identity::<u64>(prod_local_195).checked_add(prod_local_200).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_202 = 64; { let prod_local_203 = (value & prod_local_202); { let prod_local_204 = (prod_local_203 == prod_local_202); match prod_local_204 {
+        false => { let prod_local_206 = _x_4; { let prod_local_207 = core::convert::identity::<u64>(prod_local_201).checked_add(prod_local_206).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_208 = 128; { let prod_local_209 = (value & prod_local_208); { let prod_local_210 = (prod_local_209 == prod_local_208); match prod_local_210 {
+        false => prod_local_207,
+        true => { let prod_local_211 = 128; { let prod_local_212 = core::convert::identity::<u64>(prod_local_207).checked_add(prod_local_211).ok_or(crate::ComputeError::AddOverflow)?; prod_local_212 } },
+    } } } } } },
+        true => { let prod_local_213 = 64; { let prod_local_214 = prod_local_213; { let prod_local_215 = core::convert::identity::<u64>(prod_local_201).checked_add(prod_local_214).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_216 = 128; { let prod_local_217 = (value & prod_local_216); { let prod_local_218 = (prod_local_217 == prod_local_216); match prod_local_218 {
+        false => prod_local_215,
+        true => { let prod_local_219 = 128; { let prod_local_220 = core::convert::identity::<u64>(prod_local_215).checked_add(prod_local_219).ok_or(crate::ComputeError::AddOverflow)?; prod_local_220 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_221 = 32; { let prod_local_222 = prod_local_221; { let prod_local_223 = core::convert::identity::<u64>(prod_local_195).checked_add(prod_local_222).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_224 = 64; { let prod_local_225 = (value & prod_local_224); { let prod_local_226 = (prod_local_225 == prod_local_224); match prod_local_226 {
+        false => { let prod_local_228 = _x_4; { let prod_local_229 = core::convert::identity::<u64>(prod_local_223).checked_add(prod_local_228).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_230 = 128; { let prod_local_231 = (value & prod_local_230); { let prod_local_232 = (prod_local_231 == prod_local_230); match prod_local_232 {
+        false => prod_local_229,
+        true => { let prod_local_233 = 128; { let prod_local_234 = core::convert::identity::<u64>(prod_local_229).checked_add(prod_local_233).ok_or(crate::ComputeError::AddOverflow)?; prod_local_234 } },
+    } } } } } },
+        true => { let prod_local_235 = 64; { let prod_local_236 = prod_local_235; { let prod_local_237 = core::convert::identity::<u64>(prod_local_223).checked_add(prod_local_236).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_238 = 128; { let prod_local_239 = (value & prod_local_238); { let prod_local_240 = (prod_local_239 == prod_local_238); match prod_local_240 {
+        false => prod_local_237,
+        true => { let prod_local_241 = 128; { let prod_local_242 = core::convert::identity::<u64>(prod_local_237).checked_add(prod_local_241).ok_or(crate::ComputeError::AddOverflow)?; prod_local_242 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_243 = 16; { let prod_local_244 = prod_local_243; { let prod_local_245 = core::convert::identity::<u64>(prod_local_189).checked_add(prod_local_244).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_246 = 32; { let prod_local_247 = (value & prod_local_246); { let prod_local_248 = (prod_local_247 == prod_local_246); match prod_local_248 {
+        false => { let prod_local_250 = _x_4; { let prod_local_251 = core::convert::identity::<u64>(prod_local_245).checked_add(prod_local_250).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_252 = 64; { let prod_local_253 = (value & prod_local_252); { let prod_local_254 = (prod_local_253 == prod_local_252); match prod_local_254 {
+        false => { let prod_local_256 = _x_4; { let prod_local_257 = core::convert::identity::<u64>(prod_local_251).checked_add(prod_local_256).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_258 = 128; { let prod_local_259 = (value & prod_local_258); { let prod_local_260 = (prod_local_259 == prod_local_258); match prod_local_260 {
+        false => prod_local_257,
+        true => { let prod_local_261 = 128; { let prod_local_262 = core::convert::identity::<u64>(prod_local_257).checked_add(prod_local_261).ok_or(crate::ComputeError::AddOverflow)?; prod_local_262 } },
+    } } } } } },
+        true => { let prod_local_263 = 64; { let prod_local_264 = prod_local_263; { let prod_local_265 = core::convert::identity::<u64>(prod_local_251).checked_add(prod_local_264).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_266 = 128; { let prod_local_267 = (value & prod_local_266); { let prod_local_268 = (prod_local_267 == prod_local_266); match prod_local_268 {
+        false => prod_local_265,
+        true => { let prod_local_269 = 128; { let prod_local_270 = core::convert::identity::<u64>(prod_local_265).checked_add(prod_local_269).ok_or(crate::ComputeError::AddOverflow)?; prod_local_270 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_271 = 32; { let prod_local_272 = prod_local_271; { let prod_local_273 = core::convert::identity::<u64>(prod_local_245).checked_add(prod_local_272).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_274 = 64; { let prod_local_275 = (value & prod_local_274); { let prod_local_276 = (prod_local_275 == prod_local_274); match prod_local_276 {
+        false => { let prod_local_278 = _x_4; { let prod_local_279 = core::convert::identity::<u64>(prod_local_273).checked_add(prod_local_278).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_280 = 128; { let prod_local_281 = (value & prod_local_280); { let prod_local_282 = (prod_local_281 == prod_local_280); match prod_local_282 {
+        false => prod_local_279,
+        true => { let prod_local_283 = 128; { let prod_local_284 = core::convert::identity::<u64>(prod_local_279).checked_add(prod_local_283).ok_or(crate::ComputeError::AddOverflow)?; prod_local_284 } },
+    } } } } } },
+        true => { let prod_local_285 = 64; { let prod_local_286 = prod_local_285; { let prod_local_287 = core::convert::identity::<u64>(prod_local_273).checked_add(prod_local_286).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_288 = 128; { let prod_local_289 = (value & prod_local_288); { let prod_local_290 = (prod_local_289 == prod_local_288); match prod_local_290 {
+        false => prod_local_287,
+        true => { let prod_local_291 = 128; { let prod_local_292 = core::convert::identity::<u64>(prod_local_287).checked_add(prod_local_291).ok_or(crate::ComputeError::AddOverflow)?; prod_local_292 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_293 = 8; { let prod_local_294 = prod_local_293; { let prod_local_295 = core::convert::identity::<u64>(prod_local_183).checked_add(prod_local_294).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_296 = 16; { let prod_local_297 = (value & prod_local_296); { let prod_local_298 = (prod_local_297 == prod_local_296); match prod_local_298 {
+        false => { let prod_local_300 = _x_4; { let prod_local_301 = core::convert::identity::<u64>(prod_local_295).checked_add(prod_local_300).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_302 = 32; { let prod_local_303 = (value & prod_local_302); { let prod_local_304 = (prod_local_303 == prod_local_302); match prod_local_304 {
+        false => { let prod_local_306 = _x_4; { let prod_local_307 = core::convert::identity::<u64>(prod_local_301).checked_add(prod_local_306).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_308 = 64; { let prod_local_309 = (value & prod_local_308); { let prod_local_310 = (prod_local_309 == prod_local_308); match prod_local_310 {
+        false => { let prod_local_312 = _x_4; { let prod_local_313 = core::convert::identity::<u64>(prod_local_307).checked_add(prod_local_312).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_314 = 128; { let prod_local_315 = (value & prod_local_314); { let prod_local_316 = (prod_local_315 == prod_local_314); match prod_local_316 {
+        false => prod_local_313,
+        true => { let prod_local_317 = 128; { let prod_local_318 = core::convert::identity::<u64>(prod_local_313).checked_add(prod_local_317).ok_or(crate::ComputeError::AddOverflow)?; prod_local_318 } },
+    } } } } } },
+        true => { let prod_local_319 = 64; { let prod_local_320 = prod_local_319; { let prod_local_321 = core::convert::identity::<u64>(prod_local_307).checked_add(prod_local_320).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_322 = 128; { let prod_local_323 = (value & prod_local_322); { let prod_local_324 = (prod_local_323 == prod_local_322); match prod_local_324 {
+        false => prod_local_321,
+        true => { let prod_local_325 = 128; { let prod_local_326 = core::convert::identity::<u64>(prod_local_321).checked_add(prod_local_325).ok_or(crate::ComputeError::AddOverflow)?; prod_local_326 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_327 = 32; { let prod_local_328 = prod_local_327; { let prod_local_329 = core::convert::identity::<u64>(prod_local_301).checked_add(prod_local_328).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_330 = 64; { let prod_local_331 = (value & prod_local_330); { let prod_local_332 = (prod_local_331 == prod_local_330); match prod_local_332 {
+        false => { let prod_local_334 = _x_4; { let prod_local_335 = core::convert::identity::<u64>(prod_local_329).checked_add(prod_local_334).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_336 = 128; { let prod_local_337 = (value & prod_local_336); { let prod_local_338 = (prod_local_337 == prod_local_336); match prod_local_338 {
+        false => prod_local_335,
+        true => { let prod_local_339 = 128; { let prod_local_340 = core::convert::identity::<u64>(prod_local_335).checked_add(prod_local_339).ok_or(crate::ComputeError::AddOverflow)?; prod_local_340 } },
+    } } } } } },
+        true => { let prod_local_341 = 64; { let prod_local_342 = prod_local_341; { let prod_local_343 = core::convert::identity::<u64>(prod_local_329).checked_add(prod_local_342).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_344 = 128; { let prod_local_345 = (value & prod_local_344); { let prod_local_346 = (prod_local_345 == prod_local_344); match prod_local_346 {
+        false => prod_local_343,
+        true => { let prod_local_347 = 128; { let prod_local_348 = core::convert::identity::<u64>(prod_local_343).checked_add(prod_local_347).ok_or(crate::ComputeError::AddOverflow)?; prod_local_348 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_349 = 16; { let prod_local_350 = prod_local_349; { let prod_local_351 = core::convert::identity::<u64>(prod_local_295).checked_add(prod_local_350).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_352 = 32; { let prod_local_353 = (value & prod_local_352); { let prod_local_354 = (prod_local_353 == prod_local_352); match prod_local_354 {
+        false => { let prod_local_356 = _x_4; { let prod_local_357 = core::convert::identity::<u64>(prod_local_351).checked_add(prod_local_356).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_358 = 64; { let prod_local_359 = (value & prod_local_358); { let prod_local_360 = (prod_local_359 == prod_local_358); match prod_local_360 {
+        false => { let prod_local_362 = _x_4; { let prod_local_363 = core::convert::identity::<u64>(prod_local_357).checked_add(prod_local_362).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_364 = 128; { let prod_local_365 = (value & prod_local_364); { let prod_local_366 = (prod_local_365 == prod_local_364); match prod_local_366 {
+        false => prod_local_363,
+        true => { let prod_local_367 = 128; { let prod_local_368 = core::convert::identity::<u64>(prod_local_363).checked_add(prod_local_367).ok_or(crate::ComputeError::AddOverflow)?; prod_local_368 } },
+    } } } } } },
+        true => { let prod_local_369 = 64; { let prod_local_370 = prod_local_369; { let prod_local_371 = core::convert::identity::<u64>(prod_local_357).checked_add(prod_local_370).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_372 = 128; { let prod_local_373 = (value & prod_local_372); { let prod_local_374 = (prod_local_373 == prod_local_372); match prod_local_374 {
+        false => prod_local_371,
+        true => { let prod_local_375 = 128; { let prod_local_376 = core::convert::identity::<u64>(prod_local_371).checked_add(prod_local_375).ok_or(crate::ComputeError::AddOverflow)?; prod_local_376 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_377 = 32; { let prod_local_378 = prod_local_377; { let prod_local_379 = core::convert::identity::<u64>(prod_local_351).checked_add(prod_local_378).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_380 = 64; { let prod_local_381 = (value & prod_local_380); { let prod_local_382 = (prod_local_381 == prod_local_380); match prod_local_382 {
+        false => { let prod_local_384 = _x_4; { let prod_local_385 = core::convert::identity::<u64>(prod_local_379).checked_add(prod_local_384).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_386 = 128; { let prod_local_387 = (value & prod_local_386); { let prod_local_388 = (prod_local_387 == prod_local_386); match prod_local_388 {
+        false => prod_local_385,
+        true => { let prod_local_389 = 128; { let prod_local_390 = core::convert::identity::<u64>(prod_local_385).checked_add(prod_local_389).ok_or(crate::ComputeError::AddOverflow)?; prod_local_390 } },
+    } } } } } },
+        true => { let prod_local_391 = 64; { let prod_local_392 = prod_local_391; { let prod_local_393 = core::convert::identity::<u64>(prod_local_379).checked_add(prod_local_392).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_394 = 128; { let prod_local_395 = (value & prod_local_394); { let prod_local_396 = (prod_local_395 == prod_local_394); match prod_local_396 {
+        false => prod_local_393,
+        true => { let prod_local_397 = 128; { let prod_local_398 = core::convert::identity::<u64>(prod_local_393).checked_add(prod_local_397).ok_or(crate::ComputeError::AddOverflow)?; prod_local_398 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let _x_303 = 2; { let prod_local_399 = _x_303; { let prod_local_400 = core::convert::identity::<u64>(_y_27).checked_add(prod_local_399).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_401 = 4; { let prod_local_402 = (value & prod_local_401); { let prod_local_403 = (prod_local_402 == prod_local_401); match prod_local_403 {
+        false => { let prod_local_405 = _x_4; { let prod_local_406 = core::convert::identity::<u64>(prod_local_400).checked_add(prod_local_405).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_407 = 8; { let prod_local_408 = (value & prod_local_407); { let prod_local_409 = (prod_local_408 == prod_local_407); match prod_local_409 {
+        false => { let prod_local_411 = _x_4; { let prod_local_412 = core::convert::identity::<u64>(prod_local_406).checked_add(prod_local_411).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_413 = 16; { let prod_local_414 = (value & prod_local_413); { let prod_local_415 = (prod_local_414 == prod_local_413); match prod_local_415 {
+        false => { let prod_local_417 = _x_4; { let prod_local_418 = core::convert::identity::<u64>(prod_local_412).checked_add(prod_local_417).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_419 = 32; { let prod_local_420 = (value & prod_local_419); { let prod_local_421 = (prod_local_420 == prod_local_419); match prod_local_421 {
+        false => { let prod_local_423 = _x_4; { let prod_local_424 = core::convert::identity::<u64>(prod_local_418).checked_add(prod_local_423).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_425 = 64; { let prod_local_426 = (value & prod_local_425); { let prod_local_427 = (prod_local_426 == prod_local_425); match prod_local_427 {
+        false => { let prod_local_429 = _x_4; { let prod_local_430 = core::convert::identity::<u64>(prod_local_424).checked_add(prod_local_429).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_431 = 128; { let prod_local_432 = (value & prod_local_431); { let prod_local_433 = (prod_local_432 == prod_local_431); match prod_local_433 {
+        false => prod_local_430,
+        true => { let prod_local_434 = 128; { let prod_local_435 = core::convert::identity::<u64>(prod_local_430).checked_add(prod_local_434).ok_or(crate::ComputeError::AddOverflow)?; prod_local_435 } },
+    } } } } } },
+        true => { let prod_local_436 = 64; { let prod_local_437 = prod_local_436; { let prod_local_438 = core::convert::identity::<u64>(prod_local_424).checked_add(prod_local_437).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_439 = 128; { let prod_local_440 = (value & prod_local_439); { let prod_local_441 = (prod_local_440 == prod_local_439); match prod_local_441 {
+        false => prod_local_438,
+        true => { let prod_local_442 = 128; { let prod_local_443 = core::convert::identity::<u64>(prod_local_438).checked_add(prod_local_442).ok_or(crate::ComputeError::AddOverflow)?; prod_local_443 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_444 = 32; { let prod_local_445 = prod_local_444; { let prod_local_446 = core::convert::identity::<u64>(prod_local_418).checked_add(prod_local_445).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_447 = 64; { let prod_local_448 = (value & prod_local_447); { let prod_local_449 = (prod_local_448 == prod_local_447); match prod_local_449 {
+        false => { let prod_local_451 = _x_4; { let prod_local_452 = core::convert::identity::<u64>(prod_local_446).checked_add(prod_local_451).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_453 = 128; { let prod_local_454 = (value & prod_local_453); { let prod_local_455 = (prod_local_454 == prod_local_453); match prod_local_455 {
+        false => prod_local_452,
+        true => { let prod_local_456 = 128; { let prod_local_457 = core::convert::identity::<u64>(prod_local_452).checked_add(prod_local_456).ok_or(crate::ComputeError::AddOverflow)?; prod_local_457 } },
+    } } } } } },
+        true => { let prod_local_458 = 64; { let prod_local_459 = prod_local_458; { let prod_local_460 = core::convert::identity::<u64>(prod_local_446).checked_add(prod_local_459).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_461 = 128; { let prod_local_462 = (value & prod_local_461); { let prod_local_463 = (prod_local_462 == prod_local_461); match prod_local_463 {
+        false => prod_local_460,
+        true => { let prod_local_464 = 128; { let prod_local_465 = core::convert::identity::<u64>(prod_local_460).checked_add(prod_local_464).ok_or(crate::ComputeError::AddOverflow)?; prod_local_465 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_466 = 16; { let prod_local_467 = prod_local_466; { let prod_local_468 = core::convert::identity::<u64>(prod_local_412).checked_add(prod_local_467).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_469 = 32; { let prod_local_470 = (value & prod_local_469); { let prod_local_471 = (prod_local_470 == prod_local_469); match prod_local_471 {
+        false => { let prod_local_473 = _x_4; { let prod_local_474 = core::convert::identity::<u64>(prod_local_468).checked_add(prod_local_473).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_475 = 64; { let prod_local_476 = (value & prod_local_475); { let prod_local_477 = (prod_local_476 == prod_local_475); match prod_local_477 {
+        false => { let prod_local_479 = _x_4; { let prod_local_480 = core::convert::identity::<u64>(prod_local_474).checked_add(prod_local_479).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_481 = 128; { let prod_local_482 = (value & prod_local_481); { let prod_local_483 = (prod_local_482 == prod_local_481); match prod_local_483 {
+        false => prod_local_480,
+        true => { let prod_local_484 = 128; { let prod_local_485 = core::convert::identity::<u64>(prod_local_480).checked_add(prod_local_484).ok_or(crate::ComputeError::AddOverflow)?; prod_local_485 } },
+    } } } } } },
+        true => { let prod_local_486 = 64; { let prod_local_487 = prod_local_486; { let prod_local_488 = core::convert::identity::<u64>(prod_local_474).checked_add(prod_local_487).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_489 = 128; { let prod_local_490 = (value & prod_local_489); { let prod_local_491 = (prod_local_490 == prod_local_489); match prod_local_491 {
+        false => prod_local_488,
+        true => { let prod_local_492 = 128; { let prod_local_493 = core::convert::identity::<u64>(prod_local_488).checked_add(prod_local_492).ok_or(crate::ComputeError::AddOverflow)?; prod_local_493 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_494 = 32; { let prod_local_495 = prod_local_494; { let prod_local_496 = core::convert::identity::<u64>(prod_local_468).checked_add(prod_local_495).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_497 = 64; { let prod_local_498 = (value & prod_local_497); { let prod_local_499 = (prod_local_498 == prod_local_497); match prod_local_499 {
+        false => { let prod_local_501 = _x_4; { let prod_local_502 = core::convert::identity::<u64>(prod_local_496).checked_add(prod_local_501).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_503 = 128; { let prod_local_504 = (value & prod_local_503); { let prod_local_505 = (prod_local_504 == prod_local_503); match prod_local_505 {
+        false => prod_local_502,
+        true => { let prod_local_506 = 128; { let prod_local_507 = core::convert::identity::<u64>(prod_local_502).checked_add(prod_local_506).ok_or(crate::ComputeError::AddOverflow)?; prod_local_507 } },
+    } } } } } },
+        true => { let prod_local_508 = 64; { let prod_local_509 = prod_local_508; { let prod_local_510 = core::convert::identity::<u64>(prod_local_496).checked_add(prod_local_509).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_511 = 128; { let prod_local_512 = (value & prod_local_511); { let prod_local_513 = (prod_local_512 == prod_local_511); match prod_local_513 {
+        false => prod_local_510,
+        true => { let prod_local_514 = 128; { let prod_local_515 = core::convert::identity::<u64>(prod_local_510).checked_add(prod_local_514).ok_or(crate::ComputeError::AddOverflow)?; prod_local_515 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_516 = 8; { let prod_local_517 = prod_local_516; { let prod_local_518 = core::convert::identity::<u64>(prod_local_406).checked_add(prod_local_517).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_519 = 16; { let prod_local_520 = (value & prod_local_519); { let prod_local_521 = (prod_local_520 == prod_local_519); match prod_local_521 {
+        false => { let prod_local_523 = _x_4; { let prod_local_524 = core::convert::identity::<u64>(prod_local_518).checked_add(prod_local_523).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_525 = 32; { let prod_local_526 = (value & prod_local_525); { let prod_local_527 = (prod_local_526 == prod_local_525); match prod_local_527 {
+        false => { let prod_local_529 = _x_4; { let prod_local_530 = core::convert::identity::<u64>(prod_local_524).checked_add(prod_local_529).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_531 = 64; { let prod_local_532 = (value & prod_local_531); { let prod_local_533 = (prod_local_532 == prod_local_531); match prod_local_533 {
+        false => { let prod_local_535 = _x_4; { let prod_local_536 = core::convert::identity::<u64>(prod_local_530).checked_add(prod_local_535).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_537 = 128; { let prod_local_538 = (value & prod_local_537); { let prod_local_539 = (prod_local_538 == prod_local_537); match prod_local_539 {
+        false => prod_local_536,
+        true => { let prod_local_540 = 128; { let prod_local_541 = core::convert::identity::<u64>(prod_local_536).checked_add(prod_local_540).ok_or(crate::ComputeError::AddOverflow)?; prod_local_541 } },
+    } } } } } },
+        true => { let prod_local_542 = 64; { let prod_local_543 = prod_local_542; { let prod_local_544 = core::convert::identity::<u64>(prod_local_530).checked_add(prod_local_543).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_545 = 128; { let prod_local_546 = (value & prod_local_545); { let prod_local_547 = (prod_local_546 == prod_local_545); match prod_local_547 {
+        false => prod_local_544,
+        true => { let prod_local_548 = 128; { let prod_local_549 = core::convert::identity::<u64>(prod_local_544).checked_add(prod_local_548).ok_or(crate::ComputeError::AddOverflow)?; prod_local_549 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_550 = 32; { let prod_local_551 = prod_local_550; { let prod_local_552 = core::convert::identity::<u64>(prod_local_524).checked_add(prod_local_551).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_553 = 64; { let prod_local_554 = (value & prod_local_553); { let prod_local_555 = (prod_local_554 == prod_local_553); match prod_local_555 {
+        false => { let prod_local_557 = _x_4; { let prod_local_558 = core::convert::identity::<u64>(prod_local_552).checked_add(prod_local_557).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_559 = 128; { let prod_local_560 = (value & prod_local_559); { let prod_local_561 = (prod_local_560 == prod_local_559); match prod_local_561 {
+        false => prod_local_558,
+        true => { let prod_local_562 = 128; { let prod_local_563 = core::convert::identity::<u64>(prod_local_558).checked_add(prod_local_562).ok_or(crate::ComputeError::AddOverflow)?; prod_local_563 } },
+    } } } } } },
+        true => { let prod_local_564 = 64; { let prod_local_565 = prod_local_564; { let prod_local_566 = core::convert::identity::<u64>(prod_local_552).checked_add(prod_local_565).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_567 = 128; { let prod_local_568 = (value & prod_local_567); { let prod_local_569 = (prod_local_568 == prod_local_567); match prod_local_569 {
+        false => prod_local_566,
+        true => { let prod_local_570 = 128; { let prod_local_571 = core::convert::identity::<u64>(prod_local_566).checked_add(prod_local_570).ok_or(crate::ComputeError::AddOverflow)?; prod_local_571 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_572 = 16; { let prod_local_573 = prod_local_572; { let prod_local_574 = core::convert::identity::<u64>(prod_local_518).checked_add(prod_local_573).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_575 = 32; { let prod_local_576 = (value & prod_local_575); { let prod_local_577 = (prod_local_576 == prod_local_575); match prod_local_577 {
+        false => { let prod_local_579 = _x_4; { let prod_local_580 = core::convert::identity::<u64>(prod_local_574).checked_add(prod_local_579).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_581 = 64; { let prod_local_582 = (value & prod_local_581); { let prod_local_583 = (prod_local_582 == prod_local_581); match prod_local_583 {
+        false => { let prod_local_585 = _x_4; { let prod_local_586 = core::convert::identity::<u64>(prod_local_580).checked_add(prod_local_585).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_587 = 128; { let prod_local_588 = (value & prod_local_587); { let prod_local_589 = (prod_local_588 == prod_local_587); match prod_local_589 {
+        false => prod_local_586,
+        true => { let prod_local_590 = 128; { let prod_local_591 = core::convert::identity::<u64>(prod_local_586).checked_add(prod_local_590).ok_or(crate::ComputeError::AddOverflow)?; prod_local_591 } },
+    } } } } } },
+        true => { let prod_local_592 = 64; { let prod_local_593 = prod_local_592; { let prod_local_594 = core::convert::identity::<u64>(prod_local_580).checked_add(prod_local_593).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_595 = 128; { let prod_local_596 = (value & prod_local_595); { let prod_local_597 = (prod_local_596 == prod_local_595); match prod_local_597 {
+        false => prod_local_594,
+        true => { let prod_local_598 = 128; { let prod_local_599 = core::convert::identity::<u64>(prod_local_594).checked_add(prod_local_598).ok_or(crate::ComputeError::AddOverflow)?; prod_local_599 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_600 = 32; { let prod_local_601 = prod_local_600; { let prod_local_602 = core::convert::identity::<u64>(prod_local_574).checked_add(prod_local_601).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_603 = 64; { let prod_local_604 = (value & prod_local_603); { let prod_local_605 = (prod_local_604 == prod_local_603); match prod_local_605 {
+        false => { let prod_local_607 = _x_4; { let prod_local_608 = core::convert::identity::<u64>(prod_local_602).checked_add(prod_local_607).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_609 = 128; { let prod_local_610 = (value & prod_local_609); { let prod_local_611 = (prod_local_610 == prod_local_609); match prod_local_611 {
+        false => prod_local_608,
+        true => { let prod_local_612 = 128; { let prod_local_613 = core::convert::identity::<u64>(prod_local_608).checked_add(prod_local_612).ok_or(crate::ComputeError::AddOverflow)?; prod_local_613 } },
+    } } } } } },
+        true => { let prod_local_614 = 64; { let prod_local_615 = prod_local_614; { let prod_local_616 = core::convert::identity::<u64>(prod_local_602).checked_add(prod_local_615).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_617 = 128; { let prod_local_618 = (value & prod_local_617); { let prod_local_619 = (prod_local_618 == prod_local_617); match prod_local_619 {
+        false => prod_local_616,
+        true => { let prod_local_620 = 128; { let prod_local_621 = core::convert::identity::<u64>(prod_local_616).checked_add(prod_local_620).ok_or(crate::ComputeError::AddOverflow)?; prod_local_621 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_622 = 4; { let prod_local_623 = prod_local_622; { let prod_local_624 = core::convert::identity::<u64>(prod_local_400).checked_add(prod_local_623).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_625 = 8; { let prod_local_626 = (value & prod_local_625); { let prod_local_627 = (prod_local_626 == prod_local_625); match prod_local_627 {
+        false => { let prod_local_629 = _x_4; { let prod_local_630 = core::convert::identity::<u64>(prod_local_624).checked_add(prod_local_629).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_631 = 16; { let prod_local_632 = (value & prod_local_631); { let prod_local_633 = (prod_local_632 == prod_local_631); match prod_local_633 {
+        false => { let prod_local_635 = _x_4; { let prod_local_636 = core::convert::identity::<u64>(prod_local_630).checked_add(prod_local_635).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_637 = 32; { let prod_local_638 = (value & prod_local_637); { let prod_local_639 = (prod_local_638 == prod_local_637); match prod_local_639 {
+        false => { let prod_local_641 = _x_4; { let prod_local_642 = core::convert::identity::<u64>(prod_local_636).checked_add(prod_local_641).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_643 = 64; { let prod_local_644 = (value & prod_local_643); { let prod_local_645 = (prod_local_644 == prod_local_643); match prod_local_645 {
+        false => { let prod_local_647 = _x_4; { let prod_local_648 = core::convert::identity::<u64>(prod_local_642).checked_add(prod_local_647).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_649 = 128; { let prod_local_650 = (value & prod_local_649); { let prod_local_651 = (prod_local_650 == prod_local_649); match prod_local_651 {
+        false => prod_local_648,
+        true => { let prod_local_652 = 128; { let prod_local_653 = core::convert::identity::<u64>(prod_local_648).checked_add(prod_local_652).ok_or(crate::ComputeError::AddOverflow)?; prod_local_653 } },
+    } } } } } },
+        true => { let prod_local_654 = 64; { let prod_local_655 = prod_local_654; { let prod_local_656 = core::convert::identity::<u64>(prod_local_642).checked_add(prod_local_655).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_657 = 128; { let prod_local_658 = (value & prod_local_657); { let prod_local_659 = (prod_local_658 == prod_local_657); match prod_local_659 {
+        false => prod_local_656,
+        true => { let prod_local_660 = 128; { let prod_local_661 = core::convert::identity::<u64>(prod_local_656).checked_add(prod_local_660).ok_or(crate::ComputeError::AddOverflow)?; prod_local_661 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_662 = 32; { let prod_local_663 = prod_local_662; { let prod_local_664 = core::convert::identity::<u64>(prod_local_636).checked_add(prod_local_663).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_665 = 64; { let prod_local_666 = (value & prod_local_665); { let prod_local_667 = (prod_local_666 == prod_local_665); match prod_local_667 {
+        false => { let prod_local_669 = _x_4; { let prod_local_670 = core::convert::identity::<u64>(prod_local_664).checked_add(prod_local_669).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_671 = 128; { let prod_local_672 = (value & prod_local_671); { let prod_local_673 = (prod_local_672 == prod_local_671); match prod_local_673 {
+        false => prod_local_670,
+        true => { let prod_local_674 = 128; { let prod_local_675 = core::convert::identity::<u64>(prod_local_670).checked_add(prod_local_674).ok_or(crate::ComputeError::AddOverflow)?; prod_local_675 } },
+    } } } } } },
+        true => { let prod_local_676 = 64; { let prod_local_677 = prod_local_676; { let prod_local_678 = core::convert::identity::<u64>(prod_local_664).checked_add(prod_local_677).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_679 = 128; { let prod_local_680 = (value & prod_local_679); { let prod_local_681 = (prod_local_680 == prod_local_679); match prod_local_681 {
+        false => prod_local_678,
+        true => { let prod_local_682 = 128; { let prod_local_683 = core::convert::identity::<u64>(prod_local_678).checked_add(prod_local_682).ok_or(crate::ComputeError::AddOverflow)?; prod_local_683 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_684 = 16; { let prod_local_685 = prod_local_684; { let prod_local_686 = core::convert::identity::<u64>(prod_local_630).checked_add(prod_local_685).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_687 = 32; { let prod_local_688 = (value & prod_local_687); { let prod_local_689 = (prod_local_688 == prod_local_687); match prod_local_689 {
+        false => { let prod_local_691 = _x_4; { let prod_local_692 = core::convert::identity::<u64>(prod_local_686).checked_add(prod_local_691).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_693 = 64; { let prod_local_694 = (value & prod_local_693); { let prod_local_695 = (prod_local_694 == prod_local_693); match prod_local_695 {
+        false => { let prod_local_697 = _x_4; { let prod_local_698 = core::convert::identity::<u64>(prod_local_692).checked_add(prod_local_697).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_699 = 128; { let prod_local_700 = (value & prod_local_699); { let prod_local_701 = (prod_local_700 == prod_local_699); match prod_local_701 {
+        false => prod_local_698,
+        true => { let prod_local_702 = 128; { let prod_local_703 = core::convert::identity::<u64>(prod_local_698).checked_add(prod_local_702).ok_or(crate::ComputeError::AddOverflow)?; prod_local_703 } },
+    } } } } } },
+        true => { let prod_local_704 = 64; { let prod_local_705 = prod_local_704; { let prod_local_706 = core::convert::identity::<u64>(prod_local_692).checked_add(prod_local_705).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_707 = 128; { let prod_local_708 = (value & prod_local_707); { let prod_local_709 = (prod_local_708 == prod_local_707); match prod_local_709 {
+        false => prod_local_706,
+        true => { let prod_local_710 = 128; { let prod_local_711 = core::convert::identity::<u64>(prod_local_706).checked_add(prod_local_710).ok_or(crate::ComputeError::AddOverflow)?; prod_local_711 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_712 = 32; { let prod_local_713 = prod_local_712; { let prod_local_714 = core::convert::identity::<u64>(prod_local_686).checked_add(prod_local_713).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_715 = 64; { let prod_local_716 = (value & prod_local_715); { let prod_local_717 = (prod_local_716 == prod_local_715); match prod_local_717 {
+        false => { let prod_local_719 = _x_4; { let prod_local_720 = core::convert::identity::<u64>(prod_local_714).checked_add(prod_local_719).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_721 = 128; { let prod_local_722 = (value & prod_local_721); { let prod_local_723 = (prod_local_722 == prod_local_721); match prod_local_723 {
+        false => prod_local_720,
+        true => { let prod_local_724 = 128; { let prod_local_725 = core::convert::identity::<u64>(prod_local_720).checked_add(prod_local_724).ok_or(crate::ComputeError::AddOverflow)?; prod_local_725 } },
+    } } } } } },
+        true => { let prod_local_726 = 64; { let prod_local_727 = prod_local_726; { let prod_local_728 = core::convert::identity::<u64>(prod_local_714).checked_add(prod_local_727).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_729 = 128; { let prod_local_730 = (value & prod_local_729); { let prod_local_731 = (prod_local_730 == prod_local_729); match prod_local_731 {
+        false => prod_local_728,
+        true => { let prod_local_732 = 128; { let prod_local_733 = core::convert::identity::<u64>(prod_local_728).checked_add(prod_local_732).ok_or(crate::ComputeError::AddOverflow)?; prod_local_733 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_734 = 8; { let prod_local_735 = prod_local_734; { let prod_local_736 = core::convert::identity::<u64>(prod_local_624).checked_add(prod_local_735).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_737 = 16; { let prod_local_738 = (value & prod_local_737); { let prod_local_739 = (prod_local_738 == prod_local_737); match prod_local_739 {
+        false => { let prod_local_741 = _x_4; { let prod_local_742 = core::convert::identity::<u64>(prod_local_736).checked_add(prod_local_741).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_743 = 32; { let prod_local_744 = (value & prod_local_743); { let prod_local_745 = (prod_local_744 == prod_local_743); match prod_local_745 {
+        false => { let prod_local_747 = _x_4; { let prod_local_748 = core::convert::identity::<u64>(prod_local_742).checked_add(prod_local_747).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_749 = 64; { let prod_local_750 = (value & prod_local_749); { let prod_local_751 = (prod_local_750 == prod_local_749); match prod_local_751 {
+        false => { let prod_local_753 = _x_4; { let prod_local_754 = core::convert::identity::<u64>(prod_local_748).checked_add(prod_local_753).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_755 = 128; { let prod_local_756 = (value & prod_local_755); { let prod_local_757 = (prod_local_756 == prod_local_755); match prod_local_757 {
+        false => prod_local_754,
+        true => { let prod_local_758 = 128; { let prod_local_759 = core::convert::identity::<u64>(prod_local_754).checked_add(prod_local_758).ok_or(crate::ComputeError::AddOverflow)?; prod_local_759 } },
+    } } } } } },
+        true => { let prod_local_760 = 64; { let prod_local_761 = prod_local_760; { let prod_local_762 = core::convert::identity::<u64>(prod_local_748).checked_add(prod_local_761).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_763 = 128; { let prod_local_764 = (value & prod_local_763); { let prod_local_765 = (prod_local_764 == prod_local_763); match prod_local_765 {
+        false => prod_local_762,
+        true => { let prod_local_766 = 128; { let prod_local_767 = core::convert::identity::<u64>(prod_local_762).checked_add(prod_local_766).ok_or(crate::ComputeError::AddOverflow)?; prod_local_767 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_768 = 32; { let prod_local_769 = prod_local_768; { let prod_local_770 = core::convert::identity::<u64>(prod_local_742).checked_add(prod_local_769).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_771 = 64; { let prod_local_772 = (value & prod_local_771); { let prod_local_773 = (prod_local_772 == prod_local_771); match prod_local_773 {
+        false => { let prod_local_775 = _x_4; { let prod_local_776 = core::convert::identity::<u64>(prod_local_770).checked_add(prod_local_775).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_777 = 128; { let prod_local_778 = (value & prod_local_777); { let prod_local_779 = (prod_local_778 == prod_local_777); match prod_local_779 {
+        false => prod_local_776,
+        true => { let prod_local_780 = 128; { let prod_local_781 = core::convert::identity::<u64>(prod_local_776).checked_add(prod_local_780).ok_or(crate::ComputeError::AddOverflow)?; prod_local_781 } },
+    } } } } } },
+        true => { let prod_local_782 = 64; { let prod_local_783 = prod_local_782; { let prod_local_784 = core::convert::identity::<u64>(prod_local_770).checked_add(prod_local_783).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_785 = 128; { let prod_local_786 = (value & prod_local_785); { let prod_local_787 = (prod_local_786 == prod_local_785); match prod_local_787 {
+        false => prod_local_784,
+        true => { let prod_local_788 = 128; { let prod_local_789 = core::convert::identity::<u64>(prod_local_784).checked_add(prod_local_788).ok_or(crate::ComputeError::AddOverflow)?; prod_local_789 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_790 = 16; { let prod_local_791 = prod_local_790; { let prod_local_792 = core::convert::identity::<u64>(prod_local_736).checked_add(prod_local_791).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_793 = 32; { let prod_local_794 = (value & prod_local_793); { let prod_local_795 = (prod_local_794 == prod_local_793); match prod_local_795 {
+        false => { let prod_local_797 = _x_4; { let prod_local_798 = core::convert::identity::<u64>(prod_local_792).checked_add(prod_local_797).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_799 = 64; { let prod_local_800 = (value & prod_local_799); { let prod_local_801 = (prod_local_800 == prod_local_799); match prod_local_801 {
+        false => { let prod_local_803 = _x_4; { let prod_local_804 = core::convert::identity::<u64>(prod_local_798).checked_add(prod_local_803).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_805 = 128; { let prod_local_806 = (value & prod_local_805); { let prod_local_807 = (prod_local_806 == prod_local_805); match prod_local_807 {
+        false => prod_local_804,
+        true => { let prod_local_808 = 128; { let prod_local_809 = core::convert::identity::<u64>(prod_local_804).checked_add(prod_local_808).ok_or(crate::ComputeError::AddOverflow)?; prod_local_809 } },
+    } } } } } },
+        true => { let prod_local_810 = 64; { let prod_local_811 = prod_local_810; { let prod_local_812 = core::convert::identity::<u64>(prod_local_798).checked_add(prod_local_811).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_813 = 128; { let prod_local_814 = (value & prod_local_813); { let prod_local_815 = (prod_local_814 == prod_local_813); match prod_local_815 {
+        false => prod_local_812,
+        true => { let prod_local_816 = 128; { let prod_local_817 = core::convert::identity::<u64>(prod_local_812).checked_add(prod_local_816).ok_or(crate::ComputeError::AddOverflow)?; prod_local_817 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_818 = 32; { let prod_local_819 = prod_local_818; { let prod_local_820 = core::convert::identity::<u64>(prod_local_792).checked_add(prod_local_819).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_821 = 64; { let prod_local_822 = (value & prod_local_821); { let prod_local_823 = (prod_local_822 == prod_local_821); match prod_local_823 {
+        false => { let prod_local_825 = _x_4; { let prod_local_826 = core::convert::identity::<u64>(prod_local_820).checked_add(prod_local_825).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_827 = 128; { let prod_local_828 = (value & prod_local_827); { let prod_local_829 = (prod_local_828 == prod_local_827); match prod_local_829 {
+        false => prod_local_826,
+        true => { let prod_local_830 = 128; { let prod_local_831 = core::convert::identity::<u64>(prod_local_826).checked_add(prod_local_830).ok_or(crate::ComputeError::AddOverflow)?; prod_local_831 } },
+    } } } } } },
+        true => { let prod_local_832 = 64; { let prod_local_833 = prod_local_832; { let prod_local_834 = core::convert::identity::<u64>(prod_local_820).checked_add(prod_local_833).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_835 = 128; { let prod_local_836 = (value & prod_local_835); { let prod_local_837 = (prod_local_836 == prod_local_835); match prod_local_837 {
+        false => prod_local_834,
+        true => { let prod_local_838 = 128; { let prod_local_839 = core::convert::identity::<u64>(prod_local_834).checked_add(prod_local_838).ok_or(crate::ComputeError::AddOverflow)?; prod_local_839 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } },
+        true => { let _x_308 = 1; { let prod_local_840 = _x_308; { let prod_local_841 = 2; { let prod_local_842 = (value & prod_local_841); { let prod_local_843 = (prod_local_842 == prod_local_841); match prod_local_843 {
+        false => { let prod_local_845 = _x_4; { let prod_local_846 = core::convert::identity::<u64>(prod_local_840).checked_add(prod_local_845).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_847 = 4; { let prod_local_848 = (value & prod_local_847); { let prod_local_849 = (prod_local_848 == prod_local_847); match prod_local_849 {
+        false => { let prod_local_851 = _x_4; { let prod_local_852 = core::convert::identity::<u64>(prod_local_846).checked_add(prod_local_851).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_853 = 8; { let prod_local_854 = (value & prod_local_853); { let prod_local_855 = (prod_local_854 == prod_local_853); match prod_local_855 {
+        false => { let prod_local_857 = _x_4; { let prod_local_858 = core::convert::identity::<u64>(prod_local_852).checked_add(prod_local_857).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_859 = 16; { let prod_local_860 = (value & prod_local_859); { let prod_local_861 = (prod_local_860 == prod_local_859); match prod_local_861 {
+        false => { let prod_local_863 = _x_4; { let prod_local_864 = core::convert::identity::<u64>(prod_local_858).checked_add(prod_local_863).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_865 = 32; { let prod_local_866 = (value & prod_local_865); { let prod_local_867 = (prod_local_866 == prod_local_865); match prod_local_867 {
+        false => { let prod_local_869 = _x_4; { let prod_local_870 = core::convert::identity::<u64>(prod_local_864).checked_add(prod_local_869).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_871 = 64; { let prod_local_872 = (value & prod_local_871); { let prod_local_873 = (prod_local_872 == prod_local_871); match prod_local_873 {
+        false => { let prod_local_875 = _x_4; { let prod_local_876 = core::convert::identity::<u64>(prod_local_870).checked_add(prod_local_875).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_877 = 128; { let prod_local_878 = (value & prod_local_877); { let prod_local_879 = (prod_local_878 == prod_local_877); match prod_local_879 {
+        false => prod_local_876,
+        true => { let prod_local_880 = 128; { let prod_local_881 = core::convert::identity::<u64>(prod_local_876).checked_add(prod_local_880).ok_or(crate::ComputeError::AddOverflow)?; prod_local_881 } },
+    } } } } } },
+        true => { let prod_local_882 = 64; { let prod_local_883 = prod_local_882; { let prod_local_884 = core::convert::identity::<u64>(prod_local_870).checked_add(prod_local_883).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_885 = 128; { let prod_local_886 = (value & prod_local_885); { let prod_local_887 = (prod_local_886 == prod_local_885); match prod_local_887 {
+        false => prod_local_884,
+        true => { let prod_local_888 = 128; { let prod_local_889 = core::convert::identity::<u64>(prod_local_884).checked_add(prod_local_888).ok_or(crate::ComputeError::AddOverflow)?; prod_local_889 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_890 = 32; { let prod_local_891 = prod_local_890; { let prod_local_892 = core::convert::identity::<u64>(prod_local_864).checked_add(prod_local_891).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_893 = 64; { let prod_local_894 = (value & prod_local_893); { let prod_local_895 = (prod_local_894 == prod_local_893); match prod_local_895 {
+        false => { let prod_local_897 = _x_4; { let prod_local_898 = core::convert::identity::<u64>(prod_local_892).checked_add(prod_local_897).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_899 = 128; { let prod_local_900 = (value & prod_local_899); { let prod_local_901 = (prod_local_900 == prod_local_899); match prod_local_901 {
+        false => prod_local_898,
+        true => { let prod_local_902 = 128; { let prod_local_903 = core::convert::identity::<u64>(prod_local_898).checked_add(prod_local_902).ok_or(crate::ComputeError::AddOverflow)?; prod_local_903 } },
+    } } } } } },
+        true => { let prod_local_904 = 64; { let prod_local_905 = prod_local_904; { let prod_local_906 = core::convert::identity::<u64>(prod_local_892).checked_add(prod_local_905).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_907 = 128; { let prod_local_908 = (value & prod_local_907); { let prod_local_909 = (prod_local_908 == prod_local_907); match prod_local_909 {
+        false => prod_local_906,
+        true => { let prod_local_910 = 128; { let prod_local_911 = core::convert::identity::<u64>(prod_local_906).checked_add(prod_local_910).ok_or(crate::ComputeError::AddOverflow)?; prod_local_911 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_912 = 16; { let prod_local_913 = prod_local_912; { let prod_local_914 = core::convert::identity::<u64>(prod_local_858).checked_add(prod_local_913).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_915 = 32; { let prod_local_916 = (value & prod_local_915); { let prod_local_917 = (prod_local_916 == prod_local_915); match prod_local_917 {
+        false => { let prod_local_919 = _x_4; { let prod_local_920 = core::convert::identity::<u64>(prod_local_914).checked_add(prod_local_919).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_921 = 64; { let prod_local_922 = (value & prod_local_921); { let prod_local_923 = (prod_local_922 == prod_local_921); match prod_local_923 {
+        false => { let prod_local_925 = _x_4; { let prod_local_926 = core::convert::identity::<u64>(prod_local_920).checked_add(prod_local_925).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_927 = 128; { let prod_local_928 = (value & prod_local_927); { let prod_local_929 = (prod_local_928 == prod_local_927); match prod_local_929 {
+        false => prod_local_926,
+        true => { let prod_local_930 = 128; { let prod_local_931 = core::convert::identity::<u64>(prod_local_926).checked_add(prod_local_930).ok_or(crate::ComputeError::AddOverflow)?; prod_local_931 } },
+    } } } } } },
+        true => { let prod_local_932 = 64; { let prod_local_933 = prod_local_932; { let prod_local_934 = core::convert::identity::<u64>(prod_local_920).checked_add(prod_local_933).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_935 = 128; { let prod_local_936 = (value & prod_local_935); { let prod_local_937 = (prod_local_936 == prod_local_935); match prod_local_937 {
+        false => prod_local_934,
+        true => { let prod_local_938 = 128; { let prod_local_939 = core::convert::identity::<u64>(prod_local_934).checked_add(prod_local_938).ok_or(crate::ComputeError::AddOverflow)?; prod_local_939 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_940 = 32; { let prod_local_941 = prod_local_940; { let prod_local_942 = core::convert::identity::<u64>(prod_local_914).checked_add(prod_local_941).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_943 = 64; { let prod_local_944 = (value & prod_local_943); { let prod_local_945 = (prod_local_944 == prod_local_943); match prod_local_945 {
+        false => { let prod_local_947 = _x_4; { let prod_local_948 = core::convert::identity::<u64>(prod_local_942).checked_add(prod_local_947).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_949 = 128; { let prod_local_950 = (value & prod_local_949); { let prod_local_951 = (prod_local_950 == prod_local_949); match prod_local_951 {
+        false => prod_local_948,
+        true => { let prod_local_952 = 128; { let prod_local_953 = core::convert::identity::<u64>(prod_local_948).checked_add(prod_local_952).ok_or(crate::ComputeError::AddOverflow)?; prod_local_953 } },
+    } } } } } },
+        true => { let prod_local_954 = 64; { let prod_local_955 = prod_local_954; { let prod_local_956 = core::convert::identity::<u64>(prod_local_942).checked_add(prod_local_955).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_957 = 128; { let prod_local_958 = (value & prod_local_957); { let prod_local_959 = (prod_local_958 == prod_local_957); match prod_local_959 {
+        false => prod_local_956,
+        true => { let prod_local_960 = 128; { let prod_local_961 = core::convert::identity::<u64>(prod_local_956).checked_add(prod_local_960).ok_or(crate::ComputeError::AddOverflow)?; prod_local_961 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_962 = 8; { let prod_local_963 = prod_local_962; { let prod_local_964 = core::convert::identity::<u64>(prod_local_852).checked_add(prod_local_963).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_965 = 16; { let prod_local_966 = (value & prod_local_965); { let prod_local_967 = (prod_local_966 == prod_local_965); match prod_local_967 {
+        false => { let prod_local_969 = _x_4; { let prod_local_970 = core::convert::identity::<u64>(prod_local_964).checked_add(prod_local_969).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_971 = 32; { let prod_local_972 = (value & prod_local_971); { let prod_local_973 = (prod_local_972 == prod_local_971); match prod_local_973 {
+        false => { let prod_local_975 = _x_4; { let prod_local_976 = core::convert::identity::<u64>(prod_local_970).checked_add(prod_local_975).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_977 = 64; { let prod_local_978 = (value & prod_local_977); { let prod_local_979 = (prod_local_978 == prod_local_977); match prod_local_979 {
+        false => { let prod_local_981 = _x_4; { let prod_local_982 = core::convert::identity::<u64>(prod_local_976).checked_add(prod_local_981).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_983 = 128; { let prod_local_984 = (value & prod_local_983); { let prod_local_985 = (prod_local_984 == prod_local_983); match prod_local_985 {
+        false => prod_local_982,
+        true => { let prod_local_986 = 128; { let prod_local_987 = core::convert::identity::<u64>(prod_local_982).checked_add(prod_local_986).ok_or(crate::ComputeError::AddOverflow)?; prod_local_987 } },
+    } } } } } },
+        true => { let prod_local_988 = 64; { let prod_local_989 = prod_local_988; { let prod_local_990 = core::convert::identity::<u64>(prod_local_976).checked_add(prod_local_989).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_991 = 128; { let prod_local_992 = (value & prod_local_991); { let prod_local_993 = (prod_local_992 == prod_local_991); match prod_local_993 {
+        false => prod_local_990,
+        true => { let prod_local_994 = 128; { let prod_local_995 = core::convert::identity::<u64>(prod_local_990).checked_add(prod_local_994).ok_or(crate::ComputeError::AddOverflow)?; prod_local_995 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_996 = 32; { let prod_local_997 = prod_local_996; { let prod_local_998 = core::convert::identity::<u64>(prod_local_970).checked_add(prod_local_997).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_999 = 64; { let prod_local_1000 = (value & prod_local_999); { let prod_local_1001 = (prod_local_1000 == prod_local_999); match prod_local_1001 {
+        false => { let prod_local_1003 = _x_4; { let prod_local_1004 = core::convert::identity::<u64>(prod_local_998).checked_add(prod_local_1003).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1005 = 128; { let prod_local_1006 = (value & prod_local_1005); { let prod_local_1007 = (prod_local_1006 == prod_local_1005); match prod_local_1007 {
+        false => prod_local_1004,
+        true => { let prod_local_1008 = 128; { let prod_local_1009 = core::convert::identity::<u64>(prod_local_1004).checked_add(prod_local_1008).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1009 } },
+    } } } } } },
+        true => { let prod_local_1010 = 64; { let prod_local_1011 = prod_local_1010; { let prod_local_1012 = core::convert::identity::<u64>(prod_local_998).checked_add(prod_local_1011).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1013 = 128; { let prod_local_1014 = (value & prod_local_1013); { let prod_local_1015 = (prod_local_1014 == prod_local_1013); match prod_local_1015 {
+        false => prod_local_1012,
+        true => { let prod_local_1016 = 128; { let prod_local_1017 = core::convert::identity::<u64>(prod_local_1012).checked_add(prod_local_1016).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1017 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1018 = 16; { let prod_local_1019 = prod_local_1018; { let prod_local_1020 = core::convert::identity::<u64>(prod_local_964).checked_add(prod_local_1019).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1021 = 32; { let prod_local_1022 = (value & prod_local_1021); { let prod_local_1023 = (prod_local_1022 == prod_local_1021); match prod_local_1023 {
+        false => { let prod_local_1025 = _x_4; { let prod_local_1026 = core::convert::identity::<u64>(prod_local_1020).checked_add(prod_local_1025).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1027 = 64; { let prod_local_1028 = (value & prod_local_1027); { let prod_local_1029 = (prod_local_1028 == prod_local_1027); match prod_local_1029 {
+        false => { let prod_local_1031 = _x_4; { let prod_local_1032 = core::convert::identity::<u64>(prod_local_1026).checked_add(prod_local_1031).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1033 = 128; { let prod_local_1034 = (value & prod_local_1033); { let prod_local_1035 = (prod_local_1034 == prod_local_1033); match prod_local_1035 {
+        false => prod_local_1032,
+        true => { let prod_local_1036 = 128; { let prod_local_1037 = core::convert::identity::<u64>(prod_local_1032).checked_add(prod_local_1036).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1037 } },
+    } } } } } },
+        true => { let prod_local_1038 = 64; { let prod_local_1039 = prod_local_1038; { let prod_local_1040 = core::convert::identity::<u64>(prod_local_1026).checked_add(prod_local_1039).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1041 = 128; { let prod_local_1042 = (value & prod_local_1041); { let prod_local_1043 = (prod_local_1042 == prod_local_1041); match prod_local_1043 {
+        false => prod_local_1040,
+        true => { let prod_local_1044 = 128; { let prod_local_1045 = core::convert::identity::<u64>(prod_local_1040).checked_add(prod_local_1044).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1045 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1046 = 32; { let prod_local_1047 = prod_local_1046; { let prod_local_1048 = core::convert::identity::<u64>(prod_local_1020).checked_add(prod_local_1047).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1049 = 64; { let prod_local_1050 = (value & prod_local_1049); { let prod_local_1051 = (prod_local_1050 == prod_local_1049); match prod_local_1051 {
+        false => { let prod_local_1053 = _x_4; { let prod_local_1054 = core::convert::identity::<u64>(prod_local_1048).checked_add(prod_local_1053).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1055 = 128; { let prod_local_1056 = (value & prod_local_1055); { let prod_local_1057 = (prod_local_1056 == prod_local_1055); match prod_local_1057 {
+        false => prod_local_1054,
+        true => { let prod_local_1058 = 128; { let prod_local_1059 = core::convert::identity::<u64>(prod_local_1054).checked_add(prod_local_1058).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1059 } },
+    } } } } } },
+        true => { let prod_local_1060 = 64; { let prod_local_1061 = prod_local_1060; { let prod_local_1062 = core::convert::identity::<u64>(prod_local_1048).checked_add(prod_local_1061).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1063 = 128; { let prod_local_1064 = (value & prod_local_1063); { let prod_local_1065 = (prod_local_1064 == prod_local_1063); match prod_local_1065 {
+        false => prod_local_1062,
+        true => { let prod_local_1066 = 128; { let prod_local_1067 = core::convert::identity::<u64>(prod_local_1062).checked_add(prod_local_1066).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1067 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1068 = 4; { let prod_local_1069 = prod_local_1068; { let prod_local_1070 = core::convert::identity::<u64>(prod_local_846).checked_add(prod_local_1069).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1071 = 8; { let prod_local_1072 = (value & prod_local_1071); { let prod_local_1073 = (prod_local_1072 == prod_local_1071); match prod_local_1073 {
+        false => { let prod_local_1075 = _x_4; { let prod_local_1076 = core::convert::identity::<u64>(prod_local_1070).checked_add(prod_local_1075).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1077 = 16; { let prod_local_1078 = (value & prod_local_1077); { let prod_local_1079 = (prod_local_1078 == prod_local_1077); match prod_local_1079 {
+        false => { let prod_local_1081 = _x_4; { let prod_local_1082 = core::convert::identity::<u64>(prod_local_1076).checked_add(prod_local_1081).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1083 = 32; { let prod_local_1084 = (value & prod_local_1083); { let prod_local_1085 = (prod_local_1084 == prod_local_1083); match prod_local_1085 {
+        false => { let prod_local_1087 = _x_4; { let prod_local_1088 = core::convert::identity::<u64>(prod_local_1082).checked_add(prod_local_1087).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1089 = 64; { let prod_local_1090 = (value & prod_local_1089); { let prod_local_1091 = (prod_local_1090 == prod_local_1089); match prod_local_1091 {
+        false => { let prod_local_1093 = _x_4; { let prod_local_1094 = core::convert::identity::<u64>(prod_local_1088).checked_add(prod_local_1093).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1095 = 128; { let prod_local_1096 = (value & prod_local_1095); { let prod_local_1097 = (prod_local_1096 == prod_local_1095); match prod_local_1097 {
+        false => prod_local_1094,
+        true => { let prod_local_1098 = 128; { let prod_local_1099 = core::convert::identity::<u64>(prod_local_1094).checked_add(prod_local_1098).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1099 } },
+    } } } } } },
+        true => { let prod_local_1100 = 64; { let prod_local_1101 = prod_local_1100; { let prod_local_1102 = core::convert::identity::<u64>(prod_local_1088).checked_add(prod_local_1101).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1103 = 128; { let prod_local_1104 = (value & prod_local_1103); { let prod_local_1105 = (prod_local_1104 == prod_local_1103); match prod_local_1105 {
+        false => prod_local_1102,
+        true => { let prod_local_1106 = 128; { let prod_local_1107 = core::convert::identity::<u64>(prod_local_1102).checked_add(prod_local_1106).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1107 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1108 = 32; { let prod_local_1109 = prod_local_1108; { let prod_local_1110 = core::convert::identity::<u64>(prod_local_1082).checked_add(prod_local_1109).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1111 = 64; { let prod_local_1112 = (value & prod_local_1111); { let prod_local_1113 = (prod_local_1112 == prod_local_1111); match prod_local_1113 {
+        false => { let prod_local_1115 = _x_4; { let prod_local_1116 = core::convert::identity::<u64>(prod_local_1110).checked_add(prod_local_1115).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1117 = 128; { let prod_local_1118 = (value & prod_local_1117); { let prod_local_1119 = (prod_local_1118 == prod_local_1117); match prod_local_1119 {
+        false => prod_local_1116,
+        true => { let prod_local_1120 = 128; { let prod_local_1121 = core::convert::identity::<u64>(prod_local_1116).checked_add(prod_local_1120).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1121 } },
+    } } } } } },
+        true => { let prod_local_1122 = 64; { let prod_local_1123 = prod_local_1122; { let prod_local_1124 = core::convert::identity::<u64>(prod_local_1110).checked_add(prod_local_1123).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1125 = 128; { let prod_local_1126 = (value & prod_local_1125); { let prod_local_1127 = (prod_local_1126 == prod_local_1125); match prod_local_1127 {
+        false => prod_local_1124,
+        true => { let prod_local_1128 = 128; { let prod_local_1129 = core::convert::identity::<u64>(prod_local_1124).checked_add(prod_local_1128).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1129 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1130 = 16; { let prod_local_1131 = prod_local_1130; { let prod_local_1132 = core::convert::identity::<u64>(prod_local_1076).checked_add(prod_local_1131).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1133 = 32; { let prod_local_1134 = (value & prod_local_1133); { let prod_local_1135 = (prod_local_1134 == prod_local_1133); match prod_local_1135 {
+        false => { let prod_local_1137 = _x_4; { let prod_local_1138 = core::convert::identity::<u64>(prod_local_1132).checked_add(prod_local_1137).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1139 = 64; { let prod_local_1140 = (value & prod_local_1139); { let prod_local_1141 = (prod_local_1140 == prod_local_1139); match prod_local_1141 {
+        false => { let prod_local_1143 = _x_4; { let prod_local_1144 = core::convert::identity::<u64>(prod_local_1138).checked_add(prod_local_1143).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1145 = 128; { let prod_local_1146 = (value & prod_local_1145); { let prod_local_1147 = (prod_local_1146 == prod_local_1145); match prod_local_1147 {
+        false => prod_local_1144,
+        true => { let prod_local_1148 = 128; { let prod_local_1149 = core::convert::identity::<u64>(prod_local_1144).checked_add(prod_local_1148).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1149 } },
+    } } } } } },
+        true => { let prod_local_1150 = 64; { let prod_local_1151 = prod_local_1150; { let prod_local_1152 = core::convert::identity::<u64>(prod_local_1138).checked_add(prod_local_1151).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1153 = 128; { let prod_local_1154 = (value & prod_local_1153); { let prod_local_1155 = (prod_local_1154 == prod_local_1153); match prod_local_1155 {
+        false => prod_local_1152,
+        true => { let prod_local_1156 = 128; { let prod_local_1157 = core::convert::identity::<u64>(prod_local_1152).checked_add(prod_local_1156).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1157 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1158 = 32; { let prod_local_1159 = prod_local_1158; { let prod_local_1160 = core::convert::identity::<u64>(prod_local_1132).checked_add(prod_local_1159).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1161 = 64; { let prod_local_1162 = (value & prod_local_1161); { let prod_local_1163 = (prod_local_1162 == prod_local_1161); match prod_local_1163 {
+        false => { let prod_local_1165 = _x_4; { let prod_local_1166 = core::convert::identity::<u64>(prod_local_1160).checked_add(prod_local_1165).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1167 = 128; { let prod_local_1168 = (value & prod_local_1167); { let prod_local_1169 = (prod_local_1168 == prod_local_1167); match prod_local_1169 {
+        false => prod_local_1166,
+        true => { let prod_local_1170 = 128; { let prod_local_1171 = core::convert::identity::<u64>(prod_local_1166).checked_add(prod_local_1170).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1171 } },
+    } } } } } },
+        true => { let prod_local_1172 = 64; { let prod_local_1173 = prod_local_1172; { let prod_local_1174 = core::convert::identity::<u64>(prod_local_1160).checked_add(prod_local_1173).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1175 = 128; { let prod_local_1176 = (value & prod_local_1175); { let prod_local_1177 = (prod_local_1176 == prod_local_1175); match prod_local_1177 {
+        false => prod_local_1174,
+        true => { let prod_local_1178 = 128; { let prod_local_1179 = core::convert::identity::<u64>(prod_local_1174).checked_add(prod_local_1178).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1179 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1180 = 8; { let prod_local_1181 = prod_local_1180; { let prod_local_1182 = core::convert::identity::<u64>(prod_local_1070).checked_add(prod_local_1181).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1183 = 16; { let prod_local_1184 = (value & prod_local_1183); { let prod_local_1185 = (prod_local_1184 == prod_local_1183); match prod_local_1185 {
+        false => { let prod_local_1187 = _x_4; { let prod_local_1188 = core::convert::identity::<u64>(prod_local_1182).checked_add(prod_local_1187).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1189 = 32; { let prod_local_1190 = (value & prod_local_1189); { let prod_local_1191 = (prod_local_1190 == prod_local_1189); match prod_local_1191 {
+        false => { let prod_local_1193 = _x_4; { let prod_local_1194 = core::convert::identity::<u64>(prod_local_1188).checked_add(prod_local_1193).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1195 = 64; { let prod_local_1196 = (value & prod_local_1195); { let prod_local_1197 = (prod_local_1196 == prod_local_1195); match prod_local_1197 {
+        false => { let prod_local_1199 = _x_4; { let prod_local_1200 = core::convert::identity::<u64>(prod_local_1194).checked_add(prod_local_1199).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1201 = 128; { let prod_local_1202 = (value & prod_local_1201); { let prod_local_1203 = (prod_local_1202 == prod_local_1201); match prod_local_1203 {
+        false => prod_local_1200,
+        true => { let prod_local_1204 = 128; { let prod_local_1205 = core::convert::identity::<u64>(prod_local_1200).checked_add(prod_local_1204).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1205 } },
+    } } } } } },
+        true => { let prod_local_1206 = 64; { let prod_local_1207 = prod_local_1206; { let prod_local_1208 = core::convert::identity::<u64>(prod_local_1194).checked_add(prod_local_1207).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1209 = 128; { let prod_local_1210 = (value & prod_local_1209); { let prod_local_1211 = (prod_local_1210 == prod_local_1209); match prod_local_1211 {
+        false => prod_local_1208,
+        true => { let prod_local_1212 = 128; { let prod_local_1213 = core::convert::identity::<u64>(prod_local_1208).checked_add(prod_local_1212).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1213 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1214 = 32; { let prod_local_1215 = prod_local_1214; { let prod_local_1216 = core::convert::identity::<u64>(prod_local_1188).checked_add(prod_local_1215).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1217 = 64; { let prod_local_1218 = (value & prod_local_1217); { let prod_local_1219 = (prod_local_1218 == prod_local_1217); match prod_local_1219 {
+        false => { let prod_local_1221 = _x_4; { let prod_local_1222 = core::convert::identity::<u64>(prod_local_1216).checked_add(prod_local_1221).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1223 = 128; { let prod_local_1224 = (value & prod_local_1223); { let prod_local_1225 = (prod_local_1224 == prod_local_1223); match prod_local_1225 {
+        false => prod_local_1222,
+        true => { let prod_local_1226 = 128; { let prod_local_1227 = core::convert::identity::<u64>(prod_local_1222).checked_add(prod_local_1226).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1227 } },
+    } } } } } },
+        true => { let prod_local_1228 = 64; { let prod_local_1229 = prod_local_1228; { let prod_local_1230 = core::convert::identity::<u64>(prod_local_1216).checked_add(prod_local_1229).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1231 = 128; { let prod_local_1232 = (value & prod_local_1231); { let prod_local_1233 = (prod_local_1232 == prod_local_1231); match prod_local_1233 {
+        false => prod_local_1230,
+        true => { let prod_local_1234 = 128; { let prod_local_1235 = core::convert::identity::<u64>(prod_local_1230).checked_add(prod_local_1234).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1235 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1236 = 16; { let prod_local_1237 = prod_local_1236; { let prod_local_1238 = core::convert::identity::<u64>(prod_local_1182).checked_add(prod_local_1237).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1239 = 32; { let prod_local_1240 = (value & prod_local_1239); { let prod_local_1241 = (prod_local_1240 == prod_local_1239); match prod_local_1241 {
+        false => { let prod_local_1243 = _x_4; { let prod_local_1244 = core::convert::identity::<u64>(prod_local_1238).checked_add(prod_local_1243).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1245 = 64; { let prod_local_1246 = (value & prod_local_1245); { let prod_local_1247 = (prod_local_1246 == prod_local_1245); match prod_local_1247 {
+        false => { let prod_local_1249 = _x_4; { let prod_local_1250 = core::convert::identity::<u64>(prod_local_1244).checked_add(prod_local_1249).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1251 = 128; { let prod_local_1252 = (value & prod_local_1251); { let prod_local_1253 = (prod_local_1252 == prod_local_1251); match prod_local_1253 {
+        false => prod_local_1250,
+        true => { let prod_local_1254 = 128; { let prod_local_1255 = core::convert::identity::<u64>(prod_local_1250).checked_add(prod_local_1254).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1255 } },
+    } } } } } },
+        true => { let prod_local_1256 = 64; { let prod_local_1257 = prod_local_1256; { let prod_local_1258 = core::convert::identity::<u64>(prod_local_1244).checked_add(prod_local_1257).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1259 = 128; { let prod_local_1260 = (value & prod_local_1259); { let prod_local_1261 = (prod_local_1260 == prod_local_1259); match prod_local_1261 {
+        false => prod_local_1258,
+        true => { let prod_local_1262 = 128; { let prod_local_1263 = core::convert::identity::<u64>(prod_local_1258).checked_add(prod_local_1262).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1263 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1264 = 32; { let prod_local_1265 = prod_local_1264; { let prod_local_1266 = core::convert::identity::<u64>(prod_local_1238).checked_add(prod_local_1265).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1267 = 64; { let prod_local_1268 = (value & prod_local_1267); { let prod_local_1269 = (prod_local_1268 == prod_local_1267); match prod_local_1269 {
+        false => { let prod_local_1271 = _x_4; { let prod_local_1272 = core::convert::identity::<u64>(prod_local_1266).checked_add(prod_local_1271).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1273 = 128; { let prod_local_1274 = (value & prod_local_1273); { let prod_local_1275 = (prod_local_1274 == prod_local_1273); match prod_local_1275 {
+        false => prod_local_1272,
+        true => { let prod_local_1276 = 128; { let prod_local_1277 = core::convert::identity::<u64>(prod_local_1272).checked_add(prod_local_1276).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1277 } },
+    } } } } } },
+        true => { let prod_local_1278 = 64; { let prod_local_1279 = prod_local_1278; { let prod_local_1280 = core::convert::identity::<u64>(prod_local_1266).checked_add(prod_local_1279).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1281 = 128; { let prod_local_1282 = (value & prod_local_1281); { let prod_local_1283 = (prod_local_1282 == prod_local_1281); match prod_local_1283 {
+        false => prod_local_1280,
+        true => { let prod_local_1284 = 128; { let prod_local_1285 = core::convert::identity::<u64>(prod_local_1280).checked_add(prod_local_1284).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1285 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1286 = 2; { let prod_local_1287 = prod_local_1286; { let prod_local_1288 = core::convert::identity::<u64>(prod_local_840).checked_add(prod_local_1287).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1289 = 4; { let prod_local_1290 = (value & prod_local_1289); { let prod_local_1291 = (prod_local_1290 == prod_local_1289); match prod_local_1291 {
+        false => { let prod_local_1293 = _x_4; { let prod_local_1294 = core::convert::identity::<u64>(prod_local_1288).checked_add(prod_local_1293).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1295 = 8; { let prod_local_1296 = (value & prod_local_1295); { let prod_local_1297 = (prod_local_1296 == prod_local_1295); match prod_local_1297 {
+        false => { let prod_local_1299 = _x_4; { let prod_local_1300 = core::convert::identity::<u64>(prod_local_1294).checked_add(prod_local_1299).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1301 = 16; { let prod_local_1302 = (value & prod_local_1301); { let prod_local_1303 = (prod_local_1302 == prod_local_1301); match prod_local_1303 {
+        false => { let prod_local_1305 = _x_4; { let prod_local_1306 = core::convert::identity::<u64>(prod_local_1300).checked_add(prod_local_1305).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1307 = 32; { let prod_local_1308 = (value & prod_local_1307); { let prod_local_1309 = (prod_local_1308 == prod_local_1307); match prod_local_1309 {
+        false => { let prod_local_1311 = _x_4; { let prod_local_1312 = core::convert::identity::<u64>(prod_local_1306).checked_add(prod_local_1311).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1313 = 64; { let prod_local_1314 = (value & prod_local_1313); { let prod_local_1315 = (prod_local_1314 == prod_local_1313); match prod_local_1315 {
+        false => { let prod_local_1317 = _x_4; { let prod_local_1318 = core::convert::identity::<u64>(prod_local_1312).checked_add(prod_local_1317).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1319 = 128; { let prod_local_1320 = (value & prod_local_1319); { let prod_local_1321 = (prod_local_1320 == prod_local_1319); match prod_local_1321 {
+        false => prod_local_1318,
+        true => { let prod_local_1322 = 128; { let prod_local_1323 = core::convert::identity::<u64>(prod_local_1318).checked_add(prod_local_1322).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1323 } },
+    } } } } } },
+        true => { let prod_local_1324 = 64; { let prod_local_1325 = prod_local_1324; { let prod_local_1326 = core::convert::identity::<u64>(prod_local_1312).checked_add(prod_local_1325).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1327 = 128; { let prod_local_1328 = (value & prod_local_1327); { let prod_local_1329 = (prod_local_1328 == prod_local_1327); match prod_local_1329 {
+        false => prod_local_1326,
+        true => { let prod_local_1330 = 128; { let prod_local_1331 = core::convert::identity::<u64>(prod_local_1326).checked_add(prod_local_1330).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1331 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1332 = 32; { let prod_local_1333 = prod_local_1332; { let prod_local_1334 = core::convert::identity::<u64>(prod_local_1306).checked_add(prod_local_1333).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1335 = 64; { let prod_local_1336 = (value & prod_local_1335); { let prod_local_1337 = (prod_local_1336 == prod_local_1335); match prod_local_1337 {
+        false => { let prod_local_1339 = _x_4; { let prod_local_1340 = core::convert::identity::<u64>(prod_local_1334).checked_add(prod_local_1339).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1341 = 128; { let prod_local_1342 = (value & prod_local_1341); { let prod_local_1343 = (prod_local_1342 == prod_local_1341); match prod_local_1343 {
+        false => prod_local_1340,
+        true => { let prod_local_1344 = 128; { let prod_local_1345 = core::convert::identity::<u64>(prod_local_1340).checked_add(prod_local_1344).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1345 } },
+    } } } } } },
+        true => { let prod_local_1346 = 64; { let prod_local_1347 = prod_local_1346; { let prod_local_1348 = core::convert::identity::<u64>(prod_local_1334).checked_add(prod_local_1347).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1349 = 128; { let prod_local_1350 = (value & prod_local_1349); { let prod_local_1351 = (prod_local_1350 == prod_local_1349); match prod_local_1351 {
+        false => prod_local_1348,
+        true => { let prod_local_1352 = 128; { let prod_local_1353 = core::convert::identity::<u64>(prod_local_1348).checked_add(prod_local_1352).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1353 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1354 = 16; { let prod_local_1355 = prod_local_1354; { let prod_local_1356 = core::convert::identity::<u64>(prod_local_1300).checked_add(prod_local_1355).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1357 = 32; { let prod_local_1358 = (value & prod_local_1357); { let prod_local_1359 = (prod_local_1358 == prod_local_1357); match prod_local_1359 {
+        false => { let prod_local_1361 = _x_4; { let prod_local_1362 = core::convert::identity::<u64>(prod_local_1356).checked_add(prod_local_1361).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1363 = 64; { let prod_local_1364 = (value & prod_local_1363); { let prod_local_1365 = (prod_local_1364 == prod_local_1363); match prod_local_1365 {
+        false => { let prod_local_1367 = _x_4; { let prod_local_1368 = core::convert::identity::<u64>(prod_local_1362).checked_add(prod_local_1367).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1369 = 128; { let prod_local_1370 = (value & prod_local_1369); { let prod_local_1371 = (prod_local_1370 == prod_local_1369); match prod_local_1371 {
+        false => prod_local_1368,
+        true => { let prod_local_1372 = 128; { let prod_local_1373 = core::convert::identity::<u64>(prod_local_1368).checked_add(prod_local_1372).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1373 } },
+    } } } } } },
+        true => { let prod_local_1374 = 64; { let prod_local_1375 = prod_local_1374; { let prod_local_1376 = core::convert::identity::<u64>(prod_local_1362).checked_add(prod_local_1375).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1377 = 128; { let prod_local_1378 = (value & prod_local_1377); { let prod_local_1379 = (prod_local_1378 == prod_local_1377); match prod_local_1379 {
+        false => prod_local_1376,
+        true => { let prod_local_1380 = 128; { let prod_local_1381 = core::convert::identity::<u64>(prod_local_1376).checked_add(prod_local_1380).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1381 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1382 = 32; { let prod_local_1383 = prod_local_1382; { let prod_local_1384 = core::convert::identity::<u64>(prod_local_1356).checked_add(prod_local_1383).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1385 = 64; { let prod_local_1386 = (value & prod_local_1385); { let prod_local_1387 = (prod_local_1386 == prod_local_1385); match prod_local_1387 {
+        false => { let prod_local_1389 = _x_4; { let prod_local_1390 = core::convert::identity::<u64>(prod_local_1384).checked_add(prod_local_1389).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1391 = 128; { let prod_local_1392 = (value & prod_local_1391); { let prod_local_1393 = (prod_local_1392 == prod_local_1391); match prod_local_1393 {
+        false => prod_local_1390,
+        true => { let prod_local_1394 = 128; { let prod_local_1395 = core::convert::identity::<u64>(prod_local_1390).checked_add(prod_local_1394).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1395 } },
+    } } } } } },
+        true => { let prod_local_1396 = 64; { let prod_local_1397 = prod_local_1396; { let prod_local_1398 = core::convert::identity::<u64>(prod_local_1384).checked_add(prod_local_1397).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1399 = 128; { let prod_local_1400 = (value & prod_local_1399); { let prod_local_1401 = (prod_local_1400 == prod_local_1399); match prod_local_1401 {
+        false => prod_local_1398,
+        true => { let prod_local_1402 = 128; { let prod_local_1403 = core::convert::identity::<u64>(prod_local_1398).checked_add(prod_local_1402).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1403 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1404 = 8; { let prod_local_1405 = prod_local_1404; { let prod_local_1406 = core::convert::identity::<u64>(prod_local_1294).checked_add(prod_local_1405).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1407 = 16; { let prod_local_1408 = (value & prod_local_1407); { let prod_local_1409 = (prod_local_1408 == prod_local_1407); match prod_local_1409 {
+        false => { let prod_local_1411 = _x_4; { let prod_local_1412 = core::convert::identity::<u64>(prod_local_1406).checked_add(prod_local_1411).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1413 = 32; { let prod_local_1414 = (value & prod_local_1413); { let prod_local_1415 = (prod_local_1414 == prod_local_1413); match prod_local_1415 {
+        false => { let prod_local_1417 = _x_4; { let prod_local_1418 = core::convert::identity::<u64>(prod_local_1412).checked_add(prod_local_1417).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1419 = 64; { let prod_local_1420 = (value & prod_local_1419); { let prod_local_1421 = (prod_local_1420 == prod_local_1419); match prod_local_1421 {
+        false => { let prod_local_1423 = _x_4; { let prod_local_1424 = core::convert::identity::<u64>(prod_local_1418).checked_add(prod_local_1423).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1425 = 128; { let prod_local_1426 = (value & prod_local_1425); { let prod_local_1427 = (prod_local_1426 == prod_local_1425); match prod_local_1427 {
+        false => prod_local_1424,
+        true => { let prod_local_1428 = 128; { let prod_local_1429 = core::convert::identity::<u64>(prod_local_1424).checked_add(prod_local_1428).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1429 } },
+    } } } } } },
+        true => { let prod_local_1430 = 64; { let prod_local_1431 = prod_local_1430; { let prod_local_1432 = core::convert::identity::<u64>(prod_local_1418).checked_add(prod_local_1431).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1433 = 128; { let prod_local_1434 = (value & prod_local_1433); { let prod_local_1435 = (prod_local_1434 == prod_local_1433); match prod_local_1435 {
+        false => prod_local_1432,
+        true => { let prod_local_1436 = 128; { let prod_local_1437 = core::convert::identity::<u64>(prod_local_1432).checked_add(prod_local_1436).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1437 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1438 = 32; { let prod_local_1439 = prod_local_1438; { let prod_local_1440 = core::convert::identity::<u64>(prod_local_1412).checked_add(prod_local_1439).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1441 = 64; { let prod_local_1442 = (value & prod_local_1441); { let prod_local_1443 = (prod_local_1442 == prod_local_1441); match prod_local_1443 {
+        false => { let prod_local_1445 = _x_4; { let prod_local_1446 = core::convert::identity::<u64>(prod_local_1440).checked_add(prod_local_1445).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1447 = 128; { let prod_local_1448 = (value & prod_local_1447); { let prod_local_1449 = (prod_local_1448 == prod_local_1447); match prod_local_1449 {
+        false => prod_local_1446,
+        true => { let prod_local_1450 = 128; { let prod_local_1451 = core::convert::identity::<u64>(prod_local_1446).checked_add(prod_local_1450).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1451 } },
+    } } } } } },
+        true => { let prod_local_1452 = 64; { let prod_local_1453 = prod_local_1452; { let prod_local_1454 = core::convert::identity::<u64>(prod_local_1440).checked_add(prod_local_1453).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1455 = 128; { let prod_local_1456 = (value & prod_local_1455); { let prod_local_1457 = (prod_local_1456 == prod_local_1455); match prod_local_1457 {
+        false => prod_local_1454,
+        true => { let prod_local_1458 = 128; { let prod_local_1459 = core::convert::identity::<u64>(prod_local_1454).checked_add(prod_local_1458).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1459 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1460 = 16; { let prod_local_1461 = prod_local_1460; { let prod_local_1462 = core::convert::identity::<u64>(prod_local_1406).checked_add(prod_local_1461).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1463 = 32; { let prod_local_1464 = (value & prod_local_1463); { let prod_local_1465 = (prod_local_1464 == prod_local_1463); match prod_local_1465 {
+        false => { let prod_local_1467 = _x_4; { let prod_local_1468 = core::convert::identity::<u64>(prod_local_1462).checked_add(prod_local_1467).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1469 = 64; { let prod_local_1470 = (value & prod_local_1469); { let prod_local_1471 = (prod_local_1470 == prod_local_1469); match prod_local_1471 {
+        false => { let prod_local_1473 = _x_4; { let prod_local_1474 = core::convert::identity::<u64>(prod_local_1468).checked_add(prod_local_1473).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1475 = 128; { let prod_local_1476 = (value & prod_local_1475); { let prod_local_1477 = (prod_local_1476 == prod_local_1475); match prod_local_1477 {
+        false => prod_local_1474,
+        true => { let prod_local_1478 = 128; { let prod_local_1479 = core::convert::identity::<u64>(prod_local_1474).checked_add(prod_local_1478).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1479 } },
+    } } } } } },
+        true => { let prod_local_1480 = 64; { let prod_local_1481 = prod_local_1480; { let prod_local_1482 = core::convert::identity::<u64>(prod_local_1468).checked_add(prod_local_1481).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1483 = 128; { let prod_local_1484 = (value & prod_local_1483); { let prod_local_1485 = (prod_local_1484 == prod_local_1483); match prod_local_1485 {
+        false => prod_local_1482,
+        true => { let prod_local_1486 = 128; { let prod_local_1487 = core::convert::identity::<u64>(prod_local_1482).checked_add(prod_local_1486).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1487 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1488 = 32; { let prod_local_1489 = prod_local_1488; { let prod_local_1490 = core::convert::identity::<u64>(prod_local_1462).checked_add(prod_local_1489).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1491 = 64; { let prod_local_1492 = (value & prod_local_1491); { let prod_local_1493 = (prod_local_1492 == prod_local_1491); match prod_local_1493 {
+        false => { let prod_local_1495 = _x_4; { let prod_local_1496 = core::convert::identity::<u64>(prod_local_1490).checked_add(prod_local_1495).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1497 = 128; { let prod_local_1498 = (value & prod_local_1497); { let prod_local_1499 = (prod_local_1498 == prod_local_1497); match prod_local_1499 {
+        false => prod_local_1496,
+        true => { let prod_local_1500 = 128; { let prod_local_1501 = core::convert::identity::<u64>(prod_local_1496).checked_add(prod_local_1500).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1501 } },
+    } } } } } },
+        true => { let prod_local_1502 = 64; { let prod_local_1503 = prod_local_1502; { let prod_local_1504 = core::convert::identity::<u64>(prod_local_1490).checked_add(prod_local_1503).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1505 = 128; { let prod_local_1506 = (value & prod_local_1505); { let prod_local_1507 = (prod_local_1506 == prod_local_1505); match prod_local_1507 {
+        false => prod_local_1504,
+        true => { let prod_local_1508 = 128; { let prod_local_1509 = core::convert::identity::<u64>(prod_local_1504).checked_add(prod_local_1508).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1509 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1510 = 4; { let prod_local_1511 = prod_local_1510; { let prod_local_1512 = core::convert::identity::<u64>(prod_local_1288).checked_add(prod_local_1511).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1513 = 8; { let prod_local_1514 = (value & prod_local_1513); { let prod_local_1515 = (prod_local_1514 == prod_local_1513); match prod_local_1515 {
+        false => { let prod_local_1517 = _x_4; { let prod_local_1518 = core::convert::identity::<u64>(prod_local_1512).checked_add(prod_local_1517).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1519 = 16; { let prod_local_1520 = (value & prod_local_1519); { let prod_local_1521 = (prod_local_1520 == prod_local_1519); match prod_local_1521 {
+        false => { let prod_local_1523 = _x_4; { let prod_local_1524 = core::convert::identity::<u64>(prod_local_1518).checked_add(prod_local_1523).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1525 = 32; { let prod_local_1526 = (value & prod_local_1525); { let prod_local_1527 = (prod_local_1526 == prod_local_1525); match prod_local_1527 {
+        false => { let prod_local_1529 = _x_4; { let prod_local_1530 = core::convert::identity::<u64>(prod_local_1524).checked_add(prod_local_1529).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1531 = 64; { let prod_local_1532 = (value & prod_local_1531); { let prod_local_1533 = (prod_local_1532 == prod_local_1531); match prod_local_1533 {
+        false => { let prod_local_1535 = _x_4; { let prod_local_1536 = core::convert::identity::<u64>(prod_local_1530).checked_add(prod_local_1535).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1537 = 128; { let prod_local_1538 = (value & prod_local_1537); { let prod_local_1539 = (prod_local_1538 == prod_local_1537); match prod_local_1539 {
+        false => prod_local_1536,
+        true => { let prod_local_1540 = 128; { let prod_local_1541 = core::convert::identity::<u64>(prod_local_1536).checked_add(prod_local_1540).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1541 } },
+    } } } } } },
+        true => { let prod_local_1542 = 64; { let prod_local_1543 = prod_local_1542; { let prod_local_1544 = core::convert::identity::<u64>(prod_local_1530).checked_add(prod_local_1543).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1545 = 128; { let prod_local_1546 = (value & prod_local_1545); { let prod_local_1547 = (prod_local_1546 == prod_local_1545); match prod_local_1547 {
+        false => prod_local_1544,
+        true => { let prod_local_1548 = 128; { let prod_local_1549 = core::convert::identity::<u64>(prod_local_1544).checked_add(prod_local_1548).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1549 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1550 = 32; { let prod_local_1551 = prod_local_1550; { let prod_local_1552 = core::convert::identity::<u64>(prod_local_1524).checked_add(prod_local_1551).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1553 = 64; { let prod_local_1554 = (value & prod_local_1553); { let prod_local_1555 = (prod_local_1554 == prod_local_1553); match prod_local_1555 {
+        false => { let prod_local_1557 = _x_4; { let prod_local_1558 = core::convert::identity::<u64>(prod_local_1552).checked_add(prod_local_1557).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1559 = 128; { let prod_local_1560 = (value & prod_local_1559); { let prod_local_1561 = (prod_local_1560 == prod_local_1559); match prod_local_1561 {
+        false => prod_local_1558,
+        true => { let prod_local_1562 = 128; { let prod_local_1563 = core::convert::identity::<u64>(prod_local_1558).checked_add(prod_local_1562).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1563 } },
+    } } } } } },
+        true => { let prod_local_1564 = 64; { let prod_local_1565 = prod_local_1564; { let prod_local_1566 = core::convert::identity::<u64>(prod_local_1552).checked_add(prod_local_1565).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1567 = 128; { let prod_local_1568 = (value & prod_local_1567); { let prod_local_1569 = (prod_local_1568 == prod_local_1567); match prod_local_1569 {
+        false => prod_local_1566,
+        true => { let prod_local_1570 = 128; { let prod_local_1571 = core::convert::identity::<u64>(prod_local_1566).checked_add(prod_local_1570).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1571 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1572 = 16; { let prod_local_1573 = prod_local_1572; { let prod_local_1574 = core::convert::identity::<u64>(prod_local_1518).checked_add(prod_local_1573).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1575 = 32; { let prod_local_1576 = (value & prod_local_1575); { let prod_local_1577 = (prod_local_1576 == prod_local_1575); match prod_local_1577 {
+        false => { let prod_local_1579 = _x_4; { let prod_local_1580 = core::convert::identity::<u64>(prod_local_1574).checked_add(prod_local_1579).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1581 = 64; { let prod_local_1582 = (value & prod_local_1581); { let prod_local_1583 = (prod_local_1582 == prod_local_1581); match prod_local_1583 {
+        false => { let prod_local_1585 = _x_4; { let prod_local_1586 = core::convert::identity::<u64>(prod_local_1580).checked_add(prod_local_1585).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1587 = 128; { let prod_local_1588 = (value & prod_local_1587); { let prod_local_1589 = (prod_local_1588 == prod_local_1587); match prod_local_1589 {
+        false => prod_local_1586,
+        true => { let prod_local_1590 = 128; { let prod_local_1591 = core::convert::identity::<u64>(prod_local_1586).checked_add(prod_local_1590).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1591 } },
+    } } } } } },
+        true => { let prod_local_1592 = 64; { let prod_local_1593 = prod_local_1592; { let prod_local_1594 = core::convert::identity::<u64>(prod_local_1580).checked_add(prod_local_1593).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1595 = 128; { let prod_local_1596 = (value & prod_local_1595); { let prod_local_1597 = (prod_local_1596 == prod_local_1595); match prod_local_1597 {
+        false => prod_local_1594,
+        true => { let prod_local_1598 = 128; { let prod_local_1599 = core::convert::identity::<u64>(prod_local_1594).checked_add(prod_local_1598).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1599 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1600 = 32; { let prod_local_1601 = prod_local_1600; { let prod_local_1602 = core::convert::identity::<u64>(prod_local_1574).checked_add(prod_local_1601).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1603 = 64; { let prod_local_1604 = (value & prod_local_1603); { let prod_local_1605 = (prod_local_1604 == prod_local_1603); match prod_local_1605 {
+        false => { let prod_local_1607 = _x_4; { let prod_local_1608 = core::convert::identity::<u64>(prod_local_1602).checked_add(prod_local_1607).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1609 = 128; { let prod_local_1610 = (value & prod_local_1609); { let prod_local_1611 = (prod_local_1610 == prod_local_1609); match prod_local_1611 {
+        false => prod_local_1608,
+        true => { let prod_local_1612 = 128; { let prod_local_1613 = core::convert::identity::<u64>(prod_local_1608).checked_add(prod_local_1612).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1613 } },
+    } } } } } },
+        true => { let prod_local_1614 = 64; { let prod_local_1615 = prod_local_1614; { let prod_local_1616 = core::convert::identity::<u64>(prod_local_1602).checked_add(prod_local_1615).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1617 = 128; { let prod_local_1618 = (value & prod_local_1617); { let prod_local_1619 = (prod_local_1618 == prod_local_1617); match prod_local_1619 {
+        false => prod_local_1616,
+        true => { let prod_local_1620 = 128; { let prod_local_1621 = core::convert::identity::<u64>(prod_local_1616).checked_add(prod_local_1620).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1621 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1622 = 8; { let prod_local_1623 = prod_local_1622; { let prod_local_1624 = core::convert::identity::<u64>(prod_local_1512).checked_add(prod_local_1623).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1625 = 16; { let prod_local_1626 = (value & prod_local_1625); { let prod_local_1627 = (prod_local_1626 == prod_local_1625); match prod_local_1627 {
+        false => { let prod_local_1629 = _x_4; { let prod_local_1630 = core::convert::identity::<u64>(prod_local_1624).checked_add(prod_local_1629).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1631 = 32; { let prod_local_1632 = (value & prod_local_1631); { let prod_local_1633 = (prod_local_1632 == prod_local_1631); match prod_local_1633 {
+        false => { let prod_local_1635 = _x_4; { let prod_local_1636 = core::convert::identity::<u64>(prod_local_1630).checked_add(prod_local_1635).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1637 = 64; { let prod_local_1638 = (value & prod_local_1637); { let prod_local_1639 = (prod_local_1638 == prod_local_1637); match prod_local_1639 {
+        false => { let prod_local_1641 = _x_4; { let prod_local_1642 = core::convert::identity::<u64>(prod_local_1636).checked_add(prod_local_1641).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1643 = 128; { let prod_local_1644 = (value & prod_local_1643); { let prod_local_1645 = (prod_local_1644 == prod_local_1643); match prod_local_1645 {
+        false => prod_local_1642,
+        true => { let prod_local_1646 = 128; { let prod_local_1647 = core::convert::identity::<u64>(prod_local_1642).checked_add(prod_local_1646).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1647 } },
+    } } } } } },
+        true => { let prod_local_1648 = 64; { let prod_local_1649 = prod_local_1648; { let prod_local_1650 = core::convert::identity::<u64>(prod_local_1636).checked_add(prod_local_1649).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1651 = 128; { let prod_local_1652 = (value & prod_local_1651); { let prod_local_1653 = (prod_local_1652 == prod_local_1651); match prod_local_1653 {
+        false => prod_local_1650,
+        true => { let prod_local_1654 = 128; { let prod_local_1655 = core::convert::identity::<u64>(prod_local_1650).checked_add(prod_local_1654).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1655 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1656 = 32; { let prod_local_1657 = prod_local_1656; { let prod_local_1658 = core::convert::identity::<u64>(prod_local_1630).checked_add(prod_local_1657).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1659 = 64; { let prod_local_1660 = (value & prod_local_1659); { let prod_local_1661 = (prod_local_1660 == prod_local_1659); match prod_local_1661 {
+        false => { let prod_local_1663 = _x_4; { let prod_local_1664 = core::convert::identity::<u64>(prod_local_1658).checked_add(prod_local_1663).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1665 = 128; { let prod_local_1666 = (value & prod_local_1665); { let prod_local_1667 = (prod_local_1666 == prod_local_1665); match prod_local_1667 {
+        false => prod_local_1664,
+        true => { let prod_local_1668 = 128; { let prod_local_1669 = core::convert::identity::<u64>(prod_local_1664).checked_add(prod_local_1668).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1669 } },
+    } } } } } },
+        true => { let prod_local_1670 = 64; { let prod_local_1671 = prod_local_1670; { let prod_local_1672 = core::convert::identity::<u64>(prod_local_1658).checked_add(prod_local_1671).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1673 = 128; { let prod_local_1674 = (value & prod_local_1673); { let prod_local_1675 = (prod_local_1674 == prod_local_1673); match prod_local_1675 {
+        false => prod_local_1672,
+        true => { let prod_local_1676 = 128; { let prod_local_1677 = core::convert::identity::<u64>(prod_local_1672).checked_add(prod_local_1676).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1677 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1678 = 16; { let prod_local_1679 = prod_local_1678; { let prod_local_1680 = core::convert::identity::<u64>(prod_local_1624).checked_add(prod_local_1679).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1681 = 32; { let prod_local_1682 = (value & prod_local_1681); { let prod_local_1683 = (prod_local_1682 == prod_local_1681); match prod_local_1683 {
+        false => { let prod_local_1685 = _x_4; { let prod_local_1686 = core::convert::identity::<u64>(prod_local_1680).checked_add(prod_local_1685).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1687 = 64; { let prod_local_1688 = (value & prod_local_1687); { let prod_local_1689 = (prod_local_1688 == prod_local_1687); match prod_local_1689 {
+        false => { let prod_local_1691 = _x_4; { let prod_local_1692 = core::convert::identity::<u64>(prod_local_1686).checked_add(prod_local_1691).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1693 = 128; { let prod_local_1694 = (value & prod_local_1693); { let prod_local_1695 = (prod_local_1694 == prod_local_1693); match prod_local_1695 {
+        false => prod_local_1692,
+        true => { let prod_local_1696 = 128; { let prod_local_1697 = core::convert::identity::<u64>(prod_local_1692).checked_add(prod_local_1696).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1697 } },
+    } } } } } },
+        true => { let prod_local_1698 = 64; { let prod_local_1699 = prod_local_1698; { let prod_local_1700 = core::convert::identity::<u64>(prod_local_1686).checked_add(prod_local_1699).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1701 = 128; { let prod_local_1702 = (value & prod_local_1701); { let prod_local_1703 = (prod_local_1702 == prod_local_1701); match prod_local_1703 {
+        false => prod_local_1700,
+        true => { let prod_local_1704 = 128; { let prod_local_1705 = core::convert::identity::<u64>(prod_local_1700).checked_add(prod_local_1704).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1705 } },
+    } } } } } } },
+    } } } } } },
+        true => { let prod_local_1706 = 32; { let prod_local_1707 = prod_local_1706; { let prod_local_1708 = core::convert::identity::<u64>(prod_local_1680).checked_add(prod_local_1707).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1709 = 64; { let prod_local_1710 = (value & prod_local_1709); { let prod_local_1711 = (prod_local_1710 == prod_local_1709); match prod_local_1711 {
+        false => { let prod_local_1713 = _x_4; { let prod_local_1714 = core::convert::identity::<u64>(prod_local_1708).checked_add(prod_local_1713).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1715 = 128; { let prod_local_1716 = (value & prod_local_1715); { let prod_local_1717 = (prod_local_1716 == prod_local_1715); match prod_local_1717 {
+        false => prod_local_1714,
+        true => { let prod_local_1718 = 128; { let prod_local_1719 = core::convert::identity::<u64>(prod_local_1714).checked_add(prod_local_1718).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1719 } },
+    } } } } } },
+        true => { let prod_local_1720 = 64; { let prod_local_1721 = prod_local_1720; { let prod_local_1722 = core::convert::identity::<u64>(prod_local_1708).checked_add(prod_local_1721).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_1723 = 128; { let prod_local_1724 = (value & prod_local_1723); { let prod_local_1725 = (prod_local_1724 == prod_local_1723); match prod_local_1725 {
+        false => prod_local_1722,
+        true => { let prod_local_1726 = 128; { let prod_local_1727 = core::convert::identity::<u64>(prod_local_1722).checked_add(prod_local_1726).ok_or(crate::ComputeError::AddOverflow)?; prod_local_1727 } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } } },
+    } } } } } },
+    } } } } })
+}
+
+pub fn cborOctetTable0() -> alloc::vec::Vec<u8> {
+    alloc::vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+}
+
+pub fn cborOctetTable1() -> alloc::vec::Vec<u8> {
+    alloc::vec![16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+}
+
+pub fn cborOctetTable10() -> alloc::vec::Vec<u8> {
+    alloc::vec![160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175]
+}
+
+pub fn cborOctetTable11() -> alloc::vec::Vec<u8> {
+    alloc::vec![176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191]
+}
+
+pub fn cborOctetTable12() -> alloc::vec::Vec<u8> {
+    alloc::vec![192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207]
+}
+
+pub fn cborOctetTable13() -> alloc::vec::Vec<u8> {
+    alloc::vec![208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223]
+}
+
+pub fn cborOctetTable14() -> alloc::vec::Vec<u8> {
+    alloc::vec![224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239]
+}
+
+pub fn cborOctetTable15() -> alloc::vec::Vec<u8> {
+    alloc::vec![240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255]
+}
+
+pub fn cborOctetTable2() -> alloc::vec::Vec<u8> {
+    alloc::vec![32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]
+}
+
+pub fn cborOctetTable3() -> alloc::vec::Vec<u8> {
+    alloc::vec![48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+}
+
+pub fn cborOctetTable4() -> alloc::vec::Vec<u8> {
+    alloc::vec![64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79]
+}
+
+pub fn cborOctetTable5() -> alloc::vec::Vec<u8> {
+    alloc::vec![80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95]
+}
+
+pub fn cborOctetTable6() -> alloc::vec::Vec<u8> {
+    alloc::vec![96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111]
+}
+
+pub fn cborOctetTable7() -> alloc::vec::Vec<u8> {
+    alloc::vec![112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127]
+}
+
+pub fn cborOctetTable8() -> alloc::vec::Vec<u8> {
+    alloc::vec![128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143]
+}
+
+pub fn cborOctetTable9() -> alloc::vec::Vec<u8> {
+    alloc::vec![144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159]
+}
+
+pub fn cborRead1(cursor: &crate::BoundedCursor) -> Result<Result<crate::CborHead, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_45 = 1; { let _x_49 = (cursor).limit; { let _x_50 = (cursor).offset; { let _x_51 = core::convert::identity::<u64>(_x_49).saturating_sub(_x_50); { let _x_52 = (_x_45 <= _x_51); match _x_52 {
+        false => { let _x_85 = crate::PUnit {  }; { let _x_54 = { let prod_local_0 = _x_85; { let _x_1 = crate::CborError::Truncated; { let _x_2 = Err(_x_1); _x_2 } } }; _x_54 } },
+        true => { let _x_100 = &(cursor).bytes; { let _x_101 = (cursor).offset; { let _x_103 = usize::try_from(_x_101).ok().and_then(|__index| (_x_100).get(__index).cloned()); match _x_103 {
+        None => { let _x_104 = crate::PUnit {  }; { let _x_105 = { let prod_local_1 = _x_104; { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_105 } },
+        Some(val_106) => { let _x_109 = cborOctetNat(val_106)?; { let _x_110 = 1; { let _x_111 = core::convert::identity::<u64>(_x_109).checked_mul(_x_110).ok_or(crate::ComputeError::MulOverflow)?; { let _x_113 = &(cursor).bytes; { let _x_114 = (cursor).offset; { let _x_115 = core::convert::identity::<u64>(_x_114).checked_add(_x_110).ok_or(crate::ComputeError::AddOverflow)?; { let _x_116 = (cursor).limit; { let _x_117 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_113), offset: _x_115, limit: _x_116 }; { let _x_118 = crate::CborHead { argument: _x_111, cursor: _x_117 }; { let _x_119 = Ok(_x_118); _x_119 } } } } } } } } } },
+    } } } },
+    } } } } } })
+}
+
+pub fn cborRead2(cursor: &crate::BoundedCursor) -> Result<Result<crate::CborHead, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_72 = 2; { let _x_76 = (cursor).limit; { let _x_77 = (cursor).offset; { let _x_78 = core::convert::identity::<u64>(_x_76).saturating_sub(_x_77); { let _x_79 = (_x_72 <= _x_78); match _x_79 {
+        false => { let _x_129 = crate::PUnit {  }; { let _x_81 = { let prod_local_0 = _x_129; { let _x_1 = crate::CborError::Truncated; { let _x_2 = Err(_x_1); _x_2 } } }; _x_81 } },
+        true => { let _x_159 = &(cursor).bytes; { let _x_160 = (cursor).offset; { let _x_162 = usize::try_from(_x_160).ok().and_then(|__index| (_x_159).get(__index).cloned()); match _x_162 {
+        None => { let _x_163 = crate::PUnit {  }; { let _x_164 = { let prod_local_1 = _x_163; { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_164 } },
+        Some(val_165) => { let _x_185 = &(cursor).bytes; { let _x_186 = (cursor).offset; { let _x_187 = 1; { let _x_188 = core::convert::identity::<u64>(_x_186).checked_add(_x_187).ok_or(crate::ComputeError::AddOverflow)?; { let _x_189 = usize::try_from(_x_188).ok().and_then(|__index| (_x_185).get(__index).cloned()); match _x_189 {
+        None => { let _x_190 = crate::PUnit {  }; { let _x_191 = { let prod_local_4 = _x_190; { let prod_local_5 = crate::CborError::Truncated; { let prod_local_6 = Err(prod_local_5); prod_local_6 } } }; _x_191 } },
+        Some(val_192) => { let _x_195 = cborOctetNat(val_165)?; { let _x_196 = 256; { let _x_197 = core::convert::identity::<u64>(_x_195).checked_mul(_x_196).ok_or(crate::ComputeError::MulOverflow)?; { let _x_199 = cborOctetNat(val_192)?; { let _x_200 = 1; { let _x_201 = core::convert::identity::<u64>(_x_199).checked_mul(_x_200).ok_or(crate::ComputeError::MulOverflow)?; { let _x_202 = core::convert::identity::<u64>(_x_197).checked_add(_x_201).ok_or(crate::ComputeError::AddOverflow)?; { let _x_203 = &(cursor).bytes; { let _x_204 = (cursor).offset; { let _x_205 = 2; { let _x_206 = core::convert::identity::<u64>(_x_204).checked_add(_x_205).ok_or(crate::ComputeError::AddOverflow)?; { let _x_207 = (cursor).limit; { let _x_208 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_203), offset: _x_206, limit: _x_207 }; { let _x_209 = crate::CborHead { argument: _x_202, cursor: _x_208 }; { let _x_210 = Ok(_x_209); _x_210 } } } } } } } } } } } } } } },
+    } } } } } },
+    } } } },
+    } } } } } })
+}
+
+pub fn cborRead4(cursor: &crate::BoundedCursor) -> Result<Result<crate::CborHead, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_120 = 4; { let _x_124 = (cursor).limit; { let _x_125 = (cursor).offset; { let _x_126 = core::convert::identity::<u64>(_x_124).saturating_sub(_x_125); { let _x_127 = (_x_120 <= _x_126); match _x_127 {
+        false => { let _x_209 = crate::PUnit {  }; { let _x_129 = { let prod_local_0 = _x_209; { let _x_1 = crate::CborError::Truncated; { let _x_2 = Err(_x_1); _x_2 } } }; _x_129 } },
+        true => { let _x_267 = &(cursor).bytes; { let _x_268 = (cursor).offset; { let _x_270 = usize::try_from(_x_268).ok().and_then(|__index| (_x_267).get(__index).cloned()); match _x_270 {
+        None => { let _x_271 = crate::PUnit {  }; { let _x_272 = { let prod_local_1 = _x_271; { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_272 } },
+        Some(val_273) => { let _x_321 = &(cursor).bytes; { let _x_322 = (cursor).offset; { let _x_323 = 1; { let _x_324 = core::convert::identity::<u64>(_x_322).checked_add(_x_323).ok_or(crate::ComputeError::AddOverflow)?; { let _x_325 = usize::try_from(_x_324).ok().and_then(|__index| (_x_321).get(__index).cloned()); match _x_325 {
+        None => { let _x_326 = crate::PUnit {  }; { let _x_327 = { let prod_local_4 = _x_326; { let prod_local_5 = crate::CborError::Truncated; { let prod_local_6 = Err(prod_local_5); prod_local_6 } } }; _x_327 } },
+        Some(val_328) => { let _x_366 = &(cursor).bytes; { let _x_367 = (cursor).offset; { let _x_368 = 2; { let _x_369 = core::convert::identity::<u64>(_x_367).checked_add(_x_368).ok_or(crate::ComputeError::AddOverflow)?; { let _x_370 = usize::try_from(_x_369).ok().and_then(|__index| (_x_366).get(__index).cloned()); match _x_370 {
+        None => { let _x_371 = crate::PUnit {  }; { let _x_372 = { let prod_local_7 = _x_371; { let prod_local_8 = crate::CborError::Truncated; { let prod_local_9 = Err(prod_local_8); prod_local_9 } } }; _x_372 } },
+        Some(val_373) => { let _x_401 = &(cursor).bytes; { let _x_402 = (cursor).offset; { let _x_403 = 3; { let _x_404 = core::convert::identity::<u64>(_x_402).checked_add(_x_403).ok_or(crate::ComputeError::AddOverflow)?; { let _x_405 = usize::try_from(_x_404).ok().and_then(|__index| (_x_401).get(__index).cloned()); match _x_405 {
+        None => { let _x_406 = crate::PUnit {  }; { let _x_407 = { let prod_local_10 = _x_406; { let prod_local_11 = crate::CborError::Truncated; { let prod_local_12 = Err(prod_local_11); prod_local_12 } } }; _x_407 } },
+        Some(val_408) => { let _x_411 = cborOctetNat(val_273)?; { let _x_412 = 16777216; { let _x_413 = core::convert::identity::<u64>(_x_411).checked_mul(_x_412).ok_or(crate::ComputeError::MulOverflow)?; { let _x_415 = cborOctetNat(val_328)?; { let _x_416 = 65536; { let _x_417 = core::convert::identity::<u64>(_x_415).checked_mul(_x_416).ok_or(crate::ComputeError::MulOverflow)?; { let _x_418 = core::convert::identity::<u64>(_x_413).checked_add(_x_417).ok_or(crate::ComputeError::AddOverflow)?; { let _x_419 = cborOctetNat(val_373)?; { let _x_420 = 256; { let _x_421 = core::convert::identity::<u64>(_x_419).checked_mul(_x_420).ok_or(crate::ComputeError::MulOverflow)?; { let _x_422 = core::convert::identity::<u64>(_x_418).checked_add(_x_421).ok_or(crate::ComputeError::AddOverflow)?; { let _x_423 = cborOctetNat(val_408)?; { let _x_424 = 1; { let _x_425 = core::convert::identity::<u64>(_x_423).checked_mul(_x_424).ok_or(crate::ComputeError::MulOverflow)?; { let _x_426 = core::convert::identity::<u64>(_x_422).checked_add(_x_425).ok_or(crate::ComputeError::AddOverflow)?; { let _x_427 = &(cursor).bytes; { let _x_428 = (cursor).offset; { let _x_429 = 4; { let _x_430 = core::convert::identity::<u64>(_x_428).checked_add(_x_429).ok_or(crate::ComputeError::AddOverflow)?; { let _x_431 = (cursor).limit; { let _x_432 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_427), offset: _x_430, limit: _x_431 }; { let _x_433 = crate::CborHead { argument: _x_426, cursor: _x_432 }; { let _x_434 = Ok(_x_433); _x_434 } } } } } } } } } } } } } } } } } } } } } } },
+    } } } } } },
+    } } } } } },
+    } } } } } },
+    } } } },
+    } } } } } })
+}
+
+pub fn cborReadHead(cursor: &crate::BoundedCursor, limits: crate::CborLimits, major: u64) -> Result<Result<crate::CborHead, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_46 = cborLimitsValid(limits); match _x_46 {
+        false => { let _x_61 = crate::CborError::BadLimits; { let _x_62 = Err(_x_61); _x_62 } },
+        true => { let _x_88 = cborCursorValid(&(cursor), limits); match _x_88 {
+        false => { let _x_93 = crate::CborError::BadCursor; { let _x_94 = Err(_x_93); _x_94 } },
+        true => { let _x_109 = (cursor).offset; { let _x_110 = (cursor).limit; { let _x_111 = (_x_109 < _x_110); match _x_111 {
+        false => { let _x_112 = crate::PUnit {  }; { let _x_113 = { let prod_local_0 = _x_112; { let _x_96 = crate::CborError::Truncated; { let _x_97 = Err(_x_96); _x_97 } } }; _x_113 } },
+        true => { let _x_119 = &(cursor).bytes; { let _x_120 = (cursor).offset; { let _x_121 = usize::try_from(_x_120).ok().and_then(|__index| (_x_119).get(__index).cloned()); match _x_121 {
+        None => { let _x_122 = crate::PUnit {  }; { let _x_123 = { let prod_local_1 = _x_122; { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_123 } },
+        Some(val_124) => { let _x_126 = cborOctetNat(val_124)?; { let _x_127 = cborReadHeadInitial(&(cursor), major, _x_126)?; _x_127 } },
+    } } } },
+    } } } },
+    } },
+    } })
+}
+
+pub fn cborReadHeadArgument(cursor: &crate::BoundedCursor, additional: u64) -> Result<Result<crate::CborHead, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_132 = 24; { let _x_135 = (additional < _x_132); match _x_135 {
+        false => { let _x_234 = 24; { let _x_235 = (additional == _x_234); match _x_235 {
+        false => { let _x_282 = 25; { let _x_283 = (additional == _x_282); match _x_283 {
+        false => { let _x_307 = 26; { let _x_308 = (additional == _x_307); match _x_308 {
+        false => { let _x_313 = crate::CborError::UnsupportedHead; { let _x_314 = Err(_x_313); _x_314 } },
+        true => { let _x_326 = cborRead4(&(cursor))?; match _x_326.clone() {
+        Err(a_327) => _x_326.clone(),
+        Ok(a_328) => { let _x_333 = 65536; { let _x_334 = (a_328).argument; { let _x_335 = (_x_333 <= _x_334); match _x_335 {
+        false => { let _x_340 = crate::CborError::NonCanonical; { let _x_341 = Err(_x_340); _x_341 } },
+        true => _x_326.clone(),
+    } } } },
+    } },
+    } } },
+        true => { let _x_353 = cborRead2(&(cursor))?; match _x_353.clone() {
+        Err(a_354) => _x_353.clone(),
+        Ok(a_355) => { let _x_360 = 256; { let _x_361 = (a_355).argument; { let _x_362 = (_x_360 <= _x_361); match _x_362 {
+        false => { let _x_367 = crate::CborError::NonCanonical; { let _x_368 = Err(_x_367); _x_368 } },
+        true => _x_353.clone(),
+    } } } },
+    } },
+    } } },
+        true => { let _x_380 = cborRead1(&(cursor))?; match _x_380.clone() {
+        Err(a_381) => _x_380.clone(),
+        Ok(a_382) => { let _x_387 = 24; { let _x_388 = (a_382).argument; { let _x_389 = (_x_387 <= _x_388); match _x_389 {
+        false => { let _x_394 = crate::CborError::NonCanonical; { let _x_395 = Err(_x_394); _x_395 } },
+        true => _x_380.clone(),
+    } } } },
+    } },
+    } } },
+        true => { let _x_396 = crate::CborHead { argument: additional, cursor: alloc::borrow::ToOwned::to_owned(cursor) }; { let _x_397 = Ok(_x_396); _x_397 } },
+    } } })
+}
+
+pub fn cborReadHeadInitial(cursor: &crate::BoundedCursor, major: u64, initial: u64) -> Result<Result<crate::CborHead, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_28 = 32; { let _x_31 = 0; { let _x_34 = if _x_28 == 0 { _x_31 } else { initial / _x_28 }; { let _x_35 = (_x_34 == major); match _x_35 {
+        false => { let _x_57 = crate::CborError::WrongType; { let _x_58 = Err(_x_57); _x_58 } },
+        true => { let _x_59 = &(cursor).bytes; { let _x_60 = (cursor).offset; { let _x_61 = 1; { let _x_62 = core::convert::identity::<u64>(_x_60).checked_add(_x_61).ok_or(crate::ComputeError::AddOverflow)?; { let _x_63 = (cursor).limit; { let _x_64 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_59), offset: _x_62, limit: _x_63 }; { let _x_66 = 32; { let _x_67 = 0; { let _x_68 = if _x_66 == 0 { _x_67 } else { initial % _x_66 }; { let _x_69 = cborReadHeadArgument(&(_x_64), _x_68)?; _x_69 } } } } } } } } } },
+    } } } } })
+}
+
+pub fn cborReadPayload(head: &crate::CborHead, maximum: u64) -> Result<Result<crate::CborPayload, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_50 = (head).argument; { let _x_51 = (_x_50 <= maximum); match _x_51 {
+        false => { let _x_72 = crate::CborError::ValueLimit; { let _x_73 = Err(_x_72); _x_73 } },
+        true => { let _x_97 = (head).argument; { let _x_99 = &(head).cursor; { let _x_100 = (_x_99).limit; { let _x_101 = (_x_99).offset; { let _x_102 = core::convert::identity::<u64>(_x_100).saturating_sub(_x_101); { let _x_103 = (_x_97 <= _x_102); match _x_103 {
+        false => { let _x_104 = crate::PUnit {  }; { let _x_105 = { let prod_local_0 = _x_104; { let _x_75 = crate::CborError::Truncated; { let _x_76 = Err(_x_75); _x_76 } } }; _x_105 } },
+        true => { let _x_118 = &(head).cursor; { let _x_119 = &(_x_118).bytes; { let _x_120 = (_x_118).offset; { let _x_121 = (head).argument; { let _x_122 = { let __start = usize::try_from(_x_120).ok(); let __count = usize::try_from(_x_121).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (_x_119).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_122 {
+        None => { let _x_123 = crate::PUnit {  }; { let _x_124 = { let prod_local_1 = _x_123; { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_124 } },
+        Some(val_125) => { let _x_127 = &(head).cursor; { let _x_128 = &(_x_127).bytes; { let _x_129 = (_x_127).offset; { let _x_130 = (head).argument; { let _x_131 = core::convert::identity::<u64>(_x_129).checked_add(_x_130).ok_or(crate::ComputeError::AddOverflow)?; { let _x_132 = (_x_127).limit; { let _x_133 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_128), offset: _x_131, limit: _x_132 }; { let _x_134 = crate::CborPayload { bytes: val_125, cursor: _x_133 }; { let _x_135 = Ok(_x_134); _x_135 } } } } } } } } },
+    } } } } } },
+    } } } } } } },
+    } } })
+}
+
+pub fn cborReadPrimitiveInitial(cursor: &crate::BoundedCursor, limits: crate::CborLimits, initial: u64) -> Result<Result<crate::CborDecoded, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_156 = 32; { let _x_159 = 0; { let _x_162 = if _x_156 == 0 { _x_159 } else { initial / _x_156 }; { let _x_163 = (_x_162 == _x_159); match _x_163 {
+        false => { let _x_296 = 32; { let _x_297 = 0; { let _x_298 = if _x_296 == 0 { _x_297 } else { initial / _x_296 }; { let _x_299 = 2; { let _x_300 = (_x_298 == _x_299); match _x_300 {
+        false => { let _x_365 = 32; { let _x_366 = 0; { let _x_367 = if _x_365 == 0 { _x_366 } else { initial / _x_365 }; { let _x_368 = 3; { let _x_369 = (_x_367 == _x_368); match _x_369 {
+        false => { let _x_423 = 244; { let _x_424 = (initial == _x_423); match _x_424 {
+        false => { let _x_460 = 245; { let _x_461 = (initial == _x_460); match _x_461 {
+        false => { let _x_479 = 246; { let _x_480 = (initial == _x_479); match _x_480 {
+        false => { let _x_485 = crate::CborError::WrongType; { let _x_486 = Err(_x_485); _x_486 } },
+        true => { let _x_487 = crate::CborValue::Null; { let _x_488 = &(cursor).bytes; { let _x_489 = (cursor).offset; { let _x_490 = 1; { let _x_491 = core::convert::identity::<u64>(_x_489).checked_add(_x_490).ok_or(crate::ComputeError::AddOverflow)?; { let _x_492 = (cursor).limit; { let _x_493 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_488), offset: _x_491, limit: _x_492 }; { let _x_494 = crate::CborDecoded { value: _x_487, cursor: _x_493 }; { let _x_495 = Ok(_x_494); _x_495 } } } } } } } } },
+    } } },
+        true => { let _x_497 = crate::CborValue::Boolean { field_0: _x_461 }; { let _x_498 = &(cursor).bytes; { let _x_499 = (cursor).offset; { let _x_500 = 1; { let _x_501 = core::convert::identity::<u64>(_x_499).checked_add(_x_500).ok_or(crate::ComputeError::AddOverflow)?; { let _x_502 = (cursor).limit; { let _x_503 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_498), offset: _x_501, limit: _x_502 }; { let _x_504 = crate::CborDecoded { value: _x_497, cursor: _x_503 }; { let _x_505 = Ok(_x_504); _x_505 } } } } } } } } },
+    } } },
+        true => { let _x_507 = crate::CborValue::Boolean { field_0: _x_369 }; { let _x_508 = &(cursor).bytes; { let _x_509 = (cursor).offset; { let _x_510 = 1; { let _x_511 = core::convert::identity::<u64>(_x_509).checked_add(_x_510).ok_or(crate::ComputeError::AddOverflow)?; { let _x_512 = (cursor).limit; { let _x_513 = crate::BoundedCursor { bytes: alloc::borrow::ToOwned::to_owned(_x_508), offset: _x_511, limit: _x_512 }; { let _x_514 = crate::CborDecoded { value: _x_507, cursor: _x_513 }; { let _x_515 = Ok(_x_514); _x_515 } } } } } } } } },
+    } } },
+        true => { let _x_517 = cborReadString(&(cursor), limits, _x_369)?; _x_517 },
+    } } } } } },
+        true => { let _x_519 = cborReadString(&(cursor), limits, _x_163)?; _x_519 },
+    } } } } } },
+        true => { let _x_526 = 0; { let _x_527 = cborReadHead(&(cursor), limits, _x_526)?; match _x_527 {
+        Err(a_528) => { let _x_529 = Err(a_528); _x_529 },
+        Ok(a_530) => { let _x_532 = (a_530).argument; { let _x_533 = crate::CborValue::Unsigned { field_0: _x_532 }; { let _x_534 = (a_530).cursor; { let _x_535 = crate::CborDecoded { value: _x_533, cursor: _x_534 }; { let _x_536 = Ok(_x_535); _x_536 } } } } },
+    } } },
+    } } } } })
+}
+
+pub fn cborReadString(cursor: &crate::BoundedCursor, limits: crate::CborLimits, textMode: bool) -> Result<Result<crate::CborDecoded, crate::CborError>, crate::ComputeError> {
+    Ok(match textMode {
+        false => { let _x_108 = 2; { let _y_78 = _x_108; { let _x_79 = cborReadHead(&(cursor), limits, _y_78)?; match _x_79 {
+        Err(a_80) => { let _x_105 = Err(a_80); _x_105 },
+        Ok(a_82) => match textMode {
+        false => { let _x_146 = (limits).maximumBytes; { let _y_139 = _x_146; { let _x_140 = cborReadPayload(&(a_82), _y_139)?; match _x_140 {
+        Err(a_141) => { let _x_142 = Err(a_141); _x_142 },
+        Ok(a_143) => match textMode {
+        false => { let _x_174 = &(a_143).bytes; { let _x_175 = crate::CborValue::ByteString { field_0: alloc::borrow::ToOwned::to_owned(_x_174) }; { let _x_176 = &(a_143).cursor; { let _x_177 = crate::CborDecoded { value: _x_175, cursor: alloc::borrow::ToOwned::to_owned(_x_176) }; { let _x_178 = Ok(_x_177); _x_178 } } } } },
+        true => { let _x_187 = &(a_143).bytes; { let _x_188 = core::str::from_utf8(core::convert::AsRef::<[u8]>::as_ref(&(_x_187))).ok().map(alloc::borrow::ToOwned::to_owned); match _x_188 {
+        None => { let _x_193 = crate::CborError::InvalidUtf8; { let _x_194 = Err(_x_193); _x_194 } },
+        Some(val_191) => { let _x_195 = crate::CborValue::TextString { field_0: val_191 }; { let _x_196 = &(a_143).cursor; { let _x_197 = crate::CborDecoded { value: _x_195, cursor: alloc::borrow::ToOwned::to_owned(_x_196) }; { let _x_198 = Ok(_x_197); _x_198 } } } },
+    } } },
+    },
+    } } } },
+        true => { let _x_148 = (limits).maximumText; { let prod_local_0 = _x_148; { let prod_local_1 = cborReadPayload(&(a_82), prod_local_0)?; match prod_local_1 {
+        Err(prod_local_2) => { let prod_local_3 = Err(prod_local_2); prod_local_3 },
+        Ok(prod_local_4) => match textMode {
+        false => { let prod_local_5 = &(prod_local_4).bytes; { let prod_local_6 = crate::CborValue::ByteString { field_0: alloc::borrow::ToOwned::to_owned(prod_local_5) }; { let prod_local_7 = &(prod_local_4).cursor; { let prod_local_8 = crate::CborDecoded { value: prod_local_6, cursor: alloc::borrow::ToOwned::to_owned(prod_local_7) }; { let prod_local_9 = Ok(prod_local_8); prod_local_9 } } } } },
+        true => { let prod_local_10 = &(prod_local_4).bytes; { let prod_local_11 = core::str::from_utf8(core::convert::AsRef::<[u8]>::as_ref(&(prod_local_10))).ok().map(alloc::borrow::ToOwned::to_owned); match prod_local_11 {
+        None => { let prod_local_12 = crate::CborError::InvalidUtf8; { let prod_local_13 = Err(prod_local_12); prod_local_13 } },
+        Some(prod_local_14) => { let prod_local_15 = crate::CborValue::TextString { field_0: prod_local_14 }; { let prod_local_16 = &(prod_local_4).cursor; { let prod_local_17 = crate::CborDecoded { value: prod_local_15, cursor: alloc::borrow::ToOwned::to_owned(prod_local_16) }; { let prod_local_18 = Ok(prod_local_17); prod_local_18 } } } },
+    } } },
+    },
+    } } } },
+    },
+    } } } },
+        true => { let _x_111 = 3; { let prod_local_19 = _x_111; { let prod_local_20 = cborReadHead(&(cursor), limits, prod_local_19)?; match prod_local_20 {
+        Err(prod_local_21) => { let prod_local_22 = Err(prod_local_21); prod_local_22 },
+        Ok(prod_local_23) => match textMode {
+        false => { let prod_local_25 = (limits).maximumBytes; { let prod_local_26 = prod_local_25; { let prod_local_27 = cborReadPayload(&(prod_local_23), prod_local_26)?; match prod_local_27 {
+        Err(prod_local_28) => { let prod_local_29 = Err(prod_local_28); prod_local_29 },
+        Ok(prod_local_30) => match textMode {
+        false => { let prod_local_31 = &(prod_local_30).bytes; { let prod_local_32 = crate::CborValue::ByteString { field_0: alloc::borrow::ToOwned::to_owned(prod_local_31) }; { let prod_local_33 = &(prod_local_30).cursor; { let prod_local_34 = crate::CborDecoded { value: prod_local_32, cursor: alloc::borrow::ToOwned::to_owned(prod_local_33) }; { let prod_local_35 = Ok(prod_local_34); prod_local_35 } } } } },
+        true => { let prod_local_36 = &(prod_local_30).bytes; { let prod_local_37 = core::str::from_utf8(core::convert::AsRef::<[u8]>::as_ref(&(prod_local_36))).ok().map(alloc::borrow::ToOwned::to_owned); match prod_local_37 {
+        None => { let prod_local_38 = crate::CborError::InvalidUtf8; { let prod_local_39 = Err(prod_local_38); prod_local_39 } },
+        Some(prod_local_40) => { let prod_local_41 = crate::CborValue::TextString { field_0: prod_local_40 }; { let prod_local_42 = &(prod_local_30).cursor; { let prod_local_43 = crate::CborDecoded { value: prod_local_41, cursor: alloc::borrow::ToOwned::to_owned(prod_local_42) }; { let prod_local_44 = Ok(prod_local_43); prod_local_44 } } } },
+    } } },
+    },
+    } } } },
+        true => { let prod_local_45 = (limits).maximumText; { let prod_local_46 = prod_local_45; { let prod_local_47 = cborReadPayload(&(prod_local_23), prod_local_46)?; match prod_local_47 {
+        Err(prod_local_48) => { let prod_local_49 = Err(prod_local_48); prod_local_49 },
+        Ok(prod_local_50) => match textMode {
+        false => { let prod_local_51 = &(prod_local_50).bytes; { let prod_local_52 = crate::CborValue::ByteString { field_0: alloc::borrow::ToOwned::to_owned(prod_local_51) }; { let prod_local_53 = &(prod_local_50).cursor; { let prod_local_54 = crate::CborDecoded { value: prod_local_52, cursor: alloc::borrow::ToOwned::to_owned(prod_local_53) }; { let prod_local_55 = Ok(prod_local_54); prod_local_55 } } } } },
+        true => { let prod_local_56 = &(prod_local_50).bytes; { let prod_local_57 = core::str::from_utf8(core::convert::AsRef::<[u8]>::as_ref(&(prod_local_56))).ok().map(alloc::borrow::ToOwned::to_owned); match prod_local_57 {
+        None => { let prod_local_58 = crate::CborError::InvalidUtf8; { let prod_local_59 = Err(prod_local_58); prod_local_59 } },
+        Some(prod_local_60) => { let prod_local_61 = crate::CborValue::TextString { field_0: prod_local_60 }; { let prod_local_62 = &(prod_local_50).cursor; { let prod_local_63 = crate::CborDecoded { value: prod_local_61, cursor: alloc::borrow::ToOwned::to_owned(prod_local_62) }; { let prod_local_64 = Ok(prod_local_63); prod_local_64 } } } },
+    } } },
+    },
+    } } } },
+    },
+    } } } },
+    })
+}
+
+pub fn cborTextLength(value: alloc::string::String) -> u64 {
+    __prod_borrowed_cborTextLength(value.as_ref())
+}
+
+fn __prod_borrowed_cborTextLength(value: &str) -> u64 {
+    { let _x_2 = (value).chars().count() as u64; _x_2 }
+}
+
+pub fn cborWriteHead(value: u64, major: u64, limits: crate::CborLimits) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_35 = cborLimitsValid(limits); match _x_35 {
+        false => { let _x_49 = crate::CborError::BadLimits; { let _x_50 = Err(_x_49); _x_50 } },
+        true => { let _x_65 = 4294967295; { let _x_66 = (value <= _x_65); match _x_66 {
+        false => { let _x_67 = crate::PUnit {  }; { let _x_68 = { let prod_local_0 = _x_67; { let _x_52 = crate::CborError::ValueLimit; { let _x_53 = Err(_x_52); _x_53 } } }; _x_68 } },
+        true => { let _x_74 = cborHeadWidth(value); { let _x_75 = (limits).maximumOutput; { let _x_76 = (_x_74 <= _x_75); match _x_76 {
+        false => { let _x_77 = crate::PUnit {  }; { let _x_78 = { let prod_local_1 = _x_77; { let prod_local_2 = crate::CborError::ValueLimit; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_78 } },
+        true => { let _x_81 = cborWriteHeadUnchecked(value, major)?; { let _x_82 = Ok(_x_81); _x_82 } },
+    } } } },
+    } } },
+    } })
+}
+
+pub fn cborWriteHeadUnchecked(value: u64, major: u64) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_134 = 24; { let _x_137 = (value < _x_134); match _x_137 {
+        false => { let _x_270 = 255; { let _x_271 = (value <= _x_270); match _x_271 {
+        false => { let _x_328 = 65535; { let _x_329 = (value <= _x_328); match _x_329 {
+        false => { let _x_336 = 32; { let _x_337 = core::convert::identity::<u64>(major).checked_mul(_x_336).ok_or(crate::ComputeError::MulOverflow)?; { let _x_338 = 26; { let _x_339 = core::convert::identity::<u64>(_x_337).checked_add(_x_338).ok_or(crate::ComputeError::AddOverflow)?; { let _x_340 = cborOctetBytes(_x_339); { let _x_346 = 16777216; { let _x_347 = 0; { let _x_348 = if _x_346 == 0 { _x_347 } else { value / _x_346 }; { let _x_349 = 256; { let _x_350 = if _x_349 == 0 { _x_347 } else { _x_348 % _x_349 }; { let _x_351 = cborOctetBytes(_x_350); { let _x_352 = { let mut __append = (alloc::vec::Vec::<u8>::new(), _x_351); __append.0.extend(__append.1); __append.0 }; { let _x_353 = 65536; { let _x_354 = if _x_353 == 0 { _x_347 } else { value / _x_353 }; { let _x_355 = if _x_349 == 0 { _x_347 } else { _x_354 % _x_349 }; { let _x_356 = cborOctetBytes(_x_355); { let _x_357 = { let mut __append = (_x_352, _x_356); __append.0.extend(__append.1); __append.0 }; { let _x_358 = if _x_349 == 0 { _x_347 } else { value / _x_349 }; { let _x_359 = if _x_349 == 0 { _x_347 } else { _x_358 % _x_349 }; { let _x_360 = cborOctetBytes(_x_359); { let _x_361 = { let mut __append = (_x_357, _x_360); __append.0.extend(__append.1); __append.0 }; { let _x_362 = 1; { let _x_363 = if _x_362 == 0 { _x_347 } else { value / _x_362 }; { let _x_364 = if _x_349 == 0 { _x_347 } else { _x_363 % _x_349 }; { let _x_365 = cborOctetBytes(_x_364); { let _x_366 = { let mut __append = (_x_361, _x_365); __append.0.extend(__append.1); __append.0 }; { let _x_367 = { let mut __append = (_x_340, _x_366); __append.0.extend(__append.1); __append.0 }; _x_367 } } } } } } } } } } } } } } } } } } } } } } } } } } },
+        true => { let _x_370 = 32; { let _x_371 = core::convert::identity::<u64>(major).checked_mul(_x_370).ok_or(crate::ComputeError::MulOverflow)?; { let _x_372 = 25; { let _x_373 = core::convert::identity::<u64>(_x_371).checked_add(_x_372).ok_or(crate::ComputeError::AddOverflow)?; { let _x_374 = cborOctetBytes(_x_373); { let _x_376 = 256; { let _x_377 = 0; { let _x_378 = if _x_376 == 0 { _x_377 } else { value / _x_376 }; { let _x_379 = cborOctetBytes(_x_378); { let _x_380 = if _x_376 == 0 { _x_377 } else { value % _x_376 }; { let _x_381 = cborOctetBytes(_x_380); { let _x_382 = { let mut __append = (_x_379, _x_381); __append.0.extend(__append.1); __append.0 }; { let _x_383 = { let mut __append = (_x_374, _x_382); __append.0.extend(__append.1); __append.0 }; _x_383 } } } } } } } } } } } } },
+    } } },
+        true => { let _x_386 = 32; { let _x_387 = core::convert::identity::<u64>(major).checked_mul(_x_386).ok_or(crate::ComputeError::MulOverflow)?; { let _x_388 = 24; { let _x_389 = core::convert::identity::<u64>(_x_387).checked_add(_x_388).ok_or(crate::ComputeError::AddOverflow)?; { let _x_390 = cborOctetBytes(_x_389); { let _x_391 = cborOctetBytes(value); { let _x_392 = { let mut __append = (_x_390, _x_391); __append.0.extend(__append.1); __append.0 }; _x_392 } } } } } } },
+    } } },
+        true => { let _x_394 = 32; { let _x_395 = core::convert::identity::<u64>(major).checked_mul(_x_394).ok_or(crate::ComputeError::MulOverflow)?; { let _x_396 = core::convert::identity::<u64>(_x_395).checked_add(value).ok_or(crate::ComputeError::AddOverflow)?; { let _x_397 = cborOctetBytes(_x_396); _x_397 } } } },
+    } } })
+}
+
+pub fn cborWritePayload(bytes: alloc::vec::Vec<u8>, major: u64, maximum: u64, limits: crate::CborLimits) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_40 = (bytes).len() as u64; { let _x_41 = (_x_40 <= maximum); match _x_41 {
+        false => { let _x_60 = crate::PUnit {  }; { let _x_43 = { let prod_local_0 = _x_60; { let _x_1 = crate::CborError::ValueLimit; { let _x_2 = Err(_x_1); _x_2 } } }; _x_43 } },
+        true => { let _x_73 = (bytes).len() as u64; { let _x_74 = cborHeadWidth(_x_73); { let _x_75 = core::convert::identity::<u64>(_x_73).checked_add(_x_74).ok_or(crate::ComputeError::AddOverflow)?; { let _x_76 = (limits).maximumOutput; { let _x_77 = (_x_75 <= _x_76); match _x_77 {
+        false => { let _x_78 = crate::PUnit {  }; { let _x_79 = { let prod_local_1 = _x_78; { let prod_local_2 = crate::CborError::ValueLimit; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_79 } },
+        true => { let _x_86 = (bytes).len() as u64; { let _x_87 = cborWriteHead(_x_86, major, limits)?; match _x_87.clone() {
+        Err(a_88) => _x_87.clone(),
+        Ok(a_89) => { let _x_91 = { let mut __append = (a_89, bytes); __append.0.extend(__append.1); __append.0 }; { let _x_92 = Ok(_x_91); _x_92 } },
+    } } },
+    } } } } } },
+    } } })
+}
+
+pub fn cborWritePrimitiveChecked(value: &crate::CborValue, limits: crate::CborLimits) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::CborValue::Unsigned { field_0: x_108 } => { let x_108 = x_108.clone(); { let _x_149 = 0; { let _x_150 = cborWriteHead(x_108, _x_149, limits)?; _x_150 } } },
+        crate::CborValue::ByteString { field_0: x_110 } => { let _x_151 = 2; { let _x_152 = (limits).maximumBytes; { let _x_153 = cborWritePayload(alloc::borrow::ToOwned::to_owned(x_110), _x_151, _x_152, limits)?; _x_153 } } },
+        crate::CborValue::TextString { field_0: x_112 } => { let _x_162 = (x_112).chars().count() as u64; { let _x_163 = (limits).maximumText; { let _x_164 = (_x_162 <= _x_163); match _x_164 {
+        false => { let _x_169 = crate::CborError::ValueLimit; { let _x_170 = Err(_x_169); _x_170 } },
+        true => { let _x_171 = (alloc::borrow::ToOwned::to_owned(x_112)).into_bytes(); { let _x_172 = 3; { let _x_173 = (limits).maximumText; { let _x_174 = cborWritePayload(_x_171, _x_172, _x_173, limits)?; _x_174 } } } },
+    } } } },
+        crate::CborValue::Boolean { field_0: x_114 } => { let x_114 = x_114.clone(); { let _x_199 = 1; { let _x_200 = (limits).maximumOutput; { let _x_201 = (_x_199 <= _x_200); match _x_201 {
+        false => { let _x_206 = crate::CborError::ValueLimit; { let _x_207 = Err(_x_206); _x_207 } },
+        true => match x_114 {
+        false => { let _x_224 = Ok(alloc::vec![244]); _x_224 },
+        true => { let _x_227 = Ok(alloc::vec![245]); _x_227 },
+    },
+    } } } } },
+        crate::CborValue::Null => { let _x_251 = 1; { let _x_252 = (limits).maximumOutput; { let _x_253 = (_x_251 <= _x_252); match _x_253 {
+        false => { let _x_258 = crate::CborError::ValueLimit; { let _x_259 = Err(_x_258); _x_259 } },
+        true => { let _x_266 = Ok(alloc::vec![246]); _x_266 },
+    } } } },
+    })
+}
+
+pub fn finishCborCursor(cursor: &crate::BoundedCursor, limits: crate::CborLimits) -> Result<bool, crate::CborError> {
+    { let _x_35 = cborLimitsValid(limits); match _x_35 {
+        false => { let _x_48 = crate::CborError::BadLimits; { let _x_49 = Err(_x_48); _x_49 } },
+        true => { let _x_67 = cborCursorValid(&(cursor), limits); match _x_67 {
+        false => { let _x_72 = crate::CborError::BadCursor; { let _x_73 = Err(_x_72); _x_73 } },
+        true => { let _x_80 = (cursor).offset; { let _x_81 = (cursor).limit; { let _x_82 = (_x_80 == _x_81); match _x_82 {
+        false => { let _x_87 = crate::CborError::TrailingInput; { let _x_88 = Err(_x_87); _x_88 } },
+        true => { let _x_90 = Ok(_x_82); _x_90 },
+    } } } },
+    } },
+    } }
+}
+
+pub fn readCborPrimitive(cursor: &crate::BoundedCursor, limits: crate::CborLimits) -> Result<Result<crate::CborDecoded, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_46 = cborLimitsValid(limits); match _x_46 {
+        false => { let _x_61 = crate::CborError::BadLimits; { let _x_62 = Err(_x_61); _x_62 } },
+        true => { let _x_88 = cborCursorValid(&(cursor), limits); match _x_88 {
+        false => { let _x_93 = crate::CborError::BadCursor; { let _x_94 = Err(_x_93); _x_94 } },
+        true => { let _x_109 = (cursor).offset; { let _x_110 = (cursor).limit; { let _x_111 = (_x_109 < _x_110); match _x_111 {
+        false => { let _x_112 = crate::PUnit {  }; { let _x_113 = { let prod_local_0 = _x_112; { let _x_96 = crate::CborError::Truncated; { let _x_97 = Err(_x_96); _x_97 } } }; _x_113 } },
+        true => { let _x_119 = &(cursor).bytes; { let _x_120 = (cursor).offset; { let _x_121 = usize::try_from(_x_120).ok().and_then(|__index| (_x_119).get(__index).cloned()); match _x_121 {
+        None => { let _x_122 = crate::PUnit {  }; { let _x_123 = { let prod_local_1 = _x_122; { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_123 } },
+        Some(val_124) => { let _x_126 = cborOctetNat(val_124)?; { let _x_127 = cborReadPrimitiveInitial(&(cursor), limits, _x_126)?; _x_127 } },
+    } } } },
+    } } } },
+    } },
+    } })
+}
+
+pub fn writeCborArrayHead(count: u64, limits: crate::CborLimits) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_24 = cborLimitsValid(limits); match _x_24 {
+        false => { let _x_36 = crate::CborError::BadLimits; { let _x_37 = Err(_x_36); _x_37 } },
+        true => { let _x_44 = (limits).maximumArrayItems; { let _x_45 = (count <= _x_44); match _x_45 {
+        false => { let _x_50 = crate::CborError::ValueLimit; { let _x_51 = Err(_x_50); _x_51 } },
+        true => { let _x_52 = 4; { let _x_53 = cborWriteHead(count, _x_52, limits)?; _x_53 } },
+    } } },
+    } })
+}
+
+pub fn writeCborPrimitive(value: &crate::CborValue, limits: crate::CborLimits) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_8 = cborLimitsValid(limits); match _x_8 {
+        false => { let _x_18 = crate::CborError::BadLimits; { let _x_19 = Err(_x_18); _x_19 } },
+        true => { let _x_17 = cborWritePrimitiveChecked(&(value), limits)?; _x_17 },
+    } })
 }
 
 pub fn formatInt64(value: i64) -> alloc::string::String {
@@ -9667,6 +11862,5947 @@ pub fn coverageValidPolicy() -> crate::ControlPolicy {
 
 pub fn coverageValidSubmission() -> crate::ControlSubmission {
     { let _x_1 = 1; { let _x_4 = 10; { let _x_7 = coverageOctets11Length32(); { let _x_8 = (_x_7).octets; { let _x_11 = coverageOctetsAALength32(); { let _x_12 = (_x_11).octets; { let _x_14 = coverageOctets01Length32(); { let _x_15 = (_x_14).octets; { let _x_16 = crate::ControlOrigin::Local; { let _x_17 = crate::ControlContribution { obligation: _x_1, control: _x_4, policy: _x_8.clone(), scope: alloc::string::String::from("control-scope"), version: alloc::string::String::from("1"), subject: _x_12.clone(), evidenceKind: alloc::string::String::from("accepted-test-evidence"), evidence: _x_15.clone(), origin: _x_16.clone() }; { let _x_18 = 2; { let _x_21 = 20; { let _x_24 = coverageOctetsBBLength32(); { let _x_25 = (_x_24).octets; { let _x_26 = coverageOctets02Length32(); { let _x_27 = (_x_26).octets; { let _x_28 = crate::ControlContribution { obligation: _x_18, control: _x_21, policy: _x_8.clone(), scope: alloc::string::String::from("control-scope"), version: alloc::string::String::from("1"), subject: _x_25.clone(), evidenceKind: alloc::string::String::from("accepted-test-evidence"), evidence: _x_27, origin: _x_16.clone() }; { let _x_29 = 3; { let _x_32 = coverageOctets03Length32(); { let _x_33 = (_x_32).octets; { let _x_34 = crate::ControlOrigin::Inherited { field_0: _x_1, field_1: _x_12.clone(), field_2: _x_15.clone() }; { let _x_35 = crate::ControlContribution { obligation: _x_29, control: _x_4, policy: _x_8.clone(), scope: alloc::string::String::from("control-scope"), version: alloc::string::String::from("1"), subject: _x_25.clone(), evidenceKind: alloc::string::String::from("accepted-test-evidence"), evidence: _x_33, origin: _x_34 }; { let _x_37 = alloc::vec![_x_35]; { let _x_38 = { let mut __list = (_x_28, _x_37); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_39 = { let mut __list = (_x_17, _x_38); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_40 = crate::ControlSubmission { contributions: _x_39 }; _x_40 } } } } } } } } } } } } } } } } } } } } } } } } } }
+}
+
+pub fn publicationLinkageBitBuckets(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: u64) -> Result<bool, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => (x_3 <= x_2),
+        _ => { let n_47 = (x_4).saturating_sub(1); { let _x_92 = (x_3 <= x_2); match _x_92 {
+        false => { let _x_121 = 0; { let _x_122 = 0; { let _x_123 = crate::PublicationBitMarks { word0: _x_122, word1: _x_122, word2: _x_122, word3: _x_122 }; { let _x_124 = 256; { let _x_125 = publicationLinkageBitChunks(&(x_1), _x_121, x_2, _x_123, _x_124)?; match _x_125 {
+        None => _x_92,
+        Some(val_127) => { let _x_128 = 256; { let _x_129 = core::convert::identity::<u64>(x_2).checked_add(_x_128).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4,) = (_x_129, n_47,); continue; } } },
+    } } } } } },
+        true => _x_92,
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageBitChunks(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: crate::PublicationBitMarks, mut x_5: u64) -> Result<Option<crate::PublicationBitMarks>, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => { let _x_101 = (x_1).len() as u64; { let _x_102 = (_x_101 <= x_2); match _x_102 {
+        false => None,
+        true => Some(x_4),
+    } } },
+        _ => { let n_52 = (x_5).saturating_sub(1); { let _x_118 = (x_1).len() as u64; { let _x_119 = (_x_118 <= x_2); match _x_119 {
+        false => { let _x_143 = 256; { let _x_144 = publicationLinkageBitRows(&(x_1), x_2, x_3, x_4, _x_143)?; match _x_144 {
+        None => _x_144,
+        Some(val_145) => { let _x_146 = 256; { let _x_147 = core::convert::identity::<u64>(x_2).checked_add(_x_146).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (_x_147, val_145, n_52,); continue; } } },
+    } } },
+        true => Some(x_4),
+    } } } },
+    }); }
+}
+
+pub fn publicationLinkageBitMark(marks: crate::PublicationBitMarks, offset: u64) -> Option<crate::PublicationBitMarks> {
+    { let _x_168 = 256; { let _x_171 = (offset < _x_168); match _x_171 {
+        false => None,
+        true => { let _x_328 = 64; { let _x_329 = 0; { let _x_330 = if _x_328 == 0 { _x_329 } else { offset % _x_328 }; { let _x_332 = 1; { let _x_333 = 63; { let _x_334 = publicationLinkageBitMaskLoop(_x_330, _x_332, _x_333); match _x_334 {
+        None => None,
+        Some(val_337) => { let _x_441 = 64; { let _x_442 = (offset < _x_441); match _x_442 {
+        false => { let _x_520 = 128; { let _x_521 = (offset < _x_520); match _x_521 {
+        false => { let _x_570 = 192; { let _x_571 = (offset < _x_570); match _x_571 {
+        false => { let _x_588 = (marks).word3; { let _x_589 = (_x_588 & val_337); { let _x_591 = 0; { let _x_592 = (_x_589 == _x_591); match _x_592 {
+        false => None,
+        true => { let _x_597 = (marks).word0; { let _x_598 = (marks).word1; { let _x_599 = (marks).word2; { let _x_601 = (marks).word3; { let _x_602 = (_x_601 | val_337); { let _x_603 = crate::PublicationBitMarks { word0: _x_597, word1: _x_598, word2: _x_599, word3: _x_602 }; { let _x_604 = Some(_x_603); _x_604 } } } } } } },
+    } } } } },
+        true => { let _x_617 = (marks).word2; { let _x_618 = (_x_617 & val_337); { let _x_620 = 0; { let _x_621 = (_x_618 == _x_620); match _x_621 {
+        false => None,
+        true => { let _x_626 = (marks).word0; { let _x_627 = (marks).word1; { let _x_629 = (marks).word2; { let _x_630 = (_x_629 | val_337); { let _x_631 = (marks).word3; { let _x_632 = crate::PublicationBitMarks { word0: _x_626, word1: _x_627, word2: _x_630, word3: _x_631 }; { let _x_633 = Some(_x_632); _x_633 } } } } } } },
+    } } } } },
+    } } },
+        true => { let _x_646 = (marks).word1; { let _x_647 = (_x_646 & val_337); { let _x_649 = 0; { let _x_650 = (_x_647 == _x_649); match _x_650 {
+        false => None,
+        true => { let _x_655 = (marks).word0; { let _x_657 = (marks).word1; { let _x_658 = (_x_657 | val_337); { let _x_659 = (marks).word2; { let _x_660 = (marks).word3; { let _x_661 = crate::PublicationBitMarks { word0: _x_655, word1: _x_658, word2: _x_659, word3: _x_660 }; { let _x_662 = Some(_x_661); _x_662 } } } } } } },
+    } } } } },
+    } } },
+        true => { let _x_675 = (marks).word0; { let _x_676 = (_x_675 & val_337); { let _x_678 = 0; { let _x_679 = (_x_676 == _x_678); match _x_679 {
+        false => None,
+        true => { let _x_685 = (marks).word0; { let _x_686 = (_x_685 | val_337); { let _x_687 = (marks).word1; { let _x_688 = (marks).word2; { let _x_689 = (marks).word3; { let _x_690 = crate::PublicationBitMarks { word0: _x_686, word1: _x_687, word2: _x_688, word3: _x_689 }; { let _x_691 = Some(_x_690); _x_691 } } } } } } },
+    } } } } },
+    } } },
+    } } } } } } },
+    } } }
+}
+
+pub fn publicationLinkageBitMaskLoop(mut x_1: u64, mut x_2: u64, mut x_3: u64) -> Option<u64> {
+    loop { return match x_3 {
+        0 => { let _x_70 = 0; { let _x_71 = (x_1 == _x_70); match _x_71 {
+        false => None,
+        true => Some(x_2),
+    } } },
+        _ => { let n_52 = (x_3).saturating_sub(1); match x_1 {
+        0 => Some(x_2),
+        _ => { let n_86 = (x_1).saturating_sub(1); { let _x_90 = 1; { let _x_91 = (x_2).checked_shl(_x_90); match _x_91 {
+        None => _x_91,
+        Some(val_93) => { (x_1, x_2, x_3,) = (n_86, val_93, n_52,); continue; },
+    } } } },
+    } },
+    }; }
+}
+
+pub fn publicationLinkageBitRows(x_1: &[u64], mut x_2: u64, x_3: u64, mut x_4: crate::PublicationBitMarks, mut x_5: u64) -> Result<Option<crate::PublicationBitMarks>, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => Some(x_4),
+        _ => { let n_84 = (x_5).saturating_sub(1); { let _x_181 = usize::try_from(x_2).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_181 {
+        None => Some(x_4),
+        Some(val_184) => { let _x_190 = (x_3 <= val_184); match _x_190 {
+        false => { let _y_192 = _x_190; match _y_192 {
+        false => { let _x_223 = 1; { let _x_224 = core::convert::identity::<u64>(x_2).checked_add(_x_223).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (_x_224, x_4, n_84,); continue; } } },
+        true => { let _x_227 = core::convert::identity::<u64>(val_184).saturating_sub(x_3); { let _x_228 = publicationLinkageBitMark(x_4, _x_227); match _x_228 {
+        None => _x_228,
+        Some(val_229) => { let _x_230 = 1; { let _x_231 = core::convert::identity::<u64>(x_2).checked_add(_x_230).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (_x_231, val_229, n_84,); continue; } } },
+    } } },
+    } },
+        true => { let _x_220 = 256; { let _x_221 = core::convert::identity::<u64>(x_3).checked_add(_x_220).ok_or(crate::ComputeError::AddOverflow)?; { let _x_222 = (val_184 < _x_221); { let prod_local_0 = _x_222; match prod_local_0 {
+        false => { let prod_local_1 = 1; { let prod_local_2 = core::convert::identity::<u64>(x_2).checked_add(prod_local_1).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (prod_local_2, x_4, n_84,); continue; } } },
+        true => { let prod_local_4 = core::convert::identity::<u64>(val_184).saturating_sub(x_3); { let prod_local_5 = publicationLinkageBitMark(x_4, prod_local_4); match prod_local_5 {
+        None => prod_local_5,
+        Some(prod_local_6) => { let prod_local_7 = 1; { let prod_local_8 = core::convert::identity::<u64>(x_2).checked_add(prod_local_7).ok_or(crate::ComputeError::AddOverflow)?; { (x_2, x_4, x_5,) = (prod_local_8, prod_local_6, n_84,); continue; } } },
+    } } },
+    } } } } },
+    } },
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageCollectIdChunksAcc(x_1: &[crate::PublicationIdsChunk], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    __prod_owned_36_publicationLinkageCollectIdChunksAcc(x_1, x_2, x_3, alloc::borrow::ToOwned::to_owned(x_4), x_5)
+}
+
+fn __prod_owned_36_publicationLinkageCollectIdChunksAcc(x_1: &[crate::PublicationIdsChunk], x_2: &crate::PublicationRecords, mut x_3: u64, mut x_4: alloc::vec::Vec<u64>, mut x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => { let _x_110 = (x_1).len() as u64; { let _x_111 = (_x_110 == x_3); match _x_111 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_111 },
+        true => crate::PublicationIndexBatch { indices: x_4, valid: _x_111 },
+    } } },
+        _ => { let n_80 = (x_5).saturating_sub(1); { let _x_149 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_149 {
+        None => { let _x_154 = true; crate::PublicationIndexBatch { indices: x_4, valid: _x_154 } },
+        Some(val_152) => { let _x_171 = (val_152).entries; { let _x_172 = 0; { let _x_174 = 256; { let _x_175 = __prod_owned_32_publicationLinkageCollectRowsAcc(&(_x_171), &(x_2), _x_172, alloc::vec::Vec::new(), _x_174)?; match _x_175 {
+        crate::PublicationIndexBatch { indices: indices_176, valid: valid_177 } => match valid_177 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: valid_177 },
+        true => { let _x_196 = 1; { let _x_197 = core::convert::identity::<u64>(x_3).checked_add(_x_196).ok_or(crate::ComputeError::AddOverflow)?; { let _x_199 = { let mut __append = (x_4, indices_176); __append.0.extend(__append.1); __append.0 }; { (x_3, x_4, x_5,) = (_x_197, _x_199, n_80,); continue; } } } },
+    },
+    } } } } },
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageCollectRowsAcc(x_1: &[alloc::string::String], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    __prod_owned_32_publicationLinkageCollectRowsAcc(x_1, x_2, x_3, alloc::borrow::ToOwned::to_owned(x_4), x_5)
+}
+
+fn __prod_owned_32_publicationLinkageCollectRowsAcc(x_1: &[alloc::string::String], x_2: &crate::PublicationRecords, mut x_3: u64, mut x_4: alloc::vec::Vec<u64>, mut x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => { let _x_104 = (x_1).len() as u64; { let _x_105 = (_x_104 == x_3); match _x_105 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_105 },
+        true => crate::PublicationIndexBatch { indices: x_4, valid: _x_105 },
+    } } },
+        _ => { let n_75 = (x_5).saturating_sub(1); { let _x_140 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_140 {
+        None => { let _x_145 = true; crate::PublicationIndexBatch { indices: x_4, valid: _x_145 } },
+        Some(val_143) => { let _x_159 = 0; { let _x_160 = publicationLinkagePublicationRecordsCount(&(x_2))?; { let _x_161 = 17; { let _x_162 = __prod_borrowed_publicationLinkageRecordIndex(&(x_2), (val_143).as_ref(), _x_159, _x_160, _x_161)?; match _x_162 {
+        None => { let _x_168 = false; crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_168 } },
+        Some(val_165) => { let _x_170 = 1; { let _x_171 = core::convert::identity::<u64>(x_3).checked_add(_x_170).ok_or(crate::ComputeError::AddOverflow)?; { let _x_174 = alloc::vec![val_165]; { let _x_175 = { let mut __append = (x_4, _x_174); __append.0.extend(__append.1); __append.0 }; { (x_3, x_4, x_5,) = (_x_171, _x_175, n_75,); continue; } } } } },
+    } } } } },
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageCollectServiceChunks(items: &[crate::PublicationServicesChunk], records: &crate::PublicationRecords, fuel: u64) -> Result<Option<alloc::vec::Vec<u64>>, crate::ComputeError> {
+    Ok({ let _x_14 = 0; { let _x_18 = __prod_owned_41_publicationLinkageCollectServiceChunksAcc(&(items), &(records), _x_14, alloc::vec::Vec::new(), fuel)?; match _x_18 {
+        crate::PublicationIndexBatch { indices: indices_19, valid: valid_20 } => match valid_20 {
+        false => None,
+        true => { let _x_32 = Some(indices_19); _x_32 },
+    },
+    } } })
+}
+
+pub fn publicationLinkageCollectServiceChunksAcc(x_1: &[crate::PublicationServicesChunk], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    __prod_owned_41_publicationLinkageCollectServiceChunksAcc(x_1, x_2, x_3, alloc::borrow::ToOwned::to_owned(x_4), x_5)
+}
+
+fn __prod_owned_41_publicationLinkageCollectServiceChunksAcc(x_1: &[crate::PublicationServicesChunk], x_2: &crate::PublicationRecords, mut x_3: u64, mut x_4: alloc::vec::Vec<u64>, mut x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => { let _x_110 = (x_1).len() as u64; { let _x_111 = (_x_110 == x_3); match _x_111 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_111 },
+        true => crate::PublicationIndexBatch { indices: x_4, valid: _x_111 },
+    } } },
+        _ => { let n_80 = (x_5).saturating_sub(1); { let _x_149 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_149 {
+        None => { let _x_154 = true; crate::PublicationIndexBatch { indices: x_4, valid: _x_154 } },
+        Some(val_152) => { let _x_171 = (val_152).entries; { let _x_172 = 0; { let _x_174 = 256; { let _x_175 = __prod_owned_39_publicationLinkageCollectServiceRowsAcc(&(_x_171), &(x_2), _x_172, alloc::vec::Vec::new(), _x_174)?; match _x_175 {
+        crate::PublicationIndexBatch { indices: indices_176, valid: valid_177 } => match valid_177 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: valid_177 },
+        true => { let _x_196 = 1; { let _x_197 = core::convert::identity::<u64>(x_3).checked_add(_x_196).ok_or(crate::ComputeError::AddOverflow)?; { let _x_199 = { let mut __append = (x_4, indices_176); __append.0.extend(__append.1); __append.0 }; { (x_3, x_4, x_5,) = (_x_197, _x_199, n_80,); continue; } } } },
+    },
+    } } } } },
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageCollectServiceRowsAcc(x_1: &[crate::PublicationService], x_2: &crate::PublicationRecords, x_3: u64, x_4: &[u64], x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    __prod_owned_39_publicationLinkageCollectServiceRowsAcc(x_1, x_2, x_3, alloc::borrow::ToOwned::to_owned(x_4), x_5)
+}
+
+fn __prod_owned_39_publicationLinkageCollectServiceRowsAcc(x_1: &[crate::PublicationService], x_2: &crate::PublicationRecords, mut x_3: u64, mut x_4: alloc::vec::Vec<u64>, mut x_5: u64) -> Result<crate::PublicationIndexBatch, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => { let _x_111 = (x_1).len() as u64; { let _x_112 = (_x_111 == x_3); match _x_112 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: _x_112 },
+        true => crate::PublicationIndexBatch { indices: x_4, valid: _x_112 },
+    } } },
+        _ => { let n_81 = (x_5).saturating_sub(1); { let _x_151 = usize::try_from(x_3).ok().and_then(|__index| (x_1).get(__index).cloned()); match _x_151 {
+        None => { let _x_156 = true; crate::PublicationIndexBatch { indices: x_4, valid: _x_156 } },
+        Some(val_154) => { let _x_173 = (val_154).components; { let _x_174 = (_x_173).chunks; { let _x_175 = 0; { let _x_177 = 256; { let _x_178 = __prod_owned_36_publicationLinkageCollectIdChunksAcc(&(_x_174), &(x_2), _x_175, alloc::vec::Vec::new(), _x_177)?; match _x_178 {
+        crate::PublicationIndexBatch { indices: indices_179, valid: valid_180 } => match valid_180 {
+        false => crate::PublicationIndexBatch { indices: alloc::vec::Vec::new(), valid: valid_180 },
+        true => { let _x_199 = 1; { let _x_200 = core::convert::identity::<u64>(x_3).checked_add(_x_199).ok_or(crate::ComputeError::AddOverflow)?; { let _x_202 = { let mut __append = (x_4, indices_179); __append.0.extend(__append.1); __append.0 }; { (x_3, x_4, x_5,) = (_x_200, _x_202, n_81,); continue; } } } },
+    },
+    } } } } } },
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageControlsPartition(ids: &crate::PublicationIds, records: &crate::PublicationRecords) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_21 = publicationLinkagePublicationIdsCount(&(ids))?; { let _x_22 = publicationLinkagePublicationRecordsCount(&(records))?; { let _x_23 = (_x_21 == _x_22); match _x_23 {
+        false => _x_23,
+        true => { let _x_38 = 65536; { let _x_39 = publicationLinkageControlsScan(&(ids), &(records), _x_38); _x_39 } },
+    } } } })
+}
+
+pub fn publicationLinkageControlsScan(x_1: &crate::PublicationIds, x_2: &crate::PublicationRecords, mut x_3: u64) -> bool {
+    loop { return match x_3 {
+        0 => true,
+        _ => { let n_62 = (x_3).saturating_sub(1); { let _x_101 = 65535; { let _x_102 = core::convert::identity::<u64>(_x_101).saturating_sub(n_62); { let _x_103 = publicationLinkagePublicationIdsAt(&(x_1), _x_102); match _x_103 {
+        None => true,
+        Some(val_106) => { let _x_120 = 65535; { let _x_121 = core::convert::identity::<u64>(_x_120).saturating_sub(n_62); { let _x_122 = publicationLinkagePublicationRecordsAt(&(x_2), _x_121); match _x_122 {
+        None => false,
+        Some(val_125) => { let _x_132 = (val_125).id; { let _x_133 = (val_106 == _x_132); match _x_133 {
+        false => _x_133,
+        true => { (x_3,) = (n_62,); continue; },
+    } } },
+    } } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationLinkageDigestValid(value: &[u8]) -> bool {
+    { let _x_4 = (value).len() as u64; { let _x_5 = 32; { let _x_8 = (_x_4 == _x_5); _x_8 } } }
+}
+
+pub fn publicationLinkageManifestScan(x_1: &crate::PublicationFiles, x_2: &[u8], mut x_3: u64) -> bool {
+    loop { return match x_3 {
+        0 => false,
+        _ => { let n_44 = (x_3).saturating_sub(1); { let _x_70 = 65535; { let _x_71 = core::convert::identity::<u64>(_x_70).saturating_sub(n_44); { let _x_72 = publicationLinkagePublicationFilesAt(&(x_1), _x_71); match _x_72 {
+        None => false,
+        Some(val_75) => { let _x_83 = (val_75).path; { let _x_85 = _x_83 == "manifest.json"; match _x_85 {
+        false => { (x_3,) = (n_44,); continue; },
+        true => { let _x_91 = (val_75).digest; (&(_x_91) == x_2) },
+    } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationLinkageMemberEqual(left: &crate::PublicationMember, right: &crate::PublicationMember) -> bool {
+    { let _x_22 = &(left).module; { let _x_23 = &(right).module; { let _x_24 = (_x_22 == _x_23); match _x_24 {
+        false => _x_24,
+        true => { let _x_40 = &(left).name; { let _x_41 = &(right).name; { let _x_42 = (_x_40 == _x_41); _x_42 } } },
+    } } } }
+}
+
+pub fn publicationLinkageMemberValid(value: &crate::PublicationMember) -> bool {
+    { let _x_20 = &(value).module; { let _x_21 = 2048; { let _x_24 = publicationLinkageTextValid((_x_20).as_ref(), _x_21); match _x_24 {
+        false => _x_24,
+        true => { let _x_40 = &(value).name; { let _x_41 = 2048; { let _x_42 = publicationLinkageTextValid((_x_40).as_ref(), _x_41); _x_42 } } },
+    } } } }
+}
+
+pub fn publicationLinkageMetadataValid(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_252 = &(closure).system; { let _x_253 = publicationLinkageMemberValid(&(_x_252)); match _x_253 {
+        false => _x_253,
+        true => { let _x_473 = &(closure).target; { let _x_474 = 128; { let _x_475 = publicationLinkageTextValid((_x_473).as_ref(), _x_474); match _x_475 {
+        false => _x_475,
+        true => { let _x_609 = &(closure).declaration; { let _x_610 = publicationDeclarationValid(&(_x_609)); match _x_610 {
+        false => _x_610,
+        true => { let _x_738 = &(closure).services; { let _x_739 = publicationLinkagePublicationServicesValid(&(_x_738))?; match _x_739 {
+        false => _x_739,
+        true => { let _x_859 = 0; { let _x_860 = &(closure).services; { let _x_861 = publicationLinkagePublicationServicesCount(&(_x_860))?; { let _x_862 = (_x_859 < _x_861); match _x_862 {
+        false => _x_862,
+        true => { let _x_976 = &(closure).controls; { let _x_977 = publicationLinkagePublicationIdsValid(&(_x_976))?; match _x_977 {
+        false => _x_977,
+        true => { let _x_1085 = &(closure).requirements; { let _x_1086 = publicationLinkageRequirementsValid(&(_x_1085))?; match _x_1086 {
+        false => _x_1086,
+        true => { let _x_1188 = &(capture).sourceLink; { let _x_1189 = publicationLinkageSourceValid(&(_x_1188)); match _x_1189 {
+        false => _x_1189,
+        true => { let _x_1285 = &(capture).components; { let _x_1286 = publicationLinkagePublicationRecordsValid(&(_x_1285))?; match _x_1286 {
+        false => _x_1286,
+        true => { let _x_1376 = &(capture).controls; { let _x_1377 = publicationLinkagePublicationRecordsValid(&(_x_1376))?; match _x_1377 {
+        false => _x_1377,
+        true => { let _x_1461 = &(capture).dependencies; { let _x_1462 = publicationLinkagePublicationRecordsValid(&(_x_1461))?; match _x_1462 {
+        false => _x_1462,
+        true => { let _x_1538 = &(capture).components; { let _x_1539 = &(_x_1538).chunks; { let _x_1540 = 256; { let _x_1541 = publicationLinkageSmallRecordChunks(&(_x_1539), _x_1540); match _x_1541 {
+        false => _x_1541,
+        true => { let _x_1609 = &(capture).controls; { let _x_1610 = &(_x_1609).chunks; { let _x_1611 = 256; { let _x_1612 = publicationLinkageSmallRecordChunks(&(_x_1610), _x_1611); match _x_1612 {
+        false => _x_1612,
+        true => { let _x_1674 = &(capture).verificationFiles; { let _x_1675 = publicationLinkagePublicationFilesValid(&(_x_1674))?; match _x_1675 {
+        false => _x_1675,
+        true => { let _x_1731 = &(capture).browserFiles; { let _x_1732 = publicationLinkagePublicationFilesValid(&(_x_1731))?; match _x_1732 {
+        false => _x_1732,
+        true => { let _x_1782 = &(capture).oracleAttestations; { let _x_1783 = publicationLinkagePublicationFilesValid(&(_x_1782))?; match _x_1783 {
+        false => _x_1783,
+        true => { let _x_1827 = &(capture).provenance; { let _x_1828 = publicationLinkageDigestValid((_x_1827).as_ref()); match _x_1828 {
+        false => _x_1828,
+        true => { let _x_1866 = &(capture).sdkLock; { let _x_1867 = publicationLinkageDigestValid((_x_1866).as_ref()); match _x_1867 {
+        false => _x_1867,
+        true => { let _x_1899 = &(capture).standardsLock; { let _x_1900 = publicationLinkageDigestValid((_x_1899).as_ref()); match _x_1900 {
+        false => _x_1900,
+        true => { let _x_1926 = &(capture).lexleanBuildManifest; { let _x_1927 = publicationLinkageDigestValid((_x_1926).as_ref()); match _x_1927 {
+        false => _x_1927,
+        true => { let _x_1947 = &(capture).lexleanAttestation; { let _x_1948 = publicationLinkageDigestValid((_x_1947).as_ref()); match _x_1948 {
+        false => _x_1948,
+        true => { let _x_1962 = &(capture).buildManifest; { let _x_1963 = publicationLinkageDigestValid((_x_1962).as_ref()); match _x_1963 {
+        false => _x_1963,
+        true => { let _x_1971 = &(capture).verificationManifest; { let _x_1972 = publicationLinkageDigestValid((_x_1971).as_ref()); match _x_1972 {
+        false => _x_1972,
+        true => { let _x_1976 = &(capture).releaseValidation; { let _x_1977 = publicationLinkageDigestValid((_x_1976).as_ref()); _x_1977 } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } } },
+    } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn publicationLinkagePublicationFilesAt(items: &crate::PublicationFiles, offset: u64) -> Option<crate::PublicationFile> {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationFilesAtChunks(&(_x_1), offset, _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationFilesAtChunks(x_1: &[crate::PublicationFilesChunk], x_2: u64, x_3: u64) -> Option<crate::PublicationFile> {
+    match x_3 {
+        0 => None,
+        _ => { let n_36 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => None,
+        [head_79, tail_80 @ ..] => { let _x_82 = 256; { let _x_83 = (x_2 < _x_82); match _x_83 {
+        false => { let _x_99 = core::convert::identity::<u64>(x_2).saturating_sub(_x_82); { let _x_100 = publicationLinkagePublicationFilesAtChunks(&(tail_80), _x_99, n_36); _x_100 } },
+        true => { let _x_102 = &(head_79).entries; { let _x_103 = usize::try_from(x_2).ok().and_then(|__index| (_x_102).get(__index).cloned()); _x_103 } },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationFilesCanonical(items: &crate::PublicationFiles) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationFilesShape(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationFilesCount(items: &crate::PublicationFiles) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationFilesCountChunks(&(_x_1), _x_2)?; _x_5 } } })
+}
+
+pub fn publicationLinkagePublicationFilesCountChunks(x_1: &[crate::PublicationFilesChunk], x_2: u64) -> Result<u64, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_48 = 0; _x_48 },
+        _ => { let n_32 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_56 = 0; _x_56 },
+        [head_57, tail_58 @ ..] => { let _x_61 = &(head_57).entries; { let _x_62 = (_x_61).len() as u64; { let _x_63 = publicationLinkagePublicationFilesCountChunks(&(tail_58), n_32)?; { let _x_64 = core::convert::identity::<u64>(_x_62).checked_add(_x_63).ok_or(crate::ComputeError::AddOverflow)?; _x_64 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationFilesScan(items: &crate::PublicationFiles) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = true; { let _x_4 = 0; { let _x_7 = crate::PublicationScan { valid: _x_2, previous: alloc::string::String::from(""), count: _x_4 }; { let _x_8 = 256; { let _x_11 = publicationLinkagePublicationFilesScanChunks(&(_x_1), &(_x_7), _x_8)?; _x_11 } } } } } })
+}
+
+pub fn publicationLinkagePublicationFilesScanChunks(x_1: &[crate::PublicationFilesChunk], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_66 = (x_1).len() as u64; { let _x_67 = 0; { let _x_68 = (_x_66 == _x_67); match _x_68 {
+        false => { let _x_74 = 0; { let _x_75 = crate::PublicationScan { valid: _x_68, previous: alloc::string::String::from(""), count: _x_74 }; _x_75 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_48 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_82, tail_83 @ ..] => { let _x_85 = &(head_82).entries; { let _x_86 = 256; { let _x_87 = publicationLinkagePublicationFilesScanRows(&(_x_85), &(x_2), _x_86)?; { let _x_88 = publicationLinkagePublicationFilesScanChunks(&(tail_83), &(_x_87), n_48)?; _x_88 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationFilesScanRows(x_1: &[crate::PublicationFile], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_181 = (x_1).len() as u64; { let _x_182 = 0; { let _x_183 = (_x_181 == _x_182); match _x_183 {
+        false => { let _x_189 = 0; { let _x_190 = crate::PublicationScan { valid: _x_183, previous: alloc::string::String::from(""), count: _x_189 }; _x_190 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_126 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_232, tail_233 @ ..] => { let _x_262 = (x_2).valid; match _x_262 {
+        false => { let _y_264 = _x_262; { let _x_265 = &(head_232).path; { let _x_266 = (x_2).count; { let _x_267 = 1; { let _x_268 = core::convert::identity::<u64>(_x_266).checked_add(_x_267).ok_or(crate::ComputeError::AddOverflow)?; { let _x_269 = crate::PublicationScan { valid: _y_264, previous: alloc::borrow::ToOwned::to_owned(_x_265), count: _x_268 }; { let _x_270 = publicationLinkagePublicationFilesScanRows(&(tail_233), &(_x_269), n_126)?; _x_270 } } } } } } },
+        true => { let _x_294 = &(head_232).path; { let _x_295 = 2048; { let _x_296 = publicationLinkageTextValid((_x_294).as_ref(), _x_295); match _x_296 {
+        false => { let prod_local_0 = _x_296; { let prod_local_1 = &(head_232).path; { let prod_local_2 = (x_2).count; { let prod_local_3 = 1; { let prod_local_4 = core::convert::identity::<u64>(prod_local_2).checked_add(prod_local_3).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_5 = crate::PublicationScan { valid: prod_local_0, previous: alloc::borrow::ToOwned::to_owned(prod_local_1), count: prod_local_4 }; { let prod_local_6 = publicationLinkagePublicationFilesScanRows(&(tail_233), &(prod_local_5), n_126)?; prod_local_6 } } } } } } },
+        true => { let _x_313 = &(x_2).previous; { let _x_314 = &(head_232).path; { let _x_315 = publicationLinkageTextLess((_x_313).as_ref(), (_x_314).as_ref()); match _x_315 {
+        false => { let prod_local_7 = _x_315; { let prod_local_8 = &(head_232).path; { let prod_local_9 = (x_2).count; { let prod_local_10 = 1; { let prod_local_11 = core::convert::identity::<u64>(prod_local_9).checked_add(prod_local_10).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_12 = crate::PublicationScan { valid: prod_local_7, previous: alloc::borrow::ToOwned::to_owned(prod_local_8), count: prod_local_11 }; { let prod_local_13 = publicationLinkagePublicationFilesScanRows(&(tail_233), &(prod_local_12), n_126)?; prod_local_13 } } } } } } },
+        true => { let _x_326 = &(head_232).digest; { let _x_327 = publicationLinkageDigestValid((_x_326).as_ref()); match _x_327 {
+        false => { let prod_local_14 = _x_327; { let prod_local_15 = &(head_232).path; { let prod_local_16 = (x_2).count; { let prod_local_17 = 1; { let prod_local_18 = core::convert::identity::<u64>(prod_local_16).checked_add(prod_local_17).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_19 = crate::PublicationScan { valid: prod_local_14, previous: alloc::borrow::ToOwned::to_owned(prod_local_15), count: prod_local_18 }; { let prod_local_20 = publicationLinkagePublicationFilesScanRows(&(tail_233), &(prod_local_19), n_126)?; prod_local_20 } } } } } } },
+        true => { let _x_331 = (x_2).count; { let _x_332 = 1; { let _x_333 = core::convert::identity::<u64>(_x_331).checked_add(_x_332).ok_or(crate::ComputeError::AddOverflow)?; { let _x_334 = 65536; { let _x_335 = (_x_333 <= _x_334); { let prod_local_21 = _x_335; { let prod_local_22 = &(head_232).path; { let prod_local_23 = (x_2).count; { let prod_local_24 = 1; { let prod_local_25 = core::convert::identity::<u64>(prod_local_23).checked_add(prod_local_24).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_26 = crate::PublicationScan { valid: prod_local_21, previous: alloc::borrow::ToOwned::to_owned(prod_local_22), count: prod_local_25 }; { let prod_local_27 = publicationLinkagePublicationFilesScanRows(&(tail_233), &(prod_local_26), n_126)?; prod_local_27 } } } } } } } } } } } },
+    } } },
+    } } } },
+    } } } },
+    } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationFilesShape(x_1: &[crate::PublicationFilesChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_139 = (x_1).len() as u64; { let _x_140 = 0; { let _x_141 = (_x_139 == _x_140); _x_141 } } },
+        _ => { let n_107 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_187 = true; _x_187 },
+        [head_188, tail_189 @ ..] => { let _x_226 = 0; { let _x_228 = &(head_188).entries; { let _x_229 = (_x_228).len() as u64; { let _x_230 = (_x_226 < _x_229); match _x_230 {
+        false => _x_230,
+        true => { let _x_261 = &(head_188).entries; { let _x_262 = (_x_261).len() as u64; { let _x_263 = 256; { let _x_264 = (_x_262 <= _x_263); match _x_264 {
+        false => _x_264,
+        true => { let _x_282 = (tail_189).len() as u64; { let _x_283 = 0; { let _x_284 = (_x_282 == _x_283); match _x_284 {
+        false => { let _x_298 = &(head_188).entries; { let _x_299 = (_x_298).len() as u64; { let _x_300 = 256; { let _x_301 = (_x_299 == _x_300); { let _y_286 = _x_301; match _y_286 {
+        false => _y_286,
+        true => { let _x_293 = publicationLinkagePublicationFilesShape(&(tail_189), n_107); _x_293 },
+    } } } } } },
+        true => { let prod_local_0 = _x_284; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = publicationLinkagePublicationFilesShape(&(tail_189), n_107); prod_local_1 },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationFilesValid(items: &crate::PublicationFiles) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationFilesCanonical(&(items)); match _x_17 {
+        false => _x_17,
+        true => { let _x_31 = publicationLinkagePublicationFilesScan(&(items))?; { let _x_32 = (_x_31).valid; _x_32 } },
+    } })
+}
+
+pub fn publicationLinkagePublicationIdsAt(items: &crate::PublicationIds, offset: u64) -> Option<alloc::string::String> {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationIdsAtChunks(&(_x_1), offset, _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationIdsAtChunks(x_1: &[crate::PublicationIdsChunk], x_2: u64, x_3: u64) -> Option<alloc::string::String> {
+    match x_3 {
+        0 => None,
+        _ => { let n_36 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => None,
+        [head_79, tail_80 @ ..] => { let _x_82 = 256; { let _x_83 = (x_2 < _x_82); match _x_83 {
+        false => { let _x_99 = core::convert::identity::<u64>(x_2).saturating_sub(_x_82); { let _x_100 = publicationLinkagePublicationIdsAtChunks(&(tail_80), _x_99, n_36); _x_100 } },
+        true => { let _x_102 = &(head_79).entries; { let _x_103 = usize::try_from(x_2).ok().and_then(|__index| (_x_102).get(__index).cloned()); _x_103 } },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationIdsCanonical(items: &crate::PublicationIds) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationIdsShape(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationIdsCount(items: &crate::PublicationIds) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationIdsCountChunks(&(_x_1), _x_2)?; _x_5 } } })
+}
+
+pub fn publicationLinkagePublicationIdsCountChunks(x_1: &[crate::PublicationIdsChunk], x_2: u64) -> Result<u64, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_48 = 0; _x_48 },
+        _ => { let n_32 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_56 = 0; _x_56 },
+        [head_57, tail_58 @ ..] => { let _x_61 = &(head_57).entries; { let _x_62 = (_x_61).len() as u64; { let _x_63 = publicationLinkagePublicationIdsCountChunks(&(tail_58), n_32)?; { let _x_64 = core::convert::identity::<u64>(_x_62).checked_add(_x_63).ok_or(crate::ComputeError::AddOverflow)?; _x_64 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationIdsScan(items: &crate::PublicationIds) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = true; { let _x_4 = 0; { let _x_7 = crate::PublicationScan { valid: _x_2, previous: alloc::string::String::from(""), count: _x_4 }; { let _x_8 = 256; { let _x_11 = publicationLinkagePublicationIdsScanChunks(&(_x_1), &(_x_7), _x_8)?; _x_11 } } } } } })
+}
+
+pub fn publicationLinkagePublicationIdsScanChunks(x_1: &[crate::PublicationIdsChunk], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_66 = (x_1).len() as u64; { let _x_67 = 0; { let _x_68 = (_x_66 == _x_67); match _x_68 {
+        false => { let _x_74 = 0; { let _x_75 = crate::PublicationScan { valid: _x_68, previous: alloc::string::String::from(""), count: _x_74 }; _x_75 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_48 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_82, tail_83 @ ..] => { let _x_85 = &(head_82).entries; { let _x_86 = 256; { let _x_87 = publicationLinkagePublicationIdsScanRows(&(_x_85), &(x_2), _x_86)?; { let _x_88 = publicationLinkagePublicationIdsScanChunks(&(tail_83), &(_x_87), n_48)?; _x_88 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationIdsScanRows(x_1: &[alloc::string::String], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_175 = (x_1).len() as u64; { let _x_176 = 0; { let _x_177 = (_x_175 == _x_176); match _x_177 {
+        false => { let _x_183 = 0; { let _x_184 = crate::PublicationScan { valid: _x_177, previous: alloc::string::String::from(""), count: _x_183 }; _x_184 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_122 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_220, tail_221 @ ..] => { let _x_245 = (x_2).valid; match _x_245 {
+        false => { let _y_247 = _x_245; { let _x_248 = (x_2).count; { let _x_249 = 1; { let _x_250 = core::convert::identity::<u64>(_x_248).checked_add(_x_249).ok_or(crate::ComputeError::AddOverflow)?; { let _x_251 = crate::PublicationScan { valid: _y_247, previous: alloc::borrow::ToOwned::to_owned(head_220), count: _x_250 }; { let _x_252 = publicationLinkagePublicationIdsScanRows(&(tail_221), &(_x_251), n_122)?; _x_252 } } } } } },
+        true => { let _x_272 = 128; { let _x_273 = publicationLinkageTextValid((head_220).as_ref(), _x_272); match _x_273 {
+        false => { let prod_local_0 = _x_273; { let prod_local_1 = (x_2).count; { let prod_local_2 = 1; { let prod_local_3 = core::convert::identity::<u64>(prod_local_1).checked_add(prod_local_2).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_4 = crate::PublicationScan { valid: prod_local_0, previous: alloc::borrow::ToOwned::to_owned(head_220), count: prod_local_3 }; { let prod_local_5 = publicationLinkagePublicationIdsScanRows(&(tail_221), &(prod_local_4), n_122)?; prod_local_5 } } } } } },
+        true => { let _x_287 = &(x_2).previous; { let _x_288 = publicationLinkageTextLess((_x_287).as_ref(), (head_220).as_ref()); match _x_288 {
+        false => { let prod_local_6 = _x_288; { let prod_local_7 = (x_2).count; { let prod_local_8 = 1; { let prod_local_9 = core::convert::identity::<u64>(prod_local_7).checked_add(prod_local_8).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_10 = crate::PublicationScan { valid: prod_local_6, previous: alloc::borrow::ToOwned::to_owned(head_220), count: prod_local_9 }; { let prod_local_11 = publicationLinkagePublicationIdsScanRows(&(tail_221), &(prod_local_10), n_122)?; prod_local_11 } } } } } },
+        true => { let _x_301 = (x_2).count; { let _x_302 = 1; { let _x_303 = core::convert::identity::<u64>(_x_301).checked_add(_x_302).ok_or(crate::ComputeError::AddOverflow)?; { let _x_304 = 65536; { let _x_305 = (_x_303 <= _x_304); { let prod_local_12 = _x_305; { let prod_local_13 = (x_2).count; { let prod_local_14 = 1; { let prod_local_15 = core::convert::identity::<u64>(prod_local_13).checked_add(prod_local_14).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_16 = crate::PublicationScan { valid: prod_local_12, previous: alloc::borrow::ToOwned::to_owned(head_220), count: prod_local_15 }; { let prod_local_17 = publicationLinkagePublicationIdsScanRows(&(tail_221), &(prod_local_16), n_122)?; prod_local_17 } } } } } } } } } } },
+    } } },
+    } } },
+    } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationIdsShape(x_1: &[crate::PublicationIdsChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_139 = (x_1).len() as u64; { let _x_140 = 0; { let _x_141 = (_x_139 == _x_140); _x_141 } } },
+        _ => { let n_107 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_187 = true; _x_187 },
+        [head_188, tail_189 @ ..] => { let _x_226 = 0; { let _x_228 = &(head_188).entries; { let _x_229 = (_x_228).len() as u64; { let _x_230 = (_x_226 < _x_229); match _x_230 {
+        false => _x_230,
+        true => { let _x_261 = &(head_188).entries; { let _x_262 = (_x_261).len() as u64; { let _x_263 = 256; { let _x_264 = (_x_262 <= _x_263); match _x_264 {
+        false => _x_264,
+        true => { let _x_282 = (tail_189).len() as u64; { let _x_283 = 0; { let _x_284 = (_x_282 == _x_283); match _x_284 {
+        false => { let _x_298 = &(head_188).entries; { let _x_299 = (_x_298).len() as u64; { let _x_300 = 256; { let _x_301 = (_x_299 == _x_300); { let _y_286 = _x_301; match _y_286 {
+        false => _y_286,
+        true => { let _x_293 = publicationLinkagePublicationIdsShape(&(tail_189), n_107); _x_293 },
+    } } } } } },
+        true => { let prod_local_0 = _x_284; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = publicationLinkagePublicationIdsShape(&(tail_189), n_107); prod_local_1 },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationIdsValid(items: &crate::PublicationIds) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationIdsCanonical(&(items)); match _x_17 {
+        false => _x_17,
+        true => { let _x_31 = publicationLinkagePublicationIdsScan(&(items))?; { let _x_32 = (_x_31).valid; _x_32 } },
+    } })
+}
+
+pub fn publicationLinkagePublicationRecordsAt(items: &crate::PublicationRecords, offset: u64) -> Option<crate::PublicationRecord> {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationRecordsAtChunks(&(_x_1), offset, _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationRecordsAtChunks(x_1: &[crate::PublicationRecordsChunk], x_2: u64, x_3: u64) -> Option<crate::PublicationRecord> {
+    match x_3 {
+        0 => None,
+        _ => { let n_36 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => None,
+        [head_79, tail_80 @ ..] => { let _x_82 = 256; { let _x_83 = (x_2 < _x_82); match _x_83 {
+        false => { let _x_99 = core::convert::identity::<u64>(x_2).saturating_sub(_x_82); { let _x_100 = publicationLinkagePublicationRecordsAtChunks(&(tail_80), _x_99, n_36); _x_100 } },
+        true => { let _x_102 = &(head_79).entries; { let _x_103 = usize::try_from(x_2).ok().and_then(|__index| (_x_102).get(__index).cloned()); _x_103 } },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationRecordsCanonical(items: &crate::PublicationRecords) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationRecordsShape(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationRecordsCount(items: &crate::PublicationRecords) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationRecordsCountChunks(&(_x_1), _x_2)?; _x_5 } } })
+}
+
+pub fn publicationLinkagePublicationRecordsCountChunks(x_1: &[crate::PublicationRecordsChunk], x_2: u64) -> Result<u64, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_48 = 0; _x_48 },
+        _ => { let n_32 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_56 = 0; _x_56 },
+        [head_57, tail_58 @ ..] => { let _x_61 = &(head_57).entries; { let _x_62 = (_x_61).len() as u64; { let _x_63 = publicationLinkagePublicationRecordsCountChunks(&(tail_58), n_32)?; { let _x_64 = core::convert::identity::<u64>(_x_62).checked_add(_x_63).ok_or(crate::ComputeError::AddOverflow)?; _x_64 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationRecordsScan(items: &crate::PublicationRecords) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = true; { let _x_4 = 0; { let _x_7 = crate::PublicationScan { valid: _x_2, previous: alloc::string::String::from(""), count: _x_4 }; { let _x_8 = 256; { let _x_11 = publicationLinkagePublicationRecordsScanChunks(&(_x_1), &(_x_7), _x_8)?; _x_11 } } } } } })
+}
+
+pub fn publicationLinkagePublicationRecordsScanChunks(x_1: &[crate::PublicationRecordsChunk], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_66 = (x_1).len() as u64; { let _x_67 = 0; { let _x_68 = (_x_66 == _x_67); match _x_68 {
+        false => { let _x_74 = 0; { let _x_75 = crate::PublicationScan { valid: _x_68, previous: alloc::string::String::from(""), count: _x_74 }; _x_75 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_48 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_82, tail_83 @ ..] => { let _x_85 = &(head_82).entries; { let _x_86 = 256; { let _x_87 = publicationLinkagePublicationRecordsScanRows(&(_x_85), &(x_2), _x_86)?; { let _x_88 = publicationLinkagePublicationRecordsScanChunks(&(tail_83), &(_x_87), n_48)?; _x_88 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationRecordsScanRows(x_1: &[crate::PublicationRecord], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_181 = (x_1).len() as u64; { let _x_182 = 0; { let _x_183 = (_x_181 == _x_182); match _x_183 {
+        false => { let _x_189 = 0; { let _x_190 = crate::PublicationScan { valid: _x_183, previous: alloc::string::String::from(""), count: _x_189 }; _x_190 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_126 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_232, tail_233 @ ..] => { let _x_262 = (x_2).valid; match _x_262 {
+        false => { let _y_264 = _x_262; { let _x_265 = &(head_232).id; { let _x_266 = (x_2).count; { let _x_267 = 1; { let _x_268 = core::convert::identity::<u64>(_x_266).checked_add(_x_267).ok_or(crate::ComputeError::AddOverflow)?; { let _x_269 = crate::PublicationScan { valid: _y_264, previous: alloc::borrow::ToOwned::to_owned(_x_265), count: _x_268 }; { let _x_270 = publicationLinkagePublicationRecordsScanRows(&(tail_233), &(_x_269), n_126)?; _x_270 } } } } } } },
+        true => { let _x_294 = &(head_232).id; { let _x_295 = 2048; { let _x_296 = publicationLinkageTextValid((_x_294).as_ref(), _x_295); match _x_296 {
+        false => { let prod_local_0 = _x_296; { let prod_local_1 = &(head_232).id; { let prod_local_2 = (x_2).count; { let prod_local_3 = 1; { let prod_local_4 = core::convert::identity::<u64>(prod_local_2).checked_add(prod_local_3).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_5 = crate::PublicationScan { valid: prod_local_0, previous: alloc::borrow::ToOwned::to_owned(prod_local_1), count: prod_local_4 }; { let prod_local_6 = publicationLinkagePublicationRecordsScanRows(&(tail_233), &(prod_local_5), n_126)?; prod_local_6 } } } } } } },
+        true => { let _x_313 = &(x_2).previous; { let _x_314 = &(head_232).id; { let _x_315 = publicationLinkageTextLess((_x_313).as_ref(), (_x_314).as_ref()); match _x_315 {
+        false => { let prod_local_7 = _x_315; { let prod_local_8 = &(head_232).id; { let prod_local_9 = (x_2).count; { let prod_local_10 = 1; { let prod_local_11 = core::convert::identity::<u64>(prod_local_9).checked_add(prod_local_10).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_12 = crate::PublicationScan { valid: prod_local_7, previous: alloc::borrow::ToOwned::to_owned(prod_local_8), count: prod_local_11 }; { let prod_local_13 = publicationLinkagePublicationRecordsScanRows(&(tail_233), &(prod_local_12), n_126)?; prod_local_13 } } } } } } },
+        true => { let _x_326 = &(head_232).digest; { let _x_327 = publicationLinkageDigestValid((_x_326).as_ref()); match _x_327 {
+        false => { let prod_local_14 = _x_327; { let prod_local_15 = &(head_232).id; { let prod_local_16 = (x_2).count; { let prod_local_17 = 1; { let prod_local_18 = core::convert::identity::<u64>(prod_local_16).checked_add(prod_local_17).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_19 = crate::PublicationScan { valid: prod_local_14, previous: alloc::borrow::ToOwned::to_owned(prod_local_15), count: prod_local_18 }; { let prod_local_20 = publicationLinkagePublicationRecordsScanRows(&(tail_233), &(prod_local_19), n_126)?; prod_local_20 } } } } } } },
+        true => { let _x_331 = (x_2).count; { let _x_332 = 1; { let _x_333 = core::convert::identity::<u64>(_x_331).checked_add(_x_332).ok_or(crate::ComputeError::AddOverflow)?; { let _x_334 = 65536; { let _x_335 = (_x_333 <= _x_334); { let prod_local_21 = _x_335; { let prod_local_22 = &(head_232).id; { let prod_local_23 = (x_2).count; { let prod_local_24 = 1; { let prod_local_25 = core::convert::identity::<u64>(prod_local_23).checked_add(prod_local_24).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_26 = crate::PublicationScan { valid: prod_local_21, previous: alloc::borrow::ToOwned::to_owned(prod_local_22), count: prod_local_25 }; { let prod_local_27 = publicationLinkagePublicationRecordsScanRows(&(tail_233), &(prod_local_26), n_126)?; prod_local_27 } } } } } } } } } } } },
+    } } },
+    } } } },
+    } } } },
+    } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationRecordsShape(x_1: &[crate::PublicationRecordsChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_139 = (x_1).len() as u64; { let _x_140 = 0; { let _x_141 = (_x_139 == _x_140); _x_141 } } },
+        _ => { let n_107 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_187 = true; _x_187 },
+        [head_188, tail_189 @ ..] => { let _x_226 = 0; { let _x_228 = &(head_188).entries; { let _x_229 = (_x_228).len() as u64; { let _x_230 = (_x_226 < _x_229); match _x_230 {
+        false => _x_230,
+        true => { let _x_261 = &(head_188).entries; { let _x_262 = (_x_261).len() as u64; { let _x_263 = 256; { let _x_264 = (_x_262 <= _x_263); match _x_264 {
+        false => _x_264,
+        true => { let _x_282 = (tail_189).len() as u64; { let _x_283 = 0; { let _x_284 = (_x_282 == _x_283); match _x_284 {
+        false => { let _x_298 = &(head_188).entries; { let _x_299 = (_x_298).len() as u64; { let _x_300 = 256; { let _x_301 = (_x_299 == _x_300); { let _y_286 = _x_301; match _y_286 {
+        false => _y_286,
+        true => { let _x_293 = publicationLinkagePublicationRecordsShape(&(tail_189), n_107); _x_293 },
+    } } } } } },
+        true => { let prod_local_0 = _x_284; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = publicationLinkagePublicationRecordsShape(&(tail_189), n_107); prod_local_1 },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationRecordsValid(items: &crate::PublicationRecords) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationRecordsCanonical(&(items)); match _x_17 {
+        false => _x_17,
+        true => { let _x_31 = publicationLinkagePublicationRecordsScan(&(items))?; { let _x_32 = (_x_31).valid; _x_32 } },
+    } })
+}
+
+pub fn publicationLinkagePublicationRequirementsAt(items: &crate::PublicationRequirements, offset: u64) -> Option<crate::PublicationRequirement> {
+    { let _x_1 = &(items).chunks; { let _x_2 = 64; { let _x_5 = publicationLinkagePublicationRequirementsAtChunks(&(_x_1), offset, _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationRequirementsAtChunks(x_1: &[crate::PublicationRequirementsChunk], x_2: u64, x_3: u64) -> Option<crate::PublicationRequirement> {
+    match x_3 {
+        0 => None,
+        _ => { let n_36 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => None,
+        [head_79, tail_80 @ ..] => { let _x_82 = 64; { let _x_83 = (x_2 < _x_82); match _x_83 {
+        false => { let _x_99 = core::convert::identity::<u64>(x_2).saturating_sub(_x_82); { let _x_100 = publicationLinkagePublicationRequirementsAtChunks(&(tail_80), _x_99, n_36); _x_100 } },
+        true => { let _x_102 = &(head_79).entries; { let _x_103 = usize::try_from(x_2).ok().and_then(|__index| (_x_102).get(__index).cloned()); _x_103 } },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationRequirementsCanonical(items: &crate::PublicationRequirements) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 64; { let _x_5 = publicationLinkagePublicationRequirementsShape(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationRequirementsCount(items: &crate::PublicationRequirements) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = 64; { let _x_5 = publicationLinkagePublicationRequirementsCountChunks(&(_x_1), _x_2)?; _x_5 } } })
+}
+
+pub fn publicationLinkagePublicationRequirementsCountChunks(x_1: &[crate::PublicationRequirementsChunk], x_2: u64) -> Result<u64, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_48 = 0; _x_48 },
+        _ => { let n_32 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_56 = 0; _x_56 },
+        [head_57, tail_58 @ ..] => { let _x_61 = &(head_57).entries; { let _x_62 = (_x_61).len() as u64; { let _x_63 = publicationLinkagePublicationRequirementsCountChunks(&(tail_58), n_32)?; { let _x_64 = core::convert::identity::<u64>(_x_62).checked_add(_x_63).ok_or(crate::ComputeError::AddOverflow)?; _x_64 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationRequirementsShape(x_1: &[crate::PublicationRequirementsChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_139 = (x_1).len() as u64; { let _x_140 = 0; { let _x_141 = (_x_139 == _x_140); _x_141 } } },
+        _ => { let n_107 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_187 = true; _x_187 },
+        [head_188, tail_189 @ ..] => { let _x_226 = 0; { let _x_228 = &(head_188).entries; { let _x_229 = (_x_228).len() as u64; { let _x_230 = (_x_226 < _x_229); match _x_230 {
+        false => _x_230,
+        true => { let _x_261 = &(head_188).entries; { let _x_262 = (_x_261).len() as u64; { let _x_263 = 64; { let _x_264 = (_x_262 <= _x_263); match _x_264 {
+        false => _x_264,
+        true => { let _x_282 = (tail_189).len() as u64; { let _x_283 = 0; { let _x_284 = (_x_282 == _x_283); match _x_284 {
+        false => { let _x_298 = &(head_188).entries; { let _x_299 = (_x_298).len() as u64; { let _x_300 = 64; { let _x_301 = (_x_299 == _x_300); { let _y_286 = _x_301; match _y_286 {
+        false => _y_286,
+        true => { let _x_293 = publicationLinkagePublicationRequirementsShape(&(tail_189), n_107); _x_293 },
+    } } } } } },
+        true => { let prod_local_0 = _x_284; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = publicationLinkagePublicationRequirementsShape(&(tail_189), n_107); prod_local_1 },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationServicesCanonical(items: &crate::PublicationServices) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationServicesShape(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkagePublicationServicesCount(items: &crate::PublicationServices) -> Result<u64, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = 256; { let _x_5 = publicationLinkagePublicationServicesCountChunks(&(_x_1), _x_2)?; _x_5 } } })
+}
+
+pub fn publicationLinkagePublicationServicesCountChunks(x_1: &[crate::PublicationServicesChunk], x_2: u64) -> Result<u64, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_48 = 0; _x_48 },
+        _ => { let n_32 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_56 = 0; _x_56 },
+        [head_57, tail_58 @ ..] => { let _x_61 = &(head_57).entries; { let _x_62 = (_x_61).len() as u64; { let _x_63 = publicationLinkagePublicationServicesCountChunks(&(tail_58), n_32)?; { let _x_64 = core::convert::identity::<u64>(_x_62).checked_add(_x_63).ok_or(crate::ComputeError::AddOverflow)?; _x_64 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationServicesScan(items: &crate::PublicationServices) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok({ let _x_1 = &(items).chunks; { let _x_2 = true; { let _x_4 = 0; { let _x_7 = crate::PublicationScan { valid: _x_2, previous: alloc::string::String::from(""), count: _x_4 }; { let _x_8 = 256; { let _x_11 = publicationLinkagePublicationServicesScanChunks(&(_x_1), &(_x_7), _x_8)?; _x_11 } } } } } })
+}
+
+pub fn publicationLinkagePublicationServicesScanChunks(x_1: &[crate::PublicationServicesChunk], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_66 = (x_1).len() as u64; { let _x_67 = 0; { let _x_68 = (_x_66 == _x_67); match _x_68 {
+        false => { let _x_74 = 0; { let _x_75 = crate::PublicationScan { valid: _x_68, previous: alloc::string::String::from(""), count: _x_74 }; _x_75 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_48 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_82, tail_83 @ ..] => { let _x_85 = &(head_82).entries; { let _x_86 = 256; { let _x_87 = publicationLinkagePublicationServicesScanRows(&(_x_85), &(x_2), _x_86)?; { let _x_88 = publicationLinkagePublicationServicesScanChunks(&(tail_83), &(_x_87), n_48)?; _x_88 } } } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationServicesScanRows(x_1: &[crate::PublicationService], x_2: &crate::PublicationScan, x_3: u64) -> Result<crate::PublicationScan, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_217 = (x_1).len() as u64; { let _x_218 = 0; { let _x_219 = (_x_217 == _x_218); match _x_219 {
+        false => { let _x_225 = 0; { let _x_226 = crate::PublicationScan { valid: _x_219, previous: alloc::string::String::from(""), count: _x_225 }; _x_226 } },
+        true => alloc::borrow::ToOwned::to_owned(x_2),
+    } } } },
+        _ => { let n_154 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => alloc::borrow::ToOwned::to_owned(x_2),
+        [head_281, tail_282 @ ..] => { let _x_323 = (x_2).valid; match _x_323 {
+        false => { let _y_325 = _x_323; { let _x_326 = &(head_281).id; { let _x_327 = (x_2).count; { let _x_328 = &(head_281).components; { let _x_329 = publicationLinkagePublicationIdsCount(&(_x_328))?; { let _x_330 = core::convert::identity::<u64>(_x_327).checked_add(_x_329).ok_or(crate::ComputeError::AddOverflow)?; { let _x_331 = crate::PublicationScan { valid: _y_325, previous: alloc::borrow::ToOwned::to_owned(_x_326), count: _x_330 }; { let _x_332 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(_x_331), n_154)?; _x_332 } } } } } } } },
+        true => { let _x_368 = &(head_281).id; { let _x_369 = 128; { let _x_370 = publicationLinkageTextValid((_x_368).as_ref(), _x_369); match _x_370 {
+        false => { let prod_local_0 = _x_370; { let prod_local_1 = &(head_281).id; { let prod_local_2 = (x_2).count; { let prod_local_3 = &(head_281).components; { let prod_local_4 = publicationLinkagePublicationIdsCount(&(prod_local_3))?; { let prod_local_5 = core::convert::identity::<u64>(prod_local_2).checked_add(prod_local_4).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_6 = crate::PublicationScan { valid: prod_local_0, previous: alloc::borrow::ToOwned::to_owned(prod_local_1), count: prod_local_5 }; { let prod_local_7 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(prod_local_6), n_154)?; prod_local_7 } } } } } } } },
+        true => { let _x_399 = &(x_2).previous; { let _x_400 = &(head_281).id; { let _x_401 = publicationLinkageTextLess((_x_399).as_ref(), (_x_400).as_ref()); match _x_401 {
+        false => { let prod_local_8 = _x_401; { let prod_local_9 = &(head_281).id; { let prod_local_10 = (x_2).count; { let prod_local_11 = &(head_281).components; { let prod_local_12 = publicationLinkagePublicationIdsCount(&(prod_local_11))?; { let prod_local_13 = core::convert::identity::<u64>(prod_local_10).checked_add(prod_local_12).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_14 = crate::PublicationScan { valid: prod_local_8, previous: alloc::borrow::ToOwned::to_owned(prod_local_9), count: prod_local_13 }; { let prod_local_15 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(prod_local_14), n_154)?; prod_local_15 } } } } } } } },
+        true => { let _x_419 = &(head_281).components; { let _x_420 = publicationLinkagePublicationIdsValid(&(_x_419))?; match _x_420 {
+        false => { let _y_422 = _x_420; match _y_422 {
+        false => { let prod_local_16 = _y_422; { let prod_local_17 = &(head_281).id; { let prod_local_18 = (x_2).count; { let prod_local_19 = &(head_281).components; { let prod_local_20 = publicationLinkagePublicationIdsCount(&(prod_local_19))?; { let prod_local_21 = core::convert::identity::<u64>(prod_local_18).checked_add(prod_local_20).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_22 = crate::PublicationScan { valid: prod_local_16, previous: alloc::borrow::ToOwned::to_owned(prod_local_17), count: prod_local_21 }; { let prod_local_23 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(prod_local_22), n_154)?; prod_local_23 } } } } } } } },
+        true => { let _x_429 = (x_2).count; { let _x_430 = &(head_281).components; { let _x_431 = publicationLinkagePublicationIdsCount(&(_x_430))?; { let _x_432 = core::convert::identity::<u64>(_x_429).checked_add(_x_431).ok_or(crate::ComputeError::AddOverflow)?; { let _x_433 = 65536; { let _x_434 = (_x_432 <= _x_433); { let prod_local_24 = _x_434; { let prod_local_25 = &(head_281).id; { let prod_local_26 = (x_2).count; { let prod_local_27 = &(head_281).components; { let prod_local_28 = publicationLinkagePublicationIdsCount(&(prod_local_27))?; { let prod_local_29 = core::convert::identity::<u64>(prod_local_26).checked_add(prod_local_28).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_30 = crate::PublicationScan { valid: prod_local_24, previous: alloc::borrow::ToOwned::to_owned(prod_local_25), count: prod_local_29 }; { let prod_local_31 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(prod_local_30), n_154)?; prod_local_31 } } } } } } } } } } } } } },
+    } },
+        true => { let _x_436 = 0; { let _x_437 = &(head_281).components; { let _x_438 = publicationLinkagePublicationIdsCount(&(_x_437))?; { let _x_439 = (_x_436 < _x_438); { let prod_local_32 = _x_439; match prod_local_32 {
+        false => { let prod_local_33 = prod_local_32; { let prod_local_34 = &(head_281).id; { let prod_local_35 = (x_2).count; { let prod_local_36 = &(head_281).components; { let prod_local_37 = publicationLinkagePublicationIdsCount(&(prod_local_36))?; { let prod_local_38 = core::convert::identity::<u64>(prod_local_35).checked_add(prod_local_37).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_39 = crate::PublicationScan { valid: prod_local_33, previous: alloc::borrow::ToOwned::to_owned(prod_local_34), count: prod_local_38 }; { let prod_local_40 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(prod_local_39), n_154)?; prod_local_40 } } } } } } } },
+        true => { let prod_local_41 = (x_2).count; { let prod_local_42 = &(head_281).components; { let prod_local_43 = publicationLinkagePublicationIdsCount(&(prod_local_42))?; { let prod_local_44 = core::convert::identity::<u64>(prod_local_41).checked_add(prod_local_43).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_45 = 65536; { let prod_local_46 = (prod_local_44 <= prod_local_45); { let prod_local_47 = prod_local_46; { let prod_local_48 = &(head_281).id; { let prod_local_49 = (x_2).count; { let prod_local_50 = &(head_281).components; { let prod_local_51 = publicationLinkagePublicationIdsCount(&(prod_local_50))?; { let prod_local_52 = core::convert::identity::<u64>(prod_local_49).checked_add(prod_local_51).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_53 = crate::PublicationScan { valid: prod_local_47, previous: alloc::borrow::ToOwned::to_owned(prod_local_48), count: prod_local_52 }; { let prod_local_54 = publicationLinkagePublicationServicesScanRows(&(tail_282), &(prod_local_53), n_154)?; prod_local_54 } } } } } } } } } } } } } },
+    } } } } } },
+    } } },
+    } } } },
+    } } } },
+    } },
+    } },
+    })
+}
+
+pub fn publicationLinkagePublicationServicesShape(x_1: &[crate::PublicationServicesChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_139 = (x_1).len() as u64; { let _x_140 = 0; { let _x_141 = (_x_139 == _x_140); _x_141 } } },
+        _ => { let n_107 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_187 = true; _x_187 },
+        [head_188, tail_189 @ ..] => { let _x_226 = 0; { let _x_228 = &(head_188).entries; { let _x_229 = (_x_228).len() as u64; { let _x_230 = (_x_226 < _x_229); match _x_230 {
+        false => _x_230,
+        true => { let _x_261 = &(head_188).entries; { let _x_262 = (_x_261).len() as u64; { let _x_263 = 256; { let _x_264 = (_x_262 <= _x_263); match _x_264 {
+        false => _x_264,
+        true => { let _x_282 = (tail_189).len() as u64; { let _x_283 = 0; { let _x_284 = (_x_282 == _x_283); match _x_284 {
+        false => { let _x_298 = &(head_188).entries; { let _x_299 = (_x_298).len() as u64; { let _x_300 = 256; { let _x_301 = (_x_299 == _x_300); { let _y_286 = _x_301; match _y_286 {
+        false => _y_286,
+        true => { let _x_293 = publicationLinkagePublicationServicesShape(&(tail_189), n_107); _x_293 },
+    } } } } } },
+        true => { let prod_local_0 = _x_284; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = publicationLinkagePublicationServicesShape(&(tail_189), n_107); prod_local_1 },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkagePublicationServicesValid(items: &crate::PublicationServices) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationServicesCanonical(&(items)); match _x_17 {
+        false => _x_17,
+        true => { let _x_31 = publicationLinkagePublicationServicesScan(&(items))?; { let _x_32 = (_x_31).valid; _x_32 } },
+    } })
+}
+
+pub fn publicationLinkageRecordCompareAt(records: &crate::PublicationRecords, id: alloc::string::String, index: u64) -> Option<u64> {
+    __prod_borrowed_publicationLinkageRecordCompareAt(records, id.as_ref(), index)
+}
+
+fn __prod_borrowed_publicationLinkageRecordCompareAt(records: &crate::PublicationRecords, id: &str, index: u64) -> Option<u64> {
+    { let _x_1 = &(records).chunks; { let _x_2 = 256; { let _x_5 = __prod_borrowed_publicationLinkageRecordCompareChunks(&(_x_1), (id).as_ref(), index, _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkageRecordCompareChunks(x_1: &[crate::PublicationRecordsChunk], x_2: alloc::string::String, x_3: u64, x_4: u64) -> Option<u64> {
+    __prod_borrowed_publicationLinkageRecordCompareChunks(x_1, x_2.as_ref(), x_3, x_4)
+}
+
+fn __prod_borrowed_publicationLinkageRecordCompareChunks(x_1: &[crate::PublicationRecordsChunk], x_2: &str, x_3: u64, x_4: u64) -> Option<u64> {
+    match x_4 {
+        0 => None,
+        _ => { let n_46 = (x_4).saturating_sub(1); match &(x_1)[..] {
+        [] => None,
+        [head_76, tail_77 @ ..] => { let _x_88 = 256; { let _x_89 = (x_3 < _x_88); match _x_89 {
+        false => { let _x_95 = 256; { let _x_96 = core::convert::identity::<u64>(x_3).saturating_sub(_x_95); { let _x_97 = __prod_borrowed_publicationLinkageRecordCompareChunks(&(tail_77), (x_2).as_ref(), _x_96, n_46); _x_97 } } },
+        true => { let _x_98 = &(head_76).entries; { let _x_99 = 256; { let _x_100 = __prod_borrowed_publicationLinkageRecordCompareRows(&(_x_98), (x_2).as_ref(), x_3, _x_99); _x_100 } } },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationLinkageRecordCompareRows(x_1: &[crate::PublicationRecord], x_2: alloc::string::String, x_3: u64, x_4: u64) -> Option<u64> {
+    __prod_borrowed_publicationLinkageRecordCompareRows(x_1, x_2.as_ref(), x_3, x_4)
+}
+
+fn __prod_borrowed_publicationLinkageRecordCompareRows(x_1: &[crate::PublicationRecord], x_2: &str, x_3: u64, x_4: u64) -> Option<u64> {
+    match x_4 {
+        0 => None,
+        _ => { let n_80 = (x_4).saturating_sub(1); match &(x_1)[..] {
+        [] => None,
+        [head_135, tail_136 @ ..] => { let _x_159 = 0; { let _x_160 = (x_3 == _x_159); match _x_160 {
+        false => { let _x_166 = 1; { let _x_167 = core::convert::identity::<u64>(x_3).saturating_sub(_x_166); { let _x_168 = __prod_borrowed_publicationLinkageRecordCompareRows(&(tail_136), (x_2).as_ref(), _x_167, n_80); _x_168 } } },
+        true => { let _x_176 = &(head_135).id; { let _x_177 = publicationLinkageTextLess((x_2).as_ref(), (_x_176).as_ref()); match _x_177 {
+        false => { let _x_184 = &(head_135).id; { let _x_185 = publicationLinkageTextLess((_x_184).as_ref(), (x_2).as_ref()); match _x_185 {
+        false => { let _x_187 = 1; { let _x_192 = Some(_x_187); _x_192 } },
+        true => { let _x_189 = 2; { let _x_193 = Some(_x_189); _x_193 } },
+    } } },
+        true => { let _x_182 = 0; { let _x_183 = Some(_x_182); _x_183 } },
+    } } },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationLinkageRecordIndex(x_1: &crate::PublicationRecords, x_2: alloc::string::String, x_3: u64, x_4: u64, x_5: u64) -> Result<Option<u64>, crate::ComputeError> {
+    __prod_borrowed_publicationLinkageRecordIndex(x_1, x_2.as_ref(), x_3, x_4, x_5)
+}
+
+fn __prod_borrowed_publicationLinkageRecordIndex(x_1: &crate::PublicationRecords, x_2: &str, mut x_3: u64, mut x_4: u64, mut x_5: u64) -> Result<Option<u64>, crate::ComputeError> {
+    loop { return Ok(match x_5 {
+        0 => None,
+        _ => { let n_113 = (x_5).saturating_sub(1); { let _x_221 = (x_3 < x_4); match _x_221 {
+        false => None,
+        true => { let _x_264 = core::convert::identity::<u64>(x_3).checked_add(x_4).ok_or(crate::ComputeError::AddOverflow)?; { let _x_265 = 2; { let _x_266 = 0; { let _x_267 = if _x_265 == 0 { _x_266 } else { _x_264 / _x_265 }; { let _x_268 = __prod_borrowed_publicationLinkageRecordCompareAt(&(x_1), (x_2).as_ref(), _x_267); match _x_268 {
+        None => _x_268,
+        Some(val_270) => { let _x_302 = 0; { let _x_303 = (val_270 == _x_302); match _x_303 {
+        false => { let _x_324 = 1; { let _x_325 = (val_270 == _x_324); match _x_325 {
+        false => { let _x_331 = core::convert::identity::<u64>(x_3).checked_add(x_4).ok_or(crate::ComputeError::AddOverflow)?; { let _x_332 = 2; { let _x_333 = 0; { let _x_334 = if _x_332 == 0 { _x_333 } else { _x_331 / _x_332 }; { let _x_335 = 1; { let _x_336 = core::convert::identity::<u64>(_x_334).checked_add(_x_335).ok_or(crate::ComputeError::AddOverflow)?; { (x_3, x_4, x_5,) = (_x_336, x_4, n_113,); continue; } } } } } } },
+        true => { let _x_339 = core::convert::identity::<u64>(x_3).checked_add(x_4).ok_or(crate::ComputeError::AddOverflow)?; { let _x_340 = 2; { let _x_341 = 0; { let _x_342 = if _x_340 == 0 { _x_341 } else { _x_339 / _x_340 }; Some(_x_342) } } } },
+    } } },
+        true => { let _x_345 = core::convert::identity::<u64>(x_3).checked_add(x_4).ok_or(crate::ComputeError::AddOverflow)?; { let _x_346 = 2; { let _x_347 = 0; { let _x_348 = if _x_346 == 0 { _x_347 } else { _x_345 / _x_346 }; { (x_3, x_4, x_5,) = (x_3, _x_348, n_113,); continue; } } } } },
+    } } },
+    } } } } } },
+    } } },
+    }); }
+}
+
+pub fn publicationLinkageRequirementKind(value: &crate::PublicationRequirementValue, assurance: crate::PublicationAssurance) -> bool {
+    match value {
+        crate::PublicationRequirementValue::Proof { field_0: x_96 } => { let _x_150 = crate::PublicationAssurance::SourceProof; { let _x_151 = publicationPublicationAssuranceEqual(assurance, _x_150); _x_151 } },
+        crate::PublicationRequirementValue::Execution { field_0: x_98 } => match assurance {
+        crate::PublicationAssurance::SourceProof => { let _x_168 = false; _x_168 },
+        crate::PublicationAssurance::HumanAssessment => { let _x_169 = false; _x_169 },
+        crate::PublicationAssurance::OperationalAssessment => { let _x_170 = false; _x_170 },
+        _ => { let _x_171 = true; _x_171 },
+    },
+        crate::PublicationRequirementValue::Assessment { field_0: x_100 } => match assurance {
+        crate::PublicationAssurance::HumanAssessment => { let _x_173 = true; _x_173 },
+        crate::PublicationAssurance::OperationalAssessment => { let _x_175 = true; _x_175 },
+        _ => { let _x_177 = false; _x_177 },
+    },
+    }
+}
+
+pub fn publicationLinkageRequirementMemberAbsent(requirements: &crate::PublicationRequirements, member: &crate::PublicationMember, fuel: u64) -> bool {
+    { let _x_1 = &(requirements).chunks; { let _x_2 = 64; { let _x_5 = publicationLinkageRequirementPrefixChunks(&(_x_1), &(member), fuel, _x_2); _x_5 } } }
+}
+
+pub fn publicationLinkageRequirementPrefixChunks(x_1: &[crate::PublicationRequirementsChunk], x_2: &crate::PublicationMember, x_3: u64, x_4: u64) -> bool {
+    match x_4 {
+        0 => { let _x_137 = 0; { let _x_138 = (x_3 == _x_137); _x_138 } },
+        _ => { let n_62 = (x_4).saturating_sub(1); { let _x_141 = 0; { let _x_142 = (x_3 == _x_141); match _x_142 {
+        false => match &(x_1)[..] {
+        [] => _x_142,
+        [head_206, tail_207 @ ..] => { let _x_208 = 64; { let _x_209 = (x_3 <= _x_208); match _x_209 {
+        false => { let _x_219 = &(head_206).entries; { let _x_220 = publicationLinkageRequirementPrefixRows(&(_x_219), &(x_2), _x_208, _x_208); match _x_220 {
+        false => _x_220,
+        true => { let _x_222 = core::convert::identity::<u64>(x_3).saturating_sub(_x_208); { let _x_223 = publicationLinkageRequirementPrefixChunks(&(tail_207), &(x_2), _x_222, n_62); _x_223 } },
+    } } },
+        true => { let _x_224 = &(head_206).entries; { let _x_225 = publicationLinkageRequirementPrefixRows(&(_x_224), &(x_2), x_3, _x_208); _x_225 } },
+    } } },
+    },
+        true => _x_142,
+    } } } },
+    }
+}
+
+pub fn publicationLinkageRequirementPrefixRows(x_1: &[crate::PublicationRequirement], x_2: &crate::PublicationMember, x_3: u64, x_4: u64) -> bool {
+    match x_4 {
+        0 => { let _x_114 = 0; { let _x_115 = (x_3 == _x_114); _x_115 } },
+        _ => { let n_56 = (x_4).saturating_sub(1); { let _x_118 = 0; { let _x_119 = (x_3 == _x_118); match _x_119 {
+        false => match &(x_1)[..] {
+        [] => _x_119,
+        [head_176, tail_177 @ ..] => { let _x_178 = &(head_176).member; { let _x_179 = publicationLinkageMemberEqual(&(x_2), &(_x_178)); match _x_179 {
+        false => { let _x_187 = 1; { let _x_188 = core::convert::identity::<u64>(x_3).saturating_sub(_x_187); { let _x_189 = publicationLinkageRequirementPrefixRows(&(tail_177), &(x_2), _x_188, n_56); _x_189 } } },
+        true => _x_119,
+    } } },
+    },
+        true => _x_119,
+    } } } },
+    }
+}
+
+pub fn publicationLinkageRequirementValid(requirement: &crate::PublicationRequirement) -> bool {
+    { let _x_121 = 0; { let _x_124 = (requirement).obligation; { let _x_125 = (_x_121 < _x_124); match _x_125 {
+        false => _x_125,
+        true => { let _x_219 = (requirement).obligation; { let _x_220 = 4294967295; { let _x_221 = (_x_219 <= _x_220); match _x_221 {
+        false => _x_221,
+        true => { let _x_265 = &(requirement).member; { let _x_266 = publicationLinkageMemberValid(&(_x_265)); match _x_266 {
+        false => _x_266,
+        true => { let _x_302 = &(requirement).requirement; match _x_302 {
+        crate::PublicationRequirementValue::Proof { field_0: x_303 } => { let _x_309 = &(x_303).theorem; { let _x_310 = publicationLinkageMemberValid(&(_x_309)); _x_310 } },
+        crate::PublicationRequirementValue::Execution { field_0: x_305 } => { let _x_321 = &(x_305).oracle; { let _x_322 = 128; { let _x_323 = publicationLinkageTextValid((_x_321).as_ref(), _x_322); match _x_323 {
+        false => _x_323,
+        true => { let _x_331 = &(x_305).input; { let _x_332 = publicationLinkageSelectorValid(&(_x_331)); match _x_332 {
+        false => _x_332,
+        true => { let _x_336 = &(x_305).suite; { let _x_337 = publicationLinkageDigestValid((_x_336).as_ref()); _x_337 } },
+    } } },
+    } } } },
+        crate::PublicationRequirementValue::Assessment { field_0: x_307 } => { let _x_344 = &(x_307).criterion; { let _x_345 = 2048; { let _x_346 = publicationLinkageTextValid((_x_344).as_ref(), _x_345); match _x_346 {
+        false => _x_346,
+        true => { let _x_350 = &(x_307).subject; { let _x_351 = 2048; { let _x_352 = publicationLinkageTextValid((_x_350).as_ref(), _x_351); _x_352 } } },
+    } } } },
+    } },
+    } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationLinkageRequirementsMatch(x_1: &crate::PublicationRequirements, x_2: &crate::PublicationObligations, mut x_3: u64) -> bool {
+    loop { return match x_3 {
+        0 => true,
+        _ => { let n_97 = (x_3).saturating_sub(1); { let _x_169 = 4095; { let _x_170 = core::convert::identity::<u64>(_x_169).saturating_sub(n_97); { let _x_171 = publicationLinkagePublicationRequirementsAt(&(x_1), _x_170); match _x_171 {
+        None => { let _x_177 = 4095; { let _x_178 = core::convert::identity::<u64>(_x_177).saturating_sub(n_97); { let _x_179 = publicationPublicationObligationsHas(&(x_2), _x_178); match _x_179 {
+        false => true,
+        true => false,
+    } } } },
+        Some(val_174) => { let _x_211 = 4095; { let _x_212 = core::convert::identity::<u64>(_x_211).saturating_sub(n_97); { let _x_213 = publicationPublicationObligationsAt(&(x_2), _x_212); match _x_213 {
+        None => false,
+        Some(val_216) => { let _x_239 = (val_174).obligation; { let _x_240 = (val_216).id; { let _x_241 = (_x_239 == _x_240); match _x_241 {
+        false => _x_241,
+        true => { let _x_255 = (val_174).member; { let _x_257 = 4095; { let _x_258 = core::convert::identity::<u64>(_x_257).saturating_sub(n_97); { let _x_259 = publicationLinkageRequirementMemberAbsent(&(x_1), &(_x_255), _x_258); match _x_259 {
+        false => _x_259,
+        true => { let _x_266 = (val_174).requirement; { let _x_267 = (val_216).assurance; { let _x_268 = publicationLinkageRequirementKind(&(_x_266), _x_267); match _x_268 {
+        false => _x_268,
+        true => { (x_3,) = (n_97,); continue; },
+    } } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationLinkageRequirementsScan(x_1: &crate::PublicationRequirements, mut x_2: u64, mut x_3: u64) -> bool {
+    loop { return match x_3 {
+        0 => true,
+        _ => { let n_56 = (x_3).saturating_sub(1); { let _x_90 = 4095; { let _x_91 = core::convert::identity::<u64>(_x_90).saturating_sub(n_56); { let _x_92 = publicationLinkagePublicationRequirementsAt(&(x_1), _x_91); match _x_92 {
+        None => true,
+        Some(val_95) => { let _x_107 = publicationLinkageRequirementValid(&(val_95)); match _x_107 {
+        false => _x_107,
+        true => { let _x_115 = (val_95).obligation; { let _x_116 = (x_2 < _x_115); match _x_116 {
+        false => _x_116,
+        true => { let _x_120 = (val_95).obligation; { (x_2, x_3,) = (_x_120, n_56,); continue; } },
+    } } },
+    } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationLinkageRequirementsValid(items: &crate::PublicationRequirements) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_35 = publicationLinkagePublicationRequirementsCanonical(&(items)); match _x_35 {
+        false => _x_35,
+        true => { let _x_60 = 2; { let _x_61 = publicationLinkagePublicationRequirementsCount(&(items))?; { let _x_62 = (_x_60 <= _x_61); match _x_62 {
+        false => _x_62,
+        true => { let _x_66 = 0; { let _x_67 = 4096; { let _x_68 = publicationLinkageRequirementsScan(&(items), _x_66, _x_67); _x_68 } } },
+    } } } },
+    } })
+}
+
+pub fn publicationLinkageSelectorValid(selector: &crate::PublicationInputSelector) -> bool {
+    match selector {
+        crate::PublicationInputSelector::BuildFile { field_0: x_13 } => { let _x_25 = 2048; { let _x_26 = publicationLinkageTextValid((x_13).as_ref(), _x_25); _x_26 } },
+        crate::PublicationInputSelector::SourceMember { field_0: x_15 } => { let _x_22 = publicationLinkageMemberValid(&(x_15)); _x_22 },
+        crate::PublicationInputSelector::Target => { let _x_24 = true; _x_24 },
+    }
+}
+
+pub fn publicationLinkageServicesPartition(services: &crate::PublicationServices, records: &crate::PublicationRecords) -> Result<bool, crate::ComputeError> {
+    Ok({ let _x_29 = publicationLinkagePublicationServicesScan(&(services))?; { let _x_30 = (_x_29).count; { let _x_31 = publicationLinkagePublicationRecordsCount(&(records))?; { let _x_32 = (_x_30 == _x_31); match _x_32 {
+        false => _x_32,
+        true => { let _x_52 = &(services).chunks; { let _x_53 = 256; { let _x_54 = publicationLinkageCollectServiceChunks(&(_x_52), &(records), _x_53)?; match _x_54 {
+        None => { let _x_56 = false; _x_56 },
+        Some(val_57) => { let _x_59 = 0; { let _x_60 = publicationLinkagePublicationRecordsCount(&(records))?; { let _x_61 = 256; { let _x_62 = publicationLinkageBitBuckets(&(val_57), _x_59, _x_60, _x_61)?; _x_62 } } } },
+    } } } },
+    } } } } })
+}
+
+pub fn publicationLinkageSmallRecordChunks(x_1: &[crate::PublicationRecordsChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_68 = (x_1).len() as u64; { let _x_69 = 0; { let _x_70 = (_x_68 == _x_69); _x_70 } } },
+        _ => { let n_50 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_82 = true; _x_82 },
+        [head_83, tail_84 @ ..] => { let _x_89 = &(head_83).entries; { let _x_90 = 256; { let _x_91 = publicationLinkageSmallRecordRows(&(_x_89), _x_90); match _x_91 {
+        false => _x_91,
+        true => { let _x_95 = publicationLinkageSmallRecordChunks(&(tail_84), n_50); _x_95 },
+    } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkageSmallRecordRows(x_1: &[crate::PublicationRecord], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_68 = (x_1).len() as u64; { let _x_69 = 0; { let _x_70 = (_x_68 == _x_69); _x_70 } } },
+        _ => { let n_50 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_82 = true; _x_82 },
+        [head_83, tail_84 @ ..] => { let _x_89 = &(head_83).id; { let _x_90 = 128; { let _x_91 = publicationLinkageTextValid((_x_89).as_ref(), _x_90); match _x_91 {
+        false => _x_91,
+        true => { let _x_95 = publicationLinkageSmallRecordRows(&(tail_84), n_50); _x_95 },
+    } } } },
+    } },
+    }
+}
+
+pub fn publicationLinkageSourceValid(link: &crate::PublicationSourceLink) -> bool {
+    { let _x_90 = &(link).snapshot; { let _x_91 = publicationLinkageDigestValid((_x_90).as_ref()); match _x_91 {
+        false => _x_91,
+        true => { let _x_168 = &(link).source; { let _x_169 = publicationLinkageDigestValid((_x_168).as_ref()); match _x_169 {
+        false => _x_169,
+        true => { let _x_208 = &(link).semantic; { let _x_209 = publicationLinkageDigestValid((_x_208).as_ref()); match _x_209 {
+        false => _x_209,
+        true => { let _x_242 = &(link).compiler; { let _x_243 = publicationLinkageDigestValid((_x_242).as_ref()); match _x_243 {
+        false => _x_243,
+        true => { let _x_270 = &(link).moduleSource; { let _x_271 = publicationLinkageDigestValid((_x_270).as_ref()); match _x_271 {
+        false => _x_271,
+        true => { let _x_292 = &(link).system; { let _x_293 = publicationLinkageDigestValid((_x_292).as_ref()); match _x_293 {
+        false => _x_293,
+        true => { let _x_308 = &(link).closureMember; { let _x_309 = publicationLinkageMemberValid(&(_x_308)); match _x_309 {
+        false => _x_309,
+        true => { let _x_318 = &(link).systemMember; { let _x_319 = publicationLinkageMemberValid(&(_x_318)); match _x_319 {
+        false => _x_319,
+        true => { let _x_323 = &(link).target; { let _x_324 = 128; { let _x_325 = publicationLinkageTextValid((_x_323).as_ref(), _x_324); _x_325 } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } }
+}
+
+pub fn publicationLinkageTextLengthValid(length: u64, maximum: u64) -> bool {
+    { let _x_7 = 0; { let _x_10 = (_x_7 < length); match _x_10 {
+        false => _x_10,
+        true => { let _x_21 = (length <= maximum); _x_21 },
+    } } }
+}
+
+pub fn publicationLinkageTextLess(left: &str, right: &str) -> bool {
+    { let _x_3 = (left).as_bytes(); { let _x_4 = (right).as_bytes(); { let _x_5 = core::convert::AsRef::<[u8]>::as_ref(&(_x_3)).cmp(core::convert::AsRef::<[u8]>::as_ref(&(_x_4))); { let _x_17 = core::convert::AsRef::<[u8]>::as_ref(&(alloc::vec![0])).cmp(core::convert::AsRef::<[u8]>::as_ref(&(alloc::vec![1]))); { let _x_18 = (_x_5 == _x_17); _x_18 } } } } }
+}
+
+pub fn publicationLinkageTextValid(value: &str, maximum: u64) -> bool {
+    { let _x_2 = (value).as_bytes(); { let _x_3 = (_x_2).len() as u64; { let _x_4 = publicationLinkageTextLengthValid(_x_3, maximum); _x_4 } } }
+}
+
+pub fn publicationLinkageValidate(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<Option<crate::PublicationLinkageError>, crate::ComputeError> {
+    Ok({ let _x_130 = publicationLinkageMetadataValid(&(closure), &(capture))?; match _x_130 {
+        false => { let _x_169 = crate::PublicationLinkageError::InvalidMetadata; { let _x_170 = Some(_x_169); _x_170 } },
+        true => { let _x_224 = &(closure).system; { let _x_225 = &(capture).sourceLink; { let _x_226 = &(_x_225).systemMember; { let _x_227 = publicationLinkageMemberEqual(&(_x_224), &(_x_226)); match _x_227 {
+        false => { let _y_229 = _x_227; match _y_229 {
+        false => { let _x_237 = crate::PublicationLinkageError::SourceMismatch; { let _x_238 = Some(_x_237); _x_238 } },
+        true => { let _x_268 = &(closure).services; { let _x_269 = &(capture).components; { let _x_270 = publicationLinkageServicesPartition(&(_x_268), &(_x_269))?; match _x_270 {
+        false => { let _y_272 = _x_270; match _y_272 {
+        false => { let _x_280 = crate::PublicationLinkageError::InventoryMismatch; { let _x_281 = Some(_x_280); _x_281 } },
+        true => { let _x_285 = &(closure).requirements; { let _x_286 = &(closure).declaration; { let _x_287 = &(_x_286).obligations; { let _x_288 = 4096; { let _x_289 = publicationLinkageRequirementsMatch(&(_x_285), &(_x_287), _x_288); match _x_289 {
+        false => { let _x_294 = crate::PublicationLinkageError::RequirementMismatch; { let _x_295 = Some(_x_294); _x_295 } },
+        true => None,
+    } } } } } },
+    } },
+        true => { let _x_302 = &(closure).controls; { let _x_303 = &(capture).controls; { let _x_304 = publicationLinkageControlsPartition(&(_x_302), &(_x_303))?; match _x_304 {
+        false => { let prod_local_0 = _x_304; match prod_local_0 {
+        false => { let prod_local_1 = crate::PublicationLinkageError::InventoryMismatch; { let prod_local_2 = Some(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = &(closure).requirements; { let prod_local_4 = &(closure).declaration; { let prod_local_5 = &(prod_local_4).obligations; { let prod_local_6 = 4096; { let prod_local_7 = publicationLinkageRequirementsMatch(&(prod_local_3), &(prod_local_5), prod_local_6); match prod_local_7 {
+        false => { let prod_local_8 = crate::PublicationLinkageError::RequirementMismatch; { let prod_local_9 = Some(prod_local_8); prod_local_9 } },
+        true => None,
+    } } } } } },
+    } },
+        true => { let _x_308 = &(capture).verificationFiles; { let _x_309 = &(capture).verificationManifest; { let _x_310 = 65536; { let _x_311 = publicationLinkageManifestScan(&(_x_308), (_x_309).as_ref(), _x_310); { let prod_local_11 = _x_311; match prod_local_11 {
+        false => { let prod_local_12 = crate::PublicationLinkageError::InventoryMismatch; { let prod_local_13 = Some(prod_local_12); prod_local_13 } },
+        true => { let prod_local_14 = &(closure).requirements; { let prod_local_15 = &(closure).declaration; { let prod_local_16 = &(prod_local_15).obligations; { let prod_local_17 = 4096; { let prod_local_18 = publicationLinkageRequirementsMatch(&(prod_local_14), &(prod_local_16), prod_local_17); match prod_local_18 {
+        false => { let prod_local_19 = crate::PublicationLinkageError::RequirementMismatch; { let prod_local_20 = Some(prod_local_19); prod_local_20 } },
+        true => None,
+    } } } } } },
+    } } } } } },
+    } } } },
+    } } } },
+    } },
+        true => { let _x_317 = &(closure).target; { let _x_318 = &(capture).sourceLink; { let _x_319 = &(_x_318).target; { let _x_320 = (_x_317 == _x_319); { let prod_local_22 = _x_320; match prod_local_22 {
+        false => { let prod_local_23 = crate::PublicationLinkageError::SourceMismatch; { let prod_local_24 = Some(prod_local_23); prod_local_24 } },
+        true => { let prod_local_25 = &(closure).services; { let prod_local_26 = &(capture).components; { let prod_local_27 = publicationLinkageServicesPartition(&(prod_local_25), &(prod_local_26))?; match prod_local_27 {
+        false => { let prod_local_29 = prod_local_27; match prod_local_29 {
+        false => { let prod_local_30 = crate::PublicationLinkageError::InventoryMismatch; { let prod_local_31 = Some(prod_local_30); prod_local_31 } },
+        true => { let prod_local_32 = &(closure).requirements; { let prod_local_33 = &(closure).declaration; { let prod_local_34 = &(prod_local_33).obligations; { let prod_local_35 = 4096; { let prod_local_36 = publicationLinkageRequirementsMatch(&(prod_local_32), &(prod_local_34), prod_local_35); match prod_local_36 {
+        false => { let prod_local_37 = crate::PublicationLinkageError::RequirementMismatch; { let prod_local_38 = Some(prod_local_37); prod_local_38 } },
+        true => None,
+    } } } } } },
+    } },
+        true => { let prod_local_40 = &(closure).controls; { let prod_local_41 = &(capture).controls; { let prod_local_42 = publicationLinkageControlsPartition(&(prod_local_40), &(prod_local_41))?; match prod_local_42 {
+        false => { let prod_local_43 = prod_local_42; match prod_local_43 {
+        false => { let prod_local_44 = crate::PublicationLinkageError::InventoryMismatch; { let prod_local_45 = Some(prod_local_44); prod_local_45 } },
+        true => { let prod_local_46 = &(closure).requirements; { let prod_local_47 = &(closure).declaration; { let prod_local_48 = &(prod_local_47).obligations; { let prod_local_49 = 4096; { let prod_local_50 = publicationLinkageRequirementsMatch(&(prod_local_46), &(prod_local_48), prod_local_49); match prod_local_50 {
+        false => { let prod_local_51 = crate::PublicationLinkageError::RequirementMismatch; { let prod_local_52 = Some(prod_local_51); prod_local_52 } },
+        true => None,
+    } } } } } },
+    } },
+        true => { let prod_local_54 = &(capture).verificationFiles; { let prod_local_55 = &(capture).verificationManifest; { let prod_local_56 = 65536; { let prod_local_57 = publicationLinkageManifestScan(&(prod_local_54), (prod_local_55).as_ref(), prod_local_56); { let prod_local_58 = prod_local_57; match prod_local_58 {
+        false => { let prod_local_59 = crate::PublicationLinkageError::InventoryMismatch; { let prod_local_60 = Some(prod_local_59); prod_local_60 } },
+        true => { let prod_local_61 = &(closure).requirements; { let prod_local_62 = &(closure).declaration; { let prod_local_63 = &(prod_local_62).obligations; { let prod_local_64 = 4096; { let prod_local_65 = publicationLinkageRequirementsMatch(&(prod_local_61), &(prod_local_63), prod_local_64); match prod_local_65 {
+        false => { let prod_local_66 = crate::PublicationLinkageError::RequirementMismatch; { let prod_local_67 = Some(prod_local_66); prod_local_67 } },
+        true => None,
+    } } } } } },
+    } } } } } },
+    } } } },
+    } } } },
+    } } } } } },
+    } } } } },
+    } })
+}
+
+pub fn dispatchPublicationLinkage(input: &crate::PublicationWireInput) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_111 = 0; { let _x_114 = 4; { let _x_117 = publicationWireReadArray(&(input), _x_111, _x_114)?; match _x_117 {
+        Err(a_118) => { let _x_143 = Err(a_118); _x_143 },
+        Ok(a_120) => { let _x_204 = (a_120).count; { let _x_205 = 4; { let _x_206 = (_x_204 == _x_205); match _x_206 {
+        false => { let _x_207 = crate::PUnit {  }; { let _x_208 = { let prod_local_0 = _x_207; { let _x_145 = crate::CborError::WrongType; { let _x_146 = Err(_x_145); _x_146 } } }; _x_208 } },
+        true => { let _x_261 = (a_120).cursor; { let _x_262 = readPublicationWireNat(&(input), _x_261)?; match _x_262 {
+        Err(a_263) => { let _x_264 = Err(a_263); _x_264 },
+        Ok(a_265) => { let _x_310 = (a_265).cursor; { let _x_311 = readPublicationWireNat(&(input), _x_310)?; match _x_311 {
+        Err(a_312) => { let _x_313 = Err(a_312); _x_313 },
+        Ok(a_314) => { let _x_346 = (a_265).value; { let _x_347 = 1; { let _x_348 = (_x_346 == _x_347); match _x_348 {
+        false => { let _y_350 = _x_348; match _y_350 {
+        false => { let _x_351 = crate::PUnit {  }; { let _x_352 = { let prod_local_1 = _x_351; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_352 } },
+        true => { let _x_377 = (a_314).cursor; { let _x_378 = readPublicationLinkagePublicationClosure(&(input), _x_377)?; match _x_378 {
+        Err(a_379) => { let _x_380 = Err(a_379); _x_380 },
+        Ok(a_381) => { let _x_395 = (a_381).cursor; { let _x_396 = readPublicationLinkagePublicationCapture(&(input), _x_395)?; match _x_396 {
+        Err(a_397) => { let _x_398 = Err(a_397); _x_398 },
+        Ok(a_399) => { let _x_406 = (a_399).cursor; { let _x_407 = publicationLinkageFinish(&(input), _x_406); match _x_407 {
+        Err(a_408) => { let _x_409 = Err(a_408); _x_409 },
+        Ok(a_410) => { let _x_412 = (a_381).value; { let _x_413 = (a_399).value; { let _x_414 = publicationLinkageResponse(&(_x_412), &(_x_413))?; _x_414 } } },
+    } } },
+    } } },
+    } } },
+    } },
+        true => { let _x_415 = (a_314).value; { let _x_416 = 0; { let _x_417 = (_x_415 == _x_416); { let prod_local_4 = _x_417; match prod_local_4 {
+        false => { let prod_local_5 = crate::PUnit {  }; { let prod_local_9 = { let prod_local_6 = prod_local_5; { let prod_local_7 = crate::CborError::WrongType; { let prod_local_8 = Err(prod_local_7); prod_local_8 } } }; prod_local_9 } },
+        true => { let prod_local_10 = (a_314).cursor; { let prod_local_11 = readPublicationLinkagePublicationClosure(&(input), prod_local_10)?; match prod_local_11 {
+        Err(prod_local_12) => { let prod_local_13 = Err(prod_local_12); prod_local_13 },
+        Ok(prod_local_14) => { let prod_local_15 = (prod_local_14).cursor; { let prod_local_16 = readPublicationLinkagePublicationCapture(&(input), prod_local_15)?; match prod_local_16 {
+        Err(prod_local_17) => { let prod_local_18 = Err(prod_local_17); prod_local_18 },
+        Ok(prod_local_19) => { let prod_local_20 = (prod_local_19).cursor; { let prod_local_21 = publicationLinkageFinish(&(input), prod_local_20); match prod_local_21 {
+        Err(prod_local_22) => { let prod_local_23 = Err(prod_local_22); prod_local_23 },
+        Ok(prod_local_24) => { let prod_local_25 = (prod_local_14).value; { let prod_local_26 = (prod_local_19).value; { let prod_local_27 = publicationLinkageResponse(&(prod_local_25), &(prod_local_26))?; prod_local_27 } } },
+    } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+    } } },
+    } } },
+    } } } },
+    } } } })
+}
+
+pub fn publicationLinkageFinish(input: &crate::PublicationWireInput, cursor: u64) -> Result<bool, crate::CborError> {
+    { let _x_14 = publicationWireWindow(&(input), cursor); match _x_14 {
+        Err(a_15) => { let _x_22 = Err(a_15); _x_22 },
+        Ok(a_17) => { let _x_23 = 0; { let _x_25 = (a_17).len() as u64; { let _x_26 = crate::BoundedCursor { bytes: a_17, offset: _x_23, limit: _x_25 }; { let _x_27 = publicationLinkageWireLimits(); { let _x_28 = finishCborCursor(&(_x_26), _x_27); _x_28 } } } } },
+    } }
+}
+
+pub fn publicationLinkagePayloadHead(size: u64, major: u64, maximum: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_36 = (size <= maximum); match _x_36 {
+        false => { let _x_55 = crate::PUnit {  }; { let _x_38 = { let prod_local_0 = _x_55; { let _x_1 = crate::CborError::ValueLimit; { let _x_2 = Err(_x_1); _x_2 } } }; _x_38 } },
+        true => { let _x_60 = cborHeadWidth(size); { let _x_61 = core::convert::identity::<u64>(size).checked_add(_x_60).ok_or(crate::ComputeError::AddOverflow)?; { let _x_62 = publicationLinkageWireLimits(); { let _x_63 = (_x_62).maximumOutput; { let _x_64 = (_x_61 <= _x_63); match _x_64 {
+        false => { let _x_65 = crate::PUnit {  }; { let _x_66 = { let prod_local_1 = _x_65; { let prod_local_2 = crate::CborError::ValueLimit; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_66 } },
+        true => { let _x_69 = publicationLinkageWireLimits(); { let _x_70 = cborWriteHead(size, major, _x_69)?; _x_70 } },
+    } } } } } },
+    } })
+}
+
+pub fn publicationLinkagePayloadInto(acc: Result<alloc::vec::Vec<u8>, crate::CborError>, payload: alloc::vec::Vec<u8>, major: u64, maximum: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_2 = (payload).len() as u64; { let _x_3 = publicationLinkagePayloadHead(_x_2, major, maximum)?; { let _x_4 = publicationLinkageWireJoin(acc, _x_3)?; { let _x_5 = Ok(payload); { let _x_6 = publicationLinkageWireJoin(_x_4, _x_5)?; _x_6 } } } } })
+}
+
+pub fn publicationLinkageResponse(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_224 = publicationLinkageValidate(&(closure), &(capture))?; match _x_224 {
+        None => { let _x_377 = &(closure).declaration; { let _x_378 = publicationDeclarationPreimage(&(_x_377))?; { let _x_379 = publicationWireOutput(_x_378); match _x_379 {
+        crate::PublicationWireOutput { value: value_380, cause: cause_381 } => match cause_381 {
+        None => { let _x_563 = publicationLinkageservicesPreimage(&(closure), &(capture))?; { let _x_564 = publicationWireOutput(_x_563); match _x_564 {
+        crate::PublicationWireOutput { value: value_565, cause: cause_566 } => match cause_566 {
+        None => { let _x_726 = publicationLinkagecontrolsPreimage(&(closure), &(capture))?; { let _x_727 = publicationWireOutput(_x_726); match _x_727 {
+        crate::PublicationWireOutput { value: value_728, cause: cause_729 } => match cause_729 {
+        None => { let _x_867 = publicationLinkagedependenciesPreimage(&(capture))?; { let _x_868 = publicationWireOutput(_x_867); match _x_868 {
+        crate::PublicationWireOutput { value: value_869, cause: cause_870 } => match cause_870 {
+        None => { let _x_986 = publicationLinkagecompilerPreimage(&(capture))?; { let _x_987 = publicationWireOutput(_x_986); match _x_987 {
+        crate::PublicationWireOutput { value: value_988, cause: cause_989 } => match cause_989 {
+        None => { let _x_1083 = publicationLinkageruntimePreimage(&(capture))?; { let _x_1084 = publicationWireOutput(_x_1083); match _x_1084 {
+        crate::PublicationWireOutput { value: value_1085, cause: cause_1086 } => match cause_1086 {
+        None => { let _x_1158 = publicationLinkageoraclesPreimage(&(closure), &(capture))?; { let _x_1159 = publicationWireOutput(_x_1158); match _x_1159 {
+        crate::PublicationWireOutput { value: value_1160, cause: cause_1161 } => match cause_1161 {
+        None => { let _x_1196 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_1197 = 9; { let _x_1198 = publicationLinkageWireLimits(); { let _x_1199 = writeCborArrayHead(_x_1197, _x_1198)?; { let _x_1200 = publicationLinkageWireJoin(_x_1196, _x_1199)?; { let _x_1201 = 1; { let _x_1202 = writePublicationWireNat(_x_1201)?; { let _x_1203 = publicationLinkageWireJoin(_x_1200, _x_1202)?; { let _x_1204 = 0; { let _x_1205 = writePublicationWireNat(_x_1204)?; { let _x_1206 = publicationLinkageWireJoin(_x_1203, _x_1205)?; { let _x_1207 = 2; { let _x_1208 = 67108864; { let _x_1209 = publicationLinkagePayloadInto(_x_1206, value_380, _x_1207, _x_1208)?; { let _x_1210 = publicationLinkagePayloadInto(_x_1209, value_565, _x_1207, _x_1208)?; { let _x_1211 = publicationLinkagePayloadInto(_x_1210, value_728, _x_1207, _x_1208)?; { let _x_1212 = publicationLinkagePayloadInto(_x_1211, value_869, _x_1207, _x_1208)?; { let _x_1213 = publicationLinkagePayloadInto(_x_1212, value_988, _x_1207, _x_1208)?; { let _x_1214 = publicationLinkagePayloadInto(_x_1213, value_1085, _x_1207, _x_1208)?; { let _x_1215 = publicationLinkagePayloadInto(_x_1214, value_1160, _x_1207, _x_1208)?; _x_1215 } } } } } } } } } } } } } } } } } } } },
+        Some(val_1190) => { let _x_1191 = Err(val_1190); _x_1191 },
+    },
+    } } },
+        Some(val_1126) => { let _x_1127 = Err(val_1126); _x_1127 },
+    },
+    } } },
+        Some(val_1040) => { let _x_1041 = Err(val_1040); _x_1041 },
+    },
+    } } },
+        Some(val_932) => { let _x_933 = Err(val_932); _x_933 },
+    },
+    } } },
+        Some(val_802) => { let _x_803 = Err(val_802); _x_803 },
+    },
+    } } },
+        Some(val_650) => { let _x_651 = Err(val_650); _x_651 },
+    },
+    } } },
+        Some(val_476) => { let _x_477 = Err(val_476); _x_477 },
+    },
+    } } } },
+        Some(val_227) => match val_227 {
+        crate::PublicationLinkageError::InvalidMetadata => { let _x_1286 = Ok(alloc::vec![131, 1, 1, 0]); _x_1286 },
+        crate::PublicationLinkageError::SourceMismatch => { let _x_1297 = Ok(alloc::vec![131, 1, 1, 1]); _x_1297 },
+        crate::PublicationLinkageError::InventoryMismatch => { let _x_1309 = Ok(alloc::vec![131, 1, 1, 2]); _x_1309 },
+        crate::PublicationLinkageError::RequirementMismatch => { let _x_1321 = Ok(alloc::vec![131, 1, 1, 3]); _x_1321 },
+    },
+    } })
+}
+
+pub fn publicationLinkageWireAppend(left: alloc::vec::Vec<u8>, right: alloc::vec::Vec<u8>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_5 = (left).len() as u64; { let _x_6 = (right).len() as u64; { let _x_19 = core::convert::identity::<u64>(_x_5).checked_add(_x_6).ok_or(crate::ComputeError::AddOverflow)?; { let _x_8 = 67108864; { let _x_11 = (_x_19 <= _x_8); { let _x_12 = publicationLinkageWireAppendReady(_x_11, left, right); _x_12 } } } } } })
+}
+
+pub fn publicationLinkageWireAppendReady(allowed: bool, left: alloc::vec::Vec<u8>, right: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::CborError> {
+    match allowed {
+        false => { let _x_27 = crate::CborError::ValueLimit; { let _x_28 = Err(_x_27); _x_28 } },
+        true => { let _x_30 = { let mut __append = (left, right); __append.0.extend(__append.1); __append.0 }; { let _x_31 = Ok(_x_30); _x_31 } },
+    }
+}
+
+pub fn publicationLinkageWireBytes(input: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_33 = (input).len() as u64; { let _x_34 = 67108864; { let _x_37 = (_x_33 <= _x_34); match _x_37 {
+        false => alloc::vec![131, 1, 2, 6],
+        true => { let _x_66 = crate::PublicationWireInput { bytes: input }; { let _x_67 = dispatchPublicationLinkage(&(_x_66))?; match _x_67 {
+        Err(a_68) => { let _x_69 = publicationWireErrorBytes(a_68); _x_69 },
+        Ok(a_70) => a_70,
+    } } },
+    } } } })
+}
+
+pub fn publicationLinkageWireJoin(left: Result<alloc::vec::Vec<u8>, crate::CborError>, right: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_29 = publicationWireOutput(left); match _x_29 {
+        crate::PublicationWireOutput { value: value_30, cause: cause_31 } => match cause_31 {
+        None => { let _x_59 = publicationWireOutput(right); match _x_59 {
+        crate::PublicationWireOutput { value: value_60, cause: cause_61 } => match cause_61 {
+        None => { let _x_64 = publicationLinkageWireAppend(value_30, value_60)?; _x_64 },
+        Some(val_65) => { let _x_66 = Err(val_65); _x_66 },
+    },
+    } },
+        Some(val_52) => { let _x_53 = Err(val_52); _x_53 },
+    },
+    } })
+}
+
+pub fn publicationLinkageWireLimits() -> crate::CborLimits {
+    { let _x_1 = 67108864; { let _x_4 = 2048; { let _x_7 = 65536; { let _x_10 = crate::CborLimits { maximumInput: _x_1, maximumOutput: _x_1, maximumBytes: _x_1, maximumText: _x_4, maximumArrayItems: _x_7 }; _x_10 } } } }
+}
+
+pub fn publicationLinkageWriteText(text: alloc::string::String) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = (text).into_bytes(); { let _x_2 = 3; { let _x_5 = 2048; { let _x_8 = publicationLinkageWireLimits(); { let _x_9 = cborWritePayload(_x_1, _x_2, _x_5, _x_8)?; _x_9 } } } } })
+}
+
+pub fn publicationLinkagecompilerPreimage(capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_89 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 99, 111, 109, 112, 105, 108, 101, 114, 45, 99, 108, 111, 115, 117, 114, 101, 47, 49, 0]); { let _x_90 = publicationLinkageWireJoin(_x_4, _x_89)?; { let _x_91 = 5; { let _x_94 = publicationLinkageWireLimits(); { let _x_95 = writeCborArrayHead(_x_91, _x_94)?; { let _x_96 = publicationLinkageWireJoin(_x_90, _x_95)?; { let _x_97 = &(capture).sdkLock; { let _x_98 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_97))?; { let _x_99 = publicationLinkageWireJoin(_x_96, _x_98)?; { let _x_100 = &(capture).lexleanBuildManifest; { let _x_101 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_100))?; { let _x_102 = publicationLinkageWireJoin(_x_99, _x_101)?; { let _x_103 = &(capture).lexleanAttestation; { let _x_104 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_103))?; { let _x_105 = publicationLinkageWireJoin(_x_102, _x_104)?; { let _x_106 = &(capture).buildManifest; { let _x_107 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_106))?; { let _x_108 = publicationLinkageWireJoin(_x_105, _x_107)?; { let _x_109 = &(capture).verificationManifest; { let _x_110 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_109))?; { let _x_111 = publicationLinkageWireJoin(_x_108, _x_110)?; _x_111 } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn publicationLinkagecontrolsPreimage(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = &(capture).controls; { let _x_2 = &(closure).controls; { let _x_6 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_91 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 99, 111, 110, 116, 114, 111, 108, 115, 45, 99, 108, 111, 115, 117, 114, 101, 47, 49, 0]); { let _x_92 = publicationLinkageWireJoin(_x_6, _x_91)?; { let _x_93 = 5; { let _x_96 = publicationLinkageWireLimits(); { let _x_97 = writeCborArrayHead(_x_93, _x_96)?; { let _x_98 = publicationLinkageWireJoin(_x_92, _x_97)?; { let _x_99 = &(capture).sourceLink; { let _x_100 = writePublicationLinkagePublicationSourceLink(&(_x_99))?; { let _x_101 = publicationLinkageWireJoin(_x_98, _x_100)?; { let _x_102 = writePublicationLinkagePublicationIdsInto(&(_x_2), _x_101)?; { let _x_103 = writePublicationLinkagePublicationRecordsInto(&(_x_1), _x_102)?; { let _x_104 = &(capture).standardsLock; { let _x_105 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_104))?; { let _x_106 = publicationLinkageWireJoin(_x_103, _x_105)?; { let _x_107 = &(closure).requirements; { let _x_108 = writePublicationLinkagePublicationRequirements(&(_x_107))?; { let _x_109 = publicationLinkageWireJoin(_x_106, _x_108)?; _x_109 } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn publicationLinkagedependenciesPreimage(capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = &(capture).dependencies; { let _x_5 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_96 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 100, 101, 112, 101, 110, 100, 101, 110, 99, 105, 101, 115, 45, 99, 108, 111, 115, 117, 114, 101, 47, 49, 0]); { let _x_97 = publicationLinkageWireJoin(_x_5, _x_96)?; { let _x_98 = 2; { let _x_101 = publicationLinkageWireLimits(); { let _x_102 = writeCborArrayHead(_x_98, _x_101)?; { let _x_103 = publicationLinkageWireJoin(_x_97, _x_102)?; { let _x_104 = &(capture).provenance; { let _x_105 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_104))?; { let _x_106 = publicationLinkageWireJoin(_x_103, _x_105)?; { let _x_107 = writePublicationLinkagePublicationRecordsInto(&(_x_1), _x_106)?; _x_107 } } } } } } } } } } } })
+}
+
+pub fn publicationLinkageoraclesPreimage(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = &(capture).oracleAttestations; { let _x_5 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_89 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 111, 114, 97, 99, 108, 101, 115, 45, 99, 108, 111, 115, 117, 114, 101, 47, 49, 0]); { let _x_90 = publicationLinkageWireJoin(_x_5, _x_89)?; { let _x_91 = 6; { let _x_94 = publicationLinkageWireLimits(); { let _x_95 = writeCborArrayHead(_x_91, _x_94)?; { let _x_96 = publicationLinkageWireJoin(_x_90, _x_95)?; { let _x_97 = &(capture).sourceLink; { let _x_98 = writePublicationLinkagePublicationSourceLink(&(_x_97))?; { let _x_99 = publicationLinkageWireJoin(_x_96, _x_98)?; { let _x_100 = &(closure).requirements; { let _x_101 = writePublicationLinkagePublicationRequirements(&(_x_100))?; { let _x_102 = publicationLinkageWireJoin(_x_99, _x_101)?; { let _x_103 = &(capture).standardsLock; { let _x_104 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_103))?; { let _x_105 = publicationLinkageWireJoin(_x_102, _x_104)?; { let _x_106 = &(capture).sdkLock; { let _x_107 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_106))?; { let _x_108 = publicationLinkageWireJoin(_x_105, _x_107)?; { let _x_109 = &(capture).releaseValidation; { let _x_110 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_109))?; { let _x_111 = publicationLinkageWireJoin(_x_108, _x_110)?; { let _x_112 = writePublicationLinkagePublicationFilesInto(&(_x_1), _x_111)?; _x_112 } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn publicationLinkageruntimePreimage(capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = &(capture).browserFiles; { let _x_2 = &(capture).verificationFiles; { let _x_6 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_90 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 114, 117, 110, 116, 105, 109, 101, 45, 99, 108, 111, 115, 117, 114, 101, 47, 49, 0]); { let _x_91 = publicationLinkageWireJoin(_x_6, _x_90)?; { let _x_92 = 3; { let _x_95 = publicationLinkageWireLimits(); { let _x_96 = writeCborArrayHead(_x_92, _x_95)?; { let _x_97 = publicationLinkageWireJoin(_x_91, _x_96)?; { let _x_98 = &(capture).verificationManifest; { let _x_99 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_98))?; { let _x_100 = publicationLinkageWireJoin(_x_97, _x_99)?; { let _x_101 = writePublicationLinkagePublicationFilesInto(&(_x_2), _x_100)?; { let _x_102 = writePublicationLinkagePublicationFilesInto(&(_x_1), _x_101)?; _x_102 } } } } } } } } } } } } } })
+}
+
+pub fn publicationLinkageservicesPreimage(closure: &crate::PublicationClosure, capture: &crate::PublicationCapture) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = &(capture).components; { let _x_2 = &(closure).services; { let _x_6 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_93 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 115, 101, 114, 118, 105, 99, 101, 115, 45, 99, 108, 111, 115, 117, 114, 101, 47, 49, 0]); { let _x_94 = publicationLinkageWireJoin(_x_6, _x_93)?; { let _x_95 = 3; { let _x_98 = publicationLinkageWireLimits(); { let _x_99 = writeCborArrayHead(_x_95, _x_98)?; { let _x_100 = publicationLinkageWireJoin(_x_94, _x_99)?; { let _x_101 = &(capture).sourceLink; { let _x_102 = writePublicationLinkagePublicationSourceLink(&(_x_101))?; { let _x_103 = publicationLinkageWireJoin(_x_100, _x_102)?; { let _x_104 = writePublicationLinkagePublicationServicesInto(&(_x_2), _x_103)?; { let _x_105 = writePublicationLinkagePublicationRecordsInto(&(_x_1), _x_104)?; _x_105 } } } } } } } } } } } } } })
+}
+
+pub fn readPublicationLinkagePublicationCapture(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationCapture, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_215 = 65536; { let _x_218 = publicationWireReadArray(&(input), cursor, _x_215)?; match _x_218 {
+        Err(a_219) => { let _x_252 = Err(a_219); _x_252 },
+        Ok(a_221) => { let _x_389 = (a_221).count; { let _x_390 = 15; { let _x_391 = (_x_389 == _x_390); match _x_391 {
+        false => { let _x_396 = crate::CborError::WrongType; { let _x_397 = Err(_x_396); _x_397 } },
+        true => { let _x_524 = (a_221).cursor; { let _x_525 = readPublicationLinkagePublicationSourceLink(&(input), _x_524)?; match _x_525 {
+        Err(a_526) => { let _x_527 = Err(a_526); _x_527 },
+        Ok(a_528) => { let _x_649 = (a_528).cursor; { let _x_650 = readPublicationLinkagePublicationRecords(&(input), _x_649)?; match _x_650 {
+        Err(a_651) => { let _x_652 = Err(a_651); _x_652 },
+        Ok(a_653) => { let _x_767 = (a_653).cursor; { let _x_768 = readPublicationLinkagePublicationRecords(&(input), _x_767)?; match _x_768 {
+        Err(a_769) => { let _x_770 = Err(a_769); _x_770 },
+        Ok(a_771) => { let _x_877 = (a_771).cursor; { let _x_878 = 32; { let _x_879 = readPublicationWireBytes(&(input), _x_877, _x_878)?; match _x_879 {
+        Err(a_880) => { let _x_881 = Err(a_880); _x_881 },
+        Ok(a_882) => { let _x_981 = (a_882).cursor; { let _x_982 = readPublicationLinkagePublicationRecords(&(input), _x_981)?; match _x_982 {
+        Err(a_983) => { let _x_984 = Err(a_983); _x_984 },
+        Ok(a_985) => { let _x_1076 = (a_985).cursor; { let _x_1077 = 32; { let _x_1078 = readPublicationWireBytes(&(input), _x_1076, _x_1077)?; match _x_1078 {
+        Err(a_1079) => { let _x_1080 = Err(a_1079); _x_1080 },
+        Ok(a_1081) => { let _x_1164 = (a_1081).cursor; { let _x_1165 = 32; { let _x_1166 = readPublicationWireBytes(&(input), _x_1164, _x_1165)?; match _x_1166 {
+        Err(a_1167) => { let _x_1168 = Err(a_1167); _x_1168 },
+        Ok(a_1169) => { let _x_1244 = (a_1169).cursor; { let _x_1245 = 32; { let _x_1246 = readPublicationWireBytes(&(input), _x_1244, _x_1245)?; match _x_1246 {
+        Err(a_1247) => { let _x_1248 = Err(a_1247); _x_1248 },
+        Ok(a_1249) => { let _x_1316 = (a_1249).cursor; { let _x_1317 = 32; { let _x_1318 = readPublicationWireBytes(&(input), _x_1316, _x_1317)?; match _x_1318 {
+        Err(a_1319) => { let _x_1320 = Err(a_1319); _x_1320 },
+        Ok(a_1321) => { let _x_1380 = (a_1321).cursor; { let _x_1381 = 32; { let _x_1382 = readPublicationWireBytes(&(input), _x_1380, _x_1381)?; match _x_1382 {
+        Err(a_1383) => { let _x_1384 = Err(a_1383); _x_1384 },
+        Ok(a_1385) => { let _x_1436 = (a_1385).cursor; { let _x_1437 = 32; { let _x_1438 = readPublicationWireBytes(&(input), _x_1436, _x_1437)?; match _x_1438 {
+        Err(a_1439) => { let _x_1440 = Err(a_1439); _x_1440 },
+        Ok(a_1441) => { let _x_1485 = (a_1441).cursor; { let _x_1486 = readPublicationLinkagePublicationFiles(&(input), _x_1485)?; match _x_1486 {
+        Err(a_1487) => { let _x_1488 = Err(a_1487); _x_1488 },
+        Ok(a_1489) => { let _x_1526 = (a_1489).cursor; { let _x_1527 = readPublicationLinkagePublicationFiles(&(input), _x_1526)?; match _x_1527 {
+        Err(a_1528) => { let _x_1529 = Err(a_1528); _x_1529 },
+        Ok(a_1530) => { let _x_1559 = (a_1530).cursor; { let _x_1560 = 32; { let _x_1561 = readPublicationWireBytes(&(input), _x_1559, _x_1560)?; match _x_1561 {
+        Err(a_1562) => { let _x_1563 = Err(a_1562); _x_1563 },
+        Ok(a_1564) => { let _x_1586 = (a_1564).cursor; { let _x_1587 = readPublicationLinkagePublicationFiles(&(input), _x_1586)?; match _x_1587 {
+        Err(a_1588) => { let _x_1589 = Err(a_1588); _x_1589 },
+        Ok(a_1590) => { let _x_1592 = (a_528).value; { let _x_1593 = (a_653).value; { let _x_1594 = (a_771).value; { let _x_1595 = (a_882).value; { let _x_1596 = (a_985).value; { let _x_1597 = (a_1081).value; { let _x_1598 = (a_1169).value; { let _x_1599 = (a_1249).value; { let _x_1600 = (a_1321).value; { let _x_1601 = (a_1385).value; { let _x_1602 = (a_1441).value; { let _x_1603 = (a_1489).value; { let _x_1604 = (a_1530).value; { let _x_1605 = (a_1564).value; { let _x_1606 = (a_1590).value; { let _x_1607 = crate::PublicationCapture { sourceLink: _x_1592, components: _x_1593, controls: _x_1594, provenance: _x_1595, dependencies: _x_1596, sdkLock: _x_1597, standardsLock: _x_1598, lexleanBuildManifest: _x_1599, lexleanAttestation: _x_1600, buildManifest: _x_1601, verificationManifest: _x_1602, verificationFiles: _x_1603, browserFiles: _x_1604, releaseValidation: _x_1605, oracleAttestations: _x_1606 }; { let _x_1608 = (a_1590).cursor; { let _x_1609 = crate::PublicationLinkageReadPublicationCapture { value: _x_1607, cursor: _x_1608 }; { let _x_1610 = Ok(_x_1609); _x_1610 } } } } } } } } } } } } } } } } } } },
+    } } },
+    } } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationClosure(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationClosure, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_92 = 65536; { let _x_95 = publicationWireReadArray(&(input), cursor, _x_92)?; match _x_95 {
+        Err(a_96) => { let _x_112 = Err(a_96); _x_112 },
+        Ok(a_98) => { let _x_169 = (a_98).count; { let _x_170 = 6; { let _x_171 = (_x_169 == _x_170); match _x_171 {
+        false => { let _x_176 = crate::CborError::WrongType; { let _x_177 = Err(_x_176); _x_177 } },
+        true => { let _x_224 = (a_98).cursor; { let _x_225 = readPublicationLinkagePublicationMember(&(input), _x_224)?; match _x_225 {
+        Err(a_226) => { let _x_227 = Err(a_226); _x_227 },
+        Ok(a_228) => { let _x_269 = (a_228).cursor; { let _x_270 = readPublicationWireText(&(input), _x_269)?; match _x_270 {
+        Err(a_271) => { let _x_272 = Err(a_271); _x_272 },
+        Ok(a_273) => { let _x_307 = (a_273).cursor; { let _x_308 = readPublicationWirePublicationDeclaration(&(input), _x_307)?; match _x_308 {
+        Err(a_309) => { let _x_310 = Err(a_309); _x_310 },
+        Ok(a_311) => { let _x_338 = (a_311).cursor; { let _x_339 = readPublicationLinkagePublicationServices(&(input), _x_338)?; match _x_339 {
+        Err(a_340) => { let _x_341 = Err(a_340); _x_341 },
+        Ok(a_342) => { let _x_362 = (a_342).cursor; { let _x_363 = readPublicationLinkagePublicationIds(&(input), _x_362)?; match _x_363 {
+        Err(a_364) => { let _x_365 = Err(a_364); _x_365 },
+        Ok(a_366) => { let _x_379 = (a_366).cursor; { let _x_380 = readPublicationLinkagePublicationRequirements(&(input), _x_379)?; match _x_380 {
+        Err(a_381) => { let _x_382 = Err(a_381); _x_382 },
+        Ok(a_383) => { let _x_385 = (a_228).value; { let _x_386 = (a_273).value; { let _x_387 = (a_311).value; { let _x_388 = (a_342).value; { let _x_389 = (a_366).value; { let _x_390 = (a_383).value; { let _x_391 = crate::PublicationClosure { system: _x_385, target: _x_386, declaration: _x_387, services: _x_388, controls: _x_389, requirements: _x_390 }; { let _x_392 = (a_383).cursor; { let _x_393 = crate::PublicationLinkageReadPublicationClosure { value: _x_391, cursor: _x_392 }; { let _x_394 = Ok(_x_393); _x_394 } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationFile(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationFile, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_51 = 65536; { let _x_54 = publicationWireReadArray(&(input), cursor, _x_51)?; match _x_54 {
+        Err(a_55) => { let _x_68 = Err(a_55); _x_68 },
+        Ok(a_57) => { let _x_94 = (a_57).count; { let _x_95 = 2; { let _x_96 = (_x_94 == _x_95); match _x_96 {
+        false => { let _x_101 = crate::CborError::WrongType; { let _x_102 = Err(_x_101); _x_102 } },
+        true => { let _x_118 = (a_57).cursor; { let _x_119 = readPublicationWireText(&(input), _x_118)?; match _x_119 {
+        Err(a_120) => { let _x_121 = Err(a_120); _x_121 },
+        Ok(a_122) => { let _x_131 = (a_122).cursor; { let _x_132 = 32; { let _x_133 = readPublicationWireBytes(&(input), _x_131, _x_132)?; match _x_133 {
+        Err(a_134) => { let _x_135 = Err(a_134); _x_135 },
+        Ok(a_136) => { let _x_138 = (a_122).value; { let _x_139 = (a_136).value; { let _x_140 = crate::PublicationFile { path: _x_138, digest: _x_139 }; { let _x_141 = (a_136).cursor; { let _x_142 = crate::PublicationLinkageReadPublicationFile { value: _x_140, cursor: _x_141 }; { let _x_143 = Ok(_x_142); _x_143 } } } } } },
+    } } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationFiles(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationFiles, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 65536; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 256; { let _x_57 = readPublicationLinkagePublicationFilesGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationLinkageGroupsPublicationFiles { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationFiles { chunks: chunks_58 }; { let _x_71 = crate::PublicationLinkageReadPublicationFiles { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationFilesBatch(input: &crate::PublicationWireInput, cursor: u64, fuel: u64) -> Result<crate::PublicationLinkageBatchPublicationFiles, crate::ComputeError> {
+    Ok({ let _x_2 = __prod_owned_46_readPublicationLinkagePublicationFilesBatchAcc(&(input), cursor, alloc::vec::Vec::new(), fuel)?; _x_2 })
+}
+
+pub fn readPublicationLinkagePublicationFilesBatchAcc(x_1: &crate::PublicationWireInput, x_2: u64, x_3: &[crate::PublicationFile], x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationFiles, crate::ComputeError> {
+    __prod_owned_46_readPublicationLinkagePublicationFilesBatchAcc(x_1, x_2, alloc::borrow::ToOwned::to_owned(x_3), x_4)
+}
+
+fn __prod_owned_46_readPublicationLinkagePublicationFilesBatchAcc(x_1: &crate::PublicationWireInput, mut x_2: u64, mut x_3: alloc::vec::Vec<crate::PublicationFile>, mut x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationFiles, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => crate::PublicationLinkageBatchPublicationFiles { items: x_3, cursor: x_2, cause: None },
+        _ => { let n_31 = (x_4).saturating_sub(1); { let _x_48 = readPublicationLinkagePublicationFile(&(x_1), x_2)?; match _x_48 {
+        Err(a_49) => { let _x_53 = Some(a_49); crate::PublicationLinkageBatchPublicationFiles { items: x_3, cursor: x_2, cause: _x_53 } },
+        Ok(a_51) => { let _x_55 = (a_51).cursor; { let _x_57 = (a_51).value; { let _x_59 = alloc::vec![_x_57]; { let _x_60 = { let mut __append = (x_3, _x_59); __append.0.extend(__append.1); __append.0 }; { (x_2, x_3, x_4,) = (_x_55, _x_60, n_31,); continue; } } } } },
+    } } },
+    }); }
+}
+
+pub fn readPublicationLinkagePublicationFilesGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationLinkageGroupsPublicationFiles, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_164 = 0; { let _x_165 = (x_3 == _x_164); match _x_165 {
+        false => { let _x_172 = crate::CborError::ValueLimit; { let _x_173 = Some(_x_172); { let _x_168 = crate::PublicationLinkageGroupsPublicationFiles { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_173 }; _x_168 } } },
+        true => { let _x_171 = crate::PublicationLinkageGroupsPublicationFiles { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_171 },
+    } } },
+        _ => { let n_130 = (x_4).saturating_sub(1); { let _x_219 = 0; { let _x_220 = (x_3 == _x_219); match _x_220 {
+        false => { let _x_253 = 256; { let _x_254 = (x_3 <= _x_253); match _x_254 {
+        false => { let _x_263 = 256; { let _y_256 = _x_263; { let _x_257 = readPublicationLinkagePublicationFilesBatch(&(x_1), x_2, _y_256)?; match _x_257 {
+        crate::PublicationLinkageBatchPublicationFiles { items: items_258, cursor: cursor_259, cause: cause_260 } => match cause_260 {
+        None => { let _x_297 = 256; { let _x_298 = (x_3 <= _x_297); match _x_298 {
+        false => { let _x_308 = 256; { let _y_300 = _x_308; { let _x_301 = core::convert::identity::<u64>(x_3).saturating_sub(_y_300); { let _x_302 = readPublicationLinkagePublicationFilesGroups(&(x_1), cursor_259, _x_301, n_130)?; match _x_302 {
+        crate::PublicationLinkageGroupsPublicationFiles { chunks: chunks_303, cursor: cursor_304, cause: cause_305 } => { let _x_310 = crate::PublicationFilesChunk { entries: items_258 }; { let _x_311 = { let mut __list = (_x_310, chunks_303); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_312 = crate::PublicationLinkageGroupsPublicationFiles { chunks: _x_311, cursor: cursor_304, cause: cause_305 }; _x_312 } } },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationLinkagePublicationFilesGroups(&(x_1), cursor_259, prod_local_1, n_130)?; match prod_local_2 {
+        crate::PublicationLinkageGroupsPublicationFiles { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => { let prod_local_6 = crate::PublicationFilesChunk { entries: items_258 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationLinkageGroupsPublicationFiles { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+    } } } },
+    } } },
+        Some(val_290) => { let _x_315 = crate::PublicationLinkageGroupsPublicationFiles { chunks: alloc::vec::Vec::new(), cursor: cursor_259, cause: cause_260 }; _x_315 },
+    },
+    } } } },
+        true => { let prod_local_9 = x_3; { let prod_local_10 = readPublicationLinkagePublicationFilesBatch(&(x_1), x_2, prod_local_9)?; match prod_local_10 {
+        crate::PublicationLinkageBatchPublicationFiles { items: prod_local_11, cursor: prod_local_12, cause: prod_local_13 } => match prod_local_13 {
+        None => { let prod_local_14 = 256; { let prod_local_15 = (x_3 <= prod_local_14); match prod_local_15 {
+        false => { let prod_local_17 = 256; { let prod_local_18 = prod_local_17; { let prod_local_19 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_18); { let prod_local_20 = readPublicationLinkagePublicationFilesGroups(&(x_1), prod_local_12, prod_local_19, n_130)?; match prod_local_20 {
+        crate::PublicationLinkageGroupsPublicationFiles { chunks: prod_local_21, cursor: prod_local_22, cause: prod_local_23 } => { let prod_local_24 = crate::PublicationFilesChunk { entries: prod_local_11 }; { let prod_local_25 = { let mut __list = (prod_local_24, prod_local_21); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_26 = crate::PublicationLinkageGroupsPublicationFiles { chunks: prod_local_25, cursor: prod_local_22, cause: prod_local_23 }; prod_local_26 } } },
+    } } } } },
+        true => { let prod_local_27 = x_3; { let prod_local_28 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_27); { let prod_local_29 = readPublicationLinkagePublicationFilesGroups(&(x_1), prod_local_12, prod_local_28, n_130)?; match prod_local_29 {
+        crate::PublicationLinkageGroupsPublicationFiles { chunks: prod_local_30, cursor: prod_local_31, cause: prod_local_32 } => { let prod_local_33 = crate::PublicationFilesChunk { entries: prod_local_11 }; { let prod_local_34 = { let mut __list = (prod_local_33, prod_local_30); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_35 = crate::PublicationLinkageGroupsPublicationFiles { chunks: prod_local_34, cursor: prod_local_31, cause: prod_local_32 }; prod_local_35 } } },
+    } } } },
+    } } },
+        Some(prod_local_36) => { let prod_local_38 = crate::PublicationLinkageGroupsPublicationFiles { chunks: alloc::vec::Vec::new(), cursor: prod_local_12, cause: prod_local_13 }; prod_local_38 },
+    },
+    } } },
+    } } },
+        true => { let _x_318 = crate::PublicationLinkageGroupsPublicationFiles { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_318 },
+    } } } },
+    })
+}
+
+pub fn readPublicationLinkagePublicationIds(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationIds, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 65536; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 256; { let _x_57 = readPublicationLinkagePublicationIdsGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationLinkageGroupsPublicationIds { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationIds { chunks: chunks_58 }; { let _x_71 = crate::PublicationLinkageReadPublicationIds { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationIdsBatch(input: &crate::PublicationWireInput, cursor: u64, fuel: u64) -> Result<crate::PublicationLinkageBatchPublicationIds, crate::ComputeError> {
+    Ok({ let _x_2 = __prod_owned_44_readPublicationLinkagePublicationIdsBatchAcc(&(input), cursor, alloc::vec::Vec::new(), fuel)?; _x_2 })
+}
+
+pub fn readPublicationLinkagePublicationIdsBatchAcc(x_1: &crate::PublicationWireInput, x_2: u64, x_3: &[alloc::string::String], x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationIds, crate::ComputeError> {
+    __prod_owned_44_readPublicationLinkagePublicationIdsBatchAcc(x_1, x_2, alloc::borrow::ToOwned::to_owned(x_3), x_4)
+}
+
+fn __prod_owned_44_readPublicationLinkagePublicationIdsBatchAcc(x_1: &crate::PublicationWireInput, mut x_2: u64, mut x_3: alloc::vec::Vec<alloc::string::String>, mut x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationIds, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => crate::PublicationLinkageBatchPublicationIds { items: x_3, cursor: x_2, cause: None },
+        _ => { let n_31 = (x_4).saturating_sub(1); { let _x_48 = readPublicationWireText(&(x_1), x_2)?; match _x_48 {
+        Err(a_49) => { let _x_53 = Some(a_49); crate::PublicationLinkageBatchPublicationIds { items: x_3, cursor: x_2, cause: _x_53 } },
+        Ok(a_51) => { let _x_55 = (a_51).cursor; { let _x_57 = (a_51).value; { let _x_59 = alloc::vec![_x_57]; { let _x_60 = { let mut __append = (x_3, _x_59); __append.0.extend(__append.1); __append.0 }; { (x_2, x_3, x_4,) = (_x_55, _x_60, n_31,); continue; } } } } },
+    } } },
+    }); }
+}
+
+pub fn readPublicationLinkagePublicationIdsGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationLinkageGroupsPublicationIds, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_164 = 0; { let _x_165 = (x_3 == _x_164); match _x_165 {
+        false => { let _x_172 = crate::CborError::ValueLimit; { let _x_173 = Some(_x_172); { let _x_168 = crate::PublicationLinkageGroupsPublicationIds { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_173 }; _x_168 } } },
+        true => { let _x_171 = crate::PublicationLinkageGroupsPublicationIds { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_171 },
+    } } },
+        _ => { let n_130 = (x_4).saturating_sub(1); { let _x_219 = 0; { let _x_220 = (x_3 == _x_219); match _x_220 {
+        false => { let _x_253 = 256; { let _x_254 = (x_3 <= _x_253); match _x_254 {
+        false => { let _x_263 = 256; { let _y_256 = _x_263; { let _x_257 = readPublicationLinkagePublicationIdsBatch(&(x_1), x_2, _y_256)?; match _x_257 {
+        crate::PublicationLinkageBatchPublicationIds { items: items_258, cursor: cursor_259, cause: cause_260 } => match cause_260 {
+        None => { let _x_297 = 256; { let _x_298 = (x_3 <= _x_297); match _x_298 {
+        false => { let _x_308 = 256; { let _y_300 = _x_308; { let _x_301 = core::convert::identity::<u64>(x_3).saturating_sub(_y_300); { let _x_302 = readPublicationLinkagePublicationIdsGroups(&(x_1), cursor_259, _x_301, n_130)?; match _x_302 {
+        crate::PublicationLinkageGroupsPublicationIds { chunks: chunks_303, cursor: cursor_304, cause: cause_305 } => { let _x_310 = crate::PublicationIdsChunk { entries: items_258 }; { let _x_311 = { let mut __list = (_x_310, chunks_303); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_312 = crate::PublicationLinkageGroupsPublicationIds { chunks: _x_311, cursor: cursor_304, cause: cause_305 }; _x_312 } } },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationLinkagePublicationIdsGroups(&(x_1), cursor_259, prod_local_1, n_130)?; match prod_local_2 {
+        crate::PublicationLinkageGroupsPublicationIds { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => { let prod_local_6 = crate::PublicationIdsChunk { entries: items_258 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationLinkageGroupsPublicationIds { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+    } } } },
+    } } },
+        Some(val_290) => { let _x_315 = crate::PublicationLinkageGroupsPublicationIds { chunks: alloc::vec::Vec::new(), cursor: cursor_259, cause: cause_260 }; _x_315 },
+    },
+    } } } },
+        true => { let prod_local_9 = x_3; { let prod_local_10 = readPublicationLinkagePublicationIdsBatch(&(x_1), x_2, prod_local_9)?; match prod_local_10 {
+        crate::PublicationLinkageBatchPublicationIds { items: prod_local_11, cursor: prod_local_12, cause: prod_local_13 } => match prod_local_13 {
+        None => { let prod_local_14 = 256; { let prod_local_15 = (x_3 <= prod_local_14); match prod_local_15 {
+        false => { let prod_local_17 = 256; { let prod_local_18 = prod_local_17; { let prod_local_19 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_18); { let prod_local_20 = readPublicationLinkagePublicationIdsGroups(&(x_1), prod_local_12, prod_local_19, n_130)?; match prod_local_20 {
+        crate::PublicationLinkageGroupsPublicationIds { chunks: prod_local_21, cursor: prod_local_22, cause: prod_local_23 } => { let prod_local_24 = crate::PublicationIdsChunk { entries: prod_local_11 }; { let prod_local_25 = { let mut __list = (prod_local_24, prod_local_21); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_26 = crate::PublicationLinkageGroupsPublicationIds { chunks: prod_local_25, cursor: prod_local_22, cause: prod_local_23 }; prod_local_26 } } },
+    } } } } },
+        true => { let prod_local_27 = x_3; { let prod_local_28 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_27); { let prod_local_29 = readPublicationLinkagePublicationIdsGroups(&(x_1), prod_local_12, prod_local_28, n_130)?; match prod_local_29 {
+        crate::PublicationLinkageGroupsPublicationIds { chunks: prod_local_30, cursor: prod_local_31, cause: prod_local_32 } => { let prod_local_33 = crate::PublicationIdsChunk { entries: prod_local_11 }; { let prod_local_34 = { let mut __list = (prod_local_33, prod_local_30); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_35 = crate::PublicationLinkageGroupsPublicationIds { chunks: prod_local_34, cursor: prod_local_31, cause: prod_local_32 }; prod_local_35 } } },
+    } } } },
+    } } },
+        Some(prod_local_36) => { let prod_local_38 = crate::PublicationLinkageGroupsPublicationIds { chunks: alloc::vec::Vec::new(), cursor: prod_local_12, cause: prod_local_13 }; prod_local_38 },
+    },
+    } } },
+    } } },
+        true => { let _x_318 = crate::PublicationLinkageGroupsPublicationIds { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_318 },
+    } } } },
+    })
+}
+
+pub fn readPublicationLinkagePublicationInputSelector(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationInputSelector, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_160 = 65536; { let _x_163 = publicationWireReadArray(&(input), cursor, _x_160)?; match _x_163 {
+        Err(a_164) => { let _x_201 = Err(a_164); _x_201 },
+        Ok(a_166) => { let _x_287 = (a_166).cursor; { let _x_288 = readPublicationWireNat(&(input), _x_287)?; match _x_288 {
+        Err(a_289) => { let _x_290 = Err(a_289); _x_290 },
+        Ok(a_291) => { let _x_365 = (a_291).value; { let _x_366 = 0; { let _x_367 = (_x_365 == _x_366); match _x_367 {
+        false => { let _y_369 = _x_367; match _y_369 {
+        false => { let _x_419 = (a_291).value; { let _x_420 = 1; { let _x_421 = (_x_419 == _x_420); match _x_421 {
+        false => { let _y_423 = _x_421; match _y_423 {
+        false => { let _x_443 = (a_291).value; { let _x_444 = 2; { let _x_445 = (_x_443 == _x_444); match _x_445 {
+        false => { let _y_447 = _x_445; match _y_447 {
+        false => { let _x_455 = crate::CborError::WrongType; { let _x_456 = Err(_x_455); _x_456 } },
+        true => { let _x_457 = crate::PublicationInputSelector::Target; { let _x_458 = (a_291).cursor; { let _x_459 = crate::PublicationLinkageReadPublicationInputSelector { value: _x_457, cursor: _x_458 }; { let _x_460 = Ok(_x_459); _x_460 } } } },
+    } },
+        true => { let _x_461 = (a_166).count; { let _x_462 = 1; { let _x_463 = (_x_461 == _x_462); { let prod_local_0 = _x_463; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = crate::PublicationInputSelector::Target; { let prod_local_4 = (a_291).cursor; { let prod_local_5 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_3, cursor: prod_local_4 }; { let prod_local_6 = Ok(prod_local_5); prod_local_6 } } } },
+    } } } } },
+    } } } },
+        true => { let _x_470 = (a_291).cursor; { let _x_471 = readPublicationLinkagePublicationMember(&(input), _x_470)?; match _x_471 {
+        Err(a_472) => { let _x_473 = Err(a_472); _x_473 },
+        Ok(a_474) => { let _x_476 = (a_474).value; { let _x_477 = crate::PublicationInputSelector::SourceMember { field_0: _x_476 }; { let _x_478 = (a_474).cursor; { let _x_479 = crate::PublicationLinkageReadPublicationInputSelector { value: _x_477, cursor: _x_478 }; { let _x_480 = Ok(_x_479); _x_480 } } } } },
+    } } },
+    } },
+        true => { let _x_481 = (a_166).count; { let _x_482 = 2; { let _x_483 = (_x_481 == _x_482); { let prod_local_7 = _x_483; match prod_local_7 {
+        false => { let prod_local_8 = (a_291).value; { let prod_local_9 = 2; { let prod_local_10 = (prod_local_8 == prod_local_9); match prod_local_10 {
+        false => { let prod_local_12 = prod_local_10; match prod_local_12 {
+        false => { let prod_local_13 = crate::CborError::WrongType; { let prod_local_14 = Err(prod_local_13); prod_local_14 } },
+        true => { let prod_local_15 = crate::PublicationInputSelector::Target; { let prod_local_16 = (a_291).cursor; { let prod_local_17 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_15, cursor: prod_local_16 }; { let prod_local_18 = Ok(prod_local_17); prod_local_18 } } } },
+    } },
+        true => { let prod_local_19 = (a_166).count; { let prod_local_20 = 1; { let prod_local_21 = (prod_local_19 == prod_local_20); { let prod_local_22 = prod_local_21; match prod_local_22 {
+        false => { let prod_local_23 = crate::CborError::WrongType; { let prod_local_24 = Err(prod_local_23); prod_local_24 } },
+        true => { let prod_local_25 = crate::PublicationInputSelector::Target; { let prod_local_26 = (a_291).cursor; { let prod_local_27 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_25, cursor: prod_local_26 }; { let prod_local_28 = Ok(prod_local_27); prod_local_28 } } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_29 = (a_291).cursor; { let prod_local_30 = readPublicationLinkagePublicationMember(&(input), prod_local_29)?; match prod_local_30 {
+        Err(prod_local_31) => { let prod_local_32 = Err(prod_local_31); prod_local_32 },
+        Ok(prod_local_33) => { let prod_local_34 = (prod_local_33).value; { let prod_local_35 = crate::PublicationInputSelector::SourceMember { field_0: prod_local_34 }; { let prod_local_36 = (prod_local_33).cursor; { let prod_local_37 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_35, cursor: prod_local_36 }; { let prod_local_38 = Ok(prod_local_37); prod_local_38 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_490 = (a_291).cursor; { let _x_491 = readPublicationWireText(&(input), _x_490)?; match _x_491 {
+        Err(a_492) => { let _x_493 = Err(a_492); _x_493 },
+        Ok(a_494) => { let _x_496 = (a_494).value; { let _x_497 = crate::PublicationInputSelector::BuildFile { field_0: _x_496 }; { let _x_498 = (a_494).cursor; { let _x_499 = crate::PublicationLinkageReadPublicationInputSelector { value: _x_497, cursor: _x_498 }; { let _x_500 = Ok(_x_499); _x_500 } } } } },
+    } } },
+    } },
+        true => { let _x_501 = (a_166).count; { let _x_502 = 2; { let _x_503 = (_x_501 == _x_502); { let prod_local_39 = _x_503; match prod_local_39 {
+        false => { let prod_local_40 = (a_291).value; { let prod_local_41 = 1; { let prod_local_42 = (prod_local_40 == prod_local_41); match prod_local_42 {
+        false => { let prod_local_44 = prod_local_42; match prod_local_44 {
+        false => { let prod_local_45 = (a_291).value; { let prod_local_46 = 2; { let prod_local_47 = (prod_local_45 == prod_local_46); match prod_local_47 {
+        false => { let prod_local_49 = prod_local_47; match prod_local_49 {
+        false => { let prod_local_50 = crate::CborError::WrongType; { let prod_local_51 = Err(prod_local_50); prod_local_51 } },
+        true => { let prod_local_52 = crate::PublicationInputSelector::Target; { let prod_local_53 = (a_291).cursor; { let prod_local_54 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_52, cursor: prod_local_53 }; { let prod_local_55 = Ok(prod_local_54); prod_local_55 } } } },
+    } },
+        true => { let prod_local_56 = (a_166).count; { let prod_local_57 = 1; { let prod_local_58 = (prod_local_56 == prod_local_57); { let prod_local_59 = prod_local_58; match prod_local_59 {
+        false => { let prod_local_60 = crate::CborError::WrongType; { let prod_local_61 = Err(prod_local_60); prod_local_61 } },
+        true => { let prod_local_62 = crate::PublicationInputSelector::Target; { let prod_local_63 = (a_291).cursor; { let prod_local_64 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_62, cursor: prod_local_63 }; { let prod_local_65 = Ok(prod_local_64); prod_local_65 } } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_66 = (a_291).cursor; { let prod_local_67 = readPublicationLinkagePublicationMember(&(input), prod_local_66)?; match prod_local_67 {
+        Err(prod_local_68) => { let prod_local_69 = Err(prod_local_68); prod_local_69 },
+        Ok(prod_local_70) => { let prod_local_71 = (prod_local_70).value; { let prod_local_72 = crate::PublicationInputSelector::SourceMember { field_0: prod_local_71 }; { let prod_local_73 = (prod_local_70).cursor; { let prod_local_74 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_72, cursor: prod_local_73 }; { let prod_local_75 = Ok(prod_local_74); prod_local_75 } } } } },
+    } } },
+    } },
+        true => { let prod_local_76 = (a_166).count; { let prod_local_77 = 2; { let prod_local_78 = (prod_local_76 == prod_local_77); { let prod_local_79 = prod_local_78; match prod_local_79 {
+        false => { let prod_local_80 = (a_291).value; { let prod_local_81 = 2; { let prod_local_82 = (prod_local_80 == prod_local_81); match prod_local_82 {
+        false => { let prod_local_84 = prod_local_82; match prod_local_84 {
+        false => { let prod_local_85 = crate::CborError::WrongType; { let prod_local_86 = Err(prod_local_85); prod_local_86 } },
+        true => { let prod_local_87 = crate::PublicationInputSelector::Target; { let prod_local_88 = (a_291).cursor; { let prod_local_89 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_87, cursor: prod_local_88 }; { let prod_local_90 = Ok(prod_local_89); prod_local_90 } } } },
+    } },
+        true => { let prod_local_91 = (a_166).count; { let prod_local_92 = 1; { let prod_local_93 = (prod_local_91 == prod_local_92); { let prod_local_94 = prod_local_93; match prod_local_94 {
+        false => { let prod_local_95 = crate::CborError::WrongType; { let prod_local_96 = Err(prod_local_95); prod_local_96 } },
+        true => { let prod_local_97 = crate::PublicationInputSelector::Target; { let prod_local_98 = (a_291).cursor; { let prod_local_99 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_97, cursor: prod_local_98 }; { let prod_local_100 = Ok(prod_local_99); prod_local_100 } } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_101 = (a_291).cursor; { let prod_local_102 = readPublicationLinkagePublicationMember(&(input), prod_local_101)?; match prod_local_102 {
+        Err(prod_local_103) => { let prod_local_104 = Err(prod_local_103); prod_local_104 },
+        Ok(prod_local_105) => { let prod_local_106 = (prod_local_105).value; { let prod_local_107 = crate::PublicationInputSelector::SourceMember { field_0: prod_local_106 }; { let prod_local_108 = (prod_local_105).cursor; { let prod_local_109 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_107, cursor: prod_local_108 }; { let prod_local_110 = Ok(prod_local_109); prod_local_110 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_111 = (a_291).cursor; { let prod_local_112 = readPublicationWireText(&(input), prod_local_111)?; match prod_local_112 {
+        Err(prod_local_113) => { let prod_local_114 = Err(prod_local_113); prod_local_114 },
+        Ok(prod_local_115) => { let prod_local_116 = (prod_local_115).value; { let prod_local_117 = crate::PublicationInputSelector::BuildFile { field_0: prod_local_116 }; { let prod_local_118 = (prod_local_115).cursor; { let prod_local_119 = crate::PublicationLinkageReadPublicationInputSelector { value: prod_local_117, cursor: prod_local_118 }; { let prod_local_120 = Ok(prod_local_119); prod_local_120 } } } } },
+    } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationMember(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationMember, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_48 = 65536; { let _x_51 = publicationWireReadArray(&(input), cursor, _x_48)?; match _x_51 {
+        Err(a_52) => { let _x_64 = Err(a_52); _x_64 },
+        Ok(a_54) => { let _x_89 = (a_54).count; { let _x_90 = 2; { let _x_91 = (_x_89 == _x_90); match _x_91 {
+        false => { let _x_96 = crate::CborError::WrongType; { let _x_97 = Err(_x_96); _x_97 } },
+        true => { let _x_112 = (a_54).cursor; { let _x_113 = readPublicationWireText(&(input), _x_112)?; match _x_113 {
+        Err(a_114) => { let _x_115 = Err(a_114); _x_115 },
+        Ok(a_116) => { let _x_125 = (a_116).cursor; { let _x_126 = readPublicationWireText(&(input), _x_125)?; match _x_126 {
+        Err(a_127) => { let _x_128 = Err(a_127); _x_128 },
+        Ok(a_129) => { let _x_131 = (a_116).value; { let _x_132 = (a_129).value; { let _x_133 = crate::PublicationMember { module: _x_131, name: _x_132 }; { let _x_134 = (a_129).cursor; { let _x_135 = crate::PublicationLinkageReadPublicationMember { value: _x_133, cursor: _x_134 }; { let _x_136 = Ok(_x_135); _x_136 } } } } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationRecord(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationRecord, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_51 = 65536; { let _x_54 = publicationWireReadArray(&(input), cursor, _x_51)?; match _x_54 {
+        Err(a_55) => { let _x_68 = Err(a_55); _x_68 },
+        Ok(a_57) => { let _x_94 = (a_57).count; { let _x_95 = 2; { let _x_96 = (_x_94 == _x_95); match _x_96 {
+        false => { let _x_101 = crate::CborError::WrongType; { let _x_102 = Err(_x_101); _x_102 } },
+        true => { let _x_118 = (a_57).cursor; { let _x_119 = readPublicationWireText(&(input), _x_118)?; match _x_119 {
+        Err(a_120) => { let _x_121 = Err(a_120); _x_121 },
+        Ok(a_122) => { let _x_131 = (a_122).cursor; { let _x_132 = 32; { let _x_133 = readPublicationWireBytes(&(input), _x_131, _x_132)?; match _x_133 {
+        Err(a_134) => { let _x_135 = Err(a_134); _x_135 },
+        Ok(a_136) => { let _x_138 = (a_122).value; { let _x_139 = (a_136).value; { let _x_140 = crate::PublicationRecord { id: _x_138, digest: _x_139 }; { let _x_141 = (a_136).cursor; { let _x_142 = crate::PublicationLinkageReadPublicationRecord { value: _x_140, cursor: _x_141 }; { let _x_143 = Ok(_x_142); _x_143 } } } } } },
+    } } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationRecords(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationRecords, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 65536; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 256; { let _x_57 = readPublicationLinkagePublicationRecordsGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationLinkageGroupsPublicationRecords { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationRecords { chunks: chunks_58 }; { let _x_71 = crate::PublicationLinkageReadPublicationRecords { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationRecordsBatch(input: &crate::PublicationWireInput, cursor: u64, fuel: u64) -> Result<crate::PublicationLinkageBatchPublicationRecords, crate::ComputeError> {
+    Ok({ let _x_2 = __prod_owned_48_readPublicationLinkagePublicationRecordsBatchAcc(&(input), cursor, alloc::vec::Vec::new(), fuel)?; _x_2 })
+}
+
+pub fn readPublicationLinkagePublicationRecordsBatchAcc(x_1: &crate::PublicationWireInput, x_2: u64, x_3: &[crate::PublicationRecord], x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationRecords, crate::ComputeError> {
+    __prod_owned_48_readPublicationLinkagePublicationRecordsBatchAcc(x_1, x_2, alloc::borrow::ToOwned::to_owned(x_3), x_4)
+}
+
+fn __prod_owned_48_readPublicationLinkagePublicationRecordsBatchAcc(x_1: &crate::PublicationWireInput, mut x_2: u64, mut x_3: alloc::vec::Vec<crate::PublicationRecord>, mut x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationRecords, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => crate::PublicationLinkageBatchPublicationRecords { items: x_3, cursor: x_2, cause: None },
+        _ => { let n_31 = (x_4).saturating_sub(1); { let _x_48 = readPublicationLinkagePublicationRecord(&(x_1), x_2)?; match _x_48 {
+        Err(a_49) => { let _x_53 = Some(a_49); crate::PublicationLinkageBatchPublicationRecords { items: x_3, cursor: x_2, cause: _x_53 } },
+        Ok(a_51) => { let _x_55 = (a_51).cursor; { let _x_57 = (a_51).value; { let _x_59 = alloc::vec![_x_57]; { let _x_60 = { let mut __append = (x_3, _x_59); __append.0.extend(__append.1); __append.0 }; { (x_2, x_3, x_4,) = (_x_55, _x_60, n_31,); continue; } } } } },
+    } } },
+    }); }
+}
+
+pub fn readPublicationLinkagePublicationRecordsGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationLinkageGroupsPublicationRecords, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_164 = 0; { let _x_165 = (x_3 == _x_164); match _x_165 {
+        false => { let _x_172 = crate::CborError::ValueLimit; { let _x_173 = Some(_x_172); { let _x_168 = crate::PublicationLinkageGroupsPublicationRecords { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_173 }; _x_168 } } },
+        true => { let _x_171 = crate::PublicationLinkageGroupsPublicationRecords { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_171 },
+    } } },
+        _ => { let n_130 = (x_4).saturating_sub(1); { let _x_219 = 0; { let _x_220 = (x_3 == _x_219); match _x_220 {
+        false => { let _x_253 = 256; { let _x_254 = (x_3 <= _x_253); match _x_254 {
+        false => { let _x_263 = 256; { let _y_256 = _x_263; { let _x_257 = readPublicationLinkagePublicationRecordsBatch(&(x_1), x_2, _y_256)?; match _x_257 {
+        crate::PublicationLinkageBatchPublicationRecords { items: items_258, cursor: cursor_259, cause: cause_260 } => match cause_260 {
+        None => { let _x_297 = 256; { let _x_298 = (x_3 <= _x_297); match _x_298 {
+        false => { let _x_308 = 256; { let _y_300 = _x_308; { let _x_301 = core::convert::identity::<u64>(x_3).saturating_sub(_y_300); { let _x_302 = readPublicationLinkagePublicationRecordsGroups(&(x_1), cursor_259, _x_301, n_130)?; match _x_302 {
+        crate::PublicationLinkageGroupsPublicationRecords { chunks: chunks_303, cursor: cursor_304, cause: cause_305 } => { let _x_310 = crate::PublicationRecordsChunk { entries: items_258 }; { let _x_311 = { let mut __list = (_x_310, chunks_303); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_312 = crate::PublicationLinkageGroupsPublicationRecords { chunks: _x_311, cursor: cursor_304, cause: cause_305 }; _x_312 } } },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationLinkagePublicationRecordsGroups(&(x_1), cursor_259, prod_local_1, n_130)?; match prod_local_2 {
+        crate::PublicationLinkageGroupsPublicationRecords { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => { let prod_local_6 = crate::PublicationRecordsChunk { entries: items_258 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationLinkageGroupsPublicationRecords { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+    } } } },
+    } } },
+        Some(val_290) => { let _x_315 = crate::PublicationLinkageGroupsPublicationRecords { chunks: alloc::vec::Vec::new(), cursor: cursor_259, cause: cause_260 }; _x_315 },
+    },
+    } } } },
+        true => { let prod_local_9 = x_3; { let prod_local_10 = readPublicationLinkagePublicationRecordsBatch(&(x_1), x_2, prod_local_9)?; match prod_local_10 {
+        crate::PublicationLinkageBatchPublicationRecords { items: prod_local_11, cursor: prod_local_12, cause: prod_local_13 } => match prod_local_13 {
+        None => { let prod_local_14 = 256; { let prod_local_15 = (x_3 <= prod_local_14); match prod_local_15 {
+        false => { let prod_local_17 = 256; { let prod_local_18 = prod_local_17; { let prod_local_19 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_18); { let prod_local_20 = readPublicationLinkagePublicationRecordsGroups(&(x_1), prod_local_12, prod_local_19, n_130)?; match prod_local_20 {
+        crate::PublicationLinkageGroupsPublicationRecords { chunks: prod_local_21, cursor: prod_local_22, cause: prod_local_23 } => { let prod_local_24 = crate::PublicationRecordsChunk { entries: prod_local_11 }; { let prod_local_25 = { let mut __list = (prod_local_24, prod_local_21); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_26 = crate::PublicationLinkageGroupsPublicationRecords { chunks: prod_local_25, cursor: prod_local_22, cause: prod_local_23 }; prod_local_26 } } },
+    } } } } },
+        true => { let prod_local_27 = x_3; { let prod_local_28 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_27); { let prod_local_29 = readPublicationLinkagePublicationRecordsGroups(&(x_1), prod_local_12, prod_local_28, n_130)?; match prod_local_29 {
+        crate::PublicationLinkageGroupsPublicationRecords { chunks: prod_local_30, cursor: prod_local_31, cause: prod_local_32 } => { let prod_local_33 = crate::PublicationRecordsChunk { entries: prod_local_11 }; { let prod_local_34 = { let mut __list = (prod_local_33, prod_local_30); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_35 = crate::PublicationLinkageGroupsPublicationRecords { chunks: prod_local_34, cursor: prod_local_31, cause: prod_local_32 }; prod_local_35 } } },
+    } } } },
+    } } },
+        Some(prod_local_36) => { let prod_local_38 = crate::PublicationLinkageGroupsPublicationRecords { chunks: alloc::vec::Vec::new(), cursor: prod_local_12, cause: prod_local_13 }; prod_local_38 },
+    },
+    } } },
+    } } },
+        true => { let _x_318 = crate::PublicationLinkageGroupsPublicationRecords { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_318 },
+    } } } },
+    })
+}
+
+pub fn readPublicationLinkagePublicationRequirement(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationRequirement, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_59 = 65536; { let _x_62 = publicationWireReadArray(&(input), cursor, _x_59)?; match _x_62 {
+        Err(a_63) => { let _x_76 = Err(a_63); _x_76 },
+        Ok(a_65) => { let _x_109 = (a_65).count; { let _x_110 = 3; { let _x_111 = (_x_109 == _x_110); match _x_111 {
+        false => { let _x_116 = crate::CborError::WrongType; { let _x_117 = Err(_x_116); _x_117 } },
+        true => { let _x_140 = (a_65).cursor; { let _x_141 = readPublicationWireNat(&(input), _x_140)?; match _x_141 {
+        Err(a_142) => { let _x_143 = Err(a_142); _x_143 },
+        Ok(a_144) => { let _x_161 = (a_144).cursor; { let _x_162 = readPublicationLinkagePublicationMember(&(input), _x_161)?; match _x_162 {
+        Err(a_163) => { let _x_164 = Err(a_163); _x_164 },
+        Ok(a_165) => { let _x_175 = (a_165).cursor; { let _x_176 = readPublicationLinkagePublicationRequirementValue(&(input), _x_175)?; match _x_176 {
+        Err(a_177) => { let _x_178 = Err(a_177); _x_178 },
+        Ok(a_179) => { let _x_181 = (a_144).value; { let _x_182 = (a_165).value; { let _x_183 = (a_179).value; { let _x_184 = crate::PublicationRequirement { obligation: _x_181, member: _x_182, requirement: _x_183 }; { let _x_185 = (a_179).cursor; { let _x_186 = crate::PublicationLinkageReadPublicationRequirement { value: _x_184, cursor: _x_185 }; { let _x_187 = Ok(_x_186); _x_187 } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationRequirementValue(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationRequirementValue, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_210 = 65536; { let _x_213 = publicationWireReadArray(&(input), cursor, _x_210)?; match _x_213 {
+        Err(a_214) => { let _x_256 = Err(a_214); _x_256 },
+        Ok(a_216) => { let _x_378 = (a_216).cursor; { let _x_379 = readPublicationWireNat(&(input), _x_378)?; match _x_379 {
+        Err(a_380) => { let _x_381 = Err(a_380); _x_381 },
+        Ok(a_382) => { let _x_492 = (a_382).value; { let _x_493 = 0; { let _x_494 = (_x_492 == _x_493); match _x_494 {
+        false => { let _y_496 = _x_494; match _y_496 {
+        false => { let _x_581 = (a_382).value; { let _x_582 = 1; { let _x_583 = (_x_581 == _x_582); match _x_583 {
+        false => { let _y_585 = _x_583; match _y_585 {
+        false => { let _x_622 = (a_382).value; { let _x_623 = 2; { let _x_624 = (_x_622 == _x_623); match _x_624 {
+        false => { let _y_626 = _x_624; match _y_626 {
+        false => { let _x_634 = crate::CborError::WrongType; { let _x_635 = Err(_x_634); _x_635 } },
+        true => { let _x_651 = (a_382).cursor; { let _x_652 = readPublicationWireText(&(input), _x_651)?; match _x_652 {
+        Err(a_653) => { let _x_654 = Err(a_653); _x_654 },
+        Ok(a_655) => { let _x_665 = (a_655).cursor; { let _x_666 = readPublicationWireText(&(input), _x_665)?; match _x_666 {
+        Err(a_667) => { let _x_668 = Err(a_667); _x_668 },
+        Ok(a_669) => { let _x_671 = (a_655).value; { let _x_672 = (a_669).value; { let _x_673 = crate::AssessmentRequirement { criterion: _x_671, subject: _x_672 }; { let _x_674 = crate::PublicationRequirementValue::Assessment { field_0: _x_673 }; { let _x_675 = (a_669).cursor; { let _x_676 = crate::PublicationLinkageReadPublicationRequirementValue { value: _x_674, cursor: _x_675 }; { let _x_677 = Ok(_x_676); _x_677 } } } } } } },
+    } } },
+    } } },
+    } },
+        true => { let _x_678 = (a_216).count; { let _x_679 = 3; { let _x_680 = (_x_678 == _x_679); { let prod_local_0 = _x_680; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (a_382).cursor; { let prod_local_4 = readPublicationWireText(&(input), prod_local_3)?; match prod_local_4 {
+        Err(prod_local_5) => { let prod_local_6 = Err(prod_local_5); prod_local_6 },
+        Ok(prod_local_7) => { let prod_local_8 = (prod_local_7).cursor; { let prod_local_9 = readPublicationWireText(&(input), prod_local_8)?; match prod_local_9 {
+        Err(prod_local_10) => { let prod_local_11 = Err(prod_local_10); prod_local_11 },
+        Ok(prod_local_12) => { let prod_local_13 = (prod_local_7).value; { let prod_local_14 = (prod_local_12).value; { let prod_local_15 = crate::AssessmentRequirement { criterion: prod_local_13, subject: prod_local_14 }; { let prod_local_16 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_15 }; { let prod_local_17 = (prod_local_12).cursor; { let prod_local_18 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_16, cursor: prod_local_17 }; { let prod_local_19 = Ok(prod_local_18); prod_local_19 } } } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_705 = (a_382).cursor; { let _x_706 = readPublicationWireText(&(input), _x_705)?; match _x_706 {
+        Err(a_707) => { let _x_708 = Err(a_707); _x_708 },
+        Ok(a_709) => { let _x_728 = (a_709).cursor; { let _x_729 = readPublicationLinkagePublicationInputSelector(&(input), _x_728)?; match _x_729 {
+        Err(a_730) => { let _x_731 = Err(a_730); _x_731 },
+        Ok(a_732) => { let _x_743 = (a_732).cursor; { let _x_744 = 32; { let _x_745 = readPublicationWireBytes(&(input), _x_743, _x_744)?; match _x_745 {
+        Err(a_746) => { let _x_747 = Err(a_746); _x_747 },
+        Ok(a_748) => { let _x_750 = (a_709).value; { let _x_751 = (a_732).value; { let _x_752 = (a_748).value; { let _x_753 = crate::ExecutionRequirement { oracle: _x_750, input: _x_751, suite: _x_752 }; { let _x_754 = crate::PublicationRequirementValue::Execution { field_0: _x_753 }; { let _x_755 = (a_748).cursor; { let _x_756 = crate::PublicationLinkageReadPublicationRequirementValue { value: _x_754, cursor: _x_755 }; { let _x_757 = Ok(_x_756); _x_757 } } } } } } } },
+    } } } },
+    } } },
+    } } },
+    } },
+        true => { let _x_758 = (a_216).count; { let _x_759 = 4; { let _x_760 = (_x_758 == _x_759); { let prod_local_20 = _x_760; match prod_local_20 {
+        false => { let prod_local_21 = (a_382).value; { let prod_local_22 = 2; { let prod_local_23 = (prod_local_21 == prod_local_22); match prod_local_23 {
+        false => { let prod_local_25 = prod_local_23; match prod_local_25 {
+        false => { let prod_local_26 = crate::CborError::WrongType; { let prod_local_27 = Err(prod_local_26); prod_local_27 } },
+        true => { let prod_local_28 = (a_382).cursor; { let prod_local_29 = readPublicationWireText(&(input), prod_local_28)?; match prod_local_29 {
+        Err(prod_local_30) => { let prod_local_31 = Err(prod_local_30); prod_local_31 },
+        Ok(prod_local_32) => { let prod_local_33 = (prod_local_32).cursor; { let prod_local_34 = readPublicationWireText(&(input), prod_local_33)?; match prod_local_34 {
+        Err(prod_local_35) => { let prod_local_36 = Err(prod_local_35); prod_local_36 },
+        Ok(prod_local_37) => { let prod_local_38 = (prod_local_32).value; { let prod_local_39 = (prod_local_37).value; { let prod_local_40 = crate::AssessmentRequirement { criterion: prod_local_38, subject: prod_local_39 }; { let prod_local_41 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_40 }; { let prod_local_42 = (prod_local_37).cursor; { let prod_local_43 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_41, cursor: prod_local_42 }; { let prod_local_44 = Ok(prod_local_43); prod_local_44 } } } } } } },
+    } } },
+    } } },
+    } },
+        true => { let prod_local_45 = (a_216).count; { let prod_local_46 = 3; { let prod_local_47 = (prod_local_45 == prod_local_46); { let prod_local_48 = prod_local_47; match prod_local_48 {
+        false => { let prod_local_49 = crate::CborError::WrongType; { let prod_local_50 = Err(prod_local_49); prod_local_50 } },
+        true => { let prod_local_51 = (a_382).cursor; { let prod_local_52 = readPublicationWireText(&(input), prod_local_51)?; match prod_local_52 {
+        Err(prod_local_53) => { let prod_local_54 = Err(prod_local_53); prod_local_54 },
+        Ok(prod_local_55) => { let prod_local_56 = (prod_local_55).cursor; { let prod_local_57 = readPublicationWireText(&(input), prod_local_56)?; match prod_local_57 {
+        Err(prod_local_58) => { let prod_local_59 = Err(prod_local_58); prod_local_59 },
+        Ok(prod_local_60) => { let prod_local_61 = (prod_local_55).value; { let prod_local_62 = (prod_local_60).value; { let prod_local_63 = crate::AssessmentRequirement { criterion: prod_local_61, subject: prod_local_62 }; { let prod_local_64 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_63 }; { let prod_local_65 = (prod_local_60).cursor; { let prod_local_66 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_64, cursor: prod_local_65 }; { let prod_local_67 = Ok(prod_local_66); prod_local_67 } } } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_68 = (a_382).cursor; { let prod_local_69 = readPublicationWireText(&(input), prod_local_68)?; match prod_local_69 {
+        Err(prod_local_70) => { let prod_local_71 = Err(prod_local_70); prod_local_71 },
+        Ok(prod_local_72) => { let prod_local_73 = (prod_local_72).cursor; { let prod_local_74 = readPublicationLinkagePublicationInputSelector(&(input), prod_local_73)?; match prod_local_74 {
+        Err(prod_local_75) => { let prod_local_76 = Err(prod_local_75); prod_local_76 },
+        Ok(prod_local_77) => { let prod_local_78 = (prod_local_77).cursor; { let prod_local_79 = 32; { let prod_local_80 = readPublicationWireBytes(&(input), prod_local_78, prod_local_79)?; match prod_local_80 {
+        Err(prod_local_81) => { let prod_local_82 = Err(prod_local_81); prod_local_82 },
+        Ok(prod_local_83) => { let prod_local_84 = (prod_local_72).value; { let prod_local_85 = (prod_local_77).value; { let prod_local_86 = (prod_local_83).value; { let prod_local_87 = crate::ExecutionRequirement { oracle: prod_local_84, input: prod_local_85, suite: prod_local_86 }; { let prod_local_88 = crate::PublicationRequirementValue::Execution { field_0: prod_local_87 }; { let prod_local_89 = (prod_local_83).cursor; { let prod_local_90 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_88, cursor: prod_local_89 }; { let prod_local_91 = Ok(prod_local_90); prod_local_91 } } } } } } } },
+    } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_768 = (a_382).cursor; { let _x_769 = readPublicationLinkagePublicationMember(&(input), _x_768)?; match _x_769 {
+        Err(a_770) => { let _x_771 = Err(a_770); _x_771 },
+        Ok(a_772) => { let _x_774 = (a_772).value; { let _x_775 = crate::ProofRequirement { theorem: _x_774 }; { let _x_776 = crate::PublicationRequirementValue::Proof { field_0: _x_775 }; { let _x_777 = (a_772).cursor; { let _x_778 = crate::PublicationLinkageReadPublicationRequirementValue { value: _x_776, cursor: _x_777 }; { let _x_779 = Ok(_x_778); _x_779 } } } } } },
+    } } },
+    } },
+        true => { let _x_780 = (a_216).count; { let _x_781 = 2; { let _x_782 = (_x_780 == _x_781); { let prod_local_92 = _x_782; match prod_local_92 {
+        false => { let prod_local_93 = (a_382).value; { let prod_local_94 = 1; { let prod_local_95 = (prod_local_93 == prod_local_94); match prod_local_95 {
+        false => { let prod_local_97 = prod_local_95; match prod_local_97 {
+        false => { let prod_local_98 = (a_382).value; { let prod_local_99 = 2; { let prod_local_100 = (prod_local_98 == prod_local_99); match prod_local_100 {
+        false => { let prod_local_102 = prod_local_100; match prod_local_102 {
+        false => { let prod_local_103 = crate::CborError::WrongType; { let prod_local_104 = Err(prod_local_103); prod_local_104 } },
+        true => { let prod_local_105 = (a_382).cursor; { let prod_local_106 = readPublicationWireText(&(input), prod_local_105)?; match prod_local_106 {
+        Err(prod_local_107) => { let prod_local_108 = Err(prod_local_107); prod_local_108 },
+        Ok(prod_local_109) => { let prod_local_110 = (prod_local_109).cursor; { let prod_local_111 = readPublicationWireText(&(input), prod_local_110)?; match prod_local_111 {
+        Err(prod_local_112) => { let prod_local_113 = Err(prod_local_112); prod_local_113 },
+        Ok(prod_local_114) => { let prod_local_115 = (prod_local_109).value; { let prod_local_116 = (prod_local_114).value; { let prod_local_117 = crate::AssessmentRequirement { criterion: prod_local_115, subject: prod_local_116 }; { let prod_local_118 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_117 }; { let prod_local_119 = (prod_local_114).cursor; { let prod_local_120 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_118, cursor: prod_local_119 }; { let prod_local_121 = Ok(prod_local_120); prod_local_121 } } } } } } },
+    } } },
+    } } },
+    } },
+        true => { let prod_local_122 = (a_216).count; { let prod_local_123 = 3; { let prod_local_124 = (prod_local_122 == prod_local_123); { let prod_local_125 = prod_local_124; match prod_local_125 {
+        false => { let prod_local_126 = crate::CborError::WrongType; { let prod_local_127 = Err(prod_local_126); prod_local_127 } },
+        true => { let prod_local_128 = (a_382).cursor; { let prod_local_129 = readPublicationWireText(&(input), prod_local_128)?; match prod_local_129 {
+        Err(prod_local_130) => { let prod_local_131 = Err(prod_local_130); prod_local_131 },
+        Ok(prod_local_132) => { let prod_local_133 = (prod_local_132).cursor; { let prod_local_134 = readPublicationWireText(&(input), prod_local_133)?; match prod_local_134 {
+        Err(prod_local_135) => { let prod_local_136 = Err(prod_local_135); prod_local_136 },
+        Ok(prod_local_137) => { let prod_local_138 = (prod_local_132).value; { let prod_local_139 = (prod_local_137).value; { let prod_local_140 = crate::AssessmentRequirement { criterion: prod_local_138, subject: prod_local_139 }; { let prod_local_141 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_140 }; { let prod_local_142 = (prod_local_137).cursor; { let prod_local_143 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_141, cursor: prod_local_142 }; { let prod_local_144 = Ok(prod_local_143); prod_local_144 } } } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_145 = (a_382).cursor; { let prod_local_146 = readPublicationWireText(&(input), prod_local_145)?; match prod_local_146 {
+        Err(prod_local_147) => { let prod_local_148 = Err(prod_local_147); prod_local_148 },
+        Ok(prod_local_149) => { let prod_local_150 = (prod_local_149).cursor; { let prod_local_151 = readPublicationLinkagePublicationInputSelector(&(input), prod_local_150)?; match prod_local_151 {
+        Err(prod_local_152) => { let prod_local_153 = Err(prod_local_152); prod_local_153 },
+        Ok(prod_local_154) => { let prod_local_155 = (prod_local_154).cursor; { let prod_local_156 = 32; { let prod_local_157 = readPublicationWireBytes(&(input), prod_local_155, prod_local_156)?; match prod_local_157 {
+        Err(prod_local_158) => { let prod_local_159 = Err(prod_local_158); prod_local_159 },
+        Ok(prod_local_160) => { let prod_local_161 = (prod_local_149).value; { let prod_local_162 = (prod_local_154).value; { let prod_local_163 = (prod_local_160).value; { let prod_local_164 = crate::ExecutionRequirement { oracle: prod_local_161, input: prod_local_162, suite: prod_local_163 }; { let prod_local_165 = crate::PublicationRequirementValue::Execution { field_0: prod_local_164 }; { let prod_local_166 = (prod_local_160).cursor; { let prod_local_167 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_165, cursor: prod_local_166 }; { let prod_local_168 = Ok(prod_local_167); prod_local_168 } } } } } } } },
+    } } } },
+    } } },
+    } } },
+    } },
+        true => { let prod_local_169 = (a_216).count; { let prod_local_170 = 4; { let prod_local_171 = (prod_local_169 == prod_local_170); { let prod_local_172 = prod_local_171; match prod_local_172 {
+        false => { let prod_local_173 = (a_382).value; { let prod_local_174 = 2; { let prod_local_175 = (prod_local_173 == prod_local_174); match prod_local_175 {
+        false => { let prod_local_177 = prod_local_175; match prod_local_177 {
+        false => { let prod_local_178 = crate::CborError::WrongType; { let prod_local_179 = Err(prod_local_178); prod_local_179 } },
+        true => { let prod_local_180 = (a_382).cursor; { let prod_local_181 = readPublicationWireText(&(input), prod_local_180)?; match prod_local_181 {
+        Err(prod_local_182) => { let prod_local_183 = Err(prod_local_182); prod_local_183 },
+        Ok(prod_local_184) => { let prod_local_185 = (prod_local_184).cursor; { let prod_local_186 = readPublicationWireText(&(input), prod_local_185)?; match prod_local_186 {
+        Err(prod_local_187) => { let prod_local_188 = Err(prod_local_187); prod_local_188 },
+        Ok(prod_local_189) => { let prod_local_190 = (prod_local_184).value; { let prod_local_191 = (prod_local_189).value; { let prod_local_192 = crate::AssessmentRequirement { criterion: prod_local_190, subject: prod_local_191 }; { let prod_local_193 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_192 }; { let prod_local_194 = (prod_local_189).cursor; { let prod_local_195 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_193, cursor: prod_local_194 }; { let prod_local_196 = Ok(prod_local_195); prod_local_196 } } } } } } },
+    } } },
+    } } },
+    } },
+        true => { let prod_local_197 = (a_216).count; { let prod_local_198 = 3; { let prod_local_199 = (prod_local_197 == prod_local_198); { let prod_local_200 = prod_local_199; match prod_local_200 {
+        false => { let prod_local_201 = crate::CborError::WrongType; { let prod_local_202 = Err(prod_local_201); prod_local_202 } },
+        true => { let prod_local_203 = (a_382).cursor; { let prod_local_204 = readPublicationWireText(&(input), prod_local_203)?; match prod_local_204 {
+        Err(prod_local_205) => { let prod_local_206 = Err(prod_local_205); prod_local_206 },
+        Ok(prod_local_207) => { let prod_local_208 = (prod_local_207).cursor; { let prod_local_209 = readPublicationWireText(&(input), prod_local_208)?; match prod_local_209 {
+        Err(prod_local_210) => { let prod_local_211 = Err(prod_local_210); prod_local_211 },
+        Ok(prod_local_212) => { let prod_local_213 = (prod_local_207).value; { let prod_local_214 = (prod_local_212).value; { let prod_local_215 = crate::AssessmentRequirement { criterion: prod_local_213, subject: prod_local_214 }; { let prod_local_216 = crate::PublicationRequirementValue::Assessment { field_0: prod_local_215 }; { let prod_local_217 = (prod_local_212).cursor; { let prod_local_218 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_216, cursor: prod_local_217 }; { let prod_local_219 = Ok(prod_local_218); prod_local_219 } } } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_220 = (a_382).cursor; { let prod_local_221 = readPublicationWireText(&(input), prod_local_220)?; match prod_local_221 {
+        Err(prod_local_222) => { let prod_local_223 = Err(prod_local_222); prod_local_223 },
+        Ok(prod_local_224) => { let prod_local_225 = (prod_local_224).cursor; { let prod_local_226 = readPublicationLinkagePublicationInputSelector(&(input), prod_local_225)?; match prod_local_226 {
+        Err(prod_local_227) => { let prod_local_228 = Err(prod_local_227); prod_local_228 },
+        Ok(prod_local_229) => { let prod_local_230 = (prod_local_229).cursor; { let prod_local_231 = 32; { let prod_local_232 = readPublicationWireBytes(&(input), prod_local_230, prod_local_231)?; match prod_local_232 {
+        Err(prod_local_233) => { let prod_local_234 = Err(prod_local_233); prod_local_234 },
+        Ok(prod_local_235) => { let prod_local_236 = (prod_local_224).value; { let prod_local_237 = (prod_local_229).value; { let prod_local_238 = (prod_local_235).value; { let prod_local_239 = crate::ExecutionRequirement { oracle: prod_local_236, input: prod_local_237, suite: prod_local_238 }; { let prod_local_240 = crate::PublicationRequirementValue::Execution { field_0: prod_local_239 }; { let prod_local_241 = (prod_local_235).cursor; { let prod_local_242 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_240, cursor: prod_local_241 }; { let prod_local_243 = Ok(prod_local_242); prod_local_243 } } } } } } } },
+    } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_244 = (a_382).cursor; { let prod_local_245 = readPublicationLinkagePublicationMember(&(input), prod_local_244)?; match prod_local_245 {
+        Err(prod_local_246) => { let prod_local_247 = Err(prod_local_246); prod_local_247 },
+        Ok(prod_local_248) => { let prod_local_249 = (prod_local_248).value; { let prod_local_250 = crate::ProofRequirement { theorem: prod_local_249 }; { let prod_local_251 = crate::PublicationRequirementValue::Proof { field_0: prod_local_250 }; { let prod_local_252 = (prod_local_248).cursor; { let prod_local_253 = crate::PublicationLinkageReadPublicationRequirementValue { value: prod_local_251, cursor: prod_local_252 }; { let prod_local_254 = Ok(prod_local_253); prod_local_254 } } } } } },
+    } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationRequirements(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationRequirements, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 4096; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 64; { let _x_57 = readPublicationLinkagePublicationRequirementsGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationLinkageGroupsPublicationRequirements { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationRequirements { chunks: chunks_58 }; { let _x_71 = crate::PublicationLinkageReadPublicationRequirements { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationRequirementsBatch(input: &crate::PublicationWireInput, cursor: u64, fuel: u64) -> Result<crate::PublicationLinkageBatchPublicationRequirements, crate::ComputeError> {
+    Ok({ let _x_2 = __prod_owned_53_readPublicationLinkagePublicationRequirementsBatchAcc(&(input), cursor, alloc::vec::Vec::new(), fuel)?; _x_2 })
+}
+
+pub fn readPublicationLinkagePublicationRequirementsBatchAcc(x_1: &crate::PublicationWireInput, x_2: u64, x_3: &[crate::PublicationRequirement], x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationRequirements, crate::ComputeError> {
+    __prod_owned_53_readPublicationLinkagePublicationRequirementsBatchAcc(x_1, x_2, alloc::borrow::ToOwned::to_owned(x_3), x_4)
+}
+
+fn __prod_owned_53_readPublicationLinkagePublicationRequirementsBatchAcc(x_1: &crate::PublicationWireInput, mut x_2: u64, mut x_3: alloc::vec::Vec<crate::PublicationRequirement>, mut x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationRequirements, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => crate::PublicationLinkageBatchPublicationRequirements { items: x_3, cursor: x_2, cause: None },
+        _ => { let n_31 = (x_4).saturating_sub(1); { let _x_48 = readPublicationLinkagePublicationRequirement(&(x_1), x_2)?; match _x_48 {
+        Err(a_49) => { let _x_53 = Some(a_49); crate::PublicationLinkageBatchPublicationRequirements { items: x_3, cursor: x_2, cause: _x_53 } },
+        Ok(a_51) => { let _x_55 = (a_51).cursor; { let _x_57 = (a_51).value; { let _x_59 = alloc::vec![_x_57]; { let _x_60 = { let mut __append = (x_3, _x_59); __append.0.extend(__append.1); __append.0 }; { (x_2, x_3, x_4,) = (_x_55, _x_60, n_31,); continue; } } } } },
+    } } },
+    }); }
+}
+
+pub fn readPublicationLinkagePublicationRequirementsGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationLinkageGroupsPublicationRequirements, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_164 = 0; { let _x_165 = (x_3 == _x_164); match _x_165 {
+        false => { let _x_172 = crate::CborError::ValueLimit; { let _x_173 = Some(_x_172); { let _x_168 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_173 }; _x_168 } } },
+        true => { let _x_171 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_171 },
+    } } },
+        _ => { let n_130 = (x_4).saturating_sub(1); { let _x_219 = 0; { let _x_220 = (x_3 == _x_219); match _x_220 {
+        false => { let _x_253 = 64; { let _x_254 = (x_3 <= _x_253); match _x_254 {
+        false => { let _x_263 = 64; { let _y_256 = _x_263; { let _x_257 = readPublicationLinkagePublicationRequirementsBatch(&(x_1), x_2, _y_256)?; match _x_257 {
+        crate::PublicationLinkageBatchPublicationRequirements { items: items_258, cursor: cursor_259, cause: cause_260 } => match cause_260 {
+        None => { let _x_297 = 64; { let _x_298 = (x_3 <= _x_297); match _x_298 {
+        false => { let _x_308 = 64; { let _y_300 = _x_308; { let _x_301 = core::convert::identity::<u64>(x_3).saturating_sub(_y_300); { let _x_302 = readPublicationLinkagePublicationRequirementsGroups(&(x_1), cursor_259, _x_301, n_130)?; match _x_302 {
+        crate::PublicationLinkageGroupsPublicationRequirements { chunks: chunks_303, cursor: cursor_304, cause: cause_305 } => { let _x_310 = crate::PublicationRequirementsChunk { entries: items_258 }; { let _x_311 = { let mut __list = (_x_310, chunks_303); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_312 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: _x_311, cursor: cursor_304, cause: cause_305 }; _x_312 } } },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationLinkagePublicationRequirementsGroups(&(x_1), cursor_259, prod_local_1, n_130)?; match prod_local_2 {
+        crate::PublicationLinkageGroupsPublicationRequirements { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => { let prod_local_6 = crate::PublicationRequirementsChunk { entries: items_258 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+    } } } },
+    } } },
+        Some(val_290) => { let _x_315 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: alloc::vec::Vec::new(), cursor: cursor_259, cause: cause_260 }; _x_315 },
+    },
+    } } } },
+        true => { let prod_local_9 = x_3; { let prod_local_10 = readPublicationLinkagePublicationRequirementsBatch(&(x_1), x_2, prod_local_9)?; match prod_local_10 {
+        crate::PublicationLinkageBatchPublicationRequirements { items: prod_local_11, cursor: prod_local_12, cause: prod_local_13 } => match prod_local_13 {
+        None => { let prod_local_14 = 64; { let prod_local_15 = (x_3 <= prod_local_14); match prod_local_15 {
+        false => { let prod_local_17 = 64; { let prod_local_18 = prod_local_17; { let prod_local_19 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_18); { let prod_local_20 = readPublicationLinkagePublicationRequirementsGroups(&(x_1), prod_local_12, prod_local_19, n_130)?; match prod_local_20 {
+        crate::PublicationLinkageGroupsPublicationRequirements { chunks: prod_local_21, cursor: prod_local_22, cause: prod_local_23 } => { let prod_local_24 = crate::PublicationRequirementsChunk { entries: prod_local_11 }; { let prod_local_25 = { let mut __list = (prod_local_24, prod_local_21); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_26 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: prod_local_25, cursor: prod_local_22, cause: prod_local_23 }; prod_local_26 } } },
+    } } } } },
+        true => { let prod_local_27 = x_3; { let prod_local_28 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_27); { let prod_local_29 = readPublicationLinkagePublicationRequirementsGroups(&(x_1), prod_local_12, prod_local_28, n_130)?; match prod_local_29 {
+        crate::PublicationLinkageGroupsPublicationRequirements { chunks: prod_local_30, cursor: prod_local_31, cause: prod_local_32 } => { let prod_local_33 = crate::PublicationRequirementsChunk { entries: prod_local_11 }; { let prod_local_34 = { let mut __list = (prod_local_33, prod_local_30); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_35 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: prod_local_34, cursor: prod_local_31, cause: prod_local_32 }; prod_local_35 } } },
+    } } } },
+    } } },
+        Some(prod_local_36) => { let prod_local_38 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: alloc::vec::Vec::new(), cursor: prod_local_12, cause: prod_local_13 }; prod_local_38 },
+    },
+    } } },
+    } } },
+        true => { let _x_318 = crate::PublicationLinkageGroupsPublicationRequirements { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_318 },
+    } } } },
+    })
+}
+
+pub fn readPublicationLinkagePublicationService(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationService, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_48 = 65536; { let _x_51 = publicationWireReadArray(&(input), cursor, _x_48)?; match _x_51 {
+        Err(a_52) => { let _x_64 = Err(a_52); _x_64 },
+        Ok(a_54) => { let _x_89 = (a_54).count; { let _x_90 = 2; { let _x_91 = (_x_89 == _x_90); match _x_91 {
+        false => { let _x_96 = crate::CborError::WrongType; { let _x_97 = Err(_x_96); _x_97 } },
+        true => { let _x_112 = (a_54).cursor; { let _x_113 = readPublicationWireText(&(input), _x_112)?; match _x_113 {
+        Err(a_114) => { let _x_115 = Err(a_114); _x_115 },
+        Ok(a_116) => { let _x_125 = (a_116).cursor; { let _x_126 = readPublicationLinkagePublicationIds(&(input), _x_125)?; match _x_126 {
+        Err(a_127) => { let _x_128 = Err(a_127); _x_128 },
+        Ok(a_129) => { let _x_131 = (a_116).value; { let _x_132 = (a_129).value; { let _x_133 = crate::PublicationService { id: _x_131, components: _x_132 }; { let _x_134 = (a_129).cursor; { let _x_135 = crate::PublicationLinkageReadPublicationService { value: _x_133, cursor: _x_134 }; { let _x_136 = Ok(_x_135); _x_136 } } } } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationServices(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationServices, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 65536; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 256; { let _x_57 = readPublicationLinkagePublicationServicesGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationLinkageGroupsPublicationServices { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationServices { chunks: chunks_58 }; { let _x_71 = crate::PublicationLinkageReadPublicationServices { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationLinkagePublicationServicesBatch(input: &crate::PublicationWireInput, cursor: u64, fuel: u64) -> Result<crate::PublicationLinkageBatchPublicationServices, crate::ComputeError> {
+    Ok({ let _x_2 = __prod_owned_49_readPublicationLinkagePublicationServicesBatchAcc(&(input), cursor, alloc::vec::Vec::new(), fuel)?; _x_2 })
+}
+
+pub fn readPublicationLinkagePublicationServicesBatchAcc(x_1: &crate::PublicationWireInput, x_2: u64, x_3: &[crate::PublicationService], x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationServices, crate::ComputeError> {
+    __prod_owned_49_readPublicationLinkagePublicationServicesBatchAcc(x_1, x_2, alloc::borrow::ToOwned::to_owned(x_3), x_4)
+}
+
+fn __prod_owned_49_readPublicationLinkagePublicationServicesBatchAcc(x_1: &crate::PublicationWireInput, mut x_2: u64, mut x_3: alloc::vec::Vec<crate::PublicationService>, mut x_4: u64) -> Result<crate::PublicationLinkageBatchPublicationServices, crate::ComputeError> {
+    loop { return Ok(match x_4 {
+        0 => crate::PublicationLinkageBatchPublicationServices { items: x_3, cursor: x_2, cause: None },
+        _ => { let n_31 = (x_4).saturating_sub(1); { let _x_48 = readPublicationLinkagePublicationService(&(x_1), x_2)?; match _x_48 {
+        Err(a_49) => { let _x_53 = Some(a_49); crate::PublicationLinkageBatchPublicationServices { items: x_3, cursor: x_2, cause: _x_53 } },
+        Ok(a_51) => { let _x_55 = (a_51).cursor; { let _x_57 = (a_51).value; { let _x_59 = alloc::vec![_x_57]; { let _x_60 = { let mut __append = (x_3, _x_59); __append.0.extend(__append.1); __append.0 }; { (x_2, x_3, x_4,) = (_x_55, _x_60, n_31,); continue; } } } } },
+    } } },
+    }); }
+}
+
+pub fn readPublicationLinkagePublicationServicesGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationLinkageGroupsPublicationServices, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_164 = 0; { let _x_165 = (x_3 == _x_164); match _x_165 {
+        false => { let _x_172 = crate::CborError::ValueLimit; { let _x_173 = Some(_x_172); { let _x_168 = crate::PublicationLinkageGroupsPublicationServices { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_173 }; _x_168 } } },
+        true => { let _x_171 = crate::PublicationLinkageGroupsPublicationServices { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_171 },
+    } } },
+        _ => { let n_130 = (x_4).saturating_sub(1); { let _x_219 = 0; { let _x_220 = (x_3 == _x_219); match _x_220 {
+        false => { let _x_253 = 256; { let _x_254 = (x_3 <= _x_253); match _x_254 {
+        false => { let _x_263 = 256; { let _y_256 = _x_263; { let _x_257 = readPublicationLinkagePublicationServicesBatch(&(x_1), x_2, _y_256)?; match _x_257 {
+        crate::PublicationLinkageBatchPublicationServices { items: items_258, cursor: cursor_259, cause: cause_260 } => match cause_260 {
+        None => { let _x_297 = 256; { let _x_298 = (x_3 <= _x_297); match _x_298 {
+        false => { let _x_308 = 256; { let _y_300 = _x_308; { let _x_301 = core::convert::identity::<u64>(x_3).saturating_sub(_y_300); { let _x_302 = readPublicationLinkagePublicationServicesGroups(&(x_1), cursor_259, _x_301, n_130)?; match _x_302 {
+        crate::PublicationLinkageGroupsPublicationServices { chunks: chunks_303, cursor: cursor_304, cause: cause_305 } => { let _x_310 = crate::PublicationServicesChunk { entries: items_258 }; { let _x_311 = { let mut __list = (_x_310, chunks_303); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_312 = crate::PublicationLinkageGroupsPublicationServices { chunks: _x_311, cursor: cursor_304, cause: cause_305 }; _x_312 } } },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationLinkagePublicationServicesGroups(&(x_1), cursor_259, prod_local_1, n_130)?; match prod_local_2 {
+        crate::PublicationLinkageGroupsPublicationServices { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => { let prod_local_6 = crate::PublicationServicesChunk { entries: items_258 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationLinkageGroupsPublicationServices { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+    } } } },
+    } } },
+        Some(val_290) => { let _x_315 = crate::PublicationLinkageGroupsPublicationServices { chunks: alloc::vec::Vec::new(), cursor: cursor_259, cause: cause_260 }; _x_315 },
+    },
+    } } } },
+        true => { let prod_local_9 = x_3; { let prod_local_10 = readPublicationLinkagePublicationServicesBatch(&(x_1), x_2, prod_local_9)?; match prod_local_10 {
+        crate::PublicationLinkageBatchPublicationServices { items: prod_local_11, cursor: prod_local_12, cause: prod_local_13 } => match prod_local_13 {
+        None => { let prod_local_14 = 256; { let prod_local_15 = (x_3 <= prod_local_14); match prod_local_15 {
+        false => { let prod_local_17 = 256; { let prod_local_18 = prod_local_17; { let prod_local_19 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_18); { let prod_local_20 = readPublicationLinkagePublicationServicesGroups(&(x_1), prod_local_12, prod_local_19, n_130)?; match prod_local_20 {
+        crate::PublicationLinkageGroupsPublicationServices { chunks: prod_local_21, cursor: prod_local_22, cause: prod_local_23 } => { let prod_local_24 = crate::PublicationServicesChunk { entries: prod_local_11 }; { let prod_local_25 = { let mut __list = (prod_local_24, prod_local_21); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_26 = crate::PublicationLinkageGroupsPublicationServices { chunks: prod_local_25, cursor: prod_local_22, cause: prod_local_23 }; prod_local_26 } } },
+    } } } } },
+        true => { let prod_local_27 = x_3; { let prod_local_28 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_27); { let prod_local_29 = readPublicationLinkagePublicationServicesGroups(&(x_1), prod_local_12, prod_local_28, n_130)?; match prod_local_29 {
+        crate::PublicationLinkageGroupsPublicationServices { chunks: prod_local_30, cursor: prod_local_31, cause: prod_local_32 } => { let prod_local_33 = crate::PublicationServicesChunk { entries: prod_local_11 }; { let prod_local_34 = { let mut __list = (prod_local_33, prod_local_30); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_35 = crate::PublicationLinkageGroupsPublicationServices { chunks: prod_local_34, cursor: prod_local_31, cause: prod_local_32 }; prod_local_35 } } },
+    } } } },
+    } } },
+        Some(prod_local_36) => { let prod_local_38 = crate::PublicationLinkageGroupsPublicationServices { chunks: alloc::vec::Vec::new(), cursor: prod_local_12, cause: prod_local_13 }; prod_local_38 },
+    },
+    } } },
+    } } },
+        true => { let _x_318 = crate::PublicationLinkageGroupsPublicationServices { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_318 },
+    } } } },
+    })
+}
+
+pub fn readPublicationLinkagePublicationSourceLink(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationLinkageReadPublicationSourceLink, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_143 = 65536; { let _x_146 = publicationWireReadArray(&(input), cursor, _x_143)?; match _x_146 {
+        Err(a_147) => { let _x_172 = Err(a_147); _x_172 },
+        Ok(a_149) => { let _x_259 = (a_149).count; { let _x_260 = 9; { let _x_261 = (_x_259 == _x_260); match _x_261 {
+        false => { let _x_266 = crate::CborError::WrongType; { let _x_267 = Err(_x_266); _x_267 } },
+        true => { let _x_343 = (a_149).cursor; { let _x_344 = 32; { let _x_345 = readPublicationWireBytes(&(input), _x_343, _x_344)?; match _x_345 {
+        Err(a_346) => { let _x_347 = Err(a_346); _x_347 },
+        Ok(a_348) => { let _x_417 = (a_348).cursor; { let _x_418 = 32; { let _x_419 = readPublicationWireBytes(&(input), _x_417, _x_418)?; match _x_419 {
+        Err(a_420) => { let _x_421 = Err(a_420); _x_421 },
+        Ok(a_422) => { let _x_483 = (a_422).cursor; { let _x_484 = 32; { let _x_485 = readPublicationWireBytes(&(input), _x_483, _x_484)?; match _x_485 {
+        Err(a_486) => { let _x_487 = Err(a_486); _x_487 },
+        Ok(a_488) => { let _x_541 = (a_488).cursor; { let _x_542 = 32; { let _x_543 = readPublicationWireBytes(&(input), _x_541, _x_542)?; match _x_543 {
+        Err(a_544) => { let _x_545 = Err(a_544); _x_545 },
+        Ok(a_546) => { let _x_592 = (a_546).cursor; { let _x_593 = readPublicationLinkagePublicationMember(&(input), _x_592)?; match _x_593 {
+        Err(a_594) => { let _x_595 = Err(a_594); _x_595 },
+        Ok(a_596) => { let _x_634 = (a_596).cursor; { let _x_635 = 32; { let _x_636 = readPublicationWireBytes(&(input), _x_634, _x_635)?; match _x_636 {
+        Err(a_637) => { let _x_638 = Err(a_637); _x_638 },
+        Ok(a_639) => { let _x_670 = (a_639).cursor; { let _x_671 = readPublicationLinkagePublicationMember(&(input), _x_670)?; match _x_671 {
+        Err(a_672) => { let _x_673 = Err(a_672); _x_673 },
+        Ok(a_674) => { let _x_697 = (a_674).cursor; { let _x_698 = 32; { let _x_699 = readPublicationWireBytes(&(input), _x_697, _x_698)?; match _x_699 {
+        Err(a_700) => { let _x_701 = Err(a_700); _x_701 },
+        Ok(a_702) => { let _x_718 = (a_702).cursor; { let _x_719 = readPublicationWireText(&(input), _x_718)?; match _x_719 {
+        Err(a_720) => { let _x_721 = Err(a_720); _x_721 },
+        Ok(a_722) => { let _x_724 = (a_348).value; { let _x_725 = (a_422).value; { let _x_726 = (a_488).value; { let _x_727 = (a_546).value; { let _x_728 = (a_596).value; { let _x_729 = (a_639).value; { let _x_730 = (a_674).value; { let _x_731 = (a_702).value; { let _x_732 = (a_722).value; { let _x_733 = crate::PublicationSourceLink { snapshot: _x_724, source: _x_725, semantic: _x_726, compiler: _x_727, closureMember: _x_728, moduleSource: _x_729, systemMember: _x_730, system: _x_731, target: _x_732 }; { let _x_734 = (a_722).cursor; { let _x_735 = crate::PublicationLinkageReadPublicationSourceLink { value: _x_733, cursor: _x_734 }; { let _x_736 = Ok(_x_735); _x_736 } } } } } } } } } } } } },
+    } } },
+    } } } },
+    } } },
+    } } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn writePublicationLinkagePublicationFilesGroupsAcc(x_1: &[crate::PublicationFilesChunk], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_54, tail_55 @ ..] => { let _x_57 = crate::CborError::ValueLimit; { let _x_58 = Err(_x_57); { let _x_59 = publicationLinkageWireJoin(x_2, _x_58)?; _x_59 } } },
+    },
+        _ => { let n_40 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_66, tail_67 @ ..] => { let _x_69 = &(head_66).entries; { let _x_70 = 256; { let _x_71 = writePublicationLinkagePublicationFilesRowsAcc(&(_x_69), x_2, _x_70)?; { let _x_72 = writePublicationLinkagePublicationFilesGroupsAcc(&(tail_67), _x_71, n_40)?; _x_72 } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationFilesInto(value: &crate::PublicationFiles, acc: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationFilesCanonical(&(value)); match _x_17 {
+        false => { let _x_27 = crate::CborError::ValueLimit; { let _x_28 = Err(_x_27); { let _x_29 = publicationLinkageWireJoin(acc, _x_28)?; _x_29 } } },
+        true => { let _x_30 = &(value).chunks; { let _x_31 = publicationLinkagePublicationFilesCount(&(value))?; { let _x_32 = publicationLinkageWireLimits(); { let _x_33 = writeCborArrayHead(_x_31, _x_32)?; { let _x_34 = publicationLinkageWireJoin(acc, _x_33)?; { let _x_35 = 256; { let _x_36 = writePublicationLinkagePublicationFilesGroupsAcc(&(_x_30), _x_34, _x_35)?; _x_36 } } } } } } },
+    } })
+}
+
+pub fn writePublicationLinkagePublicationFilesRowsAcc(x_1: &[crate::PublicationFile], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_69, tail_70 @ ..] => { let _x_72 = crate::CborError::ValueLimit; { let _x_73 = Err(_x_72); { let _x_74 = publicationLinkageWireJoin(x_2, _x_73)?; _x_74 } } },
+    },
+        _ => { let n_53 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_90, tail_91 @ ..] => { let _x_93 = 2; { let _x_94 = publicationLinkageWireLimits(); { let _x_95 = writeCborArrayHead(_x_93, _x_94)?; { let _x_96 = publicationLinkageWireJoin(x_2, _x_95)?; { let _x_97 = &(head_90).path; { let _x_98 = (alloc::borrow::ToOwned::to_owned(_x_97)).into_bytes(); { let _x_99 = 3; { let _x_100 = 2048; { let _x_101 = publicationLinkagePayloadInto(_x_96, _x_98, _x_99, _x_100)?; { let _x_102 = &(head_90).digest; { let _x_103 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_102))?; { let _x_104 = publicationLinkageWireJoin(_x_101, _x_103)?; { let _x_105 = writePublicationLinkagePublicationFilesRowsAcc(&(tail_91), _x_104, n_53)?; _x_105 } } } } } } } } } } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationIdsGroupsAcc(x_1: &[crate::PublicationIdsChunk], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_54, tail_55 @ ..] => { let _x_57 = crate::CborError::ValueLimit; { let _x_58 = Err(_x_57); { let _x_59 = publicationLinkageWireJoin(x_2, _x_58)?; _x_59 } } },
+    },
+        _ => { let n_40 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_66, tail_67 @ ..] => { let _x_69 = &(head_66).entries; { let _x_70 = 256; { let _x_71 = writePublicationLinkagePublicationIdsRowsAcc(&(_x_69), x_2, _x_70)?; { let _x_72 = writePublicationLinkagePublicationIdsGroupsAcc(&(tail_67), _x_71, n_40)?; _x_72 } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationIdsInto(value: &crate::PublicationIds, acc: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationIdsCanonical(&(value)); match _x_17 {
+        false => { let _x_27 = crate::CborError::ValueLimit; { let _x_28 = Err(_x_27); { let _x_29 = publicationLinkageWireJoin(acc, _x_28)?; _x_29 } } },
+        true => { let _x_30 = &(value).chunks; { let _x_31 = publicationLinkagePublicationIdsCount(&(value))?; { let _x_32 = publicationLinkageWireLimits(); { let _x_33 = writeCborArrayHead(_x_31, _x_32)?; { let _x_34 = publicationLinkageWireJoin(acc, _x_33)?; { let _x_35 = 256; { let _x_36 = writePublicationLinkagePublicationIdsGroupsAcc(&(_x_30), _x_34, _x_35)?; _x_36 } } } } } } },
+    } })
+}
+
+pub fn writePublicationLinkagePublicationIdsRowsAcc(x_1: &[alloc::string::String], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_50, tail_51 @ ..] => { let _x_53 = crate::CborError::ValueLimit; { let _x_54 = Err(_x_53); { let _x_55 = publicationLinkageWireJoin(x_2, _x_54)?; _x_55 } } },
+    },
+        _ => { let n_37 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_61, tail_62 @ ..] => { let _x_64 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(head_61))?; { let _x_65 = publicationLinkageWireJoin(x_2, _x_64)?; { let _x_66 = writePublicationLinkagePublicationIdsRowsAcc(&(tail_62), _x_65, n_37)?; _x_66 } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationInputSelector(value: &crate::PublicationInputSelector) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationInputSelector::BuildFile { field_0: x_56 } => { let _x_81 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_82 = 2; { let _x_83 = publicationLinkageWireLimits(); { let _x_84 = writeCborArrayHead(_x_82, _x_83)?; { let _x_85 = publicationLinkageWireJoin(_x_81, _x_84)?; { let _x_86 = 0; { let _x_87 = writePublicationWireNat(_x_86)?; { let _x_88 = publicationLinkageWireJoin(_x_85, _x_87)?; { let _x_89 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(x_56))?; { let _x_90 = publicationLinkageWireJoin(_x_88, _x_89)?; _x_90 } } } } } } } } } },
+        crate::PublicationInputSelector::SourceMember { field_0: x_58 } => { let _x_95 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_96 = 2; { let _x_97 = publicationLinkageWireLimits(); { let _x_98 = writeCborArrayHead(_x_96, _x_97)?; { let _x_99 = publicationLinkageWireJoin(_x_95, _x_98)?; { let _x_100 = 1; { let _x_101 = writePublicationWireNat(_x_100)?; { let _x_102 = publicationLinkageWireJoin(_x_99, _x_101)?; { let _x_103 = writePublicationLinkagePublicationMember(&(x_58))?; { let _x_104 = publicationLinkageWireJoin(_x_102, _x_103)?; _x_104 } } } } } } } } } },
+        crate::PublicationInputSelector::Target => { let _x_109 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_110 = 1; { let _x_111 = publicationLinkageWireLimits(); { let _x_112 = writeCborArrayHead(_x_110, _x_111)?; { let _x_113 = publicationLinkageWireJoin(_x_109, _x_112)?; { let _x_114 = 2; { let _x_115 = writePublicationWireNat(_x_114)?; { let _x_116 = publicationLinkageWireJoin(_x_113, _x_115)?; _x_116 } } } } } } } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationMember(value: &crate::PublicationMember) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 2; { let _x_8 = publicationLinkageWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationLinkageWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).module; { let _x_12 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationLinkageWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).name; { let _x_15 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationLinkageWireJoin(_x_13, _x_15)?; _x_16 } } } } } } } } } } })
+}
+
+pub fn writePublicationLinkagePublicationRecordsGroupsAcc(x_1: &[crate::PublicationRecordsChunk], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_54, tail_55 @ ..] => { let _x_57 = crate::CborError::ValueLimit; { let _x_58 = Err(_x_57); { let _x_59 = publicationLinkageWireJoin(x_2, _x_58)?; _x_59 } } },
+    },
+        _ => { let n_40 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_66, tail_67 @ ..] => { let _x_69 = &(head_66).entries; { let _x_70 = 256; { let _x_71 = writePublicationLinkagePublicationRecordsRowsAcc(&(_x_69), x_2, _x_70)?; { let _x_72 = writePublicationLinkagePublicationRecordsGroupsAcc(&(tail_67), _x_71, n_40)?; _x_72 } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationRecordsInto(value: &crate::PublicationRecords, acc: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationRecordsCanonical(&(value)); match _x_17 {
+        false => { let _x_27 = crate::CborError::ValueLimit; { let _x_28 = Err(_x_27); { let _x_29 = publicationLinkageWireJoin(acc, _x_28)?; _x_29 } } },
+        true => { let _x_30 = &(value).chunks; { let _x_31 = publicationLinkagePublicationRecordsCount(&(value))?; { let _x_32 = publicationLinkageWireLimits(); { let _x_33 = writeCborArrayHead(_x_31, _x_32)?; { let _x_34 = publicationLinkageWireJoin(acc, _x_33)?; { let _x_35 = 256; { let _x_36 = writePublicationLinkagePublicationRecordsGroupsAcc(&(_x_30), _x_34, _x_35)?; _x_36 } } } } } } },
+    } })
+}
+
+pub fn writePublicationLinkagePublicationRecordsRowsAcc(x_1: &[crate::PublicationRecord], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_61, tail_62 @ ..] => { let _x_64 = crate::CborError::ValueLimit; { let _x_65 = Err(_x_64); { let _x_66 = publicationLinkageWireJoin(x_2, _x_65)?; _x_66 } } },
+    },
+        _ => { let n_47 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_80, tail_81 @ ..] => { let _x_83 = 2; { let _x_84 = publicationLinkageWireLimits(); { let _x_85 = writeCborArrayHead(_x_83, _x_84)?; { let _x_86 = publicationLinkageWireJoin(x_2, _x_85)?; { let _x_87 = &(head_80).id; { let _x_88 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_87))?; { let _x_89 = publicationLinkageWireJoin(_x_86, _x_88)?; { let _x_90 = &(head_80).digest; { let _x_91 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_90))?; { let _x_92 = publicationLinkageWireJoin(_x_89, _x_91)?; { let _x_93 = writePublicationLinkagePublicationRecordsRowsAcc(&(tail_81), _x_92, n_47)?; _x_93 } } } } } } } } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationRequirement(value: &crate::PublicationRequirement) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 3; { let _x_8 = publicationLinkageWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationLinkageWireJoin(_x_4, _x_9)?; { let _x_11 = (value).obligation; { let _x_12 = writePublicationWireNat(_x_11)?; { let _x_13 = publicationLinkageWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).member; { let _x_15 = writePublicationLinkagePublicationMember(&(_x_14))?; { let _x_16 = publicationLinkageWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).requirement; { let _x_18 = writePublicationLinkagePublicationRequirementValue(&(_x_17))?; { let _x_19 = publicationLinkageWireJoin(_x_16, _x_18)?; _x_19 } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationLinkagePublicationRequirementValue(value: &crate::PublicationRequirementValue) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationRequirementValue::Proof { field_0: x_70 } => { let _x_94 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_95 = 2; { let _x_96 = publicationLinkageWireLimits(); { let _x_97 = writeCborArrayHead(_x_95, _x_96)?; { let _x_98 = publicationLinkageWireJoin(_x_94, _x_97)?; { let _x_99 = 0; { let _x_100 = writePublicationWireNat(_x_99)?; { let _x_101 = publicationLinkageWireJoin(_x_98, _x_100)?; { let _x_102 = &(x_70).theorem; { let _x_103 = writePublicationLinkagePublicationMember(&(_x_102))?; { let _x_104 = publicationLinkageWireJoin(_x_101, _x_103)?; _x_104 } } } } } } } } } } },
+        crate::PublicationRequirementValue::Execution { field_0: x_72 } => { let _x_109 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_110 = 4; { let _x_111 = publicationLinkageWireLimits(); { let _x_112 = writeCborArrayHead(_x_110, _x_111)?; { let _x_113 = publicationLinkageWireJoin(_x_109, _x_112)?; { let _x_114 = 1; { let _x_115 = writePublicationWireNat(_x_114)?; { let _x_116 = publicationLinkageWireJoin(_x_113, _x_115)?; { let _x_117 = &(x_72).oracle; { let _x_118 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_117))?; { let _x_119 = publicationLinkageWireJoin(_x_116, _x_118)?; { let _x_120 = &(x_72).input; { let _x_121 = writePublicationLinkagePublicationInputSelector(&(_x_120))?; { let _x_122 = publicationLinkageWireJoin(_x_119, _x_121)?; { let _x_123 = &(x_72).suite; { let _x_124 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_123))?; { let _x_125 = publicationLinkageWireJoin(_x_122, _x_124)?; _x_125 } } } } } } } } } } } } } } } } },
+        crate::PublicationRequirementValue::Assessment { field_0: x_74 } => { let _x_130 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_131 = 3; { let _x_132 = publicationLinkageWireLimits(); { let _x_133 = writeCborArrayHead(_x_131, _x_132)?; { let _x_134 = publicationLinkageWireJoin(_x_130, _x_133)?; { let _x_135 = 2; { let _x_136 = writePublicationWireNat(_x_135)?; { let _x_137 = publicationLinkageWireJoin(_x_134, _x_136)?; { let _x_138 = &(x_74).criterion; { let _x_139 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_138))?; { let _x_140 = publicationLinkageWireJoin(_x_137, _x_139)?; { let _x_141 = &(x_74).subject; { let _x_142 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_141))?; { let _x_143 = publicationLinkageWireJoin(_x_140, _x_142)?; _x_143 } } } } } } } } } } } } } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationRequirements(value: &crate::PublicationRequirements) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_20 = publicationLinkagePublicationRequirementsCanonical(&(value)); match _x_20 {
+        false => { let _x_32 = crate::CborError::ValueLimit; { let _x_33 = Err(_x_32); _x_33 } },
+        true => { let _x_34 = &(value).chunks; { let _x_39 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_40 = publicationLinkagePublicationRequirementsCount(&(value))?; { let _x_41 = publicationLinkageWireLimits(); { let _x_42 = writeCborArrayHead(_x_40, _x_41)?; { let _x_43 = publicationLinkageWireJoin(_x_39, _x_42)?; { let _x_44 = 64; { let _x_45 = writePublicationLinkagePublicationRequirementsGroupsAcc(&(_x_34), _x_43, _x_44)?; _x_45 } } } } } } } },
+    } })
+}
+
+pub fn writePublicationLinkagePublicationRequirementsGroupsAcc(x_1: &[crate::PublicationRequirementsChunk], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_54, tail_55 @ ..] => { let _x_57 = crate::CborError::ValueLimit; { let _x_58 = Err(_x_57); { let _x_59 = publicationLinkageWireJoin(x_2, _x_58)?; _x_59 } } },
+    },
+        _ => { let n_40 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_66, tail_67 @ ..] => { let _x_69 = &(head_66).entries; { let _x_70 = 64; { let _x_71 = writePublicationLinkagePublicationRequirementsRowsAcc(&(_x_69), x_2, _x_70)?; { let _x_72 = writePublicationLinkagePublicationRequirementsGroupsAcc(&(tail_67), _x_71, n_40)?; _x_72 } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationRequirementsRowsAcc(x_1: &[crate::PublicationRequirement], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_50, tail_51 @ ..] => { let _x_53 = crate::CborError::ValueLimit; { let _x_54 = Err(_x_53); { let _x_55 = publicationLinkageWireJoin(x_2, _x_54)?; _x_55 } } },
+    },
+        _ => { let n_37 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_61, tail_62 @ ..] => { let _x_64 = writePublicationLinkagePublicationRequirement(&(head_61))?; { let _x_65 = publicationLinkageWireJoin(x_2, _x_64)?; { let _x_66 = writePublicationLinkagePublicationRequirementsRowsAcc(&(tail_62), _x_65, n_37)?; _x_66 } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationServicesGroupsAcc(x_1: &[crate::PublicationServicesChunk], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_54, tail_55 @ ..] => { let _x_57 = crate::CborError::ValueLimit; { let _x_58 = Err(_x_57); { let _x_59 = publicationLinkageWireJoin(x_2, _x_58)?; _x_59 } } },
+    },
+        _ => { let n_40 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_66, tail_67 @ ..] => { let _x_69 = &(head_66).entries; { let _x_70 = 256; { let _x_71 = writePublicationLinkagePublicationServicesRowsAcc(&(_x_69), x_2, _x_70)?; { let _x_72 = writePublicationLinkagePublicationServicesGroupsAcc(&(tail_67), _x_71, n_40)?; _x_72 } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationServicesInto(value: &crate::PublicationServices, acc: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_17 = publicationLinkagePublicationServicesCanonical(&(value)); match _x_17 {
+        false => { let _x_27 = crate::CborError::ValueLimit; { let _x_28 = Err(_x_27); { let _x_29 = publicationLinkageWireJoin(acc, _x_28)?; _x_29 } } },
+        true => { let _x_30 = &(value).chunks; { let _x_31 = publicationLinkagePublicationServicesCount(&(value))?; { let _x_32 = publicationLinkageWireLimits(); { let _x_33 = writeCborArrayHead(_x_31, _x_32)?; { let _x_34 = publicationLinkageWireJoin(acc, _x_33)?; { let _x_35 = 256; { let _x_36 = writePublicationLinkagePublicationServicesGroupsAcc(&(_x_30), _x_34, _x_35)?; _x_36 } } } } } } },
+    } })
+}
+
+pub fn writePublicationLinkagePublicationServicesRowsAcc(x_1: &[crate::PublicationService], x_2: Result<alloc::vec::Vec<u8>, crate::CborError>, x_3: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => match &(x_1)[..] {
+        [] => x_2,
+        [head_60, tail_61 @ ..] => { let _x_63 = crate::CborError::ValueLimit; { let _x_64 = Err(_x_63); { let _x_65 = publicationLinkageWireJoin(x_2, _x_64)?; _x_65 } } },
+    },
+        _ => { let n_46 = (x_3).saturating_sub(1); match &(x_1)[..] {
+        [] => x_2,
+        [head_78, tail_79 @ ..] => { let _x_81 = &(head_78).components; { let _x_82 = 2; { let _x_83 = publicationLinkageWireLimits(); { let _x_84 = writeCborArrayHead(_x_82, _x_83)?; { let _x_85 = publicationLinkageWireJoin(x_2, _x_84)?; { let _x_86 = &(head_78).id; { let _x_87 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_86))?; { let _x_88 = publicationLinkageWireJoin(_x_85, _x_87)?; { let _x_89 = writePublicationLinkagePublicationIdsInto(&(_x_81), _x_88)?; { let _x_90 = writePublicationLinkagePublicationServicesRowsAcc(&(tail_79), _x_89, n_46)?; _x_90 } } } } } } } } } },
+    } },
+    })
+}
+
+pub fn writePublicationLinkagePublicationSourceLink(value: &crate::PublicationSourceLink) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 9; { let _x_8 = publicationLinkageWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationLinkageWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).snapshot; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationLinkageWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).source; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationLinkageWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).semantic; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationLinkageWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).compiler; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationLinkageWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).closureMember; { let _x_24 = writePublicationLinkagePublicationMember(&(_x_23))?; { let _x_25 = publicationLinkageWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).moduleSource; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationLinkageWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).systemMember; { let _x_30 = writePublicationLinkagePublicationMember(&(_x_29))?; { let _x_31 = publicationLinkageWireJoin(_x_28, _x_30)?; { let _x_32 = &(value).system; { let _x_33 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_32))?; { let _x_34 = publicationLinkageWireJoin(_x_31, _x_33)?; { let _x_35 = &(value).target; { let _x_36 = publicationLinkageWriteText(alloc::borrow::ToOwned::to_owned(_x_35))?; { let _x_37 = publicationLinkageWireJoin(_x_34, _x_36)?; _x_37 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn publicationAuthorizedStateValid(state: &crate::PublicationState, now: u64) -> bool {
+    { let _x_81 = publicationReadyStateValid(&(state), now); match _x_81 {
+        false => _x_81,
+        true => { let _x_145 = (state).readyAt; { let _x_146 = (state).authorizedAt; { let _x_147 = (_x_145 <= _x_146); match _x_147 {
+        false => _x_147,
+        true => { let _x_174 = (state).authorizedAt; { let _x_175 = (_x_174 <= now); match _x_175 {
+        false => _x_175,
+        true => { let _x_196 = &(state).ready; match _x_196 {
+        None => { let _x_198 = false; _x_198 },
+        Some(val_199) => { let _x_212 = &(state).decision; match _x_212 {
+        None => { let _x_214 = false; _x_214 },
+        Some(val_215) => { let _x_222 = &(state).context; { let _x_223 = publicationDecisionValid(&(_x_222), (val_199).as_ref(), &(val_215), now); match _x_223 {
+        false => _x_223,
+        true => { let _x_227 = &(state).context; { let _x_228 = (state).authorizedAt; { let _x_229 = publicationDecisionValid(&(_x_227), (val_199).as_ref(), &(val_215), _x_228); _x_229 } } },
+    } } },
+    } },
+    } },
+    } } },
+    } } } },
+    } }
+}
+
+pub fn publicationClockValid(context: &crate::PublicationContext, clock: &crate::PublicationClock) -> bool {
+    { let _x_49 = &(clock).domain; { let _x_50 = &(context).declaration; { let _x_51 = &(_x_50).clock; { let _x_52 = (_x_49 == _x_51); match _x_52 {
+        false => _x_52,
+        true => { let _x_89 = &(clock).authority; { let _x_90 = &(context).declaration; { let _x_91 = &(_x_90).clockAuthority; { let _x_92 = (_x_89 == _x_91); match _x_92 {
+        false => _x_92,
+        true => { let _x_102 = &(clock).receipt; { let _x_103 = (_x_102).len() as u64; { let _x_104 = 32; { let _x_105 = (_x_103 == _x_104); match _x_105 {
+        false => _x_105,
+        true => { let _x_109 = (clock).tick; { let _x_110 = 4294967295; { let _x_111 = (_x_109 <= _x_110); _x_111 } } },
+    } } } } },
+    } } } } },
+    } } } } }
+}
+
+pub fn publicationContextValid(context: &crate::PublicationContext) -> bool {
+    { let _x_123 = &(context).declaration; { let _x_124 = publicationDeclarationValid(&(_x_123)); match _x_124 {
+        false => _x_124,
+        true => { let _x_224 = &(context).subject; { let _x_225 = publicationSubjectValid(&(_x_224)); match _x_225 {
+        false => _x_225,
+        true => { let _x_275 = &(context).declarationIdentity; { let _x_276 = (_x_275).len() as u64; { let _x_277 = 32; { let _x_278 = (_x_276 == _x_277); match _x_278 {
+        false => _x_278,
+        true => { let _x_319 = &(context).instance; { let _x_320 = (_x_319).len() as u64; { let _x_321 = 32; { let _x_322 = (_x_320 == _x_321); match _x_322 {
+        false => _x_322,
+        true => { let _x_354 = &(context).digest; { let _x_355 = (_x_354).len() as u64; { let _x_356 = 32; { let _x_357 = (_x_355 == _x_356); match _x_357 {
+        false => _x_357,
+        true => { let _x_380 = &(context).publisherRevision; { let _x_381 = (_x_380).len() as u64; { let _x_382 = 20; { let _x_383 = (_x_381 == _x_382); match _x_383 {
+        false => _x_383,
+        true => { let _x_395 = 0; { let _x_397 = &(context).publisherRef; { let _x_398 = (_x_397).as_bytes(); { let _x_399 = (_x_398).len() as u64; { let _x_400 = (_x_395 < _x_399); match _x_400 {
+        false => _x_400,
+        true => { let _x_405 = &(context).publisherRef; { let _x_406 = (_x_405).as_bytes(); { let _x_407 = (_x_406).len() as u64; { let _x_408 = 2048; { let _x_409 = (_x_407 <= _x_408); _x_409 } } } } },
+    } } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } },
+    } } }
+}
+
+pub fn publicationDecisionValid(context: &crate::PublicationContext, ready: &[u8], decision: &crate::PublicationDecision, now: u64) -> bool {
+    { let _x_172 = &(decision).context; { let _x_173 = &(context).digest; { let _x_174 = (_x_172 == _x_173); match _x_174 {
+        false => _x_174,
+        true => { let _x_317 = &(decision).authority; { let _x_318 = &(context).declaration; { let _x_319 = &(_x_318).decisionAuthority; { let _x_320 = (_x_317 == _x_319); match _x_320 {
+        false => _x_320,
+        true => { let _x_402 = &(decision).refAuthority; { let _x_403 = &(context).declaration; { let _x_404 = &(_x_403).refAuthority; { let _x_405 = (_x_402 == _x_404); match _x_405 {
+        false => _x_405,
+        true => { let _x_478 = &(decision).decision; { let _x_479 = (_x_478).len() as u64; { let _x_480 = 32; { let _x_481 = (_x_479 == _x_480); match _x_481 {
+        false => _x_481,
+        true => { let _x_545 = &(decision).refEvidence; { let _x_546 = (_x_545).len() as u64; { let _x_547 = 32; { let _x_548 = (_x_546 == _x_547); match _x_548 {
+        false => _x_548,
+        true => { let _x_605 = &(decision).ready; { let _x_606 = (_x_605 == ready); match _x_606 {
+        false => _x_606,
+        true => { let _x_655 = &(decision).publisherRevision; { let _x_656 = &(context).publisherRevision; { let _x_657 = (_x_655 == _x_656); match _x_657 {
+        false => _x_657,
+        true => { let _x_698 = &(decision).publisherRef; { let _x_699 = &(context).publisherRef; { let _x_700 = (_x_698 == _x_699); match _x_700 {
+        false => _x_700,
+        true => { let _x_731 = (decision).refKind; { let _x_732 = &(context).declaration; { let _x_733 = (_x_732).refKind; { let _x_734 = publicationPublicationRefKindEqual(_x_731, _x_733); match _x_734 {
+        false => _x_734,
+        true => { let _x_754 = (decision).from; { let _x_755 = (_x_754 <= now); match _x_755 {
+        false => { let _y_757 = _x_755; match _y_757 {
+        false => _y_757,
+        true => { let _x_764 = (decision).outcome; { let _x_765 = crate::PublicationOutcome::Satisfied; { let _x_766 = publicationPublicationOutcomeEqual(_x_764, _x_765); _x_766 } } },
+    } },
+        true => { let _x_773 = (decision).until; { let _x_774 = (now <= _x_773); match _x_774 {
+        false => { let prod_local_0 = _x_774; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = (decision).outcome; { let prod_local_2 = crate::PublicationOutcome::Satisfied; { let prod_local_3 = publicationPublicationOutcomeEqual(prod_local_1, prod_local_2); prod_local_3 } } },
+    } },
+        true => { let _x_778 = (decision).until; { let _x_779 = 4294967295; { let _x_780 = (_x_778 <= _x_779); { let prod_local_4 = _x_780; match prod_local_4 {
+        false => prod_local_4,
+        true => { let prod_local_5 = (decision).outcome; { let prod_local_6 = crate::PublicationOutcome::Satisfied; { let prod_local_7 = publicationPublicationOutcomeEqual(prod_local_5, prod_local_6); prod_local_7 } } },
+    } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } }
+}
+
+pub fn publicationDeclarationValid(declaration: &crate::PublicationDeclaration) -> bool {
+    { let _x_233 = 0; { let _x_237 = &(declaration).stage; { let _x_238 = (_x_237).as_bytes(); { let _x_239 = (_x_238).len() as u64; { let _x_240 = (_x_233 < _x_239); match _x_240 {
+        false => { let _y_245 = _x_240; match _y_245 {
+        false => _y_245,
+        true => { let _x_441 = &(declaration).target; { let _x_442 = publicationTargetValid(&(_x_441)); match _x_442 {
+        false => _x_442,
+        true => { let _x_547 = &(declaration).policy; { let _x_548 = (_x_547).len() as u64; { let _x_549 = 32; { let _x_550 = (_x_548 == _x_549); match _x_550 {
+        false => _x_550,
+        true => { let _x_646 = &(declaration).clock; { let _x_647 = (_x_646).len() as u64; { let _x_648 = 32; { let _x_649 = (_x_647 == _x_648); match _x_649 {
+        false => _x_649,
+        true => { let _x_736 = &(declaration).clockAuthority; { let _x_737 = (_x_736).len() as u64; { let _x_738 = 32; { let _x_739 = (_x_737 == _x_738); match _x_739 {
+        false => _x_739,
+        true => { let _x_817 = &(declaration).trustAuthority; { let _x_818 = (_x_817).len() as u64; { let _x_819 = 32; { let _x_820 = (_x_818 == _x_819); match _x_820 {
+        false => _x_820,
+        true => { let _x_889 = &(declaration).decisionAuthority; { let _x_890 = (_x_889).len() as u64; { let _x_891 = 32; { let _x_892 = (_x_890 == _x_891); match _x_892 {
+        false => _x_892,
+        true => { let _x_952 = &(declaration).refAuthority; { let _x_953 = (_x_952).len() as u64; { let _x_954 = 32; { let _x_955 = (_x_953 == _x_954); match _x_955 {
+        false => _x_955,
+        true => { let _x_1006 = &(declaration).deploymentAuthority; { let _x_1007 = (_x_1006).len() as u64; { let _x_1008 = 32; { let _x_1009 = (_x_1007 == _x_1008); match _x_1009 {
+        false => _x_1009,
+        true => { let _x_1051 = &(declaration).integrityAuthority; { let _x_1052 = (_x_1051).len() as u64; { let _x_1053 = 32; { let _x_1054 = (_x_1052 == _x_1053); match _x_1054 {
+        false => _x_1054,
+        true => { let _x_1083 = (declaration).minimumTrust; { let _x_1084 = crate::PublicationTrust::Candidate; { let _x_1085 = publicationPublicationTrustEqual(_x_1083, _x_1084); match _x_1085 {
+        false => { let _x_1128 = (declaration).minimumTrust; { let _x_1129 = crate::PublicationTrust::Accepted; { let _x_1130 = publicationPublicationTrustEqual(_x_1128, _x_1129); { let _y_1087 = _x_1130; match _y_1087 {
+        false => _y_1087,
+        true => { let _x_1106 = &(declaration).obligations; { let _x_1107 = 0; { let _x_1108 = 4096; { let _x_1109 = publicationObligationsValid(&(_x_1106), _x_1107, _x_1108); match _x_1109 {
+        false => _x_1109,
+        true => { let _x_1118 = &(declaration).obligations; { let _x_1119 = crate::PublicationMoment::PrePublication; { let _x_1120 = publicationMomentPresent(&(_x_1118), _x_1119); match _x_1120 {
+        false => _x_1120,
+        true => { let _x_1124 = &(declaration).obligations; { let _x_1125 = crate::PublicationMoment::DeploymentOnly; { let _x_1126 = publicationMomentPresent(&(_x_1124), _x_1125); _x_1126 } } },
+    } } } },
+    } } } } },
+    } } } } },
+        true => { let prod_local_0 = _x_1085; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = &(declaration).obligations; { let prod_local_2 = 0; { let prod_local_3 = 4096; { let prod_local_4 = publicationObligationsValid(&(prod_local_1), prod_local_2, prod_local_3); match prod_local_4 {
+        false => prod_local_4,
+        true => { let prod_local_5 = &(declaration).obligations; { let prod_local_6 = crate::PublicationMoment::PrePublication; { let prod_local_7 = publicationMomentPresent(&(prod_local_5), prod_local_6); match prod_local_7 {
+        false => prod_local_7,
+        true => { let prod_local_8 = &(declaration).obligations; { let prod_local_9 = crate::PublicationMoment::DeploymentOnly; { let prod_local_10 = publicationMomentPresent(&(prod_local_8), prod_local_9); prod_local_10 } } },
+    } } } },
+    } } } } },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } },
+    } },
+        true => { let _x_1133 = &(declaration).stage; { let _x_1134 = (_x_1133).as_bytes(); { let _x_1135 = (_x_1134).len() as u64; { let _x_1136 = 2048; { let _x_1137 = (_x_1135 <= _x_1136); { let prod_local_11 = _x_1137; match prod_local_11 {
+        false => prod_local_11,
+        true => { let prod_local_12 = &(declaration).target; { let prod_local_13 = publicationTargetValid(&(prod_local_12)); match prod_local_13 {
+        false => prod_local_13,
+        true => { let prod_local_15 = &(declaration).policy; { let prod_local_16 = (prod_local_15).len() as u64; { let prod_local_17 = 32; { let prod_local_18 = (prod_local_16 == prod_local_17); match prod_local_18 {
+        false => prod_local_18,
+        true => { let prod_local_20 = &(declaration).clock; { let prod_local_21 = (prod_local_20).len() as u64; { let prod_local_22 = 32; { let prod_local_23 = (prod_local_21 == prod_local_22); match prod_local_23 {
+        false => prod_local_23,
+        true => { let prod_local_25 = &(declaration).clockAuthority; { let prod_local_26 = (prod_local_25).len() as u64; { let prod_local_27 = 32; { let prod_local_28 = (prod_local_26 == prod_local_27); match prod_local_28 {
+        false => prod_local_28,
+        true => { let prod_local_30 = &(declaration).trustAuthority; { let prod_local_31 = (prod_local_30).len() as u64; { let prod_local_32 = 32; { let prod_local_33 = (prod_local_31 == prod_local_32); match prod_local_33 {
+        false => prod_local_33,
+        true => { let prod_local_35 = &(declaration).decisionAuthority; { let prod_local_36 = (prod_local_35).len() as u64; { let prod_local_37 = 32; { let prod_local_38 = (prod_local_36 == prod_local_37); match prod_local_38 {
+        false => prod_local_38,
+        true => { let prod_local_40 = &(declaration).refAuthority; { let prod_local_41 = (prod_local_40).len() as u64; { let prod_local_42 = 32; { let prod_local_43 = (prod_local_41 == prod_local_42); match prod_local_43 {
+        false => prod_local_43,
+        true => { let prod_local_45 = &(declaration).deploymentAuthority; { let prod_local_46 = (prod_local_45).len() as u64; { let prod_local_47 = 32; { let prod_local_48 = (prod_local_46 == prod_local_47); match prod_local_48 {
+        false => prod_local_48,
+        true => { let prod_local_50 = &(declaration).integrityAuthority; { let prod_local_51 = (prod_local_50).len() as u64; { let prod_local_52 = 32; { let prod_local_53 = (prod_local_51 == prod_local_52); match prod_local_53 {
+        false => prod_local_53,
+        true => { let prod_local_54 = (declaration).minimumTrust; { let prod_local_55 = crate::PublicationTrust::Candidate; { let prod_local_56 = publicationPublicationTrustEqual(prod_local_54, prod_local_55); match prod_local_56 {
+        false => { let prod_local_58 = (declaration).minimumTrust; { let prod_local_59 = crate::PublicationTrust::Accepted; { let prod_local_60 = publicationPublicationTrustEqual(prod_local_58, prod_local_59); { let prod_local_61 = prod_local_60; match prod_local_61 {
+        false => prod_local_61,
+        true => { let prod_local_62 = &(declaration).obligations; { let prod_local_63 = 0; { let prod_local_64 = 4096; { let prod_local_65 = publicationObligationsValid(&(prod_local_62), prod_local_63, prod_local_64); match prod_local_65 {
+        false => prod_local_65,
+        true => { let prod_local_66 = &(declaration).obligations; { let prod_local_67 = crate::PublicationMoment::PrePublication; { let prod_local_68 = publicationMomentPresent(&(prod_local_66), prod_local_67); match prod_local_68 {
+        false => prod_local_68,
+        true => { let prod_local_69 = &(declaration).obligations; { let prod_local_70 = crate::PublicationMoment::DeploymentOnly; { let prod_local_71 = publicationMomentPresent(&(prod_local_69), prod_local_70); prod_local_71 } } },
+    } } } },
+    } } } } },
+    } } } } },
+        true => { let prod_local_72 = prod_local_56; match prod_local_72 {
+        false => prod_local_72,
+        true => { let prod_local_73 = &(declaration).obligations; { let prod_local_74 = 0; { let prod_local_75 = 4096; { let prod_local_76 = publicationObligationsValid(&(prod_local_73), prod_local_74, prod_local_75); match prod_local_76 {
+        false => prod_local_76,
+        true => { let prod_local_77 = &(declaration).obligations; { let prod_local_78 = crate::PublicationMoment::PrePublication; { let prod_local_79 = publicationMomentPresent(&(prod_local_77), prod_local_78); match prod_local_79 {
+        false => prod_local_79,
+        true => { let prod_local_80 = &(declaration).obligations; { let prod_local_81 = crate::PublicationMoment::DeploymentOnly; { let prod_local_82 = publicationMomentPresent(&(prod_local_80), prod_local_81); prod_local_82 } } },
+    } } } },
+    } } } } },
+    } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } },
+    } } } } } } },
+    } } } } } }
+}
+
+pub fn publicationDeploymentValid(context: &crate::PublicationContext, decision: &crate::PublicationDecision, deployment: &crate::PublicationDeployment, now: u64) -> bool {
+    { let _x_231 = &(deployment).context; { let _x_232 = &(context).digest; { let _x_233 = (_x_231 == _x_232); match _x_233 {
+        false => _x_233,
+        true => { let _x_418 = &(deployment).decision; { let _x_419 = &(decision).decision; { let _x_420 = (_x_418 == _x_419); match _x_420 {
+        false => _x_420,
+        true => { let _x_521 = &(deployment).authority; { let _x_522 = &(context).declaration; { let _x_523 = &(_x_522).deploymentAuthority; { let _x_524 = (_x_521 == _x_523); match _x_524 {
+        false => _x_524,
+        true => { let _x_616 = &(deployment).receipt; { let _x_617 = (_x_616).len() as u64; { let _x_618 = 32; { let _x_619 = (_x_617 == _x_618); match _x_619 {
+        false => _x_619,
+        true => { let _x_703 = &(deployment).publisherRevision; { let _x_704 = &(context).publisherRevision; { let _x_705 = (_x_703 == _x_704); match _x_705 {
+        false => _x_705,
+        true => { let _x_780 = &(deployment).deploymentRevision; { let _x_781 = (_x_780).len() as u64; { let _x_782 = 20; { let _x_783 = (_x_781 == _x_782); match _x_783 {
+        false => _x_783,
+        true => { let _x_842 = 0; { let _x_844 = &(deployment).deploymentId; { let _x_845 = (_x_844).as_bytes(); { let _x_846 = (_x_845).len() as u64; { let _x_847 = (_x_842 < _x_846); match _x_847 {
+        false => { let _y_849 = _x_847; match _y_849 {
+        false => _y_849,
+        true => { let _x_897 = (deployment).observed; { let _x_898 = (_x_897 <= now); match _x_898 {
+        false => _x_898,
+        true => { let _x_931 = (deployment).from; { let _x_932 = (deployment).observed; { let _x_933 = (_x_931 <= _x_932); match _x_933 {
+        false => { let _y_935 = _x_933; match _y_935 {
+        false => _y_935,
+        true => { let _x_953 = (deployment).from; { let _x_954 = (_x_953 <= now); match _x_954 {
+        false => _x_954,
+        true => { let _x_963 = (deployment).until; { let _x_964 = (now <= _x_963); match _x_964 {
+        false => _x_964,
+        true => { let _x_968 = (deployment).until; { let _x_969 = 4294967295; { let _x_970 = (_x_968 <= _x_969); _x_970 } } },
+    } } },
+    } } },
+    } },
+        true => { let _x_977 = (deployment).observed; { let _x_978 = (deployment).until; { let _x_979 = (_x_977 <= _x_978); match _x_979 {
+        false => { let prod_local_0 = _x_979; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = (deployment).from; { let prod_local_2 = (prod_local_1 <= now); match prod_local_2 {
+        false => prod_local_2,
+        true => { let prod_local_3 = (deployment).until; { let prod_local_4 = (now <= prod_local_3); match prod_local_4 {
+        false => prod_local_4,
+        true => { let prod_local_5 = (deployment).until; { let prod_local_6 = 4294967295; { let prod_local_7 = (prod_local_5 <= prod_local_6); prod_local_7 } } },
+    } } },
+    } } },
+    } },
+        true => { let _x_983 = (deployment).until; { let _x_984 = 4294967295; { let _x_985 = (_x_983 <= _x_984); { let prod_local_8 = _x_985; match prod_local_8 {
+        false => prod_local_8,
+        true => { let prod_local_9 = (deployment).from; { let prod_local_10 = (prod_local_9 <= now); match prod_local_10 {
+        false => prod_local_10,
+        true => { let prod_local_11 = (deployment).until; { let prod_local_12 = (now <= prod_local_11); match prod_local_12 {
+        false => prod_local_12,
+        true => { let prod_local_13 = (deployment).until; { let prod_local_14 = 4294967295; { let prod_local_15 = (prod_local_13 <= prod_local_14); prod_local_15 } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } },
+    } },
+        true => { let _x_990 = &(deployment).deploymentId; { let _x_991 = (_x_990).as_bytes(); { let _x_992 = (_x_991).len() as u64; { let _x_993 = 2048; { let _x_994 = (_x_992 <= _x_993); { let prod_local_16 = _x_994; match prod_local_16 {
+        false => prod_local_16,
+        true => { let prod_local_17 = (deployment).observed; { let prod_local_18 = (prod_local_17 <= now); match prod_local_18 {
+        false => prod_local_18,
+        true => { let prod_local_19 = (deployment).from; { let prod_local_20 = (deployment).observed; { let prod_local_21 = (prod_local_19 <= prod_local_20); match prod_local_21 {
+        false => { let prod_local_23 = prod_local_21; match prod_local_23 {
+        false => prod_local_23,
+        true => { let prod_local_24 = (deployment).from; { let prod_local_25 = (prod_local_24 <= now); match prod_local_25 {
+        false => prod_local_25,
+        true => { let prod_local_26 = (deployment).until; { let prod_local_27 = (now <= prod_local_26); match prod_local_27 {
+        false => prod_local_27,
+        true => { let prod_local_28 = (deployment).until; { let prod_local_29 = 4294967295; { let prod_local_30 = (prod_local_28 <= prod_local_29); prod_local_30 } } },
+    } } },
+    } } },
+    } },
+        true => { let prod_local_31 = (deployment).observed; { let prod_local_32 = (deployment).until; { let prod_local_33 = (prod_local_31 <= prod_local_32); match prod_local_33 {
+        false => { let prod_local_34 = prod_local_33; match prod_local_34 {
+        false => prod_local_34,
+        true => { let prod_local_35 = (deployment).from; { let prod_local_36 = (prod_local_35 <= now); match prod_local_36 {
+        false => prod_local_36,
+        true => { let prod_local_37 = (deployment).until; { let prod_local_38 = (now <= prod_local_37); match prod_local_38 {
+        false => prod_local_38,
+        true => { let prod_local_39 = (deployment).until; { let prod_local_40 = 4294967295; { let prod_local_41 = (prod_local_39 <= prod_local_40); prod_local_41 } } },
+    } } },
+    } } },
+    } },
+        true => { let prod_local_42 = (deployment).until; { let prod_local_43 = 4294967295; { let prod_local_44 = (prod_local_42 <= prod_local_43); { let prod_local_45 = prod_local_44; match prod_local_45 {
+        false => prod_local_45,
+        true => { let prod_local_46 = (deployment).from; { let prod_local_47 = (prod_local_46 <= now); match prod_local_47 {
+        false => prod_local_47,
+        true => { let prod_local_48 = (deployment).until; { let prod_local_49 = (now <= prod_local_48); match prod_local_49 {
+        false => prod_local_49,
+        true => { let prod_local_50 = (deployment).until; { let prod_local_51 = 4294967295; { let prod_local_52 = (prod_local_50 <= prod_local_51); prod_local_52 } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } } } } },
+    } } } } } },
+    } } } } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationEmptyPublicationFact(items: &[crate::PublicationFact]) -> bool {
+    match &(items)[..] {
+        [] => { let _x_17 = true; _x_17 },
+        [head_11, tail_12 @ ..] => { let _x_18 = false; _x_18 },
+    }
+}
+
+pub fn publicationEmptyPublicationFactChunk(items: &[crate::PublicationFactChunk]) -> bool {
+    match &(items)[..] {
+        [] => { let _x_17 = true; _x_17 },
+        [head_11, tail_12 @ ..] => { let _x_18 = false; _x_18 },
+    }
+}
+
+pub fn publicationEmptyPublicationObligation(items: &[crate::PublicationObligation]) -> bool {
+    match &(items)[..] {
+        [] => { let _x_17 = true; _x_17 },
+        [head_11, tail_12 @ ..] => { let _x_18 = false; _x_18 },
+    }
+}
+
+pub fn publicationEmptyPublicationObligationChunk(items: &[crate::PublicationObligationChunk]) -> bool {
+    match &(items)[..] {
+        [] => { let _x_17 = true; _x_17 },
+        [head_11, tail_12 @ ..] => { let _x_18 = false; _x_18 },
+    }
+}
+
+pub fn publicationFactAtValid(context: &crate::PublicationContext, obligations: &crate::PublicationObligations, facts: &crate::PublicationFacts, deployment: Option<alloc::vec::Vec<u8>>, now: u64, obligationIndex: u64, factIndex: u64) -> bool {
+    __prod_borrowed_publicationFactAtValid(context, obligations, facts, &deployment, now, obligationIndex, factIndex)
+}
+
+fn __prod_borrowed_publicationFactAtValid(context: &crate::PublicationContext, obligations: &crate::PublicationObligations, facts: &crate::PublicationFacts, deployment: &Option<alloc::vec::Vec<u8>>, now: u64, obligationIndex: u64, factIndex: u64) -> bool {
+    { let _x_16 = publicationPublicationObligationsAt(&(obligations), obligationIndex); match _x_16 {
+        None => { let _x_27 = false; _x_27 },
+        Some(val_19) => { let _x_28 = publicationPublicationFactsAt(&(facts), factIndex); match _x_28 {
+        None => { let _x_30 = false; _x_30 },
+        Some(val_31) => { let _x_32 = __prod_borrowed_publicationFactValid(&(context), &(val_19), &(val_31), &(deployment), now); _x_32 },
+    } },
+    } }
+}
+
+pub fn publicationFactValid(context: &crate::PublicationContext, obligation: &crate::PublicationObligation, fact: &crate::PublicationFact, deployment: Option<alloc::vec::Vec<u8>>, now: u64) -> bool {
+    __prod_borrowed_publicationFactValid(context, obligation, fact, &deployment, now)
+}
+
+fn __prod_borrowed_publicationFactValid(context: &crate::PublicationContext, obligation: &crate::PublicationObligation, fact: &crate::PublicationFact, deployment: &Option<alloc::vec::Vec<u8>>, now: u64) -> bool {
+    { let _x_139 = &(fact).context; { let _x_140 = &(context).digest; { let _x_141 = (_x_139 == _x_140); match _x_141 {
+        false => _x_141,
+        true => { let _x_255 = (fact).obligation; { let _x_256 = (obligation).id; { let _x_257 = (_x_255 == _x_256); match _x_257 {
+        false => _x_257,
+        true => { let _x_319 = (fact).assurance; { let _x_320 = (obligation).assurance; { let _x_321 = publicationPublicationAssuranceEqual(_x_319, _x_320); match _x_321 {
+        false => _x_321,
+        true => { let _x_377 = &(fact).deployment; { let _x_378 = __prod_borrowed_publicationOptionalDigestEqual(&(_x_377), &(deployment)); match _x_378 {
+        false => _x_378,
+        true => { let _x_427 = &(fact).authority; { let _x_428 = &(obligation).authority; { let _x_429 = (_x_427 == _x_428); match _x_429 {
+        false => _x_429,
+        true => { let _x_470 = &(fact).scope; { let _x_471 = &(obligation).scope; { let _x_472 = (_x_470 == _x_471); match _x_472 {
+        false => _x_472,
+        true => { let _x_504 = &(fact).evidence; { let _x_505 = (_x_504).len() as u64; { let _x_506 = 32; { let _x_507 = (_x_505 == _x_506); match _x_507 {
+        false => _x_507,
+        true => { let _x_527 = (fact).from; { let _x_528 = (_x_527 <= now); match _x_528 {
+        false => { let _y_530 = _x_528; match _y_530 {
+        false => _y_530,
+        true => { let _x_537 = (fact).outcome; { let _x_538 = crate::PublicationOutcome::Satisfied; { let _x_539 = publicationPublicationOutcomeEqual(_x_537, _x_538); _x_539 } } },
+    } },
+        true => { let _x_546 = (fact).until; { let _x_547 = (now <= _x_546); match _x_547 {
+        false => { let prod_local_0 = _x_547; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = (fact).outcome; { let prod_local_2 = crate::PublicationOutcome::Satisfied; { let prod_local_3 = publicationPublicationOutcomeEqual(prod_local_1, prod_local_2); prod_local_3 } } },
+    } },
+        true => { let _x_551 = (fact).until; { let _x_552 = 4294967295; { let _x_553 = (_x_551 <= _x_552); { let prod_local_4 = _x_553; match prod_local_4 {
+        false => prod_local_4,
+        true => { let prod_local_5 = (fact).outcome; { let prod_local_6 = crate::PublicationOutcome::Satisfied; { let prod_local_7 = publicationPublicationOutcomeEqual(prod_local_5, prod_local_6); prod_local_7 } } },
+    } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationFactsComplete(context: &crate::PublicationContext, obligations: &crate::PublicationObligations, facts: &crate::PublicationFacts, moment: crate::PublicationMoment, deployment: Option<alloc::vec::Vec<u8>>, now: u64) -> bool {
+    __prod_borrowed_publicationFactsComplete(context, obligations, facts, moment, &deployment, now)
+}
+
+fn __prod_borrowed_publicationFactsComplete(context: &crate::PublicationContext, obligations: &crate::PublicationObligations, facts: &crate::PublicationFacts, moment: crate::PublicationMoment, deployment: &Option<alloc::vec::Vec<u8>>, now: u64) -> bool {
+    { let _x_19 = publicationPublicationFactsCanonical(&(facts)); match _x_19 {
+        false => _x_19,
+        true => { let _x_34 = 4096; { let _x_35 = __prod_borrowed_publicationFactsScan(&(context), &(obligations), &(facts), moment, &(deployment), now, _x_34, _x_34); _x_35 } },
+    } }
+}
+
+pub fn publicationFactsEmpty(items: &crate::PublicationFacts) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = publicationEmptyPublicationFactChunk(&(_x_1)); _x_2 } }
+}
+
+pub fn publicationFactsScan(x_1: &crate::PublicationContext, x_2: &crate::PublicationObligations, x_3: &crate::PublicationFacts, x_4: crate::PublicationMoment, x_5: Option<alloc::vec::Vec<u8>>, x_6: u64, x_7: u64, x_8: u64) -> bool {
+    __prod_borrowed_publicationFactsScan(x_1, x_2, x_3, x_4, &x_5, x_6, x_7, x_8)
+}
+
+fn __prod_borrowed_publicationFactsScan(x_1: &crate::PublicationContext, x_2: &crate::PublicationObligations, x_3: &crate::PublicationFacts, x_4: crate::PublicationMoment, x_5: &Option<alloc::vec::Vec<u8>>, x_6: u64, mut x_7: u64, mut x_8: u64) -> bool {
+    loop { return match x_7 {
+        0 => { let _x_138 = 4096; { let _x_139 = core::convert::identity::<u64>(_x_138).saturating_sub(x_8); { let _x_140 = publicationPublicationFactsHas(&(x_3), _x_139); match _x_140 {
+        false => true,
+        true => false,
+    } } } },
+        _ => { let n_106 = (x_7).saturating_sub(1); { let _x_182 = 4095; { let _x_183 = core::convert::identity::<u64>(_x_182).saturating_sub(n_106); { let _x_184 = publicationPublicationObligationsHas(&(x_2), _x_183); match _x_184 {
+        false => { let _x_190 = 4096; { let _x_191 = core::convert::identity::<u64>(_x_190).saturating_sub(x_8); { let _x_192 = publicationPublicationFactsHas(&(x_3), _x_191); match _x_192 {
+        false => true,
+        true => _x_184,
+    } } } },
+        true => { let _x_218 = 4095; { let _x_219 = core::convert::identity::<u64>(_x_218).saturating_sub(n_106); { let _x_220 = publicationMomentAt(&(x_2), _x_219, x_4); match _x_220 {
+        false => { (x_7, x_8,) = (n_106, x_8,); continue; },
+        true => { let _x_241 = 0; { let _x_242 = (_x_241 < x_8); match _x_242 {
+        false => _x_242,
+        true => { let _x_253 = 4095; { let _x_254 = core::convert::identity::<u64>(_x_253).saturating_sub(n_106); { let _x_255 = 4096; { let _x_256 = core::convert::identity::<u64>(_x_255).saturating_sub(x_8); { let _x_257 = __prod_borrowed_publicationFactAtValid(&(x_1), &(x_2), &(x_3), &(x_5), x_6, _x_254, _x_256); match _x_257 {
+        false => _x_257,
+        true => { let _x_262 = 1; { let _x_263 = core::convert::identity::<u64>(x_8).saturating_sub(_x_262); { (x_7, x_8,) = (n_106, _x_263,); continue; } } },
+    } } } } } },
+    } } },
+    } } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationInitialize(context: &crate::PublicationContext, clock: &crate::PublicationClock) -> Result<crate::PublicationState, crate::PublicationError> {
+    { let _x_57 = &(context).declaration; { let _x_58 = publicationDeclarationValid(&(_x_57)); match _x_58 {
+        false => { let _x_74 = crate::PublicationError::BadDeclaration; { let _x_75 = Err(_x_74); _x_75 } },
+        true => { let _x_109 = &(context).subject; { let _x_110 = publicationSubjectValid(&(_x_109)); match _x_110 {
+        false => { let _x_115 = crate::PublicationError::BadSubject; { let _x_116 = Err(_x_115); _x_116 } },
+        true => { let _x_141 = publicationContextValid(&(context)); match _x_141 {
+        false => { let _x_146 = crate::PublicationError::BadContext; { let _x_147 = Err(_x_146); _x_147 } },
+        true => { let _x_163 = publicationClockValid(&(context), &(clock)); match _x_163 {
+        false => { let _x_168 = crate::PublicationError::BadClock; { let _x_169 = Err(_x_168); _x_169 } },
+        true => { let _x_170 = 0; { let _x_171 = crate::PublicationPhase::Unready; { let _x_174 = crate::PublicationFacts { chunks: alloc::vec::Vec::new() }; { let _x_179 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(context), revision: _x_170, phase: _x_171, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: _x_170, authorizedAt: _x_170, observedAt: _x_170, trust: None, readiness: _x_174.clone(), ready: None, decision: None, deployment: None, integrity: None, live: _x_174.clone() }; { let _x_180 = Ok(_x_179); _x_180 } } } } },
+    } },
+    } },
+    } } },
+    } } }
+}
+
+pub fn publicationInspect(context: &crate::PublicationContext, state: &crate::PublicationState, clock: &crate::PublicationClock) -> Result<crate::PublicationState, crate::PublicationError> {
+    { let _x_61 = publicationContextValid(&(context)); match _x_61 {
+        false => { let _x_79 = crate::PublicationError::BadContext; { let _x_80 = Err(_x_79); _x_80 } },
+        true => { let _x_115 = &(state).context; { let _x_116 = publicationPublicationContextEqual(&(context), &(_x_115)); match _x_116 {
+        false => { let _x_121 = crate::PublicationError::ContextChanged; { let _x_122 = Err(_x_121); _x_122 } },
+        true => { let _x_148 = publicationClockValid(&(context), &(clock)); match _x_148 {
+        false => { let _x_153 = crate::PublicationError::BadClock; { let _x_154 = Err(_x_153); _x_154 } },
+        true => { let _x_168 = &(state).clock; { let _x_169 = (_x_168).tick; { let _x_170 = (clock).tick; { let _x_171 = (_x_169 <= _x_170); match _x_171 {
+        false => { let _x_176 = crate::PublicationError::ClockRollback; { let _x_177 = Err(_x_176); _x_177 } },
+        true => { let _x_181 = (clock).tick; { let _x_182 = publicationStateValid(&(state), _x_181); match _x_182 {
+        false => { let _x_187 = crate::PublicationError::BadState; { let _x_188 = Err(_x_187); _x_188 } },
+        true => { let _x_186 = Ok(alloc::borrow::ToOwned::to_owned(state)); _x_186 },
+    } } },
+    } } } } },
+    } },
+    } } },
+    } }
+}
+
+pub fn publicationIntegrityValid(context: &crate::PublicationContext, deployment: &crate::PublicationDeployment, integrity: &crate::PublicationIntegrity, now: u64) -> bool {
+    { let _x_234 = &(integrity).context; { let _x_235 = &(context).digest; { let _x_236 = (_x_234 == _x_235); match _x_236 {
+        false => _x_236,
+        true => { let _x_431 = &(integrity).authority; { let _x_432 = &(context).declaration; { let _x_433 = &(_x_432).integrityAuthority; { let _x_434 = (_x_431 == _x_433); match _x_434 {
+        false => _x_434,
+        true => { let _x_548 = &(integrity).receipt; { let _x_549 = (_x_548).len() as u64; { let _x_550 = 32; { let _x_551 = (_x_549 == _x_550); match _x_551 {
+        false => _x_551,
+        true => { let _x_657 = &(integrity).deployment; { let _x_658 = &(deployment).receipt; { let _x_659 = (_x_657 == _x_658); match _x_659 {
+        false => _x_659,
+        true => { let _x_757 = (deployment).observed; { let _x_758 = (integrity).observed; { let _x_759 = (_x_757 <= _x_758); match _x_759 {
+        false => _x_759,
+        true => { let _x_851 = (integrity).observed; { let _x_852 = (_x_851 <= now); match _x_852 {
+        false => _x_852,
+        true => { let _x_932 = (integrity).from; { let _x_933 = (integrity).observed; { let _x_934 = (_x_932 <= _x_933); match _x_934 {
+        false => { let _y_936 = _x_934; match _y_936 {
+        false => _y_936,
+        true => { let _x_999 = &(integrity).release; { let _x_1000 = &(context).subject; { let _x_1001 = &(_x_1000).release; { let _x_1002 = (_x_999 == _x_1001); match _x_1002 {
+        false => _x_1002,
+        true => { let _x_1053 = &(integrity).model; { let _x_1054 = &(context).subject; { let _x_1055 = &(_x_1054).model; { let _x_1056 = (_x_1053 == _x_1055); match _x_1056 {
+        false => _x_1056,
+        true => { let _x_1098 = &(integrity).build; { let _x_1099 = &(context).subject; { let _x_1100 = &(_x_1099).build; { let _x_1101 = (_x_1098 == _x_1100); match _x_1101 {
+        false => _x_1101,
+        true => { let _x_1134 = &(integrity).tree; { let _x_1135 = &(context).subject; { let _x_1136 = &(_x_1135).tree; { let _x_1137 = (_x_1134 == _x_1136); match _x_1137 {
+        false => _x_1137,
+        true => { let _x_1160 = &(integrity).url; { let _x_1161 = &(context).declaration; { let _x_1162 = &(_x_1161).target; { let _x_1163 = &(_x_1162).url; { let _x_1164 = (_x_1160 == _x_1163); match _x_1164 {
+        false => _x_1164,
+        true => { let _x_1179 = (integrity).from; { let _x_1180 = (_x_1179 <= now); match _x_1180 {
+        false => _x_1180,
+        true => { let _x_1189 = (integrity).until; { let _x_1190 = (now <= _x_1189); match _x_1190 {
+        false => _x_1190,
+        true => { let _x_1194 = (integrity).until; { let _x_1195 = 4294967295; { let _x_1196 = (_x_1194 <= _x_1195); _x_1196 } } },
+    } } },
+    } } },
+    } } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } },
+        true => { let _x_1203 = (integrity).observed; { let _x_1204 = (integrity).until; { let _x_1205 = (_x_1203 <= _x_1204); match _x_1205 {
+        false => { let prod_local_0 = _x_1205; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_2 = &(integrity).release; { let prod_local_3 = &(context).subject; { let prod_local_4 = &(prod_local_3).release; { let prod_local_5 = (prod_local_2 == prod_local_4); match prod_local_5 {
+        false => prod_local_5,
+        true => { let prod_local_7 = &(integrity).model; { let prod_local_8 = &(context).subject; { let prod_local_9 = &(prod_local_8).model; { let prod_local_10 = (prod_local_7 == prod_local_9); match prod_local_10 {
+        false => prod_local_10,
+        true => { let prod_local_12 = &(integrity).build; { let prod_local_13 = &(context).subject; { let prod_local_14 = &(prod_local_13).build; { let prod_local_15 = (prod_local_12 == prod_local_14); match prod_local_15 {
+        false => prod_local_15,
+        true => { let prod_local_17 = &(integrity).tree; { let prod_local_18 = &(context).subject; { let prod_local_19 = &(prod_local_18).tree; { let prod_local_20 = (prod_local_17 == prod_local_19); match prod_local_20 {
+        false => prod_local_20,
+        true => { let prod_local_23 = &(integrity).url; { let prod_local_24 = &(context).declaration; { let prod_local_25 = &(prod_local_24).target; { let prod_local_26 = &(prod_local_25).url; { let prod_local_27 = (prod_local_23 == prod_local_26); match prod_local_27 {
+        false => prod_local_27,
+        true => { let prod_local_28 = (integrity).from; { let prod_local_29 = (prod_local_28 <= now); match prod_local_29 {
+        false => prod_local_29,
+        true => { let prod_local_30 = (integrity).until; { let prod_local_31 = (now <= prod_local_30); match prod_local_31 {
+        false => prod_local_31,
+        true => { let prod_local_32 = (integrity).until; { let prod_local_33 = 4294967295; { let prod_local_34 = (prod_local_32 <= prod_local_33); prod_local_34 } } },
+    } } },
+    } } },
+    } } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } },
+        true => { let _x_1209 = (integrity).until; { let _x_1210 = 4294967295; { let _x_1211 = (_x_1209 <= _x_1210); { let prod_local_35 = _x_1211; match prod_local_35 {
+        false => prod_local_35,
+        true => { let prod_local_37 = &(integrity).release; { let prod_local_38 = &(context).subject; { let prod_local_39 = &(prod_local_38).release; { let prod_local_40 = (prod_local_37 == prod_local_39); match prod_local_40 {
+        false => prod_local_40,
+        true => { let prod_local_42 = &(integrity).model; { let prod_local_43 = &(context).subject; { let prod_local_44 = &(prod_local_43).model; { let prod_local_45 = (prod_local_42 == prod_local_44); match prod_local_45 {
+        false => prod_local_45,
+        true => { let prod_local_47 = &(integrity).build; { let prod_local_48 = &(context).subject; { let prod_local_49 = &(prod_local_48).build; { let prod_local_50 = (prod_local_47 == prod_local_49); match prod_local_50 {
+        false => prod_local_50,
+        true => { let prod_local_52 = &(integrity).tree; { let prod_local_53 = &(context).subject; { let prod_local_54 = &(prod_local_53).tree; { let prod_local_55 = (prod_local_52 == prod_local_54); match prod_local_55 {
+        false => prod_local_55,
+        true => { let prod_local_58 = &(integrity).url; { let prod_local_59 = &(context).declaration; { let prod_local_60 = &(prod_local_59).target; { let prod_local_61 = &(prod_local_60).url; { let prod_local_62 = (prod_local_58 == prod_local_61); match prod_local_62 {
+        false => prod_local_62,
+        true => { let prod_local_63 = (integrity).from; { let prod_local_64 = (prod_local_63 <= now); match prod_local_64 {
+        false => prod_local_64,
+        true => { let prod_local_65 = (integrity).until; { let prod_local_66 = (now <= prod_local_65); match prod_local_66 {
+        false => prod_local_66,
+        true => { let prod_local_67 = (integrity).until; { let prod_local_68 = 4294967295; { let prod_local_69 = (prod_local_67 <= prod_local_68); prod_local_69 } } },
+    } } },
+    } } },
+    } } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } }
+}
+
+pub fn publicationMomentAt(items: &crate::PublicationObligations, index: u64, moment: crate::PublicationMoment) -> bool {
+    { let _x_8 = publicationPublicationObligationsAt(&(items), index); match _x_8 {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_17 = (val_11).moment; { let _x_18 = publicationPublicationMomentEqual(_x_17, moment); _x_18 } },
+    } }
+}
+
+pub fn publicationMomentPresent(items: &crate::PublicationObligations, moment: crate::PublicationMoment) -> bool {
+    { let _x_1 = 4096; { let _x_4 = publicationMomentScan(&(items), moment, _x_1); _x_4 } }
+}
+
+pub fn publicationMomentScan(x_1: &crate::PublicationObligations, x_2: crate::PublicationMoment, mut x_3: u64) -> bool {
+    loop { return match x_3 {
+        0 => false,
+        _ => { let n_64 = (x_3).saturating_sub(1); { let _x_101 = 4095; { let _x_102 = core::convert::identity::<u64>(_x_101).saturating_sub(n_64); { let _x_103 = publicationPublicationObligationsHas(&(x_1), _x_102); match _x_103 {
+        false => _x_103,
+        true => { let _x_111 = 4095; { let _x_112 = core::convert::identity::<u64>(_x_111).saturating_sub(n_64); { let _x_113 = publicationMomentAt(&(x_1), _x_112, x_2); match _x_113 {
+        false => { (x_3,) = (n_64,); continue; },
+        true => _x_113,
+    } } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationObligationAtEqual(left: &crate::PublicationObligations, right: &crate::PublicationObligations, index: u64) -> bool {
+    { let _x_19 = publicationPublicationObligationsAt(&(left), index); match _x_19 {
+        None => { let _x_32 = publicationPublicationObligationsHas(&(right), index); match _x_32 {
+        false => { let _x_33 = true; _x_33 },
+        true => { let _x_34 = false; _x_34 },
+    } },
+        Some(val_22) => { let _x_35 = publicationPublicationObligationsAt(&(right), index); match _x_35 {
+        None => { let _x_37 = false; _x_37 },
+        Some(val_38) => { let _x_39 = publicationPublicationObligationEqual(&(val_22), &(val_38)); _x_39 },
+    } },
+    } }
+}
+
+pub fn publicationObligationAtValid(items: &crate::PublicationObligations, index: u64) -> bool {
+    { let _x_60 = publicationPublicationObligationsAt(&(items), index); match _x_60 {
+        None => { let _x_86 = false; _x_86 },
+        Some(val_63) => { let _x_106 = publicationObligationValid(&(val_63)); match _x_106 {
+        false => _x_106,
+        true => { let _x_123 = 0; { let _x_124 = (index == _x_123); match _x_124 {
+        false => { let _x_133 = 1; { let _x_134 = core::convert::identity::<u64>(index).saturating_sub(_x_133); { let _x_135 = publicationPublicationObligationsAt(&(items), _x_134); match _x_135 {
+        None => _x_124,
+        Some(val_138) => { let _x_140 = (val_138).id; { let _x_141 = (val_63).id; { let _x_142 = (_x_140 < _x_141); _x_142 } } },
+    } } } },
+        true => _x_124,
+    } } },
+    } },
+    } }
+}
+
+pub fn publicationObligationValid(item: &crate::PublicationObligation) -> bool {
+    { let _x_172 = 0; { let _x_175 = (item).id; { let _x_176 = (_x_172 < _x_175); match _x_176 {
+        false => _x_176,
+        true => { let _x_321 = (item).id; { let _x_322 = 4294967295; { let _x_323 = (_x_321 <= _x_322); match _x_323 {
+        false => _x_323,
+        true => { let _x_402 = &(item).authority; { let _x_403 = (_x_402).len() as u64; { let _x_404 = 32; { let _x_405 = (_x_403 == _x_404); match _x_405 {
+        false => _x_405,
+        true => { let _x_475 = &(item).scope; { let _x_476 = (_x_475).len() as u64; { let _x_477 = 32; { let _x_478 = (_x_476 == _x_477); match _x_478 {
+        false => _x_478,
+        true => { let _x_541 = (item).moment; match _x_541 {
+        crate::PublicationMoment::PrePublication => { let _x_579 = (item).assurance; { let _x_580 = crate::PublicationAssurance::SourceProof; { let _x_581 = publicationPublicationAssuranceEqual(_x_579, _x_580); match _x_581 {
+        false => { let _x_611 = (item).assurance; { let _x_612 = crate::PublicationAssurance::Oracle; { let _x_613 = publicationPublicationAssuranceEqual(_x_611, _x_612); match _x_613 {
+        false => { let _x_636 = (item).assurance; { let _x_637 = crate::PublicationAssurance::ReproducibleBuild; { let _x_638 = publicationPublicationAssuranceEqual(_x_636, _x_637); match _x_638 {
+        false => { let _x_654 = (item).assurance; { let _x_655 = crate::PublicationAssurance::BrowserJourney; { let _x_656 = publicationPublicationAssuranceEqual(_x_654, _x_655); match _x_656 {
+        false => { let _x_665 = (item).assurance; { let _x_666 = crate::PublicationAssurance::FaultRecovery; { let _x_667 = publicationPublicationAssuranceEqual(_x_665, _x_666); match _x_667 {
+        false => { let _x_671 = (item).assurance; { let _x_672 = crate::PublicationAssurance::HumanAssessment; { let _x_673 = publicationPublicationAssuranceEqual(_x_671, _x_672); _x_673 } } },
+        true => _x_667,
+    } } } },
+        true => _x_656,
+    } } } },
+        true => _x_638,
+    } } } },
+        true => _x_613,
+    } } } },
+        true => _x_581,
+    } } } },
+        crate::PublicationMoment::DeploymentOnly => { let _x_687 = (item).assurance; { let _x_688 = crate::PublicationAssurance::HumanAssessment; { let _x_689 = publicationPublicationAssuranceEqual(_x_687, _x_688); match _x_689 {
+        false => { let _x_698 = (item).assurance; { let _x_699 = crate::PublicationAssurance::LiveJourney; { let _x_700 = publicationPublicationAssuranceEqual(_x_698, _x_699); match _x_700 {
+        false => { let _x_704 = (item).assurance; { let _x_705 = crate::PublicationAssurance::OperationalAssessment; { let _x_706 = publicationPublicationAssuranceEqual(_x_704, _x_705); _x_706 } } },
+        true => _x_700,
+    } } } },
+        true => _x_689,
+    } } } },
+    } },
+    } } } } },
+    } } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationObligationsEqual(x_1: &crate::PublicationObligations, x_2: &crate::PublicationObligations, mut x_3: u64) -> bool {
+    loop { return match x_3 {
+        0 => { let _x_137 = 4096; { let _x_138 = publicationPublicationObligationsHas(&(x_1), _x_137); match _x_138 {
+        false => { let _x_180 = 4096; { let _x_181 = publicationPublicationObligationsHas(&(x_2), _x_180); match _x_181 {
+        false => true,
+        true => _x_138,
+    } } },
+        true => false,
+    } } },
+        _ => { let n_85 = (x_3).saturating_sub(1); { let _x_166 = 4095; { let _x_167 = core::convert::identity::<u64>(_x_166).saturating_sub(n_85); { let _x_168 = publicationObligationAtEqual(&(x_1), &(x_2), _x_167); match _x_168 {
+        false => _x_168,
+        true => { let _x_173 = 4095; { let _x_174 = core::convert::identity::<u64>(_x_173).saturating_sub(n_85); { let _x_175 = publicationPublicationObligationsHas(&(x_1), _x_174); match _x_175 {
+        false => _x_168,
+        true => { (x_3,) = (n_85,); continue; },
+    } } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationObligationsScan(x_1: &crate::PublicationObligations, mut x_2: u64) -> bool {
+    loop { return match x_2 {
+        0 => { let _x_72 = 4096; { let _x_73 = publicationPublicationObligationsHas(&(x_1), _x_72); match _x_73 {
+        false => true,
+        true => false,
+    } } },
+        _ => { let n_53 = (x_2).saturating_sub(1); { let _x_88 = 4095; { let _x_89 = core::convert::identity::<u64>(_x_88).saturating_sub(n_53); { let _x_90 = publicationPublicationObligationsHas(&(x_1), _x_89); match _x_90 {
+        false => true,
+        true => { let _x_99 = 4095; { let _x_100 = core::convert::identity::<u64>(_x_99).saturating_sub(n_53); { let _x_101 = publicationObligationAtValid(&(x_1), _x_100); match _x_101 {
+        false => _x_101,
+        true => { (x_2,) = (n_53,); continue; },
+    } } } },
+    } } } } },
+    }; }
+}
+
+pub fn publicationObligationsValid(items: &crate::PublicationObligations, previous: u64, fuel: u64) -> bool {
+    { let _x_37 = 0; { let _x_40 = (previous == _x_37); match _x_40 {
+        false => _x_40,
+        true => { let _x_70 = 4096; { let _x_71 = (fuel == _x_70); match _x_71 {
+        false => _x_71,
+        true => { let _x_78 = publicationPublicationObligationsCanonical(&(items)); match _x_78 {
+        false => _x_78,
+        true => { let _x_82 = publicationObligationsScan(&(items), fuel); _x_82 },
+    } },
+    } } },
+    } } }
+}
+
+pub fn publicationObservedStateValid(state: &crate::PublicationState, now: u64) -> bool {
+    { let _x_174 = publicationAuthorizedStateValid(&(state), now); match _x_174 {
+        false => _x_174,
+        true => { let _x_313 = (state).authorizedAt; { let _x_314 = (state).observedAt; { let _x_315 = (_x_313 <= _x_314); match _x_315 {
+        false => _x_315,
+        true => { let _x_385 = (state).observedAt; { let _x_386 = (_x_385 <= now); match _x_386 {
+        false => _x_386,
+        true => { let _x_450 = &(state).decision; match _x_450 {
+        None => { let _x_452 = false; _x_452 },
+        Some(val_453) => { let _x_509 = &(state).deployment; match _x_509 {
+        None => { let _x_511 = false; _x_511 },
+        Some(val_512) => { let _x_561 = (state).authorizedAt; { let _x_562 = (val_512).observed; { let _x_563 = (_x_561 <= _x_562); match _x_563 {
+        false => _x_563,
+        true => { let _x_602 = (val_453).from; { let _x_603 = (val_512).observed; { let _x_604 = (_x_602 <= _x_603); match _x_604 {
+        false => { let _y_606 = _x_604; match _y_606 {
+        false => _y_606,
+        true => { let _x_630 = &(state).context; { let _x_631 = publicationDeploymentValid(&(_x_630), &(val_453), &(val_512), now); match _x_631 {
+        false => _x_631,
+        true => { let _x_646 = &(state).integrity; match _x_646 {
+        None => { let _x_648 = false; _x_648 },
+        Some(val_649) => { let _x_655 = (val_649).observed; { let _x_656 = (state).observedAt; { let _x_657 = (_x_655 <= _x_656); match _x_657 {
+        false => _x_657,
+        true => { let _x_661 = &(state).context; { let _x_662 = publicationIntegrityValid(&(_x_661), &(val_512), &(val_649), now); _x_662 } },
+    } } } },
+    } },
+    } } },
+    } },
+        true => { let _x_669 = (val_512).observed; { let _x_670 = (val_453).until; { let _x_671 = (_x_669 <= _x_670); match _x_671 {
+        false => { let prod_local_0 = _x_671; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = &(state).context; { let prod_local_2 = publicationDeploymentValid(&(prod_local_1), &(val_453), &(val_512), now); match prod_local_2 {
+        false => prod_local_2,
+        true => { let prod_local_3 = &(state).integrity; match prod_local_3 {
+        None => { let prod_local_4 = false; prod_local_4 },
+        Some(prod_local_5) => { let prod_local_6 = (prod_local_5).observed; { let prod_local_7 = (state).observedAt; { let prod_local_8 = (prod_local_6 <= prod_local_7); match prod_local_8 {
+        false => prod_local_8,
+        true => { let prod_local_9 = &(state).context; { let prod_local_10 = publicationIntegrityValid(&(prod_local_9), &(val_512), &(prod_local_5), now); prod_local_10 } },
+    } } } },
+    } },
+    } } },
+    } },
+        true => { let _x_675 = (val_453).until; { let _x_676 = 4294967295; { let _x_677 = (_x_675 <= _x_676); { let prod_local_11 = _x_677; match prod_local_11 {
+        false => prod_local_11,
+        true => { let prod_local_12 = &(state).context; { let prod_local_13 = publicationDeploymentValid(&(prod_local_12), &(val_453), &(val_512), now); match prod_local_13 {
+        false => prod_local_13,
+        true => { let prod_local_14 = &(state).integrity; match prod_local_14 {
+        None => { let prod_local_15 = false; prod_local_15 },
+        Some(prod_local_16) => { let prod_local_17 = (prod_local_16).observed; { let prod_local_18 = (state).observedAt; { let prod_local_19 = (prod_local_17 <= prod_local_18); match prod_local_19 {
+        false => prod_local_19,
+        true => { let prod_local_20 = &(state).context; { let prod_local_21 = publicationIntegrityValid(&(prod_local_20), &(val_512), &(prod_local_16), now); prod_local_21 } },
+    } } } },
+    } },
+    } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } } },
+    } },
+    } },
+    } } },
+    } } } },
+    } }
+}
+
+pub fn publicationOptionalDigestEqual(left: Option<alloc::vec::Vec<u8>>, right: Option<alloc::vec::Vec<u8>>) -> bool {
+    __prod_borrowed_publicationOptionalDigestEqual(&left, &right)
+}
+
+fn __prod_borrowed_publicationOptionalDigestEqual(left: &Option<alloc::vec::Vec<u8>>, right: &Option<alloc::vec::Vec<u8>>) -> bool {
+    match left {
+        None => match right {
+        None => { let _x_73 = true; _x_73 },
+        Some(val_74) => { let _x_75 = false; _x_75 },
+    },
+        Some(val_54) => match right {
+        None => { let _x_89 = false; _x_89 },
+        Some(val_90) => { let _x_97 = (val_54).len() as u64; { let _x_98 = 32; { let _x_99 = (_x_97 == _x_98); match _x_99 {
+        false => _x_99,
+        true => { let _x_104 = (val_54 == val_90); _x_104 },
+    } } } },
+    },
+    }
+}
+
+pub fn publicationPublicationAssuranceEqual(left: crate::PublicationAssurance, right: crate::PublicationAssurance) -> bool {
+    match left {
+        crate::PublicationAssurance::SourceProof => match right {
+        crate::PublicationAssurance::SourceProof => { let _x_404 = true; _x_404 },
+        _ => { let _x_406 = false; _x_406 },
+    },
+        crate::PublicationAssurance::Oracle => match right {
+        crate::PublicationAssurance::Oracle => { let _x_408 = true; _x_408 },
+        _ => { let _x_410 = false; _x_410 },
+    },
+        crate::PublicationAssurance::ReproducibleBuild => match right {
+        crate::PublicationAssurance::ReproducibleBuild => { let _x_412 = true; _x_412 },
+        _ => { let _x_414 = false; _x_414 },
+    },
+        crate::PublicationAssurance::BrowserJourney => match right {
+        crate::PublicationAssurance::BrowserJourney => { let _x_416 = true; _x_416 },
+        _ => { let _x_418 = false; _x_418 },
+    },
+        crate::PublicationAssurance::FaultRecovery => match right {
+        crate::PublicationAssurance::FaultRecovery => { let _x_420 = true; _x_420 },
+        _ => { let _x_422 = false; _x_422 },
+    },
+        crate::PublicationAssurance::HumanAssessment => match right {
+        crate::PublicationAssurance::HumanAssessment => { let _x_424 = true; _x_424 },
+        _ => { let _x_426 = false; _x_426 },
+    },
+        crate::PublicationAssurance::LiveJourney => match right {
+        crate::PublicationAssurance::LiveJourney => { let _x_428 = true; _x_428 },
+        _ => { let _x_430 = false; _x_430 },
+    },
+        crate::PublicationAssurance::OperationalAssessment => match right {
+        crate::PublicationAssurance::OperationalAssessment => { let _x_432 = true; _x_432 },
+        _ => { let _x_434 = false; _x_434 },
+    },
+    }
+}
+
+pub fn publicationPublicationContextEqual(left: &crate::PublicationContext, right: &crate::PublicationContext) -> bool {
+    { let _x_79 = &(left).declaration; { let _x_80 = &(right).declaration; { let _x_81 = publicationPublicationDeclarationEqual(&(_x_79), &(_x_80)); match _x_81 {
+        false => _x_81,
+        true => { let _x_149 = &(left).declarationIdentity; { let _x_150 = &(right).declarationIdentity; { let _x_151 = (_x_149 == _x_150); match _x_151 {
+        false => _x_151,
+        true => { let _x_186 = &(left).subject; { let _x_187 = &(right).subject; { let _x_188 = publicationPublicationSubjectEqual(&(_x_186), &(_x_187)); match _x_188 {
+        false => _x_188,
+        true => { let _x_216 = &(left).instance; { let _x_217 = &(right).instance; { let _x_218 = (_x_216 == _x_217); match _x_218 {
+        false => _x_218,
+        true => { let _x_238 = &(left).publisherRevision; { let _x_239 = &(right).publisherRevision; { let _x_240 = (_x_238 == _x_239); match _x_240 {
+        false => _x_240,
+        true => { let _x_252 = &(left).publisherRef; { let _x_253 = &(right).publisherRef; { let _x_254 = (_x_252 == _x_253); match _x_254 {
+        false => _x_254,
+        true => { let _x_259 = &(left).digest; { let _x_260 = &(right).digest; { let _x_261 = (_x_259 == _x_260); _x_261 } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationPublicationDeclarationEqual(left: &crate::PublicationDeclaration, right: &crate::PublicationDeclaration) -> bool {
+    { let _x_152 = &(left).stage; { let _x_153 = &(right).stage; { let _x_154 = (_x_152 == _x_153); match _x_154 {
+        false => _x_154,
+        true => { let _x_286 = &(left).policy; { let _x_287 = &(right).policy; { let _x_288 = (_x_286 == _x_287); match _x_288 {
+        false => _x_288,
+        true => { let _x_368 = &(left).target; { let _x_369 = &(right).target; { let _x_370 = publicationPublicationTargetEqual(&(_x_368), &(_x_369)); match _x_370 {
+        false => _x_370,
+        true => { let _x_443 = &(left).clock; { let _x_444 = &(right).clock; { let _x_445 = (_x_443 == _x_444); match _x_445 {
+        false => _x_445,
+        true => { let _x_510 = &(left).clockAuthority; { let _x_511 = &(right).clockAuthority; { let _x_512 = (_x_510 == _x_511); match _x_512 {
+        false => _x_512,
+        true => { let _x_569 = &(left).trustAuthority; { let _x_570 = &(right).trustAuthority; { let _x_571 = (_x_569 == _x_570); match _x_571 {
+        false => _x_571,
+        true => { let _x_620 = &(left).decisionAuthority; { let _x_621 = &(right).decisionAuthority; { let _x_622 = (_x_620 == _x_621); match _x_622 {
+        false => _x_622,
+        true => { let _x_663 = &(left).refAuthority; { let _x_664 = &(right).refAuthority; { let _x_665 = (_x_663 == _x_664); match _x_665 {
+        false => _x_665,
+        true => { let _x_698 = &(left).deploymentAuthority; { let _x_699 = &(right).deploymentAuthority; { let _x_700 = (_x_698 == _x_699); match _x_700 {
+        false => _x_700,
+        true => { let _x_725 = &(left).integrityAuthority; { let _x_726 = &(right).integrityAuthority; { let _x_727 = (_x_725 == _x_726); match _x_727 {
+        false => _x_727,
+        true => { let _x_744 = (left).minimumTrust; { let _x_745 = (right).minimumTrust; { let _x_746 = publicationPublicationTrustEqual(_x_744, _x_745); match _x_746 {
+        false => _x_746,
+        true => { let _x_756 = (left).refKind; { let _x_757 = (right).refKind; { let _x_758 = publicationPublicationRefKindEqual(_x_756, _x_757); match _x_758 {
+        false => _x_758,
+        true => { let _x_762 = &(left).obligations; { let _x_763 = &(right).obligations; { let _x_764 = 4096; { let _x_765 = publicationObligationsEqual(&(_x_762), &(_x_763), _x_764); _x_765 } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationPublicationFactsAt(items: &crate::PublicationFacts, index: u64) -> Option<crate::PublicationFact> {
+    { let _x_1 = &(items).chunks; { let _x_2 = publicationPublicationFactsChunkAt(&(_x_1), index); _x_2 } }
+}
+
+pub fn publicationPublicationFactsCanonical(items: &crate::PublicationFacts) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 64; { let _x_5 = publicationPublicationFactsChunksValid(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationPublicationFactsChunkAt(x_1: &[crate::PublicationFactChunk], x_2: u64) -> Option<crate::PublicationFact> {
+    match &(x_1)[..] {
+        [] => None,
+        [head_30, tail_31 @ ..] => { let _x_48 = 64; { let _x_49 = (x_2 < _x_48); match _x_49 {
+        false => { let _x_55 = 64; { let _x_56 = core::convert::identity::<u64>(x_2).saturating_sub(_x_55); { let _x_57 = publicationPublicationFactsChunkAt(&(tail_31), _x_56); _x_57 } } },
+        true => { let _x_58 = &(head_30).items; { let _x_59 = publicationPublicationFactsRowAt(&(_x_58), x_2); _x_59 } },
+    } } },
+    }
+}
+
+pub fn publicationPublicationFactsChunksValid(x_1: &[crate::PublicationFactChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_81 = publicationEmptyPublicationFactChunk(&(x_1)); _x_81 },
+        _ => { let n_56 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_117 = true; _x_117 },
+        [head_118, tail_119 @ ..] => { let _x_136 = &(head_118).items; { let _x_137 = publicationEmptyPublicationFact(&(_x_136)); match _x_137 {
+        false => { let _x_164 = &(head_118).items; { let _x_165 = 64; { let _x_166 = publicationEmptyPublicationFactChunk(&(tail_119)); match _x_166 {
+        false => { let _x_171 = true; { let _y_168 = _x_171; { let _x_169 = publicationPublicationFactsRowsValid(&(_x_164), _x_165, _y_168); match _x_169 {
+        false => _x_169,
+        true => { let _x_170 = publicationPublicationFactsChunksValid(&(tail_119), n_56); _x_170 },
+    } } } },
+        true => { let prod_local_0 = _x_137; { let prod_local_1 = publicationPublicationFactsRowsValid(&(_x_164), _x_165, prod_local_0); match prod_local_1 {
+        false => prod_local_1,
+        true => { let prod_local_2 = publicationPublicationFactsChunksValid(&(tail_119), n_56); prod_local_2 },
+    } } },
+    } } } },
+        true => { let _x_147 = false; _x_147 },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationPublicationFactsHas(items: &crate::PublicationFacts, index: u64) -> bool {
+    { let _x_8 = publicationPublicationFactsAt(&(items), index); match _x_8 {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_17 = true; _x_17 },
+    } }
+}
+
+pub fn publicationPublicationFactsRowAt(x_1: &[crate::PublicationFact], x_2: u64) -> Option<crate::PublicationFact> {
+    match &(x_1)[..] {
+        [] => None,
+        [head_29, tail_30 @ ..] => { let _x_45 = 0; { let _x_46 = (x_2 == _x_45); match _x_46 {
+        false => { let _x_52 = 1; { let _x_53 = core::convert::identity::<u64>(x_2).saturating_sub(_x_52); { let _x_54 = publicationPublicationFactsRowAt(&(tail_30), _x_53); _x_54 } } },
+        true => { let _x_50 = Some(alloc::borrow::ToOwned::to_owned(head_29)); _x_50 },
+    } } },
+    }
+}
+
+pub fn publicationPublicationFactsRowsValid(x_1: &[crate::PublicationFact], x_2: u64, x_3: bool) -> bool {
+    match x_2 {
+        0 => { let _x_31 = publicationEmptyPublicationFact(&(x_1)); _x_31 },
+        _ => { let n_23 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => match x_3 {
+        false => { let _x_40 = true; _x_40 },
+        true => { let _x_41 = false; _x_41 },
+    },
+        [head_37, tail_38 @ ..] => { let _x_39 = publicationPublicationFactsRowsValid(&(tail_38), n_23, x_3); _x_39 },
+    } },
+    }
+}
+
+pub fn publicationPublicationMomentEqual(left: crate::PublicationMoment, right: crate::PublicationMoment) -> bool {
+    match left {
+        crate::PublicationMoment::PrePublication => match right {
+        crate::PublicationMoment::PrePublication => { let _x_44 = true; _x_44 },
+        crate::PublicationMoment::DeploymentOnly => { let _x_46 = false; _x_46 },
+    },
+        crate::PublicationMoment::DeploymentOnly => match right {
+        crate::PublicationMoment::PrePublication => { let _x_48 = false; _x_48 },
+        crate::PublicationMoment::DeploymentOnly => { let _x_50 = true; _x_50 },
+    },
+    }
+}
+
+pub fn publicationPublicationObligationEqual(left: &crate::PublicationObligation, right: &crate::PublicationObligation) -> bool {
+    { let _x_53 = (left).id; { let _x_54 = (right).id; { let _x_55 = (_x_53 == _x_54); match _x_55 {
+        false => _x_55,
+        true => { let _x_99 = (left).moment; { let _x_100 = (right).moment; { let _x_101 = publicationPublicationMomentEqual(_x_99, _x_100); match _x_101 {
+        false => _x_101,
+        true => { let _x_119 = (left).assurance; { let _x_120 = (right).assurance; { let _x_121 = publicationPublicationAssuranceEqual(_x_119, _x_120); match _x_121 {
+        false => _x_121,
+        true => { let _x_132 = &(left).authority; { let _x_133 = &(right).authority; { let _x_134 = (_x_132 == _x_133); match _x_134 {
+        false => _x_134,
+        true => { let _x_139 = &(left).scope; { let _x_140 = &(right).scope; { let _x_141 = (_x_139 == _x_140); _x_141 } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationPublicationObligationsAt(items: &crate::PublicationObligations, index: u64) -> Option<crate::PublicationObligation> {
+    { let _x_1 = &(items).chunks; { let _x_2 = publicationPublicationObligationsChunkAt(&(_x_1), index); _x_2 } }
+}
+
+pub fn publicationPublicationObligationsCanonical(items: &crate::PublicationObligations) -> bool {
+    { let _x_1 = &(items).chunks; { let _x_2 = 64; { let _x_5 = publicationPublicationObligationsChunksValid(&(_x_1), _x_2); _x_5 } } }
+}
+
+pub fn publicationPublicationObligationsChunkAt(x_1: &[crate::PublicationObligationChunk], x_2: u64) -> Option<crate::PublicationObligation> {
+    match &(x_1)[..] {
+        [] => None,
+        [head_30, tail_31 @ ..] => { let _x_48 = 64; { let _x_49 = (x_2 < _x_48); match _x_49 {
+        false => { let _x_55 = 64; { let _x_56 = core::convert::identity::<u64>(x_2).saturating_sub(_x_55); { let _x_57 = publicationPublicationObligationsChunkAt(&(tail_31), _x_56); _x_57 } } },
+        true => { let _x_58 = &(head_30).items; { let _x_59 = publicationPublicationObligationsRowAt(&(_x_58), x_2); _x_59 } },
+    } } },
+    }
+}
+
+pub fn publicationPublicationObligationsChunksValid(x_1: &[crate::PublicationObligationChunk], x_2: u64) -> bool {
+    match x_2 {
+        0 => { let _x_81 = publicationEmptyPublicationObligationChunk(&(x_1)); _x_81 },
+        _ => { let n_56 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_117 = true; _x_117 },
+        [head_118, tail_119 @ ..] => { let _x_136 = &(head_118).items; { let _x_137 = publicationEmptyPublicationObligation(&(_x_136)); match _x_137 {
+        false => { let _x_164 = &(head_118).items; { let _x_165 = 64; { let _x_166 = publicationEmptyPublicationObligationChunk(&(tail_119)); match _x_166 {
+        false => { let _x_171 = true; { let _y_168 = _x_171; { let _x_169 = publicationPublicationObligationsRowsValid(&(_x_164), _x_165, _y_168); match _x_169 {
+        false => _x_169,
+        true => { let _x_170 = publicationPublicationObligationsChunksValid(&(tail_119), n_56); _x_170 },
+    } } } },
+        true => { let prod_local_0 = _x_137; { let prod_local_1 = publicationPublicationObligationsRowsValid(&(_x_164), _x_165, prod_local_0); match prod_local_1 {
+        false => prod_local_1,
+        true => { let prod_local_2 = publicationPublicationObligationsChunksValid(&(tail_119), n_56); prod_local_2 },
+    } } },
+    } } } },
+        true => { let _x_147 = false; _x_147 },
+    } } },
+    } },
+    }
+}
+
+pub fn publicationPublicationObligationsHas(items: &crate::PublicationObligations, index: u64) -> bool {
+    { let _x_8 = publicationPublicationObligationsAt(&(items), index); match _x_8 {
+        None => { let _x_16 = false; _x_16 },
+        Some(val_11) => { let _x_17 = true; _x_17 },
+    } }
+}
+
+pub fn publicationPublicationObligationsRowAt(x_1: &[crate::PublicationObligation], x_2: u64) -> Option<crate::PublicationObligation> {
+    match &(x_1)[..] {
+        [] => None,
+        [head_29, tail_30 @ ..] => { let _x_45 = 0; { let _x_46 = (x_2 == _x_45); match _x_46 {
+        false => { let _x_52 = 1; { let _x_53 = core::convert::identity::<u64>(x_2).saturating_sub(_x_52); { let _x_54 = publicationPublicationObligationsRowAt(&(tail_30), _x_53); _x_54 } } },
+        true => { let _x_50 = Some(alloc::borrow::ToOwned::to_owned(head_29)); _x_50 },
+    } } },
+    }
+}
+
+pub fn publicationPublicationObligationsRowsValid(x_1: &[crate::PublicationObligation], x_2: u64, x_3: bool) -> bool {
+    match x_2 {
+        0 => { let _x_31 = publicationEmptyPublicationObligation(&(x_1)); _x_31 },
+        _ => { let n_23 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => match x_3 {
+        false => { let _x_40 = true; _x_40 },
+        true => { let _x_41 = false; _x_41 },
+    },
+        [head_37, tail_38 @ ..] => { let _x_39 = publicationPublicationObligationsRowsValid(&(tail_38), n_23, x_3); _x_39 },
+    } },
+    }
+}
+
+pub fn publicationPublicationOutcomeEqual(left: crate::PublicationOutcome, right: crate::PublicationOutcome) -> bool {
+    match left {
+        crate::PublicationOutcome::Satisfied => match right {
+        crate::PublicationOutcome::Satisfied => { let _x_79 = true; _x_79 },
+        _ => { let _x_81 = false; _x_81 },
+    },
+        crate::PublicationOutcome::Rejected => match right {
+        crate::PublicationOutcome::Rejected => { let _x_83 = true; _x_83 },
+        _ => { let _x_85 = false; _x_85 },
+    },
+        crate::PublicationOutcome::Unknown => match right {
+        crate::PublicationOutcome::Unknown => { let _x_87 = true; _x_87 },
+        _ => { let _x_89 = false; _x_89 },
+    },
+    }
+}
+
+pub fn publicationPublicationPhaseEqual(left: crate::PublicationPhase, right: crate::PublicationPhase) -> bool {
+    match left {
+        crate::PublicationPhase::Unready => match right {
+        crate::PublicationPhase::Unready => { let _x_124 = true; _x_124 },
+        _ => { let _x_126 = false; _x_126 },
+    },
+        crate::PublicationPhase::ProducerReady => match right {
+        crate::PublicationPhase::ProducerReady => { let _x_128 = true; _x_128 },
+        _ => { let _x_130 = false; _x_130 },
+    },
+        crate::PublicationPhase::DeploymentAuthorized => match right {
+        crate::PublicationPhase::DeploymentAuthorized => { let _x_132 = true; _x_132 },
+        _ => { let _x_134 = false; _x_134 },
+    },
+        crate::PublicationPhase::Accepted => match right {
+        crate::PublicationPhase::Accepted => { let _x_136 = true; _x_136 },
+        _ => { let _x_138 = false; _x_138 },
+    },
+    }
+}
+
+pub fn publicationPublicationRefKindEqual(left: crate::PublicationRefKind, right: crate::PublicationRefKind) -> bool {
+    match left {
+        crate::PublicationRefKind::ProtectedBranch => match right {
+        crate::PublicationRefKind::ProtectedBranch => { let _x_44 = true; _x_44 },
+        crate::PublicationRefKind::ProtectedTag => { let _x_46 = false; _x_46 },
+    },
+        crate::PublicationRefKind::ProtectedTag => match right {
+        crate::PublicationRefKind::ProtectedBranch => { let _x_48 = false; _x_48 },
+        crate::PublicationRefKind::ProtectedTag => { let _x_50 = true; _x_50 },
+    },
+    }
+}
+
+pub fn publicationPublicationSubjectEqual(left: &crate::PublicationSubject, right: &crate::PublicationSubject) -> bool {
+    { let _x_153 = &(left).producer; { let _x_154 = &(right).producer; { let _x_155 = (_x_153 == _x_154); match _x_155 {
+        false => _x_155,
+        true => { let _x_289 = &(left).source; { let _x_290 = &(right).source; { let _x_291 = (_x_289 == _x_290); match _x_291 {
+        false => _x_291,
+        true => { let _x_374 = &(left).release; { let _x_375 = &(right).release; { let _x_376 = (_x_374 == _x_375); match _x_376 {
+        false => _x_376,
+        true => { let _x_451 = &(left).model; { let _x_452 = &(right).model; { let _x_453 = (_x_451 == _x_452); match _x_453 {
+        false => _x_453,
+        true => { let _x_520 = &(left).build; { let _x_521 = &(right).build; { let _x_522 = (_x_520 == _x_521); match _x_522 {
+        false => _x_522,
+        true => { let _x_581 = &(left).services; { let _x_582 = &(right).services; { let _x_583 = (_x_581 == _x_582); match _x_583 {
+        false => _x_583,
+        true => { let _x_634 = &(left).controls; { let _x_635 = &(right).controls; { let _x_636 = (_x_634 == _x_635); match _x_636 {
+        false => _x_636,
+        true => { let _x_679 = &(left).dependencies; { let _x_680 = &(right).dependencies; { let _x_681 = (_x_679 == _x_680); match _x_681 {
+        false => _x_681,
+        true => { let _x_716 = &(left).sdk; { let _x_717 = &(right).sdk; { let _x_718 = (_x_716 == _x_717); match _x_718 {
+        false => _x_718,
+        true => { let _x_745 = &(left).compiler; { let _x_746 = &(right).compiler; { let _x_747 = (_x_745 == _x_746); match _x_747 {
+        false => _x_747,
+        true => { let _x_766 = &(left).runtime; { let _x_767 = &(right).runtime; { let _x_768 = (_x_766 == _x_767); match _x_768 {
+        false => _x_768,
+        true => { let _x_779 = &(left).oracles; { let _x_780 = &(right).oracles; { let _x_781 = (_x_779 == _x_780); match _x_781 {
+        false => _x_781,
+        true => { let _x_786 = &(left).tree; { let _x_787 = &(right).tree; { let _x_788 = (_x_786 == _x_787); _x_788 } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationPublicationTargetEqual(left: &crate::PublicationTarget, right: &crate::PublicationTarget) -> bool {
+    { let _x_47 = &(left).url; { let _x_48 = &(right).url; { let _x_49 = (_x_47 == _x_48); match _x_49 {
+        false => _x_49,
+        true => { let _x_86 = &(left).publisher; { let _x_87 = &(right).publisher; { let _x_88 = (_x_86 == _x_87); match _x_88 {
+        false => _x_88,
+        true => { let _x_100 = &(left).environment; { let _x_101 = &(right).environment; { let _x_102 = (_x_100 == _x_101); match _x_102 {
+        false => _x_102,
+        true => { let _x_107 = &(left).adapter; { let _x_108 = &(right).adapter; { let _x_109 = (_x_107 == _x_108); _x_109 } } },
+    } } } },
+    } } } },
+    } } } }
+}
+
+pub fn publicationPublicationTrustEqual(left: crate::PublicationTrust, right: crate::PublicationTrust) -> bool {
+    match left {
+        crate::PublicationTrust::Candidate => match right {
+        crate::PublicationTrust::Candidate => { let _x_124 = true; _x_124 },
+        _ => { let _x_126 = false; _x_126 },
+    },
+        crate::PublicationTrust::Accepted => match right {
+        crate::PublicationTrust::Accepted => { let _x_128 = true; _x_128 },
+        _ => { let _x_130 = false; _x_130 },
+    },
+        crate::PublicationTrust::Rejected => match right {
+        crate::PublicationTrust::Rejected => { let _x_132 = true; _x_132 },
+        _ => { let _x_134 = false; _x_134 },
+    },
+        crate::PublicationTrust::Unknown => match right {
+        crate::PublicationTrust::Unknown => { let _x_136 = true; _x_136 },
+        _ => { let _x_138 = false; _x_138 },
+    },
+    }
+}
+
+pub fn publicationReadyStateValid(state: &crate::PublicationState, now: u64) -> bool {
+    { let _x_114 = (state).readyAt; { let _x_115 = (_x_114 <= now); match _x_115 {
+        false => _x_115,
+        true => { let _x_204 = &(state).trust; match _x_204 {
+        None => { let _x_213 = false; _x_213 },
+        Some(val_214) => { let _x_221 = &(state).context; { let _x_222 = publicationTrustValid(&(_x_221), &(val_214), now); match _x_222 {
+        false => { let _y_230 = _x_222; match _y_230 {
+        false => _y_230,
+        true => { let _x_257 = &(state).context; { let _x_258 = &(_x_257).declaration; { let _x_259 = &(_x_258).obligations; { let _x_260 = &(state).readiness; { let _x_261 = crate::PublicationMoment::PrePublication; { let _x_263 = __prod_borrowed_publicationFactsComplete(&(_x_257), &(_x_259), &(_x_260), _x_261, &(None), now); match _x_263 {
+        false => _x_263,
+        true => { let _x_278 = &(state).context; { let _x_279 = &(_x_278).declaration; { let _x_280 = &(_x_279).obligations; { let _x_281 = &(state).readiness; { let _x_282 = crate::PublicationMoment::PrePublication; { let _x_284 = (state).readyAt; { let _x_285 = __prod_borrowed_publicationFactsComplete(&(_x_278), &(_x_280), &(_x_281), _x_282, &(None), _x_284); match _x_285 {
+        false => _x_285,
+        true => { let _x_294 = &(state).ready; match _x_294 {
+        None => { let _x_296 = false; _x_296 },
+        Some(val_297) => { let _x_300 = (val_297).len() as u64; { let _x_301 = 32; { let _x_302 = (_x_300 == _x_301); _x_302 } } },
+    } },
+    } } } } } } } },
+    } } } } } } },
+    } },
+        true => { let _x_226 = &(state).context; { let _x_227 = (state).readyAt; { let _x_228 = publicationTrustValid(&(_x_226), &(val_214), _x_227); { let prod_local_0 = _x_228; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = &(state).context; { let prod_local_2 = &(prod_local_1).declaration; { let prod_local_3 = &(prod_local_2).obligations; { let prod_local_4 = &(state).readiness; { let prod_local_5 = crate::PublicationMoment::PrePublication; { let prod_local_7 = __prod_borrowed_publicationFactsComplete(&(prod_local_1), &(prod_local_3), &(prod_local_4), prod_local_5, &(None), now); match prod_local_7 {
+        false => prod_local_7,
+        true => { let prod_local_8 = &(state).context; { let prod_local_9 = &(prod_local_8).declaration; { let prod_local_10 = &(prod_local_9).obligations; { let prod_local_11 = &(state).readiness; { let prod_local_12 = crate::PublicationMoment::PrePublication; { let prod_local_14 = (state).readyAt; { let prod_local_15 = __prod_borrowed_publicationFactsComplete(&(prod_local_8), &(prod_local_10), &(prod_local_11), prod_local_12, &(None), prod_local_14); match prod_local_15 {
+        false => prod_local_15,
+        true => { let prod_local_16 = &(state).ready; match prod_local_16 {
+        None => { let prod_local_17 = false; prod_local_17 },
+        Some(prod_local_18) => { let prod_local_20 = (prod_local_18).len() as u64; { let prod_local_21 = 32; { let prod_local_22 = (prod_local_20 == prod_local_21); prod_local_22 } } },
+    } },
+    } } } } } } } },
+    } } } } } } },
+    } } } } },
+    } } },
+    } },
+    } } }
+}
+
+pub fn publicationStatePhaseValid(state: &crate::PublicationState, now: u64) -> bool {
+    { let _x_628 = (state).phase; match _x_628 {
+        crate::PublicationPhase::Unready => { let _x_990 = (state).revision; { let _x_991 = 0; { let _x_992 = (_x_990 == _x_991); match _x_992 {
+        false => _x_992,
+        true => { let _x_1090 = (state).readyAt; { let _x_1091 = 0; { let _x_1092 = (_x_1090 == _x_1091); match _x_1092 {
+        false => _x_1092,
+        true => { let _x_1183 = (state).authorizedAt; { let _x_1184 = 0; { let _x_1185 = (_x_1183 == _x_1184); match _x_1185 {
+        false => _x_1185,
+        true => { let _x_1269 = (state).observedAt; { let _x_1270 = 0; { let _x_1271 = (_x_1269 == _x_1270); match _x_1271 {
+        false => _x_1271,
+        true => { let _x_1341 = &(state).trust; match _x_1341 {
+        None => { let _x_2325 = &(state).ready; match _x_2325 {
+        None => { let _x_2345 = &(state).decision; match _x_2345 {
+        None => { let _x_2361 = &(state).deployment; match _x_2361 {
+        None => { let _x_2373 = &(state).integrity; match _x_2373 {
+        None => { let _x_2381 = &(state).readiness; { let _x_2382 = publicationFactsEmpty(&(_x_2381)); match _x_2382 {
+        false => _x_2382,
+        true => { let _x_2383 = &(state).live; { let _x_2384 = publicationFactsEmpty(&(_x_2383)); _x_2384 } },
+    } } },
+        Some(val_2379) => { let _x_2380 = false; _x_2380 },
+    } },
+        Some(val_2371) => { let _x_2372 = false; _x_2372 },
+    } },
+        Some(val_2359) => { let _x_2360 = false; _x_2360 },
+    } },
+        Some(val_2343) => { let _x_2344 = false; _x_2344 },
+    } },
+        Some(val_1352) => { let _x_1353 = false; _x_1353 },
+    } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+        crate::PublicationPhase::ProducerReady => { let _x_1615 = (state).revision; { let _x_1616 = 1; { let _x_1617 = (_x_1615 == _x_1616); match _x_1617 {
+        false => _x_1617,
+        true => { let _x_1686 = (state).readyAt; { let _x_1687 = &(state).clock; { let _x_1688 = (_x_1687).tick; { let _x_1689 = (_x_1686 == _x_1688); match _x_1689 {
+        false => _x_1689,
+        true => { let _x_1751 = (state).authorizedAt; { let _x_1752 = 0; { let _x_1753 = (_x_1751 == _x_1752); match _x_1753 {
+        false => _x_1753,
+        true => { let _x_1808 = (state).observedAt; { let _x_1809 = 0; { let _x_1810 = (_x_1808 == _x_1809); match _x_1810 {
+        false => _x_1810,
+        true => { let _x_1860 = publicationReadyStateValid(&(state), now); match _x_1860 {
+        false => _x_1860,
+        true => { let _x_1896 = &(state).decision; match _x_1896 {
+        None => { let _x_2385 = &(state).deployment; match _x_2385 {
+        None => { let _x_2395 = &(state).integrity; match _x_2395 {
+        None => { let _x_2401 = &(state).live; { let _x_2402 = publicationFactsEmpty(&(_x_2401)); _x_2402 } },
+        Some(val_2399) => { let _x_2400 = false; _x_2400 },
+    } },
+        Some(val_2393) => { let _x_2394 = false; _x_2394 },
+    } },
+        Some(val_1907) => { let _x_1908 = false; _x_1908 },
+    } },
+    } },
+    } } } },
+    } } } },
+    } } } } },
+    } } } },
+        crate::PublicationPhase::DeploymentAuthorized => { let _x_2030 = &(state).live; { let _x_2031 = publicationFactsEmpty(&(_x_2030)); match _x_2031 {
+        false => _x_2031,
+        true => { let _x_2093 = (state).revision; { let _x_2094 = 2; { let _x_2095 = (_x_2093 == _x_2094); match _x_2095 {
+        false => { let _y_2097 = _x_2095; match _y_2097 {
+        false => { let _x_2406 = (state).revision; { let _x_2407 = 3; { let _x_2408 = (_x_2406 == _x_2407); match _x_2408 {
+        false => _x_2408,
+        true => { let _x_2409 = (state).observedAt; { let _x_2410 = &(state).clock; { let _x_2411 = (_x_2410).tick; { let _x_2412 = (_x_2409 == _x_2411); match _x_2412 {
+        false => _x_2412,
+        true => { let _x_2413 = publicationObservedStateValid(&(state), now); _x_2413 },
+    } } } } },
+    } } } },
+        true => _y_2097,
+    } },
+        true => { let _x_2165 = (state).authorizedAt; { let _x_2166 = &(state).clock; { let _x_2167 = (_x_2166).tick; { let _x_2168 = (_x_2165 == _x_2167); match _x_2168 {
+        false => { let prod_local_0 = _x_2168; match prod_local_0 {
+        false => { let prod_local_1 = (state).revision; { let prod_local_2 = 3; { let prod_local_3 = (prod_local_1 == prod_local_2); match prod_local_3 {
+        false => prod_local_3,
+        true => { let prod_local_4 = (state).observedAt; { let prod_local_5 = &(state).clock; { let prod_local_6 = (prod_local_5).tick; { let prod_local_7 = (prod_local_4 == prod_local_6); match prod_local_7 {
+        false => prod_local_7,
+        true => { let prod_local_8 = publicationObservedStateValid(&(state), now); prod_local_8 },
+    } } } } },
+    } } } },
+        true => prod_local_0,
+    } },
+        true => { let _x_2197 = (state).observedAt; { let _x_2198 = 0; { let _x_2199 = (_x_2197 == _x_2198); match _x_2199 {
+        false => { let prod_local_9 = _x_2199; match prod_local_9 {
+        false => { let prod_local_10 = (state).revision; { let prod_local_11 = 3; { let prod_local_12 = (prod_local_10 == prod_local_11); match prod_local_12 {
+        false => prod_local_12,
+        true => { let prod_local_13 = (state).observedAt; { let prod_local_14 = &(state).clock; { let prod_local_15 = (prod_local_14).tick; { let prod_local_16 = (prod_local_13 == prod_local_15); match prod_local_16 {
+        false => prod_local_16,
+        true => { let prod_local_17 = publicationObservedStateValid(&(state), now); prod_local_17 },
+    } } } } },
+    } } } },
+        true => prod_local_9,
+    } },
+        true => { let _x_2223 = publicationAuthorizedStateValid(&(state), now); match _x_2223 {
+        false => { let prod_local_18 = _x_2223; match prod_local_18 {
+        false => { let prod_local_19 = (state).revision; { let prod_local_20 = 3; { let prod_local_21 = (prod_local_19 == prod_local_20); match prod_local_21 {
+        false => prod_local_21,
+        true => { let prod_local_22 = (state).observedAt; { let prod_local_23 = &(state).clock; { let prod_local_24 = (prod_local_23).tick; { let prod_local_25 = (prod_local_22 == prod_local_24); match prod_local_25 {
+        false => prod_local_25,
+        true => { let prod_local_26 = publicationObservedStateValid(&(state), now); prod_local_26 },
+    } } } } },
+    } } } },
+        true => prod_local_18,
+    } },
+        true => { let _x_2233 = &(state).deployment; match _x_2233 {
+        None => { let _x_2403 = &(state).integrity; match _x_2403 {
+        None => { let prod_local_27 = _x_2223; match prod_local_27 {
+        false => { let prod_local_28 = (state).revision; { let prod_local_29 = 3; { let prod_local_30 = (prod_local_28 == prod_local_29); match prod_local_30 {
+        false => prod_local_30,
+        true => { let prod_local_31 = (state).observedAt; { let prod_local_32 = &(state).clock; { let prod_local_33 = (prod_local_32).tick; { let prod_local_34 = (prod_local_31 == prod_local_33); match prod_local_34 {
+        false => prod_local_34,
+        true => { let prod_local_35 = publicationObservedStateValid(&(state), now); prod_local_35 },
+    } } } } },
+    } } } },
+        true => prod_local_27,
+    } },
+        Some(val_2404) => { let prod_local_36 = (state).revision; { let prod_local_37 = 3; { let prod_local_38 = (prod_local_36 == prod_local_37); match prod_local_38 {
+        false => prod_local_38,
+        true => { let prod_local_39 = (state).observedAt; { let prod_local_40 = &(state).clock; { let prod_local_41 = (prod_local_40).tick; { let prod_local_42 = (prod_local_39 == prod_local_41); match prod_local_42 {
+        false => prod_local_42,
+        true => { let prod_local_43 = publicationObservedStateValid(&(state), now); prod_local_43 },
+    } } } } },
+    } } } },
+    } },
+        Some(val_2244) => { let prod_local_44 = (state).revision; { let prod_local_45 = 3; { let prod_local_46 = (prod_local_44 == prod_local_45); match prod_local_46 {
+        false => prod_local_46,
+        true => { let prod_local_47 = (state).observedAt; { let prod_local_48 = &(state).clock; { let prod_local_49 = (prod_local_48).tick; { let prod_local_50 = (prod_local_47 == prod_local_49); match prod_local_50 {
+        false => prod_local_50,
+        true => { let prod_local_51 = publicationObservedStateValid(&(state), now); prod_local_51 },
+    } } } } },
+    } } } },
+    } },
+    } },
+    } } } },
+    } } } } },
+    } } } },
+    } } },
+        crate::PublicationPhase::Accepted => { let _x_2276 = (state).revision; { let _x_2277 = 4; { let _x_2278 = (_x_2276 == _x_2277); match _x_2278 {
+        false => _x_2278,
+        true => { let _x_2300 = publicationObservedStateValid(&(state), now); match _x_2300 {
+        false => _x_2300,
+        true => { let _x_2304 = &(state).context; { let _x_2305 = &(_x_2304).declaration; { let _x_2306 = &(_x_2305).obligations; { let _x_2307 = &(state).live; { let _x_2308 = crate::PublicationMoment::DeploymentOnly; { let _x_2312 = &(state).deployment; match _x_2312 {
+        None => { let _x_2321 = __prod_borrowed_publicationFactsComplete(&(_x_2304), &(_x_2306), &(_x_2307), _x_2308, &(None), now); _x_2321 },
+        Some(val_2319) => { let _x_2322 = &(val_2319).receipt; { let _x_2323 = Some(alloc::borrow::ToOwned::to_owned(_x_2322)); { let _x_2324 = __prod_borrowed_publicationFactsComplete(&(_x_2304), &(_x_2306), &(_x_2307), _x_2308, &(_x_2323), now); _x_2324 } } },
+    } } } } } } },
+    } },
+    } } } },
+    } }
+}
+
+pub fn publicationStateValid(state: &crate::PublicationState, now: u64) -> bool {
+    { let _x_61 = &(state).context; { let _x_62 = publicationContextValid(&(_x_61)); match _x_62 {
+        false => _x_62,
+        true => { let _x_112 = &(state).context; { let _x_113 = &(state).clock; { let _x_114 = publicationClockValid(&(_x_112), &(_x_113)); match _x_114 {
+        false => _x_114,
+        true => { let _x_134 = &(state).clock; { let _x_135 = (_x_134).tick; { let _x_136 = (_x_135 <= now); match _x_136 {
+        false => _x_136,
+        true => { let _x_150 = 4294967295; { let _x_151 = (now <= _x_150); match _x_151 {
+        false => _x_151,
+        true => { let _x_158 = &(state).clock; { let _x_159 = (_x_158).tick; { let _x_160 = publicationStatePhaseValid(&(state), _x_159); match _x_160 {
+        false => _x_160,
+        true => { let _x_164 = publicationStatePhaseValid(&(state), now); _x_164 },
+    } } } },
+    } } },
+    } } } },
+    } } } },
+    } } }
+}
+
+pub fn publicationSubjectValid(subject: &crate::PublicationSubject) -> bool {
+    { let _x_207 = 0; { let _x_211 = &(subject).producer; { let _x_212 = (_x_211).as_bytes(); { let _x_213 = (_x_212).len() as u64; { let _x_214 = (_x_207 < _x_213); match _x_214 {
+        false => { let _y_219 = _x_214; match _y_219 {
+        false => _y_219,
+        true => { let _x_394 = &(subject).source; { let _x_395 = (_x_394).len() as u64; { let _x_396 = 20; { let _x_397 = (_x_395 == _x_396); match _x_397 {
+        false => _x_397,
+        true => { let _x_490 = &(subject).release; { let _x_491 = (_x_490).len() as u64; { let _x_492 = 32; { let _x_493 = (_x_491 == _x_492); match _x_493 {
+        false => _x_493,
+        true => { let _x_577 = &(subject).model; { let _x_578 = (_x_577).len() as u64; { let _x_579 = 32; { let _x_580 = (_x_578 == _x_579); match _x_580 {
+        false => _x_580,
+        true => { let _x_655 = &(subject).build; { let _x_656 = (_x_655).len() as u64; { let _x_657 = 32; { let _x_658 = (_x_656 == _x_657); match _x_658 {
+        false => _x_658,
+        true => { let _x_724 = &(subject).services; { let _x_725 = (_x_724).len() as u64; { let _x_726 = 32; { let _x_727 = (_x_725 == _x_726); match _x_727 {
+        false => _x_727,
+        true => { let _x_784 = &(subject).controls; { let _x_785 = (_x_784).len() as u64; { let _x_786 = 32; { let _x_787 = (_x_785 == _x_786); match _x_787 {
+        false => _x_787,
+        true => { let _x_835 = &(subject).dependencies; { let _x_836 = (_x_835).len() as u64; { let _x_837 = 32; { let _x_838 = (_x_836 == _x_837); match _x_838 {
+        false => _x_838,
+        true => { let _x_877 = &(subject).sdk; { let _x_878 = (_x_877).len() as u64; { let _x_879 = 32; { let _x_880 = (_x_878 == _x_879); match _x_880 {
+        false => _x_880,
+        true => { let _x_910 = &(subject).compiler; { let _x_911 = (_x_910).len() as u64; { let _x_912 = 32; { let _x_913 = (_x_911 == _x_912); match _x_913 {
+        false => _x_913,
+        true => { let _x_934 = &(subject).runtime; { let _x_935 = (_x_934).len() as u64; { let _x_936 = 32; { let _x_937 = (_x_935 == _x_936); match _x_937 {
+        false => _x_937,
+        true => { let _x_949 = &(subject).oracles; { let _x_950 = (_x_949).len() as u64; { let _x_951 = 32; { let _x_952 = (_x_950 == _x_951); match _x_952 {
+        false => _x_952,
+        true => { let _x_957 = &(subject).tree; { let _x_958 = (_x_957).len() as u64; { let _x_959 = 32; { let _x_960 = (_x_958 == _x_959); _x_960 } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } },
+        true => { let _x_963 = &(subject).producer; { let _x_964 = (_x_963).as_bytes(); { let _x_965 = (_x_964).len() as u64; { let _x_966 = 2048; { let _x_967 = (_x_965 <= _x_966); { let prod_local_0 = _x_967; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_2 = &(subject).source; { let prod_local_3 = (prod_local_2).len() as u64; { let prod_local_4 = 20; { let prod_local_5 = (prod_local_3 == prod_local_4); match prod_local_5 {
+        false => prod_local_5,
+        true => { let prod_local_7 = &(subject).release; { let prod_local_8 = (prod_local_7).len() as u64; { let prod_local_9 = 32; { let prod_local_10 = (prod_local_8 == prod_local_9); match prod_local_10 {
+        false => prod_local_10,
+        true => { let prod_local_12 = &(subject).model; { let prod_local_13 = (prod_local_12).len() as u64; { let prod_local_14 = 32; { let prod_local_15 = (prod_local_13 == prod_local_14); match prod_local_15 {
+        false => prod_local_15,
+        true => { let prod_local_17 = &(subject).build; { let prod_local_18 = (prod_local_17).len() as u64; { let prod_local_19 = 32; { let prod_local_20 = (prod_local_18 == prod_local_19); match prod_local_20 {
+        false => prod_local_20,
+        true => { let prod_local_22 = &(subject).services; { let prod_local_23 = (prod_local_22).len() as u64; { let prod_local_24 = 32; { let prod_local_25 = (prod_local_23 == prod_local_24); match prod_local_25 {
+        false => prod_local_25,
+        true => { let prod_local_27 = &(subject).controls; { let prod_local_28 = (prod_local_27).len() as u64; { let prod_local_29 = 32; { let prod_local_30 = (prod_local_28 == prod_local_29); match prod_local_30 {
+        false => prod_local_30,
+        true => { let prod_local_32 = &(subject).dependencies; { let prod_local_33 = (prod_local_32).len() as u64; { let prod_local_34 = 32; { let prod_local_35 = (prod_local_33 == prod_local_34); match prod_local_35 {
+        false => prod_local_35,
+        true => { let prod_local_37 = &(subject).sdk; { let prod_local_38 = (prod_local_37).len() as u64; { let prod_local_39 = 32; { let prod_local_40 = (prod_local_38 == prod_local_39); match prod_local_40 {
+        false => prod_local_40,
+        true => { let prod_local_42 = &(subject).compiler; { let prod_local_43 = (prod_local_42).len() as u64; { let prod_local_44 = 32; { let prod_local_45 = (prod_local_43 == prod_local_44); match prod_local_45 {
+        false => prod_local_45,
+        true => { let prod_local_47 = &(subject).runtime; { let prod_local_48 = (prod_local_47).len() as u64; { let prod_local_49 = 32; { let prod_local_50 = (prod_local_48 == prod_local_49); match prod_local_50 {
+        false => prod_local_50,
+        true => { let prod_local_52 = &(subject).oracles; { let prod_local_53 = (prod_local_52).len() as u64; { let prod_local_54 = 32; { let prod_local_55 = (prod_local_53 == prod_local_54); match prod_local_55 {
+        false => prod_local_55,
+        true => { let prod_local_57 = &(subject).tree; { let prod_local_58 = (prod_local_57).len() as u64; { let prod_local_59 = 32; { let prod_local_60 = (prod_local_58 == prod_local_59); prod_local_60 } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } },
+    } } } } } } },
+    } } } } } }
+}
+
+pub fn publicationTargetValid(target: &crate::PublicationTarget) -> bool {
+    { let _x_138 = 0; { let _x_142 = &(target).url; { let _x_143 = (_x_142).as_bytes(); { let _x_144 = (_x_143).len() as u64; { let _x_145 = (_x_138 < _x_144); match _x_145 {
+        false => { let _y_150 = _x_145; match _y_150 {
+        false => _y_150,
+        true => { let _x_249 = 0; { let _x_251 = &(target).publisher; { let _x_252 = (_x_251).as_bytes(); { let _x_253 = (_x_252).len() as u64; { let _x_254 = (_x_249 < _x_253); match _x_254 {
+        false => { let _y_256 = _x_254; match _y_256 {
+        false => _y_256,
+        true => { let _x_278 = 0; { let _x_280 = &(target).environment; { let _x_281 = (_x_280).as_bytes(); { let _x_282 = (_x_281).len() as u64; { let _x_283 = (_x_278 < _x_282); match _x_283 {
+        false => { let _y_285 = _x_283; match _y_285 {
+        false => _y_285,
+        true => { let _x_293 = &(target).adapter; { let _x_294 = (_x_293).len() as u64; { let _x_295 = 32; { let _x_296 = (_x_294 == _x_295); _x_296 } } } },
+    } },
+        true => { let _x_299 = &(target).environment; { let _x_300 = (_x_299).as_bytes(); { let _x_301 = (_x_300).len() as u64; { let _x_302 = 2048; { let _x_303 = (_x_301 <= _x_302); { let prod_local_0 = _x_303; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_2 = &(target).adapter; { let prod_local_3 = (prod_local_2).len() as u64; { let prod_local_4 = 32; { let prod_local_5 = (prod_local_3 == prod_local_4); prod_local_5 } } } },
+    } } } } } } },
+    } } } } } },
+    } },
+        true => { let _x_306 = &(target).publisher; { let _x_307 = (_x_306).as_bytes(); { let _x_308 = (_x_307).len() as u64; { let _x_309 = 2048; { let _x_310 = (_x_308 <= _x_309); { let prod_local_6 = _x_310; match prod_local_6 {
+        false => prod_local_6,
+        true => { let prod_local_7 = 0; { let prod_local_9 = &(target).environment; { let prod_local_10 = (prod_local_9).as_bytes(); { let prod_local_11 = (prod_local_10).len() as u64; { let prod_local_12 = (prod_local_7 < prod_local_11); match prod_local_12 {
+        false => { let prod_local_14 = prod_local_12; match prod_local_14 {
+        false => prod_local_14,
+        true => { let prod_local_16 = &(target).adapter; { let prod_local_17 = (prod_local_16).len() as u64; { let prod_local_18 = 32; { let prod_local_19 = (prod_local_17 == prod_local_18); prod_local_19 } } } },
+    } },
+        true => { let prod_local_21 = &(target).environment; { let prod_local_22 = (prod_local_21).as_bytes(); { let prod_local_23 = (prod_local_22).len() as u64; { let prod_local_24 = 2048; { let prod_local_25 = (prod_local_23 <= prod_local_24); { let prod_local_26 = prod_local_25; match prod_local_26 {
+        false => prod_local_26,
+        true => { let prod_local_28 = &(target).adapter; { let prod_local_29 = (prod_local_28).len() as u64; { let prod_local_30 = 32; { let prod_local_31 = (prod_local_29 == prod_local_30); prod_local_31 } } } },
+    } } } } } } },
+    } } } } } },
+    } } } } } } },
+    } } } } } },
+    } },
+        true => { let _x_313 = &(target).url; { let _x_314 = (_x_313).as_bytes(); { let _x_315 = (_x_314).len() as u64; { let _x_316 = 2048; { let _x_317 = (_x_315 <= _x_316); { let prod_local_32 = _x_317; match prod_local_32 {
+        false => prod_local_32,
+        true => { let prod_local_33 = 0; { let prod_local_35 = &(target).publisher; { let prod_local_36 = (prod_local_35).as_bytes(); { let prod_local_37 = (prod_local_36).len() as u64; { let prod_local_38 = (prod_local_33 < prod_local_37); match prod_local_38 {
+        false => { let prod_local_40 = prod_local_38; match prod_local_40 {
+        false => prod_local_40,
+        true => { let prod_local_41 = 0; { let prod_local_43 = &(target).environment; { let prod_local_44 = (prod_local_43).as_bytes(); { let prod_local_45 = (prod_local_44).len() as u64; { let prod_local_46 = (prod_local_41 < prod_local_45); match prod_local_46 {
+        false => { let prod_local_48 = prod_local_46; match prod_local_48 {
+        false => prod_local_48,
+        true => { let prod_local_50 = &(target).adapter; { let prod_local_51 = (prod_local_50).len() as u64; { let prod_local_52 = 32; { let prod_local_53 = (prod_local_51 == prod_local_52); prod_local_53 } } } },
+    } },
+        true => { let prod_local_55 = &(target).environment; { let prod_local_56 = (prod_local_55).as_bytes(); { let prod_local_57 = (prod_local_56).len() as u64; { let prod_local_58 = 2048; { let prod_local_59 = (prod_local_57 <= prod_local_58); { let prod_local_60 = prod_local_59; match prod_local_60 {
+        false => prod_local_60,
+        true => { let prod_local_62 = &(target).adapter; { let prod_local_63 = (prod_local_62).len() as u64; { let prod_local_64 = 32; { let prod_local_65 = (prod_local_63 == prod_local_64); prod_local_65 } } } },
+    } } } } } } },
+    } } } } } },
+    } },
+        true => { let prod_local_67 = &(target).publisher; { let prod_local_68 = (prod_local_67).as_bytes(); { let prod_local_69 = (prod_local_68).len() as u64; { let prod_local_70 = 2048; { let prod_local_71 = (prod_local_69 <= prod_local_70); { let prod_local_72 = prod_local_71; match prod_local_72 {
+        false => prod_local_72,
+        true => { let prod_local_73 = 0; { let prod_local_75 = &(target).environment; { let prod_local_76 = (prod_local_75).as_bytes(); { let prod_local_77 = (prod_local_76).len() as u64; { let prod_local_78 = (prod_local_73 < prod_local_77); match prod_local_78 {
+        false => { let prod_local_80 = prod_local_78; match prod_local_80 {
+        false => prod_local_80,
+        true => { let prod_local_82 = &(target).adapter; { let prod_local_83 = (prod_local_82).len() as u64; { let prod_local_84 = 32; { let prod_local_85 = (prod_local_83 == prod_local_84); prod_local_85 } } } },
+    } },
+        true => { let prod_local_87 = &(target).environment; { let prod_local_88 = (prod_local_87).as_bytes(); { let prod_local_89 = (prod_local_88).len() as u64; { let prod_local_90 = 2048; { let prod_local_91 = (prod_local_89 <= prod_local_90); { let prod_local_92 = prod_local_91; match prod_local_92 {
+        false => prod_local_92,
+        true => { let prod_local_94 = &(target).adapter; { let prod_local_95 = (prod_local_94).len() as u64; { let prod_local_96 = 32; { let prod_local_97 = (prod_local_95 == prod_local_96); prod_local_97 } } } },
+    } } } } } } },
+    } } } } } },
+    } } } } } } },
+    } } } } } },
+    } } } } } } },
+    } } } } } }
+}
+
+pub fn publicationTransition(context: &crate::PublicationContext, state: &crate::PublicationState, revision: u64, clock: &crate::PublicationClock, operation: &crate::PublicationOperation) -> Result<crate::PublicationState, crate::PublicationError> {
+    { let _x_580 = publicationContextValid(&(context)); match _x_580 {
+        false => { let _x_704 = crate::PublicationError::BadContext; { let _x_705 = Err(_x_704); _x_705 } },
+        true => { let _x_1048 = &(state).context; { let _x_1049 = publicationPublicationContextEqual(&(context), &(_x_1048)); match _x_1049 {
+        false => { let _x_1054 = crate::PublicationError::ContextChanged; { let _x_1055 = Err(_x_1054); _x_1055 } },
+        true => { let _x_1389 = publicationClockValid(&(context), &(clock)); match _x_1389 {
+        false => { let _x_1394 = crate::PublicationError::BadClock; { let _x_1395 = Err(_x_1394); _x_1395 } },
+        true => { let _x_1717 = &(state).clock; { let _x_1718 = (_x_1717).tick; { let _x_1719 = (clock).tick; { let _x_1720 = (_x_1718 <= _x_1719); match _x_1720 {
+        false => { let _x_1725 = crate::PublicationError::ClockRollback; { let _x_1726 = Err(_x_1725); _x_1726 } },
+        true => { let _x_2038 = (clock).tick; { let _x_2039 = publicationStateValid(&(state), _x_2038); match _x_2039 {
+        false => { let _x_2040 = crate::PUnit {  }; { let _x_2041 = { let prod_local_0 = _x_2040; { let _x_1728 = crate::PublicationError::BadState; { let _x_1729 = Err(_x_1728); _x_1729 } } }; _x_2041 } },
+        true => { let _x_2345 = (state).revision; { let _x_2346 = (revision == _x_2345); match _x_2346 {
+        false => { let _x_2351 = crate::PublicationError::StaleRevision; { let _x_2352 = Err(_x_2351); _x_2352 } },
+        true => match operation {
+        crate::PublicationOperation::Prepare { field_0: x_2639, field_1: x_2640, field_2: x_2641 } => { let _x_2710 = (state).phase; { let _x_2711 = crate::PublicationPhase::Unready; { let _x_2712 = publicationPublicationPhaseEqual(_x_2710, _x_2711); match _x_2712 {
+        false => { let _y_2714 = _x_2712; match _y_2714 {
+        false => { let _x_2722 = crate::PublicationError::WrongPhase; { let _x_2723 = Err(_x_2722); _x_2723 } },
+        true => { let _x_2768 = &(state).context; { let _x_2769 = (clock).tick; { let _x_2770 = publicationTrustValid(&(_x_2768), &(x_2639), _x_2769); match _x_2770 {
+        false => { let _x_2775 = crate::PublicationError::BadTrust; { let _x_2776 = Err(_x_2775); _x_2776 } },
+        true => { let _x_2805 = (x_2641).len() as u64; { let _x_2806 = 32; { let _x_2807 = (_x_2805 == _x_2806); match _x_2807 {
+        false => { let _y_2809 = _x_2807; match _y_2809 {
+        false => { let _x_2817 = crate::PublicationError::IncompleteReadiness; { let _x_2818 = Err(_x_2817); _x_2818 } },
+        true => { let _x_2819 = &(state).context; { let _x_2820 = 1; { let _x_2821 = crate::PublicationPhase::ProducerReady; { let _x_2822 = (clock).tick; { let _x_2823 = (state).authorizedAt; { let _x_2824 = (state).observedAt; { let _x_2825 = Some(alloc::borrow::ToOwned::to_owned(x_2639)); { let _x_2826 = Some(alloc::borrow::ToOwned::to_owned(x_2641)); { let _x_2827 = &(state).decision; { let _x_2828 = &(state).deployment; { let _x_2829 = &(state).integrity; { let _x_2830 = &(state).live; { let _x_2831 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(_x_2819), revision: _x_2820, phase: _x_2821, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: _x_2822, authorizedAt: _x_2823, observedAt: _x_2824, trust: _x_2825, readiness: alloc::borrow::ToOwned::to_owned(x_2640), ready: _x_2826, decision: alloc::borrow::ToOwned::to_owned(_x_2827), deployment: alloc::borrow::ToOwned::to_owned(_x_2828), integrity: alloc::borrow::ToOwned::to_owned(_x_2829), live: alloc::borrow::ToOwned::to_owned(_x_2830) }; { let _x_2832 = Ok(_x_2831); _x_2832 } } } } } } } } } } } } } },
+    } },
+        true => { let _x_2833 = &(state).context; { let _x_2834 = &(_x_2833).declaration; { let _x_2835 = &(_x_2834).obligations; { let _x_2836 = crate::PublicationMoment::PrePublication; { let _x_2838 = (clock).tick; { let _x_2839 = __prod_borrowed_publicationFactsComplete(&(_x_2833), &(_x_2835), &(x_2640), _x_2836, &(None), _x_2838); { let prod_local_1 = _x_2839; match prod_local_1 {
+        false => { let prod_local_2 = crate::PublicationError::IncompleteReadiness; { let prod_local_3 = Err(prod_local_2); prod_local_3 } },
+        true => { let prod_local_4 = &(state).context; { let prod_local_5 = 1; { let prod_local_6 = crate::PublicationPhase::ProducerReady; { let prod_local_7 = (clock).tick; { let prod_local_8 = (state).authorizedAt; { let prod_local_9 = (state).observedAt; { let prod_local_10 = Some(alloc::borrow::ToOwned::to_owned(x_2639)); { let prod_local_11 = Some(alloc::borrow::ToOwned::to_owned(x_2641)); { let prod_local_12 = &(state).decision; { let prod_local_13 = &(state).deployment; { let prod_local_14 = &(state).integrity; { let prod_local_15 = &(state).live; { let prod_local_16 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_4), revision: prod_local_5, phase: prod_local_6, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_7, authorizedAt: prod_local_8, observedAt: prod_local_9, trust: prod_local_10, readiness: alloc::borrow::ToOwned::to_owned(x_2640), ready: prod_local_11, decision: alloc::borrow::ToOwned::to_owned(prod_local_12), deployment: alloc::borrow::ToOwned::to_owned(prod_local_13), integrity: alloc::borrow::ToOwned::to_owned(prod_local_14), live: alloc::borrow::ToOwned::to_owned(prod_local_15) }; { let prod_local_17 = Ok(prod_local_16); prod_local_17 } } } } } } } } } } } } } },
+    } } } } } } } },
+    } } } },
+    } } } },
+    } },
+        true => { let _x_2841 = (state).revision; { let _x_2842 = 0; { let _x_2843 = (_x_2841 == _x_2842); { let prod_local_18 = _x_2843; match prod_local_18 {
+        false => { let prod_local_19 = crate::PublicationError::WrongPhase; { let prod_local_20 = Err(prod_local_19); prod_local_20 } },
+        true => { let prod_local_21 = &(state).context; { let prod_local_22 = (clock).tick; { let prod_local_23 = publicationTrustValid(&(prod_local_21), &(x_2639), prod_local_22); match prod_local_23 {
+        false => { let prod_local_24 = crate::PublicationError::BadTrust; { let prod_local_25 = Err(prod_local_24); prod_local_25 } },
+        true => { let prod_local_27 = (x_2641).len() as u64; { let prod_local_28 = 32; { let prod_local_29 = (prod_local_27 == prod_local_28); match prod_local_29 {
+        false => { let prod_local_31 = prod_local_29; match prod_local_31 {
+        false => { let prod_local_32 = crate::PublicationError::IncompleteReadiness; { let prod_local_33 = Err(prod_local_32); prod_local_33 } },
+        true => { let prod_local_34 = &(state).context; { let prod_local_35 = 1; { let prod_local_36 = crate::PublicationPhase::ProducerReady; { let prod_local_37 = (clock).tick; { let prod_local_38 = (state).authorizedAt; { let prod_local_39 = (state).observedAt; { let prod_local_40 = Some(alloc::borrow::ToOwned::to_owned(x_2639)); { let prod_local_41 = Some(alloc::borrow::ToOwned::to_owned(x_2641)); { let prod_local_42 = &(state).decision; { let prod_local_43 = &(state).deployment; { let prod_local_44 = &(state).integrity; { let prod_local_45 = &(state).live; { let prod_local_46 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_34), revision: prod_local_35, phase: prod_local_36, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_37, authorizedAt: prod_local_38, observedAt: prod_local_39, trust: prod_local_40, readiness: alloc::borrow::ToOwned::to_owned(x_2640), ready: prod_local_41, decision: alloc::borrow::ToOwned::to_owned(prod_local_42), deployment: alloc::borrow::ToOwned::to_owned(prod_local_43), integrity: alloc::borrow::ToOwned::to_owned(prod_local_44), live: alloc::borrow::ToOwned::to_owned(prod_local_45) }; { let prod_local_47 = Ok(prod_local_46); prod_local_47 } } } } } } } } } } } } } },
+    } },
+        true => { let prod_local_48 = &(state).context; { let prod_local_49 = &(prod_local_48).declaration; { let prod_local_50 = &(prod_local_49).obligations; { let prod_local_51 = crate::PublicationMoment::PrePublication; { let prod_local_53 = (clock).tick; { let prod_local_54 = __prod_borrowed_publicationFactsComplete(&(prod_local_48), &(prod_local_50), &(x_2640), prod_local_51, &(None), prod_local_53); { let prod_local_55 = prod_local_54; match prod_local_55 {
+        false => { let prod_local_56 = crate::PublicationError::IncompleteReadiness; { let prod_local_57 = Err(prod_local_56); prod_local_57 } },
+        true => { let prod_local_58 = &(state).context; { let prod_local_59 = 1; { let prod_local_60 = crate::PublicationPhase::ProducerReady; { let prod_local_61 = (clock).tick; { let prod_local_62 = (state).authorizedAt; { let prod_local_63 = (state).observedAt; { let prod_local_64 = Some(alloc::borrow::ToOwned::to_owned(x_2639)); { let prod_local_65 = Some(alloc::borrow::ToOwned::to_owned(x_2641)); { let prod_local_66 = &(state).decision; { let prod_local_67 = &(state).deployment; { let prod_local_68 = &(state).integrity; { let prod_local_69 = &(state).live; { let prod_local_70 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_58), revision: prod_local_59, phase: prod_local_60, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_61, authorizedAt: prod_local_62, observedAt: prod_local_63, trust: prod_local_64, readiness: alloc::borrow::ToOwned::to_owned(x_2640), ready: prod_local_65, decision: alloc::borrow::ToOwned::to_owned(prod_local_66), deployment: alloc::borrow::ToOwned::to_owned(prod_local_67), integrity: alloc::borrow::ToOwned::to_owned(prod_local_68), live: alloc::borrow::ToOwned::to_owned(prod_local_69) }; { let prod_local_71 = Ok(prod_local_70); prod_local_71 } } } } } } } } } } } } } },
+    } } } } } } } },
+    } } } },
+    } } } },
+    } } } } },
+    } } } },
+        crate::PublicationOperation::Authorize { field_0: x_2643 } => { let _x_2886 = (state).phase; { let _x_2887 = crate::PublicationPhase::ProducerReady; { let _x_2888 = publicationPublicationPhaseEqual(_x_2886, _x_2887); match _x_2888 {
+        false => { let _y_2890 = _x_2888; match _y_2890 {
+        false => { let _x_2898 = crate::PublicationError::WrongPhase; { let _x_2899 = Err(_x_2898); _x_2899 } },
+        true => { let _x_2927 = &(state).ready; match _x_2927 {
+        None => { let _x_2928 = crate::PUnit {  }; { let _x_2929 = { let prod_local_72 = _x_2928; { let prod_local_73 = crate::PublicationError::BadState; { let prod_local_74 = Err(prod_local_73); prod_local_74 } } }; _x_2929 } },
+        Some(val_2930) => { let _x_2951 = &(state).context; { let _x_2952 = (clock).tick; { let _x_2953 = publicationDecisionValid(&(_x_2951), (val_2930).as_ref(), &(x_2643), _x_2952); match _x_2953 {
+        false => { let _x_2958 = crate::PublicationError::BadAuthorization; { let _x_2959 = Err(_x_2958); _x_2959 } },
+        true => { let _x_2960 = &(state).context; { let _x_2961 = 2; { let _x_2962 = crate::PublicationPhase::DeploymentAuthorized; { let _x_2963 = (state).readyAt; { let _x_2964 = (clock).tick; { let _x_2965 = (state).observedAt; { let _x_2966 = &(state).trust; { let _x_2967 = &(state).readiness; { let _x_2968 = &(state).ready; { let _x_2969 = Some(alloc::borrow::ToOwned::to_owned(x_2643)); { let _x_2970 = &(state).deployment; { let _x_2971 = &(state).integrity; { let _x_2972 = &(state).live; { let _x_2973 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(_x_2960), revision: _x_2961, phase: _x_2962, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: _x_2963, authorizedAt: _x_2964, observedAt: _x_2965, trust: alloc::borrow::ToOwned::to_owned(_x_2966), readiness: alloc::borrow::ToOwned::to_owned(_x_2967), ready: alloc::borrow::ToOwned::to_owned(_x_2968), decision: _x_2969, deployment: alloc::borrow::ToOwned::to_owned(_x_2970), integrity: alloc::borrow::ToOwned::to_owned(_x_2971), live: alloc::borrow::ToOwned::to_owned(_x_2972) }; { let _x_2974 = Ok(_x_2973); _x_2974 } } } } } } } } } } } } } } },
+    } } } },
+    } },
+    } },
+        true => { let _x_2975 = (state).revision; { let _x_2976 = 1; { let _x_2977 = (_x_2975 == _x_2976); { let prod_local_75 = _x_2977; match prod_local_75 {
+        false => { let prod_local_76 = crate::PublicationError::WrongPhase; { let prod_local_77 = Err(prod_local_76); prod_local_77 } },
+        true => { let prod_local_78 = &(state).ready; match prod_local_78 {
+        None => { let prod_local_79 = crate::PUnit {  }; { let prod_local_83 = { let prod_local_80 = prod_local_79; { let prod_local_81 = crate::PublicationError::BadState; { let prod_local_82 = Err(prod_local_81); prod_local_82 } } }; prod_local_83 } },
+        Some(prod_local_84) => { let prod_local_85 = &(state).context; { let prod_local_86 = (clock).tick; { let prod_local_87 = publicationDecisionValid(&(prod_local_85), (prod_local_84).as_ref(), &(x_2643), prod_local_86); match prod_local_87 {
+        false => { let prod_local_88 = crate::PublicationError::BadAuthorization; { let prod_local_89 = Err(prod_local_88); prod_local_89 } },
+        true => { let prod_local_90 = &(state).context; { let prod_local_91 = 2; { let prod_local_92 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_93 = (state).readyAt; { let prod_local_94 = (clock).tick; { let prod_local_95 = (state).observedAt; { let prod_local_96 = &(state).trust; { let prod_local_97 = &(state).readiness; { let prod_local_98 = &(state).ready; { let prod_local_99 = Some(alloc::borrow::ToOwned::to_owned(x_2643)); { let prod_local_100 = &(state).deployment; { let prod_local_101 = &(state).integrity; { let prod_local_102 = &(state).live; { let prod_local_103 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_90), revision: prod_local_91, phase: prod_local_92, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_93, authorizedAt: prod_local_94, observedAt: prod_local_95, trust: alloc::borrow::ToOwned::to_owned(prod_local_96), readiness: alloc::borrow::ToOwned::to_owned(prod_local_97), ready: alloc::borrow::ToOwned::to_owned(prod_local_98), decision: prod_local_99, deployment: alloc::borrow::ToOwned::to_owned(prod_local_100), integrity: alloc::borrow::ToOwned::to_owned(prod_local_101), live: alloc::borrow::ToOwned::to_owned(prod_local_102) }; { let prod_local_104 = Ok(prod_local_103); prod_local_104 } } } } } } } } } } } } } } },
+    } } } },
+    } },
+    } } } } },
+    } } } },
+        crate::PublicationOperation::Observe { field_0: x_2645, field_1: x_2646 } => { let _x_3065 = (state).phase; { let _x_3066 = crate::PublicationPhase::DeploymentAuthorized; { let _x_3067 = publicationPublicationPhaseEqual(_x_3065, _x_3066); match _x_3067 {
+        false => { let _y_3069 = _x_3067; match _y_3069 {
+        false => { let _x_3077 = crate::PublicationError::WrongPhase; { let _x_3078 = Err(_x_3077); _x_3078 } },
+        true => { let _x_3151 = &(state).decision; match _x_3151 {
+        None => { let _x_3152 = crate::PUnit {  }; { let _x_3153 = { let prod_local_105 = _x_3152; { let prod_local_106 = crate::PublicationError::BadState; { let prod_local_107 = Err(prod_local_106); prod_local_107 } } }; _x_3153 } },
+        Some(val_3154) => { let _x_3215 = (state).authorizedAt; { let _x_3216 = (x_2645).observed; { let _x_3217 = (_x_3215 <= _x_3216); match _x_3217 {
+        false => { let _y_3219 = _x_3217; match _y_3219 {
+        false => { let _x_3448 = crate::PublicationError::BadDeployment; { let _x_3449 = Err(_x_3448); _x_3449 } },
+        true => { let _x_3248 = &(state).context; { let _x_3249 = (clock).tick; { let _x_3250 = publicationIntegrityValid(&(_x_3248), &(x_2645), &(x_2646), _x_3249); match _x_3250 {
+        false => { let _x_3255 = crate::PublicationError::BadIntegrity; { let _x_3256 = Err(_x_3255); _x_3256 } },
+        true => { let _x_3257 = &(state).context; { let _x_3258 = 3; { let _x_3259 = crate::PublicationPhase::DeploymentAuthorized; { let _x_3260 = (state).readyAt; { let _x_3261 = (state).authorizedAt; { let _x_3262 = (clock).tick; { let _x_3263 = &(state).trust; { let _x_3264 = &(state).readiness; { let _x_3265 = &(state).ready; { let _x_3266 = &(state).decision; { let _x_3267 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let _x_3268 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let _x_3269 = &(state).live; { let _x_3270 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(_x_3257), revision: _x_3258, phase: _x_3259, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: _x_3260, authorizedAt: _x_3261, observedAt: _x_3262, trust: alloc::borrow::ToOwned::to_owned(_x_3263), readiness: alloc::borrow::ToOwned::to_owned(_x_3264), ready: alloc::borrow::ToOwned::to_owned(_x_3265), decision: alloc::borrow::ToOwned::to_owned(_x_3266), deployment: _x_3267, integrity: _x_3268, live: alloc::borrow::ToOwned::to_owned(_x_3269) }; { let _x_3271 = Ok(_x_3270); _x_3271 } } } } } } } } } } } } } } },
+    } } } },
+    } },
+        true => { let _x_3289 = (val_3154).from; { let _x_3290 = (x_2645).observed; { let _x_3291 = (_x_3289 <= _x_3290); match _x_3291 {
+        false => { let _y_3293 = _x_3291; match _y_3293 {
+        false => { let prod_local_108 = crate::PublicationError::BadDeployment; { let prod_local_109 = Err(prod_local_108); prod_local_109 } },
+        true => { let _x_3300 = &(state).context; { let _x_3301 = (clock).tick; { let _x_3302 = publicationDeploymentValid(&(_x_3300), &(val_3154), &(x_2645), _x_3301); { let prod_local_110 = _x_3302; match prod_local_110 {
+        false => { let prod_local_111 = crate::PublicationError::BadDeployment; { let prod_local_112 = Err(prod_local_111); prod_local_112 } },
+        true => { let prod_local_113 = &(state).context; { let prod_local_114 = (clock).tick; { let prod_local_115 = publicationIntegrityValid(&(prod_local_113), &(x_2645), &(x_2646), prod_local_114); match prod_local_115 {
+        false => { let prod_local_116 = crate::PublicationError::BadIntegrity; { let prod_local_117 = Err(prod_local_116); prod_local_117 } },
+        true => { let prod_local_118 = &(state).context; { let prod_local_119 = 3; { let prod_local_120 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_121 = (state).readyAt; { let prod_local_122 = (state).authorizedAt; { let prod_local_123 = (clock).tick; { let prod_local_124 = &(state).trust; { let prod_local_125 = &(state).readiness; { let prod_local_126 = &(state).ready; { let prod_local_127 = &(state).decision; { let prod_local_128 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_129 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_130 = &(state).live; { let prod_local_131 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_118), revision: prod_local_119, phase: prod_local_120, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_121, authorizedAt: prod_local_122, observedAt: prod_local_123, trust: alloc::borrow::ToOwned::to_owned(prod_local_124), readiness: alloc::borrow::ToOwned::to_owned(prod_local_125), ready: alloc::borrow::ToOwned::to_owned(prod_local_126), decision: alloc::borrow::ToOwned::to_owned(prod_local_127), deployment: prod_local_128, integrity: prod_local_129, live: alloc::borrow::ToOwned::to_owned(prod_local_130) }; { let prod_local_132 = Ok(prod_local_131); prod_local_132 } } } } } } } } } } } } } } },
+    } } } },
+    } } } } },
+    } },
+        true => { let _x_3309 = (x_2645).observed; { let _x_3310 = (val_3154).until; { let _x_3311 = (_x_3309 <= _x_3310); match _x_3311 {
+        false => { let prod_local_133 = _x_3311; match prod_local_133 {
+        false => { let prod_local_134 = crate::PublicationError::BadDeployment; { let prod_local_135 = Err(prod_local_134); prod_local_135 } },
+        true => { let prod_local_136 = &(state).context; { let prod_local_137 = (clock).tick; { let prod_local_138 = publicationDeploymentValid(&(prod_local_136), &(val_3154), &(x_2645), prod_local_137); { let prod_local_139 = prod_local_138; match prod_local_139 {
+        false => { let prod_local_140 = crate::PublicationError::BadDeployment; { let prod_local_141 = Err(prod_local_140); prod_local_141 } },
+        true => { let prod_local_142 = &(state).context; { let prod_local_143 = (clock).tick; { let prod_local_144 = publicationIntegrityValid(&(prod_local_142), &(x_2645), &(x_2646), prod_local_143); match prod_local_144 {
+        false => { let prod_local_145 = crate::PublicationError::BadIntegrity; { let prod_local_146 = Err(prod_local_145); prod_local_146 } },
+        true => { let prod_local_147 = &(state).context; { let prod_local_148 = 3; { let prod_local_149 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_150 = (state).readyAt; { let prod_local_151 = (state).authorizedAt; { let prod_local_152 = (clock).tick; { let prod_local_153 = &(state).trust; { let prod_local_154 = &(state).readiness; { let prod_local_155 = &(state).ready; { let prod_local_156 = &(state).decision; { let prod_local_157 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_158 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_159 = &(state).live; { let prod_local_160 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_147), revision: prod_local_148, phase: prod_local_149, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_150, authorizedAt: prod_local_151, observedAt: prod_local_152, trust: alloc::borrow::ToOwned::to_owned(prod_local_153), readiness: alloc::borrow::ToOwned::to_owned(prod_local_154), ready: alloc::borrow::ToOwned::to_owned(prod_local_155), decision: alloc::borrow::ToOwned::to_owned(prod_local_156), deployment: prod_local_157, integrity: prod_local_158, live: alloc::borrow::ToOwned::to_owned(prod_local_159) }; { let prod_local_161 = Ok(prod_local_160); prod_local_161 } } } } } } } } } } } } } } },
+    } } } },
+    } } } } },
+    } },
+        true => { let _x_3315 = (val_3154).until; { let _x_3316 = 4294967295; { let _x_3317 = (_x_3315 <= _x_3316); { let prod_local_162 = _x_3317; match prod_local_162 {
+        false => { let prod_local_163 = crate::PublicationError::BadDeployment; { let prod_local_164 = Err(prod_local_163); prod_local_164 } },
+        true => { let prod_local_165 = &(state).context; { let prod_local_166 = (clock).tick; { let prod_local_167 = publicationDeploymentValid(&(prod_local_165), &(val_3154), &(x_2645), prod_local_166); { let prod_local_168 = prod_local_167; match prod_local_168 {
+        false => { let prod_local_169 = crate::PublicationError::BadDeployment; { let prod_local_170 = Err(prod_local_169); prod_local_170 } },
+        true => { let prod_local_171 = &(state).context; { let prod_local_172 = (clock).tick; { let prod_local_173 = publicationIntegrityValid(&(prod_local_171), &(x_2645), &(x_2646), prod_local_172); match prod_local_173 {
+        false => { let prod_local_174 = crate::PublicationError::BadIntegrity; { let prod_local_175 = Err(prod_local_174); prod_local_175 } },
+        true => { let prod_local_176 = &(state).context; { let prod_local_177 = 3; { let prod_local_178 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_179 = (state).readyAt; { let prod_local_180 = (state).authorizedAt; { let prod_local_181 = (clock).tick; { let prod_local_182 = &(state).trust; { let prod_local_183 = &(state).readiness; { let prod_local_184 = &(state).ready; { let prod_local_185 = &(state).decision; { let prod_local_186 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_187 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_188 = &(state).live; { let prod_local_189 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_176), revision: prod_local_177, phase: prod_local_178, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_179, authorizedAt: prod_local_180, observedAt: prod_local_181, trust: alloc::borrow::ToOwned::to_owned(prod_local_182), readiness: alloc::borrow::ToOwned::to_owned(prod_local_183), ready: alloc::borrow::ToOwned::to_owned(prod_local_184), decision: alloc::borrow::ToOwned::to_owned(prod_local_185), deployment: prod_local_186, integrity: prod_local_187, live: alloc::borrow::ToOwned::to_owned(prod_local_188) }; { let prod_local_190 = Ok(prod_local_189); prod_local_190 } } } } } } } } } } } } } } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } } },
+    } },
+    } },
+        true => { let _x_3323 = (state).revision; { let _x_3324 = 2; { let _x_3325 = (_x_3323 == _x_3324); { let prod_local_191 = _x_3325; match prod_local_191 {
+        false => { let prod_local_192 = crate::PublicationError::WrongPhase; { let prod_local_193 = Err(prod_local_192); prod_local_193 } },
+        true => { let prod_local_194 = &(state).decision; match prod_local_194 {
+        None => { let prod_local_195 = crate::PUnit {  }; { let prod_local_199 = { let prod_local_196 = prod_local_195; { let prod_local_197 = crate::PublicationError::BadState; { let prod_local_198 = Err(prod_local_197); prod_local_198 } } }; prod_local_199 } },
+        Some(prod_local_200) => { let prod_local_201 = (state).authorizedAt; { let prod_local_202 = (x_2645).observed; { let prod_local_203 = (prod_local_201 <= prod_local_202); match prod_local_203 {
+        false => { let prod_local_206 = prod_local_203; match prod_local_206 {
+        false => { let prod_local_207 = crate::PublicationError::BadDeployment; { let prod_local_208 = Err(prod_local_207); prod_local_208 } },
+        true => { let prod_local_209 = &(state).context; { let prod_local_210 = (clock).tick; { let prod_local_211 = publicationIntegrityValid(&(prod_local_209), &(x_2645), &(x_2646), prod_local_210); match prod_local_211 {
+        false => { let prod_local_212 = crate::PublicationError::BadIntegrity; { let prod_local_213 = Err(prod_local_212); prod_local_213 } },
+        true => { let prod_local_214 = &(state).context; { let prod_local_215 = 3; { let prod_local_216 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_217 = (state).readyAt; { let prod_local_218 = (state).authorizedAt; { let prod_local_219 = (clock).tick; { let prod_local_220 = &(state).trust; { let prod_local_221 = &(state).readiness; { let prod_local_222 = &(state).ready; { let prod_local_223 = &(state).decision; { let prod_local_224 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_225 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_226 = &(state).live; { let prod_local_227 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_214), revision: prod_local_215, phase: prod_local_216, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_217, authorizedAt: prod_local_218, observedAt: prod_local_219, trust: alloc::borrow::ToOwned::to_owned(prod_local_220), readiness: alloc::borrow::ToOwned::to_owned(prod_local_221), ready: alloc::borrow::ToOwned::to_owned(prod_local_222), decision: alloc::borrow::ToOwned::to_owned(prod_local_223), deployment: prod_local_224, integrity: prod_local_225, live: alloc::borrow::ToOwned::to_owned(prod_local_226) }; { let prod_local_228 = Ok(prod_local_227); prod_local_228 } } } } } } } } } } } } } } },
+    } } } },
+    } },
+        true => { let prod_local_229 = (prod_local_200).from; { let prod_local_230 = (x_2645).observed; { let prod_local_231 = (prod_local_229 <= prod_local_230); match prod_local_231 {
+        false => { let prod_local_233 = prod_local_231; match prod_local_233 {
+        false => { let prod_local_234 = crate::PublicationError::BadDeployment; { let prod_local_235 = Err(prod_local_234); prod_local_235 } },
+        true => { let prod_local_236 = &(state).context; { let prod_local_237 = (clock).tick; { let prod_local_238 = publicationDeploymentValid(&(prod_local_236), &(prod_local_200), &(x_2645), prod_local_237); { let prod_local_239 = prod_local_238; match prod_local_239 {
+        false => { let prod_local_240 = crate::PublicationError::BadDeployment; { let prod_local_241 = Err(prod_local_240); prod_local_241 } },
+        true => { let prod_local_242 = &(state).context; { let prod_local_243 = (clock).tick; { let prod_local_244 = publicationIntegrityValid(&(prod_local_242), &(x_2645), &(x_2646), prod_local_243); match prod_local_244 {
+        false => { let prod_local_245 = crate::PublicationError::BadIntegrity; { let prod_local_246 = Err(prod_local_245); prod_local_246 } },
+        true => { let prod_local_247 = &(state).context; { let prod_local_248 = 3; { let prod_local_249 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_250 = (state).readyAt; { let prod_local_251 = (state).authorizedAt; { let prod_local_252 = (clock).tick; { let prod_local_253 = &(state).trust; { let prod_local_254 = &(state).readiness; { let prod_local_255 = &(state).ready; { let prod_local_256 = &(state).decision; { let prod_local_257 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_258 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_259 = &(state).live; { let prod_local_260 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_247), revision: prod_local_248, phase: prod_local_249, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_250, authorizedAt: prod_local_251, observedAt: prod_local_252, trust: alloc::borrow::ToOwned::to_owned(prod_local_253), readiness: alloc::borrow::ToOwned::to_owned(prod_local_254), ready: alloc::borrow::ToOwned::to_owned(prod_local_255), decision: alloc::borrow::ToOwned::to_owned(prod_local_256), deployment: prod_local_257, integrity: prod_local_258, live: alloc::borrow::ToOwned::to_owned(prod_local_259) }; { let prod_local_261 = Ok(prod_local_260); prod_local_261 } } } } } } } } } } } } } } },
+    } } } },
+    } } } } },
+    } },
+        true => { let prod_local_262 = (x_2645).observed; { let prod_local_263 = (prod_local_200).until; { let prod_local_264 = (prod_local_262 <= prod_local_263); match prod_local_264 {
+        false => { let prod_local_265 = prod_local_264; match prod_local_265 {
+        false => { let prod_local_266 = crate::PublicationError::BadDeployment; { let prod_local_267 = Err(prod_local_266); prod_local_267 } },
+        true => { let prod_local_268 = &(state).context; { let prod_local_269 = (clock).tick; { let prod_local_270 = publicationDeploymentValid(&(prod_local_268), &(prod_local_200), &(x_2645), prod_local_269); { let prod_local_271 = prod_local_270; match prod_local_271 {
+        false => { let prod_local_272 = crate::PublicationError::BadDeployment; { let prod_local_273 = Err(prod_local_272); prod_local_273 } },
+        true => { let prod_local_274 = &(state).context; { let prod_local_275 = (clock).tick; { let prod_local_276 = publicationIntegrityValid(&(prod_local_274), &(x_2645), &(x_2646), prod_local_275); match prod_local_276 {
+        false => { let prod_local_277 = crate::PublicationError::BadIntegrity; { let prod_local_278 = Err(prod_local_277); prod_local_278 } },
+        true => { let prod_local_279 = &(state).context; { let prod_local_280 = 3; { let prod_local_281 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_282 = (state).readyAt; { let prod_local_283 = (state).authorizedAt; { let prod_local_284 = (clock).tick; { let prod_local_285 = &(state).trust; { let prod_local_286 = &(state).readiness; { let prod_local_287 = &(state).ready; { let prod_local_288 = &(state).decision; { let prod_local_289 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_290 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_291 = &(state).live; { let prod_local_292 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_279), revision: prod_local_280, phase: prod_local_281, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_282, authorizedAt: prod_local_283, observedAt: prod_local_284, trust: alloc::borrow::ToOwned::to_owned(prod_local_285), readiness: alloc::borrow::ToOwned::to_owned(prod_local_286), ready: alloc::borrow::ToOwned::to_owned(prod_local_287), decision: alloc::borrow::ToOwned::to_owned(prod_local_288), deployment: prod_local_289, integrity: prod_local_290, live: alloc::borrow::ToOwned::to_owned(prod_local_291) }; { let prod_local_293 = Ok(prod_local_292); prod_local_293 } } } } } } } } } } } } } } },
+    } } } },
+    } } } } },
+    } },
+        true => { let prod_local_294 = (prod_local_200).until; { let prod_local_295 = 4294967295; { let prod_local_296 = (prod_local_294 <= prod_local_295); { let prod_local_297 = prod_local_296; match prod_local_297 {
+        false => { let prod_local_298 = crate::PublicationError::BadDeployment; { let prod_local_299 = Err(prod_local_298); prod_local_299 } },
+        true => { let prod_local_300 = &(state).context; { let prod_local_301 = (clock).tick; { let prod_local_302 = publicationDeploymentValid(&(prod_local_300), &(prod_local_200), &(x_2645), prod_local_301); { let prod_local_303 = prod_local_302; match prod_local_303 {
+        false => { let prod_local_304 = crate::PublicationError::BadDeployment; { let prod_local_305 = Err(prod_local_304); prod_local_305 } },
+        true => { let prod_local_306 = &(state).context; { let prod_local_307 = (clock).tick; { let prod_local_308 = publicationIntegrityValid(&(prod_local_306), &(x_2645), &(x_2646), prod_local_307); match prod_local_308 {
+        false => { let prod_local_309 = crate::PublicationError::BadIntegrity; { let prod_local_310 = Err(prod_local_309); prod_local_310 } },
+        true => { let prod_local_311 = &(state).context; { let prod_local_312 = 3; { let prod_local_313 = crate::PublicationPhase::DeploymentAuthorized; { let prod_local_314 = (state).readyAt; { let prod_local_315 = (state).authorizedAt; { let prod_local_316 = (clock).tick; { let prod_local_317 = &(state).trust; { let prod_local_318 = &(state).readiness; { let prod_local_319 = &(state).ready; { let prod_local_320 = &(state).decision; { let prod_local_321 = Some(alloc::borrow::ToOwned::to_owned(x_2645)); { let prod_local_322 = Some(alloc::borrow::ToOwned::to_owned(x_2646)); { let prod_local_323 = &(state).live; { let prod_local_324 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_311), revision: prod_local_312, phase: prod_local_313, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_314, authorizedAt: prod_local_315, observedAt: prod_local_316, trust: alloc::borrow::ToOwned::to_owned(prod_local_317), readiness: alloc::borrow::ToOwned::to_owned(prod_local_318), ready: alloc::borrow::ToOwned::to_owned(prod_local_319), decision: alloc::borrow::ToOwned::to_owned(prod_local_320), deployment: prod_local_321, integrity: prod_local_322, live: alloc::borrow::ToOwned::to_owned(prod_local_323) }; { let prod_local_325 = Ok(prod_local_324); prod_local_325 } } } } } } } } } } } } } } },
+    } } } },
+    } } } } },
+    } } } } },
+    } } } },
+    } } } },
+    } } } },
+    } },
+    } } } } },
+    } } } },
+        crate::PublicationOperation::Accept { field_0: x_2648 } => { let _x_3374 = (state).phase; { let _x_3375 = crate::PublicationPhase::DeploymentAuthorized; { let _x_3376 = publicationPublicationPhaseEqual(_x_3374, _x_3375); match _x_3376 {
+        false => { let _y_3378 = _x_3376; match _y_3378 {
+        false => { let _x_3386 = crate::PublicationError::WrongPhase; { let _x_3387 = Err(_x_3386); _x_3387 } },
+        true => { let _x_3406 = &(state).context; { let _x_3407 = &(_x_3406).declaration; { let _x_3408 = &(_x_3407).obligations; { let _x_3409 = crate::PublicationMoment::DeploymentOnly; { let _x_3413 = &(state).deployment; match _x_3413 {
+        None => { let _y_3415 = None; { let _x_3416 = (clock).tick; { let _x_3417 = __prod_borrowed_publicationFactsComplete(&(_x_3406), &(_x_3408), &(x_2648), _x_3409, &(_y_3415), _x_3416); match _x_3417 {
+        false => { let _x_3426 = crate::PublicationError::IncompleteLiveAssessment; { let _x_3427 = Err(_x_3426); _x_3427 } },
+        true => { let _x_3428 = &(state).context; { let _x_3429 = 4; { let _x_3430 = crate::PublicationPhase::Accepted; { let _x_3431 = (state).readyAt; { let _x_3432 = (state).authorizedAt; { let _x_3433 = (state).observedAt; { let _x_3434 = &(state).trust; { let _x_3435 = &(state).readiness; { let _x_3436 = &(state).ready; { let _x_3437 = &(state).decision; { let _x_3438 = &(state).deployment; { let _x_3439 = &(state).integrity; { let _x_3440 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(_x_3428), revision: _x_3429, phase: _x_3430, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: _x_3431, authorizedAt: _x_3432, observedAt: _x_3433, trust: alloc::borrow::ToOwned::to_owned(_x_3434), readiness: alloc::borrow::ToOwned::to_owned(_x_3435), ready: alloc::borrow::ToOwned::to_owned(_x_3436), decision: alloc::borrow::ToOwned::to_owned(_x_3437), deployment: alloc::borrow::ToOwned::to_owned(_x_3438), integrity: alloc::borrow::ToOwned::to_owned(_x_3439), live: alloc::borrow::ToOwned::to_owned(x_2648) }; { let _x_3441 = Ok(_x_3440); _x_3441 } } } } } } } } } } } } } },
+    } } } },
+        Some(val_3424) => { let _x_3442 = &(val_3424).receipt; { let _x_3443 = Some(alloc::borrow::ToOwned::to_owned(_x_3442)); { let prod_local_326 = _x_3443; { let prod_local_327 = (clock).tick; { let prod_local_328 = __prod_borrowed_publicationFactsComplete(&(_x_3406), &(_x_3408), &(x_2648), _x_3409, &(prod_local_326), prod_local_327); match prod_local_328 {
+        false => { let prod_local_329 = crate::PublicationError::IncompleteLiveAssessment; { let prod_local_330 = Err(prod_local_329); prod_local_330 } },
+        true => { let prod_local_331 = &(state).context; { let prod_local_332 = 4; { let prod_local_333 = crate::PublicationPhase::Accepted; { let prod_local_334 = (state).readyAt; { let prod_local_335 = (state).authorizedAt; { let prod_local_336 = (state).observedAt; { let prod_local_337 = &(state).trust; { let prod_local_338 = &(state).readiness; { let prod_local_339 = &(state).ready; { let prod_local_340 = &(state).decision; { let prod_local_341 = &(state).deployment; { let prod_local_342 = &(state).integrity; { let prod_local_343 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_331), revision: prod_local_332, phase: prod_local_333, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_334, authorizedAt: prod_local_335, observedAt: prod_local_336, trust: alloc::borrow::ToOwned::to_owned(prod_local_337), readiness: alloc::borrow::ToOwned::to_owned(prod_local_338), ready: alloc::borrow::ToOwned::to_owned(prod_local_339), decision: alloc::borrow::ToOwned::to_owned(prod_local_340), deployment: alloc::borrow::ToOwned::to_owned(prod_local_341), integrity: alloc::borrow::ToOwned::to_owned(prod_local_342), live: alloc::borrow::ToOwned::to_owned(x_2648) }; { let prod_local_344 = Ok(prod_local_343); prod_local_344 } } } } } } } } } } } } } },
+    } } } } } },
+    } } } } } },
+    } },
+        true => { let _x_3444 = (state).revision; { let _x_3445 = 3; { let _x_3446 = (_x_3444 == _x_3445); { let prod_local_345 = _x_3446; match prod_local_345 {
+        false => { let prod_local_346 = crate::PublicationError::WrongPhase; { let prod_local_347 = Err(prod_local_346); prod_local_347 } },
+        true => { let prod_local_348 = &(state).context; { let prod_local_349 = &(prod_local_348).declaration; { let prod_local_350 = &(prod_local_349).obligations; { let prod_local_351 = crate::PublicationMoment::DeploymentOnly; { let prod_local_352 = &(state).deployment; match prod_local_352 {
+        None => { let prod_local_355 = None; { let prod_local_356 = (clock).tick; { let prod_local_357 = __prod_borrowed_publicationFactsComplete(&(prod_local_348), &(prod_local_350), &(x_2648), prod_local_351, &(prod_local_355), prod_local_356); match prod_local_357 {
+        false => { let prod_local_358 = crate::PublicationError::IncompleteLiveAssessment; { let prod_local_359 = Err(prod_local_358); prod_local_359 } },
+        true => { let prod_local_360 = &(state).context; { let prod_local_361 = 4; { let prod_local_362 = crate::PublicationPhase::Accepted; { let prod_local_363 = (state).readyAt; { let prod_local_364 = (state).authorizedAt; { let prod_local_365 = (state).observedAt; { let prod_local_366 = &(state).trust; { let prod_local_367 = &(state).readiness; { let prod_local_368 = &(state).ready; { let prod_local_369 = &(state).decision; { let prod_local_370 = &(state).deployment; { let prod_local_371 = &(state).integrity; { let prod_local_372 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_360), revision: prod_local_361, phase: prod_local_362, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_363, authorizedAt: prod_local_364, observedAt: prod_local_365, trust: alloc::borrow::ToOwned::to_owned(prod_local_366), readiness: alloc::borrow::ToOwned::to_owned(prod_local_367), ready: alloc::borrow::ToOwned::to_owned(prod_local_368), decision: alloc::borrow::ToOwned::to_owned(prod_local_369), deployment: alloc::borrow::ToOwned::to_owned(prod_local_370), integrity: alloc::borrow::ToOwned::to_owned(prod_local_371), live: alloc::borrow::ToOwned::to_owned(x_2648) }; { let prod_local_373 = Ok(prod_local_372); prod_local_373 } } } } } } } } } } } } } },
+    } } } },
+        Some(prod_local_374) => { let prod_local_375 = &(prod_local_374).receipt; { let prod_local_376 = Some(alloc::borrow::ToOwned::to_owned(prod_local_375)); { let prod_local_377 = prod_local_376; { let prod_local_378 = (clock).tick; { let prod_local_379 = __prod_borrowed_publicationFactsComplete(&(prod_local_348), &(prod_local_350), &(x_2648), prod_local_351, &(prod_local_377), prod_local_378); match prod_local_379 {
+        false => { let prod_local_380 = crate::PublicationError::IncompleteLiveAssessment; { let prod_local_381 = Err(prod_local_380); prod_local_381 } },
+        true => { let prod_local_382 = &(state).context; { let prod_local_383 = 4; { let prod_local_384 = crate::PublicationPhase::Accepted; { let prod_local_385 = (state).readyAt; { let prod_local_386 = (state).authorizedAt; { let prod_local_387 = (state).observedAt; { let prod_local_388 = &(state).trust; { let prod_local_389 = &(state).readiness; { let prod_local_390 = &(state).ready; { let prod_local_391 = &(state).decision; { let prod_local_392 = &(state).deployment; { let prod_local_393 = &(state).integrity; { let prod_local_394 = crate::PublicationState { context: alloc::borrow::ToOwned::to_owned(prod_local_382), revision: prod_local_383, phase: prod_local_384, clock: alloc::borrow::ToOwned::to_owned(clock), readyAt: prod_local_385, authorizedAt: prod_local_386, observedAt: prod_local_387, trust: alloc::borrow::ToOwned::to_owned(prod_local_388), readiness: alloc::borrow::ToOwned::to_owned(prod_local_389), ready: alloc::borrow::ToOwned::to_owned(prod_local_390), decision: alloc::borrow::ToOwned::to_owned(prod_local_391), deployment: alloc::borrow::ToOwned::to_owned(prod_local_392), integrity: alloc::borrow::ToOwned::to_owned(prod_local_393), live: alloc::borrow::ToOwned::to_owned(x_2648) }; { let prod_local_395 = Ok(prod_local_394); prod_local_395 } } } } } } } } } } } } } },
+    } } } } } },
+    } } } } } },
+    } } } } },
+    } } } },
+    },
+    } } },
+    } } },
+    } } } } },
+    } },
+    } } },
+    } }
+}
+
+pub fn publicationTrustValid(context: &crate::PublicationContext, fact: &crate::PublicationTrustFact, now: u64) -> bool {
+    { let _x_147 = &(fact).context; { let _x_148 = &(context).digest; { let _x_149 = (_x_147 == _x_148); match _x_149 {
+        false => _x_149,
+        true => { let _x_260 = &(fact).authority; { let _x_261 = &(context).declaration; { let _x_262 = &(_x_261).trustAuthority; { let _x_263 = (_x_260 == _x_262); match _x_263 {
+        false => _x_263,
+        true => { let _x_310 = &(fact).receipt; { let _x_311 = (_x_310).len() as u64; { let _x_312 = 32; { let _x_313 = (_x_311 == _x_312); match _x_313 {
+        false => _x_313,
+        true => { let _x_348 = (fact).from; { let _x_349 = (_x_348 <= now); match _x_349 {
+        false => { let _y_351 = _x_349; match _y_351 {
+        false => _y_351,
+        true => { let _x_371 = (fact).status; { let _x_372 = crate::PublicationTrust::Accepted; { let _x_373 = publicationPublicationTrustEqual(_x_371, _x_372); match _x_373 {
+        false => { let _x_383 = (fact).status; { let _x_384 = crate::PublicationTrust::Candidate; { let _x_385 = publicationPublicationTrustEqual(_x_383, _x_384); match _x_385 {
+        false => _x_385,
+        true => { let _x_389 = &(context).declaration; { let _x_390 = (_x_389).minimumTrust; { let _x_391 = crate::PublicationTrust::Candidate; { let _x_392 = publicationPublicationTrustEqual(_x_390, _x_391); _x_392 } } } },
+    } } } },
+        true => _x_373,
+    } } } },
+    } },
+        true => { let _x_399 = (fact).until; { let _x_400 = (now <= _x_399); match _x_400 {
+        false => { let prod_local_0 = _x_400; match prod_local_0 {
+        false => prod_local_0,
+        true => { let prod_local_1 = (fact).status; { let prod_local_2 = crate::PublicationTrust::Accepted; { let prod_local_3 = publicationPublicationTrustEqual(prod_local_1, prod_local_2); match prod_local_3 {
+        false => { let prod_local_4 = (fact).status; { let prod_local_5 = crate::PublicationTrust::Candidate; { let prod_local_6 = publicationPublicationTrustEqual(prod_local_4, prod_local_5); match prod_local_6 {
+        false => prod_local_6,
+        true => { let prod_local_7 = &(context).declaration; { let prod_local_8 = (prod_local_7).minimumTrust; { let prod_local_9 = crate::PublicationTrust::Candidate; { let prod_local_10 = publicationPublicationTrustEqual(prod_local_8, prod_local_9); prod_local_10 } } } },
+    } } } },
+        true => prod_local_3,
+    } } } },
+    } },
+        true => { let _x_404 = (fact).until; { let _x_405 = 4294967295; { let _x_406 = (_x_404 <= _x_405); { let prod_local_11 = _x_406; match prod_local_11 {
+        false => prod_local_11,
+        true => { let prod_local_12 = (fact).status; { let prod_local_13 = crate::PublicationTrust::Accepted; { let prod_local_14 = publicationPublicationTrustEqual(prod_local_12, prod_local_13); match prod_local_14 {
+        false => { let prod_local_15 = (fact).status; { let prod_local_16 = crate::PublicationTrust::Candidate; { let prod_local_17 = publicationPublicationTrustEqual(prod_local_15, prod_local_16); match prod_local_17 {
+        false => prod_local_17,
+        true => { let prod_local_18 = &(context).declaration; { let prod_local_19 = (prod_local_18).minimumTrust; { let prod_local_20 = crate::PublicationTrust::Candidate; { let prod_local_21 = publicationPublicationTrustEqual(prod_local_19, prod_local_20); prod_local_21 } } } },
+    } } } },
+        true => prod_local_14,
+    } } } },
+    } } } } },
+    } } },
+    } } },
+    } } } } },
+    } } } } },
+    } } } }
+}
+
+pub fn dispatchPublicationWire(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_511 = 4096; { let _x_514 = publicationWireReadArray(&(input), cursor, _x_511)?; match _x_514 {
+        Err(a_515) => { let _x_602 = Err(a_515); _x_602 },
+        Ok(a_517) => { let _x_956 = (a_517).cursor; { let _x_957 = readPublicationWireNat(&(input), _x_956)?; match _x_957 {
+        Err(a_958) => { let _x_959 = Err(a_958); _x_959 },
+        Ok(a_960) => { let _x_1307 = (a_960).value; { let _x_1308 = 1; { let _x_1309 = (_x_1307 == _x_1308); match _x_1309 {
+        false => { let _x_1310 = crate::PUnit {  }; { let _x_1311 = { let prod_local_0 = _x_1310; { let _x_963 = crate::CborError::WrongType; { let _x_964 = Err(_x_963); _x_964 } } }; _x_1311 } },
+        true => { let _x_1649 = (a_960).cursor; { let _x_1650 = readPublicationWireNat(&(input), _x_1649)?; match _x_1650 {
+        Err(a_1651) => { let _x_1652 = Err(a_1651); _x_1652 },
+        Ok(a_1653) => { let _x_1982 = (a_1653).value; { let _x_1983 = 0; { let _x_1984 = (_x_1982 == _x_1983); match _x_1984 {
+        false => { let _x_2263 = (a_1653).value; { let _x_2264 = 1; { let _x_2265 = (_x_2263 == _x_2264); match _x_2265 {
+        false => { let _x_2467 = (a_1653).value; { let _x_2468 = 2; { let _x_2469 = (_x_2467 == _x_2468); match _x_2469 {
+        false => { let _x_2610 = (a_1653).value; { let _x_2611 = 4; { let _x_2612 = (_x_2610 == _x_2611); match _x_2612 {
+        false => { let _x_2681 = (a_1653).value; { let _x_2682 = 3; { let _x_2683 = (_x_2681 == _x_2682); match _x_2683 {
+        false => { let _x_2684 = crate::PUnit {  }; { let _x_2685 = { let prod_local_1 = _x_2684; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_2685 } },
+        true => { let _x_2744 = (a_517).count; { let _x_2745 = 3; { let _x_2746 = (_x_2744 == _x_2745); match _x_2746 {
+        false => { let _x_2747 = crate::PUnit {  }; { let _x_2748 = { let prod_local_4 = _x_2747; { let prod_local_5 = crate::CborError::WrongType; { let prod_local_6 = Err(prod_local_5); prod_local_6 } } }; _x_2748 } },
+        true => { let _x_2800 = (a_1653).cursor; { let _x_2801 = readPublicationWirePublicationDeclaration(&(input), _x_2800)?; match _x_2801 {
+        Err(a_2802) => { let _x_2803 = Err(a_2802); _x_2803 },
+        Ok(a_2804) => { let _x_2849 = (a_2804).cursor; { let _x_2850 = publicationWireWindow(&(input), _x_2849); match _x_2850.clone() {
+        Err(a_2851) => _x_2850.clone(),
+        Ok(a_2852) => { let _x_2886 = 0; { let _x_2888 = (a_2852).len() as u64; { let _x_2889 = crate::BoundedCursor { bytes: a_2852, offset: _x_2886, limit: _x_2888 }; { let _x_2890 = publicationWireLimits(); { let _x_2891 = finishCborCursor(&(_x_2889), _x_2890); match _x_2891 {
+        Err(a_2892) => { let _x_2893 = Err(a_2892); _x_2893 },
+        Ok(a_2894) => { let _x_2920 = &(a_2804).value; { let _x_2921 = publicationDeclarationValid(&(_x_2920)); match _x_2921 {
+        false => { let _x_2930 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_2940 = Ok(alloc::vec![131, 1, 1]); { let _x_2941 = publicationWireJoin(_x_2930, _x_2940)?; { let _x_2942 = crate::PublicationError::BadDeclaration; { let _x_2943 = writePublicationWirePublicationError(_x_2942)?; { let _x_2944 = publicationWireJoin(_x_2941, _x_2943)?; _x_2944 } } } } } },
+        true => { let _x_2945 = &(a_2804).value; { let _x_2946 = publicationDeclarationPreimage(&(_x_2945))?; { let _x_2947 = publicationWirePreimageResult(_x_2946)?; _x_2947 } } },
+    } } },
+    } } } } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_3004 = (a_517).count; { let _x_3005 = 3; { let _x_3006 = (_x_3004 == _x_3005); match _x_3006 {
+        false => { let _x_3007 = crate::PUnit {  }; { let _x_3008 = { let prod_local_7 = _x_3007; { let prod_local_8 = crate::CborError::WrongType; { let prod_local_9 = Err(prod_local_8); prod_local_9 } } }; _x_3008 } },
+        true => { let _x_3060 = (a_1653).cursor; { let _x_3061 = readPublicationWirePublicationContext(&(input), _x_3060)?; match _x_3061 {
+        Err(a_3062) => { let _x_3063 = Err(a_3062); _x_3063 },
+        Ok(a_3064) => { let _x_3109 = (a_3064).cursor; { let _x_3110 = publicationWireWindow(&(input), _x_3109); match _x_3110.clone() {
+        Err(a_3111) => _x_3110.clone(),
+        Ok(a_3112) => { let _x_3146 = 0; { let _x_3148 = (a_3112).len() as u64; { let _x_3149 = crate::BoundedCursor { bytes: a_3112, offset: _x_3146, limit: _x_3148 }; { let _x_3150 = publicationWireLimits(); { let _x_3151 = finishCborCursor(&(_x_3149), _x_3150); match _x_3151 {
+        Err(a_3152) => { let _x_3153 = Err(a_3152); _x_3153 },
+        Ok(a_3154) => { let _x_3180 = &(a_3064).value; { let _x_3181 = publicationContextValid(&(_x_3180)); match _x_3181 {
+        false => { let _x_3190 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_3200 = Ok(alloc::vec![131, 1, 1]); { let _x_3201 = publicationWireJoin(_x_3190, _x_3200)?; { let _x_3202 = crate::PublicationError::BadContext; { let _x_3203 = writePublicationWirePublicationError(_x_3202)?; { let _x_3204 = publicationWireJoin(_x_3201, _x_3203)?; _x_3204 } } } } } },
+        true => { let _x_3205 = &(a_3064).value; { let _x_3206 = publicationContextPreimage(&(_x_3205))?; { let _x_3207 = publicationWirePreimageResult(_x_3206)?; _x_3207 } } },
+    } } },
+    } } } } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_3253 = (a_517).count; { let _x_3254 = 5; { let _x_3255 = (_x_3253 == _x_3254); match _x_3255 {
+        false => { let _x_3256 = crate::PUnit {  }; { let _x_3257 = { let prod_local_10 = _x_3256; { let prod_local_11 = crate::CborError::WrongType; { let prod_local_12 = Err(prod_local_11); prod_local_12 } } }; _x_3257 } },
+        true => { let _x_3298 = (a_1653).cursor; { let _x_3299 = readPublicationWirePublicationContext(&(input), _x_3298)?; match _x_3299 {
+        Err(a_3300) => { let _x_3301 = Err(a_3300); _x_3301 },
+        Ok(a_3302) => { let _x_3335 = (a_3302).cursor; { let _x_3336 = readPublicationWirePublicationState(&(input), _x_3335)?; match _x_3336 {
+        Err(a_3337) => { let _x_3338 = Err(a_3337); _x_3338 },
+        Ok(a_3339) => { let _x_3365 = (a_3339).cursor; { let _x_3366 = readPublicationWirePublicationClock(&(input), _x_3365)?; match _x_3366 {
+        Err(a_3367) => { let _x_3368 = Err(a_3367); _x_3368 },
+        Ok(a_3369) => { let _x_3389 = (a_3369).cursor; { let _x_3390 = publicationWireWindow(&(input), _x_3389); match _x_3390.clone() {
+        Err(a_3391) => _x_3390.clone(),
+        Ok(a_3392) => { let _x_3401 = 0; { let _x_3403 = (a_3392).len() as u64; { let _x_3404 = crate::BoundedCursor { bytes: a_3392, offset: _x_3401, limit: _x_3403 }; { let _x_3405 = publicationWireLimits(); { let _x_3406 = finishCborCursor(&(_x_3404), _x_3405); match _x_3406 {
+        Err(a_3407) => { let _x_3408 = Err(a_3407); _x_3408 },
+        Ok(a_3409) => { let _x_3411 = (a_3302).value; { let _x_3412 = (a_3339).value; { let _x_3413 = (a_3369).value; { let _x_3414 = publicationInspect(&(_x_3411), &(_x_3412), &(_x_3413)); { let _x_3415 = publicationWireProtocolResult(_x_3414)?; _x_3415 } } } } },
+    } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_3477 = (a_517).count; { let _x_3478 = 7; { let _x_3479 = (_x_3477 == _x_3478); match _x_3479 {
+        false => { let _x_3480 = crate::PUnit {  }; { let _x_3481 = { let prod_local_13 = _x_3480; { let prod_local_14 = crate::CborError::WrongType; { let prod_local_15 = Err(prod_local_14); prod_local_15 } } }; _x_3481 } },
+        true => { let _x_3538 = (a_1653).cursor; { let _x_3539 = readPublicationWirePublicationContext(&(input), _x_3538)?; match _x_3539 {
+        Err(a_3540) => { let _x_3541 = Err(a_3540); _x_3541 },
+        Ok(a_3542) => { let _x_3591 = (a_3542).cursor; { let _x_3592 = readPublicationWirePublicationState(&(input), _x_3591)?; match _x_3592 {
+        Err(a_3593) => { let _x_3594 = Err(a_3593); _x_3594 },
+        Ok(a_3595) => { let _x_3637 = (a_3595).cursor; { let _x_3638 = readPublicationWireNat(&(input), _x_3637)?; match _x_3638 {
+        Err(a_3639) => { let _x_3640 = Err(a_3639); _x_3640 },
+        Ok(a_3641) => { let _x_3676 = (a_3641).cursor; { let _x_3677 = readPublicationWirePublicationClock(&(input), _x_3676)?; match _x_3677 {
+        Err(a_3678) => { let _x_3679 = Err(a_3678); _x_3679 },
+        Ok(a_3680) => { let _x_3708 = (a_3680).cursor; { let _x_3709 = readPublicationWirePublicationOperation(&(input), _x_3708)?; match _x_3709 {
+        Err(a_3710) => { let _x_3711 = Err(a_3710); _x_3711 },
+        Ok(a_3712) => { let _x_3734 = (a_3712).cursor; { let _x_3735 = publicationWireWindow(&(input), _x_3734); match _x_3735.clone() {
+        Err(a_3736) => _x_3735.clone(),
+        Ok(a_3737) => { let _x_3748 = 0; { let _x_3750 = (a_3737).len() as u64; { let _x_3751 = crate::BoundedCursor { bytes: a_3737, offset: _x_3748, limit: _x_3750 }; { let _x_3752 = publicationWireLimits(); { let _x_3753 = finishCborCursor(&(_x_3751), _x_3752); match _x_3753 {
+        Err(a_3754) => { let _x_3755 = Err(a_3754); _x_3755 },
+        Ok(a_3756) => { let _x_3758 = (a_3542).value; { let _x_3759 = (a_3595).value; { let _x_3760 = (a_3641).value; { let _x_3761 = (a_3680).value; { let _x_3762 = (a_3712).value; { let _x_3763 = publicationTransition(&(_x_3758), &(_x_3759), _x_3760, &(_x_3761), &(_x_3762)); { let _x_3764 = publicationWireProtocolResult(_x_3763)?; _x_3764 } } } } } } },
+    } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_3802 = (a_517).count; { let _x_3803 = 4; { let _x_3804 = (_x_3802 == _x_3803); match _x_3804 {
+        false => { let _x_3805 = crate::PUnit {  }; { let _x_3806 = { let prod_local_16 = _x_3805; { let prod_local_17 = crate::CborError::WrongType; { let prod_local_18 = Err(prod_local_17); prod_local_18 } } }; _x_3806 } },
+        true => { let _x_3839 = (a_1653).cursor; { let _x_3840 = readPublicationWirePublicationContext(&(input), _x_3839)?; match _x_3840 {
+        Err(a_3841) => { let _x_3842 = Err(a_3841); _x_3842 },
+        Ok(a_3843) => { let _x_3868 = (a_3843).cursor; { let _x_3869 = readPublicationWirePublicationClock(&(input), _x_3868)?; match _x_3869 {
+        Err(a_3870) => { let _x_3871 = Err(a_3870); _x_3871 },
+        Ok(a_3872) => { let _x_3891 = (a_3872).cursor; { let _x_3892 = publicationWireWindow(&(input), _x_3891); match _x_3892.clone() {
+        Err(a_3893) => _x_3892.clone(),
+        Ok(a_3894) => { let _x_3902 = 0; { let _x_3904 = (a_3894).len() as u64; { let _x_3905 = crate::BoundedCursor { bytes: a_3894, offset: _x_3902, limit: _x_3904 }; { let _x_3906 = publicationWireLimits(); { let _x_3907 = finishCborCursor(&(_x_3905), _x_3906); match _x_3907 {
+        Err(a_3908) => { let _x_3909 = Err(a_3908); _x_3909 },
+        Ok(a_3910) => { let _x_3912 = (a_3843).value; { let _x_3913 = (a_3872).value; { let _x_3914 = publicationInitialize(&(_x_3912), &(_x_3913)); { let _x_3915 = publicationWireProtocolResult(_x_3914)?; _x_3915 } } } },
+    } } } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn publicationContextFieldsPreimage(declaration: &crate::PublicationDeclaration, declarationIdentity: alloc::vec::Vec<u8>, subject: &crate::PublicationSubject, instance: alloc::vec::Vec<u8>, publisherRevision: alloc::vec::Vec<u8>, publisherRef: alloc::string::String) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_75 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 99, 111, 110, 116, 101, 120, 116, 47, 49, 0]); { let _x_76 = publicationWireJoin(_x_4, _x_75)?; { let _x_77 = 6; { let _x_80 = publicationWireLimits(); { let _x_81 = writeCborArrayHead(_x_77, _x_80)?; { let _x_82 = publicationWireJoin(_x_76, _x_81)?; { let _x_83 = writePublicationWirePublicationDeclaration(&(declaration))?; { let _x_84 = publicationWireJoin(_x_82, _x_83)?; { let _x_85 = writePublicationWireBytes(declarationIdentity)?; { let _x_86 = publicationWireJoin(_x_84, _x_85)?; { let _x_87 = writePublicationWirePublicationSubject(&(subject))?; { let _x_88 = publicationWireJoin(_x_86, _x_87)?; { let _x_89 = writePublicationWireBytes(instance)?; { let _x_90 = publicationWireJoin(_x_88, _x_89)?; { let _x_91 = writePublicationWireBytes(publisherRevision)?; { let _x_92 = publicationWireJoin(_x_90, _x_91)?; { let _x_93 = writePublicationWireText(publisherRef)?; { let _x_94 = publicationWireJoin(_x_92, _x_93)?; _x_94 } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn publicationContextPreimage(value: &crate::PublicationContext) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = &(value).declaration; { let _x_2 = &(value).declarationIdentity; { let _x_3 = &(value).subject; { let _x_4 = &(value).instance; { let _x_5 = &(value).publisherRevision; { let _x_6 = &(value).publisherRef; { let _x_7 = publicationContextFieldsPreimage(&(_x_1), alloc::borrow::ToOwned::to_owned(_x_2), &(_x_3), alloc::borrow::ToOwned::to_owned(_x_4), alloc::borrow::ToOwned::to_owned(_x_5), alloc::borrow::ToOwned::to_owned(_x_6))?; _x_7 } } } } } } })
+}
+
+pub fn publicationDeclarationPreimage(value: &crate::PublicationDeclaration) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_86 = Ok(alloc::vec![112, 114, 105, 115, 109, 112, 109, 47, 112, 117, 98, 108, 105, 99, 97, 116, 105, 111, 110, 45, 100, 101, 99, 108, 97, 114, 97, 116, 105, 111, 110, 47, 49, 0]); { let _x_87 = publicationWireJoin(_x_4, _x_86)?; { let _x_88 = writePublicationWirePublicationDeclaration(&(value))?; { let _x_89 = publicationWireJoin(_x_87, _x_88)?; _x_89 } } } } })
+}
+
+pub fn publicationWireAppend(left: alloc::vec::Vec<u8>, right: alloc::vec::Vec<u8>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_44 = (left).len() as u64; { let _x_45 = 67108864; { let _x_48 = (_x_44 <= _x_45); match _x_48 {
+        false => { let _x_70 = crate::PUnit {  }; { let _x_50 = { let prod_local_0 = _x_70; { let _x_1 = crate::CborError::ValueLimit; { let _x_2 = Err(_x_1); _x_2 } } }; _x_50 } },
+        true => { let _x_88 = (right).len() as u64; { let _x_89 = 67108864; { let _x_90 = (_x_88 <= _x_89); match _x_90 {
+        false => { let _x_91 = crate::PUnit {  }; { let _x_92 = { let prod_local_1 = _x_91; { let prod_local_2 = crate::CborError::ValueLimit; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_92 } },
+        true => { let _x_100 = (left).len() as u64; { let _x_101 = (right).len() as u64; { let _x_102 = core::convert::identity::<u64>(_x_100).checked_add(_x_101).ok_or(crate::ComputeError::AddOverflow)?; { let _x_103 = 67108864; { let _x_104 = (_x_102 <= _x_103); match _x_104 {
+        false => { let _x_105 = crate::PUnit {  }; { let _x_106 = { let prod_local_4 = _x_105; { let prod_local_5 = crate::CborError::ValueLimit; { let prod_local_6 = Err(prod_local_5); prod_local_6 } } }; _x_106 } },
+        true => { let _x_110 = { let mut __append = (left, right); __append.0.extend(__append.1); __append.0 }; { let _x_111 = Ok(_x_110); _x_111 } },
+    } } } } } },
+    } } } },
+    } } } })
+}
+
+pub fn publicationWireBytes(input: alloc::vec::Vec<u8>) -> Result<alloc::vec::Vec<u8>, crate::ComputeError> {
+    Ok({ let _x_36 = (input).len() as u64; { let _x_37 = 67108864; { let _x_40 = (_x_36 <= _x_37); match _x_40 {
+        false => alloc::vec![131, 1, 2, 6],
+        true => { let _x_70 = crate::PublicationWireInput { bytes: input }; { let _x_71 = 0; { let _x_72 = dispatchPublicationWire(&(_x_70), _x_71)?; match _x_72 {
+        Err(a_73) => { let _x_74 = publicationWireErrorBytes(a_73); _x_74 },
+        Ok(a_75) => a_75,
+    } } } },
+    } } } })
+}
+
+pub fn publicationWireErrorBytes(cause: crate::CborError) -> alloc::vec::Vec<u8> {
+    match cause {
+        crate::CborError::BadLimits => alloc::vec![131, 1, 2, 0],
+        crate::CborError::BadCursor => alloc::vec![131, 1, 2, 1],
+        crate::CborError::Truncated => alloc::vec![131, 1, 2, 2],
+        crate::CborError::WrongType => alloc::vec![131, 1, 2, 3],
+        crate::CborError::UnsupportedHead => alloc::vec![131, 1, 2, 4],
+        crate::CborError::NonCanonical => alloc::vec![131, 1, 2, 5],
+        crate::CborError::ValueLimit => alloc::vec![131, 1, 2, 6],
+        crate::CborError::InvalidUtf8 => alloc::vec![131, 1, 2, 7],
+        crate::CborError::TrailingInput => alloc::vec![131, 1, 2, 8],
+    }
+}
+
+pub fn publicationWireJoin(left: Result<alloc::vec::Vec<u8>, crate::CborError>, right: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_29 = publicationWireOutput(left); match _x_29 {
+        crate::PublicationWireOutput { value: value_30, cause: cause_31 } => match cause_31 {
+        None => { let _x_59 = publicationWireOutput(right); match _x_59 {
+        crate::PublicationWireOutput { value: value_60, cause: cause_61 } => match cause_61 {
+        None => { let _x_64 = publicationWireAppend(value_30, value_60)?; _x_64 },
+        Some(val_65) => { let _x_66 = Err(val_65); _x_66 },
+    },
+    } },
+        Some(val_52) => { let _x_53 = Err(val_52); _x_53 },
+    },
+    } })
+}
+
+pub fn publicationWireLimits() -> crate::CborLimits {
+    { let _x_1 = 67108864; { let _x_4 = 32; { let _x_7 = 2048; { let _x_10 = 4096; { let _x_13 = crate::CborLimits { maximumInput: _x_1, maximumOutput: _x_1, maximumBytes: _x_4, maximumText: _x_7, maximumArrayItems: _x_10 }; _x_13 } } } } }
+}
+
+pub fn publicationWireOutput(value: Result<alloc::vec::Vec<u8>, crate::CborError>) -> crate::PublicationWireOutput {
+    match value {
+        Err(a_12) => { let _x_24 = Some(a_12); { let _x_25 = crate::PublicationWireOutput { value: alloc::vec::Vec::<u8>::new(), cause: _x_24 }; _x_25 } },
+        Ok(a_14) => { let _x_27 = crate::PublicationWireOutput { value: a_14, cause: None }; _x_27 },
+    }
+}
+
+pub fn publicationWirePreimageResult(value: Result<alloc::vec::Vec<u8>, crate::CborError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value.clone() {
+        Err(a_36) => value.clone(),
+        Ok(a_38) => { let _x_57 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_68 = Ok(alloc::vec![131, 1, 3]); { let _x_69 = publicationWireJoin(_x_57, _x_68)?; { let _x_70 = crate::CborValue::ByteString { field_0: a_38 }; { let _x_71 = 67108864; { let _x_72 = 2048; { let _x_73 = 4096; { let _x_74 = crate::CborLimits { maximumInput: _x_71, maximumOutput: _x_71, maximumBytes: _x_71, maximumText: _x_72, maximumArrayItems: _x_73 }; { let _x_75 = writeCborPrimitive(&(_x_70), _x_74)?; { let _x_76 = publicationWireJoin(_x_69, _x_75)?; _x_76 } } } } } } } } } },
+    })
+}
+
+pub fn publicationWireProtocolResult(value: Result<crate::PublicationState, crate::PublicationError>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        Err(a_41) => { let _x_65 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_75 = Ok(alloc::vec![131, 1, 1]); { let _x_76 = publicationWireJoin(_x_65, _x_75)?; { let _x_77 = writePublicationWirePublicationError(a_41)?; { let _x_78 = publicationWireJoin(_x_76, _x_77)?; _x_78 } } } } },
+        Ok(a_43) => { let _x_83 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_94 = Ok(alloc::vec![131, 1, 0]); { let _x_95 = publicationWireJoin(_x_83, _x_94)?; { let _x_96 = writePublicationWirePublicationState(&(a_43))?; { let _x_97 = publicationWireJoin(_x_95, _x_96)?; _x_97 } } } } },
+    })
+}
+
+pub fn publicationWireReadArray(input: &crate::PublicationWireInput, cursor: u64, maximum: u64) -> Result<Result<crate::PublicationWireHeader, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_20 = 4; { let _x_23 = publicationWireReadHeader(&(input), cursor, _x_20)?; match _x_23 {
+        Err(a_24) => _x_23,
+        Ok(a_26) => { let _x_38 = (a_26).count; { let _x_39 = (_x_38 <= maximum); match _x_39 {
+        false => { let _x_44 = crate::CborError::ValueLimit; { let _x_45 = Err(_x_44); _x_45 } },
+        true => _x_23,
+    } } },
+    } } })
+}
+
+pub fn publicationWireReadAtom(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWirePrimitive, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_40 = publicationWireWindow(&(input), cursor); match _x_40 {
+        Err(a_41) => { let _x_60 = Err(a_41); _x_60 },
+        Ok(a_43) => { let _x_68 = 0; { let _x_70 = (a_43).len() as u64; { let _x_71 = crate::BoundedCursor { bytes: a_43, offset: _x_68, limit: _x_70 }; { let _x_72 = 67108864; { let _x_73 = 2048; { let _x_74 = 4096; { let _x_75 = crate::CborLimits { maximumInput: _x_72, maximumOutput: _x_72, maximumBytes: _x_68, maximumText: _x_73, maximumArrayItems: _x_74 }; { let _x_76 = readCborPrimitive(&(_x_71), _x_75)?; match _x_76 {
+        Err(a_77) => { let _x_78 = Err(a_77); _x_78 },
+        Ok(a_79) => { let _x_81 = (a_79).value; { let _x_82 = (a_79).cursor; { let _x_83 = (_x_82).offset; { let _x_84 = core::convert::identity::<u64>(cursor).checked_add(_x_83).ok_or(crate::ComputeError::AddOverflow)?; { let _x_85 = crate::PublicationWirePrimitive { value: _x_81, cursor: _x_84 }; { let _x_86 = Ok(_x_85); _x_86 } } } } } },
+    } } } } } } } } },
+    } })
+}
+
+pub fn publicationWireReadHeader(input: &crate::PublicationWireInput, cursor: u64, major: u64) -> Result<Result<crate::PublicationWireHeader, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_31 = publicationWireWindow(&(input), cursor); match _x_31 {
+        Err(a_32) => { let _x_48 = Err(a_32); _x_48 },
+        Ok(a_34) => { let _x_56 = 0; { let _x_58 = (a_34).len() as u64; { let _x_59 = crate::BoundedCursor { bytes: a_34, offset: _x_56, limit: _x_58 }; { let _x_60 = publicationWireLimits(); { let _x_61 = cborReadHead(&(_x_59), _x_60, major)?; match _x_61 {
+        Err(a_62) => { let _x_63 = Err(a_62); _x_63 },
+        Ok(a_64) => { let _x_66 = (a_64).argument; { let _x_67 = (a_64).cursor; { let _x_68 = (_x_67).offset; { let _x_69 = core::convert::identity::<u64>(cursor).checked_add(_x_68).ok_or(crate::ComputeError::AddOverflow)?; { let _x_70 = crate::PublicationWireHeader { count: _x_66, cursor: _x_69 }; { let _x_71 = Ok(_x_70); _x_71 } } } } } },
+    } } } } } },
+    } })
+}
+
+pub fn publicationWireReadString(input: &crate::PublicationWireInput, cursor: u64, maximum: u64, textMode: bool) -> Result<Result<crate::PublicationWirePrimitive, crate::CborError>, crate::ComputeError> {
+    Ok(match textMode {
+        false => { let _x_130 = 2; { let _y_88 = _x_130; { let _x_89 = publicationWireReadHeader(&(input), cursor, _y_88)?; match _x_89 {
+        Err(a_90) => { let _x_127 = Err(a_90); _x_127 },
+        Ok(a_92) => { let _x_178 = (a_92).count; { let _x_179 = (_x_178 <= maximum); match _x_179 {
+        false => { let _x_184 = crate::CborError::ValueLimit; { let _x_185 = Err(_x_184); _x_185 } },
+        true => { let _x_218 = &(input).bytes; { let _x_219 = (a_92).cursor; { let _x_220 = (a_92).count; { let _x_221 = { let __start = usize::try_from(_x_219).ok(); let __count = usize::try_from(_x_220).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (_x_218).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_221 {
+        None => { let _x_226 = crate::CborError::Truncated; { let _x_227 = Err(_x_226); _x_227 } },
+        Some(val_224) => match textMode {
+        false => { let _x_255 = crate::CborValue::ByteString { field_0: val_224 }; { let _x_256 = (a_92).cursor; { let _x_257 = (a_92).count; { let _x_258 = core::convert::identity::<u64>(_x_256).checked_add(_x_257).ok_or(crate::ComputeError::AddOverflow)?; { let _x_259 = crate::PublicationWirePrimitive { value: _x_255, cursor: _x_258 }; { let _x_260 = Ok(_x_259); _x_260 } } } } } },
+        true => { let _x_271 = alloc::string::String::from_utf8(val_224).ok(); match _x_271 {
+        None => { let _x_276 = crate::CborError::InvalidUtf8; { let _x_277 = Err(_x_276); _x_277 } },
+        Some(val_274) => { let _x_278 = crate::CborValue::TextString { field_0: val_274 }; { let _x_279 = (a_92).cursor; { let _x_280 = (a_92).count; { let _x_281 = core::convert::identity::<u64>(_x_279).checked_add(_x_280).ok_or(crate::ComputeError::AddOverflow)?; { let _x_282 = crate::PublicationWirePrimitive { value: _x_278, cursor: _x_281 }; { let _x_283 = Ok(_x_282); _x_283 } } } } } },
+    } },
+    },
+    } } } } },
+    } } },
+    } } } },
+        true => { let _x_133 = 3; { let prod_local_0 = _x_133; { let prod_local_1 = publicationWireReadHeader(&(input), cursor, prod_local_0)?; match prod_local_1 {
+        Err(prod_local_2) => { let prod_local_3 = Err(prod_local_2); prod_local_3 },
+        Ok(prod_local_4) => { let prod_local_5 = (prod_local_4).count; { let prod_local_6 = (prod_local_5 <= maximum); match prod_local_6 {
+        false => { let prod_local_7 = crate::CborError::ValueLimit; { let prod_local_8 = Err(prod_local_7); prod_local_8 } },
+        true => { let prod_local_10 = &(input).bytes; { let prod_local_11 = (prod_local_4).cursor; { let prod_local_12 = (prod_local_4).count; { let prod_local_13 = { let __start = usize::try_from(prod_local_11).ok(); let __count = usize::try_from(prod_local_12).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (prod_local_10).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_13 {
+        None => { let prod_local_14 = crate::CborError::Truncated; { let prod_local_15 = Err(prod_local_14); prod_local_15 } },
+        Some(prod_local_16) => match textMode {
+        false => { let prod_local_17 = crate::CborValue::ByteString { field_0: prod_local_16 }; { let prod_local_18 = (prod_local_4).cursor; { let prod_local_19 = (prod_local_4).count; { let prod_local_20 = core::convert::identity::<u64>(prod_local_18).checked_add(prod_local_19).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_21 = crate::PublicationWirePrimitive { value: prod_local_17, cursor: prod_local_20 }; { let prod_local_22 = Ok(prod_local_21); prod_local_22 } } } } } },
+        true => { let prod_local_23 = alloc::string::String::from_utf8(prod_local_16).ok(); match prod_local_23 {
+        None => { let prod_local_24 = crate::CborError::InvalidUtf8; { let prod_local_25 = Err(prod_local_24); prod_local_25 } },
+        Some(prod_local_26) => { let prod_local_27 = crate::CborValue::TextString { field_0: prod_local_26 }; { let prod_local_28 = (prod_local_4).cursor; { let prod_local_29 = (prod_local_4).count; { let prod_local_30 = core::convert::identity::<u64>(prod_local_28).checked_add(prod_local_29).ok_or(crate::ComputeError::AddOverflow)?; { let prod_local_31 = crate::PublicationWirePrimitive { value: prod_local_27, cursor: prod_local_30 }; { let prod_local_32 = Ok(prod_local_31); prod_local_32 } } } } } },
+    } },
+    },
+    } } } } },
+    } } },
+    } } } },
+    })
+}
+
+pub fn publicationWireWindow(input: &crate::PublicationWireInput, cursor: u64) -> Result<alloc::vec::Vec<u8>, crate::CborError> {
+    { let _x_54 = &(input).bytes; { let _x_55 = (_x_54).len() as u64; { let _x_56 = (cursor <= _x_55); match _x_56 {
+        false => { let _x_74 = crate::CborError::BadCursor; { let _x_75 = Err(_x_74); _x_75 } },
+        true => { let _x_80 = &(input).bytes; { let _x_88 = (_x_80).len() as u64; { let _x_89 = core::convert::identity::<u64>(_x_88).saturating_sub(cursor); { let _x_90 = 5; { let _x_91 = (_x_89 <= _x_90); match _x_91 {
+        false => { let _x_100 = 5; { let _y_93 = _x_100; { let _x_94 = { let __start = usize::try_from(cursor).ok(); let __count = usize::try_from(_y_93).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (_x_80).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match _x_94 {
+        None => { let _x_103 = crate::CborError::Truncated; { let _x_104 = Err(_x_103); _x_104 } },
+        Some(val_97) => { let _x_98 = Ok(val_97); _x_98 },
+    } } } },
+        true => { let _x_107 = (_x_80).len() as u64; { let _x_108 = core::convert::identity::<u64>(_x_107).saturating_sub(cursor); { let prod_local_0 = _x_108; { let prod_local_1 = { let __start = usize::try_from(cursor).ok(); let __count = usize::try_from(prod_local_0).ok(); match (__start, __count) { (Some(__start), Some(__count)) => __start.checked_add(__count).and_then(|__end| (_x_80).get(__start..__end).map(|__slice| __slice.to_vec())), _ => None } }; match prod_local_1 {
+        None => { let prod_local_2 = crate::CborError::Truncated; { let prod_local_3 = Err(prod_local_2); prod_local_3 } },
+        Some(prod_local_4) => { let prod_local_5 = Ok(prod_local_4); prod_local_5 },
+    } } } } },
+    } } } } } },
+    } } } }
+}
+
+pub fn readPublicationWireBytes(input: &crate::PublicationWireInput, cursor: u64, maximum: u64) -> Result<Result<crate::PublicationWireReadBytes, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_42 = false; { let _x_43 = publicationWireReadString(&(input), cursor, maximum, _x_42)?; match _x_43 {
+        Err(a_44) => { let _x_51 = Err(a_44); _x_51 },
+        Ok(a_46) => { let _x_71 = (a_46).value; match _x_71 {
+        crate::CborValue::ByteString { field_0: x_74 } => { let _x_84 = (a_46).cursor; { let _x_85 = crate::PublicationWireReadBytes { value: x_74, cursor: _x_84 }; { let _x_86 = Ok(_x_85); _x_86 } } },
+        _ => { let _x_82 = crate::CborError::WrongType; { let _x_83 = Err(_x_82); _x_83 } },
+    } },
+    } } })
+}
+
+pub fn readPublicationWireListPublicationFactBatch(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64) -> Result<crate::PublicationWireListOutcomeListPublicationFact, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_57 = crate::PublicationWireListOutcomeListPublicationFact { value: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_57 },
+        _ => { let n_50 = (x_3).saturating_sub(1); { let _x_83 = readPublicationWirePublicationFact(&(x_1), x_2)?; match _x_83 {
+        Err(a_84) => { let _x_89 = Some(a_84); { let _x_90 = crate::PublicationWireListOutcomeListPublicationFact { value: alloc::vec::Vec::new(), cursor: x_2, cause: _x_89 }; _x_90 } },
+        Ok(a_86) => { let _x_105 = (a_86).cursor; { let _x_106 = readPublicationWireListPublicationFactBatch(&(x_1), _x_105, n_50)?; match _x_106 {
+        crate::PublicationWireListOutcomeListPublicationFact { value: value_107, cursor: cursor_108, cause: cause_109 } => match cause_109 {
+        None => { let _x_124 = (a_86).value; { let _x_125 = { let mut __list = (_x_124, value_107); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_127 = crate::PublicationWireListOutcomeListPublicationFact { value: _x_125, cursor: cursor_108, cause: cause_109 }; _x_127 } } },
+        Some(val_122) => { let _x_130 = crate::PublicationWireListOutcomeListPublicationFact { value: alloc::vec::Vec::new(), cursor: cursor_108, cause: cause_109 }; _x_130 },
+    },
+    } } },
+    } } },
+    })
+}
+
+pub fn readPublicationWireListPublicationObligationBatch(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64) -> Result<crate::PublicationWireListOutcomeListPublicationObligation, crate::ComputeError> {
+    Ok(match x_3 {
+        0 => { let _x_57 = crate::PublicationWireListOutcomeListPublicationObligation { value: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_57 },
+        _ => { let n_50 = (x_3).saturating_sub(1); { let _x_83 = readPublicationWirePublicationObligation(&(x_1), x_2)?; match _x_83 {
+        Err(a_84) => { let _x_89 = Some(a_84); { let _x_90 = crate::PublicationWireListOutcomeListPublicationObligation { value: alloc::vec::Vec::new(), cursor: x_2, cause: _x_89 }; _x_90 } },
+        Ok(a_86) => { let _x_105 = (a_86).cursor; { let _x_106 = readPublicationWireListPublicationObligationBatch(&(x_1), _x_105, n_50)?; match _x_106 {
+        crate::PublicationWireListOutcomeListPublicationObligation { value: value_107, cursor: cursor_108, cause: cause_109 } => match cause_109 {
+        None => { let _x_124 = (a_86).value; { let _x_125 = { let mut __list = (_x_124, value_107); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_127 = crate::PublicationWireListOutcomeListPublicationObligation { value: _x_125, cursor: cursor_108, cause: cause_109 }; _x_127 } } },
+        Some(val_122) => { let _x_130 = crate::PublicationWireListOutcomeListPublicationObligation { value: alloc::vec::Vec::new(), cursor: cursor_108, cause: cause_109 }; _x_130 },
+    },
+    } } },
+    } } },
+    })
+}
+
+pub fn readPublicationWireNat(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadNat, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_42 = publicationWireReadAtom(&(input), cursor)?; match _x_42 {
+        Err(a_43) => { let _x_50 = Err(a_43); _x_50 },
+        Ok(a_45) => { let _x_70 = (a_45).value; match _x_70 {
+        crate::CborValue::Unsigned { field_0: x_71 } => { let _x_81 = (a_45).cursor; { let _x_82 = crate::PublicationWireReadNat { value: x_71, cursor: _x_81 }; { let _x_83 = Ok(_x_82); _x_83 } } },
+        _ => { let _x_84 = crate::CborError::WrongType; { let _x_85 = Err(_x_84); _x_85 } },
+    } },
+    } })
+}
+
+pub fn readPublicationWireOptionBytes(input: &crate::PublicationWireInput, cursor: u64, maximum: u64) -> Result<Result<crate::PublicationWireReadOptionBytes, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_127 = 2; { let _x_130 = publicationWireReadArray(&(input), cursor, _x_127)?; match _x_130 {
+        Err(a_131) => { let _x_166 = Err(a_131); _x_166 },
+        Ok(a_133) => { let _x_224 = (a_133).cursor; { let _x_225 = readPublicationWireNat(&(input), _x_224)?; match _x_225 {
+        Err(a_226) => { let _x_227 = Err(a_226); _x_227 },
+        Ok(a_228) => { let _x_274 = (a_133).count; { let _x_275 = 1; { let _x_276 = (_x_274 == _x_275); match _x_276 {
+        false => { let _y_278 = _x_276; match _y_278 {
+        false => { let _x_307 = (a_133).count; { let _x_308 = 2; { let _x_309 = (_x_307 == _x_308); match _x_309 {
+        false => { let _y_311 = _x_309; match _y_311 {
+        false => { let _x_319 = crate::CborError::WrongType; { let _x_320 = Err(_x_319); _x_320 } },
+        true => { let _x_327 = (a_228).cursor; { let _x_328 = readPublicationWireBytes(&(input), _x_327, maximum)?; match _x_328 {
+        Err(a_329) => { let _x_330 = Err(a_329); _x_330 },
+        Ok(a_331) => { let _x_333 = (a_331).value; { let _x_334 = Some(_x_333); { let _x_335 = (a_331).cursor; { let _x_336 = crate::PublicationWireReadOptionBytes { value: _x_334, cursor: _x_335 }; { let _x_337 = Ok(_x_336); _x_337 } } } } },
+    } } },
+    } },
+        true => { let _x_338 = (a_228).value; { let _x_339 = 1; { let _x_340 = (_x_338 == _x_339); { let prod_local_0 = _x_340; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (a_228).cursor; { let prod_local_4 = readPublicationWireBytes(&(input), prod_local_3, maximum)?; match prod_local_4 {
+        Err(prod_local_5) => { let prod_local_6 = Err(prod_local_5); prod_local_6 },
+        Ok(prod_local_7) => { let prod_local_8 = (prod_local_7).value; { let prod_local_9 = Some(prod_local_8); { let prod_local_10 = (prod_local_7).cursor; { let prod_local_11 = crate::PublicationWireReadOptionBytes { value: prod_local_9, cursor: prod_local_10 }; { let prod_local_12 = Ok(prod_local_11); prod_local_12 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_343 = (a_228).cursor; { let _x_344 = crate::PublicationWireReadOptionBytes { value: None, cursor: _x_343 }; { let _x_345 = Ok(_x_344); _x_345 } } },
+    } },
+        true => { let _x_346 = (a_228).value; { let _x_347 = 0; { let _x_348 = (_x_346 == _x_347); { let prod_local_13 = _x_348; match prod_local_13 {
+        false => { let prod_local_14 = (a_133).count; { let prod_local_15 = 2; { let prod_local_16 = (prod_local_14 == prod_local_15); match prod_local_16 {
+        false => { let prod_local_18 = prod_local_16; match prod_local_18 {
+        false => { let prod_local_19 = crate::CborError::WrongType; { let prod_local_20 = Err(prod_local_19); prod_local_20 } },
+        true => { let prod_local_21 = (a_228).cursor; { let prod_local_22 = readPublicationWireBytes(&(input), prod_local_21, maximum)?; match prod_local_22 {
+        Err(prod_local_23) => { let prod_local_24 = Err(prod_local_23); prod_local_24 },
+        Ok(prod_local_25) => { let prod_local_26 = (prod_local_25).value; { let prod_local_27 = Some(prod_local_26); { let prod_local_28 = (prod_local_25).cursor; { let prod_local_29 = crate::PublicationWireReadOptionBytes { value: prod_local_27, cursor: prod_local_28 }; { let prod_local_30 = Ok(prod_local_29); prod_local_30 } } } } },
+    } } },
+    } },
+        true => { let prod_local_31 = (a_228).value; { let prod_local_32 = 1; { let prod_local_33 = (prod_local_31 == prod_local_32); { let prod_local_34 = prod_local_33; match prod_local_34 {
+        false => { let prod_local_35 = crate::CborError::WrongType; { let prod_local_36 = Err(prod_local_35); prod_local_36 } },
+        true => { let prod_local_37 = (a_228).cursor; { let prod_local_38 = readPublicationWireBytes(&(input), prod_local_37, maximum)?; match prod_local_38 {
+        Err(prod_local_39) => { let prod_local_40 = Err(prod_local_39); prod_local_40 },
+        Ok(prod_local_41) => { let prod_local_42 = (prod_local_41).value; { let prod_local_43 = Some(prod_local_42); { let prod_local_44 = (prod_local_41).cursor; { let prod_local_45 = crate::PublicationWireReadOptionBytes { value: prod_local_43, cursor: prod_local_44 }; { let prod_local_46 = Ok(prod_local_45); prod_local_46 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_48 = (a_228).cursor; { let prod_local_49 = crate::PublicationWireReadOptionBytes { value: None, cursor: prod_local_48 }; { let prod_local_50 = Ok(prod_local_49); prod_local_50 } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWireOptionPublicationDecision(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadOptionPublicationDecision, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_127 = 2; { let _x_130 = publicationWireReadArray(&(input), cursor, _x_127)?; match _x_130 {
+        Err(a_131) => { let _x_166 = Err(a_131); _x_166 },
+        Ok(a_133) => { let _x_224 = (a_133).cursor; { let _x_225 = readPublicationWireNat(&(input), _x_224)?; match _x_225 {
+        Err(a_226) => { let _x_227 = Err(a_226); _x_227 },
+        Ok(a_228) => { let _x_274 = (a_133).count; { let _x_275 = 1; { let _x_276 = (_x_274 == _x_275); match _x_276 {
+        false => { let _y_278 = _x_276; match _y_278 {
+        false => { let _x_307 = (a_133).count; { let _x_308 = 2; { let _x_309 = (_x_307 == _x_308); match _x_309 {
+        false => { let _y_311 = _x_309; match _y_311 {
+        false => { let _x_319 = crate::CborError::WrongType; { let _x_320 = Err(_x_319); _x_320 } },
+        true => { let _x_327 = (a_228).cursor; { let _x_328 = readPublicationWirePublicationDecision(&(input), _x_327)?; match _x_328 {
+        Err(a_329) => { let _x_330 = Err(a_329); _x_330 },
+        Ok(a_331) => { let _x_333 = (a_331).value; { let _x_334 = Some(_x_333); { let _x_335 = (a_331).cursor; { let _x_336 = crate::PublicationWireReadOptionPublicationDecision { value: _x_334, cursor: _x_335 }; { let _x_337 = Ok(_x_336); _x_337 } } } } },
+    } } },
+    } },
+        true => { let _x_338 = (a_228).value; { let _x_339 = 1; { let _x_340 = (_x_338 == _x_339); { let prod_local_0 = _x_340; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (a_228).cursor; { let prod_local_4 = readPublicationWirePublicationDecision(&(input), prod_local_3)?; match prod_local_4 {
+        Err(prod_local_5) => { let prod_local_6 = Err(prod_local_5); prod_local_6 },
+        Ok(prod_local_7) => { let prod_local_8 = (prod_local_7).value; { let prod_local_9 = Some(prod_local_8); { let prod_local_10 = (prod_local_7).cursor; { let prod_local_11 = crate::PublicationWireReadOptionPublicationDecision { value: prod_local_9, cursor: prod_local_10 }; { let prod_local_12 = Ok(prod_local_11); prod_local_12 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_343 = (a_228).cursor; { let _x_344 = crate::PublicationWireReadOptionPublicationDecision { value: None, cursor: _x_343 }; { let _x_345 = Ok(_x_344); _x_345 } } },
+    } },
+        true => { let _x_346 = (a_228).value; { let _x_347 = 0; { let _x_348 = (_x_346 == _x_347); { let prod_local_13 = _x_348; match prod_local_13 {
+        false => { let prod_local_14 = (a_133).count; { let prod_local_15 = 2; { let prod_local_16 = (prod_local_14 == prod_local_15); match prod_local_16 {
+        false => { let prod_local_18 = prod_local_16; match prod_local_18 {
+        false => { let prod_local_19 = crate::CborError::WrongType; { let prod_local_20 = Err(prod_local_19); prod_local_20 } },
+        true => { let prod_local_21 = (a_228).cursor; { let prod_local_22 = readPublicationWirePublicationDecision(&(input), prod_local_21)?; match prod_local_22 {
+        Err(prod_local_23) => { let prod_local_24 = Err(prod_local_23); prod_local_24 },
+        Ok(prod_local_25) => { let prod_local_26 = (prod_local_25).value; { let prod_local_27 = Some(prod_local_26); { let prod_local_28 = (prod_local_25).cursor; { let prod_local_29 = crate::PublicationWireReadOptionPublicationDecision { value: prod_local_27, cursor: prod_local_28 }; { let prod_local_30 = Ok(prod_local_29); prod_local_30 } } } } },
+    } } },
+    } },
+        true => { let prod_local_31 = (a_228).value; { let prod_local_32 = 1; { let prod_local_33 = (prod_local_31 == prod_local_32); { let prod_local_34 = prod_local_33; match prod_local_34 {
+        false => { let prod_local_35 = crate::CborError::WrongType; { let prod_local_36 = Err(prod_local_35); prod_local_36 } },
+        true => { let prod_local_37 = (a_228).cursor; { let prod_local_38 = readPublicationWirePublicationDecision(&(input), prod_local_37)?; match prod_local_38 {
+        Err(prod_local_39) => { let prod_local_40 = Err(prod_local_39); prod_local_40 },
+        Ok(prod_local_41) => { let prod_local_42 = (prod_local_41).value; { let prod_local_43 = Some(prod_local_42); { let prod_local_44 = (prod_local_41).cursor; { let prod_local_45 = crate::PublicationWireReadOptionPublicationDecision { value: prod_local_43, cursor: prod_local_44 }; { let prod_local_46 = Ok(prod_local_45); prod_local_46 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_48 = (a_228).cursor; { let prod_local_49 = crate::PublicationWireReadOptionPublicationDecision { value: None, cursor: prod_local_48 }; { let prod_local_50 = Ok(prod_local_49); prod_local_50 } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWireOptionPublicationDeployment(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadOptionPublicationDeployment, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_127 = 2; { let _x_130 = publicationWireReadArray(&(input), cursor, _x_127)?; match _x_130 {
+        Err(a_131) => { let _x_166 = Err(a_131); _x_166 },
+        Ok(a_133) => { let _x_224 = (a_133).cursor; { let _x_225 = readPublicationWireNat(&(input), _x_224)?; match _x_225 {
+        Err(a_226) => { let _x_227 = Err(a_226); _x_227 },
+        Ok(a_228) => { let _x_274 = (a_133).count; { let _x_275 = 1; { let _x_276 = (_x_274 == _x_275); match _x_276 {
+        false => { let _y_278 = _x_276; match _y_278 {
+        false => { let _x_307 = (a_133).count; { let _x_308 = 2; { let _x_309 = (_x_307 == _x_308); match _x_309 {
+        false => { let _y_311 = _x_309; match _y_311 {
+        false => { let _x_319 = crate::CborError::WrongType; { let _x_320 = Err(_x_319); _x_320 } },
+        true => { let _x_327 = (a_228).cursor; { let _x_328 = readPublicationWirePublicationDeployment(&(input), _x_327)?; match _x_328 {
+        Err(a_329) => { let _x_330 = Err(a_329); _x_330 },
+        Ok(a_331) => { let _x_333 = (a_331).value; { let _x_334 = Some(_x_333); { let _x_335 = (a_331).cursor; { let _x_336 = crate::PublicationWireReadOptionPublicationDeployment { value: _x_334, cursor: _x_335 }; { let _x_337 = Ok(_x_336); _x_337 } } } } },
+    } } },
+    } },
+        true => { let _x_338 = (a_228).value; { let _x_339 = 1; { let _x_340 = (_x_338 == _x_339); { let prod_local_0 = _x_340; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (a_228).cursor; { let prod_local_4 = readPublicationWirePublicationDeployment(&(input), prod_local_3)?; match prod_local_4 {
+        Err(prod_local_5) => { let prod_local_6 = Err(prod_local_5); prod_local_6 },
+        Ok(prod_local_7) => { let prod_local_8 = (prod_local_7).value; { let prod_local_9 = Some(prod_local_8); { let prod_local_10 = (prod_local_7).cursor; { let prod_local_11 = crate::PublicationWireReadOptionPublicationDeployment { value: prod_local_9, cursor: prod_local_10 }; { let prod_local_12 = Ok(prod_local_11); prod_local_12 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_343 = (a_228).cursor; { let _x_344 = crate::PublicationWireReadOptionPublicationDeployment { value: None, cursor: _x_343 }; { let _x_345 = Ok(_x_344); _x_345 } } },
+    } },
+        true => { let _x_346 = (a_228).value; { let _x_347 = 0; { let _x_348 = (_x_346 == _x_347); { let prod_local_13 = _x_348; match prod_local_13 {
+        false => { let prod_local_14 = (a_133).count; { let prod_local_15 = 2; { let prod_local_16 = (prod_local_14 == prod_local_15); match prod_local_16 {
+        false => { let prod_local_18 = prod_local_16; match prod_local_18 {
+        false => { let prod_local_19 = crate::CborError::WrongType; { let prod_local_20 = Err(prod_local_19); prod_local_20 } },
+        true => { let prod_local_21 = (a_228).cursor; { let prod_local_22 = readPublicationWirePublicationDeployment(&(input), prod_local_21)?; match prod_local_22 {
+        Err(prod_local_23) => { let prod_local_24 = Err(prod_local_23); prod_local_24 },
+        Ok(prod_local_25) => { let prod_local_26 = (prod_local_25).value; { let prod_local_27 = Some(prod_local_26); { let prod_local_28 = (prod_local_25).cursor; { let prod_local_29 = crate::PublicationWireReadOptionPublicationDeployment { value: prod_local_27, cursor: prod_local_28 }; { let prod_local_30 = Ok(prod_local_29); prod_local_30 } } } } },
+    } } },
+    } },
+        true => { let prod_local_31 = (a_228).value; { let prod_local_32 = 1; { let prod_local_33 = (prod_local_31 == prod_local_32); { let prod_local_34 = prod_local_33; match prod_local_34 {
+        false => { let prod_local_35 = crate::CborError::WrongType; { let prod_local_36 = Err(prod_local_35); prod_local_36 } },
+        true => { let prod_local_37 = (a_228).cursor; { let prod_local_38 = readPublicationWirePublicationDeployment(&(input), prod_local_37)?; match prod_local_38 {
+        Err(prod_local_39) => { let prod_local_40 = Err(prod_local_39); prod_local_40 },
+        Ok(prod_local_41) => { let prod_local_42 = (prod_local_41).value; { let prod_local_43 = Some(prod_local_42); { let prod_local_44 = (prod_local_41).cursor; { let prod_local_45 = crate::PublicationWireReadOptionPublicationDeployment { value: prod_local_43, cursor: prod_local_44 }; { let prod_local_46 = Ok(prod_local_45); prod_local_46 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_48 = (a_228).cursor; { let prod_local_49 = crate::PublicationWireReadOptionPublicationDeployment { value: None, cursor: prod_local_48 }; { let prod_local_50 = Ok(prod_local_49); prod_local_50 } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWireOptionPublicationIntegrity(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadOptionPublicationIntegrity, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_127 = 2; { let _x_130 = publicationWireReadArray(&(input), cursor, _x_127)?; match _x_130 {
+        Err(a_131) => { let _x_166 = Err(a_131); _x_166 },
+        Ok(a_133) => { let _x_224 = (a_133).cursor; { let _x_225 = readPublicationWireNat(&(input), _x_224)?; match _x_225 {
+        Err(a_226) => { let _x_227 = Err(a_226); _x_227 },
+        Ok(a_228) => { let _x_274 = (a_133).count; { let _x_275 = 1; { let _x_276 = (_x_274 == _x_275); match _x_276 {
+        false => { let _y_278 = _x_276; match _y_278 {
+        false => { let _x_307 = (a_133).count; { let _x_308 = 2; { let _x_309 = (_x_307 == _x_308); match _x_309 {
+        false => { let _y_311 = _x_309; match _y_311 {
+        false => { let _x_319 = crate::CborError::WrongType; { let _x_320 = Err(_x_319); _x_320 } },
+        true => { let _x_327 = (a_228).cursor; { let _x_328 = readPublicationWirePublicationIntegrity(&(input), _x_327)?; match _x_328 {
+        Err(a_329) => { let _x_330 = Err(a_329); _x_330 },
+        Ok(a_331) => { let _x_333 = (a_331).value; { let _x_334 = Some(_x_333); { let _x_335 = (a_331).cursor; { let _x_336 = crate::PublicationWireReadOptionPublicationIntegrity { value: _x_334, cursor: _x_335 }; { let _x_337 = Ok(_x_336); _x_337 } } } } },
+    } } },
+    } },
+        true => { let _x_338 = (a_228).value; { let _x_339 = 1; { let _x_340 = (_x_338 == _x_339); { let prod_local_0 = _x_340; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (a_228).cursor; { let prod_local_4 = readPublicationWirePublicationIntegrity(&(input), prod_local_3)?; match prod_local_4 {
+        Err(prod_local_5) => { let prod_local_6 = Err(prod_local_5); prod_local_6 },
+        Ok(prod_local_7) => { let prod_local_8 = (prod_local_7).value; { let prod_local_9 = Some(prod_local_8); { let prod_local_10 = (prod_local_7).cursor; { let prod_local_11 = crate::PublicationWireReadOptionPublicationIntegrity { value: prod_local_9, cursor: prod_local_10 }; { let prod_local_12 = Ok(prod_local_11); prod_local_12 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_343 = (a_228).cursor; { let _x_344 = crate::PublicationWireReadOptionPublicationIntegrity { value: None, cursor: _x_343 }; { let _x_345 = Ok(_x_344); _x_345 } } },
+    } },
+        true => { let _x_346 = (a_228).value; { let _x_347 = 0; { let _x_348 = (_x_346 == _x_347); { let prod_local_13 = _x_348; match prod_local_13 {
+        false => { let prod_local_14 = (a_133).count; { let prod_local_15 = 2; { let prod_local_16 = (prod_local_14 == prod_local_15); match prod_local_16 {
+        false => { let prod_local_18 = prod_local_16; match prod_local_18 {
+        false => { let prod_local_19 = crate::CborError::WrongType; { let prod_local_20 = Err(prod_local_19); prod_local_20 } },
+        true => { let prod_local_21 = (a_228).cursor; { let prod_local_22 = readPublicationWirePublicationIntegrity(&(input), prod_local_21)?; match prod_local_22 {
+        Err(prod_local_23) => { let prod_local_24 = Err(prod_local_23); prod_local_24 },
+        Ok(prod_local_25) => { let prod_local_26 = (prod_local_25).value; { let prod_local_27 = Some(prod_local_26); { let prod_local_28 = (prod_local_25).cursor; { let prod_local_29 = crate::PublicationWireReadOptionPublicationIntegrity { value: prod_local_27, cursor: prod_local_28 }; { let prod_local_30 = Ok(prod_local_29); prod_local_30 } } } } },
+    } } },
+    } },
+        true => { let prod_local_31 = (a_228).value; { let prod_local_32 = 1; { let prod_local_33 = (prod_local_31 == prod_local_32); { let prod_local_34 = prod_local_33; match prod_local_34 {
+        false => { let prod_local_35 = crate::CborError::WrongType; { let prod_local_36 = Err(prod_local_35); prod_local_36 } },
+        true => { let prod_local_37 = (a_228).cursor; { let prod_local_38 = readPublicationWirePublicationIntegrity(&(input), prod_local_37)?; match prod_local_38 {
+        Err(prod_local_39) => { let prod_local_40 = Err(prod_local_39); prod_local_40 },
+        Ok(prod_local_41) => { let prod_local_42 = (prod_local_41).value; { let prod_local_43 = Some(prod_local_42); { let prod_local_44 = (prod_local_41).cursor; { let prod_local_45 = crate::PublicationWireReadOptionPublicationIntegrity { value: prod_local_43, cursor: prod_local_44 }; { let prod_local_46 = Ok(prod_local_45); prod_local_46 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_48 = (a_228).cursor; { let prod_local_49 = crate::PublicationWireReadOptionPublicationIntegrity { value: None, cursor: prod_local_48 }; { let prod_local_50 = Ok(prod_local_49); prod_local_50 } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWireOptionPublicationTrustFact(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadOptionPublicationTrustFact, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_127 = 2; { let _x_130 = publicationWireReadArray(&(input), cursor, _x_127)?; match _x_130 {
+        Err(a_131) => { let _x_166 = Err(a_131); _x_166 },
+        Ok(a_133) => { let _x_224 = (a_133).cursor; { let _x_225 = readPublicationWireNat(&(input), _x_224)?; match _x_225 {
+        Err(a_226) => { let _x_227 = Err(a_226); _x_227 },
+        Ok(a_228) => { let _x_274 = (a_133).count; { let _x_275 = 1; { let _x_276 = (_x_274 == _x_275); match _x_276 {
+        false => { let _y_278 = _x_276; match _y_278 {
+        false => { let _x_307 = (a_133).count; { let _x_308 = 2; { let _x_309 = (_x_307 == _x_308); match _x_309 {
+        false => { let _y_311 = _x_309; match _y_311 {
+        false => { let _x_319 = crate::CborError::WrongType; { let _x_320 = Err(_x_319); _x_320 } },
+        true => { let _x_327 = (a_228).cursor; { let _x_328 = readPublicationWirePublicationTrustFact(&(input), _x_327)?; match _x_328 {
+        Err(a_329) => { let _x_330 = Err(a_329); _x_330 },
+        Ok(a_331) => { let _x_333 = (a_331).value; { let _x_334 = Some(_x_333); { let _x_335 = (a_331).cursor; { let _x_336 = crate::PublicationWireReadOptionPublicationTrustFact { value: _x_334, cursor: _x_335 }; { let _x_337 = Ok(_x_336); _x_337 } } } } },
+    } } },
+    } },
+        true => { let _x_338 = (a_228).value; { let _x_339 = 1; { let _x_340 = (_x_338 == _x_339); { let prod_local_0 = _x_340; match prod_local_0 {
+        false => { let prod_local_1 = crate::CborError::WrongType; { let prod_local_2 = Err(prod_local_1); prod_local_2 } },
+        true => { let prod_local_3 = (a_228).cursor; { let prod_local_4 = readPublicationWirePublicationTrustFact(&(input), prod_local_3)?; match prod_local_4 {
+        Err(prod_local_5) => { let prod_local_6 = Err(prod_local_5); prod_local_6 },
+        Ok(prod_local_7) => { let prod_local_8 = (prod_local_7).value; { let prod_local_9 = Some(prod_local_8); { let prod_local_10 = (prod_local_7).cursor; { let prod_local_11 = crate::PublicationWireReadOptionPublicationTrustFact { value: prod_local_9, cursor: prod_local_10 }; { let prod_local_12 = Ok(prod_local_11); prod_local_12 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let _x_343 = (a_228).cursor; { let _x_344 = crate::PublicationWireReadOptionPublicationTrustFact { value: None, cursor: _x_343 }; { let _x_345 = Ok(_x_344); _x_345 } } },
+    } },
+        true => { let _x_346 = (a_228).value; { let _x_347 = 0; { let _x_348 = (_x_346 == _x_347); { let prod_local_13 = _x_348; match prod_local_13 {
+        false => { let prod_local_14 = (a_133).count; { let prod_local_15 = 2; { let prod_local_16 = (prod_local_14 == prod_local_15); match prod_local_16 {
+        false => { let prod_local_18 = prod_local_16; match prod_local_18 {
+        false => { let prod_local_19 = crate::CborError::WrongType; { let prod_local_20 = Err(prod_local_19); prod_local_20 } },
+        true => { let prod_local_21 = (a_228).cursor; { let prod_local_22 = readPublicationWirePublicationTrustFact(&(input), prod_local_21)?; match prod_local_22 {
+        Err(prod_local_23) => { let prod_local_24 = Err(prod_local_23); prod_local_24 },
+        Ok(prod_local_25) => { let prod_local_26 = (prod_local_25).value; { let prod_local_27 = Some(prod_local_26); { let prod_local_28 = (prod_local_25).cursor; { let prod_local_29 = crate::PublicationWireReadOptionPublicationTrustFact { value: prod_local_27, cursor: prod_local_28 }; { let prod_local_30 = Ok(prod_local_29); prod_local_30 } } } } },
+    } } },
+    } },
+        true => { let prod_local_31 = (a_228).value; { let prod_local_32 = 1; { let prod_local_33 = (prod_local_31 == prod_local_32); { let prod_local_34 = prod_local_33; match prod_local_34 {
+        false => { let prod_local_35 = crate::CborError::WrongType; { let prod_local_36 = Err(prod_local_35); prod_local_36 } },
+        true => { let prod_local_37 = (a_228).cursor; { let prod_local_38 = readPublicationWirePublicationTrustFact(&(input), prod_local_37)?; match prod_local_38 {
+        Err(prod_local_39) => { let prod_local_40 = Err(prod_local_39); prod_local_40 },
+        Ok(prod_local_41) => { let prod_local_42 = (prod_local_41).value; { let prod_local_43 = Some(prod_local_42); { let prod_local_44 = (prod_local_41).cursor; { let prod_local_45 = crate::PublicationWireReadOptionPublicationTrustFact { value: prod_local_43, cursor: prod_local_44 }; { let prod_local_46 = Ok(prod_local_45); prod_local_46 } } } } },
+    } } },
+    } } } } },
+    } } } },
+        true => { let prod_local_48 = (a_228).cursor; { let prod_local_49 = crate::PublicationWireReadOptionPublicationTrustFact { value: None, cursor: prod_local_48 }; { let prod_local_50 = Ok(prod_local_49); prod_local_50 } } },
+    } } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationAssurance(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationAssurance, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_287 = 4096; { let _x_290 = publicationWireReadArray(&(input), cursor, _x_287)?; match _x_290 {
+        Err(a_291) => { let _x_347 = Err(a_291); _x_347 },
+        Ok(a_293) => { let _x_540 = (a_293).cursor; { let _x_541 = readPublicationWireNat(&(input), _x_540)?; match _x_541 {
+        Err(a_542) => { let _x_543 = Err(a_542); _x_543 },
+        Ok(a_544) => { let _x_730 = (a_544).value; { let _x_731 = 0; { let _x_732 = (_x_730 == _x_731); match _x_732 {
+        false => { let _x_897 = (a_544).value; { let _x_898 = 1; { let _x_899 = (_x_897 == _x_898); match _x_899 {
+        false => { let _x_1040 = (a_544).value; { let _x_1041 = 2; { let _x_1042 = (_x_1040 == _x_1041); match _x_1042 {
+        false => { let _x_1159 = (a_544).value; { let _x_1160 = 3; { let _x_1161 = (_x_1159 == _x_1160); match _x_1161 {
+        false => { let _x_1254 = (a_544).value; { let _x_1255 = 4; { let _x_1256 = (_x_1254 == _x_1255); match _x_1256 {
+        false => { let _x_1325 = (a_544).value; { let _x_1326 = 5; { let _x_1327 = (_x_1325 == _x_1326); match _x_1327 {
+        false => { let _x_1372 = (a_544).value; { let _x_1373 = 6; { let _x_1374 = (_x_1372 == _x_1373); match _x_1374 {
+        false => { let _x_1395 = (a_544).value; { let _x_1396 = 7; { let _x_1397 = (_x_1395 == _x_1396); match _x_1397 {
+        false => { let _x_1398 = crate::PUnit {  }; { let _x_1399 = { let prod_local_0 = _x_1398; { let _x_1380 = crate::CborError::WrongType; { let _x_1381 = Err(_x_1380); _x_1381 } } }; _x_1399 } },
+        true => { let _x_1407 = (a_293).count; { let _x_1408 = 1; { let _x_1409 = (_x_1407 == _x_1408); match _x_1409 {
+        false => { let _x_1410 = crate::PUnit {  }; { let _x_1411 = { let prod_local_1 = _x_1410; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_1411 } },
+        true => { let _x_1414 = crate::PublicationAssurance::OperationalAssessment; { let _x_1415 = (a_544).cursor; { let _x_1416 = crate::PublicationWireReadPublicationAssurance { value: _x_1414, cursor: _x_1415 }; { let _x_1417 = Ok(_x_1416); _x_1417 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1426 = (a_293).count; { let _x_1427 = 1; { let _x_1428 = (_x_1426 == _x_1427); match _x_1428 {
+        false => { let _x_1433 = crate::CborError::WrongType; { let _x_1434 = Err(_x_1433); _x_1434 } },
+        true => { let _x_1435 = crate::PublicationAssurance::LiveJourney; { let _x_1436 = (a_544).cursor; { let _x_1437 = crate::PublicationWireReadPublicationAssurance { value: _x_1435, cursor: _x_1436 }; { let _x_1438 = Ok(_x_1437); _x_1438 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1447 = (a_293).count; { let _x_1448 = 1; { let _x_1449 = (_x_1447 == _x_1448); match _x_1449 {
+        false => { let _x_1454 = crate::CborError::WrongType; { let _x_1455 = Err(_x_1454); _x_1455 } },
+        true => { let _x_1456 = crate::PublicationAssurance::HumanAssessment; { let _x_1457 = (a_544).cursor; { let _x_1458 = crate::PublicationWireReadPublicationAssurance { value: _x_1456, cursor: _x_1457 }; { let _x_1459 = Ok(_x_1458); _x_1459 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1468 = (a_293).count; { let _x_1469 = 1; { let _x_1470 = (_x_1468 == _x_1469); match _x_1470 {
+        false => { let _x_1475 = crate::CborError::WrongType; { let _x_1476 = Err(_x_1475); _x_1476 } },
+        true => { let _x_1477 = crate::PublicationAssurance::FaultRecovery; { let _x_1478 = (a_544).cursor; { let _x_1479 = crate::PublicationWireReadPublicationAssurance { value: _x_1477, cursor: _x_1478 }; { let _x_1480 = Ok(_x_1479); _x_1480 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1489 = (a_293).count; { let _x_1490 = 1; { let _x_1491 = (_x_1489 == _x_1490); match _x_1491 {
+        false => { let _x_1496 = crate::CborError::WrongType; { let _x_1497 = Err(_x_1496); _x_1497 } },
+        true => { let _x_1498 = crate::PublicationAssurance::BrowserJourney; { let _x_1499 = (a_544).cursor; { let _x_1500 = crate::PublicationWireReadPublicationAssurance { value: _x_1498, cursor: _x_1499 }; { let _x_1501 = Ok(_x_1500); _x_1501 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1510 = (a_293).count; { let _x_1511 = 1; { let _x_1512 = (_x_1510 == _x_1511); match _x_1512 {
+        false => { let _x_1517 = crate::CborError::WrongType; { let _x_1518 = Err(_x_1517); _x_1518 } },
+        true => { let _x_1519 = crate::PublicationAssurance::ReproducibleBuild; { let _x_1520 = (a_544).cursor; { let _x_1521 = crate::PublicationWireReadPublicationAssurance { value: _x_1519, cursor: _x_1520 }; { let _x_1522 = Ok(_x_1521); _x_1522 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1531 = (a_293).count; { let _x_1532 = 1; { let _x_1533 = (_x_1531 == _x_1532); match _x_1533 {
+        false => { let _x_1538 = crate::CborError::WrongType; { let _x_1539 = Err(_x_1538); _x_1539 } },
+        true => { let _x_1540 = crate::PublicationAssurance::Oracle; { let _x_1541 = (a_544).cursor; { let _x_1542 = crate::PublicationWireReadPublicationAssurance { value: _x_1540, cursor: _x_1541 }; { let _x_1543 = Ok(_x_1542); _x_1543 } } } },
+    } } } },
+    } } } },
+        true => { let _x_1552 = (a_293).count; { let _x_1553 = 1; { let _x_1554 = (_x_1552 == _x_1553); match _x_1554 {
+        false => { let _x_1559 = crate::CborError::WrongType; { let _x_1560 = Err(_x_1559); _x_1560 } },
+        true => { let _x_1561 = crate::PublicationAssurance::SourceProof; { let _x_1562 = (a_544).cursor; { let _x_1563 = crate::PublicationWireReadPublicationAssurance { value: _x_1561, cursor: _x_1562 }; { let _x_1564 = Ok(_x_1563); _x_1564 } } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationClock(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationClock, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_79 = 4096; { let _x_82 = publicationWireReadArray(&(input), cursor, _x_79)?; match _x_82 {
+        Err(a_83) => { let _x_100 = Err(a_83); _x_100 },
+        Ok(a_85) => { let _x_144 = (a_85).count; { let _x_145 = 4; { let _x_146 = (_x_144 == _x_145); match _x_146 {
+        false => { let _x_151 = crate::CborError::WrongType; { let _x_152 = Err(_x_151); _x_152 } },
+        true => { let _x_185 = (a_85).cursor; { let _x_186 = 32; { let _x_187 = readPublicationWireBytes(&(input), _x_185, _x_186)?; match _x_187 {
+        Err(a_188) => { let _x_189 = Err(a_188); _x_189 },
+        Ok(a_190) => { let _x_216 = (a_190).cursor; { let _x_217 = 32; { let _x_218 = readPublicationWireBytes(&(input), _x_216, _x_217)?; match _x_218 {
+        Err(a_219) => { let _x_220 = Err(a_219); _x_220 },
+        Ok(a_221) => { let _x_239 = (a_221).cursor; { let _x_240 = 32; { let _x_241 = readPublicationWireBytes(&(input), _x_239, _x_240)?; match _x_241 {
+        Err(a_242) => { let _x_243 = Err(a_242); _x_243 },
+        Ok(a_244) => { let _x_255 = (a_244).cursor; { let _x_256 = readPublicationWireNat(&(input), _x_255)?; match _x_256 {
+        Err(a_257) => { let _x_258 = Err(a_257); _x_258 },
+        Ok(a_259) => { let _x_261 = (a_190).value; { let _x_262 = (a_221).value; { let _x_263 = (a_244).value; { let _x_264 = (a_259).value; { let _x_265 = crate::PublicationClock { domain: _x_261, authority: _x_262, receipt: _x_263, tick: _x_264 }; { let _x_266 = (a_259).cursor; { let _x_267 = crate::PublicationWireReadPublicationClock { value: _x_265, cursor: _x_266 }; { let _x_268 = Ok(_x_267); _x_268 } } } } } } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationContext(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationContext, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_115 = 4096; { let _x_118 = publicationWireReadArray(&(input), cursor, _x_115)?; match _x_118 {
+        Err(a_119) => { let _x_140 = Err(a_119); _x_140 },
+        Ok(a_121) => { let _x_209 = (a_121).count; { let _x_210 = 7; { let _x_211 = (_x_209 == _x_210); match _x_211 {
+        false => { let _x_216 = crate::CborError::WrongType; { let _x_217 = Err(_x_216); _x_217 } },
+        true => { let _x_276 = (a_121).cursor; { let _x_277 = readPublicationWirePublicationDeclaration(&(input), _x_276)?; match _x_277 {
+        Err(a_278) => { let _x_279 = Err(a_278); _x_279 },
+        Ok(a_280) => { let _x_332 = (a_280).cursor; { let _x_333 = 32; { let _x_334 = readPublicationWireBytes(&(input), _x_332, _x_333)?; match _x_334 {
+        Err(a_335) => { let _x_336 = Err(a_335); _x_336 },
+        Ok(a_337) => { let _x_382 = (a_337).cursor; { let _x_383 = readPublicationWirePublicationSubject(&(input), _x_382)?; match _x_383 {
+        Err(a_384) => { let _x_385 = Err(a_384); _x_385 },
+        Ok(a_386) => { let _x_423 = (a_386).cursor; { let _x_424 = 32; { let _x_425 = readPublicationWireBytes(&(input), _x_423, _x_424)?; match _x_425 {
+        Err(a_426) => { let _x_427 = Err(a_426); _x_427 },
+        Ok(a_428) => { let _x_457 = (a_428).cursor; { let _x_458 = 20; { let _x_459 = readPublicationWireBytes(&(input), _x_457, _x_458)?; match _x_459 {
+        Err(a_460) => { let _x_461 = Err(a_460); _x_461 },
+        Ok(a_462) => { let _x_484 = (a_462).cursor; { let _x_485 = readPublicationWireText(&(input), _x_484)?; match _x_485 {
+        Err(a_486) => { let _x_487 = Err(a_486); _x_487 },
+        Ok(a_488) => { let _x_502 = (a_488).cursor; { let _x_503 = 32; { let _x_504 = readPublicationWireBytes(&(input), _x_502, _x_503)?; match _x_504 {
+        Err(a_505) => { let _x_506 = Err(a_505); _x_506 },
+        Ok(a_507) => { let _x_509 = (a_280).value; { let _x_510 = (a_337).value; { let _x_511 = (a_386).value; { let _x_512 = (a_428).value; { let _x_513 = (a_462).value; { let _x_514 = (a_488).value; { let _x_515 = (a_507).value; { let _x_516 = crate::PublicationContext { declaration: _x_509, declarationIdentity: _x_510, subject: _x_511, instance: _x_512, publisherRevision: _x_513, publisherRef: _x_514, digest: _x_515 }; { let _x_517 = (a_507).cursor; { let _x_518 = crate::PublicationWireReadPublicationContext { value: _x_516, cursor: _x_517 }; { let _x_519 = Ok(_x_518); _x_519 } } } } } } } } } } },
+    } } } },
+    } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationDecision(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationDecision, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_179 = 4096; { let _x_182 = publicationWireReadArray(&(input), cursor, _x_179)?; match _x_182 {
+        Err(a_183) => { let _x_212 = Err(a_183); _x_212 },
+        Ok(a_185) => { let _x_324 = (a_185).count; { let _x_325 = 12; { let _x_326 = (_x_324 == _x_325); match _x_326 {
+        false => { let _x_331 = crate::CborError::WrongType; { let _x_332 = Err(_x_331); _x_332 } },
+        true => { let _x_433 = (a_185).cursor; { let _x_434 = 32; { let _x_435 = readPublicationWireBytes(&(input), _x_433, _x_434)?; match _x_435 {
+        Err(a_436) => { let _x_437 = Err(a_436); _x_437 },
+        Ok(a_438) => { let _x_532 = (a_438).cursor; { let _x_533 = 32; { let _x_534 = readPublicationWireBytes(&(input), _x_532, _x_533)?; match _x_534 {
+        Err(a_535) => { let _x_536 = Err(a_535); _x_536 },
+        Ok(a_537) => { let _x_623 = (a_537).cursor; { let _x_624 = 32; { let _x_625 = readPublicationWireBytes(&(input), _x_623, _x_624)?; match _x_625 {
+        Err(a_626) => { let _x_627 = Err(a_626); _x_627 },
+        Ok(a_628) => { let _x_706 = (a_628).cursor; { let _x_707 = 32; { let _x_708 = readPublicationWireBytes(&(input), _x_706, _x_707)?; match _x_708 {
+        Err(a_709) => { let _x_710 = Err(a_709); _x_710 },
+        Ok(a_711) => { let _x_781 = (a_711).cursor; { let _x_782 = 32; { let _x_783 = readPublicationWireBytes(&(input), _x_781, _x_782)?; match _x_783 {
+        Err(a_784) => { let _x_785 = Err(a_784); _x_785 },
+        Ok(a_786) => { let _x_848 = (a_786).cursor; { let _x_849 = 32; { let _x_850 = readPublicationWireBytes(&(input), _x_848, _x_849)?; match _x_850 {
+        Err(a_851) => { let _x_852 = Err(a_851); _x_852 },
+        Ok(a_853) => { let _x_907 = (a_853).cursor; { let _x_908 = 20; { let _x_909 = readPublicationWireBytes(&(input), _x_907, _x_908)?; match _x_909 {
+        Err(a_910) => { let _x_911 = Err(a_910); _x_911 },
+        Ok(a_912) => { let _x_959 = (a_912).cursor; { let _x_960 = readPublicationWireText(&(input), _x_959)?; match _x_960 {
+        Err(a_961) => { let _x_962 = Err(a_961); _x_962 },
+        Ok(a_963) => { let _x_1003 = (a_963).cursor; { let _x_1004 = readPublicationWirePublicationRefKind(&(input), _x_1003)?; match _x_1004 {
+        Err(a_1005) => { let _x_1006 = Err(a_1005); _x_1006 },
+        Ok(a_1007) => { let _x_1040 = (a_1007).cursor; { let _x_1041 = readPublicationWireNat(&(input), _x_1040)?; match _x_1041 {
+        Err(a_1042) => { let _x_1043 = Err(a_1042); _x_1043 },
+        Ok(a_1044) => { let _x_1070 = (a_1044).cursor; { let _x_1071 = readPublicationWireNat(&(input), _x_1070)?; match _x_1071 {
+        Err(a_1072) => { let _x_1073 = Err(a_1072); _x_1073 },
+        Ok(a_1074) => { let _x_1093 = (a_1074).cursor; { let _x_1094 = readPublicationWirePublicationOutcome(&(input), _x_1093)?; match _x_1094 {
+        Err(a_1095) => { let _x_1096 = Err(a_1095); _x_1096 },
+        Ok(a_1097) => { let _x_1099 = (a_438).value; { let _x_1100 = (a_537).value; { let _x_1101 = (a_628).value; { let _x_1102 = (a_711).value; { let _x_1103 = (a_786).value; { let _x_1104 = (a_853).value; { let _x_1105 = (a_912).value; { let _x_1106 = (a_963).value; { let _x_1107 = (a_1007).value; { let _x_1108 = (a_1044).value; { let _x_1109 = (a_1074).value; { let _x_1110 = (a_1097).value; { let _x_1111 = crate::PublicationDecision { context: _x_1099, authority: _x_1100, refAuthority: _x_1101, decision: _x_1102, refEvidence: _x_1103, ready: _x_1104, publisherRevision: _x_1105, publisherRef: _x_1106, refKind: _x_1107, from: _x_1108, until: _x_1109, outcome: _x_1110 }; { let _x_1112 = (a_1097).cursor; { let _x_1113 = crate::PublicationWireReadPublicationDecision { value: _x_1111, cursor: _x_1112 }; { let _x_1114 = Ok(_x_1113); _x_1114 } } } } } } } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationDeclaration(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationDeclaration, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_193 = 4096; { let _x_196 = publicationWireReadArray(&(input), cursor, _x_193)?; match _x_196 {
+        Err(a_197) => { let _x_228 = Err(a_197); _x_228 },
+        Ok(a_199) => { let _x_349 = (a_199).count; { let _x_350 = 13; { let _x_351 = (_x_349 == _x_350); match _x_351 {
+        false => { let _x_356 = crate::CborError::WrongType; { let _x_357 = Err(_x_356); _x_357 } },
+        true => { let _x_468 = (a_199).cursor; { let _x_469 = readPublicationWireText(&(input), _x_468)?; match _x_469 {
+        Err(a_470) => { let _x_471 = Err(a_470); _x_471 },
+        Ok(a_472) => { let _x_576 = (a_472).cursor; { let _x_577 = 32; { let _x_578 = readPublicationWireBytes(&(input), _x_576, _x_577)?; match _x_578 {
+        Err(a_579) => { let _x_580 = Err(a_579); _x_580 },
+        Ok(a_581) => { let _x_678 = (a_581).cursor; { let _x_679 = readPublicationWirePublicationTarget(&(input), _x_678)?; match _x_679 {
+        Err(a_680) => { let _x_681 = Err(a_680); _x_681 },
+        Ok(a_682) => { let _x_771 = (a_682).cursor; { let _x_772 = 32; { let _x_773 = readPublicationWireBytes(&(input), _x_771, _x_772)?; match _x_773 {
+        Err(a_774) => { let _x_775 = Err(a_774); _x_775 },
+        Ok(a_776) => { let _x_857 = (a_776).cursor; { let _x_858 = 32; { let _x_859 = readPublicationWireBytes(&(input), _x_857, _x_858)?; match _x_859 {
+        Err(a_860) => { let _x_861 = Err(a_860); _x_861 },
+        Ok(a_862) => { let _x_935 = (a_862).cursor; { let _x_936 = 32; { let _x_937 = readPublicationWireBytes(&(input), _x_935, _x_936)?; match _x_937 {
+        Err(a_938) => { let _x_939 = Err(a_938); _x_939 },
+        Ok(a_940) => { let _x_1005 = (a_940).cursor; { let _x_1006 = 32; { let _x_1007 = readPublicationWireBytes(&(input), _x_1005, _x_1006)?; match _x_1007 {
+        Err(a_1008) => { let _x_1009 = Err(a_1008); _x_1009 },
+        Ok(a_1010) => { let _x_1067 = (a_1010).cursor; { let _x_1068 = 32; { let _x_1069 = readPublicationWireBytes(&(input), _x_1067, _x_1068)?; match _x_1069 {
+        Err(a_1070) => { let _x_1071 = Err(a_1070); _x_1071 },
+        Ok(a_1072) => { let _x_1121 = (a_1072).cursor; { let _x_1122 = 32; { let _x_1123 = readPublicationWireBytes(&(input), _x_1121, _x_1122)?; match _x_1123 {
+        Err(a_1124) => { let _x_1125 = Err(a_1124); _x_1125 },
+        Ok(a_1126) => { let _x_1167 = (a_1126).cursor; { let _x_1168 = 32; { let _x_1169 = readPublicationWireBytes(&(input), _x_1167, _x_1168)?; match _x_1169 {
+        Err(a_1170) => { let _x_1171 = Err(a_1170); _x_1171 },
+        Ok(a_1172) => { let _x_1206 = (a_1172).cursor; { let _x_1207 = readPublicationWirePublicationTrust(&(input), _x_1206)?; match _x_1207 {
+        Err(a_1208) => { let _x_1209 = Err(a_1208); _x_1209 },
+        Ok(a_1210) => { let _x_1237 = (a_1210).cursor; { let _x_1238 = readPublicationWirePublicationRefKind(&(input), _x_1237)?; match _x_1238 {
+        Err(a_1239) => { let _x_1240 = Err(a_1239); _x_1240 },
+        Ok(a_1241) => { let _x_1261 = (a_1241).cursor; { let _x_1262 = readPublicationWirePublicationObligations(&(input), _x_1261)?; match _x_1262 {
+        Err(a_1263) => { let _x_1264 = Err(a_1263); _x_1264 },
+        Ok(a_1265) => { let _x_1267 = (a_472).value; { let _x_1268 = (a_581).value; { let _x_1269 = (a_682).value; { let _x_1270 = (a_776).value; { let _x_1271 = (a_862).value; { let _x_1272 = (a_940).value; { let _x_1273 = (a_1010).value; { let _x_1274 = (a_1072).value; { let _x_1275 = (a_1126).value; { let _x_1276 = (a_1172).value; { let _x_1277 = (a_1210).value; { let _x_1278 = (a_1241).value; { let _x_1279 = (a_1265).value; { let _x_1280 = crate::PublicationDeclaration { stage: _x_1267, policy: _x_1268, target: _x_1269, clock: _x_1270, clockAuthority: _x_1271, trustAuthority: _x_1272, decisionAuthority: _x_1273, refAuthority: _x_1274, deploymentAuthority: _x_1275, integrityAuthority: _x_1276, minimumTrust: _x_1277, refKind: _x_1278, obligations: _x_1279 }; { let _x_1281 = (a_1265).cursor; { let _x_1282 = crate::PublicationWireReadPublicationDeclaration { value: _x_1280, cursor: _x_1281 }; { let _x_1283 = Ok(_x_1282); _x_1283 } } } } } } } } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationDeployment(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationDeployment, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_154 = 4096; { let _x_157 = publicationWireReadArray(&(input), cursor, _x_154)?; match _x_157 {
+        Err(a_158) => { let _x_184 = Err(a_158); _x_184 },
+        Ok(a_160) => { let _x_279 = (a_160).count; { let _x_280 = 10; { let _x_281 = (_x_279 == _x_280); match _x_281 {
+        false => { let _x_286 = crate::CborError::WrongType; { let _x_287 = Err(_x_286); _x_287 } },
+        true => { let _x_371 = (a_160).cursor; { let _x_372 = 32; { let _x_373 = readPublicationWireBytes(&(input), _x_371, _x_372)?; match _x_373 {
+        Err(a_374) => { let _x_375 = Err(a_374); _x_375 },
+        Ok(a_376) => { let _x_453 = (a_376).cursor; { let _x_454 = 32; { let _x_455 = readPublicationWireBytes(&(input), _x_453, _x_454)?; match _x_455 {
+        Err(a_456) => { let _x_457 = Err(a_456); _x_457 },
+        Ok(a_458) => { let _x_527 = (a_458).cursor; { let _x_528 = 32; { let _x_529 = readPublicationWireBytes(&(input), _x_527, _x_528)?; match _x_529 {
+        Err(a_530) => { let _x_531 = Err(a_530); _x_531 },
+        Ok(a_532) => { let _x_593 = (a_532).cursor; { let _x_594 = 32; { let _x_595 = readPublicationWireBytes(&(input), _x_593, _x_594)?; match _x_595 {
+        Err(a_596) => { let _x_597 = Err(a_596); _x_597 },
+        Ok(a_598) => { let _x_651 = (a_598).cursor; { let _x_652 = 20; { let _x_653 = readPublicationWireBytes(&(input), _x_651, _x_652)?; match _x_653 {
+        Err(a_654) => { let _x_655 = Err(a_654); _x_655 },
+        Ok(a_656) => { let _x_701 = (a_656).cursor; { let _x_702 = 20; { let _x_703 = readPublicationWireBytes(&(input), _x_701, _x_702)?; match _x_703 {
+        Err(a_704) => { let _x_705 = Err(a_704); _x_705 },
+        Ok(a_706) => { let _x_744 = (a_706).cursor; { let _x_745 = readPublicationWireText(&(input), _x_744)?; match _x_745 {
+        Err(a_746) => { let _x_747 = Err(a_746); _x_747 },
+        Ok(a_748) => { let _x_779 = (a_748).cursor; { let _x_780 = readPublicationWireNat(&(input), _x_779)?; match _x_780 {
+        Err(a_781) => { let _x_782 = Err(a_781); _x_782 },
+        Ok(a_783) => { let _x_807 = (a_783).cursor; { let _x_808 = readPublicationWireNat(&(input), _x_807)?; match _x_808 {
+        Err(a_809) => { let _x_810 = Err(a_809); _x_810 },
+        Ok(a_811) => { let _x_828 = (a_811).cursor; { let _x_829 = readPublicationWireNat(&(input), _x_828)?; match _x_829 {
+        Err(a_830) => { let _x_831 = Err(a_830); _x_831 },
+        Ok(a_832) => { let _x_834 = (a_376).value; { let _x_835 = (a_458).value; { let _x_836 = (a_532).value; { let _x_837 = (a_598).value; { let _x_838 = (a_656).value; { let _x_839 = (a_706).value; { let _x_840 = (a_748).value; { let _x_841 = (a_783).value; { let _x_842 = (a_811).value; { let _x_843 = (a_832).value; { let _x_844 = crate::PublicationDeployment { context: _x_834, decision: _x_835, authority: _x_836, receipt: _x_837, publisherRevision: _x_838, deploymentRevision: _x_839, deploymentId: _x_840, observed: _x_841, from: _x_842, until: _x_843 }; { let _x_845 = (a_832).cursor; { let _x_846 = crate::PublicationWireReadPublicationDeployment { value: _x_844, cursor: _x_845 }; { let _x_847 = Ok(_x_846); _x_847 } } } } } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationFact(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationFact, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_151 = 4096; { let _x_154 = publicationWireReadArray(&(input), cursor, _x_151)?; match _x_154 {
+        Err(a_155) => { let _x_180 = Err(a_155); _x_180 },
+        Ok(a_157) => { let _x_274 = (a_157).count; { let _x_275 = 10; { let _x_276 = (_x_274 == _x_275); match _x_276 {
+        false => { let _x_281 = crate::CborError::WrongType; { let _x_282 = Err(_x_281); _x_282 } },
+        true => { let _x_365 = (a_157).cursor; { let _x_366 = 32; { let _x_367 = readPublicationWireBytes(&(input), _x_365, _x_366)?; match _x_367 {
+        Err(a_368) => { let _x_369 = Err(a_368); _x_369 },
+        Ok(a_370) => { let _x_447 = (a_370).cursor; { let _x_448 = readPublicationWireNat(&(input), _x_447)?; match _x_448 {
+        Err(a_449) => { let _x_450 = Err(a_449); _x_450 },
+        Ok(a_451) => { let _x_521 = (a_451).cursor; { let _x_522 = readPublicationWirePublicationAssurance(&(input), _x_521)?; match _x_522 {
+        Err(a_523) => { let _x_524 = Err(a_523); _x_524 },
+        Ok(a_525) => { let _x_587 = (a_525).cursor; { let _x_588 = 32; { let _x_589 = readPublicationWireBytes(&(input), _x_587, _x_588)?; match _x_589 {
+        Err(a_590) => { let _x_591 = Err(a_590); _x_591 },
+        Ok(a_592) => { let _x_646 = (a_592).cursor; { let _x_647 = 32; { let _x_648 = readPublicationWireBytes(&(input), _x_646, _x_647)?; match _x_648 {
+        Err(a_649) => { let _x_650 = Err(a_649); _x_650 },
+        Ok(a_651) => { let _x_697 = (a_651).cursor; { let _x_698 = 32; { let _x_699 = readPublicationWireBytes(&(input), _x_697, _x_698)?; match _x_699 {
+        Err(a_700) => { let _x_701 = Err(a_700); _x_701 },
+        Ok(a_702) => { let _x_740 = (a_702).cursor; { let _x_741 = 32; { let _x_742 = readPublicationWireOptionBytes(&(input), _x_740, _x_741)?; match _x_742 {
+        Err(a_743) => { let _x_744 = Err(a_743); _x_744 },
+        Ok(a_745) => { let _x_776 = (a_745).cursor; { let _x_777 = readPublicationWireNat(&(input), _x_776)?; match _x_777 {
+        Err(a_778) => { let _x_779 = Err(a_778); _x_779 },
+        Ok(a_780) => { let _x_804 = (a_780).cursor; { let _x_805 = readPublicationWireNat(&(input), _x_804)?; match _x_805 {
+        Err(a_806) => { let _x_807 = Err(a_806); _x_807 },
+        Ok(a_808) => { let _x_825 = (a_808).cursor; { let _x_826 = readPublicationWirePublicationOutcome(&(input), _x_825)?; match _x_826 {
+        Err(a_827) => { let _x_828 = Err(a_827); _x_828 },
+        Ok(a_829) => { let _x_831 = (a_370).value; { let _x_832 = (a_451).value; { let _x_833 = (a_525).value; { let _x_834 = (a_592).value; { let _x_835 = (a_651).value; { let _x_836 = (a_702).value; { let _x_837 = (a_745).value; { let _x_838 = (a_780).value; { let _x_839 = (a_808).value; { let _x_840 = (a_829).value; { let _x_841 = crate::PublicationFact { context: _x_831, obligation: _x_832, assurance: _x_833, authority: _x_834, scope: _x_835, evidence: _x_836, deployment: _x_837, from: _x_838, until: _x_839, outcome: _x_840 }; { let _x_842 = (a_829).cursor; { let _x_843 = crate::PublicationWireReadPublicationFact { value: _x_841, cursor: _x_842 }; { let _x_844 = Ok(_x_843); _x_844 } } } } } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationFacts(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationFacts, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 4096; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 64; { let _x_57 = readPublicationWirePublicationFactsGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationWireFlatOutcomePublicationFacts { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationFacts { chunks: chunks_58 }; { let _x_71 = crate::PublicationWireReadPublicationFacts { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationFactsGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationWireFlatOutcomePublicationFacts, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_173 = 0; { let _x_174 = (x_3 == _x_173); match _x_174 {
+        false => { let _x_180 = crate::CborError::ValueLimit; { let _x_181 = Some(_x_180); { let _x_182 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_181 }; _x_182 } } },
+        true => { let _x_185 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_185 },
+    } } },
+        _ => { let n_138 = (x_4).saturating_sub(1); { let _x_241 = 0; { let _x_242 = (x_3 == _x_241); match _x_242 {
+        false => { let _x_285 = 64; { let _x_286 = (x_3 <= _x_285); match _x_286 {
+        false => { let _x_295 = 64; { let _y_288 = _x_295; { let _x_289 = readPublicationWireListPublicationFactBatch(&(x_1), x_2, _y_288)?; match _x_289 {
+        crate::PublicationWireListOutcomeListPublicationFact { value: value_290, cursor: cursor_291, cause: cause_292 } => match cause_292 {
+        None => { let _x_349 = 64; { let _x_350 = (x_3 <= _x_349); match _x_350 {
+        false => { let _x_360 = 64; { let _y_352 = _x_360; { let _x_353 = core::convert::identity::<u64>(x_3).saturating_sub(_y_352); { let _x_354 = readPublicationWirePublicationFactsGroups(&(x_1), cursor_291, _x_353, n_138)?; match _x_354 {
+        crate::PublicationWireFlatOutcomePublicationFacts { chunks: chunks_355, cursor: cursor_356, cause: cause_357 } => match cause_357 {
+        None => { let _x_375 = crate::PublicationFactChunk { items: value_290 }; { let _x_376 = { let mut __list = (_x_375, chunks_355); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_378 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: _x_376, cursor: cursor_356, cause: cause_357 }; _x_378 } } },
+        Some(val_373) => { let _x_381 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: cursor_356, cause: cause_357 }; _x_381 },
+    },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationWirePublicationFactsGroups(&(x_1), cursor_291, prod_local_1, n_138)?; match prod_local_2 {
+        crate::PublicationWireFlatOutcomePublicationFacts { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => match prod_local_5 {
+        None => { let prod_local_6 = crate::PublicationFactChunk { items: value_290 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+        Some(prod_local_9) => { let prod_local_11 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: prod_local_4, cause: prod_local_5 }; prod_local_11 },
+    },
+    } } } },
+    } } },
+        Some(val_332) => { let _x_384 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: cursor_291, cause: cause_292 }; _x_384 },
+    },
+    } } } },
+        true => { let prod_local_12 = x_3; { let prod_local_13 = readPublicationWireListPublicationFactBatch(&(x_1), x_2, prod_local_12)?; match prod_local_13 {
+        crate::PublicationWireListOutcomeListPublicationFact { value: prod_local_14, cursor: prod_local_15, cause: prod_local_16 } => match prod_local_16 {
+        None => { let prod_local_17 = 64; { let prod_local_18 = (x_3 <= prod_local_17); match prod_local_18 {
+        false => { let prod_local_20 = 64; { let prod_local_21 = prod_local_20; { let prod_local_22 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_21); { let prod_local_23 = readPublicationWirePublicationFactsGroups(&(x_1), prod_local_15, prod_local_22, n_138)?; match prod_local_23 {
+        crate::PublicationWireFlatOutcomePublicationFacts { chunks: prod_local_24, cursor: prod_local_25, cause: prod_local_26 } => match prod_local_26 {
+        None => { let prod_local_27 = crate::PublicationFactChunk { items: prod_local_14 }; { let prod_local_28 = { let mut __list = (prod_local_27, prod_local_24); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_29 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: prod_local_28, cursor: prod_local_25, cause: prod_local_26 }; prod_local_29 } } },
+        Some(prod_local_30) => { let prod_local_32 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: prod_local_25, cause: prod_local_26 }; prod_local_32 },
+    },
+    } } } } },
+        true => { let prod_local_33 = x_3; { let prod_local_34 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_33); { let prod_local_35 = readPublicationWirePublicationFactsGroups(&(x_1), prod_local_15, prod_local_34, n_138)?; match prod_local_35 {
+        crate::PublicationWireFlatOutcomePublicationFacts { chunks: prod_local_36, cursor: prod_local_37, cause: prod_local_38 } => match prod_local_38 {
+        None => { let prod_local_39 = crate::PublicationFactChunk { items: prod_local_14 }; { let prod_local_40 = { let mut __list = (prod_local_39, prod_local_36); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_41 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: prod_local_40, cursor: prod_local_37, cause: prod_local_38 }; prod_local_41 } } },
+        Some(prod_local_42) => { let prod_local_44 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: prod_local_37, cause: prod_local_38 }; prod_local_44 },
+    },
+    } } } },
+    } } },
+        Some(prod_local_45) => { let prod_local_47 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: prod_local_15, cause: prod_local_16 }; prod_local_47 },
+    },
+    } } },
+    } } },
+        true => { let _x_387 = crate::PublicationWireFlatOutcomePublicationFacts { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_387 },
+    } } } },
+    })
+}
+
+pub fn readPublicationWirePublicationIntegrity(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationIntegrity, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_182 = 4096; { let _x_185 = publicationWireReadArray(&(input), cursor, _x_182)?; match _x_185 {
+        Err(a_186) => { let _x_216 = Err(a_186); _x_216 },
+        Ok(a_188) => { let _x_329 = (a_188).count; { let _x_330 = 12; { let _x_331 = (_x_329 == _x_330); match _x_331 {
+        false => { let _x_336 = crate::CborError::WrongType; { let _x_337 = Err(_x_336); _x_337 } },
+        true => { let _x_439 = (a_188).cursor; { let _x_440 = 32; { let _x_441 = readPublicationWireBytes(&(input), _x_439, _x_440)?; match _x_441 {
+        Err(a_442) => { let _x_443 = Err(a_442); _x_443 },
+        Ok(a_444) => { let _x_539 = (a_444).cursor; { let _x_540 = 32; { let _x_541 = readPublicationWireBytes(&(input), _x_539, _x_540)?; match _x_541 {
+        Err(a_542) => { let _x_543 = Err(a_542); _x_543 },
+        Ok(a_544) => { let _x_631 = (a_544).cursor; { let _x_632 = 32; { let _x_633 = readPublicationWireBytes(&(input), _x_631, _x_632)?; match _x_633 {
+        Err(a_634) => { let _x_635 = Err(a_634); _x_635 },
+        Ok(a_636) => { let _x_715 = (a_636).cursor; { let _x_716 = 32; { let _x_717 = readPublicationWireBytes(&(input), _x_715, _x_716)?; match _x_717 {
+        Err(a_718) => { let _x_719 = Err(a_718); _x_719 },
+        Ok(a_720) => { let _x_791 = (a_720).cursor; { let _x_792 = 32; { let _x_793 = readPublicationWireBytes(&(input), _x_791, _x_792)?; match _x_793 {
+        Err(a_794) => { let _x_795 = Err(a_794); _x_795 },
+        Ok(a_796) => { let _x_859 = (a_796).cursor; { let _x_860 = 32; { let _x_861 = readPublicationWireBytes(&(input), _x_859, _x_860)?; match _x_861 {
+        Err(a_862) => { let _x_863 = Err(a_862); _x_863 },
+        Ok(a_864) => { let _x_919 = (a_864).cursor; { let _x_920 = 32; { let _x_921 = readPublicationWireBytes(&(input), _x_919, _x_920)?; match _x_921 {
+        Err(a_922) => { let _x_923 = Err(a_922); _x_923 },
+        Ok(a_924) => { let _x_972 = (a_924).cursor; { let _x_973 = readPublicationWireText(&(input), _x_972)?; match _x_973 {
+        Err(a_974) => { let _x_975 = Err(a_974); _x_975 },
+        Ok(a_976) => { let _x_1016 = (a_976).cursor; { let _x_1017 = 32; { let _x_1018 = readPublicationWireBytes(&(input), _x_1016, _x_1017)?; match _x_1018 {
+        Err(a_1019) => { let _x_1020 = Err(a_1019); _x_1020 },
+        Ok(a_1021) => { let _x_1054 = (a_1021).cursor; { let _x_1055 = readPublicationWireNat(&(input), _x_1054)?; match _x_1055 {
+        Err(a_1056) => { let _x_1057 = Err(a_1056); _x_1057 },
+        Ok(a_1058) => { let _x_1084 = (a_1058).cursor; { let _x_1085 = readPublicationWireNat(&(input), _x_1084)?; match _x_1085 {
+        Err(a_1086) => { let _x_1087 = Err(a_1086); _x_1087 },
+        Ok(a_1088) => { let _x_1107 = (a_1088).cursor; { let _x_1108 = readPublicationWireNat(&(input), _x_1107)?; match _x_1108 {
+        Err(a_1109) => { let _x_1110 = Err(a_1109); _x_1110 },
+        Ok(a_1111) => { let _x_1113 = (a_444).value; { let _x_1114 = (a_544).value; { let _x_1115 = (a_636).value; { let _x_1116 = (a_720).value; { let _x_1117 = (a_796).value; { let _x_1118 = (a_864).value; { let _x_1119 = (a_924).value; { let _x_1120 = (a_976).value; { let _x_1121 = (a_1021).value; { let _x_1122 = (a_1058).value; { let _x_1123 = (a_1088).value; { let _x_1124 = (a_1111).value; { let _x_1125 = crate::PublicationIntegrity { context: _x_1113, authority: _x_1114, receipt: _x_1115, release: _x_1116, model: _x_1117, build: _x_1118, tree: _x_1119, url: _x_1120, deployment: _x_1121, observed: _x_1122, from: _x_1123, until: _x_1124 }; { let _x_1126 = (a_1111).cursor; { let _x_1127 = crate::PublicationWireReadPublicationIntegrity { value: _x_1125, cursor: _x_1126 }; { let _x_1128 = Ok(_x_1127); _x_1128 } } } } } } } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationMoment(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationMoment, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_83 = 4096; { let _x_86 = publicationWireReadArray(&(input), cursor, _x_83)?; match _x_86 {
+        Err(a_87) => { let _x_107 = Err(a_87); _x_107 },
+        Ok(a_89) => { let _x_156 = (a_89).cursor; { let _x_157 = readPublicationWireNat(&(input), _x_156)?; match _x_157 {
+        Err(a_158) => { let _x_159 = Err(a_158); _x_159 },
+        Ok(a_160) => { let _x_202 = (a_160).value; { let _x_203 = 0; { let _x_204 = (_x_202 == _x_203); match _x_204 {
+        false => { let _x_225 = (a_160).value; { let _x_226 = 1; { let _x_227 = (_x_225 == _x_226); match _x_227 {
+        false => { let _x_228 = crate::PUnit {  }; { let _x_229 = { let prod_local_0 = _x_228; { let _x_210 = crate::CborError::WrongType; { let _x_211 = Err(_x_210); _x_211 } } }; _x_229 } },
+        true => { let _x_237 = (a_89).count; { let _x_238 = 1; { let _x_239 = (_x_237 == _x_238); match _x_239 {
+        false => { let _x_240 = crate::PUnit {  }; { let _x_241 = { let prod_local_1 = _x_240; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_241 } },
+        true => { let _x_244 = crate::PublicationMoment::DeploymentOnly; { let _x_245 = (a_160).cursor; { let _x_246 = crate::PublicationWireReadPublicationMoment { value: _x_244, cursor: _x_245 }; { let _x_247 = Ok(_x_246); _x_247 } } } },
+    } } } },
+    } } } },
+        true => { let _x_256 = (a_89).count; { let _x_257 = 1; { let _x_258 = (_x_256 == _x_257); match _x_258 {
+        false => { let _x_263 = crate::CborError::WrongType; { let _x_264 = Err(_x_263); _x_264 } },
+        true => { let _x_265 = crate::PublicationMoment::PrePublication; { let _x_266 = (a_160).cursor; { let _x_267 = crate::PublicationWireReadPublicationMoment { value: _x_265, cursor: _x_266 }; { let _x_268 = Ok(_x_267); _x_268 } } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationObligation(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationObligation, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_87 = 4096; { let _x_90 = publicationWireReadArray(&(input), cursor, _x_87)?; match _x_90 {
+        Err(a_91) => { let _x_108 = Err(a_91); _x_108 },
+        Ok(a_93) => { let _x_159 = (a_93).count; { let _x_160 = 5; { let _x_161 = (_x_159 == _x_160); match _x_161 {
+        false => { let _x_166 = crate::CborError::WrongType; { let _x_167 = Err(_x_166); _x_167 } },
+        true => { let _x_208 = (a_93).cursor; { let _x_209 = readPublicationWireNat(&(input), _x_208)?; match _x_209 {
+        Err(a_210) => { let _x_211 = Err(a_210); _x_211 },
+        Ok(a_212) => { let _x_247 = (a_212).cursor; { let _x_248 = readPublicationWirePublicationMoment(&(input), _x_247)?; match _x_248 {
+        Err(a_249) => { let _x_250 = Err(a_249); _x_250 },
+        Ok(a_251) => { let _x_279 = (a_251).cursor; { let _x_280 = readPublicationWirePublicationAssurance(&(input), _x_279)?; match _x_280 {
+        Err(a_281) => { let _x_282 = Err(a_281); _x_282 },
+        Ok(a_283) => { let _x_303 = (a_283).cursor; { let _x_304 = 32; { let _x_305 = readPublicationWireBytes(&(input), _x_303, _x_304)?; match _x_305 {
+        Err(a_306) => { let _x_307 = Err(a_306); _x_307 },
+        Ok(a_308) => { let _x_320 = (a_308).cursor; { let _x_321 = 32; { let _x_322 = readPublicationWireBytes(&(input), _x_320, _x_321)?; match _x_322 {
+        Err(a_323) => { let _x_324 = Err(a_323); _x_324 },
+        Ok(a_325) => { let _x_327 = (a_212).value; { let _x_328 = (a_251).value; { let _x_329 = (a_283).value; { let _x_330 = (a_308).value; { let _x_331 = (a_325).value; { let _x_332 = crate::PublicationObligation { id: _x_327, moment: _x_328, assurance: _x_329, authority: _x_330, scope: _x_331 }; { let _x_333 = (a_325).cursor; { let _x_334 = crate::PublicationWireReadPublicationObligation { value: _x_332, cursor: _x_333 }; { let _x_335 = Ok(_x_334); _x_335 } } } } } } } } },
+    } } } },
+    } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationObligations(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationObligations, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_30 = 4096; { let _x_33 = publicationWireReadArray(&(input), cursor, _x_30)?; match _x_33 {
+        Err(a_34) => { let _x_44 = Err(a_34); _x_44 },
+        Ok(a_36) => { let _x_54 = (a_36).cursor; { let _x_55 = (a_36).count; { let _x_56 = 64; { let _x_57 = readPublicationWirePublicationObligationsGroups(&(input), _x_54, _x_55, _x_56)?; match _x_57 {
+        crate::PublicationWireFlatOutcomePublicationObligations { chunks: chunks_58, cursor: cursor_59, cause: cause_60 } => match cause_60 {
+        None => { let _x_70 = crate::PublicationObligations { chunks: chunks_58 }; { let _x_71 = crate::PublicationWireReadPublicationObligations { value: _x_70, cursor: cursor_59 }; { let _x_72 = Ok(_x_71); _x_72 } } },
+        Some(val_68) => { let _x_69 = Err(val_68); _x_69 },
+    },
+    } } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationObligationsGroups(x_1: &crate::PublicationWireInput, x_2: u64, x_3: u64, x_4: u64) -> Result<crate::PublicationWireFlatOutcomePublicationObligations, crate::ComputeError> {
+    Ok(match x_4 {
+        0 => { let _x_173 = 0; { let _x_174 = (x_3 == _x_173); match _x_174 {
+        false => { let _x_180 = crate::CborError::ValueLimit; { let _x_181 = Some(_x_180); { let _x_182 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: _x_181 }; _x_182 } } },
+        true => { let _x_185 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_185 },
+    } } },
+        _ => { let n_138 = (x_4).saturating_sub(1); { let _x_241 = 0; { let _x_242 = (x_3 == _x_241); match _x_242 {
+        false => { let _x_285 = 64; { let _x_286 = (x_3 <= _x_285); match _x_286 {
+        false => { let _x_295 = 64; { let _y_288 = _x_295; { let _x_289 = readPublicationWireListPublicationObligationBatch(&(x_1), x_2, _y_288)?; match _x_289 {
+        crate::PublicationWireListOutcomeListPublicationObligation { value: value_290, cursor: cursor_291, cause: cause_292 } => match cause_292 {
+        None => { let _x_349 = 64; { let _x_350 = (x_3 <= _x_349); match _x_350 {
+        false => { let _x_360 = 64; { let _y_352 = _x_360; { let _x_353 = core::convert::identity::<u64>(x_3).saturating_sub(_y_352); { let _x_354 = readPublicationWirePublicationObligationsGroups(&(x_1), cursor_291, _x_353, n_138)?; match _x_354 {
+        crate::PublicationWireFlatOutcomePublicationObligations { chunks: chunks_355, cursor: cursor_356, cause: cause_357 } => match cause_357 {
+        None => { let _x_375 = crate::PublicationObligationChunk { items: value_290 }; { let _x_376 = { let mut __list = (_x_375, chunks_355); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let _x_378 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: _x_376, cursor: cursor_356, cause: cause_357 }; _x_378 } } },
+        Some(val_373) => { let _x_381 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: cursor_356, cause: cause_357 }; _x_381 },
+    },
+    } } } } },
+        true => { let prod_local_0 = x_3; { let prod_local_1 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_0); { let prod_local_2 = readPublicationWirePublicationObligationsGroups(&(x_1), cursor_291, prod_local_1, n_138)?; match prod_local_2 {
+        crate::PublicationWireFlatOutcomePublicationObligations { chunks: prod_local_3, cursor: prod_local_4, cause: prod_local_5 } => match prod_local_5 {
+        None => { let prod_local_6 = crate::PublicationObligationChunk { items: value_290 }; { let prod_local_7 = { let mut __list = (prod_local_6, prod_local_3); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_8 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: prod_local_7, cursor: prod_local_4, cause: prod_local_5 }; prod_local_8 } } },
+        Some(prod_local_9) => { let prod_local_11 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: prod_local_4, cause: prod_local_5 }; prod_local_11 },
+    },
+    } } } },
+    } } },
+        Some(val_332) => { let _x_384 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: cursor_291, cause: cause_292 }; _x_384 },
+    },
+    } } } },
+        true => { let prod_local_12 = x_3; { let prod_local_13 = readPublicationWireListPublicationObligationBatch(&(x_1), x_2, prod_local_12)?; match prod_local_13 {
+        crate::PublicationWireListOutcomeListPublicationObligation { value: prod_local_14, cursor: prod_local_15, cause: prod_local_16 } => match prod_local_16 {
+        None => { let prod_local_17 = 64; { let prod_local_18 = (x_3 <= prod_local_17); match prod_local_18 {
+        false => { let prod_local_20 = 64; { let prod_local_21 = prod_local_20; { let prod_local_22 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_21); { let prod_local_23 = readPublicationWirePublicationObligationsGroups(&(x_1), prod_local_15, prod_local_22, n_138)?; match prod_local_23 {
+        crate::PublicationWireFlatOutcomePublicationObligations { chunks: prod_local_24, cursor: prod_local_25, cause: prod_local_26 } => match prod_local_26 {
+        None => { let prod_local_27 = crate::PublicationObligationChunk { items: prod_local_14 }; { let prod_local_28 = { let mut __list = (prod_local_27, prod_local_24); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_29 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: prod_local_28, cursor: prod_local_25, cause: prod_local_26 }; prod_local_29 } } },
+        Some(prod_local_30) => { let prod_local_32 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: prod_local_25, cause: prod_local_26 }; prod_local_32 },
+    },
+    } } } } },
+        true => { let prod_local_33 = x_3; { let prod_local_34 = core::convert::identity::<u64>(x_3).saturating_sub(prod_local_33); { let prod_local_35 = readPublicationWirePublicationObligationsGroups(&(x_1), prod_local_15, prod_local_34, n_138)?; match prod_local_35 {
+        crate::PublicationWireFlatOutcomePublicationObligations { chunks: prod_local_36, cursor: prod_local_37, cause: prod_local_38 } => match prod_local_38 {
+        None => { let prod_local_39 = crate::PublicationObligationChunk { items: prod_local_14 }; { let prod_local_40 = { let mut __list = (prod_local_39, prod_local_36); __list.1.reserve_exact(1); __list.1.insert(0, __list.0); __list.1 }; { let prod_local_41 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: prod_local_40, cursor: prod_local_37, cause: prod_local_38 }; prod_local_41 } } },
+        Some(prod_local_42) => { let prod_local_44 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: prod_local_37, cause: prod_local_38 }; prod_local_44 },
+    },
+    } } } },
+    } } },
+        Some(prod_local_45) => { let prod_local_47 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: prod_local_15, cause: prod_local_16 }; prod_local_47 },
+    },
+    } } },
+    } } },
+        true => { let _x_387 = crate::PublicationWireFlatOutcomePublicationObligations { chunks: alloc::vec::Vec::new(), cursor: x_2, cause: None }; _x_387 },
+    } } } },
+    })
+}
+
+pub fn readPublicationWirePublicationOperation(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationOperation, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_231 = 4096; { let _x_234 = publicationWireReadArray(&(input), cursor, _x_231)?; match _x_234 {
+        Err(a_235) => { let _x_275 = Err(a_235); _x_275 },
+        Ok(a_237) => { let _x_429 = (a_237).cursor; { let _x_430 = readPublicationWireNat(&(input), _x_429)?; match _x_430 {
+        Err(a_431) => { let _x_432 = Err(a_431); _x_432 },
+        Ok(a_433) => { let _x_580 = (a_433).value; { let _x_581 = 0; { let _x_582 = (_x_580 == _x_581); match _x_582 {
+        false => { let _x_683 = (a_433).value; { let _x_684 = 1; { let _x_685 = (_x_683 == _x_684); match _x_685 {
+        false => { let _x_754 = (a_433).value; { let _x_755 = 2; { let _x_756 = (_x_754 == _x_755); match _x_756 {
+        false => { let _x_785 = (a_433).value; { let _x_786 = 3; { let _x_787 = (_x_785 == _x_786); match _x_787 {
+        false => { let _x_788 = crate::PUnit {  }; { let _x_789 = { let prod_local_0 = _x_788; { let _x_762 = crate::CborError::WrongType; { let _x_763 = Err(_x_762); _x_763 } } }; _x_789 } },
+        true => { let _x_805 = (a_237).count; { let _x_806 = 2; { let _x_807 = (_x_805 == _x_806); match _x_807 {
+        false => { let _x_808 = crate::PUnit {  }; { let _x_809 = { let prod_local_1 = _x_808; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_809 } },
+        true => { let _x_818 = (a_433).cursor; { let _x_819 = readPublicationWirePublicationFacts(&(input), _x_818)?; match _x_819 {
+        Err(a_820) => { let _x_821 = Err(a_820); _x_821 },
+        Ok(a_822) => { let _x_824 = (a_822).value; { let _x_825 = crate::PublicationOperation::Accept { field_0: _x_824 }; { let _x_826 = (a_822).cursor; { let _x_827 = crate::PublicationWireReadPublicationOperation { value: _x_825, cursor: _x_826 }; { let _x_828 = Ok(_x_827); _x_828 } } } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_853 = (a_237).count; { let _x_854 = 3; { let _x_855 = (_x_853 == _x_854); match _x_855 {
+        false => { let _x_860 = crate::CborError::WrongType; { let _x_861 = Err(_x_860); _x_861 } },
+        true => { let _x_876 = (a_433).cursor; { let _x_877 = readPublicationWirePublicationDeployment(&(input), _x_876)?; match _x_877 {
+        Err(a_878) => { let _x_879 = Err(a_878); _x_879 },
+        Ok(a_880) => { let _x_889 = (a_880).cursor; { let _x_890 = readPublicationWirePublicationIntegrity(&(input), _x_889)?; match _x_890 {
+        Err(a_891) => { let _x_892 = Err(a_891); _x_892 },
+        Ok(a_893) => { let _x_895 = (a_880).value; { let _x_896 = (a_893).value; { let _x_897 = crate::PublicationOperation::Observe { field_0: _x_895, field_1: _x_896 }; { let _x_898 = (a_893).cursor; { let _x_899 = crate::PublicationWireReadPublicationOperation { value: _x_897, cursor: _x_898 }; { let _x_900 = Ok(_x_899); _x_900 } } } } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_917 = (a_237).count; { let _x_918 = 2; { let _x_919 = (_x_917 == _x_918); match _x_919 {
+        false => { let _x_924 = crate::CborError::WrongType; { let _x_925 = Err(_x_924); _x_925 } },
+        true => { let _x_932 = (a_433).cursor; { let _x_933 = readPublicationWirePublicationDecision(&(input), _x_932)?; match _x_933 {
+        Err(a_934) => { let _x_935 = Err(a_934); _x_935 },
+        Ok(a_936) => { let _x_938 = (a_936).value; { let _x_939 = crate::PublicationOperation::Authorize { field_0: _x_938 }; { let _x_940 = (a_936).cursor; { let _x_941 = crate::PublicationWireReadPublicationOperation { value: _x_939, cursor: _x_940 }; { let _x_942 = Ok(_x_941); _x_942 } } } } },
+    } } },
+    } } } },
+    } } } },
+        true => { let _x_976 = (a_237).count; { let _x_977 = 4; { let _x_978 = (_x_976 == _x_977); match _x_978 {
+        false => { let _x_983 = crate::CborError::WrongType; { let _x_984 = Err(_x_983); _x_984 } },
+        true => { let _x_1008 = (a_433).cursor; { let _x_1009 = readPublicationWirePublicationTrustFact(&(input), _x_1008)?; match _x_1009 {
+        Err(a_1010) => { let _x_1011 = Err(a_1010); _x_1011 },
+        Ok(a_1012) => { let _x_1030 = (a_1012).cursor; { let _x_1031 = readPublicationWirePublicationFacts(&(input), _x_1030)?; match _x_1031 {
+        Err(a_1032) => { let _x_1033 = Err(a_1032); _x_1033 },
+        Ok(a_1034) => { let _x_1044 = (a_1034).cursor; { let _x_1045 = 32; { let _x_1046 = readPublicationWireBytes(&(input), _x_1044, _x_1045)?; match _x_1046 {
+        Err(a_1047) => { let _x_1048 = Err(a_1047); _x_1048 },
+        Ok(a_1049) => { let _x_1051 = (a_1012).value; { let _x_1052 = (a_1034).value; { let _x_1053 = (a_1049).value; { let _x_1054 = crate::PublicationOperation::Prepare { field_0: _x_1051, field_1: _x_1052, field_2: _x_1053 }; { let _x_1055 = (a_1049).cursor; { let _x_1056 = crate::PublicationWireReadPublicationOperation { value: _x_1054, cursor: _x_1055 }; { let _x_1057 = Ok(_x_1056); _x_1057 } } } } } } },
+    } } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationOutcome(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationOutcome, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_117 = 4096; { let _x_120 = publicationWireReadArray(&(input), cursor, _x_117)?; match _x_120 {
+        Err(a_121) => { let _x_147 = Err(a_121); _x_147 },
+        Ok(a_123) => { let _x_220 = (a_123).cursor; { let _x_221 = readPublicationWireNat(&(input), _x_220)?; match _x_221 {
+        Err(a_222) => { let _x_223 = Err(a_222); _x_223 },
+        Ok(a_224) => { let _x_290 = (a_224).value; { let _x_291 = 0; { let _x_292 = (_x_290 == _x_291); match _x_292 {
+        false => { let _x_337 = (a_224).value; { let _x_338 = 1; { let _x_339 = (_x_337 == _x_338); match _x_339 {
+        false => { let _x_360 = (a_224).value; { let _x_361 = 2; { let _x_362 = (_x_360 == _x_361); match _x_362 {
+        false => { let _x_363 = crate::PUnit {  }; { let _x_364 = { let prod_local_0 = _x_363; { let _x_345 = crate::CborError::WrongType; { let _x_346 = Err(_x_345); _x_346 } } }; _x_364 } },
+        true => { let _x_372 = (a_123).count; { let _x_373 = 1; { let _x_374 = (_x_372 == _x_373); match _x_374 {
+        false => { let _x_375 = crate::PUnit {  }; { let _x_376 = { let prod_local_1 = _x_375; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_376 } },
+        true => { let _x_379 = crate::PublicationOutcome::Unknown; { let _x_380 = (a_224).cursor; { let _x_381 = crate::PublicationWireReadPublicationOutcome { value: _x_379, cursor: _x_380 }; { let _x_382 = Ok(_x_381); _x_382 } } } },
+    } } } },
+    } } } },
+        true => { let _x_391 = (a_123).count; { let _x_392 = 1; { let _x_393 = (_x_391 == _x_392); match _x_393 {
+        false => { let _x_398 = crate::CborError::WrongType; { let _x_399 = Err(_x_398); _x_399 } },
+        true => { let _x_400 = crate::PublicationOutcome::Rejected; { let _x_401 = (a_224).cursor; { let _x_402 = crate::PublicationWireReadPublicationOutcome { value: _x_400, cursor: _x_401 }; { let _x_403 = Ok(_x_402); _x_403 } } } },
+    } } } },
+    } } } },
+        true => { let _x_412 = (a_123).count; { let _x_413 = 1; { let _x_414 = (_x_412 == _x_413); match _x_414 {
+        false => { let _x_419 = crate::CborError::WrongType; { let _x_420 = Err(_x_419); _x_420 } },
+        true => { let _x_421 = crate::PublicationOutcome::Satisfied; { let _x_422 = (a_224).cursor; { let _x_423 = crate::PublicationWireReadPublicationOutcome { value: _x_421, cursor: _x_422 }; { let _x_424 = Ok(_x_423); _x_424 } } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationPhase(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationPhase, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_151 = 4096; { let _x_154 = publicationWireReadArray(&(input), cursor, _x_151)?; match _x_154 {
+        Err(a_155) => { let _x_187 = Err(a_155); _x_187 },
+        Ok(a_157) => { let _x_284 = (a_157).cursor; { let _x_285 = readPublicationWireNat(&(input), _x_284)?; match _x_285 {
+        Err(a_286) => { let _x_287 = Err(a_286); _x_287 },
+        Ok(a_288) => { let _x_378 = (a_288).value; { let _x_379 = 0; { let _x_380 = (_x_378 == _x_379); match _x_380 {
+        false => { let _x_449 = (a_288).value; { let _x_450 = 1; { let _x_451 = (_x_449 == _x_450); match _x_451 {
+        false => { let _x_496 = (a_288).value; { let _x_497 = 2; { let _x_498 = (_x_496 == _x_497); match _x_498 {
+        false => { let _x_519 = (a_288).value; { let _x_520 = 3; { let _x_521 = (_x_519 == _x_520); match _x_521 {
+        false => { let _x_522 = crate::PUnit {  }; { let _x_523 = { let prod_local_0 = _x_522; { let _x_504 = crate::CborError::WrongType; { let _x_505 = Err(_x_504); _x_505 } } }; _x_523 } },
+        true => { let _x_531 = (a_157).count; { let _x_532 = 1; { let _x_533 = (_x_531 == _x_532); match _x_533 {
+        false => { let _x_534 = crate::PUnit {  }; { let _x_535 = { let prod_local_1 = _x_534; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_535 } },
+        true => { let _x_538 = crate::PublicationPhase::Accepted; { let _x_539 = (a_288).cursor; { let _x_540 = crate::PublicationWireReadPublicationPhase { value: _x_538, cursor: _x_539 }; { let _x_541 = Ok(_x_540); _x_541 } } } },
+    } } } },
+    } } } },
+        true => { let _x_550 = (a_157).count; { let _x_551 = 1; { let _x_552 = (_x_550 == _x_551); match _x_552 {
+        false => { let _x_557 = crate::CborError::WrongType; { let _x_558 = Err(_x_557); _x_558 } },
+        true => { let _x_559 = crate::PublicationPhase::DeploymentAuthorized; { let _x_560 = (a_288).cursor; { let _x_561 = crate::PublicationWireReadPublicationPhase { value: _x_559, cursor: _x_560 }; { let _x_562 = Ok(_x_561); _x_562 } } } },
+    } } } },
+    } } } },
+        true => { let _x_571 = (a_157).count; { let _x_572 = 1; { let _x_573 = (_x_571 == _x_572); match _x_573 {
+        false => { let _x_578 = crate::CborError::WrongType; { let _x_579 = Err(_x_578); _x_579 } },
+        true => { let _x_580 = crate::PublicationPhase::ProducerReady; { let _x_581 = (a_288).cursor; { let _x_582 = crate::PublicationWireReadPublicationPhase { value: _x_580, cursor: _x_581 }; { let _x_583 = Ok(_x_582); _x_583 } } } },
+    } } } },
+    } } } },
+        true => { let _x_592 = (a_157).count; { let _x_593 = 1; { let _x_594 = (_x_592 == _x_593); match _x_594 {
+        false => { let _x_599 = crate::CborError::WrongType; { let _x_600 = Err(_x_599); _x_600 } },
+        true => { let _x_601 = crate::PublicationPhase::Unready; { let _x_602 = (a_288).cursor; { let _x_603 = crate::PublicationWireReadPublicationPhase { value: _x_601, cursor: _x_602 }; { let _x_604 = Ok(_x_603); _x_604 } } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationRefKind(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationRefKind, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_83 = 4096; { let _x_86 = publicationWireReadArray(&(input), cursor, _x_83)?; match _x_86 {
+        Err(a_87) => { let _x_107 = Err(a_87); _x_107 },
+        Ok(a_89) => { let _x_156 = (a_89).cursor; { let _x_157 = readPublicationWireNat(&(input), _x_156)?; match _x_157 {
+        Err(a_158) => { let _x_159 = Err(a_158); _x_159 },
+        Ok(a_160) => { let _x_202 = (a_160).value; { let _x_203 = 0; { let _x_204 = (_x_202 == _x_203); match _x_204 {
+        false => { let _x_225 = (a_160).value; { let _x_226 = 1; { let _x_227 = (_x_225 == _x_226); match _x_227 {
+        false => { let _x_228 = crate::PUnit {  }; { let _x_229 = { let prod_local_0 = _x_228; { let _x_210 = crate::CborError::WrongType; { let _x_211 = Err(_x_210); _x_211 } } }; _x_229 } },
+        true => { let _x_237 = (a_89).count; { let _x_238 = 1; { let _x_239 = (_x_237 == _x_238); match _x_239 {
+        false => { let _x_240 = crate::PUnit {  }; { let _x_241 = { let prod_local_1 = _x_240; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_241 } },
+        true => { let _x_244 = crate::PublicationRefKind::ProtectedTag; { let _x_245 = (a_160).cursor; { let _x_246 = crate::PublicationWireReadPublicationRefKind { value: _x_244, cursor: _x_245 }; { let _x_247 = Ok(_x_246); _x_247 } } } },
+    } } } },
+    } } } },
+        true => { let _x_256 = (a_89).count; { let _x_257 = 1; { let _x_258 = (_x_256 == _x_257); match _x_258 {
+        false => { let _x_263 = crate::CborError::WrongType; { let _x_264 = Err(_x_263); _x_264 } },
+        true => { let _x_265 = crate::PublicationRefKind::ProtectedBranch; { let _x_266 = (a_160).cursor; { let _x_267 = crate::PublicationWireReadPublicationRefKind { value: _x_265, cursor: _x_266 }; { let _x_268 = Ok(_x_267); _x_268 } } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationState(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationState, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_183 = 4096; { let _x_186 = publicationWireReadArray(&(input), cursor, _x_183)?; match _x_186 {
+        Err(a_187) => { let _x_212 = Err(a_187); _x_212 },
+        Ok(a_189) => { let _x_334 = (a_189).count; { let _x_335 = 14; { let _x_336 = (_x_334 == _x_335); match _x_336 {
+        false => { let _x_341 = crate::CborError::WrongType; { let _x_342 = Err(_x_341); _x_342 } },
+        true => { let _x_454 = (a_189).cursor; { let _x_455 = readPublicationWirePublicationContext(&(input), _x_454)?; match _x_455 {
+        Err(a_456) => { let _x_457 = Err(a_456); _x_457 },
+        Ok(a_458) => { let _x_564 = (a_458).cursor; { let _x_565 = readPublicationWireNat(&(input), _x_564)?; match _x_565 {
+        Err(a_566) => { let _x_567 = Err(a_566); _x_567 },
+        Ok(a_568) => { let _x_667 = (a_568).cursor; { let _x_668 = readPublicationWirePublicationPhase(&(input), _x_667)?; match _x_668 {
+        Err(a_669) => { let _x_670 = Err(a_669); _x_670 },
+        Ok(a_671) => { let _x_763 = (a_671).cursor; { let _x_764 = readPublicationWirePublicationClock(&(input), _x_763)?; match _x_764 {
+        Err(a_765) => { let _x_766 = Err(a_765); _x_766 },
+        Ok(a_767) => { let _x_852 = (a_767).cursor; { let _x_853 = readPublicationWireNat(&(input), _x_852)?; match _x_853 {
+        Err(a_854) => { let _x_855 = Err(a_854); _x_855 },
+        Ok(a_856) => { let _x_934 = (a_856).cursor; { let _x_935 = readPublicationWireNat(&(input), _x_934)?; match _x_935 {
+        Err(a_936) => { let _x_937 = Err(a_936); _x_937 },
+        Ok(a_938) => { let _x_1009 = (a_938).cursor; { let _x_1010 = readPublicationWireNat(&(input), _x_1009)?; match _x_1010 {
+        Err(a_1011) => { let _x_1012 = Err(a_1011); _x_1012 },
+        Ok(a_1013) => { let _x_1077 = (a_1013).cursor; { let _x_1078 = readPublicationWireOptionPublicationTrustFact(&(input), _x_1077)?; match _x_1078 {
+        Err(a_1079) => { let _x_1080 = Err(a_1079); _x_1080 },
+        Ok(a_1081) => { let _x_1138 = (a_1081).cursor; { let _x_1139 = readPublicationWirePublicationFacts(&(input), _x_1138)?; match _x_1139 {
+        Err(a_1140) => { let _x_1141 = Err(a_1140); _x_1141 },
+        Ok(a_1142) => { let _x_1191 = (a_1142).cursor; { let _x_1192 = 32; { let _x_1193 = readPublicationWireOptionBytes(&(input), _x_1191, _x_1192)?; match _x_1193 {
+        Err(a_1194) => { let _x_1195 = Err(a_1194); _x_1195 },
+        Ok(a_1196) => { let _x_1238 = (a_1196).cursor; { let _x_1239 = readPublicationWireOptionPublicationDecision(&(input), _x_1238)?; match _x_1239 {
+        Err(a_1240) => { let _x_1241 = Err(a_1240); _x_1241 },
+        Ok(a_1242) => { let _x_1277 = (a_1242).cursor; { let _x_1278 = readPublicationWireOptionPublicationDeployment(&(input), _x_1277)?; match _x_1278 {
+        Err(a_1279) => { let _x_1280 = Err(a_1279); _x_1280 },
+        Ok(a_1281) => { let _x_1309 = (a_1281).cursor; { let _x_1310 = readPublicationWireOptionPublicationIntegrity(&(input), _x_1309)?; match _x_1310 {
+        Err(a_1311) => { let _x_1312 = Err(a_1311); _x_1312 },
+        Ok(a_1313) => { let _x_1334 = (a_1313).cursor; { let _x_1335 = readPublicationWirePublicationFacts(&(input), _x_1334)?; match _x_1335 {
+        Err(a_1336) => { let _x_1337 = Err(a_1336); _x_1337 },
+        Ok(a_1338) => { let _x_1340 = (a_458).value; { let _x_1341 = (a_568).value; { let _x_1342 = (a_671).value; { let _x_1343 = (a_767).value; { let _x_1344 = (a_856).value; { let _x_1345 = (a_938).value; { let _x_1346 = (a_1013).value; { let _x_1347 = (a_1081).value; { let _x_1348 = (a_1142).value; { let _x_1349 = (a_1196).value; { let _x_1350 = (a_1242).value; { let _x_1351 = (a_1281).value; { let _x_1352 = (a_1313).value; { let _x_1353 = (a_1338).value; { let _x_1354 = crate::PublicationState { context: _x_1340, revision: _x_1341, phase: _x_1342, clock: _x_1343, readyAt: _x_1344, authorizedAt: _x_1345, observedAt: _x_1346, trust: _x_1347, readiness: _x_1348, ready: _x_1349, decision: _x_1350, deployment: _x_1351, integrity: _x_1352, live: _x_1353 }; { let _x_1355 = (a_1338).cursor; { let _x_1356 = crate::PublicationWireReadPublicationState { value: _x_1354, cursor: _x_1355 }; { let _x_1357 = Ok(_x_1356); _x_1357 } } } } } } } } } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationSubject(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationSubject, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_205 = 4096; { let _x_208 = publicationWireReadArray(&(input), cursor, _x_205)?; match _x_208 {
+        Err(a_209) => { let _x_244 = Err(a_209); _x_244 },
+        Ok(a_211) => { let _x_369 = (a_211).count; { let _x_370 = 13; { let _x_371 = (_x_369 == _x_370); match _x_371 {
+        false => { let _x_376 = crate::CborError::WrongType; { let _x_377 = Err(_x_376); _x_377 } },
+        true => { let _x_492 = (a_211).cursor; { let _x_493 = readPublicationWireText(&(input), _x_492)?; match _x_493 {
+        Err(a_494) => { let _x_495 = Err(a_494); _x_495 },
+        Ok(a_496) => { let _x_604 = (a_496).cursor; { let _x_605 = 20; { let _x_606 = readPublicationWireBytes(&(input), _x_604, _x_605)?; match _x_606 {
+        Err(a_607) => { let _x_608 = Err(a_607); _x_608 },
+        Ok(a_609) => { let _x_709 = (a_609).cursor; { let _x_710 = 32; { let _x_711 = readPublicationWireBytes(&(input), _x_709, _x_710)?; match _x_711 {
+        Err(a_712) => { let _x_713 = Err(a_712); _x_713 },
+        Ok(a_714) => { let _x_806 = (a_714).cursor; { let _x_807 = 32; { let _x_808 = readPublicationWireBytes(&(input), _x_806, _x_807)?; match _x_808 {
+        Err(a_809) => { let _x_810 = Err(a_809); _x_810 },
+        Ok(a_811) => { let _x_895 = (a_811).cursor; { let _x_896 = 32; { let _x_897 = readPublicationWireBytes(&(input), _x_895, _x_896)?; match _x_897 {
+        Err(a_898) => { let _x_899 = Err(a_898); _x_899 },
+        Ok(a_900) => { let _x_976 = (a_900).cursor; { let _x_977 = 32; { let _x_978 = readPublicationWireBytes(&(input), _x_976, _x_977)?; match _x_978 {
+        Err(a_979) => { let _x_980 = Err(a_979); _x_980 },
+        Ok(a_981) => { let _x_1049 = (a_981).cursor; { let _x_1050 = 32; { let _x_1051 = readPublicationWireBytes(&(input), _x_1049, _x_1050)?; match _x_1051 {
+        Err(a_1052) => { let _x_1053 = Err(a_1052); _x_1053 },
+        Ok(a_1054) => { let _x_1114 = (a_1054).cursor; { let _x_1115 = 32; { let _x_1116 = readPublicationWireBytes(&(input), _x_1114, _x_1115)?; match _x_1116 {
+        Err(a_1117) => { let _x_1118 = Err(a_1117); _x_1118 },
+        Ok(a_1119) => { let _x_1171 = (a_1119).cursor; { let _x_1172 = 32; { let _x_1173 = readPublicationWireBytes(&(input), _x_1171, _x_1172)?; match _x_1173 {
+        Err(a_1174) => { let _x_1175 = Err(a_1174); _x_1175 },
+        Ok(a_1176) => { let _x_1220 = (a_1176).cursor; { let _x_1221 = 32; { let _x_1222 = readPublicationWireBytes(&(input), _x_1220, _x_1221)?; match _x_1222 {
+        Err(a_1223) => { let _x_1224 = Err(a_1223); _x_1224 },
+        Ok(a_1225) => { let _x_1261 = (a_1225).cursor; { let _x_1262 = 32; { let _x_1263 = readPublicationWireBytes(&(input), _x_1261, _x_1262)?; match _x_1263 {
+        Err(a_1264) => { let _x_1265 = Err(a_1264); _x_1265 },
+        Ok(a_1266) => { let _x_1294 = (a_1266).cursor; { let _x_1295 = 32; { let _x_1296 = readPublicationWireBytes(&(input), _x_1294, _x_1295)?; match _x_1296 {
+        Err(a_1297) => { let _x_1298 = Err(a_1297); _x_1298 },
+        Ok(a_1299) => { let _x_1319 = (a_1299).cursor; { let _x_1320 = 32; { let _x_1321 = readPublicationWireBytes(&(input), _x_1319, _x_1320)?; match _x_1321 {
+        Err(a_1322) => { let _x_1323 = Err(a_1322); _x_1323 },
+        Ok(a_1324) => { let _x_1326 = (a_496).value; { let _x_1327 = (a_609).value; { let _x_1328 = (a_714).value; { let _x_1329 = (a_811).value; { let _x_1330 = (a_900).value; { let _x_1331 = (a_981).value; { let _x_1332 = (a_1054).value; { let _x_1333 = (a_1119).value; { let _x_1334 = (a_1176).value; { let _x_1335 = (a_1225).value; { let _x_1336 = (a_1266).value; { let _x_1337 = (a_1299).value; { let _x_1338 = (a_1324).value; { let _x_1339 = crate::PublicationSubject { producer: _x_1326, source: _x_1327, release: _x_1328, model: _x_1329, build: _x_1330, services: _x_1331, controls: _x_1332, dependencies: _x_1333, sdk: _x_1334, compiler: _x_1335, runtime: _x_1336, oracles: _x_1337, tree: _x_1338 }; { let _x_1340 = (a_1324).cursor; { let _x_1341 = crate::PublicationWireReadPublicationSubject { value: _x_1339, cursor: _x_1340 }; { let _x_1342 = Ok(_x_1341); _x_1342 } } } } } } } } } } } } } } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationTarget(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationTarget, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_73 = 4096; { let _x_76 = publicationWireReadArray(&(input), cursor, _x_73)?; match _x_76 {
+        Err(a_77) => { let _x_92 = Err(a_77); _x_92 },
+        Ok(a_79) => { let _x_134 = (a_79).count; { let _x_135 = 4; { let _x_136 = (_x_134 == _x_135); match _x_136 {
+        false => { let _x_141 = crate::CborError::WrongType; { let _x_142 = Err(_x_141); _x_142 } },
+        true => { let _x_174 = (a_79).cursor; { let _x_175 = readPublicationWireText(&(input), _x_174)?; match _x_175 {
+        Err(a_176) => { let _x_177 = Err(a_176); _x_177 },
+        Ok(a_178) => { let _x_204 = (a_178).cursor; { let _x_205 = readPublicationWireText(&(input), _x_204)?; match _x_205 {
+        Err(a_206) => { let _x_207 = Err(a_206); _x_207 },
+        Ok(a_208) => { let _x_227 = (a_208).cursor; { let _x_228 = readPublicationWireText(&(input), _x_227)?; match _x_228 {
+        Err(a_229) => { let _x_230 = Err(a_229); _x_230 },
+        Ok(a_231) => { let _x_242 = (a_231).cursor; { let _x_243 = 32; { let _x_244 = readPublicationWireBytes(&(input), _x_242, _x_243)?; match _x_244 {
+        Err(a_245) => { let _x_246 = Err(a_245); _x_246 },
+        Ok(a_247) => { let _x_249 = (a_178).value; { let _x_250 = (a_208).value; { let _x_251 = (a_231).value; { let _x_252 = (a_247).value; { let _x_253 = crate::PublicationTarget { url: _x_249, publisher: _x_250, environment: _x_251, adapter: _x_252 }; { let _x_254 = (a_247).cursor; { let _x_255 = crate::PublicationWireReadPublicationTarget { value: _x_253, cursor: _x_254 }; { let _x_256 = Ok(_x_255); _x_256 } } } } } } } },
+    } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationTrust(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationTrust, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_151 = 4096; { let _x_154 = publicationWireReadArray(&(input), cursor, _x_151)?; match _x_154 {
+        Err(a_155) => { let _x_187 = Err(a_155); _x_187 },
+        Ok(a_157) => { let _x_284 = (a_157).cursor; { let _x_285 = readPublicationWireNat(&(input), _x_284)?; match _x_285 {
+        Err(a_286) => { let _x_287 = Err(a_286); _x_287 },
+        Ok(a_288) => { let _x_378 = (a_288).value; { let _x_379 = 0; { let _x_380 = (_x_378 == _x_379); match _x_380 {
+        false => { let _x_449 = (a_288).value; { let _x_450 = 1; { let _x_451 = (_x_449 == _x_450); match _x_451 {
+        false => { let _x_496 = (a_288).value; { let _x_497 = 2; { let _x_498 = (_x_496 == _x_497); match _x_498 {
+        false => { let _x_519 = (a_288).value; { let _x_520 = 3; { let _x_521 = (_x_519 == _x_520); match _x_521 {
+        false => { let _x_522 = crate::PUnit {  }; { let _x_523 = { let prod_local_0 = _x_522; { let _x_504 = crate::CborError::WrongType; { let _x_505 = Err(_x_504); _x_505 } } }; _x_523 } },
+        true => { let _x_531 = (a_157).count; { let _x_532 = 1; { let _x_533 = (_x_531 == _x_532); match _x_533 {
+        false => { let _x_534 = crate::PUnit {  }; { let _x_535 = { let prod_local_1 = _x_534; { let prod_local_2 = crate::CborError::WrongType; { let prod_local_3 = Err(prod_local_2); prod_local_3 } } }; _x_535 } },
+        true => { let _x_538 = crate::PublicationTrust::Unknown; { let _x_539 = (a_288).cursor; { let _x_540 = crate::PublicationWireReadPublicationTrust { value: _x_538, cursor: _x_539 }; { let _x_541 = Ok(_x_540); _x_541 } } } },
+    } } } },
+    } } } },
+        true => { let _x_550 = (a_157).count; { let _x_551 = 1; { let _x_552 = (_x_550 == _x_551); match _x_552 {
+        false => { let _x_557 = crate::CborError::WrongType; { let _x_558 = Err(_x_557); _x_558 } },
+        true => { let _x_559 = crate::PublicationTrust::Rejected; { let _x_560 = (a_288).cursor; { let _x_561 = crate::PublicationWireReadPublicationTrust { value: _x_559, cursor: _x_560 }; { let _x_562 = Ok(_x_561); _x_562 } } } },
+    } } } },
+    } } } },
+        true => { let _x_571 = (a_157).count; { let _x_572 = 1; { let _x_573 = (_x_571 == _x_572); match _x_573 {
+        false => { let _x_578 = crate::CborError::WrongType; { let _x_579 = Err(_x_578); _x_579 } },
+        true => { let _x_580 = crate::PublicationTrust::Accepted; { let _x_581 = (a_288).cursor; { let _x_582 = crate::PublicationWireReadPublicationTrust { value: _x_580, cursor: _x_581 }; { let _x_583 = Ok(_x_582); _x_583 } } } },
+    } } } },
+    } } } },
+        true => { let _x_592 = (a_157).count; { let _x_593 = 1; { let _x_594 = (_x_592 == _x_593); match _x_594 {
+        false => { let _x_599 = crate::CborError::WrongType; { let _x_600 = Err(_x_599); _x_600 } },
+        true => { let _x_601 = crate::PublicationTrust::Candidate; { let _x_602 = (a_288).cursor; { let _x_603 = crate::PublicationWireReadPublicationTrust { value: _x_601, cursor: _x_602 }; { let _x_604 = Ok(_x_603); _x_604 } } } },
+    } } } },
+    } } } },
+    } } },
+    } } })
+}
+
+pub fn readPublicationWirePublicationTrustFact(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadPublicationTrustFact, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_101 = 4096; { let _x_104 = publicationWireReadArray(&(input), cursor, _x_101)?; match _x_104 {
+        Err(a_105) => { let _x_124 = Err(a_105); _x_124 },
+        Ok(a_107) => { let _x_184 = (a_107).count; { let _x_185 = 6; { let _x_186 = (_x_184 == _x_185); match _x_186 {
+        false => { let _x_191 = crate::CborError::WrongType; { let _x_192 = Err(_x_191); _x_192 } },
+        true => { let _x_241 = (a_107).cursor; { let _x_242 = 32; { let _x_243 = readPublicationWireBytes(&(input), _x_241, _x_242)?; match _x_243 {
+        Err(a_244) => { let _x_245 = Err(a_244); _x_245 },
+        Ok(a_246) => { let _x_288 = (a_246).cursor; { let _x_289 = 32; { let _x_290 = readPublicationWireBytes(&(input), _x_288, _x_289)?; match _x_290 {
+        Err(a_291) => { let _x_292 = Err(a_291); _x_292 },
+        Ok(a_293) => { let _x_327 = (a_293).cursor; { let _x_328 = 32; { let _x_329 = readPublicationWireBytes(&(input), _x_327, _x_328)?; match _x_329 {
+        Err(a_330) => { let _x_331 = Err(a_330); _x_331 },
+        Ok(a_332) => { let _x_359 = (a_332).cursor; { let _x_360 = readPublicationWirePublicationTrust(&(input), _x_359)?; match _x_360 {
+        Err(a_361) => { let _x_362 = Err(a_361); _x_362 },
+        Ok(a_363) => { let _x_383 = (a_363).cursor; { let _x_384 = readPublicationWireNat(&(input), _x_383)?; match _x_384 {
+        Err(a_385) => { let _x_386 = Err(a_385); _x_386 },
+        Ok(a_387) => { let _x_400 = (a_387).cursor; { let _x_401 = readPublicationWireNat(&(input), _x_400)?; match _x_401 {
+        Err(a_402) => { let _x_403 = Err(a_402); _x_403 },
+        Ok(a_404) => { let _x_406 = (a_246).value; { let _x_407 = (a_293).value; { let _x_408 = (a_332).value; { let _x_409 = (a_363).value; { let _x_410 = (a_387).value; { let _x_411 = (a_404).value; { let _x_412 = crate::PublicationTrustFact { context: _x_406, authority: _x_407, receipt: _x_408, status: _x_409, from: _x_410, until: _x_411 }; { let _x_413 = (a_404).cursor; { let _x_414 = crate::PublicationWireReadPublicationTrustFact { value: _x_412, cursor: _x_413 }; { let _x_415 = Ok(_x_414); _x_415 } } } } } } } } } },
+    } } },
+    } } },
+    } } },
+    } } } },
+    } } } },
+    } } } },
+    } } } },
+    } } })
+}
+
+pub fn readPublicationWireText(input: &crate::PublicationWireInput, cursor: u64) -> Result<Result<crate::PublicationWireReadText, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_42 = 2048; { let _x_45 = true; { let _x_46 = publicationWireReadString(&(input), cursor, _x_42, _x_45)?; match _x_46 {
+        Err(a_47) => { let _x_55 = Err(a_47); _x_55 },
+        Ok(a_49) => { let _x_75 = (a_49).value; match _x_75 {
+        crate::CborValue::TextString { field_0: x_80 } => { let _x_90 = (a_49).cursor; { let _x_91 = crate::PublicationWireReadText { value: x_80, cursor: _x_90 }; { let _x_92 = Ok(_x_91); _x_92 } } },
+        _ => { let _x_86 = crate::CborError::WrongType; { let _x_87 = Err(_x_86); _x_87 } },
+    } },
+    } } } })
+}
+
+pub fn writePublicationWireBytes(value: alloc::vec::Vec<u8>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = crate::CborValue::ByteString { field_0: value }; { let _x_2 = publicationWireLimits(); { let _x_3 = writeCborPrimitive(&(_x_1), _x_2)?; _x_3 } } })
+}
+
+pub fn writePublicationWireListPublicationFactBatch(x_1: &[crate::PublicationFact], x_2: u64) -> Result<crate::PublicationWireListWrittenListPublicationFact, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_89 = crate::PublicationWireListWrittenListPublicationFact { value: alloc::vec::Vec::<u8>::new(), tail: alloc::borrow::ToOwned::to_owned(x_1), cause: None }; _x_89 },
+        _ => { let n_72 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_143 = crate::PublicationWireListWrittenListPublicationFact { value: alloc::vec::Vec::<u8>::new(), tail: alloc::borrow::ToOwned::to_owned(x_1), cause: None }; _x_143 },
+        [head_134, tail_135 @ ..] => { let _x_172 = writePublicationWirePublicationFact(&(head_134))?; match _x_172 {
+        Err(a_173) => { let _x_174 = { let cause = a_173; { let _x_150 = Some(cause); { let _x_151 = crate::PublicationWireListWrittenListPublicationFact { value: alloc::vec::Vec::<u8>::new(), tail: alloc::vec::Vec::new(), cause: _x_150 }; _x_151 } } }; _x_174 },
+        Ok(a_175) => { let _x_191 = writePublicationWireListPublicationFactBatch(&(tail_135), n_72)?; match _x_191 {
+        crate::PublicationWireListWrittenListPublicationFact { value: value_192, tail: tail_193, cause: cause_194 } => match cause_194 {
+        None => { let _x_212 = publicationWireAppend(a_175, value_192)?; match _x_212 {
+        Err(a_213) => { let _x_214 = { let prod_local_0 = a_213; { let prod_local_4 = Some(prod_local_0); { let prod_local_5 = crate::PublicationWireListWrittenListPublicationFact { value: alloc::vec::Vec::<u8>::new(), tail: alloc::vec::Vec::new(), cause: prod_local_4 }; prod_local_5 } } }; _x_214 },
+        Ok(a_215) => { let _x_218 = crate::PublicationWireListWrittenListPublicationFact { value: a_215, tail: tail_193, cause: cause_194 }; _x_218 },
+    } },
+        Some(val_207) => { let _x_208 = { let prod_local_6 = val_207; { let prod_local_10 = Some(prod_local_6); { let prod_local_11 = crate::PublicationWireListWrittenListPublicationFact { value: alloc::vec::Vec::<u8>::new(), tail: alloc::vec::Vec::new(), cause: prod_local_10 }; prod_local_11 } } }; _x_208 },
+    },
+    } },
+    } },
+    } },
+    })
+}
+
+pub fn writePublicationWireListPublicationFactCount(x_1: &[crate::PublicationFact], x_2: u64) -> Result<Result<u64, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_81 = 0; { let _x_82 = Ok(_x_81); _x_82 } },
+        [head_78, tail_79 @ ..] => { let _x_83 = crate::CborError::ValueLimit; { let _x_84 = Err(_x_83); _x_84 } },
+    },
+        _ => { let n_52 = (x_2).saturating_sub(1); { let _x_93 = 64; { let _x_94 = writePublicationWireListPublicationFactCountChunk(&(x_1), _x_93)?; match _x_94 {
+        crate::PublicationWireListCountedListPublicationFact { count: count_95, tail: tail_96 } => { let _x_101 = writePublicationWireListPublicationFactCount(&(tail_96), n_52)?; match _x_101 {
+        Err(a_102) => _x_101,
+        Ok(a_103) => { let _x_105 = core::convert::identity::<u64>(count_95).checked_add(a_103).ok_or(crate::ComputeError::AddOverflow)?; { let _x_106 = Ok(_x_105); _x_106 } },
+    } },
+    } } } },
+    })
+}
+
+pub fn writePublicationWireListPublicationFactCountChunk(x_1: &[crate::PublicationFact], x_2: u64) -> Result<crate::PublicationWireListCountedListPublicationFact, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_59 = 0; { let _x_60 = crate::PublicationWireListCountedListPublicationFact { count: _x_59, tail: alloc::borrow::ToOwned::to_owned(x_1) }; _x_60 } },
+        _ => { let n_43 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_80 = 0; { let _x_82 = crate::PublicationWireListCountedListPublicationFact { count: _x_80, tail: alloc::borrow::ToOwned::to_owned(x_1) }; _x_82 } },
+        [head_77, tail_78 @ ..] => { let _x_87 = writePublicationWireListPublicationFactCountChunk(&(tail_78), n_43)?; match _x_87 {
+        crate::PublicationWireListCountedListPublicationFact { count: count_88, tail: tail_89 } => { let _x_91 = 1; { let _x_92 = core::convert::identity::<u64>(count_88).checked_add(_x_91).ok_or(crate::ComputeError::AddOverflow)?; { let _x_93 = crate::PublicationWireListCountedListPublicationFact { count: _x_92, tail: tail_89 }; _x_93 } } },
+    } },
+    } },
+    })
+}
+
+pub fn writePublicationWireListPublicationFactItems(x_1: &[crate::PublicationFact], x_2: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_87 = Ok(alloc::vec::Vec::<u8>::new()); _x_87 },
+        [head_80, tail_81 @ ..] => { let _x_88 = crate::CborError::ValueLimit; { let _x_89 = Err(_x_88); _x_89 } },
+    },
+        _ => { let n_55 = (x_2).saturating_sub(1); { let _x_105 = 64; { let _x_106 = writePublicationWireListPublicationFactBatch(&(x_1), _x_105)?; match _x_106 {
+        crate::PublicationWireListWrittenListPublicationFact { value: value_107, tail: tail_108, cause: cause_109 } => match cause_109 {
+        None => { let _x_129 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_130 = Ok(value_107); { let _x_131 = publicationWireJoin(_x_129, _x_130)?; { let _x_132 = writePublicationWireListPublicationFactItems(&(tail_108), n_55)?; { let _x_133 = publicationWireJoin(_x_131, _x_132)?; _x_133 } } } } },
+        Some(val_123) => { let _x_124 = Err(val_123); _x_124 },
+    },
+    } } } },
+    })
+}
+
+pub fn writePublicationWireListPublicationObligationBatch(x_1: &[crate::PublicationObligation], x_2: u64) -> Result<crate::PublicationWireListWrittenListPublicationObligation, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_89 = crate::PublicationWireListWrittenListPublicationObligation { value: alloc::vec::Vec::<u8>::new(), tail: alloc::borrow::ToOwned::to_owned(x_1), cause: None }; _x_89 },
+        _ => { let n_72 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_143 = crate::PublicationWireListWrittenListPublicationObligation { value: alloc::vec::Vec::<u8>::new(), tail: alloc::borrow::ToOwned::to_owned(x_1), cause: None }; _x_143 },
+        [head_134, tail_135 @ ..] => { let _x_172 = writePublicationWirePublicationObligation(&(head_134))?; match _x_172 {
+        Err(a_173) => { let _x_174 = { let cause = a_173; { let _x_150 = Some(cause); { let _x_151 = crate::PublicationWireListWrittenListPublicationObligation { value: alloc::vec::Vec::<u8>::new(), tail: alloc::vec::Vec::new(), cause: _x_150 }; _x_151 } } }; _x_174 },
+        Ok(a_175) => { let _x_191 = writePublicationWireListPublicationObligationBatch(&(tail_135), n_72)?; match _x_191 {
+        crate::PublicationWireListWrittenListPublicationObligation { value: value_192, tail: tail_193, cause: cause_194 } => match cause_194 {
+        None => { let _x_212 = publicationWireAppend(a_175, value_192)?; match _x_212 {
+        Err(a_213) => { let _x_214 = { let prod_local_0 = a_213; { let prod_local_4 = Some(prod_local_0); { let prod_local_5 = crate::PublicationWireListWrittenListPublicationObligation { value: alloc::vec::Vec::<u8>::new(), tail: alloc::vec::Vec::new(), cause: prod_local_4 }; prod_local_5 } } }; _x_214 },
+        Ok(a_215) => { let _x_218 = crate::PublicationWireListWrittenListPublicationObligation { value: a_215, tail: tail_193, cause: cause_194 }; _x_218 },
+    } },
+        Some(val_207) => { let _x_208 = { let prod_local_6 = val_207; { let prod_local_10 = Some(prod_local_6); { let prod_local_11 = crate::PublicationWireListWrittenListPublicationObligation { value: alloc::vec::Vec::<u8>::new(), tail: alloc::vec::Vec::new(), cause: prod_local_10 }; prod_local_11 } } }; _x_208 },
+    },
+    } },
+    } },
+    } },
+    })
+}
+
+pub fn writePublicationWireListPublicationObligationCount(x_1: &[crate::PublicationObligation], x_2: u64) -> Result<Result<u64, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_81 = 0; { let _x_82 = Ok(_x_81); _x_82 } },
+        [head_78, tail_79 @ ..] => { let _x_83 = crate::CborError::ValueLimit; { let _x_84 = Err(_x_83); _x_84 } },
+    },
+        _ => { let n_52 = (x_2).saturating_sub(1); { let _x_93 = 64; { let _x_94 = writePublicationWireListPublicationObligationCountChunk(&(x_1), _x_93)?; match _x_94 {
+        crate::PublicationWireListCountedListPublicationObligation { count: count_95, tail: tail_96 } => { let _x_101 = writePublicationWireListPublicationObligationCount(&(tail_96), n_52)?; match _x_101 {
+        Err(a_102) => _x_101,
+        Ok(a_103) => { let _x_105 = core::convert::identity::<u64>(count_95).checked_add(a_103).ok_or(crate::ComputeError::AddOverflow)?; { let _x_106 = Ok(_x_105); _x_106 } },
+    } },
+    } } } },
+    })
+}
+
+pub fn writePublicationWireListPublicationObligationCountChunk(x_1: &[crate::PublicationObligation], x_2: u64) -> Result<crate::PublicationWireListCountedListPublicationObligation, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => { let _x_59 = 0; { let _x_60 = crate::PublicationWireListCountedListPublicationObligation { count: _x_59, tail: alloc::borrow::ToOwned::to_owned(x_1) }; _x_60 } },
+        _ => { let n_43 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_80 = 0; { let _x_82 = crate::PublicationWireListCountedListPublicationObligation { count: _x_80, tail: alloc::borrow::ToOwned::to_owned(x_1) }; _x_82 } },
+        [head_77, tail_78 @ ..] => { let _x_87 = writePublicationWireListPublicationObligationCountChunk(&(tail_78), n_43)?; match _x_87 {
+        crate::PublicationWireListCountedListPublicationObligation { count: count_88, tail: tail_89 } => { let _x_91 = 1; { let _x_92 = core::convert::identity::<u64>(count_88).checked_add(_x_91).ok_or(crate::ComputeError::AddOverflow)?; { let _x_93 = crate::PublicationWireListCountedListPublicationObligation { count: _x_92, tail: tail_89 }; _x_93 } } },
+    } },
+    } },
+    })
+}
+
+pub fn writePublicationWireListPublicationObligationItems(x_1: &[crate::PublicationObligation], x_2: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_87 = Ok(alloc::vec::Vec::<u8>::new()); _x_87 },
+        [head_80, tail_81 @ ..] => { let _x_88 = crate::CborError::ValueLimit; { let _x_89 = Err(_x_88); _x_89 } },
+    },
+        _ => { let n_55 = (x_2).saturating_sub(1); { let _x_105 = 64; { let _x_106 = writePublicationWireListPublicationObligationBatch(&(x_1), _x_105)?; match _x_106 {
+        crate::PublicationWireListWrittenListPublicationObligation { value: value_107, tail: tail_108, cause: cause_109 } => match cause_109 {
+        None => { let _x_129 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_130 = Ok(value_107); { let _x_131 = publicationWireJoin(_x_129, _x_130)?; { let _x_132 = writePublicationWireListPublicationObligationItems(&(tail_108), n_55)?; { let _x_133 = publicationWireJoin(_x_131, _x_132)?; _x_133 } } } } },
+        Some(val_123) => { let _x_124 = Err(val_123); _x_124 },
+    },
+    } } } },
+    })
+}
+
+pub fn writePublicationWireNat(value: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = crate::CborValue::Unsigned { field_0: value }; { let _x_2 = publicationWireLimits(); { let _x_3 = writeCborPrimitive(&(_x_1), _x_2)?; _x_3 } } })
+}
+
+pub fn writePublicationWireOptionBytes(value: Option<alloc::vec::Vec<u8>>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        None => { let _x_56 = Ok(alloc::vec![129, 0]); _x_56 },
+        Some(val_33) => { let _x_61 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_70 = Ok(alloc::vec![130, 1]); { let _x_71 = publicationWireJoin(_x_61, _x_70)?; { let _x_72 = writePublicationWireBytes(val_33)?; { let _x_73 = publicationWireJoin(_x_71, _x_72)?; _x_73 } } } } },
+    })
+}
+
+pub fn writePublicationWireOptionPublicationDecision(value: Option<crate::PublicationDecision>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        None => { let _x_56 = Ok(alloc::vec![129, 0]); _x_56 },
+        Some(val_33) => { let _x_61 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_70 = Ok(alloc::vec![130, 1]); { let _x_71 = publicationWireJoin(_x_61, _x_70)?; { let _x_72 = writePublicationWirePublicationDecision(&(val_33))?; { let _x_73 = publicationWireJoin(_x_71, _x_72)?; _x_73 } } } } },
+    })
+}
+
+pub fn writePublicationWireOptionPublicationDeployment(value: Option<crate::PublicationDeployment>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        None => { let _x_56 = Ok(alloc::vec![129, 0]); _x_56 },
+        Some(val_33) => { let _x_61 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_70 = Ok(alloc::vec![130, 1]); { let _x_71 = publicationWireJoin(_x_61, _x_70)?; { let _x_72 = writePublicationWirePublicationDeployment(&(val_33))?; { let _x_73 = publicationWireJoin(_x_71, _x_72)?; _x_73 } } } } },
+    })
+}
+
+pub fn writePublicationWireOptionPublicationIntegrity(value: Option<crate::PublicationIntegrity>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        None => { let _x_56 = Ok(alloc::vec![129, 0]); _x_56 },
+        Some(val_33) => { let _x_61 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_70 = Ok(alloc::vec![130, 1]); { let _x_71 = publicationWireJoin(_x_61, _x_70)?; { let _x_72 = writePublicationWirePublicationIntegrity(&(val_33))?; { let _x_73 = publicationWireJoin(_x_71, _x_72)?; _x_73 } } } } },
+    })
+}
+
+pub fn writePublicationWireOptionPublicationTrustFact(value: Option<crate::PublicationTrustFact>) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        None => { let _x_56 = Ok(alloc::vec![129, 0]); _x_56 },
+        Some(val_33) => { let _x_61 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_70 = Ok(alloc::vec![130, 1]); { let _x_71 = publicationWireJoin(_x_61, _x_70)?; { let _x_72 = writePublicationWirePublicationTrustFact(&(val_33))?; { let _x_73 = publicationWireJoin(_x_71, _x_72)?; _x_73 } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationAssurance(value: crate::PublicationAssurance) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationAssurance::SourceProof => { let _x_203 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_204 = 1; { let _x_205 = publicationWireLimits(); { let _x_206 = writeCborArrayHead(_x_204, _x_205)?; { let _x_207 = publicationWireJoin(_x_203, _x_206)?; { let _x_208 = 0; { let _x_209 = crate::CborValue::Unsigned { field_0: _x_208 }; { let _x_210 = writeCborPrimitive(&(_x_209), _x_205)?; { let _x_211 = publicationWireJoin(_x_207, _x_210)?; _x_211 } } } } } } } } },
+        crate::PublicationAssurance::Oracle => { let _x_216 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_217 = 1; { let _x_218 = publicationWireLimits(); { let _x_219 = writeCborArrayHead(_x_217, _x_218)?; { let _x_220 = publicationWireJoin(_x_216, _x_219)?; { let _x_221 = crate::CborValue::Unsigned { field_0: _x_217 }; { let _x_222 = writeCborPrimitive(&(_x_221), _x_218)?; { let _x_223 = publicationWireJoin(_x_220, _x_222)?; _x_223 } } } } } } } },
+        crate::PublicationAssurance::ReproducibleBuild => { let _x_228 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_229 = 1; { let _x_230 = publicationWireLimits(); { let _x_231 = writeCborArrayHead(_x_229, _x_230)?; { let _x_232 = publicationWireJoin(_x_228, _x_231)?; { let _x_233 = 2; { let _x_234 = crate::CborValue::Unsigned { field_0: _x_233 }; { let _x_235 = writeCborPrimitive(&(_x_234), _x_230)?; { let _x_236 = publicationWireJoin(_x_232, _x_235)?; _x_236 } } } } } } } } },
+        crate::PublicationAssurance::BrowserJourney => { let _x_241 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_242 = 1; { let _x_243 = publicationWireLimits(); { let _x_244 = writeCborArrayHead(_x_242, _x_243)?; { let _x_245 = publicationWireJoin(_x_241, _x_244)?; { let _x_246 = 3; { let _x_247 = crate::CborValue::Unsigned { field_0: _x_246 }; { let _x_248 = writeCborPrimitive(&(_x_247), _x_243)?; { let _x_249 = publicationWireJoin(_x_245, _x_248)?; _x_249 } } } } } } } } },
+        crate::PublicationAssurance::FaultRecovery => { let _x_254 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_255 = 1; { let _x_256 = publicationWireLimits(); { let _x_257 = writeCborArrayHead(_x_255, _x_256)?; { let _x_258 = publicationWireJoin(_x_254, _x_257)?; { let _x_259 = 4; { let _x_260 = crate::CborValue::Unsigned { field_0: _x_259 }; { let _x_261 = writeCborPrimitive(&(_x_260), _x_256)?; { let _x_262 = publicationWireJoin(_x_258, _x_261)?; _x_262 } } } } } } } } },
+        crate::PublicationAssurance::HumanAssessment => { let _x_267 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_268 = 1; { let _x_269 = publicationWireLimits(); { let _x_270 = writeCborArrayHead(_x_268, _x_269)?; { let _x_271 = publicationWireJoin(_x_267, _x_270)?; { let _x_272 = 5; { let _x_273 = crate::CborValue::Unsigned { field_0: _x_272 }; { let _x_274 = writeCborPrimitive(&(_x_273), _x_269)?; { let _x_275 = publicationWireJoin(_x_271, _x_274)?; _x_275 } } } } } } } } },
+        crate::PublicationAssurance::LiveJourney => { let _x_280 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_281 = 1; { let _x_282 = publicationWireLimits(); { let _x_283 = writeCborArrayHead(_x_281, _x_282)?; { let _x_284 = publicationWireJoin(_x_280, _x_283)?; { let _x_285 = 6; { let _x_286 = crate::CborValue::Unsigned { field_0: _x_285 }; { let _x_287 = writeCborPrimitive(&(_x_286), _x_282)?; { let _x_288 = publicationWireJoin(_x_284, _x_287)?; _x_288 } } } } } } } } },
+        crate::PublicationAssurance::OperationalAssessment => { let _x_293 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_294 = 1; { let _x_295 = publicationWireLimits(); { let _x_296 = writeCborArrayHead(_x_294, _x_295)?; { let _x_297 = publicationWireJoin(_x_293, _x_296)?; { let _x_298 = 7; { let _x_299 = crate::CborValue::Unsigned { field_0: _x_298 }; { let _x_300 = writeCborPrimitive(&(_x_299), _x_295)?; { let _x_301 = publicationWireJoin(_x_297, _x_300)?; _x_301 } } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationClock(value: &crate::PublicationClock) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 4; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).domain; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).authority; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).receipt; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = (value).tick; { let _x_21 = writePublicationWireNat(_x_20)?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; _x_22 } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationContext(value: &crate::PublicationContext) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 7; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).declaration; { let _x_12 = writePublicationWirePublicationDeclaration(&(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).declarationIdentity; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).subject; { let _x_18 = writePublicationWirePublicationSubject(&(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).instance; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).publisherRevision; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).publisherRef; { let _x_27 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).digest; { let _x_30 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; _x_31 } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationDecision(value: &crate::PublicationDecision) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 12; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).context; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).authority; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).refAuthority; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).decision; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).refEvidence; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).ready; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).publisherRevision; { let _x_30 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = &(value).publisherRef; { let _x_33 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_32))?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = (value).refKind; { let _x_36 = writePublicationWirePublicationRefKind(_x_35)?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = (value).from; { let _x_39 = writePublicationWireNat(_x_38)?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; { let _x_41 = (value).until; { let _x_42 = writePublicationWireNat(_x_41)?; { let _x_43 = publicationWireJoin(_x_40, _x_42)?; { let _x_44 = (value).outcome; { let _x_45 = writePublicationWirePublicationOutcome(_x_44)?; { let _x_46 = publicationWireJoin(_x_43, _x_45)?; _x_46 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationDeclaration(value: &crate::PublicationDeclaration) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 13; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).stage; { let _x_12 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).policy; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).target; { let _x_18 = writePublicationWirePublicationTarget(&(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).clock; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).clockAuthority; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).trustAuthority; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).decisionAuthority; { let _x_30 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = &(value).refAuthority; { let _x_33 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_32))?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = &(value).deploymentAuthority; { let _x_36 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_35))?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = &(value).integrityAuthority; { let _x_39 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_38))?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; { let _x_41 = (value).minimumTrust; { let _x_42 = writePublicationWirePublicationTrust(_x_41)?; { let _x_43 = publicationWireJoin(_x_40, _x_42)?; { let _x_44 = (value).refKind; { let _x_45 = writePublicationWirePublicationRefKind(_x_44)?; { let _x_46 = publicationWireJoin(_x_43, _x_45)?; { let _x_47 = &(value).obligations; { let _x_48 = writePublicationWirePublicationObligations(&(_x_47))?; { let _x_49 = publicationWireJoin(_x_46, _x_48)?; _x_49 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationDeployment(value: &crate::PublicationDeployment) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 10; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).context; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).decision; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).authority; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).receipt; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).publisherRevision; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).deploymentRevision; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).deploymentId; { let _x_30 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = (value).observed; { let _x_33 = writePublicationWireNat(_x_32)?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = (value).from; { let _x_36 = writePublicationWireNat(_x_35)?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = (value).until; { let _x_39 = writePublicationWireNat(_x_38)?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; _x_40 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationError(value: crate::PublicationError) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationError::BadDeclaration => { let _x_378 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_379 = 1; { let _x_380 = publicationWireLimits(); { let _x_381 = writeCborArrayHead(_x_379, _x_380)?; { let _x_382 = publicationWireJoin(_x_378, _x_381)?; { let _x_383 = 0; { let _x_384 = crate::CborValue::Unsigned { field_0: _x_383 }; { let _x_385 = writeCborPrimitive(&(_x_384), _x_380)?; { let _x_386 = publicationWireJoin(_x_382, _x_385)?; _x_386 } } } } } } } } },
+        crate::PublicationError::BadSubject => { let _x_391 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_392 = 1; { let _x_393 = publicationWireLimits(); { let _x_394 = writeCborArrayHead(_x_392, _x_393)?; { let _x_395 = publicationWireJoin(_x_391, _x_394)?; { let _x_396 = crate::CborValue::Unsigned { field_0: _x_392 }; { let _x_397 = writeCborPrimitive(&(_x_396), _x_393)?; { let _x_398 = publicationWireJoin(_x_395, _x_397)?; _x_398 } } } } } } } },
+        crate::PublicationError::BadContext => { let _x_403 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_404 = 1; { let _x_405 = publicationWireLimits(); { let _x_406 = writeCborArrayHead(_x_404, _x_405)?; { let _x_407 = publicationWireJoin(_x_403, _x_406)?; { let _x_408 = 2; { let _x_409 = crate::CborValue::Unsigned { field_0: _x_408 }; { let _x_410 = writeCborPrimitive(&(_x_409), _x_405)?; { let _x_411 = publicationWireJoin(_x_407, _x_410)?; _x_411 } } } } } } } } },
+        crate::PublicationError::BadClock => { let _x_416 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_417 = 1; { let _x_418 = publicationWireLimits(); { let _x_419 = writeCborArrayHead(_x_417, _x_418)?; { let _x_420 = publicationWireJoin(_x_416, _x_419)?; { let _x_421 = 3; { let _x_422 = crate::CborValue::Unsigned { field_0: _x_421 }; { let _x_423 = writeCborPrimitive(&(_x_422), _x_418)?; { let _x_424 = publicationWireJoin(_x_420, _x_423)?; _x_424 } } } } } } } } },
+        crate::PublicationError::BadState => { let _x_429 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_430 = 1; { let _x_431 = publicationWireLimits(); { let _x_432 = writeCborArrayHead(_x_430, _x_431)?; { let _x_433 = publicationWireJoin(_x_429, _x_432)?; { let _x_434 = 4; { let _x_435 = crate::CborValue::Unsigned { field_0: _x_434 }; { let _x_436 = writeCborPrimitive(&(_x_435), _x_431)?; { let _x_437 = publicationWireJoin(_x_433, _x_436)?; _x_437 } } } } } } } } },
+        crate::PublicationError::ContextChanged => { let _x_442 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_443 = 1; { let _x_444 = publicationWireLimits(); { let _x_445 = writeCborArrayHead(_x_443, _x_444)?; { let _x_446 = publicationWireJoin(_x_442, _x_445)?; { let _x_447 = 5; { let _x_448 = crate::CborValue::Unsigned { field_0: _x_447 }; { let _x_449 = writeCborPrimitive(&(_x_448), _x_444)?; { let _x_450 = publicationWireJoin(_x_446, _x_449)?; _x_450 } } } } } } } } },
+        crate::PublicationError::StaleRevision => { let _x_455 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_456 = 1; { let _x_457 = publicationWireLimits(); { let _x_458 = writeCborArrayHead(_x_456, _x_457)?; { let _x_459 = publicationWireJoin(_x_455, _x_458)?; { let _x_460 = 6; { let _x_461 = crate::CborValue::Unsigned { field_0: _x_460 }; { let _x_462 = writeCborPrimitive(&(_x_461), _x_457)?; { let _x_463 = publicationWireJoin(_x_459, _x_462)?; _x_463 } } } } } } } } },
+        crate::PublicationError::ClockRollback => { let _x_468 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_469 = 1; { let _x_470 = publicationWireLimits(); { let _x_471 = writeCborArrayHead(_x_469, _x_470)?; { let _x_472 = publicationWireJoin(_x_468, _x_471)?; { let _x_473 = 7; { let _x_474 = crate::CborValue::Unsigned { field_0: _x_473 }; { let _x_475 = writeCborPrimitive(&(_x_474), _x_470)?; { let _x_476 = publicationWireJoin(_x_472, _x_475)?; _x_476 } } } } } } } } },
+        crate::PublicationError::WrongPhase => { let _x_481 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_482 = 1; { let _x_483 = publicationWireLimits(); { let _x_484 = writeCborArrayHead(_x_482, _x_483)?; { let _x_485 = publicationWireJoin(_x_481, _x_484)?; { let _x_486 = 8; { let _x_487 = crate::CborValue::Unsigned { field_0: _x_486 }; { let _x_488 = writeCborPrimitive(&(_x_487), _x_483)?; { let _x_489 = publicationWireJoin(_x_485, _x_488)?; _x_489 } } } } } } } } },
+        crate::PublicationError::BadTrust => { let _x_494 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_495 = 1; { let _x_496 = publicationWireLimits(); { let _x_497 = writeCborArrayHead(_x_495, _x_496)?; { let _x_498 = publicationWireJoin(_x_494, _x_497)?; { let _x_499 = 9; { let _x_500 = crate::CborValue::Unsigned { field_0: _x_499 }; { let _x_501 = writeCborPrimitive(&(_x_500), _x_496)?; { let _x_502 = publicationWireJoin(_x_498, _x_501)?; _x_502 } } } } } } } } },
+        crate::PublicationError::IncompleteReadiness => { let _x_507 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_508 = 1; { let _x_509 = publicationWireLimits(); { let _x_510 = writeCborArrayHead(_x_508, _x_509)?; { let _x_511 = publicationWireJoin(_x_507, _x_510)?; { let _x_512 = 10; { let _x_513 = crate::CborValue::Unsigned { field_0: _x_512 }; { let _x_514 = writeCborPrimitive(&(_x_513), _x_509)?; { let _x_515 = publicationWireJoin(_x_511, _x_514)?; _x_515 } } } } } } } } },
+        crate::PublicationError::BadAuthorization => { let _x_520 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_521 = 1; { let _x_522 = publicationWireLimits(); { let _x_523 = writeCborArrayHead(_x_521, _x_522)?; { let _x_524 = publicationWireJoin(_x_520, _x_523)?; { let _x_525 = 11; { let _x_526 = crate::CborValue::Unsigned { field_0: _x_525 }; { let _x_527 = writeCborPrimitive(&(_x_526), _x_522)?; { let _x_528 = publicationWireJoin(_x_524, _x_527)?; _x_528 } } } } } } } } },
+        crate::PublicationError::BadDeployment => { let _x_533 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_534 = 1; { let _x_535 = publicationWireLimits(); { let _x_536 = writeCborArrayHead(_x_534, _x_535)?; { let _x_537 = publicationWireJoin(_x_533, _x_536)?; { let _x_538 = 12; { let _x_539 = crate::CborValue::Unsigned { field_0: _x_538 }; { let _x_540 = writeCborPrimitive(&(_x_539), _x_535)?; { let _x_541 = publicationWireJoin(_x_537, _x_540)?; _x_541 } } } } } } } } },
+        crate::PublicationError::BadIntegrity => { let _x_546 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_547 = 1; { let _x_548 = publicationWireLimits(); { let _x_549 = writeCborArrayHead(_x_547, _x_548)?; { let _x_550 = publicationWireJoin(_x_546, _x_549)?; { let _x_551 = 13; { let _x_552 = crate::CborValue::Unsigned { field_0: _x_551 }; { let _x_553 = writeCborPrimitive(&(_x_552), _x_548)?; { let _x_554 = publicationWireJoin(_x_550, _x_553)?; _x_554 } } } } } } } } },
+        crate::PublicationError::IncompleteLiveAssessment => { let _x_559 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_560 = 1; { let _x_561 = publicationWireLimits(); { let _x_562 = writeCborArrayHead(_x_560, _x_561)?; { let _x_563 = publicationWireJoin(_x_559, _x_562)?; { let _x_564 = 14; { let _x_565 = crate::CborValue::Unsigned { field_0: _x_564 }; { let _x_566 = writeCborPrimitive(&(_x_565), _x_561)?; { let _x_567 = publicationWireJoin(_x_563, _x_566)?; _x_567 } } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationFact(value: &crate::PublicationFact) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 10; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).context; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = (value).obligation; { let _x_15 = writePublicationWireNat(_x_14)?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = (value).assurance; { let _x_18 = writePublicationWirePublicationAssurance(_x_17)?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).authority; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).scope; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).evidence; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).deployment; { let _x_30 = writePublicationWireOptionBytes(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = (value).from; { let _x_33 = writePublicationWireNat(_x_32)?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = (value).until; { let _x_36 = writePublicationWireNat(_x_35)?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = (value).outcome; { let _x_39 = writePublicationWirePublicationOutcome(_x_38)?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; _x_40 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationFacts(value: &crate::PublicationFacts) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_19 = &(value).chunks; { let _x_20 = 64; { let _x_23 = writePublicationWirePublicationFactsCount(&(_x_19), _x_20)?; match _x_23 {
+        Err(a_24) => { let _x_34 = Err(a_24); _x_34 },
+        Ok(a_26) => { let _x_39 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_40 = publicationWireLimits(); { let _x_41 = writeCborArrayHead(a_26, _x_40)?; { let _x_42 = publicationWireJoin(_x_39, _x_41)?; { let _x_43 = &(value).chunks; { let _x_44 = 64; { let _x_45 = writePublicationWirePublicationFactsGroups(&(_x_43), _x_44)?; { let _x_46 = publicationWireJoin(_x_42, _x_45)?; _x_46 } } } } } } } },
+    } } } })
+}
+
+pub fn writePublicationWirePublicationFactsCount(x_1: &[crate::PublicationFactChunk], x_2: u64) -> Result<Result<u64, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_101 = 0; { let _x_102 = Ok(_x_101); _x_102 } },
+        [head_98, tail_99 @ ..] => { let _x_103 = crate::CborError::ValueLimit; { let _x_104 = Err(_x_103); _x_104 } },
+    },
+        _ => { let n_69 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_128 = 0; { let _x_129 = Ok(_x_128); _x_129 } },
+        [head_125, tail_126 @ ..] => { let _x_138 = &(head_125).items; { let _x_139 = 1; { let _x_140 = writePublicationWireListPublicationFactCount(&(_x_138), _x_139)?; match _x_140 {
+        Err(a_141) => _x_140,
+        Ok(a_142) => { let _x_147 = writePublicationWirePublicationFactsCount(&(tail_126), n_69)?; match _x_147 {
+        Err(a_148) => _x_147,
+        Ok(a_149) => { let _x_151 = core::convert::identity::<u64>(a_142).checked_add(a_149).ok_or(crate::ComputeError::AddOverflow)?; { let _x_152 = Ok(_x_151); _x_152 } },
+    } },
+    } } } },
+    } },
+    })
+}
+
+pub fn writePublicationWirePublicationFactsGroups(x_1: &[crate::PublicationFactChunk], x_2: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_85 = Ok(alloc::vec::Vec::<u8>::new()); _x_85 },
+        [head_78, tail_79 @ ..] => { let _x_86 = crate::CborError::ValueLimit; { let _x_87 = Err(_x_86); _x_87 } },
+    },
+        _ => { let n_52 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_115 = Ok(alloc::vec::Vec::<u8>::new()); _x_115 },
+        [head_108, tail_109 @ ..] => { let _x_120 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_121 = &(head_108).items; { let _x_122 = 1; { let _x_123 = writePublicationWireListPublicationFactItems(&(_x_121), _x_122)?; { let _x_124 = publicationWireJoin(_x_120, _x_123)?; { let _x_125 = writePublicationWirePublicationFactsGroups(&(tail_109), n_52)?; { let _x_126 = publicationWireJoin(_x_124, _x_125)?; _x_126 } } } } } } },
+    } },
+    })
+}
+
+pub fn writePublicationWirePublicationIntegrity(value: &crate::PublicationIntegrity) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 12; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).context; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).authority; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).receipt; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).release; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).model; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).build; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).tree; { let _x_30 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = &(value).url; { let _x_33 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_32))?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = &(value).deployment; { let _x_36 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_35))?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = (value).observed; { let _x_39 = writePublicationWireNat(_x_38)?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; { let _x_41 = (value).from; { let _x_42 = writePublicationWireNat(_x_41)?; { let _x_43 = publicationWireJoin(_x_40, _x_42)?; { let _x_44 = (value).until; { let _x_45 = writePublicationWireNat(_x_44)?; { let _x_46 = publicationWireJoin(_x_43, _x_45)?; _x_46 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationMoment(value: crate::PublicationMoment) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationMoment::PrePublication => { let _x_53 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_54 = 1; { let _x_55 = publicationWireLimits(); { let _x_56 = writeCborArrayHead(_x_54, _x_55)?; { let _x_57 = publicationWireJoin(_x_53, _x_56)?; { let _x_58 = 0; { let _x_59 = crate::CborValue::Unsigned { field_0: _x_58 }; { let _x_60 = writeCborPrimitive(&(_x_59), _x_55)?; { let _x_61 = publicationWireJoin(_x_57, _x_60)?; _x_61 } } } } } } } } },
+        crate::PublicationMoment::DeploymentOnly => { let _x_66 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_67 = 1; { let _x_68 = publicationWireLimits(); { let _x_69 = writeCborArrayHead(_x_67, _x_68)?; { let _x_70 = publicationWireJoin(_x_66, _x_69)?; { let _x_71 = crate::CborValue::Unsigned { field_0: _x_67 }; { let _x_72 = writeCborPrimitive(&(_x_71), _x_68)?; { let _x_73 = publicationWireJoin(_x_70, _x_72)?; _x_73 } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationObligation(value: &crate::PublicationObligation) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 5; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = (value).id; { let _x_12 = writePublicationWireNat(_x_11)?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = (value).moment; { let _x_15 = writePublicationWirePublicationMoment(_x_14)?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = (value).assurance; { let _x_18 = writePublicationWirePublicationAssurance(_x_17)?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).authority; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).scope; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; _x_25 } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationObligations(value: &crate::PublicationObligations) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_19 = &(value).chunks; { let _x_20 = 64; { let _x_23 = writePublicationWirePublicationObligationsCount(&(_x_19), _x_20)?; match _x_23 {
+        Err(a_24) => { let _x_34 = Err(a_24); _x_34 },
+        Ok(a_26) => { let _x_39 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_40 = publicationWireLimits(); { let _x_41 = writeCborArrayHead(a_26, _x_40)?; { let _x_42 = publicationWireJoin(_x_39, _x_41)?; { let _x_43 = &(value).chunks; { let _x_44 = 64; { let _x_45 = writePublicationWirePublicationObligationsGroups(&(_x_43), _x_44)?; { let _x_46 = publicationWireJoin(_x_42, _x_45)?; _x_46 } } } } } } } },
+    } } } })
+}
+
+pub fn writePublicationWirePublicationObligationsCount(x_1: &[crate::PublicationObligationChunk], x_2: u64) -> Result<Result<u64, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_101 = 0; { let _x_102 = Ok(_x_101); _x_102 } },
+        [head_98, tail_99 @ ..] => { let _x_103 = crate::CborError::ValueLimit; { let _x_104 = Err(_x_103); _x_104 } },
+    },
+        _ => { let n_69 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_128 = 0; { let _x_129 = Ok(_x_128); _x_129 } },
+        [head_125, tail_126 @ ..] => { let _x_138 = &(head_125).items; { let _x_139 = 1; { let _x_140 = writePublicationWireListPublicationObligationCount(&(_x_138), _x_139)?; match _x_140 {
+        Err(a_141) => _x_140,
+        Ok(a_142) => { let _x_147 = writePublicationWirePublicationObligationsCount(&(tail_126), n_69)?; match _x_147 {
+        Err(a_148) => _x_147,
+        Ok(a_149) => { let _x_151 = core::convert::identity::<u64>(a_142).checked_add(a_149).ok_or(crate::ComputeError::AddOverflow)?; { let _x_152 = Ok(_x_151); _x_152 } },
+    } },
+    } } } },
+    } },
+    })
+}
+
+pub fn writePublicationWirePublicationObligationsGroups(x_1: &[crate::PublicationObligationChunk], x_2: u64) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match x_2 {
+        0 => match &(x_1)[..] {
+        [] => { let _x_85 = Ok(alloc::vec::Vec::<u8>::new()); _x_85 },
+        [head_78, tail_79 @ ..] => { let _x_86 = crate::CborError::ValueLimit; { let _x_87 = Err(_x_86); _x_87 } },
+    },
+        _ => { let n_52 = (x_2).saturating_sub(1); match &(x_1)[..] {
+        [] => { let _x_115 = Ok(alloc::vec::Vec::<u8>::new()); _x_115 },
+        [head_108, tail_109 @ ..] => { let _x_120 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_121 = &(head_108).items; { let _x_122 = 1; { let _x_123 = writePublicationWireListPublicationObligationItems(&(_x_121), _x_122)?; { let _x_124 = publicationWireJoin(_x_120, _x_123)?; { let _x_125 = writePublicationWirePublicationObligationsGroups(&(tail_109), n_52)?; { let _x_126 = publicationWireJoin(_x_124, _x_125)?; _x_126 } } } } } } },
+    } },
+    })
+}
+
+pub fn writePublicationWirePublicationOutcome(value: crate::PublicationOutcome) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationOutcome::Satisfied => { let _x_78 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_79 = 1; { let _x_80 = publicationWireLimits(); { let _x_81 = writeCborArrayHead(_x_79, _x_80)?; { let _x_82 = publicationWireJoin(_x_78, _x_81)?; { let _x_83 = 0; { let _x_84 = crate::CborValue::Unsigned { field_0: _x_83 }; { let _x_85 = writeCborPrimitive(&(_x_84), _x_80)?; { let _x_86 = publicationWireJoin(_x_82, _x_85)?; _x_86 } } } } } } } } },
+        crate::PublicationOutcome::Rejected => { let _x_91 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_92 = 1; { let _x_93 = publicationWireLimits(); { let _x_94 = writeCborArrayHead(_x_92, _x_93)?; { let _x_95 = publicationWireJoin(_x_91, _x_94)?; { let _x_96 = crate::CborValue::Unsigned { field_0: _x_92 }; { let _x_97 = writeCborPrimitive(&(_x_96), _x_93)?; { let _x_98 = publicationWireJoin(_x_95, _x_97)?; _x_98 } } } } } } } },
+        crate::PublicationOutcome::Unknown => { let _x_103 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_104 = 1; { let _x_105 = publicationWireLimits(); { let _x_106 = writeCborArrayHead(_x_104, _x_105)?; { let _x_107 = publicationWireJoin(_x_103, _x_106)?; { let _x_108 = 2; { let _x_109 = crate::CborValue::Unsigned { field_0: _x_108 }; { let _x_110 = writeCborPrimitive(&(_x_109), _x_105)?; { let _x_111 = publicationWireJoin(_x_107, _x_110)?; _x_111 } } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationPhase(value: crate::PublicationPhase) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationPhase::Unready => { let _x_103 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_104 = 1; { let _x_105 = publicationWireLimits(); { let _x_106 = writeCborArrayHead(_x_104, _x_105)?; { let _x_107 = publicationWireJoin(_x_103, _x_106)?; { let _x_108 = 0; { let _x_109 = crate::CborValue::Unsigned { field_0: _x_108 }; { let _x_110 = writeCborPrimitive(&(_x_109), _x_105)?; { let _x_111 = publicationWireJoin(_x_107, _x_110)?; _x_111 } } } } } } } } },
+        crate::PublicationPhase::ProducerReady => { let _x_116 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_117 = 1; { let _x_118 = publicationWireLimits(); { let _x_119 = writeCborArrayHead(_x_117, _x_118)?; { let _x_120 = publicationWireJoin(_x_116, _x_119)?; { let _x_121 = crate::CborValue::Unsigned { field_0: _x_117 }; { let _x_122 = writeCborPrimitive(&(_x_121), _x_118)?; { let _x_123 = publicationWireJoin(_x_120, _x_122)?; _x_123 } } } } } } } },
+        crate::PublicationPhase::DeploymentAuthorized => { let _x_128 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_129 = 1; { let _x_130 = publicationWireLimits(); { let _x_131 = writeCborArrayHead(_x_129, _x_130)?; { let _x_132 = publicationWireJoin(_x_128, _x_131)?; { let _x_133 = 2; { let _x_134 = crate::CborValue::Unsigned { field_0: _x_133 }; { let _x_135 = writeCborPrimitive(&(_x_134), _x_130)?; { let _x_136 = publicationWireJoin(_x_132, _x_135)?; _x_136 } } } } } } } } },
+        crate::PublicationPhase::Accepted => { let _x_141 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_142 = 1; { let _x_143 = publicationWireLimits(); { let _x_144 = writeCborArrayHead(_x_142, _x_143)?; { let _x_145 = publicationWireJoin(_x_141, _x_144)?; { let _x_146 = 3; { let _x_147 = crate::CborValue::Unsigned { field_0: _x_146 }; { let _x_148 = writeCborPrimitive(&(_x_147), _x_143)?; { let _x_149 = publicationWireJoin(_x_145, _x_148)?; _x_149 } } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationRefKind(value: crate::PublicationRefKind) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationRefKind::ProtectedBranch => { let _x_53 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_54 = 1; { let _x_55 = publicationWireLimits(); { let _x_56 = writeCborArrayHead(_x_54, _x_55)?; { let _x_57 = publicationWireJoin(_x_53, _x_56)?; { let _x_58 = 0; { let _x_59 = crate::CborValue::Unsigned { field_0: _x_58 }; { let _x_60 = writeCborPrimitive(&(_x_59), _x_55)?; { let _x_61 = publicationWireJoin(_x_57, _x_60)?; _x_61 } } } } } } } } },
+        crate::PublicationRefKind::ProtectedTag => { let _x_66 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_67 = 1; { let _x_68 = publicationWireLimits(); { let _x_69 = writeCborArrayHead(_x_67, _x_68)?; { let _x_70 = publicationWireJoin(_x_66, _x_69)?; { let _x_71 = crate::CborValue::Unsigned { field_0: _x_67 }; { let _x_72 = writeCborPrimitive(&(_x_71), _x_68)?; { let _x_73 = publicationWireJoin(_x_70, _x_72)?; _x_73 } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationState(value: &crate::PublicationState) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 14; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).context; { let _x_12 = writePublicationWirePublicationContext(&(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = (value).revision; { let _x_15 = writePublicationWireNat(_x_14)?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = (value).phase; { let _x_18 = writePublicationWirePublicationPhase(_x_17)?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).clock; { let _x_21 = writePublicationWirePublicationClock(&(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = (value).readyAt; { let _x_24 = writePublicationWireNat(_x_23)?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = (value).authorizedAt; { let _x_27 = writePublicationWireNat(_x_26)?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = (value).observedAt; { let _x_30 = writePublicationWireNat(_x_29)?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = &(value).trust; { let _x_33 = writePublicationWireOptionPublicationTrustFact(alloc::borrow::ToOwned::to_owned(_x_32))?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = &(value).readiness; { let _x_36 = writePublicationWirePublicationFacts(&(_x_35))?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = &(value).ready; { let _x_39 = writePublicationWireOptionBytes(alloc::borrow::ToOwned::to_owned(_x_38))?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; { let _x_41 = &(value).decision; { let _x_42 = writePublicationWireOptionPublicationDecision(alloc::borrow::ToOwned::to_owned(_x_41))?; { let _x_43 = publicationWireJoin(_x_40, _x_42)?; { let _x_44 = &(value).deployment; { let _x_45 = writePublicationWireOptionPublicationDeployment(alloc::borrow::ToOwned::to_owned(_x_44))?; { let _x_46 = publicationWireJoin(_x_43, _x_45)?; { let _x_47 = &(value).integrity; { let _x_48 = writePublicationWireOptionPublicationIntegrity(alloc::borrow::ToOwned::to_owned(_x_47))?; { let _x_49 = publicationWireJoin(_x_46, _x_48)?; { let _x_50 = &(value).live; { let _x_51 = writePublicationWirePublicationFacts(&(_x_50))?; { let _x_52 = publicationWireJoin(_x_49, _x_51)?; _x_52 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationSubject(value: &crate::PublicationSubject) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 13; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).producer; { let _x_12 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).source; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).release; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).model; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = &(value).build; { let _x_24 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_23))?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = &(value).services; { let _x_27 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_26))?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; { let _x_29 = &(value).controls; { let _x_30 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_29))?; { let _x_31 = publicationWireJoin(_x_28, _x_30)?; { let _x_32 = &(value).dependencies; { let _x_33 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_32))?; { let _x_34 = publicationWireJoin(_x_31, _x_33)?; { let _x_35 = &(value).sdk; { let _x_36 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_35))?; { let _x_37 = publicationWireJoin(_x_34, _x_36)?; { let _x_38 = &(value).compiler; { let _x_39 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_38))?; { let _x_40 = publicationWireJoin(_x_37, _x_39)?; { let _x_41 = &(value).runtime; { let _x_42 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_41))?; { let _x_43 = publicationWireJoin(_x_40, _x_42)?; { let _x_44 = &(value).oracles; { let _x_45 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_44))?; { let _x_46 = publicationWireJoin(_x_43, _x_45)?; { let _x_47 = &(value).tree; { let _x_48 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_47))?; { let _x_49 = publicationWireJoin(_x_46, _x_48)?; _x_49 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationTarget(value: &crate::PublicationTarget) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 4; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).url; { let _x_12 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).publisher; { let _x_15 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).environment; { let _x_18 = writePublicationWireText(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = &(value).adapter; { let _x_21 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_20))?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; _x_22 } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWirePublicationTrust(value: crate::PublicationTrust) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok(match value {
+        crate::PublicationTrust::Candidate => { let _x_103 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_104 = 1; { let _x_105 = publicationWireLimits(); { let _x_106 = writeCborArrayHead(_x_104, _x_105)?; { let _x_107 = publicationWireJoin(_x_103, _x_106)?; { let _x_108 = 0; { let _x_109 = crate::CborValue::Unsigned { field_0: _x_108 }; { let _x_110 = writeCborPrimitive(&(_x_109), _x_105)?; { let _x_111 = publicationWireJoin(_x_107, _x_110)?; _x_111 } } } } } } } } },
+        crate::PublicationTrust::Accepted => { let _x_116 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_117 = 1; { let _x_118 = publicationWireLimits(); { let _x_119 = writeCborArrayHead(_x_117, _x_118)?; { let _x_120 = publicationWireJoin(_x_116, _x_119)?; { let _x_121 = crate::CborValue::Unsigned { field_0: _x_117 }; { let _x_122 = writeCborPrimitive(&(_x_121), _x_118)?; { let _x_123 = publicationWireJoin(_x_120, _x_122)?; _x_123 } } } } } } } },
+        crate::PublicationTrust::Rejected => { let _x_128 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_129 = 1; { let _x_130 = publicationWireLimits(); { let _x_131 = writeCborArrayHead(_x_129, _x_130)?; { let _x_132 = publicationWireJoin(_x_128, _x_131)?; { let _x_133 = 2; { let _x_134 = crate::CborValue::Unsigned { field_0: _x_133 }; { let _x_135 = writeCborPrimitive(&(_x_134), _x_130)?; { let _x_136 = publicationWireJoin(_x_132, _x_135)?; _x_136 } } } } } } } } },
+        crate::PublicationTrust::Unknown => { let _x_141 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_142 = 1; { let _x_143 = publicationWireLimits(); { let _x_144 = writeCborArrayHead(_x_142, _x_143)?; { let _x_145 = publicationWireJoin(_x_141, _x_144)?; { let _x_146 = 3; { let _x_147 = crate::CborValue::Unsigned { field_0: _x_146 }; { let _x_148 = writeCborPrimitive(&(_x_147), _x_143)?; { let _x_149 = publicationWireJoin(_x_145, _x_148)?; _x_149 } } } } } } } } },
+    })
+}
+
+pub fn writePublicationWirePublicationTrustFact(value: &crate::PublicationTrustFact) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_4 = Ok(alloc::vec::Vec::<u8>::new()); { let _x_5 = 6; { let _x_8 = publicationWireLimits(); { let _x_9 = writeCborArrayHead(_x_5, _x_8)?; { let _x_10 = publicationWireJoin(_x_4, _x_9)?; { let _x_11 = &(value).context; { let _x_12 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_11))?; { let _x_13 = publicationWireJoin(_x_10, _x_12)?; { let _x_14 = &(value).authority; { let _x_15 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_14))?; { let _x_16 = publicationWireJoin(_x_13, _x_15)?; { let _x_17 = &(value).receipt; { let _x_18 = writePublicationWireBytes(alloc::borrow::ToOwned::to_owned(_x_17))?; { let _x_19 = publicationWireJoin(_x_16, _x_18)?; { let _x_20 = (value).status; { let _x_21 = writePublicationWirePublicationTrust(_x_20)?; { let _x_22 = publicationWireJoin(_x_19, _x_21)?; { let _x_23 = (value).from; { let _x_24 = writePublicationWireNat(_x_23)?; { let _x_25 = publicationWireJoin(_x_22, _x_24)?; { let _x_26 = (value).until; { let _x_27 = writePublicationWireNat(_x_26)?; { let _x_28 = publicationWireJoin(_x_25, _x_27)?; _x_28 } } } } } } } } } } } } } } } } } } } } } } })
+}
+
+pub fn writePublicationWireText(value: alloc::string::String) -> Result<Result<alloc::vec::Vec<u8>, crate::CborError>, crate::ComputeError> {
+    Ok({ let _x_1 = crate::CborValue::TextString { field_0: value }; { let _x_2 = publicationWireLimits(); { let _x_3 = writeCborPrimitive(&(_x_1), _x_2)?; _x_3 } } })
 }
 
 pub fn acceptanceEvidenceClosed(x_1: &[crate::Acceptance], x_2: &[crate::TargetBinding], x_3: &[crate::Component]) -> bool {

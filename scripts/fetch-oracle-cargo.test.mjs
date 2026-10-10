@@ -43,6 +43,24 @@ const pinned = [
   'tests/publication-admission/driver/Cargo.lock',
   'tests/browser-budget/driver/Cargo.toml',
   'tests/browser-budget/driver/Cargo.lock',
+  'tests/browser-dynamic-choice/driver/Cargo.toml',
+  'tests/browser-dynamic-choice/driver/Cargo.lock',
+  'tests/browser-semantic-presentation/driver/Cargo.toml',
+  'tests/browser-semantic-presentation/driver/Cargo.lock',
+  'tests/browser-session-journal/driver/Cargo.toml',
+  'tests/browser-session-journal/driver/Cargo.lock',
+  'tests/browser-session-journal/reservation-driver/Cargo.toml',
+  'tests/browser-session-journal/reservation-driver/Cargo.lock',
+  'tests/browser-session-journal-retention/driver/Cargo.toml',
+  'tests/browser-session-journal-retention/driver/Cargo.lock',
+  'tests/browser-session-journal-recovery/driver/Cargo.toml',
+  'tests/browser-session-journal-recovery/driver/Cargo.lock',
+  'tests/browser-session-payloads/driver/Cargo.toml',
+  'tests/browser-session-payloads/driver/Cargo.lock',
+  'tests/browser-session-recovery-frames/driver/Cargo.toml',
+  'tests/browser-session-recovery-frames/driver/Cargo.lock',
+  'tests/publication-context-linkage/driver/Cargo.toml',
+  'tests/publication-context-linkage/driver/Cargo.lock',
   'vendor/lean4-prod/rust/Cargo.toml',
   'vendor/lean4-prod/rust/Cargo.lock',
   'crates/prismpm/vendor/hologram-live.tar',
@@ -70,12 +88,14 @@ test('oracle acquisition inputs match reviewed pins and embedded verifier inputs
   const revision = /^revision = "([a-f0-9]{40})"$/m.exec(upstream)?.[1];
   assert.ok(digest && revision);
   assert.ok(script.includes(`${digest}  crates/prismpm/vendor/hologram-live.tar`));
-  for (const family of ['browser-p256', 'browser-account-genesis', 'browser-session', 'browser-operation-journal', 'publication-admission', 'browser-budget']) for (const file of ['Cargo.toml', 'Cargo.lock']) {
+  for (const family of ['browser-p256', 'browser-account-genesis', 'browser-session', 'browser-operation-journal', 'publication-admission', 'browser-budget', 'browser-dynamic-choice', 'browser-semantic-presentation', 'browser-session-journal', 'browser-session-journal-retention', 'browser-session-journal-recovery', 'browser-session-payloads', 'browser-session-recovery-frames', 'publication-context-linkage']) for (const file of ['Cargo.toml', 'Cargo.lock']) {
     const path = `tests/${family}/driver/${file}`;
     assert.ok(script.includes('  ' + path + '\n'), 'closed owning acquisition pin: ' + path);
   }
   for (const file of ['Cargo.toml', 'Cargo.lock'])
     assert.ok(script.includes('  vendor/lean4-prod/rust/' + file + '\n'), 'independent packaged compiler graph is pinned');
+  for (const file of ['Cargo.toml', 'Cargo.lock'])
+    assert.ok(script.includes('  tests/browser-session-journal/reservation-driver/' + file + '\n'), 'independent journal reservation graph is pinned');
   for (const oracle of ['hologram-oracle', 'holo-codec-oracle']) {
     assert.ok(readFileSync(join(root, `tests/${oracle}/Cargo.toml`), 'utf8').includes(`rev = "${revision}"`));
     assert.ok(readFileSync(join(root, `tests/${oracle}/Cargo.lock`), 'utf8').includes(`?rev=${revision}#${revision}`));

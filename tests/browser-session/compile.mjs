@@ -10,6 +10,7 @@ import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
 import {captureGeneratedWasm,requireGeneratedWasm} from '../browser-view/generated-wasm.mjs';
 import {captureCompilerArtifact,requireCompilerArtifact} from '../browser-view/compiler-artifact.mjs';
 import {provenanceProfile} from '../browser-presentation/provenance.mjs';
+import {createSessionProductRetention} from '../browser-view/workspace-products.mjs';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
 import {run, sha} from '../browser-view/compile.mjs';
 export {run, sha};
@@ -21,6 +22,7 @@ export const modules = Object.freeze(['Fixture', 'Foundation.Browser.Application
   'Foundation.Codec', 'Foundation.Codec.Cbor.V1.Primitive'].sort());
 const modulePath = name => (name === 'Fixture' ? 'tests/browser-session' : 'stdlib') + '/src/' + name.replaceAll('.', '/') + '.lex.tex';
 const inputCustody = new WeakMap();
+const retainedSessionProducts = new WeakMap();
 const provenanceContract = provenanceProfile('session');
 function freezeRecord(value) {
   if(value && typeof value === 'object') {
@@ -50,12 +52,14 @@ export function frozenInputs() {
     'tests/browser-view/compiler-owner.mjs','tests/browser-view/compiler-artifact.mjs','tests/browser-view/compiler-owner-checks.mjs',
     'tests/browser-view/file-custody.mjs','tests/browser-view/generated-package.mjs','tests/browser-view/generated-wasm.mjs',
     'tests/browser-presentation/provenance.mjs',
-    'model/ids.toml','SPEC.md','features/suites/sdk.feature','scripts/browser-api-sdk-check.mjs','scripts/owning-node-reporter.mjs','sdk/stdlib-sources.tar',
+    'model/ids.toml','SPEC.md','features/suites/sdk.feature','scripts/browser-api-sdk-check.mjs',
+    'sdk/account-genesis-artifact.mjs','scripts/owning-node-reporter.mjs','sdk/stdlib-sources.tar',
     'crates/conformance/src/cases/mod.rs','crates/conformance/tests/conformance.rs',
     'tests/browser-presentation/corpus.mjs','tests/browser-presentation/maximum-fixtures.mjs',
     'tests/browser-workspace/src/main.rs','tests/browser-journal/driver/src/main.rs',
     'tests/fixtures/library/native-library/project/lexlean.toml','rust-toolchain.toml','lean-toolchain',
     'LICENSE-MIT','LICENSE-APACHE','model/authorities.toml','model/dependencies.toml',
+    'tests/browser-view/workspace-products.mjs',
     'vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust/MANIFEST.sha256','vendor/lexlean/MANIFEST.sha256',
   ]);
   const captured = new Map();
@@ -318,8 +322,16 @@ export function prepare(mutation = null, baseline = null, inputs = frozenInputs(
         unchanged();
         assert.equal(dirname(work),tmpdir(),'owned session workspace parent');
         assert.match(work.slice(tmpdir().length+1),/^prismpm-session-[A-Za-z0-9]+$/,'exact owned session workspace');
+        if (!retainedSessionProducts.has(compiler))
+          retainedSessionProducts.set(compiler,createSessionProductRetention(compiler.evidence.work));
+        const retained = retainedSessionProducts.get(compiler);
+        const productCapture = retained.capture(work);
+        // Capture never substitutes for fresh live compiler/package/proof and
+        // observer checks, or for actual completed-workspace deletion below.
+        unchanged();
         // Compiler retirement must succeed before primary diagnostics disappear.
         const compilerRetirement=ownsCompiler||retireCompiler?compiler.close():undefined;
+        if(ownsCompiler||retireCompiler) retained.verify(); else retained.verifyCapture(productCapture);
         checkedWorkspace();
         const retirement=mkdtempSync(join(tmpdir(),'prismpm-session-retirement-'));
         const removed=join(retirement,'completed');
@@ -328,8 +340,11 @@ export function prepare(mutation = null, baseline = null, inputs = frozenInputs(
           rmSync(removed,{recursive:true});rmdirSync(retirement);
         }catch(error){process.stderr.write('Retained session retirement diagnostic '+retirement+'\n');throw error;}
         assert.equal(lstatSync(removed,{throwIfNoEntry:false}),undefined,'completed session workspace removed');
+        const productInventory=ownsCompiler||retireCompiler?retained.verify():undefined;
+        if(productInventory===undefined) retained.verifyCapture(productCapture);
         active=false;
-        return freezeRecord({status:'removed',scope:'completed-private-session-build',identity,
+        return freezeRecord({status:'removed',scope:'completed-private-session-build',identity,productCapture,
+          ...(productInventory===undefined?{}:{productInventory}),
           ...(compilerRetirement===undefined?{}:{compilerRetirement})});
       }};
     return Object.defineProperties({},Object.fromEntries(Object.entries(fixed).map(([name,value])=>

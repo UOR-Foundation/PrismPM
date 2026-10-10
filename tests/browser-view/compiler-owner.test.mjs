@@ -9,7 +9,7 @@ import {captureCompilerInputs, createCompilerOwner, requireCompilerOwner} from '
 import {compilerDriverDirectory} from './compiler-owner-checks.mjs';
 
 test('driver substitution lookup includes P256 and rejects missing or ambiguous source inventory', () => {
-  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'publication-admission']) {
+  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'browser-signed-context', 'browser-session-operation', 'browser-pkce', 'holo-primary-component', 'publication-admission', 'publication-context-linkage', 'browser-session-journal-retention']) {
     const path = 'tests/' + directory + '/driver/src/main.rs';
     assert.equal(compilerDriverDirectory({[path]: 'not-authority'}), 'tests/' + directory + '/driver');
   }
@@ -55,6 +55,36 @@ test('compiler owner refuses forged handles and unregistered tool families', () 
     assert.throws(() => createCompilerOwner(name, {}), /registered compiler family/);
 });
 
+test('fresh independent drivers pin hash optimization without changing construction or acceptance',()=>{
+  // Construction-argument unit only. Full owning executions remain required.
+  const source=fs.readFileSync(new URL('./compiler-owner.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf("    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',");
+  const end=source.indexOf('\n    const driverBuildMs',begin);
+  assert(begin>=0&&end>begin);const calls=[];
+  runInNewContext(source.slice(begin,end),{run(...args){calls.push(args);},join,
+    work:'/actual-private-owner',manifest:'driver/Cargo.toml',target:'/actual-fresh-target'});
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['cargo',[
+    'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+    '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+    '--manifest-path','/actual-private-owner/driver/Cargo.toml'],
+    '/actual-private-owner',{CARGO_TARGET_DIR:'/actual-fresh-target'}]]);
+  for(const family of ['view','command','query']){
+    const source=fs.readFileSync(new URL('../browser-'+family+'/compile.mjs',import.meta.url),'utf8');
+    const begin=source.indexOf("run('cargo',['build','--locked','--offline','--jobs','1',");
+    const suffix="],repository,{CARGO_TARGET_DIR:driverTarget});";
+    const end=source.indexOf(suffix,begin);
+    assert(begin>=0&&end>begin,'actual fallback construction '+family);
+    const calls=[];
+    runInNewContext(source.slice(begin,end+suffix.length),{run(...args){calls.push(args);},join,
+      draft:'/actual-source/tests/browser-'+family,repository:'/actual-source',driverTarget:'/actual-fresh-'+family});
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['cargo',[
+      'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+      '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+      '--manifest-path','/actual-source/tests/browser-'+family+'/driver/Cargo.toml'],
+      '/actual-source',{CARGO_TARGET_DIR:'/actual-fresh-'+family}]]);
+  }
+});
+
 test('compiler owner refuses malformed or incomplete input closures before building', () => {
   let called = false;
   const accessor = {get malicious() {called = true; return '0'.repeat(64);}};
@@ -63,7 +93,7 @@ test('compiler owner refuses malformed or incomplete input closures before build
     assert.throws(() => createCompilerOwner('view', inputs),
       /compiler input (map|path|digest|closure)/);
   assert.equal(called, false, 'input accessors cannot run before immutable capture');
-  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256']) {
+  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256', 'signed-context', 'session-operation', 'pkce', 'holo-primary-component', 'session-retention', 'publication-linkage']) {
     const inputs = captureCompilerInputs(name);
     for (const missing of ['tests/browser-view/compile.mjs', 'tests/browser-view/compiler-artifact.mjs', 'vendor/lean4-prod/lean.tar']) {
       const changed = {...inputs}; delete changed[missing];

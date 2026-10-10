@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {encodeEffectWire as encode, decodeEffectWire as decode} from '../../sdk/browser/effects-wire.mjs';
 import {corpus, initial, command, plan, begin, completion, continued, effect, bytes, MAXIMUM} from './corpus.mjs';
 import {compactOperation, decodeRequest, encodeRequest} from './wire.mjs';
@@ -11,6 +13,54 @@ import {frozenInputs} from './checks.mjs';
 
 test('whole-owner closure captures every imported model and rejects drift before source mutation', () => {
   const inputs = frozenInputs(), sources = new Map();
+  // Parse all actual group entries without linking or evaluating modules.
+  // Runtime imports remain separately bound by the owner's fixed input list.
+  const parser = String.raw`
+    import assert from 'node:assert/strict';
+    import {readFileSync} from 'node:fs';
+    import {createHash} from 'node:crypto';
+    import {dirname, relative, resolve} from 'node:path';
+    import {SourceTextModule} from 'node:vm';
+    const {root, inputs} = JSON.parse(readFileSync(0, 'utf8'));
+    const pending = ['sdk/browser/session-model-test.mjs',
+      'tests/browser-session/wire.test.mjs', 'tests/browser-session/provenance.test.mjs'];
+    const visited = new Set();
+    while (pending.length) {
+      const path = pending.pop(); if (visited.has(path)) continue;
+      assert(visited.size < 256, 'bounded owning static module graph');
+      assert(Object.hasOwn(inputs, path), 'captured local module input: ' + path);
+      const bytes = readFileSync(resolve(root, path));
+      assert(bytes.length <= 4194304, 'bounded owning static module');
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), inputs[path], 'captured module hash: ' + path);
+      const source = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
+      const declarations = new SourceTextModule(source).dependencySpecifiers;
+      visited.add(path);
+      for (const specifier of declarations) {
+        if (specifier.startsWith('node:')) continue;
+        assert(specifier.startsWith('./') || specifier.startsWith('../'), 'closed local import');
+        const dependency = relative(root, resolve(root, dirname(path), specifier));
+        assert(dependency.endsWith('.mjs') && dependency.split('/').every(part =>
+          /^[A-Za-z0-9_.-]+$/.test(part) && part !== '.' && part !== '..'), 'confined local import');
+        pending.push(dependency);
+      }
+    }
+    process.stdout.write(JSON.stringify([...visited].sort()));
+  `;
+  const inspect = captured => spawnSync(process.execPath,
+    ['--experimental-vm-modules', '--input-type=module', '-e', parser], {
+      input: JSON.stringify({root: fileURLToPath(new URL('../../', import.meta.url)), inputs: captured}),
+      encoding: 'utf8', env: {NODE_NO_WARNINGS: '1', TZ: 'UTC'}, timeout: 10000, maxBuffer: 1048576,
+    });
+  const complete = inspect(inputs);
+  assert.ifError(complete.error); assert.equal(complete.signal, null); assert.equal(complete.status, 0, complete.stderr);
+  const path = 'sdk/account-genesis-artifact.mjs';
+  assert(JSON.parse(complete.stdout).includes(path), 'actual imported helper: ' + path);
+  const omitted = {...inputs}; delete omitted[path];
+  const refused = inspect(omitted);
+  assert.ifError(refused.error); assert.equal(refused.signal, null); assert.equal(refused.status, 1);
+  assert(refused.stderr.includes('captured local module input: ' + path), refused.stderr);
+  assert.throws(() => assertFrozenInputs(omitted), /actual frozen session input closure/);
+  assert.throws(() => assertFrozenInputs({...inputs, [path]: '0'.repeat(64)}), /actual frozen session input closure/);
   for (const module of modules) {
     const path = module === 'Fixture' ? 'tests/browser-session/src/Fixture.lex.tex'
       : 'stdlib/src/' + module.replaceAll('.', '/') + '.lex.tex';

@@ -38,7 +38,7 @@ impl StdlibExports {
         if self.spec != "prismpm/stdlib-exports/1"
             || self.lean_module != "PrismPM.Runtime"
             || self.ir_module != "PrismPM"
-            || self.export.len() != 63
+            || self.export.len() != 66
             || self
                 .export
                 .windows(2)
@@ -99,6 +99,18 @@ impl StdlibExports {
                     "View.Workspace.V1.Interaction",
                     "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
                 ),
+                "publicationLinkageWireBytes" => (
+                    "PublicationAdmission.LinkageV1Wire",
+                    "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
+                ),
+                "publicationWireBytes" => (
+                    "PublicationAdmission.V1Wire",
+                    "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
+                ),
+                "publicationContextFieldsPreimage" => (
+                    "PublicationAdmission.V1Wire",
+                    "fn(&PublicationDeclaration, Vec<u8>, &PublicationSubject, Vec<u8>, Vec<u8>, String) -> Result<Result<Vec<u8>, CborError>, ComputeError>",
+                ),
                 "appendBytes" => ("Bytes", "fn(Vec<u8>, Vec<u8>) -> Vec<u8>"),
                 "byteAt" => ("Bytes", "fn(Vec<u8>, u64) -> Option<u8>"),
                 "byteLength" => ("Bytes", "fn(Vec<u8>) -> u64"),
@@ -144,7 +156,13 @@ impl StdlibExports {
                 "encode" => ("Utf8", "fn(String) -> Vec<u8>"),
                 _ => return Err(invalid()),
             };
-            if row.lean_name != format!("PrismPM.Foundation.{module}.{}", row.rust_name)
+            let namespace = match row.rust_name.as_str() {
+                "publicationLinkageWireBytes"
+                | "publicationWireBytes"
+                | "publicationContextFieldsPreimage" => "Production",
+                _ => "Foundation",
+            };
+            if row.lean_name != format!("PrismPM.{namespace}.{module}.{}", row.rust_name)
                 || row.rust_signature != signature
                 || !names.insert(&row.rust_name)
             {
@@ -209,7 +227,7 @@ mod tests {
         let exports: StdlibExports = toml::from_str(SOURCE).unwrap();
         let runtime = vec!["PrismPM.Foundation.Holo.validateComponentIndexes".to_owned()];
         let union = exports.union_with_runtime(&runtime).unwrap();
-        assert_eq!(union.len(), 64);
+        assert_eq!(union.len(), 67);
         assert_eq!(runtime.len(), 1);
         assert!(union.contains(&runtime[0]));
         let mut document: toml::Value = toml::from_str(SOURCE).unwrap();

@@ -39,11 +39,19 @@ test('fresh native and Wasm output have exact declared files and directories', t
   }
 });
 test('changed source bytes and a rewritten matching manifest cannot replace captured output', t => {
-  const value = fixture(t), captured = value.capture(), path = join(value.directory, 'src/lib.rs');
-  writeFileSync(path, 'substituted generated source');
-  assert.throws(() => captured.verify(), /manifest digest/);
-  value.manifest.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(path)); value.writeManifest();
-  assert.throws(() => captured.verify(), /immutable generated package|closed generated manifest/);
+  for (const kind of ['native', 'wasm']) {
+    const value = fixture(t, kind), captured = value.capture(), path = join(value.directory, 'src/lib.rs');
+    writeFileSync(path, 'substituted generated source');
+    assert.throws(() => captured.verify(), /manifest digest/);
+    value.manifest.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(path)); value.writeManifest();
+    // A fresh capture must accept the coherently forged package. Only the
+    // immediately captured original identity is allowed to reject it here.
+    value.capture().verify();
+    assert.throws(() => captured.verify(), /immutable generated package captured immediately after code generation/);
+    const manifest = join(value.directory, 'generation-manifest.json'), bytes = readFileSync(manifest);
+    writeFileSync(manifest, bytes.subarray(0, bytes.length - 1));
+    assert.throws(() => captured.verify(), /canonical generated manifest bytes/);
+  }
 });
 test('initial manifests reject extra fields, duplicate JSON keys and noncanonical bytes', t => {
   for (const kind of ['native', 'wasm']) for (const mutation of ['extra', 'duplicate', 'space', 'invalid-utf8']) {

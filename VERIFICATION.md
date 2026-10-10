@@ -1,5 +1,55 @@
 # PrismPM falsifiability and verification record
 
+## Integrated source release binding (2026-10-08)
+
+The current 117-root generated package binds IR
+`66b27a91e72cf6d82a5991149c85f5038773e79ef0203e7b086fb988857b5163`.
+Normal offline Cargo packaging and verification produce archive
+`31795eac06fbf1d64c77ffe66b5492964c069e1f2fea41efbf6a17054cf369d7`,
+sealed to semantic identity
+`fcc30c57c1c30e8024afb6d73a6d72caa7de7f4b909670c6a484304560a962b1`.
+Native run `37716977593` at `ee207ff1` passes both architectures, including
+38 exporter-seed controls and separate 411-file golden comparisons. Six
+original native records and the Cargo archive/seal were independently reviewed
+before import. These are source-generation and packaging results, not installed
+SDK, full V&V or release acceptance. Earlier sections retain historical runs;
+their identities do not describe this integration.
+
+Control integration mapping: incoming contextual-effects DK-28 is DK-37;
+incoming semantic-presentation DK-29 is DK-38. Existing SDK acquisition DK-28
+and exporter-seed DK-29 are unchanged. Historical receipts retain their original
+IDs and revisions; they are not qualification of the combined implementation.
+
+## Semantic-presentation artifact custody correction
+
+The DK-38 input map includes eight previously omitted static dependencies.
+Its existing closure test parses all three original group entry graphs and rejects each
+omitted helper and substituted helper hash. It does not execute imported code
+or treat browser-context dynamic imports as static imports.
+
+Actual generated Wasm owners bind each original Cargo artifact, its private
+copy and execution bytes. Compiled selections and guard methods are immutable;
+only the existing evidence/progress fields remain mutable. The original owner
+adds 28 real selection, artifact and byte substitution controls before its
+unchanged corpus, maximum, three-engine journey and mutation checks. Retained
+archives include the original artifacts and their custody evidence.
+
+Fresh complete DK-38 execution, current source checks, both native CI lanes and
+independent review are required; this source correction is not acceptance of
+DK-38, an installed SDK, full V&V or any public application.
+
+## Session and installed source closure correction
+
+Session group custody includes the helper imported by its provenance test via
+the SDK checker. Its existing wire test parses all three registered entry
+graphs and rejects a missing helper or substituted expected hash. Installed SDK
+source roots retain the presentation owner's mandatory SDK-checker test input.
+The existing installed-input regression now covers presentation, session and
+semantic-presentation maps as well as its original seven maps. No original
+owner, input, test count, deadline or installed-SDK qualification is removed.
+Fresh complete affected owners, source/native checks and independent review
+remain required; these source corrections do not qualify an installed SDK.
+
 ## Native golden source preflight
 
 Native SDK platforms now reject stale shared source paths, bytes or descriptors
@@ -478,6 +528,38 @@ This import is not accepted compiler, SDK or product qualification. Fresh
 upstream regressions, stdlib generation/readback, owning consumer gates,
 native architecture review and both complete V&V passes remain required.
 Earlier records below retain their original compiler identities.
+## Recovered private session kernel (DK-26)
+
+The complete registered owner passed in the pinned development container:
+34 underlying tests, 895 protocol cases, seven source-wrapper cases, 686 writer
+parity cases, 18 session/9 effect-domain/18 writer maxima, and 21 genuine source
+mutants in generated native std/no_std and Wasm execution. The 2,543.38-second
+run retained every maximum and mutation; all 825 source/tool input hashes still
+match after the non-kernel CI/golden-base fast-forward to `c6faf97`.
+
+`target/dk26-integration/registered-owner.log` SHA-256:
+`d012e3490167ac419f0dcadbbe9ff73b6ff7a9f3b8fc171413fe432f48419621`.
+The actual `session-acceptance.json` receipt SHA-256 is
+`b3cbaca6933aadef39d82770b6c43e7940d46e2a23865888db6de7c190055dea`.
+Complete supporting runs passed: 24 SDK/acquisition boundary tests, 57
+conformance/model library tests, 30 xtask tests, 191 source-audit checks and
+scoped all-target/all-feature Clippy. An earlier isolated-container audit failed
+for lack of its Docker socket; the complete Docker-enabled rerun passed.
+After the base fast-forward, the complete source audit passed all 192 checks
+in 86.46 seconds, including the full CI-policy regression.
+
+The normal golden writer and non-writing readback passed all 359 files for
+build `c61f76a5280d23d717d738d10ae2e7965f4dc938caf8674ed16b84b12628e81c`
+(`DevelopmentAmd64`). Only two exact authored-source copies and three linked
+metadata/manifests changed; generated Lean/native behavior bytes are unchanged.
+Writer/readback log SHA-256:
+`e9b87737a4777e313659c17265fe868e740c23b8dd11fdc6ab087c137b36c09e` /
+`2c4d895c93c1e8bdffc87f82add7d97800e44bca6d01238b526cceadce25b761`.
+
+This establishes the private pure kernel only, not durability, authenticated
+authority, a SessionJournal, public Browser admission, an installed SDK or
+Foundry acceptance. Integrating changed compiler helpers requires fresh
+combined owner/SDK evidence; this receipt cannot cover new inputs.
 
 ## Integrated emitter source binding
 

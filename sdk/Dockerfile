@@ -34,6 +34,26 @@ RUN node /opt/input-policy/scripts/sdk-image-inputs.mjs stage \
     && chmod 0444 /opt/prismpm/share/vv-input-policy.json
 
 FROM docker.io/library/docker:28.4.0-cli@sha256:6a73c9433f2ba4279815be1e60f5739288b939dda1e48151d8c393537802de37 AS docker_cli
+FROM input_tools AS registry_qualification_tools
+ARG TARGETARCH
+# The digest-pinned Bookworm base supplies this interpreter. Refuse missing or
+# different runtimes rather than falling back to Python installed on the host.
+RUN /usr/bin/python3 -I -B -c 'import sys; assert sys.version_info[:3] == (3, 11, 2)'
+COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+RUN case "$TARGETARCH" in \
+      amd64) oras_arch=amd64; oras_sha=6cdc692f929100feb08aa8de584d02f7bcc30ec7d88bc2adc2054d782db57c64 ;; \
+      arm64) oras_arch=arm64; oras_sha=7649738b48fde10542bcc8b0e9b460ba83936c75fb5be01ee6d4443764a14352 ;; \
+      *) exit 64 ;; \
+    esac \
+    && curl --fail --location --silent --show-error "https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_${oras_arch}.tar.gz" --output /tmp/oras.tar.gz \
+    && echo "${oras_sha}  /tmp/oras.tar.gz" | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/oras.tar.gz --directory /usr/local/bin oras \
+    && rm /tmp/oras.tar.gz \
+    && openssl version \
+    && docker buildx version \
+    && test "$(node --version)" = v22.23.2
+
 FROM docker.io/library/golang:1.19.7-alpine3.17@sha256:04065e607052705ede1ac6308ce56aec4715b0fafb1f0c2f4c2333aab9d84442 AS upstream_oracles
 COPY --from=source_inputs /prepared/source/standards/oracles/oci-distribution-1.1.1 /src/distribution
 COPY --from=source_inputs /prepared/source/standards/oracles/oci-runtime-1.3.0 /src/runtime
@@ -182,7 +202,7 @@ RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/devcontainer-cli \
     && chmod 0755 /opt/prismpm/devcontainer-cli/node_modules/@devcontainers/cli/devcontainer.js
 
 COPY --from=source_inputs /prepared/source/sdk/runtime/package.json /prepared/source/sdk/runtime/package-lock.json /prepared/source/sdk/runtime/profile.mjs /prepared/source/sdk/runtime/runtime.mjs /opt/prismpm/runtime/
-COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/browser/identity.mjs /prepared/source/sdk/browser/store.mjs /prepared/source/sdk/browser/peer.mjs /prepared/source/sdk/browser/journal.mjs /prepared/source/sdk/browser/commands.mjs /prepared/source/sdk/browser/queries.mjs /prepared/source/sdk/browser/view-host.mjs /prepared/source/sdk/browser/view-dom.mjs /prepared/source/sdk/browser/view-error.mjs /prepared/source/sdk/browser/rs256.mjs /prepared/source/sdk/browser/effects.mjs /prepared/source/sdk/browser/effects-wire.mjs /prepared/source/sdk/browser/effects-module.mjs /prepared/source/sdk/browser/presentation-wire.mjs /prepared/source/sdk/browser/presentation-dom.mjs /prepared/source/sdk/browser/credential-custody.mjs /prepared/source/sdk/browser/operation-journal.mjs /prepared/source/sdk/browser/account-genesis.mjs /prepared/source/sdk/browser/account-genesis-binding.mjs /opt/prismpm/browser/
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/browser/identity.mjs /prepared/source/sdk/browser/store.mjs /prepared/source/sdk/browser/peer.mjs /prepared/source/sdk/browser/journal.mjs /prepared/source/sdk/browser/commands.mjs /prepared/source/sdk/browser/queries.mjs /prepared/source/sdk/browser/view-host.mjs /prepared/source/sdk/browser/view-dom.mjs /prepared/source/sdk/browser/view-error.mjs /prepared/source/sdk/browser/rs256.mjs /prepared/source/sdk/browser/effects.mjs /prepared/source/sdk/browser/effects-wire.mjs /prepared/source/sdk/browser/effects-module.mjs /prepared/source/sdk/browser/presentation-wire.mjs /prepared/source/sdk/browser/presentation-dom.mjs /prepared/source/sdk/browser/semantic-presentation-wire.mjs /prepared/source/sdk/browser/semantic-presentation-style.mjs /prepared/source/sdk/browser/credential-custody.mjs /prepared/source/sdk/browser/operation-journal.mjs /prepared/source/sdk/browser/account-genesis.mjs /prepared/source/sdk/browser/account-genesis-binding.mjs /prepared/source/sdk/browser/signed-context.mjs /prepared/source/sdk/browser/session-retention-wire.mjs /prepared/source/sdk/browser/session-storage.mjs /prepared/source/sdk/browser/session-payloads.mjs /prepared/source/sdk/browser/session-operation-capture.mjs /prepared/source/sdk/browser/pkce.mjs /opt/prismpm/browser/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/runtime \
     && chmod 0444 /opt/prismpm/runtime/profile.mjs \
     && chmod 0555 /opt/prismpm/runtime/runtime.mjs
@@ -305,6 +325,7 @@ FROM scratch AS cli-archive
 COPY --from=cli-archive-package /out/ /
 
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS runtime_base
+RUN /usr/bin/python3 -I -B -c 'import sys; assert sys.version_info[:3] == (3, 12, 3)'
 RUN chmod -R a-w /ms-playwright
 
 ARG SOURCE_DATE_EPOCH=0

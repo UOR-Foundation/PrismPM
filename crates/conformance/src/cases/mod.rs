@@ -396,6 +396,16 @@ pub fn run_at(root: &Path, id: &str) {
             assert_eq!(evidence.negative, 0);
             assert_eq!(evidence.planted_rejections, 5);
         }
+        "HO-15" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/holo-primary-component/component.test.mjs",
+                "tests/holo-primary-component/owner.test.mjs",
+            ],
+            11,
+            "3600000",
+        ),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
@@ -412,6 +422,16 @@ pub fn run_at(root: &Path, id: &str) {
         "ST-14" => browser_bootstrap::verify(root),
         "ST-15" => organization_lifecycle::verify(root),
         "ST-16" => cbor_primitive::verify(root),
+        "ST-17" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-pkce/guards.test.mjs",
+                "tests/browser-pkce/owner.test.mjs",
+            ],
+            21,
+            "3600000",
+        ),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {
@@ -439,7 +459,7 @@ pub fn run_at(root: &Path, id: &str) {
         }
         "DK-01" | "DK-02" | "DK-03" | "DK-04" | "DK-05" | "DK-06" => verify_sdk(id),
         "DK-07" | "DK-08" | "DK-09" | "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15"
-        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" => {
+        | "DK-16" | "DK-19" | "DK-20" | "DK-23" | "DK-24" | "DK-25" | "DK-38" => {
             verify_browser_host(root, id)
         }
         "DK-17" => native_library::verify(root),
@@ -485,10 +505,28 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-p256/owner.test.mjs",
                 "tests/browser-view/local-module-inputs.test.mjs",
             ],
-            18,
+            22,
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
+        "DK-37" => verify_node_suite(
+            root,
+            id,
+            &["sdk/browser/contextual-effects.test.mjs"],
+            24,
+            "3600000",
+        ),
+        "DK-31" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-dynamic-choice/wire.test.mjs",
+                "tests/browser-dynamic-choice/component.test.mjs",
+                "sdk/browser/dynamic-choice.test.mjs",
+            ],
+            8,
+            "3600000",
+        ),
         "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 38, "120000"),
         "DK-28" => verify_node_suite(
             root,
@@ -509,13 +547,51 @@ pub fn run_at(root: &Path, id: &str) {
             60,
             "120000",
         ),
+        "DK-35" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-session-operation/boundary.test.mjs",
+                "tests/browser-view/kernel-provenance.test.mjs",
+                "tests/browser-view/local-module-inputs.test.mjs",
+                "tests/browser-view/file-custody.test.mjs",
+                "tests/browser-session-operation/owner.test.mjs",
+            ],
+            96,
+            "7200000",
+        ),
         "OC-07" => verify_browser_export(root),
+        "DK-32" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-signed-context/corpus.test.mjs",
+                "tests/browser-signed-context/bridge.test.mjs",
+                "tests/browser-signed-context/wpt.test.mjs",
+                "tests/browser-signed-context/aggregate.test.mjs",
+                "sdk/browser/signed-context-test.mjs",
+            ],
+            21,
+            "3600000",
+        ),
         "OC-08" => browser_publication::verify(root),
         "OC-09" => verify_node_suite(
             root,
             id,
             &["tests/publication-admission/owner.test.mjs"],
             12,
+            "3600000",
+        ),
+        "OC-10" => node_suite::verify_exact(
+            root,
+            id,
+            &[
+                ("tests/publication-context-linkage/owner.test.mjs", 65),
+                (
+                    "tests/publication-context-linkage/capture-guard.test.mjs",
+                    2,
+                ),
+            ],
             "3600000",
         ),
         "OC-01" | "OC-02" | "OC-03" | "OC-04" | "OC-05" | "OC-06" => verify_oci(id),
@@ -560,7 +636,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-view/compiler-runtime.test.mjs",
                 "tests/browser-view/compiler-runtime-mutations.test.mjs",
             ],
-            37,
+            43,
         ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (
@@ -590,6 +666,14 @@ fn verify_browser_host(root: &Path, id: &str) {
         ),
         "DK-24" => (&["sdk/browser/operation-journal.test.mjs"], 28),
         "DK-25" => (&["sdk/browser/credential-custody-test.mjs"], 11),
+        "DK-38" => (
+            &[
+                "tests/browser-semantic-presentation/wire.test.mjs",
+                "tests/browser-semantic-presentation/dom.test.mjs",
+                "sdk/browser/semantic-presentation.test.mjs",
+            ],
+            29,
+        ),
         _ => unreachable!("closed browser host capability"),
     };
     // Node also applies this limit to the file-level wrapper. Full model and
@@ -597,7 +681,7 @@ fn verify_browser_host(root: &Path, id: &str) {
     // suites retain their short deadline.
     let timeout = if matches!(
         id,
-        "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25"
+        "DK-15" | "DK-16" | "DK-20" | "DK-23" | "DK-24" | "DK-25" | "DK-38"
     ) {
         "3600000"
     } else if matches!(id, "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14") {

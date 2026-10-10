@@ -337,10 +337,10 @@ test('the actual Docker staging instruction executes and an omitted verifier fai
   assert(!existsSync(join(f.work, 'prepared')));
 });
 
-function recordingDocker(t, work) {
+function recordingDocker(t, work, action = '') {
   const bin = join(work, 'bin'); mkdirSync(bin);
   const record = join(work, 'docker.json');
-  writeFileSync(join(bin, 'docker'), `#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);const value=args[args.indexOf('--build-context')+1];fs.appendFileSync(process.env.IMAGE_DOCKER_RECORD,JSON.stringify({args,files:fs.readdirSync(value.slice('vv-inputs='.length))})+'\\n');const at=args.indexOf('--metadata-file');if(at>=0)fs.writeFileSync(args[at+1],JSON.stringify({'containerimage.digest':'sha256:'+'a'.repeat(64)}));process.exit(Number(process.env.IMAGE_DOCKER_STATUS??0));\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'docker'), `#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');const args=process.argv.slice(2);const value=args[args.indexOf('--build-context')+1];const recipe=args[args.indexOf('--file')+1];${action}\nconst files=['sdk/Dockerfile','sdk/vv-inputs.lock.json','tools.lock','scripts/sdk-vv-inputs.mjs','scripts/sdk-image-inputs.mjs'];const recipeInputs=Object.fromEntries(files.map(name=>[name,crypto.createHash('sha256').update(fs.readFileSync(path.join(args.at(-1),name))).digest('hex')]));fs.appendFileSync(process.env.IMAGE_DOCKER_RECORD,JSON.stringify({args,recipeInputs,files:fs.readdirSync(value.slice('vv-inputs='.length))})+'\\n');const at=args.indexOf('--metadata-file');if(at>=0)fs.writeFileSync(args[at+1],JSON.stringify({'containerimage.digest':'sha256:'+'a'.repeat(64)}));process.exit(Number(process.env.IMAGE_DOCKER_STATUS??0));\n`, { mode: 0o755 });
   const prior = { PATH: process.env.PATH, IMAGE_DOCKER_RECORD: process.env.IMAGE_DOCKER_RECORD, IMAGE_DOCKER_STATUS: process.env.IMAGE_DOCKER_STATUS };
   process.env.PATH = `${bin}:${process.env.PATH}`; process.env.IMAGE_DOCKER_RECORD = record;
   t.after(() => { for (const [key, value] of Object.entries(prior)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
@@ -360,8 +360,12 @@ test('build wrapper prepares and verifies real inputs before invoking Docker exa
   const [observed] = records(record); assert.equal(records(record).length, 1); assert.equal(calls, 1);
   assert.deepEqual(observed.files.sort(), ['advisory.pack', 'bootstrap.tar.gz', 'manifest.json', 'source.pack']);
   const context = observed.args[observed.args.indexOf('--build-context') + 1].slice('vv-inputs='.length);
-  assert.deepEqual(observed.args, dockerArguments(f.source, f.revision, 'runtime', context, args));
+  const recipeContext = observed.args.at(-1);
+  assert.notEqual(recipeContext, f.source);
+  assert.deepEqual(observed.args, dockerArguments(recipeContext, f.revision, 'runtime', context, args));
+  for (const [path, digest] of Object.entries(observed.recipeInputs)) assert.equal(digest, hash(readFileSync(join(f.source, path))));
   assert(!existsSync(context), 'owned context is removed after Docker returns');
+  assert(!existsSync(recipeContext), 'owned recipe context is removed after Docker returns');
   process.env.IMAGE_DOCKER_STATUS = '23';
   assert.equal(buildImage(f.source, f.revision, 'runtime', args, prepare), 23);
   assert.equal(calls, 2); assert.equal(records(record).length, 2); delete process.env.IMAGE_DOCKER_STATUS;
@@ -370,11 +374,41 @@ test('build wrapper prepares and verifies real inputs before invoking Docker exa
   assert(!existsSync(record), 'omitted acquisition cannot reach Docker');
 });
 
+test('post-capture recipe/helper changes refuse before Docker; changing the original during consumption cannot replace captured bytes', t => {
+  const f = fixture(t), recipe = join(f.source, 'sdk/Dockerfile'), original = readFileSync(recipe);
+  const action = `const original=${JSON.stringify(recipe)},before=fs.readFileSync(original);fs.writeFileSync(original,'FROM scratch\\n');if(fs.readFileSync(recipe).toString()!==${JSON.stringify(original.toString())})process.exit(91);fs.writeFileSync(original,before);`;
+  const record = recordingDocker(t, f.work, action);
+  for (const path of ['sdk/Dockerfile', 'scripts/sdk-image-inputs.mjs', 'scripts/sdk-vv-inputs.mjs']) {
+    const selected = join(f.source, path), bytes = readFileSync(selected);
+    assert.throws(() => buildImage(f.source, f.revision, 'runtime', [], (_source, _revision, destination) => {
+      const policy = f.capture(destination); writeFileSync(selected, Buffer.concat([bytes, Buffer.from('\nchanged after capture\n')]));
+      return policy;
+    }), /image-input source differs|byte|length|Expected/);
+    assert(!existsSync(record), 'captured-source drift must not invoke Docker');
+    writeFileSync(selected, bytes);
+  }
+  assert.equal(buildImage(f.source, f.revision, 'runtime', [], (_source, _revision, destination) => f.capture(destination)), 0);
+  assert.equal(records(record).length, 1);
+  assert.equal(records(record)[0].recipeInputs['sdk/Dockerfile'], hash(original));
+  assert.deepEqual(readFileSync(recipe), original, 'transport mutation restored only its original checkout file');
+});
+
+test('private recipe-context drift refuses even when Docker succeeds or fails', t => {
+  const f = fixture(t), record = recordingDocker(t, f.work,
+    "fs.chmodSync(recipe,0o600);fs.appendFileSync(recipe,'\\nchanged private recipe\\n');");
+  for (const status of [0, 23]) {
+    process.env.IMAGE_DOCKER_STATUS = String(status);
+    assert.throws(() => buildImage(f.source, f.revision, 'runtime', [], (_source, _revision, destination) => f.capture(destination)),
+      /recipe context custody changed/);
+  }
+  assert.equal(records(record).length, 2, 'both real recording transports ran; neither grants acceptance');
+});
+
 test('a planted successful Docker omission is caught by the executable wrapper check', async t => {
   const f = fixture(t), record = recordingDocker(t, f.work), module = join(f.work, 'mutant.mjs');
   cpSync(new URL('./sdk-vv-inputs.mjs', import.meta.url), join(f.work, 'sdk-vv-inputs.mjs'));
   const source = readFileSync(new URL('./sdk-image-inputs.mjs', import.meta.url), 'utf8');
-  const mutant = source.replace("const result = spawnSync('docker', argv, { stdio: 'inherit' });", 'const result = { status: 0, signal: null };');
+  const mutant = source.replace("result = spawnSync('docker', argv, { stdio: 'inherit' });", 'result = { status: 0, signal: null };');
   assert.notEqual(mutant, source); writeFileSync(module, mutant);
   const changed = await import(pathToFileURL(module));
   const assertInvoked = implementation => {
@@ -504,7 +538,8 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
     const args = actual[0].args;
     assert.equal(args[args.indexOf('--target') + 1], target);
     assert.equal(args[args.indexOf('--build-arg') + 1], `SDK_SOURCE_REVISION=${f.revision}`);
-    assert.equal(args.at(-1), f.source);
+    assert.notEqual(args.at(-1), f.source, 'caller checkout must not be the Docker recipe context');
+    for (const [path, digest] of Object.entries(actual[0].recipeInputs)) assert.equal(digest, hash(readFileSync(join(f.source, path))));
     if (outputPrefix) assert(args[args.indexOf('--output') + 1].startsWith(outputPrefix));
     if (name === 'local-vv') {
       assert(args.includes('--load'));
@@ -538,6 +573,10 @@ test('each real SDK workflow/local caller executes the checked wrapper and prese
   cpSync(f.source, join(f.work, 'root-b'), { recursive: true, verbatimSymlinks: true });
   const result = transport.run(loop, f.work); assert.equal(result.status, 0, result.stderr);
   const actual = records(transport.record); assert.equal(actual.length, 2);
-  assert.deepEqual(actual.map(row => row.args.at(-1)), [join(f.work, 'root-a'), join(f.work, 'root-b')]);
+  assert.notEqual(actual[0].args.at(-1), actual[1].args.at(-1), 'two roots must retain separate private recipe contexts');
+  for (const [number, row] of actual.entries()) {
+    assert.notEqual(row.args.at(-1), join(f.work, number === 0 ? 'root-a' : 'root-b'));
+    for (const [path, digest] of Object.entries(row.recipeInputs)) assert.equal(digest, hash(readFileSync(join(f.source, path))));
+  }
   for (const row of actual) assert(row.args.includes('--no-cache') && row.args.includes('--provenance=false') && row.args.includes('--sbom=false'));
 });
