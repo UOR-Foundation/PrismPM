@@ -116,6 +116,12 @@ export function compilerPhase(program,args) {
   }
   return 'unclassified-execution';
 }
+export function observeCompilerPhase(program,args,started,success) {
+  // Diagnostic loss cannot change the actual compiler or test outcome.
+  try { writeSync(2,'# prismpm-compiler-phase ' + JSON.stringify({
+    phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n'); }
+  catch { /* No acceptance depends on this optional observation. */ }
+}
 function execute(program,args,cwd,env={}) {
   const childEnvironment = compilerEnvironment(env);
   const tools = {cargo:'/usr/local/cargo/bin/cargo',rustc:'/usr/local/cargo/bin/rustc',
@@ -136,10 +142,7 @@ function execute(program,args,cwd,env={}) {
     assert.equal(result.status,0,program+' '+args.join(' ')+'\n'+result.stdout+'\n'+result.stderr);
     success = true; return result.stdout;
   } finally {
-    // A closed diagnostic stream cannot change the actual compiler outcome.
-    try { writeSync(2,'# prismpm-compiler-phase ' + JSON.stringify({
-      phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n'); }
-    catch { /* Diagnostic loss is not acceptance or a replacement failure. */ }
+    observeCompilerPhase(program,args,started,success);
   }
 }
 export function verifyCompilerTools() {

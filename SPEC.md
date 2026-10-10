@@ -724,6 +724,10 @@ Bounded compiler-phase diagnostics separately count actual calls, failures and
 elapsed milliseconds under closed phase labels. They preserve every command,
 argument, timeout, source/tool custody check and test outcome; absent, malformed
 or truncated diagnostics never qualify acceptance or supply missing timings.
+The existing workspace-model and journal process wrappers report the same
+closed phase observations without changing their process contracts. Successful
+Rust diagnostic records are formatted before transport and bounded to 4096
+UTF-8 bytes; diagnostic loss is never inferred to be a successful measurement.
 
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
