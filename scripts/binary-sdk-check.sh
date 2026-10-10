@@ -8,6 +8,7 @@ evidence=${3:-}
 if test -n "$evidence"; then test ! -e "$evidence" && test ! -L "$evidence"; fi
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 helper="$root/scripts/binary-sdk-check.mjs"
+command -v python3 >/dev/null
 [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]] || exit 64
 [[ $revision =~ ^[0-9a-f]{40}$ ]] || exit 64
 test "$(git -C "$root" rev-parse HEAD)" = "$revision"
@@ -17,7 +18,6 @@ sdk_work=$(mktemp -d)
 container=''
 cleanup() {
   if test -n "$container"; then docker container rm --force "$container" >/dev/null 2>&1 || true; fi
-  chmod -R u+rwX -- "$sdk_work"
   rm -r -- "$sdk_work"
 }
 trap cleanup EXIT
@@ -29,10 +29,19 @@ docker image inspect "$image" | node "$helper" image "$image" "$architecture" "$
 container=$(docker container create --network none --read-only --entrypoint /usr/bin/true "$image")
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 mkdir "$sdk_work/source"
+mkdir "$sdk_work/archives"
+archives=()
+archive_index=0
 while IFS= read -r path; do
-  mkdir -p "$sdk_work/source/$(dirname "$path")"
-  docker container cp "$container:/opt/prismpm/share/conformance-root/$path" "$sdk_work/source/$path"
+  # Docker's host extractor applies immutable directory modes too early.
+  # Validate every tar member against the existing source capture before any
+  # payload is written; create private comparison copies without archive modes.
+  archive="$sdk_work/archives/$archive_index.tar"
+  docker container cp "$container:/opt/prismpm/share/conformance-root/$path" - > "$archive"
+  archives+=("$archive" "$path")
+  archive_index=$((archive_index + 1))
 done < <(node "$helper" roots)
+python3 "$root/scripts/binary-sdk-source-extract.py" "$sdk_work/source" "$sdk_work/source.json" "${archives[@]}"
 node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"
 docker container cp "$container:/usr/local/bin/prismpm-devcontainer-init" "$sdk_work/entrypoint.sh"
 cmp "$root/sdk/devcontainer-init.sh" "$sdk_work/entrypoint.sh"

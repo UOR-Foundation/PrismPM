@@ -13,7 +13,7 @@ export {tree,cli,mutateModule,sourceAliases,verifyImage};
 export const sourceRoots=Object.freeze([...libraryRoots,
  'crates/prismpm/tests/binary_program.rs','crates/conformance/src/cases/binary_program.rs',
  'tests/fixtures/binary/binary-program/project','scripts/binary-sdk-check.mjs',
- 'scripts/binary-sdk-check.sh','scripts/binary-sdk-check.test.mjs',
+ 'scripts/binary-sdk-check.sh','scripts/binary-sdk-source-extract.py','scripts/binary-sdk-check.test.mjs',
  'scripts/binary-sdk-check-fixtures.mjs','scripts/binary-sdk-check-shell.test.mjs','scripts/binary-sdk-check.md','scripts/binary-sdk-qualify.sh','scripts/binary-sdk-format.sh','scripts/binary-sdk-format-shell.test.mjs','scripts/sdk-candidate.sh','scripts/sdk-candidate.mjs','scripts/sdk-candidate-sbom.mjs','Justfile',
  '.devcontainer','xtask','crates/conformance/src/golden.rs','crates/conformance/src/golden','scripts/reconcile-lexlean.mjs','scripts/package-release-crates.sh','.github/workflows/binary-generated-review.yml',
  '.github/workflows/binary-sdk-qualification.yml','.github/workflows/ci-parallel.yml','.github/workflows/reproducibility.yml',
@@ -192,7 +192,7 @@ export function validateGenerationWorkflow(workflow){
  ]){const next=workflow.indexOf(command);assert.ok(next>previous,'complete ordered owning generation: '+command);previous=next;}
  assert.ok(workflow.indexOf('if: always()')>previous,'failure diagnostics must not admit a partial patch');
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,17),17,'complete owning binary gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,18),18,'complete owning binary gate test count');}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
  if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));

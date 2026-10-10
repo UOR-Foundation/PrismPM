@@ -1,7 +1,7 @@
 // Synthetic parser/boundary tests are not installed CLI acceptance evidence.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,rmSync,renameSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
@@ -94,7 +94,7 @@ test('outer result requires current image inventory source and every non-skipped
  const sourceSha='1'.repeat(64),inventorySha='2'.repeat(64),args=[image,revision,'amd64',sourceSha,inventorySha];
  const value={schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:image,source_revision:revision,source_sha256:sourceSha,inventory_sha256:inventorySha,architecture:'amd64',build_id:'3'.repeat(64),attestation_id:'4'.repeat(64),checks:[...completedChecks],unclaimed:[...unclaimed]};verifyResult(value,...args);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.inventory_sha256='9'.repeat(64),v=>v.source_revision='9'.repeat(40),v=>v.architecture='arm64']){const bad=structuredClone(value);change(bad);assert.throws(()=>verifyResult(bad,...args));}
- const tap='TAP version 13\n'+Array.from({length:17},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..17\n# tests 17\n# suites 0\n# pass 17\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 17','# tests 14')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const tap='TAP version 13\n'+Array.from({length:18},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..18\n# tests 18\n# suites 0\n# pass 18\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 18','# tests 14')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
 });
 test('release retains existing mandatory gates and adds binary on both native platforms',()=>{
  const workflow=readFileSync(new URL('../.github/workflows/release.yml',import.meta.url),'utf8');
@@ -122,6 +122,49 @@ test('generated review is deliberate, exact-source, writer-owned and never accep
   ['just stdlib-package-check','echo skipped stdlib'],['just check-fixtures','echo skipped fixtures'],
   ['push: never','push: always'],['devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca','devcontainers/ci@main'],
  ]){assert.ok(workflow.includes(before));assert.throws(()=>validateGenerationWorkflow(workflow.replace(before,after)));}
+});
+test('source acquisition validates every immutable archive member before writing',t=>{
+ const makeArchive=`import copy,io,json,pathlib,sys,tarfile
+root=pathlib.Path(sys.argv[1]); mode=sys.argv[2]
+manifest=json.loads((root/'source.json').read_text()); rows=[]
+for row in manifest['files']:
+    info=tarfile.TarInfo(row['path'].rstrip('/')); payload=None
+    if row['kind']=='directory': info.type=tarfile.DIRTYPE;info.mode=0o555
+    elif row['kind']=='symlink': info.type=tarfile.SYMTYPE;info.linkname=row['target']
+    else: info.type=tarfile.REGTYPE;info.mode=0o444;payload=b'abc';info.size=len(payload)
+    rows.append((info,payload))
+if mode=='duplicate': rows.append(copy.deepcopy(rows[2]))
+elif mode=='omitted': rows.pop(2)
+elif mode=='extra': info=tarfile.TarInfo('picked/extra');rows.append((info,b''))
+elif mode=='traversal': rows[2][0].name='../escape'
+elif mode=='absolute': rows[2][0].name='/escape'
+elif mode=='tampered': rows[2]=(rows[2][0],b'bad')
+elif mode=='wrong-size': rows[2][0].size=4;rows[2]=(rows[2][0],b'abcd')
+elif mode=='wrong-type': rows[2][0].type=tarfile.DIRTYPE;rows[2][0].size=0;rows[2]=(rows[2][0],None)
+elif mode=='hardlink': rows[2][0].type=tarfile.LNKTYPE;rows[2][0].size=0;rows[2][0].linkname='picked/link';rows[2]=(rows[2][0],None)
+elif mode=='fifo': rows[2][0].type=tarfile.FIFOTYPE;rows[2][0].size=0;rows[2]=(rows[2][0],None)
+elif mode=='changed-alias': rows[3][0].linkname='../../escape'
+elif mode=='omitted-root':
+    manifest['files'].append(dict(manifest['files'][2],path='elsewhere'))
+    (root/'source.json').write_text(json.dumps(manifest))
+elif mode=='alias-descendant':
+    info=tarfile.TarInfo('picked/link/child');info.size=3;rows.append((info,b'abc'))
+    manifest['files'].append(dict(manifest['files'][2],path='picked/link/child'))
+    (root/'source.json').write_text(json.dumps(manifest))
+with tarfile.open(root/'source.tar','w',format=tarfile.PAX_FORMAT) as archive:
+    for info,payload in rows: archive.addfile(info,io.BytesIO(payload) if payload is not None else None)
+`;
+ const failures={duplicate:'duplicate source archive member',omitted:'source archive members omitted',extra:'unexpected source archive member',traversal:'unsafe source member path',absolute:'unsafe source member path',tampered:'source archive member digest differs','wrong-size':'source archive member size differs','wrong-type':'source archive member type differs',hardlink:'special source archive member refused',fifo:'special source archive member refused','changed-alias':'source archive alias differs','alias-descendant':'source member beneath symlink ancestor','destination-alias':'source destination already exists','omitted-root':'complete non-overlapping source roots required','duplicate-root':'duplicate selected source root','overlapping-root':'complete non-overlapping source roots required'};
+ for(const mode of ['valid',...Object.keys(failures)]){
+  const root=temporary(t),destination=join(root,'copy');mkdirSync(destination);
+  put(root,'source.json',canonical({revision,files:[{path:'picked/',kind:'directory'},{path:'picked/nested/',kind:'directory'},{path:'picked/nested/input',kind:'file',size:3,sha256:hash('abc')},{path:'picked/link',kind:'symlink',target:'nested/input'}]}));
+  const packed=spawnSync('python3',['-c',makeArchive,root,mode],{encoding:'utf8'});assert.equal(packed.status,0,packed.stderr);
+  if(mode==='destination-alias'){mkdirSync(join(root,'outside'));symlinkSync(join(root,'outside'),join(destination,'picked'));}
+  const args=[new URL('./binary-sdk-source-extract.py',import.meta.url).pathname,destination,join(root,'source.json'),join(root,'source.tar'),'picked'];if(['duplicate-root','overlapping-root'].includes(mode))args.push(join(root,'source.tar'),mode==='duplicate-root'?'picked':'picked/nested');
+  const output=spawnSync('python3',args,{encoding:'utf8'});assert.equal(output.error,undefined);assert.equal(output.signal,null);
+  if(mode==='valid'){assert.equal(output.status,0,output.stderr);assert.equal(readFileSync(join(destination,'picked/nested/input'),'utf8'),'abc');assert.equal(readFileSync(join(destination,'picked/link'),'utf8'),'abc');}
+  else{assert.equal(output.status,1,mode);assert.ok(output.stderr.endsWith('ValueError: '+failures[mode]+'\n'),mode+': '+output.stderr);assert.deepEqual(readdirSync(destination),mode==='destination-alias'?['picked']:[],mode+' must fail before writing');if(mode==='destination-alias')assert.deepEqual(readdirSync(join(root,'outside')),[]);}
+ }
 });
 test('owning parser tests kill an omitted process-exit guard',t=>{
  const root=temporary(t),module=readFileSync(new URL('./binary-sdk-check.mjs',import.meta.url),'utf8'),guard='assert.equal(row.exit_code,0);';assert.equal(module.split(guard).length,2);
