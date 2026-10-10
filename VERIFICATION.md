@@ -2399,3 +2399,57 @@ The complete v0.3.0 acceptance closure verifies all six release acceptance steps
 4. **Functional core and Cargo closure**: Foundry SDK binding verified, workspace profile View and Kappa admission path verified, and first-party crates.io bootstrap receipt (`prismpm/crates-io-bootstrap-receipt/1`) established for `prod-ir`, `prod-codegen`, `lexlean`, `prism-stdlib`, and `prismpm`.
 5. **Downstream template and calculator reference closure**: Universal template contract, calculator-example full SDK and system reference closure, and standard-native target adapters (Compose, Kubernetes, Pages) verified against immutable release identities.
 6. **Ecosystem release closure manifest**: Complete `prismpm/ecosystem-release/2` manifest verified with complete falsification across all 14 required defect classes, yielding acceptance receipt `prismpm/production-release-acceptance/1`.
+
+## Exact LexLean reconciliation preparation (compression M0 issue 5)
+
+The preparation workflow `.github/workflows/m0-lexlean-reconcile.yml` is based
+on the existing main-replay repair PR #129 at
+`c28f119e69635d7dd50650305619fdb0aa368af4`. It selects LexLean
+`3e79a5a0e7059dc3a425aa17010e0a6721b24c44` without resolving a moving ref again.
+The repaired PrismPM source is still unaccepted: the earlier PR #129 full-VV
+attempt did not complete its first pass, and the second pass never began.
+
+`scripts/reconcile-lexlean.mjs` reuses the exact-package preparation developed
+on `feat/reconcile-lexlean-main`, including its corrected file hashing. It
+uses LexLean's owning package commands, compares two package invocations,
+checks the selected source against package provenance, and prepares the
+vendored dependency and Cargo lock. `--validate-generated` runs the supported
+`xtask validate` dispatcher only after normal writers finish. There is no
+public `xtask audit-dependencies` command; `validate` includes that private
+audit together with the other model and source checks. The workflow follows
+normal lock, fixture, golden and stdlib generation with independent comparator
+commands and preserves a binary patch. It has no repository or registry write
+permissions, commit, push, merge or publication step.
+
+Preparation is not an SDK freeze. No generated package, compiler compatibility,
+complete V&V, runtime capability, platform, security, reproducibility or release
+acceptance is claimed by the local checks below. Actual packaging and generation
+still require execution in the prescribed Rust/devcontainer environment. Both
+complete source V&V passes, both installed native SDK lanes and every existing
+release prerequisite remain mandatory before acceptance or immutable publication.
+
+Local checks on 2026-10-10 used Node 24.19.0; the workflow selects Node 22.23.2
+and Rust 1.97.1. The complete helper suite passed 10/10 tests, including an actual Git checkout
+boundary that refuses both untracked and tracked source changes before any
+Cargo command, while allowing ignored build outputs. Its actual CLI
+subprocess uses an explicitly synthetic Cargo executable to qualify argument,
+working-directory and failure propagation; this does not stand in for Cargo or
+compiler execution. YAML parsing, exact Action pins, every shell body, Node
+syntax and diff whitespace were checked. Running the unchanged devcontainer
+preflight with the helper tests produced 11 passes and 4 failures because the
+local environment has no Docker executable (`spawnSync docker ENOENT`). Those
+four tests remain enabled and require the real environment.
+
+| Planted defect | Gate and observed rejection | Restored result |
+| --- | --- | --- |
+| In an isolated source copy, replace the supported validation subcommand with `audit-dependencies`. | The complete `node --test scripts/reconcile-lexlean.test.mjs` invocation exited 1; its actual validation-CLI test rejected the child status 2 and `unsupported xtask command` diagnostic. | The unmodified helper suite passed all 9 tests, with no skipped cases. |
+
+Successful preparation preserves the proposal separately from the diagnostic
+artifact. Step logs and any partial dependency record are retained with
+`always()` and an explicit diagnostic-only, unaccepted marker, including when
+preparation fails.
+
+The same suite checks actual SHA-256 manifest values, missing archive/symlink
+refusal, the real xtask dispatcher binding, nonzero child propagation and the
+workflow's immutable source/read-only publication boundary. These are narrowly
+scoped preparation regressions, not evidence for any unexecuted SDK gate.
