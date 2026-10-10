@@ -52,15 +52,14 @@ impl<'a> OwnerTiming<'a> {
 
 impl Drop for OwnerTiming<'_> {
     fn drop(&mut self) {
-        emit(
-            &mut std::io::stderr().lock(),
-            record(
-                self.id,
-                self.queue,
-                self.started.elapsed(),
-                std::thread::panicking(),
-            ),
+        // Stop body timing before any optional diagnostic transport contention.
+        let line = record(
+            self.id,
+            self.queue,
+            self.started.elapsed(),
+            std::thread::panicking(),
         );
+        emit(&mut std::io::stderr().lock(), line);
     }
 }
 
