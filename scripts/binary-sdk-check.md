@@ -57,3 +57,8 @@ nonempty patch fails the prerequisite and blocks both native image jobs. The
 checkout and remote remain untouched. A maintainer must review and import the
 patch before a new exact-source run can proceed. Formatting does not establish
 compilation or acceptance and cannot substitute for the reconciled compiler.
+
+Formatter startup waits for a bounded readiness marker written only after the
+normal SDK initializer hands off. A failed or stalled initializer fails the
+job before a second command can race its immutable-cache seed. The actual SDK
+inventory is retained before formatting starts, including on formatter failure.

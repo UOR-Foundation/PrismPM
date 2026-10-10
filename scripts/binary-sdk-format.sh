@@ -33,9 +33,28 @@ git -C "$scratch/source" add --all --force
 container=$(docker container create --user 1000:1000 --read-only --network none --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=4g \
   --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \
-  --workdir /tmp "$image" sleep infinity)
+  --workdir /tmp "$image" /bin/sh -ec ': > /tmp/prismpm-format-ready; exec sleep infinity')
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 docker container start "$container" >/dev/null
+# Docker start returns before the normal entrypoint has seeded its cache. The
+# marker is written only after that initializer hands control to our command.
+# Reentering it before this point races immutable cache copies with chmod.
+ready=0
+for attempt in $(seq 1 240); do
+  if docker exec "$container" test -f /tmp/prismpm-format-ready; then ready=1; break; fi
+  if test "$(docker container inspect --format '{{.State.Running}}' "$container")" != true; then
+    docker container logs "$container" >&2
+    echo 'SDK initializer exited before formatting readiness.' >&2
+    exit 1
+  fi
+  sleep 0.25
+done
+if test "$ready" -ne 1; then
+  docker container logs "$container" >&2
+  echo 'SDK initializer did not become ready within 60 seconds.' >&2
+  exit 1
+fi
+docker container cp "$container:/opt/prismpm/share/inventory.json" "$evidence/inventory.json"
 docker exec "$container" mkdir /tmp/source
 # tar is executed as the bounded SDK user, so imported bytes need no root chown.
 git -C "$root" archive "$revision" | docker exec --interactive "$container" tar -x -C /tmp/source
@@ -47,7 +66,6 @@ docker exec "$container" /usr/local/bin/prismpm-devcontainer-init /bin/bash -euo
   cargo fmt --all
   cargo fmt --all --check
 ' > "$evidence/formatter.log" 2>&1
-docker container cp "$container:/opt/prismpm/share/inventory.json" "$evidence/inventory.json"
 docker container cp "$container:/tmp/source/." "$scratch/source/"
 test -z "$(git -C "$scratch/source" ls-files --others)"
 git -C "$scratch/source" diff --binary > "$evidence/format.patch"

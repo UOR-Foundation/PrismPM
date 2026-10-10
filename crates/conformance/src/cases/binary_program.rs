@@ -40,7 +40,9 @@ pub(super) fn verify(root:&Path) {
     assert_eq!(vectors.as_array().unwrap().len(),4);
     assert_eq!(vectors[0],json!({"request":[],"response":[]}));
     assert_eq!(vectors[2]["request"],json!((0..=255).collect::<Vec<u16>>()));assert_eq!(vectors[2]["request"],vectors[2]["response"]);
-    assert!(std::str::from_utf8(&[0xc0,0xaf,0xff,0x80,0xed,0xa0,0x80]).is_err());
+    let malformed = vectors[3]["request"].as_array().unwrap().iter()
+        .map(|byte| u8::try_from(byte.as_u64().unwrap()).unwrap()).collect::<Vec<_>>();
+    assert!(std::str::from_utf8(&malformed).is_err());
     for (row,mode) in evidence["executions"].as_array().unwrap().iter().zip(["std","no_std","core-wasm","cli-stdio","cli-file","cli-mixed"]) {
         assert_eq!(row,&json!({"mode":mode,"status":"passed","vector_count":4}));
     }
