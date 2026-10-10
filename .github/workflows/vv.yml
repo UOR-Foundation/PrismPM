@@ -2,7 +2,7 @@ name: Verification & Validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, work/m0-qualification-timings]
   workflow_dispatch:
 
 jobs:

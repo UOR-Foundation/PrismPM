@@ -714,6 +714,16 @@ execute one at a time within a conformance process. Nested requests reuse the
 owning slot; a failed owner releases it without suppressing subsequent tests.
 Scheduling changes neither checks nor deadlines. Cached failures retain their
 structured diagnostics, and failed prerequisites stop dependent browser checks.
+Successful Node owners expose a closed diagnostic containing the owner identifier,
+selected-file count, validated test count and actual child elapsed milliseconds,
+excluding compiler-slot wait. It is emitted only after every original completion
+check passes, before libtest's summary, without dumping child output or private
+paths. Diagnostic write failure cannot alter acceptance. These timings are not
+acceptance receipts or evidence of a speedup without comparable measurements.
+Bounded compiler-phase diagnostics separately count actual calls, failures and
+elapsed milliseconds under closed phase labels. They preserve every command,
+argument, timeout, source/tool custody check and test outcome; absent, malformed
+or truncated diagnostics never qualify acceptance or supply missing timings.
 
 The historical version 0.1.0 is a prototype and is not PrismPM completion.
 Release version 0.2.0 was the portable application baseline across PrismPM,
