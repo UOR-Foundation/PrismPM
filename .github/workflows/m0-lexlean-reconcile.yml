@@ -52,6 +52,7 @@ jobs:
           node scripts/reconcile-lexlean.mjs _m0/lexlean "$LEXLEAN_SOURCE_SHA" \
             | tee "$RUNNER_TEMP/m0-reconcile.json"
           rm -rf _m0
+          cargo test --locked --offline -p xtask --bin xtask lean_source_audit_tests
 
       - name: Update the root dependency lock and every real LexLean consumer
         shell: bash

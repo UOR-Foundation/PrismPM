@@ -2453,3 +2453,44 @@ The same suite checks actual SHA-256 manifest values, missing archive/symlink
 refusal, the real xtask dispatcher binding, nonzero child propagation and the
 workflow's immutable source/read-only publication boundary. These are narrowly
 scoped preparation regressions, not evidence for any unexecuted SDK gate.
+
+### Selected LexLean adapter source boundary
+
+The actual preparation run
+[38023254837](https://github.com/UOR-Foundation/PrismPM/actions/runs/38023254837)
+at `b927c2d2b0713ebb34782a90dae040340d805026` failed at the final source audit.
+It had completed exact clean LexLean packaging and relocking, the 357-file
+golden writer and independent comparator, the stdlib source writer and
+independent comparator, all 19 fixtures, and exact compiler/stdlib archive
+reproduction. These are intermediate results, not a successful preparation or
+SDK acceptance. The stale-lock fixture's expected LLC0102 diagnostic is retained.
+
+The source audit rejected
+`vendor/lexlean/language/lcnf-1.2/extract.lean`. Selected LexLean's §22.10
+explicitly defines that file as its immutable Lean-authority adapter. The
+correction admits only this exact path after the existing complete dependency
+checksum/tree audit and explicit archive/tree registration checks, with package
+VCS revision, crate path and clean provenance binding. The repository root and
+vendor ancestors must be real directories, not symlinks. It does not exempt the
+vendor directory or change the PrismPM-owned Lean prohibition.
+
+The retained diagnostic artifact is
+[11660921743](https://github.com/UOR-Foundation/PrismPM/actions/runs/38023254837/artifacts/11660921743),
+ZIP SHA-256 `475bbf3d55630c21513193aedcbaf60ee838c50429f36383097369288f0cc516`.
+Its original generation transcript SHA-256 is
+`8d81095781c7c41a7fca28a6b9a1346b8944755dfe06414b8aab448d5bd52b2d`.
+The recorded LexLean crate SHA-256 is
+`fdc1fc344571357394da9292580af798d4f1a297213885e044aee44dbb6940ca`,
+bound to source `3e79a5a0e7059dc3a425aa17010e0a6721b24c44` and source tree
+`8a47aa0d8aea3d2ef5a542853f9694f999496979`. No generated package bytes were
+recreated from those digest strings or imported from this failed run.
+
+Seven Rust source-audit tests cover the exact positive fixture, changed adapter
+bytes, extra pinned Lean and lakefile paths, PrismPM-owned Lean, wrong revision,
+wrong crate path, dirty provenance, missing archive/tree registration and a
+missing manifest, plus symlinked repository/vendor ancestors on Unix. The
+preparation workflow executes these focused tests before
+regeneration; complete V&V still executes the complete workspace suite. Local
+Rust execution is unavailable, so these new tests and the corrected hosted
+preparation remain unverified until their actual runs complete. The unchanged
+Node preparation suite passes 10/10 locally; it is not Rust-gate evidence.
