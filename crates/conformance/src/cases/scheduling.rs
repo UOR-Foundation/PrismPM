@@ -149,7 +149,9 @@ mod tests {
         });
         let mut actual = completed.into_inner().unwrap();
         actual.sort();
-        assert_eq!(actual, owners);
+        let mut expected = owners;
+        expected.sort();
+        assert_eq!(actual, expected);
         assert_eq!(active.load(Ordering::SeqCst), 0);
         for id in [
             "DK-07", "DK-08", "DK-09", "DK-19", "RP-01", "ST-10", "VR-01",
