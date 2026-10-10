@@ -4,10 +4,20 @@
 
 The current port preserves the complete original owner, restores all six parser
 checks for always-fresh parsing, and adds two source-custody and four descriptor
-checks (96 required checks). It uses the closed compiler-family API, descriptor-bound
-input custody and branded original/private native artifacts. All source, browser,
+checks plus an observation-lifetime control (97 required checks). It uses the
+closed compiler-family API, descriptor-bound input custody and branded
+original/private native artifacts. All source, browser,
 payload, mutation, native CI and installed-SDK obligations remain required. The
 historical evidence below does not accept this integration.
+
+Observation delivery owns copied request/reply bytes outside the Wasm-instance
+wrapper's lexical environment. Successful and rejected queues release each
+job's byte references without changing synchronous generated execution,
+ordered native replay or error propagation. The additional control executes
+the captured queue and wrapper, checks transport boundaries and failed queues,
+and rejects removed-cleanup and removed-handoff mutations. It is not evidence
+that WebKit's observed memory failure is resolved; the complete current owner,
+including every browser maximum and mutation, remains required.
 
 The initial current port incorrectly counted six parser checks while selecting
 the newer two-check file. The omitted source-reread, relative-resolution,

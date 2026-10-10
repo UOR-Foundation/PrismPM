@@ -557,7 +557,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-view/file-custody.test.mjs",
                 "tests/browser-session-operation/owner.test.mjs",
             ],
-            96,
+            97,
             "7200000",
         ),
         "OC-07" => verify_browser_export(root),
