@@ -10,6 +10,13 @@ use std::path::Path;
 pub fn audit_no_handwritten_lean(root: &Path) -> Result<(), Fail> {
     let golden_root = root.join("tests/golden/stdlib");
     let mut allowed = std::collections::BTreeSet::new();
+    let adapter = root.join("vendor/lexlean/language/lcnf-1.2/extract.lean");
+    if adapter.is_file() {
+        // This is the dependency's exact Lean-authority adapter, never a
+        // PrismPM-authored model or an exemption for the rest of its tree.
+        audit_lexlean_adapter_provenance(root)?;
+        allowed.insert(adapter);
+    }
     let golden_manifest = golden_root.join("golden-manifest.json");
     if golden_manifest.is_file() {
         let value: serde_json::Value = serde_json::from_slice(&std::fs::read(&golden_manifest)?)?;
@@ -119,6 +126,77 @@ pub fn audit_no_handwritten_lean(root: &Path) -> Result<(), Fail> {
             )
             .into());
         }
+    }
+    Ok(())
+}
+
+fn audit_lexlean_adapter_provenance(root: &Path) -> Result<(), Fail> {
+    for directory in [
+        root.to_path_buf(),
+        root.join("vendor"),
+        root.join("vendor/lexlean"),
+    ] {
+        let metadata = std::fs::symlink_metadata(&directory)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(format!(
+                "LexLean extraction adapter has a non-directory or symlink ancestor: {}",
+                directory.display()
+            )
+            .into());
+        }
+    }
+    audit_dependencies(root)?;
+    let register: toml::Value =
+        toml::from_str(&std::fs::read_to_string(root.join("model/dependencies.toml"))?)?;
+    let dependency = register
+        .get("dependency")
+        .and_then(toml::Value::as_array)
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row.get("id").and_then(toml::Value::as_str) == Some("lexlean"))
+        })
+        .ok_or("LexLean extraction adapter lacks its dependency registration")?;
+    let version = dependency
+        .get("version")
+        .and_then(toml::Value::as_str)
+        .ok_or("LexLean extraction adapter lacks its package version")?;
+    let archive = format!("vendor/lexlean/lexlean-{version}.crate");
+    let has_archive = dependency
+        .get("artifact")
+        .and_then(toml::Value::as_array)
+        .is_some_and(|rows| {
+            rows.iter().any(|row| {
+                row.get("kind").and_then(toml::Value::as_str) == Some("file")
+                    && row.get("path").and_then(toml::Value::as_str) == Some(archive.as_str())
+            })
+        });
+    let has_tree = dependency
+        .get("artifact")
+        .and_then(toml::Value::as_array)
+        .is_some_and(|rows| {
+            rows.iter().any(|row| {
+                row.get("kind").and_then(toml::Value::as_str) == Some("tree-manifest")
+                    && row.get("path").and_then(toml::Value::as_str)
+                        == Some("vendor/lexlean/MANIFEST.sha256")
+                    && row.get("tree_root").and_then(toml::Value::as_str) == Some("vendor/lexlean")
+            })
+        });
+    if !has_tree || !has_archive {
+        return Err("LexLean extraction adapter lacks its closed package tree".into());
+    }
+    let provenance: serde_json::Value = serde_json::from_slice(&std::fs::read(
+        root.join("vendor/lexlean/.cargo_vcs_info.json"),
+    )?)?;
+    if provenance["git"]["sha1"].as_str()
+        != dependency.get("revision").and_then(toml::Value::as_str)
+        || provenance["path_in_vcs"] != "crates/lexlean"
+        || provenance["git"]
+            .get("dirty")
+            .is_some_and(|dirty| dirty.as_bool() != Some(false))
+    {
+        return Err(
+            "LexLean extraction adapter package provenance differs from its revision".into(),
+        );
     }
     Ok(())
 }
@@ -1010,5 +1088,161 @@ mod oracle_separation_tests {
             assert!(check_runtime_oracle_separation(&format!("version = 4\n[[package]]\n{row}\n")).is_err());
         }
         assert!(check_runtime_oracle_separation("version = 4").is_err());
+    }
+}
+
+#[cfg(test)]
+mod lean_source_audit_tests {
+    use super::{audit_no_handwritten_lean, hash_file};
+    use std::path::Path;
+
+    const ADAPTER: &str = "vendor/lexlean/language/lcnf-1.2/extract.lean";
+
+    fn seal(root: &Path) {
+        let vendor = root.join("vendor/lexlean");
+        let mut files = std::collections::BTreeMap::new();
+        for entry in walkdir::WalkDir::new(&vendor) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() && entry.file_name() != "MANIFEST.sha256" {
+                let relative = entry.path().strip_prefix(&vendor).unwrap();
+                files.insert(
+                    relative.to_string_lossy().replace('\\', "/"),
+                    hash_file(entry.path()).unwrap(),
+                );
+            }
+        }
+        let manifest = files
+            .iter()
+            .map(|(path, digest)| format!("{digest}  {path}\n"))
+            .collect::<String>();
+        std::fs::write(vendor.join("MANIFEST.sha256"), manifest).unwrap();
+        let manifest_digest = hash_file(&vendor.join("MANIFEST.sha256")).unwrap();
+        let other_digest = hash_file(&root.join("vendor/fixture.bin")).unwrap();
+        let archive_digest = hash_file(&vendor.join("lexlean-0.3.0.crate")).unwrap();
+        let revision = "1".repeat(40);
+        let source = format!(
+            "spec = 'prismpm/dependencies/1'\n\n\
+             [[dependency]]\nid = 'lean4-prod'\nrevision = '{revision}'\nsource = 'vendored'\n\
+             [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/fixture.bin'\nsha256 = '{other_digest}'\n\n\
+             [[dependency]]\nid = 'lexlean'\nversion = '0.3.0'\nrevision = '{revision}'\nsource = 'vendored'\n\
+             [[dependency.artifact]]\nkind = 'tree-manifest'\npath = 'vendor/lexlean/MANIFEST.sha256'\nsha256 = '{manifest_digest}'\ntree_root = 'vendor/lexlean'\n\
+             [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/lexlean/lexlean-0.3.0.crate'\nsha256 = '{archive_digest}'\n\n\
+             [[dependency]]\nid = 'hologram-live'\nrevision = '{revision}'\nsource = 'vendored'\nrole = 'validation-oracle'\n\
+             [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/fixture.bin'\nsha256 = '{other_digest}'\n\n\
+             [[dependency]]\nid = 'uor-hologram'\nrevision = '{revision}'\nsource = 'git'\nrole = 'validation-oracle'\n"
+        );
+        std::fs::write(root.join("model/dependencies.toml"), source).unwrap();
+    }
+
+    fn fixture() -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("vendor/lexlean/language/lcnf-1.2")).unwrap();
+        std::fs::create_dir(root.path().join("model")).unwrap();
+        std::fs::write(root.path().join(ADAPTER), "namespace ImportedAdapter\n").unwrap();
+        std::fs::write(root.path().join("vendor/fixture.bin"), "fixture\n").unwrap();
+        std::fs::write(
+            root.path().join("vendor/lexlean/lexlean-0.3.0.crate"),
+            "synthetic archive for dependency-gate testing\n",
+        )
+        .unwrap();
+        let provenance = serde_json::json!({
+            "git": {"sha1": "1".repeat(40)}, "path_in_vcs": "crates/lexlean"
+        });
+        std::fs::write(
+            root.path().join("vendor/lexlean/.cargo_vcs_info.json"),
+            serde_json::to_vec(&provenance).unwrap(),
+        )
+        .unwrap();
+        seal(root.path());
+        root
+    }
+
+    #[test]
+    fn exact_dependency_adapter_is_admitted_only_with_its_complete_tree() {
+        let root = fixture();
+        audit_no_handwritten_lean(root.path()).unwrap();
+        std::fs::write(root.path().join(ADAPTER), "changed adapter\n").unwrap();
+        assert!(audit_no_handwritten_lean(root.path()).is_err());
+    }
+
+    #[test]
+    fn an_additional_pinned_vendor_lean_file_is_still_rejected() {
+        for name in ["extra.lean", "lakefile.lean"] {
+            let root = fixture();
+            std::fs::write(root.path().join("vendor/lexlean").join(name), "extra\n").unwrap();
+            seal(root.path());
+            let error = audit_no_handwritten_lean(root.path()).unwrap_err();
+            assert!(error.to_string().contains("no-handwritten-lean"));
+        }
+    }
+
+    #[test]
+    fn prismpm_owned_lean_is_never_dependency_authority() {
+        let root = fixture();
+        std::fs::create_dir(root.path().join("stdlib")).unwrap();
+        std::fs::write(root.path().join("stdlib/Proof.lean"), "def model := true\n").unwrap();
+        let error = audit_no_handwritten_lean(root.path()).unwrap_err();
+        assert!(error.to_string().contains("no-handwritten-lean"));
+    }
+
+    #[test]
+    fn package_revision_path_and_dirty_provenance_are_checked_after_resealing() {
+        for provenance in [
+            serde_json::json!({"git": {"sha1": "2".repeat(40)}, "path_in_vcs": "crates/lexlean"}),
+            serde_json::json!({"git": {"sha1": "1".repeat(40)}, "path_in_vcs": "crates/other"}),
+            serde_json::json!({"git": {"sha1": "1".repeat(40), "dirty": true}, "path_in_vcs": "crates/lexlean"}),
+        ] {
+            let root = fixture();
+            std::fs::write(
+                root.path().join("vendor/lexlean/.cargo_vcs_info.json"),
+                serde_json::to_vec(&provenance).unwrap(),
+            )
+            .unwrap();
+            seal(root.path());
+            let error = audit_no_handwritten_lean(root.path()).unwrap_err();
+            assert!(error.to_string().contains("package provenance"));
+        }
+    }
+
+    #[test]
+    fn both_archive_and_tree_registrations_are_required() {
+        for kind in ["file", "tree-manifest"] {
+            let root = fixture();
+            let path = root.path().join("model/dependencies.toml");
+            let mut register: toml::Value =
+                toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            register["dependency"][1]["artifact"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|row| row["kind"].as_str() != Some(kind));
+            std::fs::write(path, toml::to_string(&register).unwrap()).unwrap();
+            let error = audit_no_handwritten_lean(root.path()).unwrap_err();
+            assert!(error.to_string().contains("closed package tree"));
+        }
+    }
+
+    #[test]
+    fn missing_pinned_manifest_cannot_grant_the_adapter_exception() {
+        let root = fixture();
+        std::fs::remove_file(root.path().join("vendor/lexlean/MANIFEST.sha256")).unwrap();
+        assert!(audit_no_handwritten_lean(root.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_repository_or_vendor_ancestor_cannot_grant_the_exception() {
+        let root = fixture();
+        let outside = tempfile::tempdir().unwrap();
+        let alias = outside.path().join("repository");
+        std::os::unix::fs::symlink(root.path(), &alias).unwrap();
+        let error = audit_no_handwritten_lean(&alias).unwrap_err();
+        assert!(error.to_string().contains("symlink ancestor"));
+
+        let vendor = root.path().join("vendor");
+        let external_vendor = outside.path().join("vendor");
+        std::fs::rename(&vendor, &external_vendor).unwrap();
+        std::os::unix::fs::symlink(&external_vendor, &vendor).unwrap();
+        let error = audit_no_handwritten_lean(root.path()).unwrap_err();
+        assert!(error.to_string().contains("symlink ancestor"));
     }
 }

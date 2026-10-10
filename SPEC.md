@@ -593,11 +593,21 @@ manifest.
 
 All source/config/package inputs are confined regular files. Symlinks,
 absolute paths, traversal, hidden adjacent dependencies, generated source in
-the repository, handwritten Lean, unsafe Rust, unregistered public errors,
+the repository, handwritten PrismPM Lean, unsafe Rust, unregistered public errors,
 unbounded child output, and mutable dependency references are rejected. Build
 and verification are offline. Canonical platform-independent artifacts contain
 no absolute checkout path, hostname, locale text, random identifier, timestamp,
 or traversal-order dependence.
+
+The only imported Lean-source exception is the registered LexLean package's
+`vendor/lexlean/language/lcnf-1.2/extract.lean`, the upstream authority adapter
+specified by LexLean §22.10. Admission first verifies the complete dependency
+register, package archive and tree checksums, then matches package VCS provenance
+to the exact registered revision and crate path and rejects dirty provenance.
+Both the archive and complete LexLean tree must be registered. No other vendored
+Lean path is admitted, even when present in a checksummed tree. This boundary
+imports dependency-owned compiler authority; it cannot introduce handwritten
+PrismPM model definitions, proofs or replacement application behavior.
 
 `cargo xtask vv` is the sole normative acceptance entry point and `just vv` is
 its alias. It performs these 15 non-mutating gates in order: formatting; model,
