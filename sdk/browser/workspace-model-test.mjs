@@ -9,6 +9,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
+import {verifyZeroBlocks} from './corpus-zero-blocks.mjs';
 import {createPrivateDriverTarget, ensureProdExport} from '../../tests/browser-view/compile.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -99,7 +100,7 @@ function corpus(source) {
   assert.equal(declarations.size, data.declarations.length);
   const requests = [...declarations.keys()].filter(name => name.startsWith('request'));
   assert.equal(requests.length, 45, 'complete modeled acceptance corpus');
-  assert.equal(declarations.size, 847, 'exact bounded fixture declaration closure');
+  assert.equal(declarations.size, 847 + 22, 'exact original and zero-block fixture declaration closure');
   const helpers = data.declarations.filter(declaration => declaration.name.startsWith('fixtureLiteral'));
   assert.equal(helpers.length, 706, 'complete bounded literal helper set');
   for (const [index, helper] of helpers.entries()) {
@@ -108,10 +109,11 @@ function corpus(source) {
     assert.equal(helper.kind, 'definition');
     assert.deepEqual(helper.parameters, []);
     assert.deepEqual(helper.result, {kind: 'bytes'});
-    assert.deepEqual(Object.keys(helper.body).sort(), ['hex', 'kind']);
-    assert.equal(helper.body.kind, 'bytes');
-    assert.match(helper.body.hex, /^(?:[0-9a-f]{2})*$/);
-    assert.ok(helper.body.hex.length <= 512, 'bounded literal C initializer');
+    if (helper.body.kind === 'bytes') {
+      assert.deepEqual(Object.keys(helper.body).sort(), ['hex', 'kind']);
+      assert.match(helper.body.hex, /^(?:[0-9a-f]{2})*$/);
+      assert.ok(helper.body.hex.length <= 512, 'bounded literal C initializer');
+    }
   }
   const used = new Set();
   const cache = new Map();
@@ -175,6 +177,7 @@ function corpus(source) {
   assert.deepEqual([...used].sort(), [...declarations.keys()].sort(), 'complete request/response/probe/data closure');
   assert.equal(sha256(vectors.map(vector => `${vector.id}\t${vector.request}\t${vector.response}\n`).join('')),
     '70e4ec78bc68029b81943fc2e0dcf4ae320c0e12ddf43d5fc4f1e8def0560147', 'exact original 45 vectors');
+  verifyZeroBlocks(data, 'workspace', source, expand);
   return vectors;
 }
 
@@ -191,7 +194,7 @@ test('corpus collector rejects altered probe bindings and non-data fixture expre
   assert.throws(() => corpus(changed(rows => rows.push(rows[0]))));
   for (const mutate of [
     rows => {
-      const helper = rows.find(row => row.name.startsWith('fixtureLiteral') && row.body.hex.length > 0);
+      const helper = rows.find(row => row.name.startsWith('fixtureLiteral') && row.body.kind === 'bytes' && row.body.hex.length > 0);
       helper.body.hex = 'ff' + helper.body.hex.slice(2);
     },
     rows => rows.push({...structuredClone(rows[0]), name: 'fixtureLiteralUnused'}),
@@ -207,7 +210,7 @@ test('corpus collector rejects altered probe bindings and non-data fixture expre
       return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, inline(child)]));
     }
     for (const row of rows) row.body = inline(row.body);
-    assert.equal(rows.length, 847, 'unused-helper mutation preserves cardinality and bytes');
+    assert.equal(rows.length, 847 + 22, 'unused-helper mutation preserves cardinality and bytes');
   })), /complete request\/response\/probe\/data closure/);
   assert.throws(() => corpus(changed(rows => {
     rows.find(row => row.name === 'probeGenesis').body.arguments[0].function.name = 'encodeWorkspaceError';
