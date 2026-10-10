@@ -135,7 +135,8 @@ jobs:
           # Intent-to-add includes new generated files without committing them.
           git add -N -- .
           git diff --binary HEAD > "$evidence/reconciliation.patch"
-          test -s "$evidence/reconciliation.patch"
+          # A fully revalidated, already-reconciled dependency may have no diff.
+          # Empty patches are preparation outcomes, never acceptance evidence.
           git status --short > "$evidence/worktree-status.txt"
           git rev-parse HEAD > "$evidence/prismpm-source.txt"
           cp "$RUNNER_TEMP/m0-reconcile.json" "$evidence/dependency.json"

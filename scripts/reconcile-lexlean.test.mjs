@@ -19,6 +19,39 @@ test('dependency update changes only the lexlean identity fields',()=>{
  assert.match(out,/revision = "a{40}"/); assert.match(out,/sha256 = "b{64}"/); assert.match(out,/sha256 = "c{64}"/); assert.match(out,/id = "next"/);
 });
 
+const selectedIdentity={revision:'a'.repeat(40),version:'0.3.0',manifestSha:'b'.repeat(64),crateSha:'c'.repeat(64)};
+const selectedRegister='spec = "prismpm/dependencies/1"\n\n[[dependency]]\nid = "lexlean"\nversion = "0.3.0"\nrevision = "'+'a'.repeat(40)+'"\nsource = "vendored"\n\n[[dependency.artifact]]\nkind = "tree-manifest"\npath = "vendor/lexlean/MANIFEST.sha256"\nsha256 = "'+'b'.repeat(64)+'"\ntree_root = "vendor/lexlean"\n\n[[dependency.artifact]]\nkind = "file"\npath = "vendor/lexlean/lexlean-0.3.0.crate"\nsha256 = "'+'c'.repeat(64)+'"\n';
+
+test('already selected dependency is byte-identical on repeated reconciliation',()=>{
+ assert.equal(updateDependencyRegister(selectedRegister,selectedIdentity),selectedRegister);
+ const changed=updateDependencyRegister(selectedRegister,{...selectedIdentity,revision:'d'.repeat(40)});
+ assert.notEqual(changed,selectedRegister);
+ assert.equal(updateDependencyRegister(changed,{...selectedIdentity,revision:'d'.repeat(40)}),changed);
+});
+
+test('missing malformed and duplicated identities cannot become reconciliation no-ops',()=>{
+ const mutations=[
+  selectedRegister.replace(/^revision = .+\n/m,''),
+  selectedRegister.replace('a'.repeat(40),'a'.repeat(39)),
+  selectedRegister.replace('b'.repeat(64),'b'.repeat(63)),
+  selectedRegister.replace('c'.repeat(64),'z'.repeat(64)),
+  selectedRegister.replace('vendor/lexlean/MANIFEST.sha256','vendor/lexlean/other.sha256'),
+  selectedRegister.replace('vendor/lexlean/lexlean-0.3.0.crate','vendor/lexlean/lexlean-0.3.1.crate'),
+  selectedRegister.replace('revision = "'+'a'.repeat(40)+'"','revision = "'+'a'.repeat(40)+'"\nrevision = "'+'a'.repeat(40)+'"'),
+  selectedRegister.replace('revision = "'+'a'.repeat(40)+'"','revision = "'+'a'.repeat(40)+'"\nrevision = "not-a-commit"'),
+  selectedRegister.replace('version = "0.3.0"','version = "0.3.0"\nversion = "other"'),
+  selectedRegister.replace('source = "vendored"','source = "vendored"\nsource = "other"'),
+  selectedRegister.replace('id = "lexlean"','id = "lexlean"\nid = "other"'),
+  selectedRegister.replace('sha256 = "'+'b'.repeat(64)+'"','sha256 = "'+'b'.repeat(64)+'"\nsha256 = "bad"'),
+  selectedRegister.replace('sha256 = "'+'c'.repeat(64)+'"','sha256 = "'+'c'.repeat(64)+'"\n"sha256" = "bad"'),
+  selectedRegister.replace('revision = "'+'a'.repeat(40)+'"','revision = "'+'a'.repeat(40)+'"\n"revi\\u0073ion" = "bad"'),
+  selectedRegister+selectedRegister.slice(selectedRegister.indexOf('[[dependency]]')),
+  selectedRegister+selectedRegister.slice(selectedRegister.indexOf('[[dependency.artifact]]')),
+ ];
+ for(const source of mutations) assert.throws(()=>updateDependencyRegister(source,selectedIdentity));
+ assert.throws(()=>updateDependencyRegister(selectedRegister,{...selectedIdentity,version:'0.3.1'}));
+});
+
 // These subprocess fixtures qualify orchestration only. They never provide
 // evidence that Cargo, LexLean, PrismPM or an SDK acceptance gate ran.
 import {createHash} from 'node:crypto';

@@ -170,6 +170,9 @@ pub struct CheckedModule {
     /// Display spellings of proof-introduced locals (for canonical
     /// formatting and rendering).
     pub proof_spellings: BTreeMap<LocalId, String>,
+    /// Language 1.2: the eligibility report of the module's production
+    /// roots, absent when it declares none (§17.13).
+    pub production: Option<crate::production::ModuleReport>,
 }
 
 /// The result of `check`: everything the backends and verification need.
@@ -189,6 +192,9 @@ pub struct CheckedProject {
     pub semantic_id: Sha256Digest,
     /// The canonical lock bytes hashed into the source ID.
     pub canonical_lock: Vec<u8>,
+    /// Language 1.2: every configured model artifact read for linking, as
+    /// `(project-relative path, byte length, SHA-256)` (§10.1, §21.6).
+    pub artifacts: Vec<(String, usize, Sha256Digest)>,
 }
 
 impl CheckedProject {
@@ -292,6 +298,62 @@ pub fn check_project(
     })
 }
 
+/// Read every configured model artifact (§10.1): a confined regular file of
+/// at most `max_file_bytes` whose SHA-256 is its configured digest. A missing
+/// file or a digest mismatch is `LLR3007`.
+fn load_artifacts(
+    project: &Project,
+    limits: &crate::config::Limits,
+) -> Result<crate::ir::semantic::model::ArtifactStore, Diagnostic> {
+    let mut store = crate::ir::semantic::model::ArtifactStore::new(
+        limits.max_ir_nodes,
+        limits.max_total_source_bytes,
+    );
+    for source in &project.config.artifact_sources {
+        let path = project.confined_file_or_missing(&source.path, || {
+            Diagnostic::new(
+                code!("LLR3007"),
+                format!(
+                    "model artifact `{}` with SHA-256 {} is missing",
+                    source.path,
+                    source.sha256.to_hex()
+                ),
+            )
+        })?;
+        let bytes = std::fs::read(path.as_std_path()).map_err(|error| {
+            Diagnostic::new(
+                code!("LLR3007"),
+                format!("model artifact `{}` cannot be read: {error}", source.path),
+            )
+        })?;
+        if bytes.len() as u64 > limits.max_file_bytes {
+            return Err(Diagnostic::new(
+                code!("LLS8002"),
+                format!(
+                    "max_file_bytes exceeded by model artifact `{}`: configured {}, observed {}",
+                    source.path,
+                    limits.max_file_bytes,
+                    bytes.len()
+                ),
+            ));
+        }
+        let observed = Sha256Digest::of(&bytes);
+        if observed != source.sha256 {
+            return Err(Diagnostic::new(
+                code!("LLR3007"),
+                format!(
+                    "model artifact `{}` has SHA-256 {}, not its configured {}",
+                    source.path,
+                    observed.to_hex(),
+                    source.sha256.to_hex()
+                ),
+            ));
+        }
+        store.insert(source.sha256.to_hex(), bytes);
+    }
+    Ok(store)
+}
+
 /// The check pipeline proper.
 #[allow(clippy::too_many_lines)]
 fn check_project_inline(
@@ -329,6 +391,18 @@ fn check_project_inline(
             None
         }
     };
+    if let Some(error) = over_total(total_bytes) {
+        return Err(error);
+    }
+    // Language 1.2 model artifacts are read once, by their configured
+    // digest, and count toward the same budget (§10.2, §17.12).
+    let artifacts = load_artifacts(project, &limits).map_err(|diagnostic| err(vec![diagnostic]))?;
+    total_bytes = total_bytes.saturating_add(
+        artifacts
+            .values()
+            .map(|bytes| bytes.len() as u64)
+            .sum::<u64>(),
+    );
     if let Some(error) = over_total(total_bytes) {
         return Err(error);
     }
@@ -577,10 +651,10 @@ fn check_project_inline(
             None
         };
         let semantic = if let Some(ast) = &load.ast.semantic {
-            if project.config.language != "1.1" {
+            if project.config.language != "1.1" && project.config.language != "1.2" {
                 return Err(err(vec![Diagnostic::new(
                     code!("LLP2003"),
-                    "semanticmodule requires language 1.1",
+                    "semanticmodule requires language 1.1 or 1.2",
                 )
                 .with_span(span_of_range(&load.path, &load.atoms, ast.data.range))]));
             }
@@ -593,23 +667,87 @@ fn check_project_inline(
                         .map(|semantic| (import.clone(), semantic))
                 })
                 .collect();
+            // Artifact declarations are charged before they decode, against
+            // the nodes every earlier module linked (§17.12 rule 2).
+            artifacts.begin_module(ir_node_count, total_bytes);
             Some(
-                SemanticModule::parse(&ast.data.text, &imports, &imported_semantic).map_err(
-                    |reason| {
+                SemanticModule::parse(
+                    &ast.data.text,
+                    &project.config.language,
+                    &project.config.module_prefix,
+                    &imports,
+                    &imported_semantic,
+                    &artifacts,
+                )
+                .map_err(|failure| {
+                    err(vec![Diagnostic::new(
+                        failure.code,
+                        format!("phase link: {}", failure.reason),
+                    )
+                    .with_span(span_of_range(
+                        &load.path,
+                        &load.atoms,
+                        ast.data.range,
+                    ))])
+                })?,
+            )
+        } else {
+            None
+        };
+        // §17.13: every production root is analysed over the linked
+        // closure of this module and its imports before any backend runs.
+        let production = match &semantic {
+            Some(semantic) if project.config.language == crate::LANGUAGE_1_2 => {
+                let mut linked: BTreeMap<String, crate::production::eligibility::LinkedModule<'_>> =
+                    modules
+                        .iter()
+                        .filter_map(|(name, module)| {
+                            module.document.semantic.as_ref().map(|semantic| {
+                                (
+                                    name.clone(),
+                                    crate::production::eligibility::LinkedModule {
+                                        lean_module: &module.document.lean_module,
+                                        semantic,
+                                    },
+                                )
+                            })
+                        })
+                        .collect();
+                linked.insert(
+                    module_name.clone(),
+                    crate::production::eligibility::LinkedModule {
+                        lean_module: &lean_module,
+                        semantic,
+                    },
+                );
+                crate::production::eligibility::analyse_module(module_name, &linked).map_err(
+                    |failure| {
+                        let range = load
+                            .ast
+                            .semantic
+                            .as_ref()
+                            .map_or((0, load.atoms.len()), |ast| ast.data.range);
+                        let (code, reason) = match failure {
+                            crate::production::eligibility::AnalysisError::Ineligible(reason) => {
+                                (code!("LLT4005"), reason)
+                            }
+                            crate::production::eligibility::AnalysisError::Internal(reason) => {
+                                (code!("LLI9001"), reason)
+                            }
+                        };
                         err(vec![Diagnostic::new(
-                            code!("LLT4001"),
-                            format!("phase link: {reason}"),
+                            code,
+                            format!("phase production: {reason}"),
                         )
                         .with_span(span_of_range(
                             &load.path,
                             &load.atoms,
-                            ast.data.range,
+                            range,
                         ))])
                     },
-                )?,
-            )
-        } else {
-            None
+                )?
+            }
+            Some(_) | None => None,
         };
         let document = DocumentModule {
             name: module_name.clone(),
@@ -656,6 +794,7 @@ fn check_project_inline(
                 decl_origins,
                 visible,
                 proof_spellings,
+                production,
             },
         );
     }
@@ -699,6 +838,18 @@ fn check_project_inline(
         source_id,
         semantic_id,
         canonical_lock,
+        artifacts: project
+            .config
+            .artifact_sources
+            .iter()
+            .map(|source| {
+                (
+                    source.path.clone(),
+                    artifacts.get(&source.sha256.to_hex()).map_or(0, Vec::len),
+                    source.sha256,
+                )
+            })
+            .collect(),
     })
 }
 
