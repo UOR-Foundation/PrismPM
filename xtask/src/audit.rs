@@ -834,6 +834,7 @@ pub fn audit_tools_ci(root: &Path) -> Result<(), Fail> {
         return Err("devcontainer base image is not digest-pinned".into());
     }
     for workflow in [
+        ".github/workflows/binary-sdk-qualification.yml",
         ".github/workflows/ci-parallel.yml",
         ".github/workflows/honesty.yml",
         ".github/workflows/reproducibility.yml",
@@ -893,8 +894,9 @@ pub fn audit_errors(root: &Path, model: &Model) -> Result<(), Fail> {
 
 /// Audit the exact Holo emitter input closure and its stored semantics digest.
 pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
-    const EXPECTED: [&str; 17] = [
+    const EXPECTED: [&str; 19] = [
         "crates/prismpm/src/holo/application.rs",
+        "crates/prismpm/src/holo/binary_program.rs",
         "crates/prismpm/src/holo/browser_application.rs",
         "crates/prismpm/src/holo/browser_application/model.rs",
         "crates/prismpm/src/holo/browser_application/source.rs",
@@ -910,6 +912,7 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "schemas/model-document-v2.schema.json",
         "schemas/model-document-v3.schema.json",
         "schemas/model-document-v4.schema.json",
+        "schemas/model-document-v5.schema.json",
         "schemas/model-document.schema.json",
     ];
     if model.emitter_inputs.spec != "prismpm/emitter-inputs/1"

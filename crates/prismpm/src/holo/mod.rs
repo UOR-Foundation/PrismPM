@@ -4,6 +4,7 @@ pub mod application;
 pub mod archive;
 pub mod browser_application;
 pub mod canonical;
+pub mod binary_program;
 pub mod library;
 pub mod model_document;
 pub mod projector;

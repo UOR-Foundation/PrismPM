@@ -76,3 +76,11 @@ release-check:
 # Stage release artifacts
 release-artifacts:
     cargo run --package xtask -- release-artifacts
+
+# Check the complete owning installed binary-package boundary suite (DK-29).
+binary-sdk-check-tests:
+    node scripts/binary-sdk-check.mjs tests
+
+# Qualify the exact current native installed SDK binary package; never publication.
+binary-sdk-check image revision:
+    bash scripts/binary-sdk-check.sh '{{image}}' '{{revision}}'

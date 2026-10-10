@@ -483,6 +483,25 @@ jobs:
           path: ${{ matrix.name }}-library-sdk.log
           if-no-files-found: error
           retention-days: 30
+      - name: Verify exact current SDK binary-package closure offline and read-only
+        if: matrix.image == 'sdk'
+        shell: bash
+        env:
+          RESULT_NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          node root-a/scripts/binary-sdk-check.mjs tests
+          bash root-a/scripts/binary-sdk-check.sh "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$RESULT_NAME-binary-sdk" > "$RESULT_NAME-binary-sdk.log" 2>&1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && matrix.image == 'sdk'
+        with:
+          name: binary-sdk-${{ matrix.name }}
+          path: |
+            ${{ matrix.name }}-binary-sdk.log
+            ${{ matrix.name }}-binary-sdk/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
   installed-sdk:
     needs: [gate, images]
     runs-on: ${{ matrix.os }}
@@ -703,6 +722,14 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: library-sdk-sdk-arm64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: binary-sdk-sdk-amd64
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: binary-sdk-sdk-arm64
           path: release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:

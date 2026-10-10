@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prismpm/binary-acceptance/1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "scope",
+    "profile",
+    "build_id",
+    "model_id",
+    "lexlean_attestation_id",
+    "program",
+    "executions",
+    "regeneration",
+    "status",
+    "unclaimed",
+    "io_coverage"
+  ],
+  "properties": {
+    "schema": {
+      "const": "prismpm/binary-acceptance/1"
+    },
+    "scope": {
+      "const": "binary-package-only"
+    },
+    "profile": {
+      "const": "prismpm/binary-program/1"
+    },
+    "build_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "lexlean_attestation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "name",
+        "cargo_name",
+        "cargo_version",
+        "cargo_description",
+        "cargo_repository",
+        "cargo_homepage",
+        "export_roots",
+        "entry_root",
+        "request_maximum",
+        "response_maximum",
+        "memory_pages",
+        "acceptance_vectors",
+        "cli"
+      ],
+      "properties": {
+        "profile": {
+          "const": "prismpm/binary-program/1"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "cargo_name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,53}$"
+        },
+        "cargo_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "cargo_description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "cargo_repository": {
+          "$ref": "#/$defs/https"
+        },
+        "cargo_homepage": {
+          "$ref": "#/$defs/https"
+        },
+        "export_roots": {
+          "$ref": "#/$defs/roots"
+        },
+        "entry_root": {
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "request_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "response_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "memory_pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32767
+        },
+        "cli": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "profile"
+          ],
+          "properties": {
+            "profile": {
+              "const": "prismpm/raw-file-cli/1"
+            }
+          }
+        },
+        "acceptance_vectors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "request",
+              "response"
+            ],
+            "properties": {
+              "request": {
+                "type": "array",
+                "maxItems": 1048576,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              },
+              "response": {
+                "type": "array",
+                "maxItems": 1048576,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "executions": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "vector_count",
+          "status"
+        ],
+        "properties": {
+          "mode": {
+            "enum": [
+              "std",
+              "no_std",
+              "core-wasm",
+              "cli-stdio",
+              "cli-file",
+              "cli-mixed"
+            ]
+          },
+          "vector_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096
+          },
+          "status": {
+            "const": "passed"
+          }
+        }
+      }
+    },
+    "regeneration": {
+      "const": "byte-identical"
+    },
+    "status": {
+      "const": "passed"
+    },
+    "unclaimed": {
+      "const": [
+        "application",
+        "browser",
+        "holo",
+        "production-release",
+        "deployment"
+      ]
+    },
+    "io_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "output_write"
+      ],
+      "properties": {
+        "platform": {
+          "const": "linux"
+        },
+        "output_write": {
+          "enum": [
+            "passed",
+            "not-exercised-empty-responses"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "https": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 2048
+    },
+    "roots": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+      }
+    }
+  }
+}

@@ -11,6 +11,7 @@ mod cbor_primitive;
 mod holo_browser;
 mod mailbox_admission;
 mod native_library;
+mod binary_program;
 mod node_suite;
 mod organization_lifecycle;
 mod saved_recovery;
@@ -429,6 +430,7 @@ pub fn run_at(root: &Path, id: &str) {
             verify_browser_host(root, id)
         }
         "DK-17" => native_library::verify(root),
+        "DK-29" => binary_program::verify(root),
         "DK-21" => browser_application::verify(root),
         "DK-22" => browser_compiler::verify(root),
         "DK-27" => verify_node_suite(

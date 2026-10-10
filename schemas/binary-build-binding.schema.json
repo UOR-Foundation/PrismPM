@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prismpm/binary-build-binding/1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile",
+    "scope",
+    "model_id",
+    "program"
+  ],
+  "properties": {
+    "schema": {
+      "const": "prismpm/binary-build-binding/1"
+    },
+    "profile": {
+      "const": "prismpm/binary-program/1"
+    },
+    "scope": {
+      "const": "binary-package-only"
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "name",
+        "cargo_name",
+        "cargo_version",
+        "cargo_description",
+        "cargo_repository",
+        "cargo_homepage",
+        "export_roots",
+        "entry_root",
+        "request_maximum",
+        "response_maximum",
+        "memory_pages",
+        "acceptance_vectors",
+        "cli"
+      ],
+      "properties": {
+        "profile": {
+          "const": "prismpm/binary-program/1"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "cargo_name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,53}$"
+        },
+        "cargo_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "cargo_description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "cargo_repository": {
+          "$ref": "#/$defs/https"
+        },
+        "cargo_homepage": {
+          "$ref": "#/$defs/https"
+        },
+        "export_roots": {
+          "$ref": "#/$defs/roots"
+        },
+        "entry_root": {
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+        },
+        "request_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "response_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "memory_pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32767
+        },
+        "cli": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "profile"
+          ],
+          "properties": {
+            "profile": {
+              "const": "prismpm/raw-file-cli/1"
+            }
+          }
+        },
+        "acceptance_vectors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "request",
+              "response"
+            ],
+            "properties": {
+              "request": {
+                "type": "array",
+                "maxItems": 1048576,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              },
+              "response": {
+                "type": "array",
+                "maxItems": 1048576,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "https": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 2048
+    },
+    "roots": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+      }
+    }
+  }
+}

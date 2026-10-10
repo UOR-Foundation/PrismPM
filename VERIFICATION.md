@@ -2453,3 +2453,15 @@ The same suite checks actual SHA-256 manifest values, missing archive/symlink
 refusal, the real xtask dispatcher binding, nonzero child propagation and the
 workflow's immutable source/read-only publication boundary. These are narrowly
 scoped preparation regressions, not evidence for any unexecuted SDK gate.
+
+BinaryProgram DK-29 verification is a distinct binary-package gate. Its source
+fixtures and generated adapters exercise arbitrary octets (including malformed
+UTF-8), native std/no_std, Core-Wasm and standard/file/mixed streams, exact
+maxima and first-over input bounds, and real argument/open/type/read/write,
+no-clobber, computation and output-limit failures. AdapterAllocation executes the generated adapter's real reservation helper
+with usize::MAX, exercising the standard library's deterministic capacity-overflow
+error without exhausting host memory. Physical allocator exhaustion remains
+unmeasured. Core OOM,
+abort or signals are failed processes, not typed recovery guarantees. Source
+checks and parser tests are not evidence that installed amd64/arm64 SDK lanes
+have passed.

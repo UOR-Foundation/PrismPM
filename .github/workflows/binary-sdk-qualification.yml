@@ -1,0 +1,126 @@
+name: BinaryProgram installed SDK qualification
+run-name: Native binary-package qualification · ${{ github.event.pull_request.head.sha || github.sha }}
+
+on:
+  push:
+    branches: [work/binary-program-prerequisite]
+  pull_request:
+    branches: [main, work/compression-m0-reconcile]
+    paths:
+      - '.github/workflows/binary-sdk-qualification.yml'
+      - 'scripts/binary-sdk-*'
+      - 'crates/prismpm/**'
+      - 'crates/conformance/**'
+      - 'model/**'
+      - 'schemas/**'
+      - 'stdlib/**'
+      - 'tests/fixtures/binary/**'
+      - 'vendor/**'
+      - 'sdk/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: binary-sdk-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  source-format:
+    name: Pinned source formatting prerequisite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Prepare review-only formatter patch and require strict source formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/binary-sdk-format.sh "$SOURCE_REVISION" "$RUNNER_TEMP/binary-format-review"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: binary-format-review-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/binary-format-review/
+          if-no-files-found: error
+          retention-days: 14
+  native-binary:
+    name: Binary package / ${{ matrix.architecture }}
+    needs: source-format
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+      ARCHITECTURE: ${{ matrix.architecture }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - name: Check exact source and all owning boundary tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test -z "$(git status --porcelain)"
+          bash -n scripts/binary-sdk-check.sh scripts/binary-sdk-qualify.sh
+          node scripts/binary-sdk-check.mjs tests
+          bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/binary-tools"
+          echo "$RUNNER_TEMP/binary-tools" >> "$GITHUB_PATH"
+      - name: Build exact native SDK OCI bytes without publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/binary-qualification"
+          node scripts/sdk-image-inputs.mjs build . "$SOURCE_REVISION" runtime \
+            --platform "linux/$ARCHITECTURE" \
+            --output "type=oci,dest=$RUNNER_TEMP/binary-qualification/sdk.oci.tar,rewrite-timestamp=true" \
+            --provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0 \
+            --label org.opencontainers.image.created=1970-01-01T00:00:00Z \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.version=0.3.0
+      - name: Execute source-free binary qualification on the real native SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/binary-sdk-qualify.sh \
+            "$RUNNER_TEMP/binary-qualification/sdk.oci.tar" "$ARCHITECTURE" "$SOURCE_REVISION" \
+            "$RUNNER_TEMP/binary-qualification/evidence"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: binary-sdk-${{ matrix.architecture }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/binary-qualification/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

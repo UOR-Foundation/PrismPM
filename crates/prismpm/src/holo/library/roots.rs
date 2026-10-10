@@ -20,7 +20,7 @@ enum Step<'a> {
     Leave((&'a str, &'a str)),
 }
 
-pub(super) fn project(
+pub(in crate::holo) fn project(
     definitions: &Definitions<'_>,
     fields: &BTreeMap<&str, (&str, &Value)>,
     name: &str,

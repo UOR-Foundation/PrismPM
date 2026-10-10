@@ -2,7 +2,7 @@ name: Parallel CI Gates
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, work/compression-m0-reconcile]
   push:
     branches: [main]
 

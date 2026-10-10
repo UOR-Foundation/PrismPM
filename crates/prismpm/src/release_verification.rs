@@ -233,6 +233,7 @@ pub(crate) fn validate(
         model.library.is_none(),
         "native-library evidence cannot authorize a product release",
     )?;
+    ensure(model.program.is_none(), "binary-package evidence cannot authorize a product release")?;
     let inputs = &build["inputs"];
     let mut input_fields = vec![
         "application_generator_sha256",
