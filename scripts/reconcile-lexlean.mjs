@@ -36,9 +36,11 @@ export function packageTreeManifest(root, crateName) {
 }
 
 export function updateDependencyRegister(source,{revision,version,manifestSha,crateSha}) {
+  assert.equal(version,'0.3.0','unsupported LexLean package version');
   assert.match(revision,/^[0-9a-f]{40}$/);
   assert.match(manifestSha,/^[0-9a-f]{64}$/);
   assert.match(crateSha,/^[0-9a-f]{64}$/);
+  assert.equal([...source.matchAll(/^\[\[dependency\]\]\nid = "lexlean"$/gm)].length,1,'expected exactly one LexLean dependency row');
   const start=source.indexOf('[[dependency]]\nid = "lexlean"');
   assert.ok(start>=0,'lexlean dependency row is absent');
   const next=source.indexOf('\n[[dependency]]',start+1);
@@ -46,12 +48,27 @@ export function updateDependencyRegister(source,{revision,version,manifestSha,cr
   const old=source.slice(start,end);
   assert.match(old,/^version = "0\.3\.0"$/m);
   assert.match(old,/^source = "vendored"$/m);
-  let changed=old
-    .replace(/^version = "[^"]+"$/m,`version = "${version}"`)
-    .replace(/^revision = "[0-9a-f]{40}"$/m,`revision = "${revision}"`)
-    .replace(/(path = "vendor\/lexlean\/MANIFEST\.sha256"\nsha256 = ")[0-9a-f]{64}(")/,`$1${manifestSha}$2`)
-    .replace(/(path = "vendor\/lexlean\/lexlean-[^"]+\.crate"\nsha256 = ")[0-9a-f]{64}(")/,`path = "vendor/lexlean/lexlean-${version}.crate"\nsha256 = "${crateSha}"`);
-  assert.notEqual(changed,old,'dependency register did not change');
+  const blocks=old.trim().split(/\n(?=\[\[dependency\.artifact\]\])/);
+  assert.equal(blocks.length,3,'expected the closed LexLean dependency and two artifacts');
+  const canonicalBlock=(block,patterns)=>{
+    const lines=block.split('\n').map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
+    assert.equal(lines.length,patterns.length,'unexpected or duplicate LexLean identity field');
+    patterns.forEach((pattern,index)=>assert.match(lines[index],pattern));
+  };
+  canonicalBlock(blocks[0],[/^\[\[dependency\]\]$/,/^id = "lexlean"$/,/^version = "0\.3\.0"$/,/^revision = "[0-9a-f]{40}"$/,/^source = "vendored"$/]);
+  canonicalBlock(blocks[1],[/^\[\[dependency\.artifact\]\]$/,/^kind = "tree-manifest"$/,/^path = "vendor\/lexlean\/MANIFEST\.sha256"$/,/^sha256 = "[0-9a-f]{64}"$/,/^tree_root = "vendor\/lexlean"$/]);
+  canonicalBlock(blocks[2],[/^\[\[dependency\.artifact\]\]$/,/^kind = "file"$/,/^path = "vendor\/lexlean\/lexlean-0\.3\.0\.crate"$/,/^sha256 = "[0-9a-f]{64}"$/]);
+  let changed=old;
+  const replaceRequired=(pattern,replacement,label)=>{
+    assert.equal([...changed.matchAll(new RegExp(pattern.source,pattern.flags+'g'))].length,1,`expected exactly one valid ${label}`);
+    changed=changed.replace(pattern,replacement);
+  };
+  replaceRequired(/^version = "0\.3\.0"$/m,`version = "${version}"`,'LexLean version');
+  replaceRequired(/^revision = "[0-9a-f]{40}"$/m,`revision = "${revision}"`,'LexLean revision');
+  replaceRequired(/(path = "vendor\/lexlean\/MANIFEST\.sha256"\nsha256 = ")[0-9a-f]{64}(")/,`$1${manifestSha}$2`,'LexLean manifest digest');
+  replaceRequired(/(path = "vendor\/lexlean\/lexlean-0\.3\.0\.crate"\nsha256 = ")[0-9a-f]{64}(")/,`$1${crateSha}$2`,'LexLean crate digest');
+  // A reproducibly packaged, already-selected dependency is a valid no-op.
+  // Closed canonical identity blocks reject even mixed-validity duplicate keys.
   return source.slice(0,start)+changed+source.slice(end);
 }
 
