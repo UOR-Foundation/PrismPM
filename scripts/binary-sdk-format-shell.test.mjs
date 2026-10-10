@@ -48,12 +48,16 @@ function fixture(t){
  copyFileSync(join(owner,'../sdk/platform-lock.mjs'),join(root,'sdk/platform-lock.mjs'));writeFileSync(join(root,'crates/probe/src/lib.rs'),original);writeFileSync(join(root,'stdlib/generated/package/src/lib.rs'),original);
  git(root,['init','--quiet']);git(root,['add','--all']);git(root,['-c','user.name=PrismPM formatter test','-c','user.email=formatter@localhost','-c','commit.gpgsign=false','commit','--quiet','-m','Format transport fixture']);
  const revision=git(root,['rev-parse','HEAD']),bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerMock);chmodSync(join(bin,'docker'),0o755);
+ // The recording fixture models the pinned AMD64 formatter on either test host.
+ // The real formatter itself still refuses unsupported host architectures.
+ writeFileSync(join(bin,'uname'),'#!/usr/bin/env node\nconst args=process.argv.slice(2);if(args.length!==1||args[0]!=="-m")process.exit(64);console.log(process.env.FORMAT_HOST_ARCH);\n');chmodSync(join(bin,'uname'),0o755);
+ writeFileSync(join(work,'calls.jsonl'),'');
  const inventoryPath=join(work,'inventory.json');writeFileSync(inventoryPath,canonical(inventory()));
- return{work,root,revision,evidence:join(work,'evidence'),env:{...process.env,PATH:bin+':'+process.env.PATH,FORMAT_CALLS:join(work,'calls.jsonl'),FORMAT_STATE:join(work,'state.json'),FORMAT_IMPORTED:join(work,'imported'),FORMAT_INVENTORY:inventoryPath,FORMAT_IMAGE:image,FORMAT_REVISION:revision}};
+ return{work,root,revision,evidence:join(work,'evidence'),env:{...process.env,PATH:bin+':'+process.env.PATH,FORMAT_HOST_ARCH:'x86_64',FORMAT_CALLS:join(work,'calls.jsonl'),FORMAT_STATE:join(work,'state.json'),FORMAT_IMPORTED:join(work,'imported'),FORMAT_INVENTORY:inventoryPath,FORMAT_IMAGE:image,FORMAT_REVISION:revision}};
 }
 function execute(context){
  const result=spawnSync('bash',[join(context.root,'scripts/binary-sdk-format.sh'),context.revision,context.evidence],{env:context.env,encoding:'utf8',timeout:30000,maxBuffer:1024*1024});assert.equal(result.error,undefined);assert.equal(result.signal,null);
- const calls=readFileSync(context.env.FORMAT_CALLS,'utf8').trim().split('\n').map(JSON.parse);return{result,calls};
+ const calls=readFileSync(context.env.FORMAT_CALLS,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);return{result,calls};
 }
 test('formatter waits for the actual initialized session and preserves strict source-format failure',t=>{
  for(const changed of [false,true]){
@@ -65,6 +69,7 @@ test('formatter waits for the actual initialized session and preserves strict so
   assert.ok(calls.some(row=>row[0]==='exec'&&row.includes('tar')&&row.includes('-c')),'export live tmpfs');assert.ok(!calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].includes(':/tmp/')));
   const create=calls.find(row=>row[0]==='container'&&row[1]==='create');for(const value of ['1000:1000','--read-only','none','ALL','no-new-privileges','/tmp:rw,exec,nosuid,nodev,size=4g','PRISMPM_EPHEMERAL_HOME=1'])assert.ok(create.includes(value));assert.ok(!create.includes('--entrypoint')&&!create.includes('--mount'));
  }
+ const unsupported=fixture(t);unsupported.env.FORMAT_HOST_ARCH='aarch64';const rejected=execute(unsupported);assert.notEqual(rejected.result.status,0,'real script must reject an unsupported formatter host');assert.deepEqual(rejected.calls,[],'unsupported host must fail before any Docker operation');
  const generated=fixture(t);generated.env.FORMAT_GENERATED_CHANGE='yes';const generatedResult=execute(generated).result;assert.notEqual(generatedResult.status,0,'excluded generated source changes must fail');assert.match(generatedResult.stderr,/formatter changed non-owned Rust source/);
  const missing=fixture(t);missing.env.FORMAT_EXPORT_FAIL='yes';assert.notEqual(execute(missing).result.status,0,'failed live export must fail formatting gate');
  const failed=fixture(t);failed.env.FORMAT_READY='never';const {result,calls}=execute(failed);assert.notEqual(result.status,0);assert.ok(!calls.some(row=>row[0]==='exec'&&row.includes('/usr/local/bin/prismpm-devcontainer-init')));
