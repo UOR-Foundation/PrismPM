@@ -105,6 +105,65 @@ test('release retains existing mandatory gates and adds binary on both native pl
  const qualification=readFileSync(new URL('../.github/workflows/binary-sdk-qualification.yml',import.meta.url),'utf8');
  for(const required of ['branches: [work/binary-program-prerequisite]','branches: [main, work/compression-m0-reconcile]','runner: ubuntu-24.04','runner: ubuntu-24.04-arm','contents: read','persist-credentials: false','needs: source-format','bash scripts/binary-sdk-format.sh','include-hidden-files: true','ref: ${{ github.event.pull_request.head.sha || github.sha }}','node scripts/binary-sdk-check.mjs tests','node scripts/sdk-image-inputs.mjs build','bash scripts/binary-sdk-qualify.sh'])assert.ok(qualification.includes(required),required);
  for(const forbidden of ['packages: write','contents: write','--push','push: true','continue-on-error'])assert.ok(!qualification.includes(forbidden),forbidden);
+ // Supersede old commits on the same ref without cancelling matrix siblings.
+ // Source and evidence identities remain commit-bound, not concurrency-bound.
+ const binaryCapacity=value=>{
+  assert.deepEqual(value.match(/^concurrency:\n(?:  [^\n]+\n)+/gm),[
+   'concurrency:\n  group: binary-sdk-${{ github.repository }}-${{ github.ref }}\n  cancel-in-progress: true\n',
+  ]);
+  const sections=value.split('\njobs:\n');assert.equal(sections.length,2);
+  assert.deepEqual([...sections[0].matchAll(/^  ([a-z][a-z_-]+):\n/gm)].map(match=>match[1]),
+   ['push','pull_request','workflow_dispatch']);
+  assert.deepEqual([...sections[1].matchAll(/^  ([a-z][a-z_-]+):\n/gm)].map(match=>match[1]),
+   ['source-format','native-binary']);
+  assert.deepEqual([...value.matchAll(/^    timeout-minutes: (\d+)$/gm)].map(match=>Number(match[1])),[30,180]);
+  assert.deepEqual(value.match(/^    needs: .+$/gm),['    needs: source-format']);
+  assert.match(value,/^    strategy:\n      fail-fast: false\n      max-parallel: 2\n      matrix:\n        include:\n          - runner: ubuntu-24.04\n            architecture: amd64\n          - runner: ubuntu-24.04-arm\n            architecture: arm64\n    runs-on: \$\{\{ matrix.runner \}\}\n/m);
+  for(const field of ['SOURCE_REVISION:','ref:'])assert.equal(value.split(field+' ${{ github.event.pull_request.head.sha || github.sha }}').length-1,2);
+  assert.deepEqual([...value.matchAll(/^      - uses: (.+)$/gm)].map(match=>match[1]),[
+   'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+   'actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38',
+   'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+   'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+   'actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38',
+   'docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f',
+   'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  ]);
+  const runs=[...value.matchAll(/^        run: \|\n((?:          [^\n]*\n)+)/gm)].map(match=>match[1]);
+  assert.equal(runs.length,4);
+  for(const [index,command] of [
+   [0,'bash scripts/binary-sdk-format.sh "$SOURCE_REVISION" "$RUNNER_TEMP/binary-format-review"'],
+   [1,'test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"'],
+   [1,'test -z "$(git status --porcelain)"'],
+   [1,'bash -n scripts/binary-sdk-check.sh scripts/binary-sdk-qualify.sh'],
+   [1,'node scripts/binary-sdk-check.mjs tests'],
+   [1,'bash scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/binary-tools"'],
+   [2,'node scripts/sdk-image-inputs.mjs build . "$SOURCE_REVISION" runtime'],
+   [2,'--platform "linux/$ARCHITECTURE"'],
+   [2,'--provenance=false --sbom=false --build-arg SOURCE_DATE_EPOCH=0'],
+   [3,'bash scripts/binary-sdk-qualify.sh'],
+   [3,'"$RUNNER_TEMP/binary-qualification/sdk.oci.tar" "$ARCHITECTURE" "$SOURCE_REVISION"'],
+   [3,'"$RUNNER_TEMP/binary-qualification/evidence"'],
+  ])assert.ok(runs[index].includes(command),command);
+  for(const run of runs)assert.ok(run.startsWith('          set -euo pipefail\n'));
+  assert.doesNotMatch(value,/continue-on-error:|^    if:|^    concurrency:/m);
+ };
+ binaryCapacity(qualification);
+ for(const [before,after] of [
+  ['binary-sdk-${{ github.repository }}-${{ github.ref }}','binary-sdk-${{ github.sha }}'],
+  ['binary-sdk-${{ github.repository }}-${{ github.ref }}','binary-sdk-${{ github.run_id }}'],
+  ['cancel-in-progress: true','cancel-in-progress: false'],
+  ['    name: Binary package /','    concurrency: binary-sdk-${{ github.repository }}-${{ github.ref }}\n    name: Binary package /'],
+  ['      max-parallel: 2\n',''],['max-parallel: 2','max-parallel: 3'],
+  ['fail-fast: false','fail-fast: true'],['architecture: arm64','architecture: amd64'],
+  ['needs: source-format','needs: skipped-format'],['timeout-minutes: 180','timeout-minutes: 360'],
+  ['SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}','SOURCE_REVISION: main'],
+  ['ref: ${{ github.event.pull_request.head.sha || github.sha }}','ref: main'],
+  ['node scripts/binary-sdk-check.mjs tests','echo omitted owning tests'],
+  ['--platform "linux/$ARCHITECTURE"','--platform linux/amd64'],
+  ['bash scripts/binary-sdk-qualify.sh','echo omitted native qualification'],
+  ['actions/checkout@11d5960a326750d5838078e36cf38b85af677262','actions/checkout@main'],
+ ]){assert.ok(qualification.includes(before));assert.throws(()=>binaryCapacity(qualification.replace(before,after)),undefined,'policy mutation: '+before);}
  const formatter=readFileSync(new URL('./binary-sdk-format.sh',import.meta.url),'utf8');
  for(const required of ['ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21','--user 1000:1000 --read-only --network none','--tmpfs /tmp:rw,exec,nosuid,nodev,size=4g','PRISMPM_EPHEMERAL_HOME=1',': > /tmp/prismpm-format-ready; exec sleep infinity','docker exec "$container" test -f /tmp/prismpm-format-ready','cargo fmt --check','if test -s "$evidence/format.patch"; then'])assert.ok(formatter.includes(required),required);
  assert.ok(!formatter.includes('cargo fmt --all'));
