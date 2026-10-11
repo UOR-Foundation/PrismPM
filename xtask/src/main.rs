@@ -13,6 +13,7 @@ mod audit;
 mod codegen;
 mod formatting;
 mod gate_driver;
+mod source_copy;
 mod spec_links;
 mod stdlib;
 
@@ -198,6 +199,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
+            "scripts/compiler-phase-observation.test.mjs",
+            "scripts/compiler-phase-transport.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",
             "scripts/release-gate-evidence.test.mjs",
@@ -1558,22 +1561,7 @@ fn release_check(root: &Path) -> Result<(), Fail> {
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
-    if !from.exists() {
-        return Ok(());
-    }
-    for entry in walkdir::WalkDir::new(from).into_iter().flatten() {
-        let rel = entry.path().strip_prefix(from).unwrap();
-        let target = to.join(rel);
-        if entry.file_type().is_dir() {
-            std::fs::create_dir_all(&target)?;
-        } else if entry.file_type().is_file() {
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
+    source_copy::copy_tree(from, to)
 }
 
 #[cfg(test)]
