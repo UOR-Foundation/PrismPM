@@ -848,6 +848,12 @@ its source fingerprints appear current. Cargo initializes the target and its
 cache tag; private compiler-driver builds use one job, no incremental state and
 no development debug symbols to bound temporary storage. Generated program
 builds, kernel checks, native/Wasm execution and oracle cases are unchanged.
+Budget and Operation Journal verification each execute their complete shared
+compiler owner and a separately registered independent-construction owner.
+Each independent owner retains the same per-file deadline and all native,
+Wasm, source-mutant and applicable browser/host checks; compiler-cache retirement
+receipts supplement, rather than replace, generated-artifact verification.
+Source conformance and installed-SDK verification require both constructions.
 
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
@@ -911,6 +917,10 @@ Source development and test profiles optimize only the `sha2` dependency at
 level 3. Complete per-invocation SDK inventory and executable byte checks,
 native golden write/repeat commands and deadlines remain unchanged; caller
 compiler/profile environment overrides do not enter the native review container.
+
+Private browser compiler-driver builds use that same fixed SHA2-only setting.
+Locked/offline construction, fresh owned targets, source custody, all owning
+executions and their original resource/deadline bounds remain mandatory.
 
 The review container explicitly selects a private Cargo home, seeded only from
 the selected image's immutable cache before generation. Copying is bounded to

@@ -222,7 +222,7 @@ function createCompilerOwner(inputs) {
   const target = createPrivateDriverTarget(work), manifest = join(work, 'tests/browser-session-journal-recovery/driver/Cargo.toml');
   measured('fresh-driver-build', () => run(toolchain.programs.cargo.path,
     ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
-      '--config', 'build.incremental=false', '--manifest-path', manifest], work, {CARGO_TARGET_DIR: target}));
+      '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3', '--manifest-path', manifest], work, {CARGO_TARGET_DIR: target}));
   sourcesUnchanged();
   const directory = join(work, 'private-tools'); mkdirSync(directory, {mode: 0o700});
   const programs = {};

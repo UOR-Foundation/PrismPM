@@ -63,7 +63,7 @@ export const suites=Object.freeze([
  {id:'DK-32',minimum:21,files:['tests/browser-signed-context/corpus.test.mjs','tests/browser-signed-context/bridge.test.mjs','tests/browser-signed-context/wpt.test.mjs','tests/browser-signed-context/aggregate.test.mjs','signed-context-test.mjs']},
  {id:'DK-33',minimum:17,files:['tests/browser-account-genesis/corpus.test.mjs','tests/browser-account-genesis/bridge.test.mjs','tests/browser-account-genesis/owner.test.mjs']},
  {id:'DK-34',minimum:22,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
- {id:'DK-35',minimum:96,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-view/file-custody.test.mjs','tests/browser-session-operation/owner.test.mjs']},
+ {id:'DK-35',minimum:97,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-view/file-custody.test.mjs','tests/browser-session-operation/owner.test.mjs']},
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
  {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
  {id:'ST-17',minimum:21,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
@@ -71,6 +71,12 @@ export const suites=Object.freeze([
 ].map(row=>Object.freeze({...row,
  deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38','ST-17','HO-15'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
+// Separate executions qualify independent compiler construction without
+// replacing shared-owner coverage or enlarging either file's deadline.
+export const fallbackSuites=Object.freeze([
+ {id:'DK-24',construction:'independent',minimum:28,deadline:3600000,files:['tests/browser-operation-journal/fallback-owner.test.mjs']},
+ {id:'DK-27',construction:'independent',minimum:12,deadline:3600000,files:['tests/browser-budget/fallback-owner.test.mjs']},
+].map(row=>Object.freeze({...row,files:Object.freeze(row.files)})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
 const hex=(value,width)=>{assert.equal(typeof value,'string');assert.match(value,new RegExp('^[0-9a-f]{'+width+'}$'));};
@@ -216,20 +222,24 @@ export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(
  root=resolve(root);
  // Preflight the complete inventory before any test can execute. The installed
  // SDK separately binds these immutable source bytes; this is not a race lock.
- const selected=new Map(suites.map(suite=>[suite.id,selectedFiles(root,suite.files)]));
+ const executions=[...suites,...fallbackSuites];
+ const identity=suite=>suite.id+(suite.construction?' '+suite.construction:'');
+ assert.equal(new Set(executions.map(identity)).size,executions.length,'unique compiler construction owners');
+ assert.ok(fallbackSuites.every(row=>suites.some(suite=>suite.id===row.id)),'independent owner has an original capability');
+ const selected=new Map(executions.map(suite=>[identity(suite),selectedFiles(root,suite.files)]));
  const reporter='data:text/javascript;base64,'+readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)).toString('base64');
  const completed=[],env={...process.env};delete env.NODE_TEST_CONTEXT;
- for(const suite of suites){
-  const deadline=suite.deadline;
-  const args=['--test','--test-concurrency=1','--test-reporter='+reporter,'--test-timeout='+deadline,...suite.files];
+ for(const execution of executions){
+  const deadline=execution.deadline;
+  const args=['--test','--test-concurrency=1','--test-reporter='+reporter,'--test-timeout='+deadline,...execution.files];
   const output=launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:deadline+100000,maxBuffer:64*1024*1024,env});
-  emit('SDK browser suite '+suite.id+'\n'+(output.stdout??'')+(output.stderr??''));
-  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+suite.id);
-  const tests=verifyTap(output.stdout,suite.minimum);
-  verifyFileCompletions(output.stdout,selected.get(suite.id),tests);
-  completed.push({id:suite.id,tests});
+  emit('SDK browser suite '+identity(execution)+'\n'+(output.stdout??'')+(output.stderr??''));
+  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+identity(execution));
+  const tests=verifyTap(output.stdout,execution.minimum);
+  verifyFileCompletions(output.stdout,selected.get(identity(execution)),tests);
+  completed.push({id:execution.id,...(execution.construction?{construction:execution.construction}:{}),tests});
  }
- assert.deepEqual(completed.map(row=>row.id),suites.map(row=>row.id));return completed;
+ assert.deepEqual(completed.map(identity),executions.map(identity));return completed;
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){

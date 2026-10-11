@@ -557,7 +557,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-view/file-custody.test.mjs",
                 "tests/browser-session-operation/owner.test.mjs",
             ],
-            96,
+            97,
             "7200000",
         ),
         "OC-07" => verify_browser_export(root),
@@ -602,6 +602,25 @@ pub fn run_at(root: &Path, id: &str) {
         "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(root, id),
 
         _ => panic!("unhandled conformance id: {id}"),
+    }
+    // Qualify the independent construction as well as the original shared
+    // owner. Each complete file retains its separate unchanged deadline.
+    match id {
+        "DK-24" => verify_node_suite(
+            root,
+            id,
+            &["tests/browser-operation-journal/fallback-owner.test.mjs"],
+            28,
+            "3600000",
+        ),
+        "DK-27" => verify_node_suite(
+            root,
+            id,
+            &["tests/browser-budget/fallback-owner.test.mjs"],
+            12,
+            "3600000",
+        ),
+        _ => {}
     }
 }
 
