@@ -21,7 +21,7 @@ const additionalOwners = [
  {id:'DK-31',minimum:8,deadline:3600000,files:['tests/browser-dynamic-choice/wire.test.mjs','tests/browser-dynamic-choice/component.test.mjs','sdk/browser/dynamic-choice.test.mjs']},
  {id:'DK-32',minimum:21,deadline:3600000,files:['tests/browser-signed-context/corpus.test.mjs','tests/browser-signed-context/bridge.test.mjs','tests/browser-signed-context/wpt.test.mjs','tests/browser-signed-context/aggregate.test.mjs','sdk/browser/signed-context-test.mjs']},
  {id:'DK-34',minimum:22,deadline:3600000,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
- {id:'DK-35',minimum:96,deadline:7200000,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-view/file-custody.test.mjs','tests/browser-session-operation/owner.test.mjs']},
+ {id:'DK-35',minimum:97,deadline:7200000,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-view/file-custody.test.mjs','tests/browser-session-operation/owner.test.mjs']},
 ];
 function registeredAdditionalOwner(source,id) {
  const files=text=>[...text.matchAll(/"([^"]+)"/g)].map(row=>row[1]);
