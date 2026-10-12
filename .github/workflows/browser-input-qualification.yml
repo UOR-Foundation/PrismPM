@@ -1,41 +1,40 @@
-name: Qualify Debian browser inputs
-
+name: Independent native SDK browser readiness
 on:
-  pull_request:
-    paths:
-      - .github/workflows/browser-input-qualification.yml
-      - scripts/qualify-debian-browser-inputs.mjs
-      - scripts/qualify-debian-browser-inputs.test.mjs
   workflow_dispatch:
-
-permissions:
-  contents: read
-
+permissions: {}
 concurrency:
-  group: browser-inputs-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
+  group: native-sdk-browser-readiness-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
-  qualify:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  readiness:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+          fetch-depth: 0
+      - name: Qualify the existing exact native SDK without rebuild or publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: python3 -B scripts/native-sdk-browser-runtime.py "$ARCHITECTURE" "$RUNNER_TEMP/native-sdk-browser-readiness"
+      - name: Preserve complete readiness evidence including failed owners and retirement
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          node-version: 22.23.2
-      - name: Check closed input and qualification rules
-        run: node --test scripts/qualify-debian-browser-inputs.test.mjs
-      - name: Acquire and inspect official archives without execution
-        run: node scripts/qualify-debian-browser-inputs.mjs "$RUNNER_TEMP/debian-browser-inputs"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: debian-browser-input-receipt-${{ github.event.pull_request.head.sha || github.sha }}
-          path: |
-            ${{ runner.temp }}/debian-browser-inputs/receipt.json
-            ${{ runner.temp }}/debian-browser-inputs/*-entries.txt
+          name: native-sdk-browser-readiness-${{ matrix.architecture }}-${{ github.sha }}
+          path: ${{ runner.temp }}/native-sdk-browser-readiness/evidence/
           if-no-files-found: error
           retention-days: 14

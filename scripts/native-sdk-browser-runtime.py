@@ -30,7 +30,7 @@ SMALL = ['authority-result.json', 'candidate.json', 'cli.json', 'config.json', '
 OWNERS = ['scripts/browser-environment-preflight.sh', 'scripts/browser-environment-preflight.mjs',
           'sdk/browser/browser-test-server.mjs', 'sdk/browser-engine/authority.json', 'sdk/browser-engine/install.py']
 VERIFIERS = ['scripts/native-sdk-browser-runtime.py', 'scripts/native-sdk-browser-runtime.mjs',
-             'scripts/native-sdk-browser-runtime.test.py', '.github/workflows/native-sdk-browser-runtime.yml']
+             'scripts/native-sdk-browser-runtime.test.py', '.github/workflows/browser-input-qualification.yml']
 
 
 def require(condition, message):
