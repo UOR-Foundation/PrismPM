@@ -1,0 +1,51 @@
+spec = "prismpm/binary-adapter-diagnostics/1"
+capability = "DK-29"
+profile = "prismpm/raw-file-cli/1"
+model_source = "stdlib/src/Foundation/Binary/V1/Model.lex.tex"
+generator = "crates/prismpm/src/binary_cli.rs"
+source = "crates/prismpm/src/binary_cli/main.rs.in"
+
+[[error]]
+code = "InvalidArguments"
+publication = "NotPublished"
+statement = "Argument count, exact flag order, or a nonempty path is invalid."
+[[error]]
+code = "InputOpen"
+publication = "NotPublished"
+statement = "The declared input cannot be opened."
+[[error]]
+code = "InputType"
+publication = "NotPublished"
+statement = "A path input is not a regular file."
+[[error]]
+code = "InputRead"
+publication = "NotPublished"
+statement = "The bounded input read failed."
+[[error]]
+code = "InputLimit"
+publication = "NotPublished"
+statement = "Input exceeds the source-owned byte maximum before core execution."
+[[error]]
+code = "AdapterAllocation"
+publication = "NotPublished"
+statement = "Fallible adapter input reservation failed; core allocation recovery is unclaimed."
+[[error]]
+code = "ComputeFailure"
+publication = "NotPublished"
+statement = "The generated core returned a computation error; panics and aborts remain process failures."
+[[error]]
+code = "OutputLimit"
+publication = "NotPublished"
+statement = "Computed output exceeds the source-owned byte maximum before publication."
+[[error]]
+code = "OutputExists"
+publication = "NotPublished"
+statement = "A destination exists and no-clobber creation refused it."
+[[error]]
+code = "OutputOpen"
+publication = "NotPublished"
+statement = "A new destination cannot be opened."
+[[error]]
+code = "OutputWrite"
+publication = "Unknown"
+statement = "Writing, flushing, or synchronizing failed; a partial destination may exist."

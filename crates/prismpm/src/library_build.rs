@@ -42,7 +42,7 @@ pub(crate) fn write(path: &Path, bytes: &[u8]) -> Result<(), PrismError> {
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", path.display())))
 }
 
-fn relative(path: &str) -> Result<(), PrismError> {
+pub(crate) fn relative(path: &str) -> Result<(), PrismError> {
     if path.is_empty()
         || path.contains('\\')
         || Path::new(path)

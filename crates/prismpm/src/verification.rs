@@ -2494,7 +2494,7 @@ pub(crate) fn run(
         .into_iter()
         .collect::<Vec<_>>();
     let package_exports_sha256 = format!("{:x}", Sha256::digest(STDLIB_EXPORTS_SOURCE.as_bytes()));
-    if model.application.is_none() && model.library.is_none() {
+    if model.application.is_none() && model.library.is_none() && model.program.is_none() {
         validate_lexlean_declarations(&lex_value, &lex_snapshot, &corpus)?;
         validate_control_coverage_corpus(&lex_snapshot, &corpus)?;
     }
@@ -2568,6 +2568,21 @@ pub(crate) fn run(
             "PP4004",
             "LexLean manifest attests no generated Lean modules",
         ));
+    }
+    if model.program.is_some() {
+        return crate::binary_verification::run(crate::library_verification::LibraryVerification {
+            repository_root: &controller.root,
+            config: &config,
+            build,
+            model,
+            model_bytes,
+            build_manifest,
+            build_root: &build_root,
+            lex_attestation,
+            lex_attestation_id,
+            lex_snapshot,
+            processes: toolchain.records,
+        });
     }
     if model.library.is_some() {
         return crate::library_verification::run(
