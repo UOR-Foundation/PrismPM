@@ -6,6 +6,14 @@ on:
       - '.devcontainer/Dockerfile'
       - 'sdk/Dockerfile'
       - 'scripts/sdk-image-inputs.test.mjs'
+      - 'scripts/sdk-image-inputs.mjs'
+      - 'scripts/sdk-vv-inputs.mjs'
+      - 'sdk/inventory-metadata.mjs'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/sdk-candidate.yml'
+      - 'scripts/vv.sh'
+      - 'scripts/rust-oracle-tools-inputs.mjs'
+      - 'scripts/rust-oracle-tools-inputs.test.mjs'
       - '.github/workflows/rust-oracle-tools.yml'
   workflow_dispatch:
 
@@ -18,7 +26,7 @@ concurrency:
 
 jobs:
   tools:
-    name: Shared tool construction (${{ matrix.os }})
+    name: Tool inputs and conditional construction (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -28,17 +36,40 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.23.2
+      - name: Compare complete tool and qualification inputs
+        id: inputs
+        env:
+          TOOL_BASE_REVISION: ${{ github.event.pull_request.base.sha || 'dispatch' }}
+        run: |
+          set -euo pipefail
+          node --test scripts/rust-oracle-tools-inputs.test.mjs
+          mkdir -p target/rust-oracle-tools
+          node scripts/rust-oracle-tools-inputs.mjs "$TOOL_BASE_REVISION" > target/rust-oracle-tools/inputs.json
+          node --input-type=module <<'JS'
+          import {readFileSync,appendFileSync} from 'node:fs';
+          const value=JSON.parse(readFileSync('target/rust-oracle-tools/inputs.json','utf8'));
+          if(typeof value.changed!=='boolean')throw new Error('missing exact input comparison');
+          appendFileSync(process.env.GITHUB_OUTPUT,`changed=${value.changed}\n`);
+          if(!value.changed){
+            const message='Exact tool stage and harness unchanged; native construction not run; no qualification established.';
+            console.log(message);appendFileSync(process.env.GITHUB_STEP_SUMMARY,message+'\n');
+          }
+          JS
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        if: steps.inputs.outputs.changed == 'true'
         with:
           version: v0.28.0
           driver-opts: image=docker.io/moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
       - name: Validate source and acquisition boundary
         run: node --test scripts/sdk-image-inputs.test.mjs
       - name: Build both exact tool stages and verify real cache reuse
+        if: steps.inputs.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail

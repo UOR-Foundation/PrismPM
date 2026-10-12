@@ -58,6 +58,13 @@ export function verifyHistoricalSource(document,bytes=readFileSync(new URL('./fi
 }
 export function historicalLock() {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/hologram-live-historical-lock.json', import.meta.url)));
+  return verifyHistoricalFixture(fixture);
+}
+// Original Git objects are imported data, not caller-produced provenance. The
+// real Git oracle proves the pinned commit -> root tree -> exact regular blob
+// relation offline. No publisher signature or current-upstream state is claimed.
+export function verifyHistoricalFixture(fixture) {
+  assert.deepEqual(Object.keys(fixture).sort(), ['document','objects','source']);
   assert.deepEqual(fixture.source, {repository: 'https://github.com/Hologram-Technologies/hologram-live',
     revision: '419759164f6cfae768fd5536da5cd8422efbf032', path: 'prismpm.lock',
     git_blob: 'cec41c29f6caf8ace4ea2cbf1fb38db3d242bdaa',
@@ -65,6 +72,33 @@ export function historicalLock() {
   assert.equal(hash(fixture.document), fixture.source.sha256);
   assert.equal(canonical(JSON.parse(fixture.document)), fixture.document);
   assert.equal(JSON.parse(fixture.document).schema, 'prismpm/sdk-lock/1');
+  assert.deepEqual(Object.keys(fixture.objects).sort(), ['commit_base64','tree_base64']);
+  const decode = text => {
+    assert.equal(typeof text,'string');assert(text.length > 0 && text.length <= 87384);
+    const bytes=Buffer.from(text,'base64');assert(bytes.length <= 65536);
+    assert.equal(bytes.toString('base64'),text,'canonical original Git object bytes');return bytes;
+  };
+  const commit=decode(fixture.objects.commit_base64),tree=decode(fixture.objects.tree_base64);
+  const treeId=/^tree ([a-f0-9]{40})\n/.exec(commit.toString('utf8'))?.[1];
+  assert(treeId,'original commit root tree is required');
+  const work=mkdtempSync('/tmp/prismpm-historical-git-');
+  try {
+    const git=(args,input) => {
+      const p=spawnSync('/usr/bin/git',args,{cwd:work,input,timeout:5000,maxBuffer:65536,
+        env:{PATH:'/usr/bin:/bin',HOME:work,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',
+          GIT_NO_REPLACE_OBJECTS:'1',LANG:'C',LC_ALL:'C'}});
+      assert.ifError(p.error);assert.equal(p.signal,null);assert.equal(p.status,0,'original Git oracle refused historical source');
+      return p.stdout;
+    };
+    git(['init','--bare','--quiet','--object-format=sha1']);
+    for(const [type,bytes,expected] of [['commit',commit,fixture.source.revision],
+      ['tree',tree,treeId],['blob',Buffer.from(fixture.document),fixture.source.git_blob]])
+      assert.equal(git(['hash-object','-w','-t',type,'--stdin'],bytes).toString(),expected+'\n','original Git object identity differs');
+    assert.equal(git(['ls-tree',fixture.source.revision,'--',fixture.source.path]).toString(),
+      '100644 blob '+fixture.source.git_blob+'\t'+fixture.source.path+'\n','historical lock is not the pinned regular Git blob');
+    assert(git(['cat-file','blob',fixture.source.revision+':'+fixture.source.path]).equals(Buffer.from(fixture.document)),
+      'historical lock bytes differ from the actual pinned commit tree');
+  } finally { rmSync(work,{recursive:true}); }
   return {...fixture,authority:verifyHistoricalSource(fixture.document)};
 }
 export const migrationChecks = Object.freeze(['historical-refusal', 'read-only-proposal', 'exact-root-replay',

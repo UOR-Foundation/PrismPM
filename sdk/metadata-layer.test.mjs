@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {gzipSync} from 'node:zlib';
@@ -93,6 +94,37 @@ test('configuration refuses wrong platforms, mismatched DiffIDs, legacy images a
   const bytes = encode(config);
   assert.deepEqual(parseConfig(bytes, {...original.manifest, config:describe(bytes, type + 'config.v1+json')}, {os:'linux', architecture:'amd64'}), config);
   assert.throws(() => parseConfig(original.configBytes, original.manifest, {os:'windows', architecture:'amd64'}));
+});
+
+test('SDK volume admission matches the imported OCI null-or-object schema without hiding metadata', () => {
+  const require=createRequire('/opt/prismpm/oracles/package.json');
+  assert.equal(require('ajv/package.json').version,'8.20.0');
+  assert.equal(require('ajv-draft-04/package.json').version,'1.0.0');
+  const Ajv=require('ajv-draft-04'),ajv=new Ajv({strict:false,allErrors:true,validateFormats:false});
+  const directory=new URL('../standards/oracles/oci-image-1.1.1/schema/',import.meta.url);
+  ajv.addSchema(JSON.parse(readFileSync(new URL('defs.json',directory))),'https://opencontainers.org/schema/image/defs.json');
+  const validate=ajv.compile(JSON.parse(readFileSync(new URL('config-schema.json',directory))));
+  const original=graph(fixture().tar);
+  const admit=value=>{const bytes=encode(value);return parseConfig(bytes,
+    {...original.manifest,config:describe(bytes,type+'config.v1+json')},{os:'linux',architecture:'amd64'});};
+  for(const volumes of [undefined,null,{}, {'/workspace':{}}, {'/workspace':{description:'opaque object'}}]) {
+    const config=structuredClone(original.config);if(volumes!==undefined)config.config.Volumes=volumes;
+    assert.equal(validate(config),true,JSON.stringify(validate.errors));
+    assert.deepEqual(admit(config),config);
+  }
+  for(const volumes of [[],false,0,'',{'/workspace':null},{'/workspace':1},{'/workspace':[]}]) {
+    const config=structuredClone(original.config);config.config.Volumes=volumes;
+    assert.equal(validate(config),false,'independent OCI schema must reject invalid volume shape');
+    assert.throws(()=>admit(config));
+  }
+  // The OCI schema permits these maps; the stricter SDK metadata-custody
+  // profile must still refuse every intersecting mount and every case alias.
+  for(const path of ['/opt','/opt/prismpm/share/inventory.json']) {
+    const config=structuredClone(original.config);config.config.Volumes={[path]:{}};
+    assert.equal(validate(config),true);assert.throws(()=>admit(config),/intersects/);
+  }
+  const alias=structuredClone(original.config);alias.config.Volumes=null;alias.config.Volumeſ={'/opt':{}};
+  assert.throws(()=>admit(alias),/casing/);
 });
 
 test('coherently rehashed duplicate keys and field aliases cannot hide OCI volumes or layers', () => {

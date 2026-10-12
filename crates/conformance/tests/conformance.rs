@@ -162,6 +162,7 @@ test_case!(conformance_dk_22, "DK-22");
 test_case!(conformance_dk_23, "DK-23");
 test_case!(conformance_dk_24, "DK-24");
 test_case!(conformance_dk_25, "DK-25");
+test_case!(conformance_dk_26, "DK-26");
 test_case!(conformance_dk_27, "DK-27");
 test_case!(conformance_dk_28, "DK-28");
 test_case!(conformance_dk_29, "DK-29");

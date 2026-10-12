@@ -23,7 +23,8 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 node "$helper" capture "$root" "$revision" > "$sdk_work/source.json"
 docker pull --platform "linux/$architecture" "$image"
-docker image inspect "$image" | node "$helper" image "$image" "$architecture" "$revision"
+docker image inspect "$image" > "$sdk_work/image.json"
+node "$helper" image "$image" "$architecture" "$revision" < "$sdk_work/image.json"
 container=$(docker container create --network none --read-only --entrypoint /usr/bin/true "$image")
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 mkdir "$sdk_work/source"
@@ -34,6 +35,8 @@ done < <(node "$helper" roots)
 node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"
 docker container cp "$container:/usr/local/bin/prismpm-devcontainer-init" "$sdk_work/entrypoint.sh"
 docker container cp "$container:/opt/prismpm/share/inventory.json" "$sdk_work/inventory.json"
+docker container cp "$container:/opt/prismpm/share/standards.lock" "$sdk_work/standards.lock"
+cmp "$root/standards.lock" "$sdk_work/standards.lock"
 cmp "$root/sdk/devcontainer-init.sh" "$sdk_work/entrypoint.sh"
 docker container rm "$container" >/dev/null
 container=''
@@ -101,4 +104,6 @@ cat "$sdk_work/result.json"
 docker container rm "$container" >/dev/null
 container=''
 node "$helper" verify "$root" "$sdk_work/source.json"
+node "$root/scripts/library-sdk-metadata-evidence.mjs" retain "$sdk_work" \
+  "$root/target/library-sdk-evidence/linux-$architecture" "$root" "$image" "$revision" "$architecture"
 printf 'native-library SDK closure passed: source=%s image=%s platform=linux/%s\n' "$revision" "$image" "$architecture"
