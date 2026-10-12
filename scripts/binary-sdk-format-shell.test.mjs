@@ -16,18 +16,40 @@ const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2)
 const state=fs.existsSync(statePath)?JSON.parse(fs.readFileSync(statePath)):{};
 const save=()=>fs.writeFileSync(statePath,JSON.stringify(state));
 fs.appendFileSync(log,JSON.stringify(args)+'\\n');
-const id='c'.repeat(64);
+const id='c'.repeat(64),imageId='sha256:'+'e'.repeat(64),value=flag=>args[args.indexOf(flag)+1];
+const live=reference=>state.created&&!state.removed&&(reference===id||reference===state.name);
 if(args[0]==='pull')process.exit(0);
-if(args[0]==='image'&&args[1]==='inspect'){console.log(JSON.stringify([{Os:'linux',Architecture:'amd64',RepoDigests:[process.env.FORMAT_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.FORMAT_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.3.0'}}}]));process.exit(0);}
-if(args[0]==='container'&&args[1]==='create'){state.created=args;save();console.log(id);process.exit(0);}
-if(args[0]==='container'&&args[1]==='start'){console.log(id);process.exit(0);}
-if(args[0]==='container'&&args[1]==='inspect'){console.log(process.env.FORMAT_READY==='never'?'false':'true');process.exit(0);}
+if(args[0]==='image'&&args[1]==='inspect'){
+ if(args.includes('--format')){if(value('--format')!=='{{.Id}}')process.exit(64);console.log(imageId);process.exit(0);}
+ console.log(JSON.stringify([{Id:imageId,Os:'linux',Architecture:'amd64',RepoDigests:[process.env.FORMAT_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.FORMAT_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.3.0'}}}]));process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='ls'){
+ if(!args.includes('--all')||!args.includes('--no-trunc')||value('--format')!=='{{.ID}}')process.exit(64);
+ const filter=value('--filter');if(!(filter.startsWith('name=^/')&&filter.endsWith('$'))&&!/^id=[a-f0-9]{64}$/.test(filter))process.exit(64);if(live(id)&&(filter==='name=^/'+state.name+'$'||filter==='id='+id))console.log(id);process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='create'){
+ const label=value('--label');if(state.created||!args.includes('--name')||!args.includes('--label')||!value('--name').endsWith('-formatter')||!label.startsWith('io.prismpm.sdk-session='))process.exit(64);
+ state.created=args;state.name=value('--name');state.owner=label.slice('io.prismpm.sdk-session='.length);state.running=false;state.exit=0;save();console.log(id);process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='start'){if(!live(args.at(-1)))process.exit(1);state.running=process.env.FORMAT_READY!=='never';save();console.log(id);process.exit(0);}
+if(args[0]==='container'&&args[1]==='inspect'){
+ const reference=args[2]==='--format'?args.at(-1):args[2];if(!live(reference))process.exit(1);
+ const format=value('--format');
+ if(format==='{{.State.Running}}')console.log(state.running);
+ else if(format==='{{.Id}}|{{.Name}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "io.prismpm.sdk-session"}}|{{range .Mounts}}{{.Type}}:{{.Name}}:{{.Destination}}:{{.RW}};{{end}}')console.log([id,'/'+state.name,imageId,process.env.FORMAT_IMAGE,state.owner,'tmpfs::/tmp:true;'].join('|'));
+ else if(format==='{{.State.Running}}|{{.State.OOMKilled}}|{{json .ExecIDs}}|{{.State.ExitCode}}|{{json .State.Error}}')console.log([state.running,false,'null',state.exit,'""'].join('|'));
+ else process.exit(64);
+ process.exit(0);
+}
 if(args[0]==='container'&&args[1]==='logs')process.exit(0);
-if(args[0]==='container'&&args[1]==='rm')process.exit(0);
+if(args[0]==='container'&&args[1]==='stop'){if(!live(args.at(-1))||args.length!==5||args[2]!=='--time'||args[3]!=='5')process.exit(64);state.running=false;state.exit=143;save();console.log(id);process.exit(0);}
+if(args[0]==='container'&&args[1]==='rm'){if(args.length!==3||!live(args[2])||state.running)process.exit(64);state.removed=true;save();console.log(id);process.exit(0);}
 if(args[0]==='exec'&&args.includes('/tmp/prismpm-format-ready')){
+ if(!live(args[1])||!state.running)process.exit(1);
  state.polls=(state.polls||0)+1;state.ready=state.polls>=3&&process.env.FORMAT_READY!=='never';save();process.exit(state.ready?0:1);
 }
 if(args[0]==='exec'){
+ if(!live(args[1]==='--interactive'?args[2]:args[1])||!state.running)process.exit(1);
  if(!state.ready){console.error('SDK initializer has not completed');process.exit(71);}
  if(args.includes('mkdir'))process.exit(0);
  if(args.includes('tar')&&args.includes('-x')){fs.mkdirSync(process.env.FORMAT_IMPORTED);const imported=require('node:child_process').spawnSync('tar',['-x','-C',process.env.FORMAT_IMPORTED],{input:fs.readFileSync(0)});if(imported.status!==0)process.exit(74);state.source=true;save();process.exit(0);}
@@ -35,6 +57,7 @@ if(args[0]==='exec'){
  if(args.includes('/usr/local/bin/prismpm-devcontainer-init')){if(!state.source)process.exit(72);if(process.env.FORMAT_CHANGE==='yes')fs.writeFileSync(path.join(process.env.FORMAT_IMPORTED,'crates/probe/src/lib.rs'),'pub fn probe() {}\\n');if(process.env.FORMAT_GENERATED_CHANGE==='yes'||args.at(-1).includes('cargo fmt --all'))fs.writeFileSync(path.join(process.env.FORMAT_IMPORTED,'stdlib/generated/package/src/lib.rs'),'pub fn probe() {}\\n');state.formatted=true;save();console.log('recording formatter only');process.exit(0);}
 }
 if(args[0]==='container'&&args[1]==='cp'){
+ if(!live(args[2].split(':')[0]))process.exit(1);
  if(args[2].endsWith(':/opt/prismpm/share/inventory.json')){fs.copyFileSync(process.env.FORMAT_INVENTORY,args[3]);process.exit(0);}
  if(args[2].includes(':/tmp/')){console.error('Docker archive API cannot read tmpfs');process.exit(76);}
 }
@@ -44,7 +67,7 @@ const git=(root,args)=>{const output=spawnSync('git',['-C',root,...args],{encodi
 function fixture(t){
  const work=mkdtempSync(join(tmpdir(),'prismpm-format-shell-'));t.after(()=>rmSync(work,{recursive:true,force:true}));
  const root=join(work,'source');mkdirSync(join(root,'scripts'),{recursive:true});mkdirSync(join(root,'sdk'));mkdirSync(join(root,'crates/probe/src'),{recursive:true});mkdirSync(join(root,'stdlib/generated/package/src'),{recursive:true});
- for(const name of ['binary-sdk-format.sh','binary-sdk-check.mjs','library-sdk-check.mjs','browser-api-sdk-check.mjs'])copyFileSync(join(owner,name),join(root,'scripts',name));
+ for(const name of ['binary-sdk-format.sh','binary-sdk-check.mjs','library-sdk-check.mjs','browser-api-sdk-check.mjs','sdk-owned-session.sh'])copyFileSync(join(owner,name),join(root,'scripts',name));
  copyFileSync(join(owner,'../sdk/platform-lock.mjs'),join(root,'sdk/platform-lock.mjs'));writeFileSync(join(root,'crates/probe/src/lib.rs'),original);writeFileSync(join(root,'stdlib/generated/package/src/lib.rs'),original);
  git(root,['init','--quiet']);git(root,['add','--all']);git(root,['-c','user.name=PrismPM formatter test','-c','user.email=formatter@localhost','-c','commit.gpgsign=false','commit','--quiet','-m','Format transport fixture']);
  const revision=git(root,['rev-parse','HEAD']),bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerMock);chmodSync(join(bin,'docker'),0o755);
@@ -68,6 +91,9 @@ test('formatter waits for the actual initialized session and preserves strict so
   const initialized=calls.findIndex(row=>row[0]==='exec'&&row.includes('/usr/local/bin/prismpm-devcontainer-init'));assert.ok(initialized>ready.at(-1),'no concurrent initializer');
   assert.ok(calls.some(row=>row[0]==='exec'&&row.includes('tar')&&row.includes('-c')),'export live tmpfs');assert.ok(!calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].includes(':/tmp/')));
   const create=calls.find(row=>row[0]==='container'&&row[1]==='create');for(const value of ['1000:1000','--read-only','none','ALL','no-new-privileges','/tmp:rw,exec,nosuid,nodev,size=4g','PRISMPM_EPHEMERAL_HOME=1'])assert.ok(create.includes(value));assert.ok(!create.includes('--entrypoint')&&!create.includes('--mount'));
+  assert.deepEqual(calls.filter(row=>row[0]==='container'&&row[1]==='stop').map(row=>row.slice(2)),[['--time','5','c'.repeat(64)]],'only the owned sleeping formatter is stopped');
+  assert.deepEqual(calls.filter(row=>row[0]==='container'&&row[1]==='rm').map(row=>row.slice(2)),[['c'.repeat(64)]],'owned formatter retires without force');
+  assert.equal(JSON.parse(readFileSync(context.env.FORMAT_STATE)).removed,true);
  }
  const unsupported=fixture(t);unsupported.env.FORMAT_HOST_ARCH='aarch64';const rejected=execute(unsupported);assert.notEqual(rejected.result.status,0,'real script must reject an unsupported formatter host');assert.deepEqual(rejected.calls,[],'unsupported host must fail before any Docker operation');
  const generated=fixture(t);generated.env.FORMAT_GENERATED_CHANGE='yes';const generatedResult=execute(generated).result;assert.notEqual(generatedResult.status,0,'excluded generated source changes must fail');assert.match(generatedResult.stderr,/formatter changed non-owned Rust source/);

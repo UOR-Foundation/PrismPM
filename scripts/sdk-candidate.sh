@@ -45,23 +45,31 @@ case "${1:-}" in
     archive=$2; architecture=$3; revision=$4; evidence=$5
     inspect_layout "$archive" "$architecture" "$revision" "$evidence"
     digest=$(<"$evidence/digest.txt")
-    nonce="$$-${RANDOM}"
-    registry="prismpm-candidate-${nonce}"
-    volume="prismpm-candidate-config-${nonce}"
+    source "$(dirname "$0")/sdk-owned-session.sh"
     scratch=$(mktemp -d)
+    sdk_owned_begin
     cleanup() {
-      docker container rm --force "$registry" >/dev/null 2>&1 || true
-      docker volume rm "$volume" >/dev/null 2>&1 || true
-      rm -r -- "$scratch"
+      local primary=$? failed=0
+      trap - EXIT
+      if ! sdk_owned_cleanup; then failed=1; fi
+      if ! rm -r -- "$scratch"; then failed=1; fi
+      if test "$primary" -ne 0; then exit "$primary"; fi
+      exit "$failed"
     }
     trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     # OCI-only here: this test transports the exact OCI artifact, never Docker conversion.
     printf '%s\n' '{"distSpecVersion":"1.1.1","http":{"address":"0.0.0.0","port":5000},"log":{"level":"warn"},"storage":{"rootDirectory":"/tmp/zot"}}' > "$scratch/config.json"
-    docker volume create "$volume" >/dev/null
-    docker container create --name "$registry" --publish 127.0.0.1::5000 \
+    sdk_owned_volume registry-config
+    volume=$SDK_SESSION_VOLUME
+    sdk_owned_container registry \
+      ghcr.io/project-zot/zot@sha256:cd2aea942f428630bcb4190542be6abd35e14177aab84fc7ccad0dca8ecb363d "$volume" \
+      --publish 127.0.0.1::5000 \
       --read-only --tmpfs /tmp:rw,nosuid,nodev --volume "$volume:/config" \
       ghcr.io/project-zot/zot@sha256:cd2aea942f428630bcb4190542be6abd35e14177aab84fc7ccad0dca8ecb363d \
-      serve /config/config.json >/dev/null
+      serve /config/config.json
+    registry=$SDK_SESSION_CONTAINER
     docker container cp "$scratch/config.json" "$registry:/config/config.json"
     docker container start "$registry" >/dev/null
     endpoint=$(docker container port "$registry" 5000/tcp | sed -n '1p')
@@ -77,11 +85,27 @@ case "${1:-}" in
     test "$(oras resolve --plain-http "$endpoint/sdk:candidate")" = "$digest"
     image="$endpoint/sdk@$digest"
     docker pull --platform "linux/$architecture" "$image"
+    sdk_count=0
     sdk() {
-      docker run --rm --user 1000:1000 --network none --cap-drop ALL \
-        --security-opt no-new-privileges "$image" "$@"
+      local cid primary=0 retired=0
+      sdk_count=$((sdk_count + 1))
+      sdk_owned_container "smoke-$sdk_count" "$image" '' \
+        --user 1000:1000 --network none --cap-drop ALL \
+        --security-opt no-new-privileges "$image" "$@" || return "$?"
+      cid=$SDK_SESSION_CONTAINER
+      docker container start --attach "$cid" || primary=$?
+      # Docker attach can return successfully even when the process failed.
+      if test "$primary" -eq 0; then
+        primary=$(sdk_owned_docker container inspect "$cid" --format '{{.State.ExitCode}}') || primary=$?
+        [[ $primary =~ ^[0-9]+$ ]] || primary=1
+      fi
+      sdk_owned_retire_container "$cid" || retired=$?
+      if test "$primary" -ne 0; then return "$primary"; fi
+      return "$retired"
     }
-    test "$(sdk id -u)" = 1000
+    # Run in the owning shell, never a substitution that loses registered IDs.
+    sdk id -u > "$scratch/uid"
+    test "$(cat "$scratch/uid")" = 1000
     sdk prismpm --json completion bash > "$evidence/cli.json"
     sdk cat /opt/prismpm/share/inventory.json > "$evidence/inventory.json"
     sdk cat /opt/prismpm/share/standards.lock > "$evidence/standards.lock"

@@ -6,6 +6,7 @@ revision=$1
 evidence=$2
 image='ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21'
 root=$(cd "$(dirname "$0")/.." && pwd -P)
+source "$root/scripts/sdk-owned-session.sh"
 [[ $revision =~ ^[0-9a-f]{40}$ ]] || exit 64
 test "$(uname -m)" = x86_64
 test "$(git -C "$root" rev-parse HEAD)" = "$revision"
@@ -14,11 +15,16 @@ test ! -e "$evidence" && test ! -L "$evidence"
 mkdir "$evidence"
 evidence=$(cd "$evidence" && pwd -P)
 scratch=$(mktemp -d)
+sdk_owned_begin
 container=''
 cleanup() {
-  if test -n "$container"; then docker container rm --force "$container" >/dev/null 2>&1 || true; fi
-  chmod -R u+rwX -- "$scratch"
-  rm -r -- "$scratch"
+  local primary=$? failed=0
+  trap - EXIT
+  if ! sdk_owned_cleanup; then failed=1; fi
+  if ! chmod -R u+rwX -- "$scratch"; then failed=1; fi
+  if ! rm -r -- "$scratch"; then failed=1; fi
+  if test "$primary" -ne 0; then exit "$primary"; fi
+  exit "$failed"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -30,10 +36,11 @@ mkdir "$scratch/source"
 git -C "$root" archive "$revision" | tar -x -C "$scratch/source"
 git -C "$scratch/source" init --quiet
 git -C "$scratch/source" add --all --force
-container=$(docker container create --user 1000:1000 --read-only --network none --cap-drop ALL \
+sdk_owned_container formatter "$image" '' --user 1000:1000 --read-only --network none --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=4g \
   --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \
-  --workdir /tmp "$image" /bin/sh -ec ': > /tmp/prismpm-format-ready; exec sleep infinity')
+  --workdir /tmp "$image" /bin/sh -ec ': > /tmp/prismpm-format-ready; exec sleep infinity'
+container=$SDK_SESSION_CONTAINER
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 docker container start "$container" >/dev/null
 # Docker start returns before the normal entrypoint has seeded its cache. The

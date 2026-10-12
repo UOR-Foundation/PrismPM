@@ -194,6 +194,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/binary-sdk-check.test.mjs",
             "scripts/binary-sdk-check-shell.test.mjs",
             "scripts/binary-sdk-format-shell.test.mjs",
+            "scripts/sdk-owned-session.test.mjs",
             "scripts/sdk-vv-inputs.test.mjs",
             "scripts/sdk-vv-run.test.mjs",
             "scripts/sdk-image-inputs.test.mjs",

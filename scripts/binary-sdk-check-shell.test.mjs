@@ -28,11 +28,30 @@ const dockerMock=`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2),root=process.env.RECORDED_SOURCE,log=process.env.RECORDED_CALLS;
 const earlier=fs.existsSync(log)?fs.readFileSync(log,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse):[];
 fs.appendFileSync(log,JSON.stringify(args)+'\\n');
-const id='c'.repeat(64);
+const statePath=process.env.RECORDED_STATE,state=fs.existsSync(statePath)?JSON.parse(fs.readFileSync(statePath)):{containers:[]};
+const save=()=>fs.writeFileSync(statePath,JSON.stringify(state));
+const imageId='sha256:'+'e'.repeat(64),value=flag=>args[args.indexOf(flag)+1];
+const container=reference=>state.containers.find(row=>row.id===reference||row.name===reference);
 if(args[0]==='pull')process.exit(0);
-if(args[0]==='image'&&args[1]==='inspect'){console.log(JSON.stringify([{Os:'linux',Architecture:process.arch==='x64'?'amd64':'arm64',RepoDigests:[process.env.RECORDED_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.RECORDED_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.3.0'}}}]));process.exit(0);}
-if(args[0]==='container'&&args[1]==='create'){console.log(id);process.exit(0);}
+if(args[0]==='image'&&args[1]==='inspect'){
+ if(args.includes('--format')){if(value('--format')!=='{{.Id}}')process.exit(64);console.log(imageId);process.exit(0);}
+ console.log(JSON.stringify([{Id:imageId,Os:'linux',Architecture:process.arch==='x64'?'amd64':'arm64',RepoDigests:[process.env.RECORDED_IMAGE],Config:{Entrypoint:['/usr/local/bin/prismpm-devcontainer-init'],Volumes:null,Labels:{'org.opencontainers.image.revision':process.env.RECORDED_REVISION,'org.opencontainers.image.source':'https://github.com/UOR-Foundation/PrismPM','org.opencontainers.image.version':'0.3.0'}}}]));process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='ls'){
+ if(!args.includes('--all')||!args.includes('--no-trunc')||value('--format')!=='{{.ID}}')process.exit(64);
+ const filter=value('--filter');
+ if(!(filter.startsWith('name=^/')&&filter.endsWith('$'))&&!/^id=[a-f0-9]{64}$/.test(filter))process.exit(64);
+ for(const row of state.containers)if(filter==='name=^/'+row.name+'$'||filter==='id='+row.id)console.log(row.id);
+ process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='create'){
+ const name=value('--name'),label=value('--label'),source=name.endsWith('-source'),runtime=name.endsWith('-runtime');
+ if(!args.includes('--name')||!args.includes('--label')||(!source&&!runtime)||!label.startsWith('io.prismpm.sdk-session=')||container(name))process.exit(64);
+ const id=(source?'c':'d').repeat(64);if(container(id))process.exit(64);
+ state.containers.push({id,name,owner:label.slice('io.prismpm.sdk-session='.length),image:process.env.RECORDED_IMAGE,mounts:source?'':'tmpfs::/tmp:true;',running:false,exit:0});save();console.log(id);process.exit(0);
+}
 if(args[0]==='container'&&args[1]==='cp'){
+ if(!container(args[2].split(':')[0]))process.exit(1);
  const from=args[2].split(':').slice(1).join(':'),prefix='/opt/prismpm/share/conformance-root/';
  if(from.startsWith('/tmp/')){console.error('Docker archive API cannot read tmpfs');process.exit(66);}
  if(from==='/opt/prismpm/share/inventory.json'){fs.copyFileSync(process.env.RECORDED_INVENTORY,args[3]);process.exit(0);}
@@ -42,6 +61,8 @@ if(args[0]==='container'&&args[1]==='cp'){
  fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
 }
 if(args[0]==='container'&&args[1]==='start'){
+ const running=container(args.at(-1));if(!running||running.id!=='d'.repeat(64)||!args.includes('--attach'))process.exit(64);
+ running.running=false;running.exit=Number(process.env.RECORDED_EXIT_STATUS||0);save();
  const fixture=require('node:child_process').spawnSync(process.execPath,[path.join(root,'scripts/binary-sdk-check-fixtures.mjs'),process.env.RECORDED_PROOF],{encoding:'utf8'});if(fixture.status!==0){process.stderr.write(fixture.stderr);process.exit(65);}const receipt=JSON.parse(fixture.stdout);
  const runtime=earlier.filter(row=>row[0]==='container'&&row[1]==='create').at(-1),last=runtime.slice(-4);
  const value={schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:last[0],source_revision:last[1],source_sha256:last[2],inventory_sha256:last[3],architecture:process.arch==='x64'?'amd64':'arm64',build_id:receipt.build_id,attestation_id:receipt.attestation_id,checks:JSON.parse(process.env.RECORDED_CHECKS),unclaimed:JSON.parse(process.env.RECORDED_UNCLAIMED)};
@@ -49,8 +70,21 @@ if(args[0]==='container'&&args[1]==='start'){
  if(process.env.RECORDED_ARCHIVE==='missing-proof'){require('node:child_process').spawnSync('tar',['-c','-C',exportRoot,'binary-result.json'],{stdio:['ignore','inherit','inherit']});}else if(process.env.RECORDED_ARCHIVE==='truncated'){process.stdout.write('broken archive');}else{const packed=require('node:child_process').spawnSync('tar',['-c','-C',exportRoot,'binary-result.json','prismpm-binary-evidence'],{stdio:['ignore','inherit','inherit']});if(packed.status!==0)process.exit(67);}
  process.exit(Number(process.env.RECORDED_START_STATUS||0));
 }
-if(args[0]==='container'&&args[1]==='inspect'){console.log(process.env.RECORDED_EXIT_STATUS||'0');process.exit(0);}
-if(args[0]==='container'&&args[1]==='rm')process.exit(0);
+if(args[0]==='container'&&args[1]==='inspect'){
+ const reference=args[2]==='--format'?args.at(-1):args[2],row=container(reference);if(!row)process.exit(1);
+ const format=value('--format');
+ if(format==='{{.State.ExitCode}}')console.log(row.exit);
+ else if(format==='{{.Id}}|{{.Name}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "io.prismpm.sdk-session"}}|{{range .Mounts}}{{.Type}}:{{.Name}}:{{.Destination}}:{{.RW}};{{end}}')console.log([row.id,'/'+row.name,imageId,row.image,row.owner,row.mounts].join('|'));
+ else if(format==='{{.State.Running}}|{{.State.OOMKilled}}|{{json .ExecIDs}}|{{.State.ExitCode}}|{{json .State.Error}}')console.log([row.running,false,'null',row.exit,'""'].join('|'));
+ else process.exit(64);
+ process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='stop'){
+ const row=container(args.at(-1));if(!row||args.length!==5||args[2]!=='--time'||args[3]!=='5')process.exit(64);row.running=false;save();console.log(row.id);process.exit(0);
+}
+if(args[0]==='container'&&args[1]==='rm'){
+ const row=container(args[2]);if(args.length!==3||!row||row.running)process.exit(64);state.containers=state.containers.filter(item=>item!==row);save();console.log(row.id);process.exit(0);
+}
 process.exit(64);
 `;
 
@@ -66,7 +100,7 @@ function fixture(t){
  writeFileSync(inventoryPath,canonical({schema:'prismpm/sdk-inventory/1',commands,artifacts}));
  const bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerWrapper);writeFileSync(join(bin,'docker-node'),dockerMock);chmodSync(join(bin,'docker'),0o755);
  writeFileSync(join(bin,'git'),'#!/usr/bin/env node\nconst args=process.argv.slice(2);if(args.includes("rev-parse"))console.log(process.env.RECORDED_REVISION);else if(!args.includes("status"))process.exit(64);\n');chmodSync(join(bin,'git'),0o755);
- return{work,root,env:{...process.env,PATH:bin+':'+process.env.PATH,RECORDED_SOURCE:root,RECORDED_CALLS:join(work,'calls.jsonl'),RECORDED_IMAGE:image,RECORDED_REVISION:revision,RECORDED_INVENTORY:inventoryPath,RECORDED_PROOF:join(work,'proof'),RECORDED_CHECKS:JSON.stringify(completedChecks),RECORDED_UNCLAIMED:JSON.stringify(unclaimed)}};
+ return{work,root,env:{...process.env,PATH:bin+':'+process.env.PATH,RECORDED_SOURCE:root,RECORDED_CALLS:join(work,'calls.jsonl'),RECORDED_STATE:join(work,'docker-state.json'),RECORDED_IMAGE:image,RECORDED_REVISION:revision,RECORDED_INVENTORY:inventoryPath,RECORDED_PROOF:join(work,'proof'),RECORDED_CHECKS:JSON.stringify(completedChecks),RECORDED_UNCLAIMED:JSON.stringify(unclaimed)}};
 }
 function execute(context){
  const result=spawnSync('bash',[join(context.root,'scripts/binary-sdk-check.sh'),image,revision],{encoding:'utf8',env:context.env,timeout:30000,maxBuffer:1024*1024});
@@ -82,8 +116,11 @@ function accepted(context){
  assert.deepEqual(runtime.slice(-9,-6),[image,'/bin/sh','-ec']);assert.match(runtime.at(-6),/node scripts\/binary-sdk-check\.mjs run "\$@" > \/tmp\/binary-result\.json/);assert.match(runtime.at(-6),/exec tar -c -C \/tmp binary-result\.json prismpm-binary-evidence/);assert.equal(runtime.at(-5),'binary-sdk');
  assert.deepEqual(runtime.slice(-4),[image,revision,hash(canonical(capture(context.root,revision))),hash(readFileSync(context.env.RECORDED_INVENTORY))]);
  const start=calls.findIndex(row=>row[0]==='container'&&row[1]==='start');assert.ok(start>=0,'runtime must actually start');
- const inspected=calls.findIndex(row=>row[0]==='container'&&row[1]==='inspect');assert.ok(inspected>start,'runtime exit must be inspected after execution');
+ const inspected=calls.findIndex(row=>row[0]==='container'&&row[1]==='inspect'&&row.includes('{{.State.ExitCode}}')&&row.at(-1)==='d'.repeat(64));assert.ok(inspected>start,'runtime exit must be inspected after execution');
  assert.equal(calls.filter(row=>row[0]==='container'&&row[1]==='start').length,1);
+ assert.equal(calls[start].at(-1),'d'.repeat(64),'distinct runtime container');
+ assert.deepEqual(calls.filter(row=>row[0]==='container'&&row[1]==='rm').map(row=>row.slice(2)),[['c'.repeat(64)],['d'.repeat(64)]],'both owned identities retire without force');
+ assert.deepEqual(JSON.parse(readFileSync(context.env.RECORDED_STATE)).containers,[],'recorded live namespace is empty');
  assert.ok(calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].endsWith('/scripts/binary-sdk-check.test.mjs')));
  assert.ok(calls.filter(row=>row[0]==='container'&&row[1]==='cp'&&row[2].includes('/conformance-root/')).every(row=>row[3]==='-'),'source archives must be validated before materialization');
  assert.ok(!calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].includes(':/tmp/')));

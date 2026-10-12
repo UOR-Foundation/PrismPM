@@ -7,6 +7,7 @@ revision=$2
 evidence=${3:-}
 if test -n "$evidence"; then test ! -e "$evidence" && test ! -L "$evidence"; fi
 root=$(cd "$(dirname "$0")/.." && pwd -P)
+source "$root/scripts/sdk-owned-session.sh"
 helper="$root/scripts/binary-sdk-check.mjs"
 command -v python3 >/dev/null
 [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]] || exit 64
@@ -15,10 +16,15 @@ test "$(git -C "$root" rev-parse HEAD)" = "$revision"
 test -z "$(git -C "$root" status --porcelain)"
 case "$(uname -m)" in x86_64) architecture=amd64 ;; aarch64) architecture=arm64 ;; *) exit 64 ;; esac
 sdk_work=$(mktemp -d)
+sdk_owned_begin
 container=''
 cleanup() {
-  if test -n "$container"; then docker container rm --force "$container" >/dev/null 2>&1 || true; fi
-  rm -r -- "$sdk_work"
+  local primary=$? failed=0
+  trap - EXIT
+  if ! sdk_owned_cleanup; then failed=1; fi
+  if ! rm -r -- "$sdk_work"; then failed=1; fi
+  if test "$primary" -ne 0; then exit "$primary"; fi
+  exit "$failed"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -26,7 +32,8 @@ trap 'exit 143' TERM
 node "$helper" capture "$root" "$revision" > "$sdk_work/source.json"
 docker pull --platform "linux/$architecture" "$image"
 docker image inspect "$image" | node "$helper" image "$image" "$architecture" "$revision"
-container=$(docker container create --network none --read-only --entrypoint /usr/bin/true "$image")
+sdk_owned_container source "$image" '' --network none --read-only --entrypoint /usr/bin/true "$image"
+container=$SDK_SESSION_CONTAINER
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 mkdir "$sdk_work/source"
 mkdir "$sdk_work/archives"
@@ -48,17 +55,18 @@ cmp "$root/sdk/devcontainer-init.sh" "$sdk_work/entrypoint.sh"
 docker container cp "$container:/opt/prismpm/share/inventory.json" "$sdk_work/inventory.json"
 source_sha256=$(node "$helper" hash "$sdk_work/source.json")
 inventory_sha256=$(node "$helper" inventory "$sdk_work/inventory.json" "$revision")
-docker container rm "$container" >/dev/null
+sdk_owned_retire_container "$container"
 container=''
 # No host source, implementation, dependency or writable mount enters execution.
-container=$(docker container create --user 1000:1000 --read-only --network none --cap-drop ALL \
+sdk_owned_container runtime "$image" '' --user 1000:1000 --read-only --network none --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \
   --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \
   --workdir /opt/prismpm/share/conformance-root "$image" \
   /bin/sh -ec '
     node scripts/binary-sdk-check.mjs run "$@" > /tmp/binary-result.json
     exec tar -c -C /tmp binary-result.json prismpm-binary-evidence
-  ' binary-sdk "$image" "$revision" "$source_sha256" "$inventory_sha256")
+  ' binary-sdk "$image" "$revision" "$source_sha256" "$inventory_sha256"
+container=$SDK_SESSION_CONTAINER
 [[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
 # Export result and proof in the process stdout while tmpfs is still mounted.
 # The normal initialized command must pass before tar runs; its final exit is
@@ -76,7 +84,7 @@ if test -n "$evidence"; then
   cp "$sdk_work/source.json" "$sdk_work/inventory.json" "$sdk_work/result.json" "$evidence/"
 fi
 cat "$sdk_work/result.json"
-docker container rm "$container" >/dev/null
+sdk_owned_retire_container "$container"
 container=''
 node "$helper" verify "$root" "$sdk_work/source.json"
 printf 'binary-package SDK closure passed: source=%s image=%s platform=linux/%s\n' "$revision" "$image" "$architecture"

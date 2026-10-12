@@ -7,6 +7,7 @@ architecture=$2
 revision=$3
 evidence=$4
 root=$(cd "$(dirname "$0")/.." && pwd -P)
+source "$root/scripts/sdk-owned-session.sh"
 case "$(uname -m):$architecture" in x86_64:amd64|aarch64:arm64) ;; *) exit 64 ;; esac
 [[ $revision =~ ^[0-9a-f]{40}$ ]] || exit 64
 test "$(git -C "$root" rev-parse HEAD)" = "$revision"
@@ -17,24 +18,29 @@ bash "$root/scripts/sdk-candidate.sh" inspect "$archive" "$architecture" "$revis
 evidence=$(cd "$evidence" && pwd -P)
 digest=$(cat "$evidence/digest.txt")
 [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || exit 64
-nonce="$$-${RANDOM}"
-registry="prismpm-binary-qualification-${nonce}"
-volume="prismpm-binary-config-${nonce}"
 scratch=$(mktemp -d)
+sdk_owned_begin
 cleanup() {
-  docker container rm --force "$registry" >/dev/null 2>&1 || true
-  docker volume rm "$volume" >/dev/null 2>&1 || true
-  rm -r -- "$scratch"
+  local primary=$? failed=0
+  trap - EXIT
+  if ! sdk_owned_cleanup; then failed=1; fi
+  if ! rm -r -- "$scratch"; then failed=1; fi
+  if test "$primary" -ne 0; then exit "$primary"; fi
+  exit "$failed"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 printf '%s\n' '{"distSpecVersion":"1.1.1","http":{"address":"0.0.0.0","port":5000},"log":{"level":"warn"},"storage":{"rootDirectory":"/tmp/zot"}}' > "$scratch/config.json"
-docker volume create "$volume" >/dev/null
-docker container create --name "$registry" --publish 127.0.0.1::5000 \
+sdk_owned_volume registry-config
+volume=$SDK_SESSION_VOLUME
+sdk_owned_container registry \
+  ghcr.io/project-zot/zot@sha256:cd2aea942f428630bcb4190542be6abd35e14177aab84fc7ccad0dca8ecb363d "$volume" \
+  --publish 127.0.0.1::5000 \
   --read-only --tmpfs /tmp:rw,nosuid,nodev --volume "$volume:/config" \
   ghcr.io/project-zot/zot@sha256:cd2aea942f428630bcb4190542be6abd35e14177aab84fc7ccad0dca8ecb363d \
-  serve /config/config.json >/dev/null
+  serve /config/config.json
+registry=$SDK_SESSION_CONTAINER
 docker container cp "$scratch/config.json" "$registry:/config/config.json"
 docker container start "$registry" >/dev/null
 endpoint=$(docker container port "$registry" 5000/tcp | sed -n '1p')
