@@ -48,12 +48,14 @@ def sha(path):
 
 def execute(argv, timeout=600, log=None, limit=16 * 1024 * 1024, on_log_error=None):
     """Bound output before allocation; always reap the actual owned client."""
-    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     captured = bytearray()
+    output_bytes = 0
     started = time.monotonic()
     try:
         with selectors.DefaultSelector() as poll:
-            poll.register(process.stdout, selectors.EVENT_READ)
+            poll.register(process.stdout, selectors.EVENT_READ, 'stdout')
+            poll.register(process.stderr, selectors.EVENT_READ, 'stderr')
             while poll.get_map():
                 require(time.monotonic() - started < timeout, 'bounded command deadline')
                 for key, _ in poll.select(0.25):
@@ -61,8 +63,10 @@ def execute(argv, timeout=600, log=None, limit=16 * 1024 * 1024, on_log_error=No
                     if not block:
                         poll.unregister(key.fileobj)
                         continue
-                    require(len(captured) + len(block) <= limit, 'bounded command output')
-                    captured.extend(block)
+                    output_bytes += len(block)
+                    require(output_bytes <= limit, 'bounded command output')
+                    if key.data == 'stdout':
+                        captured.extend(block)
                     if log:
                         try:
                             log.write(block)
@@ -80,6 +84,7 @@ def execute(argv, timeout=600, log=None, limit=16 * 1024 * 1024, on_log_error=No
             process.kill()
         process.wait(timeout=5)
         process.stdout.close()
+        process.stderr.close()
 
 
 def small_json(path):

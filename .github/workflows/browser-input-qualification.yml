@@ -25,6 +25,9 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
       - name: Qualify the existing exact native SDK without rebuild or publication
         env:
           GH_TOKEN: ${{ github.token }}

@@ -26,6 +26,16 @@ class SubprocessCustody(unittest.TestCase):
             log.seek(0)
             self.assertEqual(log.read(), b'first failure\n')
 
+    def test_real_stderr_progress_is_preserved_without_becoming_identity(self):
+        with tempfile.TemporaryFile() as log:
+            result = readiness.execute([sys.executable, '-c',
+                'import sys;print("pull progress",file=sys.stderr);print("actual identity")'], log=log)
+            self.assertEqual(result, 'actual identity\n')
+            log.seek(0)
+            recorded = log.read()
+            self.assertIn(b'pull progress\n', recorded)
+            self.assertIn(b'actual identity\n', recorded)
+
     def test_actual_output_bound_refuses_before_log_allocation(self):
         with tempfile.TemporaryFile() as log:
             with self.assertRaisesRegex(ValueError, 'bounded command output'):
@@ -46,6 +56,7 @@ class SubprocessCustody(unittest.TestCase):
         self.assertEqual(len(observed), 1)
         self.assertIsNotNone(observed[0].poll())
         self.assertTrue(observed[0].stdout.closed)
+        self.assertTrue(observed[0].stderr.closed)
 
     def test_cleanup_log_failure_does_not_prevent_real_command_completion(self):
         class RefusedLog:
