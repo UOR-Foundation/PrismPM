@@ -143,7 +143,7 @@ test('compiler owner refuses malformed or incomplete input closures before build
     assert.throws(() => createCompilerOwner('view', inputs),
       /compiler input (map|path|digest|closure)/);
   assert.equal(called, false, 'input accessors cannot run before immutable capture');
-  for (const name of ['view', 'custody']) {
+  for (const name of ['view', 'custody', 'effects']) {
     const inputs = captureCompilerInputs(name);
     for (const missing of ['tests/browser-view/compile.mjs', 'tests/browser-view/compiler-artifact.mjs', 'vendor/lean4-prod/lean.tar']) {
       const changed = {...inputs}; delete changed[missing];
@@ -151,4 +151,31 @@ test('compiler owner refuses malformed or incomplete input closures before build
     }
     assert.throws(() => createCompilerOwner(name, {...inputs, unexpected: '0'.repeat(64)}), /complete closed compiler input closure/);
   }
+});
+
+test('effects owner captures its exact driver and invocation wiring without accepting another family', () => {
+  const inputs = captureCompilerInputs('effects');
+  for (const path of ['tests/browser-effects/driver/Cargo.toml', 'tests/browser-effects/driver/Cargo.lock',
+    'tests/browser-effects/driver/src/main.rs', 'tests/browser-effects/compile.mjs',
+    'tests/browser-effects/checks.mjs', 'sdk/browser/effects-test.mjs',
+    'tests/browser-view/compiler-owner-checks.mjs', 'tests/browser-effects/runner.rs',
+    'tests/browser-effects/corpus.mjs', 'tests/browser-effects/browser.mjs',
+    'tests/browser-effects/browser-fixture.mjs', 'tests/browser-effects/src/Fixture.lex.tex',
+    'tests/fixtures/library/native-library/project/lexlean.toml',
+    'stdlib/src/Foundation/Browser/Application/V1/Effects.lex.tex',
+    'stdlib/src/Foundation/Browser/Application/V1/EffectsWire.lex.tex',
+    'stdlib/src/Foundation/Bytes.lex.tex', 'stdlib/src/Foundation/Codec.lex.tex',
+    'stdlib/src/Foundation/Codec/Cbor/V1/Primitive.lex.tex',
+    'model/browser-effect-diagnostics.json', 'sdk/browser/effects.mjs', 'sdk/browser/effects-wire.mjs',
+    'sdk/browser/effects-module.mjs', 'sdk/browser/identity.mjs', 'sdk/browser/store.mjs',
+    'sdk/browser/credential-custody.mjs', 'sdk/browser/browser-test-server.mjs',
+    'tests/browser-view/prerequisites.mjs', 'tests/browser-workspace/src/main.rs',
+    'tests/browser-journal/driver/src/main.rs']) {
+    assert.equal(inputs[path], createHash('sha256').update(fs.readFileSync(new URL('../../' + path, import.meta.url))).digest('hex'));
+    const changed = {...inputs}; delete changed[path];
+    assert.throws(() => createCompilerOwner('effects', changed), /complete closed compiler input closure/);
+  }
+  assert.equal(compilerDriverDirectory(inputs), 'tests/browser-effects/driver');
+  assert.throws(() => compilerDriverDirectory({...inputs,
+    'tests/browser-view/driver/src/main.rs': '0'.repeat(64)}), /one source-bound family driver/);
 });

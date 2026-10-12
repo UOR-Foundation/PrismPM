@@ -96,6 +96,7 @@ export async function verifyJourneys(t, build) {
     artifacts: {wire: sha(build.wasmBytes), guest: sha(build.guestBytes)}};
   writeFileSync(join(build.work, 'browser-effects-evidence.json'), JSON.stringify(evidence, null, 2) + '\n', {flag: 'wx'});
   t.diagnostic(JSON.stringify(evidence));
+  return evidence;
 }
 
 export async function verifyHostMutants(t, build) {
@@ -140,11 +141,14 @@ export async function verifyHostMutants(t, build) {
       "if (!equal(next[5], expected) || !equal(next[6], [0])) throw fail('invalid-generated-output');",
       '/* planted missing pending-promotion validation */', /corrupted completion keeps active outcome unknown/],
   ];
+  const killed = [];
   for (const [name, needle, replacement, failure] of mutants) {
     assert.equal(source.split(needle).length, 2, 'one exact mutation target: ' + name);
     const changed = source.replace(needle, replacement);
     await assert.rejects(journey(build, {'effects.mjs': changed}), failure, name);
+    killed.push(name);
     t.diagnostic('killed effect host guard mutation: ' + name);
   }
   assert.deepEqual(closure(), before, 'mutations never alter authoritative host sources');
+  return killed;
 }

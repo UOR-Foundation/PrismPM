@@ -12,6 +12,7 @@ import {captureCompilerArtifact, compilerReadBarrier, observeCompilerRuntimeFile
 const families = Object.freeze({
   view: Object.freeze({directory: 'browser-view', executable: 'browser-workspace-view-driver'}),
   custody: Object.freeze({directory: 'browser-custody', executable: 'browser-custody-driver'}),
+  effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),
 });
 const owners = new WeakMap();
 function family(name) {
@@ -24,6 +25,21 @@ function requiredInputs(name) {
     'lean-toolchain', 'rust-toolchain.toml', 'model/dependencies.toml', 'model/authorities.toml',
     'vendor/lean4-prod/lean.tar', 'tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
     'tests/browser-view/compiler-owner.mjs', 'tests/browser-view/compiler-artifact.mjs']);
+  if (name === 'effects') for (const path of ['tests/browser-effects/compile.mjs',
+    'tests/browser-effects/checks.mjs', 'tests/browser-effects/runner.rs',
+    'tests/browser-effects/corpus.mjs', 'tests/browser-effects/browser.mjs',
+    'tests/browser-effects/browser-fixture.mjs', 'tests/browser-effects/src/Fixture.lex.tex',
+    'tests/fixtures/library/native-library/project/lexlean.toml',
+    'stdlib/src/Foundation/Browser/Application/V1/Effects.lex.tex',
+    'stdlib/src/Foundation/Browser/Application/V1/EffectsWire.lex.tex',
+    'stdlib/src/Foundation/Bytes.lex.tex', 'stdlib/src/Foundation/Codec.lex.tex',
+    'stdlib/src/Foundation/Codec/Cbor/V1/Primitive.lex.tex',
+    'model/browser-effect-diagnostics.json', 'sdk/browser/effects-test.mjs',
+    'sdk/browser/effects.mjs', 'sdk/browser/effects-wire.mjs', 'sdk/browser/effects-module.mjs',
+    'sdk/browser/identity.mjs', 'sdk/browser/store.mjs', 'sdk/browser/credential-custody.mjs',
+    'sdk/browser/browser-test-server.mjs', 'tests/browser-view/prerequisites.mjs',
+    'tests/browser-workspace/src/main.rs', 'tests/browser-journal/driver/src/main.rs',
+    'tests/browser-view/compiler-owner-checks.mjs']) paths.add(path);
   for (const tree of ['vendor/lexlean', 'vendor/lean4-prod/rust']) {
     const manifestPath = tree + '/MANIFEST.sha256'; paths.add(manifestPath);
     for (const line of file(join(repository, manifestPath)).toString().trimEnd().split('\n')) {

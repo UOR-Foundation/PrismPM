@@ -199,6 +199,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/ingress-nginx-projection.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
+            "scripts/compiler-effects-owner.test.mjs",
             "scripts/compiler-phase-observation.test.mjs",
             "scripts/compiler-phase-transport.test.mjs",
             "tests/browser-view/compiler-owner.test.mjs",
