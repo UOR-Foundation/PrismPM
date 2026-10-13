@@ -10,6 +10,7 @@ import {capture,canonical,hash,completedChecks,unclaimed} from './binary-sdk-che
 
 const source=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
+const lineFeed=String.fromCharCode(10);
 // Keep the repeated archive-only transport in Bash: no Node startup or prior
 // call-log parsing is needed to record these fixed, validated arguments.
 const dockerWrapper=`#!/usr/bin/env bash
@@ -17,7 +18,7 @@ set -euo pipefail
 if [[ $1 == container && $2 == cp && $3 == *:/opt/prismpm/share/conformance-root/* ]]; then
  [[ $3 =~ ^c{64}:/opt/prismpm/share/conformance-root/[a-zA-Z0-9_./-]+$ ]] || exit 65
  test "$4" = - || { echo 'immutable SDK directory modes cannot be restored before populating the host copy' >&2; exit 68; }
- printf '["container","cp","%s","-"]\\n' "$3" >> "$RECORDED_CALLS"
+ printf '["container","cp","%s","-"]\\012' "$3" >> "$RECORDED_CALLS"
  relative=\${3#*:/opt/prismpm/share/conformance-root/}
  input="$RECORDED_SOURCE/$relative"
  exec tar --format=pax --mode=a-w -c -C "$(dirname "$input")" "$(basename "$input")"
@@ -26,8 +27,9 @@ exec node "$0-node" "$@"
 `;
 const dockerMock=`#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2),root=process.env.RECORDED_SOURCE,log=process.env.RECORDED_CALLS;
-const earlier=fs.existsSync(log)?fs.readFileSync(log,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse):[];
-fs.appendFileSync(log,JSON.stringify(args)+'\\n');
+const lineFeed=String.fromCharCode(10);
+const earlier=fs.existsSync(log)?fs.readFileSync(log,'utf8').split(lineFeed).filter(Boolean).map(JSON.parse):[];
+fs.appendFileSync(log,JSON.stringify(args)+lineFeed);
 const statePath=process.env.RECORDED_STATE,state=fs.existsSync(statePath)?JSON.parse(fs.readFileSync(statePath)):{containers:[]};
 const save=()=>fs.writeFileSync(statePath,JSON.stringify(state));
 const imageId='sha256:'+'e'.repeat(64),value=flag=>args[args.indexOf(flag)+1];
@@ -99,13 +101,22 @@ function fixture(t){
  artifacts.push({id:'prismpm',kind:'binary',version:'0.3.0',digest:'sha256:'+'c'.repeat(64)},{id:'sdk-vv-source',kind:'test-corpus',version:revision,digest:'sha256:'+'e'.repeat(64)});artifacts.sort((a,b)=>a.id.localeCompare(b.id));
  writeFileSync(inventoryPath,canonical({schema:'prismpm/sdk-inventory/1',commands,artifacts}));
  const bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerWrapper);writeFileSync(join(bin,'docker-node'),dockerMock);chmodSync(join(bin,'docker'),0o755);
- writeFileSync(join(bin,'git'),'#!/usr/bin/env node\nconst args=process.argv.slice(2);if(args.includes("rev-parse"))console.log(process.env.RECORDED_REVISION);else if(!args.includes("status"))process.exit(64);\n');chmodSync(join(bin,'git'),0o755);
+ const gitScript=['#!/usr/bin/env node','const args=process.argv.slice(2);if(args.includes("rev-parse"))console.log(process.env.RECORDED_REVISION);else if(!args.includes("status"))process.exit(64);',''].join(lineFeed);writeFileSync(join(bin,'git'),gitScript);chmodSync(join(bin,'git'),0o755);
+ const gitProbe=spawnSync(join(bin,'git'),['rev-parse','HEAD'],{encoding:'utf8',env:{...process.env,RECORDED_REVISION:revision}});assert.equal(gitProbe.error,undefined);assert.equal(gitProbe.status,0);assert.equal(gitProbe.stdout,revision+lineFeed,'fixture git must be executable and emit a real newline');
  return{work,root,env:{...process.env,PATH:bin+':'+process.env.PATH,RECORDED_SOURCE:root,RECORDED_CALLS:join(work,'calls.jsonl'),RECORDED_STATE:join(work,'docker-state.json'),RECORDED_IMAGE:image,RECORDED_REVISION:revision,RECORDED_INVENTORY:inventoryPath,RECORDED_PROOF:join(work,'proof'),RECORDED_CHECKS:JSON.stringify(completedChecks),RECORDED_UNCLAIMED:JSON.stringify(unclaimed)}};
 }
 function execute(context){
  const result=spawnSync('bash',[join(context.root,'scripts/binary-sdk-check.sh'),image,revision],{encoding:'utf8',env:context.env,timeout:30000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.equal(result.signal,null);
- const calls=readFileSync(context.env.RECORDED_CALLS,'utf8').trim().split('\n').map(JSON.parse);return{result,calls};
+ const callsBytes=readFileSync(context.env.RECORDED_CALLS);
+ assert.ok(callsBytes.length>0,'call log must contain a record');
+ const callLines=callsBytes.toString('utf8').split(lineFeed);
+ assert.equal(callLines.at(-1),'','call log delimiter must be an actual newline');
+ const calls=callLines.slice(0,-1).filter(Boolean).map(JSON.parse);
+ const roundTrip=['container','exec','line one'+lineFeed+'line two','quote"','slash\\'];
+ const roundTripBytes=Buffer.from(JSON.stringify(roundTrip)+lineFeed);
+ assert.deepEqual(roundTripBytes.toString('utf8').split(lineFeed).slice(0,-1).map(JSON.parse),[roundTrip],'JSONL preserves escaped multiline arguments');
+ return{result,calls};
 }
 function accepted(context){
  assert.equal(lstatSync(join(context.root,'.cargo')).mode&0o777,0o555);assert.equal(lstatSync(join(context.root,'.cargo/readonly-nested')).mode&0o777,0o555);assert.equal(lstatSync(join(context.root,'.cargo/readonly-nested/input')).mode&0o777,0o444);
