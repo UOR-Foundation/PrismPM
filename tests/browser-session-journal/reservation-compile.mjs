@@ -118,7 +118,7 @@ export function prepareReservation(mutation = null, baseline = null, inputs = fr
     const driverTarget = createPrivateDriverTarget(work);
     const manifest = join(work, 'tests/browser-session-journal/driver/Cargo.toml');
     run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',
-      '--config', 'build.incremental=false', '--manifest-path', manifest], work, {CARGO_TARGET_DIR: driverTarget});
+      '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3', '--manifest-path', manifest], work, {CARGO_TARGET_DIR: driverTarget});
     const driver = join(driverTarget, 'debug/browser-session-journal-driver');
     for (const [name, bytes] of sources) stage('project/src/' + name.replaceAll('.', '/') + '.lex.tex', bytes);
     const project = join(work, 'project');

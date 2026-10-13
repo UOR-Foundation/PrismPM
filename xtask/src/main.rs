@@ -15,6 +15,7 @@ mod formatting;
 mod gate_driver;
 mod gate_root;
 mod golden_preflight;
+mod source_copy;
 mod spec_links;
 mod stdlib;
 
@@ -228,7 +229,18 @@ fn run_conformance(root: &Path, args: &[String]) -> Result<(), Fail> {
 
     println!("Running conformance suite: {category}");
     command(root, "cargo", &cargo_args)?;
+    if matches!(category, "all" | "desktop-browser") {
+        verify_standalone_browser_owners(root)?;
+    }
     Ok(())
+}
+
+fn verify_standalone_browser_owners(root: &Path) -> Result<(), Fail> {
+    command(
+        root,
+        "node",
+        &["scripts/browser-api-sdk-check.mjs", "standalone"],
+    )
 }
 
 fn run_unit_tests(root: &Path) -> Result<(), Fail> {
@@ -270,6 +282,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/hologram-source-pins.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
+            "scripts/product-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
             "scripts/installed-exporter-concurrency.test.mjs",
@@ -294,14 +307,18 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/browser-environment-preflight.test.mjs",
+            "scripts/browser-engine-input.test.mjs",
+            "scripts/chromium-interop-reader.test.mjs",
             "scripts/rust-oracle-tools-inputs.test.mjs",
             "scripts/qualify-debian-browser-inputs.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
             "scripts/compiler-phase-observation.test.mjs",
+            "scripts/compiler-phase-transport.test.mjs",
             "tests/browser-view/compiler-artifact.test.mjs",
             "tests/browser-view/generated-package.test.mjs",
             "tests/browser-view/file-custody.test.mjs",
             "tests/browser-view/workspace-products.test.mjs",
+            "tests/browser-session-payloads/transcript-retention.test.mjs",
             "tests/browser-view/generated-wasm.test.mjs",
             "tests/browser-presentation/provenance.test.mjs",
             "tests/browser-presentation/replay.test.mjs",
@@ -323,6 +340,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/refresh-osv.test.mjs",
             "scripts/qualify-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
+            "scripts/ci-capacity.test.mjs",
             "scripts/vv-sdk-session.test.mjs",
             "sdk/bootstrap/runner.test.mjs",
         ],
@@ -712,6 +730,10 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "--offline",
         ],
     )?;
+
+    // Separate original standalone pairs are not implied by registered DK
+    // execution or by including their source files in an SDK inventory.
+    verify_standalone_browser_owners(root)?;
 
     println!("VV gate 7/15: feature, conformance, and negative fixtures");
     check_fixtures(root, false)?;
@@ -1705,22 +1727,7 @@ fn release_check(root: &Path) -> Result<(), Fail> {
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
-    if !from.exists() {
-        return Ok(());
-    }
-    for entry in walkdir::WalkDir::new(from).into_iter().flatten() {
-        let rel = entry.path().strip_prefix(from).unwrap();
-        let target = to.join(rel);
-        if entry.file_type().is_dir() {
-            std::fs::create_dir_all(&target)?;
-        } else if entry.file_type().is_file() {
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
+    source_copy::copy_tree(from, to)
 }
 
 #[cfg(test)]

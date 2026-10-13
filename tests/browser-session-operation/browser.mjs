@@ -25,6 +25,26 @@ export function captureOperationSources(inputs, directory = new URL('../../sdk/b
   return Object.freeze(files);
 }
 
+// Evaluated in the browser as the exact captured function below. Keep queued
+// byte ownership outside the instance/export method's lexical environment:
+// async transcript delivery must not own a Wasm instance or its arena.
+export function enqueueOperationObservation(entry, request, response, memory) {
+  const job = {entry, request, response, memory};
+  request = null; response = null;
+  globalThis.operationObservationDone = globalThis.operationObservationDone.then(async () => {
+    const id = await globalThis.operationRecordStart(job.entry, job.request.length, job.response.length, job.memory);
+    for (const kind of ['request', 'response']) {
+      for (let offset = 0; offset < job[kind].length; offset += 262144) {
+        const part = job[kind].subarray(offset, offset + 262144); let raw = '';
+        for (let at = 0; at < part.length; at += 8192) raw += String.fromCharCode(...part.subarray(at, at + 8192));
+        await globalThis.operationRecordPart(id, kind, offset, btoa(raw));
+      }
+    }
+    await globalThis.operationRecordEnd(id);
+  }).finally(() => {job.request = null; job.response = null;});
+  return globalThis.operationObservationDone;
+}
+
 async function preparePage(page, baseURL, build, options) {
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
@@ -83,6 +103,7 @@ async function preparePage(page, baseURL, build, options) {
     options.calls.push(row); streams.delete(id);
   });
   await page.goto(baseURL);
+  await page.addScriptTag({content: 'globalThis.enqueueOperationObservation = ' + enqueueOperationObservation.toString() + ';'});
   const entries = Object.fromEntries(Object.entries(build.wasmOwners).map(([name, owner]) =>
     [name, requireGeneratedWasm(owner).run(bytes => Array.from(bytes))]));
   await page.evaluate(entries => {
@@ -106,16 +127,7 @@ async function preparePage(page, baseURL, build, options) {
           const result = real.exports.holo_run(pointer, length), packed = BigInt.asUintN(64, result);
           const start = Number(packed >> 32n), size = Number(packed & 0xffffffffn);
           const response = new Uint8Array(exports.memory.buffer, start, size).slice(), memory = exports.memory.buffer.byteLength;
-          globalThis.operationObservationDone = globalThis.operationObservationDone.then(async () => {
-            const id = await operationRecordStart(entry, request.length, response.length, memory);
-            for (const [kind, bytes] of [['request', request], ['response', response]])
-              for (let offset = 0; offset < bytes.length; offset += 262144) {
-                const part = bytes.subarray(offset, offset + 262144); let raw = '';
-                for (let at = 0; at < part.length; at += 8192) raw += String.fromCharCode(...part.subarray(at, at + 8192));
-                await operationRecordPart(id, kind, offset, btoa(raw));
-              }
-            await operationRecordEnd(id);
-          });
+          enqueueOperationObservation(entry, request, response, memory);
           return result;
         };
         return {exports};

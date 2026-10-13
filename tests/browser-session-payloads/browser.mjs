@@ -1,9 +1,8 @@
 // Real browser transport against the three freshly generated entry points.
 // Observations stream in bounded chunks and replay through genuine native code.
 import assert from 'node:assert/strict';
-import {appendFileSync, lstatSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
+import {lstatSync, readFileSync, realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {withBrowser} from '../../sdk/browser/browser-test-server.mjs';
 import {requireGeneratedWasm} from '../browser-view/generated-wasm.mjs';
@@ -63,9 +62,9 @@ async function preparePage(page, baseURL, build, options) {
     const id = options.next++, stem = options.label + '-' + id;
     protocol.begin(id,requestLength,responseLength);
     const record = {entry, requestLength, responseLength, memory, requestAt: 0, responseAt: 0,
-      requestPath: join(build.work, stem + '-input.bin'), responsePath: join(build.work, stem + '-output.bin')};
-    writeFileSync(record.requestPath, Buffer.alloc(0), {flag: 'wx'});
-    writeFileSync(record.responsePath, Buffer.alloc(0), {flag: 'wx'}); streams.set(id, record); return id;
+      requestName: stem + '-input.bin', responseName: stem + '-output.bin'};
+    record.requestPath = build.transcripts.begin(record.requestName);
+    record.responsePath = build.transcripts.begin(record.responseName); streams.set(id, record); return id;
   });
   await page.exposeFunction('payloadRecordPart', (id, kind, offset, text) => {
     assert.ok(streams.has(id) && ['request', 'response'].includes(kind));
@@ -74,23 +73,26 @@ async function preparePage(page, baseURL, build, options) {
     assert.equal(bytes.toString('base64'), text); assert.ok(bytes.length > 0 && bytes.length <= 262144);
     protocol.part(id,kind,offset,bytes.length);
     assert.equal(offset, record[kind + 'At']); assert.ok(offset + bytes.length <= record[kind + 'Length']);
-    appendFileSync(record[kind + 'Path'], bytes); record[kind + 'At'] += bytes.length;
+    build.transcripts.append(record[kind + 'Name'], bytes); record[kind + 'At'] += bytes.length;
   });
   await page.exposeFunction('payloadRecordEnd', id => {
     const record = streams.get(id); assert.ok(record);
     assert.equal(record.requestAt, record.requestLength); assert.equal(record.responseAt, record.responseLength);
     protocol.end(id);
-    for (const standard of [true, false]) assert.equal(build.runNative(standard,
-      [record.entry, record.requestPath, record.responsePath]), 'PASS binary session payload twice\n');
+    build.transcripts.finish(record.requestName); build.transcripts.finish(record.responseName);
+    for (const standard of [true, false]) build.transcripts.consume(standard,[record.requestName,record.responseName],()=>
+      assert.equal(build.runNative(standard,[record.entry, record.requestPath, record.responsePath]), 'PASS binary session payload twice\n'));
     if(!options.transcriptMutations) {
       assert.equal(record.entry,'retention','first actual storage-open predicate anchors transcript mutations');
       const changed=readFileSync(record.responsePath);changed[0]^=1;
-      const path=record.responsePath+'.changed';writeFileSync(path,changed,{flag:'wx'});
+      const changedName=record.responseName+'.changed', path=build.transcripts.write(changedName,changed);
       for(const standard of [true,false]) {
-        assert.throws(()=>build.runNative(standard,[record.entry,record.requestPath,path]),/binary native output mismatch/,
-          'actual altered browser response must not replay');
-        assert.throws(()=>build.runNative(standard,['journal',record.requestPath,record.responsePath]),/binary native output mismatch/,
-          'actual relabelled browser invocation must not replay');
+        build.transcripts.consume(standard,[changedName],()=>{
+          assert.throws(()=>build.runNative(standard,[record.entry,record.requestPath,path]),/binary native output mismatch/,
+            'actual altered browser response must not replay');
+          assert.throws(()=>build.runNative(standard,['journal',record.requestPath,record.responsePath]),/binary native output mismatch/,
+            'actual relabelled browser invocation must not replay');
+        });
       }
       options.transcriptMutations=true;
     }
