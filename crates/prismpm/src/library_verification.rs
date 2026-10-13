@@ -145,7 +145,7 @@ fn acceptance_manifest(library: &ModelLibrary, enabled_std: bool) -> String {
     )
 }
 
-fn registry_cargo_home(
+pub(crate) fn registry_cargo_home(
     workspace: &Path,
     library: &ModelLibrary,
     archive: &[u8],

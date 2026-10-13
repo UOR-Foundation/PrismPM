@@ -2,6 +2,7 @@
 
 pub mod application;
 pub mod archive;
+pub mod binary_program;
 pub mod browser_application;
 pub mod canonical;
 pub mod library;

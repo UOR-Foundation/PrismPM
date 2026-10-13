@@ -66,6 +66,10 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/verify-result/1` | `schemas/verify-result.schema.json` | `application/vnd.prismpm.verify-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `uor/template-contract/1` | `schemas/template-contract.schema.json` | `application/vnd.uor.template.contract.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `uor/template-lock/1` | `schemas/template-lock.schema.json` | `application/vnd.uor.template.lock.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
+| `prismpm/model-document/5` | `schemas/model-document-v5.schema.json` | `application/vnd.prismpm.model-document-v5+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
+| `prismpm/binary-build-binding/1` | `schemas/binary-build-binding.schema.json` | `application/vnd.prismpm.binary-build-binding+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
+| `prismpm/binary-acceptance/1` | `schemas/binary-acceptance.schema.json` | `application/vnd.prismpm.binary-acceptance+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
+| `prismpm/binary-verification-manifest/1` | `schemas/binary-verification-manifest.schema.json` | `application/vnd.prismpm.binary-verification-manifest+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
 
 ## Command state and mutation boundaries
 
