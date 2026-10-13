@@ -3,7 +3,7 @@ run-name: Native binary-package qualification · ${{ github.event.pull_request.h
 
 on:
   push:
-    branches: [work/binary-program-prerequisite]
+    branches: [main]
   pull_request:
     branches: [main, work/compression-m0-reconcile]
     paths:

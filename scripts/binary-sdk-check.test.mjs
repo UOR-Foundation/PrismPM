@@ -103,11 +103,13 @@ test('release retains existing mandatory gates and adds binary on both native pl
  assert.match(workflow,/name: binary-sdk-sdk-amd64/);assert.match(workflow,/name: binary-sdk-sdk-arm64/);assert.match(workflow,/\$\{\{ matrix.name \}\}-binary-sdk\/\n          include-hidden-files: true/);
  const wrapper=readFileSync(new URL('./binary-sdk-check.sh',import.meta.url),'utf8');for(const required of ['--user 1000:1000 --read-only --network none','--cap-drop ALL','--security-opt no-new-privileges','--tmpfs /tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','node scripts/binary-sdk-check.mjs run'])assert.ok(wrapper.includes(required));assert.ok(!wrapper.includes('--volume')&&!wrapper.includes('--mount'));
  const qualification=readFileSync(new URL('../.github/workflows/binary-sdk-qualification.yml',import.meta.url),'utf8');
- for(const required of ['branches: [work/binary-program-prerequisite]','branches: [main, work/compression-m0-reconcile]','runner: ubuntu-24.04','runner: ubuntu-24.04-arm','contents: read','persist-credentials: false','needs: source-format','bash scripts/binary-sdk-format.sh','include-hidden-files: true','ref: ${{ github.event.pull_request.head.sha || github.sha }}','node scripts/binary-sdk-check.mjs tests','node scripts/sdk-image-inputs.mjs build','bash scripts/binary-sdk-qualify.sh'])assert.ok(qualification.includes(required),required);
+ for(const required of ['branches: [main]','branches: [main, work/compression-m0-reconcile]','runner: ubuntu-24.04','runner: ubuntu-24.04-arm','contents: read','persist-credentials: false','needs: source-format','bash scripts/binary-sdk-format.sh','include-hidden-files: true','ref: ${{ github.event.pull_request.head.sha || github.sha }}','node scripts/binary-sdk-check.mjs tests','node scripts/sdk-image-inputs.mjs build','bash scripts/binary-sdk-qualify.sh'])assert.ok(qualification.includes(required),required);
  for(const forbidden of ['packages: write','contents: write','--push','push: true','continue-on-error'])assert.ok(!qualification.includes(forbidden),forbidden);
  // Supersede old commits on the same ref without cancelling matrix siblings.
  // Source and evidence identities remain commit-bound, not concurrency-bound.
  const binaryCapacity=value=>{
+  // PR updates qualify the exact head once; main pushes qualify the merged source.
+  assert.match(value,/^on:\n  push:\n    branches: \[main\]\n  pull_request:\n    branches: \[main, work\/compression-m0-reconcile\]\n    paths:\n/m);
   assert.deepEqual(value.match(/^concurrency:\n(?:  [^\n]+\n)+/gm),[
    'concurrency:\n  group: binary-sdk-${{ github.repository }}-${{ github.ref }}\n  cancel-in-progress: true\n',
   ]);
@@ -150,6 +152,12 @@ test('release retains existing mandatory gates and adds binary on both native pl
  };
  binaryCapacity(qualification);
  for(const [before,after] of [
+  ['  push:\n    branches: [main]\n','  push:\n    branches: [work/binary-program-prerequisite]\n'],
+  ['  push:\n    branches: [main]\n','  push:\n    branches: [main, work/binary-program-prerequisite]\n'],
+  ['  pull_request:\n    branches: [main, work/compression-m0-reconcile]\n','  pull_request:\n    branches: [main]\n'],
+  ['  pull_request:\n    branches: [main, work/compression-m0-reconcile]\n','  pull_request:\n    branches: [work/compression-m0-reconcile]\n'],
+  ['  pull_request:\n','  pull_request_target:\n'],
+  ['  workflow_dispatch:\n',''],
   ['binary-sdk-${{ github.repository }}-${{ github.ref }}','binary-sdk-${{ github.sha }}'],
   ['binary-sdk-${{ github.repository }}-${{ github.ref }}','binary-sdk-${{ github.run_id }}'],
   ['cancel-in-progress: true','cancel-in-progress: false'],
