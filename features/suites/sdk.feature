@@ -169,7 +169,7 @@ Feature: sdk
     When the DK-06 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
 
-  @DK-29 @build
+  @DK-36 @build
   Scenario: Closed BinaryProgram packages preserve arbitrary bytes through native std, no_std, Core-Wasm and generated bounded raw file and stdio adapters, independently replayed without application or deployment claims.
     Given a closed binary program with source-owned acceptance vectors
     When independent generated packages and real transports execute every vector

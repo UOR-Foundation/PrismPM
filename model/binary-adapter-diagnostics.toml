@@ -1,5 +1,5 @@
 spec = "prismpm/binary-adapter-diagnostics/1"
-capability = "DK-29"
+capability = "DK-36"
 profile = "prismpm/raw-file-cli/1"
 model_source = "stdlib/src/Foundation/Binary/V1/Model.lex.tex"
 generator = "crates/prismpm/src/binary_cli.rs"

@@ -1,7 +1,7 @@
 # Installed binary-package qualification
 
 `bash scripts/binary-sdk-check.sh IMAGE@sha256:DIGEST SOURCE_COMMIT [NEW_EVIDENCE_DIR]` qualifies
-DK-29 through the installed CLI in the exact current native SDK. The release
+DK-36 through the installed CLI in the exact current native SDK. The release
 reproducibility matrix requires it on both native amd64 and arm64. Existing
 browser, native-library, full SDK V&V and product gates remain mandatory.
 

@@ -2454,7 +2454,7 @@ refusal, the real xtask dispatcher binding, nonzero child propagation and the
 workflow's immutable source/read-only publication boundary. These are narrowly
 scoped preparation regressions, not evidence for any unexecuted SDK gate.
 
-BinaryProgram DK-29 verification is a distinct binary-package gate. Its source
+BinaryProgram DK-36 verification is a distinct binary-package gate. Its source
 fixtures and generated adapters exercise arbitrary octets (including malformed
 UTF-8), native std/no_std, Core-Wasm and standard/file/mixed streams, exact
 maxima and first-over input bounds, and real argument/open/type/read/write,

@@ -77,7 +77,7 @@ release-check:
 release-artifacts:
     cargo run --package xtask -- release-artifacts
 
-# Check the complete owning installed binary-package boundary suite (DK-29).
+# Check the complete owning installed binary-package boundary suite (DK-36).
 binary-sdk-check-tests:
     node scripts/binary-sdk-check.mjs tests
 

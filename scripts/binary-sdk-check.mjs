@@ -1,4 +1,4 @@
-// DK-29 installed binary-package qualification. Never full SDK/product acceptance.
+// DK-36 installed binary-package qualification. Never full SDK/product acceptance.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
