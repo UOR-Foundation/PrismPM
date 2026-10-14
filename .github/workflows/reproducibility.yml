@@ -3,8 +3,8 @@ name: Reproducibility Gate
 on:
   push:
     branches: [main]
+  workflow_dispatch:
   pull_request:
-    branches: [main, work/compression-m0-reconcile]
 
 concurrency:
   group: reproducibility-${{ github.repository }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
@@ -22,4 +22,5 @@ jobs:
       - name: Compare complete platform-independent outputs in two absolute roots
         uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
         with:
+          push: never
           runCmd: cargo xtask check-reproducibility

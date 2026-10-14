@@ -1,7 +1,7 @@
 // Recording transport tests only. No real SDK formatting is claimed here.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {chmodSync,copyFileSync,mkdtempSync,mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {chmodSync,copyFileSync,cpSync,mkdtempSync,mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -67,8 +67,8 @@ const git=(root,args)=>{const output=spawnSync('git',['-C',root,...args],{encodi
 function fixture(t){
  const work=mkdtempSync(join(tmpdir(),'prismpm-format-shell-'));t.after(()=>rmSync(work,{recursive:true,force:true}));
  const root=join(work,'source');mkdirSync(join(root,'scripts'),{recursive:true});mkdirSync(join(root,'sdk'));mkdirSync(join(root,'crates/probe/src'),{recursive:true});mkdirSync(join(root,'stdlib/generated/package/src'),{recursive:true});
- for(const name of ['binary-sdk-format.sh','binary-sdk-check.mjs','library-sdk-check.mjs','browser-api-sdk-check.mjs','sdk-owned-session.sh'])copyFileSync(join(owner,name),join(root,'scripts',name));
- copyFileSync(join(owner,'../sdk/platform-lock.mjs'),join(root,'sdk/platform-lock.mjs'));writeFileSync(join(root,'crates/probe/src/lib.rs'),original);writeFileSync(join(root,'stdlib/generated/package/src/lib.rs'),original);
+ for(const name of ['binary-sdk-format.sh','binary-sdk-check.mjs','library-sdk-check.mjs','browser-api-sdk-check.mjs','sdk-owned-session.sh','installed-exporter-concurrency.mjs','sdk-command-owner.mjs','sdk-command-owner.py'])copyFileSync(join(owner,name),join(root,'scripts',name));
+ cpSync(join(owner,'../sdk'),join(root,'sdk'),{recursive:true});writeFileSync(join(root,'crates/probe/src/lib.rs'),original);writeFileSync(join(root,'stdlib/generated/package/src/lib.rs'),original);
  git(root,['init','--quiet']);git(root,['add','--all']);git(root,['-c','user.name=PrismPM formatter test','-c','user.email=formatter@localhost','-c','commit.gpgsign=false','commit','--quiet','-m','Format transport fixture']);
  const revision=git(root,['rev-parse','HEAD']),bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerMock);chmodSync(join(bin,'docker'),0o755);
  // The recording fixture models the pinned AMD64 formatter on either test host.

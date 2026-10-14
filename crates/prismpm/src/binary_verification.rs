@@ -7,6 +7,7 @@ use crate::library_build::{sha256, write};
 use crate::verification::{executable, run_process};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 fn acceptance_manifest(program: &BinaryProgram, enabled: bool) -> String {
     let features = if enabled {
@@ -48,12 +49,14 @@ pub(crate) fn run(
         .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
     // The controller build is export A. This independently exports and packages
     // the attested Lean closure as export B; both complete byte sets must agree.
-    let replay = crate::binary_build::generate_recorded(
+    let replay = crate::binary_build::generate_owned(
         context.repository_root,
         &context.model,
         &context.model_bytes,
         &lex_root,
         &lex_manifest,
+        &mut context.exporter_owner,
+        crate::exporter::Phase::Replay,
     )?;
     let expected_paths = context.build_manifest["files"]
         .as_array()
@@ -299,17 +302,54 @@ pub(crate) fn run(
     .bytes()
     .to_vec();
     let manifest = crate::contracts::CanonicalDocument::from_value(
-        "prismpm/binary-verification-manifest/1",
-        json!({
+        "prismpm/binary-verification-manifest/2",
+        {
+            let owner = context.exporter_owner.finish()?;
+            let lex: Value = serde_json::from_slice(&lex_manifest)
+                .map_err(|error| PrismError::new("PP4004", error.to_string()))?;
+            let modules = lex["outputs"]
+                .as_array()
+                .expect("generated manifest outputs")
+                .iter()
+                .filter(|row| row["kind"] == "lean")
+                .map(|row| {
+                    row["path"]
+                        .as_str()
+                        .expect("generated Lean path")
+                        .strip_prefix("modules/")
+                        .expect("generated modules root")
+                        .strip_suffix(".lean")
+                        .expect("generated Lean extension")
+                        .replace('/', ".")
+                })
+                .collect::<BTreeSet<_>>();
+            let processes = serde_json::to_value(&context.processes)
+                .map_err(|error| PrismError::new("PP4004", error.to_string()))?;
+            crate::exporter::validate_owner_binding(
+                &owner,
+                &sha256(&context.model_bytes),
+                "binary",
+                &lex_manifest,
+                &json!(bindings),
+                processes.as_array().expect("serialized process array"),
+                &crate::binary_build::export_arguments(
+                    &modules,
+                    program,
+                    Path::new("$BINARY_WORK/export"),
+                ),
+            )?;
+            json!({
             "acceptance_sha256":sha256(&acceptance),
             "artifacts":bindings,
             "build_id":context.build.build_id,
+            "exporter_owner":owner,
             "lexlean_attestation_sha256":sha256(&context.lex_attestation),
             "model_sha256":sha256(&context.model_bytes),
             "processes":context.processes,
-            "schema":"prismpm/binary-verification-manifest/1",
+            "schema":"prismpm/binary-verification-manifest/2",
             "scope":"binary-package-only"
-        }),
+            })
+        },
     )?
     .bytes()
     .to_vec();

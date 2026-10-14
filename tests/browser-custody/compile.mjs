@@ -5,6 +5,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 // Reuse the existing pinned-toolchain, override-refusing process boundary.
 import {createPrivateDriverTarget, ensureProdExport, run, sha} from '../browser-view/compile.mjs';
+import {retireCompletedCompilerCaches} from '../browser-view/driver-cache.mjs';
 import {requireCompilerOwner} from '../browser-view/compiler-owner.mjs';
 export {ensureProdExport, run, sha};
 export const draft = dirname(fileURLToPath(import.meta.url));
@@ -184,8 +185,9 @@ export function prepare(mutation = null, compilerOwner = null) {
     assert.deepEqual(guests[0], guests[1], 'two independent generated Core-Wasm packages');
     pins(); if (shared) shared.verify(); else compiler.unchanged(); assert.equal(generation.ir_sha256, sha(readFileSync(ir)));
     for (const [module, bytes] of originals) assert.deepEqual(readFileSync(sourcePath(module)), bytes, 'frozen source ' + module);
+    const cacheRetirement = shared ? null : retireCompletedCompilerCaches(work, 'custody');
     completed = true;
-    return {work, sources, verified, generation, compileNative, runner,
+    return {work, sources, verified, generation, compileNative, runner, cacheRetirement,
       compilerOwner: shared?.identity ?? null, preparationMs: performance.now() - started, wasmBytes: guests[0]};
   } finally { if (!completed) process.stderr.write('Retained incomplete custody diagnostic build ' + work + '\n'); }
 }

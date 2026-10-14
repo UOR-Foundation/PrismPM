@@ -309,17 +309,17 @@ spec = "prismpm/dependencies/1"
 [[dependency]]
 id = "lean4-prod"
 lean_version = "4.32.1"
-revision = "6272da01ea2045906f5f844988b6265d6c867f39"
+revision = "991956fe427bb646498fd0912c89b71be71e7beb"
 source = "vendored"
 
 [[dependency.artifact]]
 kind = "file"
 path = "vendor/lean4-prod/lean.tar"
-sha256 = "ce6c258440eda742df7162bdd4228b2ed4aae5416730cd770a98ecfc4185bf69"
+sha256 = "7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf"
 "#;
 
     let parsed = parse_lean4_prod_dependency(valid_toml).expect("valid parse");
-    assert_eq!(parsed.revision, "6272da01ea2045906f5f844988b6265d6c867f39");
+    assert_eq!(parsed.revision, "991956fe427bb646498fd0912c89b71be71e7beb");
 
     // Probe 1: Missing lean4-prod section
     let missing_toml = r#"

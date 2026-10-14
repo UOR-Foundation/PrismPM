@@ -2,13 +2,13 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {constants,closeSync,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,mkdtempSync,openSync,readFileSync,readdirSync,readSync,rmSync,chmodSync,writeFileSync} from 'node:fs';
+import {cpSync,existsSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,rmSync,chmodSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {tree,cli,mutateModule,sourceRoots as libraryRoots,sourceAliases,verifyImage} from './library-sdk-check.mjs';
+import {tree,cli,mutateModule,regularBytes,validateVerificationOwner,verifyExporterProcess,sourceRoots as libraryRoots,sourceAliases,verifyImage} from './library-sdk-check.mjs';
 import {verifyTap} from './browser-api-sdk-check.mjs';
 import {validateInventory} from '../sdk/platform-lock.mjs';
-export {tree,cli,mutateModule,sourceAliases,verifyImage};
+export {tree,cli,mutateModule,regularBytes,sourceAliases,verifyImage};
 
 export const sourceRoots=Object.freeze([...libraryRoots,
  'crates/prismpm/tests/binary_program.rs','crates/conformance/src/cases/binary_program.rs',
@@ -32,18 +32,6 @@ const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isAr
 const hex=value=>{assert.equal(typeof value,'string');assert.match(value,/^[0-9a-f]{64}$/);return value;};
 const revision=value=>{assert.equal(typeof value,'string');assert.match(value,/^[0-9a-f]{40}$/);return value;};
 const imagePattern=/^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$/;
-export function regularBytes(path,maximum=64*1024*1024){
- const before=lstatSync(path);assert.ok(before.isFile()&&!before.isSymbolicLink()&&before.size<=maximum,'bounded regular file: '+path);
- const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
- try{
-  const opened=fstatSync(fd);for(const key of ['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(opened[key],before[key],'file changed');
-  const bytes=Buffer.alloc(opened.size+1);let size=0;
-  while(size<bytes.length){const count=readSync(fd,bytes,size,bytes.length-size,null);if(!count)break;size+=count;}
-  assert.equal(size,opened.size,'file length changed');
-  for(const after of [fstatSync(fd),lstatSync(path)]){assert.ok(after.isFile()&&!after.isSymbolicLink());for(const key of ['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(after[key],opened[key],'file changed');}
-  return bytes.subarray(0,size);
- }finally{closeSync(fd);}
-}
 const document=path=>{const bytes=regularBytes(path),value=JSON.parse(bytes);assert.ok(bytes.equals(Buffer.from(canonical(value))),'canonical artifact bytes: '+path);return value;};
 export function capture(root,sourceRevision){revision(sourceRevision);return{revision:sourceRevision,files:tree(root,sourceRoots,sourceAliases)};}
 export function verifySource(root,expected){same(capture(root,expected.revision),expected,'installed SDK source closure differs');}
@@ -69,7 +57,7 @@ export const binaryPaths=Object.freeze([
  'binary/package/LICENSE-APACHE','binary/package/LICENSE-MIT','binary/package/README.md','binary/package/generation-manifest.json',
  'binary/package/src/lib.rs','binary/prism-binary-probe-0.1.0.crate','binary/prism-binary-probe-cli-0.1.0.crate','binary/roots.json',
 ].sort());
-export function checkAccepted(project,receipt){
+export function checkAccepted(project,receipt,sourceAuthority){
  keys(receipt,['schema','build_id','attestation_id','verified_root']);assert.equal(receipt.schema,'prismpm/verify-result/1');hex(receipt.build_id);hex(receipt.attestation_id);
  assert.equal(receipt.verified_root,'.prism/verified/'+receipt.attestation_id);
  const verified=join(project,receipt.verified_root),build=join(project,'.prism/build',receipt.build_id);
@@ -77,8 +65,8 @@ export function checkAccepted(project,receipt){
  same(tree(verified).map(row=>row.path),['/','binary-acceptance.json','lexlean-attestation.json','manifest.json'],'unexpected verified outputs');
  const manifestBytes=regularBytes(join(verified,'manifest.json')),manifest=document(join(verified,'manifest.json'));
  const acceptanceBytes=regularBytes(join(verified,'binary-acceptance.json')),acceptance=document(join(verified,'binary-acceptance.json'));
- keys(manifest,['acceptance_sha256','artifacts','build_id','lexlean_attestation_sha256','model_sha256','processes','schema','scope']);
- assert.equal(hash(manifestBytes),receipt.attestation_id);assert.equal(manifest.schema,'prismpm/binary-verification-manifest/1');assert.equal(manifest.scope,'binary-package-only');assert.equal(manifest.build_id,receipt.build_id);
+ keys(manifest,['acceptance_sha256','artifacts','build_id','exporter_owner','lexlean_attestation_sha256','model_sha256','processes','schema','scope']);
+ assert.equal(hash(manifestBytes),receipt.attestation_id);assert.equal(manifest.schema,'prismpm/binary-verification-manifest/2');assert.equal(manifest.scope,'binary-package-only');assert.equal(manifest.build_id,receipt.build_id);
  const lexBytes=regularBytes(join(verified,'lexlean-attestation.json')),lexAttestation=JSON.parse(lexBytes);hex(lexAttestation.attestation_id);
  assert.equal(manifest.acceptance_sha256,hash(acceptanceBytes));assert.equal(manifest.lexlean_attestation_sha256,hash(lexBytes));
  const modelBytes=regularBytes(join(build,'model.prism.json')),model=document(join(build,'model.prism.json'));
@@ -91,7 +79,11 @@ export function checkAccepted(project,receipt){
  same(model.program,fixtureProgram,'exact whole fixture program descriptor');assert.equal(manifest.model_sha256,hash(modelBytes));
  same(acceptance,{build_id:receipt.build_id,io_coverage:{platform:'linux',output_write:'passed'},executions:modes.map(mode=>({mode,vector_count:fixtureProgram.acceptance_vectors.length,status:'passed'})),program:fixtureProgram,lexlean_attestation_id:lexAttestation.attestation_id,model_id:hash(modelBytes),profile:'prismpm/binary-program/1',regeneration:'byte-identical',schema:'prismpm/binary-acceptance/1',scope:'binary-package-only',status:'passed',unclaimed},'binary acceptance scope or execution differs');
  assert.ok(Array.isArray(manifest.processes));same(manifest.processes.map(row=>row.tool),processTools,'complete ordered binary verification processes');
- for(const row of manifest.processes){keys(row,['tool','argv','executable_sha256','exit_code','stdout','stderr']);assert.equal(row.exit_code,0);hex(row.executable_sha256);assert.ok(Array.isArray(row.argv)&&row.argv.every(arg=>typeof arg==='string'));assert.equal(typeof row.stdout,'string');assert.equal(typeof row.stderr,'string');}
+ for(const row of manifest.processes){
+  keys(row,['tool','argv','executable_sha256','exit_code','stdout','stderr',...(row.tool==='prod-export'?['exporter']:[])]);
+  assert.equal(row.exit_code,0);hex(row.executable_sha256);assert.ok(Array.isArray(row.argv)&&row.argv.every(arg=>typeof arg==='string'));assert.equal(typeof row.stdout,'string');assert.equal(typeof row.stderr,'string');
+  if(row.tool==='prod-export')verifyExporterProcess(row,'prod-export','cold',undefined,sourceAuthority);
+ }
  for(const mode of ['std','no_std']){const record=manifest.processes.find(row=>row.tool==='binary-'+mode+'-acceptance');assert.equal(record.stdout,JSON.stringify(fixtureProgram.acceptance_vectors.map(row=>row.response))+'\n','actual native byte transcript');assert.equal(record.stderr,'');}
  const allocation=manifest.processes.find(row=>row.tool==='binary-cli-allocation-acceptance');
  same(allocation.argv,['test','--locked','--offline','--release','--','--exact','tests::adapter_allocation_maps_real_capacity_overflow'],'mandatory actual allocation test command');
@@ -118,32 +110,41 @@ export function checkAccepted(project,receipt){
  for(const row of lexAttestation.declarations){keys(row,['name','observed','policy','result']);assert.equal(row.result,'ok');same(row.policy,declarations.find(declaration=>declaration.name===row.name).policy);same(row.policy,{axioms:[],kind:'none'});same(row.observed,[],'fixture has no observed axioms');}
  const binary=artifacts.filter(row=>row.path.startsWith('binary/'));same(binary.map(row=>row.path),binaryPaths,'complete fixture binary artifact set');
  same(manifest.artifacts,binary.map(row=>({path:row.path,byte_length:row.size,sha256:row.sha256})),'complete exact binary replay artifacts');
+ const owner=validateVerificationOwner(manifest,'binary','cold',undefined,sourceAuthority);
+ const leanManifest=regularBytes(join(build,'lexlean/build/manifest.json')),outputs=JSON.parse(leanManifest).outputs;
+ assert(Array.isArray(outputs));const modules=outputs.filter(row=>row.kind==='lean').map(row=>{
+  assert.match(row.path,/^modules\/[A-Za-z0-9_/]+\.lean$/);return row.path.slice(8,-5).replaceAll('/','.');
+ }).sort();assert(modules.length>0&&new Set(modules).size===modules.length);
+ const argv=['exe','prod-export',...modules.flatMap(module=>['--module',module]),...fixtureProgram.export_roots.flatMap(root=>['--root',root]),
+  '--ir-module',fixtureProgram.cargo_name.replaceAll('-','_'),'--out','$BINARY_WORK/export'];
+ for(const phase of owner.phases){assert.equal(phase.lexlean_manifest_sha256,hash(leanManifest));same(phase.processes[2].argv,argv);}
  same(document(join(build,'binary/model-binding.json')),{model_id:hash(modelBytes),program:fixtureProgram,profile:'prismpm/binary-program/1',schema:'prismpm/binary-build-binding/1',scope:'binary-package-only'},'whole binary model binding');
  return{build,model_id:hash(modelBytes)};
 }
 function noVerification(project){const path=join(project,'.prism/verified');assert.ok(!existsSync(path)||readdirSync(path).length===0,'unaccepted source published verification');}
 const declaration=(module,name)=>{const rows=module.declarations.filter(row=>row.name===name);assert.equal(rows.length,1);return rows[0];};
 const rootField=(module,name)=>{const rows=declaration(module,'probeProgram').body.fields.filter(row=>row.field===name);assert.equal(rows.length,1);return rows[0].value;};
-export function rejectChangedEvidence(project,receipt,path){
+export function rejectChangedEvidence(project,receipt,path,sourceAuthority){
  const original=regularBytes(path);
- try{rmSync(path);assert.throws(()=>checkAccepted(project,receipt));writeFileSync(path,Buffer.concat([original,Buffer.from([0])]));assert.throws(()=>checkAccepted(project,receipt));}
+ try{rmSync(path);assert.throws(()=>checkAccepted(project,receipt,sourceAuthority));writeFileSync(path,Buffer.concat([original,Buffer.from([0])]));assert.throws(()=>checkAccepted(project,receipt,sourceAuthority));}
  finally{writeFileSync(path,original);}
- checkAccepted(project,receipt);
+ checkAccepted(project,receipt,sourceAuthority);
 }
 export function run(root,image,sourceRevision,sourceSha256,inventorySha256){
  assert.equal(process.getuid(),1000,'native SDK gate must run non-root');assert.match(image,imagePattern);revision(sourceRevision);hex(sourceSha256);hex(inventorySha256);
  assert.equal(hash(canonical(capture(root,sourceRevision))),sourceSha256,'installed current source binding');
  const inventory=inventoryEvidence(regularBytes('/opt/prismpm/share/inventory.json'),sourceRevision);assert.equal(inventory.sha256,inventorySha256);
+ const sourceAuthority={archive_sha256:hash(regularBytes(join(root,'vendor/lean4-prod/lean.tar'))),toolchain:regularBytes(join(root,'lean-toolchain')).toString().trim()};
  assert.equal(hash(regularBytes('/usr/local/bin/prismpm',256*1024*1024)),inventory.cli_sha256,'actual installed CLI matches immutable inventory');
  const work=mkdtempSync('/tmp/prismpm-binary-sdk-'),source=join(root,'tests/fixtures/binary/binary-program/project');let sequence=0;
  function fixture(){const destination=join(work,'fixture-'+sequence++);cpSync(source,destination,{recursive:true,errorOnExist:true,force:false});for(const row of tree(destination))chmodSync(join(destination,row.path),row.kind==='directory'?0o700:0o600);assert.ok(!existsSync(join(destination,'.prism')));return destination;}
  const positive=(project,args)=>cli(project,args,{schema:'prismpm/'+args[0]+'-result/1'});
  try{
   const first=fixture(),before=tree(first),checked=positive(first,['check']);same(tree(first),before,'check modified source');assert.equal(checked.entity_count,1);
-  const accepted=positive(first,['verify']),evidence=checkAccepted(first,accepted);assert.equal(checked.model_id,evidence.model_id);
+  const accepted=positive(first,['verify']),evidence=checkAccepted(first,accepted,sourceAuthority);assert.equal(checked.model_id,evidence.model_id);
   const firstBuild=tree(evidence.build),second=fixture(),secondBuild=positive(second,['build']);assert.equal(secondBuild.build_id,accepted.build_id);
   same(tree(join(second,'.prism/build',secondBuild.build_id)),firstBuild,'complete build differs across fresh absolute roots');noVerification(second);
-  const secondVerify=positive(second,['verify']);assert.equal(secondVerify.build_id,accepted.build_id);checkAccepted(second,secondVerify);
+  const secondVerify=positive(second,['verify']);assert.equal(secondVerify.build_id,accepted.build_id);checkAccepted(second,secondVerify,sourceAuthority);
   const beforeProduct=tree(first);cli(first,['build','--locked','-t','ghcr.io/uor-foundation/prismpm-binary-probe:0.1.0'],{code:'PP6101'});same(tree(first),beforeProduct,'product refusal wrote outputs');
   const descriptor=regularBytes(join(source,'src/Foundation/Binary/V1/Model.lex.tex')).toString('utf8'),rows=descriptor.split('\n').filter(line=>line.startsWith('\\semanticdata{'));assert.equal(rows.length,1);const nominal=JSON.parse(rows[0].slice('\\semanticdata{'.length,-1));
   const mutations=[
@@ -155,11 +156,11 @@ export function run(root,image,sourceRevision,sourceSha256,inventorySha256){
   for(const change of mutations){const invalid=fixture();mutateModule(invalid,change);const before=tree(invalid);cli(invalid,['check'],{code:'PP2001'});same(tree(invalid),before,'invalid check wrote outputs');noVerification(invalid);}
   const mutant=fixture(),original=mutateModule(mutant,module=>{rootField(module,'acceptanceVectors').head.fields.find(row=>row.field==='response').value={kind:'bytes',hex:'01'};});
   const changed=positive(mutant,['check']);assert.notEqual(changed.semantic_id,checked.semantic_id);cli(mutant,['verify'],{code:'PP5006'});noVerification(mutant);
-  writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored);
-  for(const name of ['lexlean-attestation.json','binary-acceptance.json'])rejectChangedEvidence(first,accepted,join(first,accepted.verified_root,name));
-  rejectChangedEvidence(first,accepted,join(evidence.build,'binary/package/src/lib.rs'));
+  writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored,sourceAuthority);
+  for(const name of ['lexlean-attestation.json','binary-acceptance.json'])rejectChangedEvidence(first,accepted,join(first,accepted.verified_root,name),sourceAuthority);
+  rejectChangedEvidence(first,accepted,join(evidence.build,'binary/package/src/lib.rs'),sourceAuthority);
   // A prior passing receipt is never an input to current verification.
-  const freshlyVerified=positive(first,['verify']);checkAccepted(first,freshlyVerified);assert.equal(freshlyVerified.build_id,accepted.build_id);
+  const freshlyVerified=positive(first,['verify']);checkAccepted(first,freshlyVerified,sourceAuthority);assert.equal(freshlyVerified.build_id,accepted.build_id);
   const retained='/tmp/prismpm-binary-evidence';assert.ok(!existsSync(retained),'fresh evidence output');mkdirSync(join(retained,'.prism/build'),{recursive:true});mkdirSync(join(retained,'.prism/verified'),{recursive:true});
   cpSync(evidence.build,join(retained,'.prism/build',accepted.build_id),{recursive:true,errorOnExist:true,force:false});
   cpSync(join(first,freshlyVerified.verified_root),join(retained,freshlyVerified.verified_root),{recursive:true,errorOnExist:true,force:false});writeFileSync(join(retained,'receipt.json'),canonical(freshlyVerified));
@@ -192,7 +193,7 @@ export function validateGenerationWorkflow(workflow){
  ]){const next=workflow.indexOf(command);assert.ok(next>previous,'complete ordered owning generation: '+command);previous=next;}
  assert.ok(workflow.indexOf('if: always()')>previous,'failure diagnostics must not admit a partial patch');
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,18),18,'complete owning binary gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,20),20,'complete original binary gate tests and added custody controls');}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
  if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));
@@ -202,7 +203,12 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  else if(mode==='image'&&args.length===3)verifyImage(JSON.parse(readFileSync(0)),...args);
  else if(mode==='inventory'&&args.length===2)console.log(inventoryEvidence(regularBytes(args[0]),args[1]).sha256);
  else if(mode==='result'&&args.length===6)verifyResult(JSON.parse(readFileSync(args[0])),...args.slice(1));
- else if(mode==='evidence'&&args.length===2){const receipt=document(join(args[0],'receipt.json')),result=JSON.parse(readFileSync(args[1]));assert.equal(receipt.build_id,result.build_id);assert.equal(receipt.attestation_id,result.attestation_id);checkAccepted(args[0],receipt);}
+ else if(mode==='evidence'&&args.length===2){
+  const receipt=document(join(args[0],'receipt.json')),result=JSON.parse(readFileSync(args[1]));
+  assert.equal(receipt.build_id,result.build_id);assert.equal(receipt.attestation_id,result.attestation_id);
+  checkAccepted(args[0],receipt,{archive_sha256:hash(regularBytes(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),
+   toolchain:regularBytes(new URL('../lean-toolchain',import.meta.url)).toString().trim()});
+ }
  else if(mode==='format-image'&&args.length===2){const value=JSON.parse(readFileSync(args[0]));assert.equal(args[1],'ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21');verifyImage(value,args[1],'amd64',value[0]?.Config?.Labels?.['org.opencontainers.image.revision']);}
  else if(mode==='format-evidence'&&args.length===3){const [directory,sourceRevision,image]=args;revision(sourceRevision);assert.match(image,imagePattern);const inventory=regularBytes(join(directory,'inventory.json'));validateInventory(inventory);const patch=regularBytes(join(directory,'format.patch')),paths=regularBytes(join(directory,'changed-paths.txt')).toString().trim().split('\n').filter(Boolean);assert.ok(paths.every(path=>!path.startsWith('/')&&!path.split('/').some(part=>['','..','.'].includes(part))&&/^(?:crates\/[^/]+\/|xtask\/).+\.rs$/.test(path)),'formatter changed non-owned Rust source');assert.equal(patch.length===0,paths.length===0);writeFileSync(join(directory,'format-result.json'),canonical({schema:'prismpm/source-format-review/1',scope:'source-format-only',source_revision:sourceRevision,sdk_image:image,inventory_sha256:hash(inventory),patch_sha256:hash(patch),formatter_log_sha256:hash(regularBytes(join(directory,'formatter.log'))),changed_paths:paths,status:patch.length?'review-required':'passed',unclaimed:['compilation','proof-verification','binary-package-acceptance','sdk-release','deployment']}));}
  else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/binary-sdk-check.test.mjs','scripts/binary-sdk-check-shell.test.mjs','scripts/binary-sdk-format-shell.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);const ownership=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/sdk-owned-session.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(ownership.stdout??'');process.stderr.write(ownership.stderr??'');assert.equal(ownership.error,undefined);assert.equal(ownership.signal,null);assert.equal(ownership.status,0);assert.equal(verifyTap(ownership.stdout,19),19,'complete additional owned-retirement controls');}

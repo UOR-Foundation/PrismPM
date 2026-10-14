@@ -612,6 +612,15 @@ impl Controller {
         request: BuildRequest,
         release: Option<&str>,
     ) -> Result<BuildResult, PrismError> {
+        self.build_release_with_owner(request, release, None)
+    }
+
+    pub(crate) fn build_release_with_owner(
+        &self,
+        request: BuildRequest,
+        release: Option<&str>,
+        mut exporter_owner: Option<&mut crate::exporter::VerifyExporterOwner>,
+    ) -> Result<BuildResult, PrismError> {
         let prepared = self.prepare_release(request.config_path.as_deref(), release)?;
         if let Some(application) = &prepared.model.application {
             crate::holo::browser_application::require_runtime(application)?;
@@ -760,13 +769,27 @@ impl Controller {
                         .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
                 ));
             }
-            let application_artifacts = crate::application_build::generate(
-                &self.root,
-                &prepared.model,
-                &prepared.model_bytes,
-                &application_lex_root,
-                &application_lex_manifest,
-            )?;
+            let application_artifacts = match exporter_owner.as_deref_mut() {
+                Some(owner) => {
+                    crate::application_build::generate_owned(
+                        &self.root,
+                        &prepared.model,
+                        &prepared.model_bytes,
+                        &application_lex_root,
+                        &application_lex_manifest,
+                        owner,
+                        crate::exporter::Phase::ControllerBuild,
+                    )?
+                    .artifacts
+                }
+                None => crate::application_build::generate(
+                    &self.root,
+                    &prepared.model,
+                    &prepared.model_bytes,
+                    &application_lex_root,
+                    &application_lex_manifest,
+                )?,
+            };
             for (path, bytes) in &application_artifacts {
                 if path.ends_with(".holo") {
                     prepared.config.limits.check_holo_length(bytes.len())?;
@@ -775,22 +798,50 @@ impl Controller {
             artifacts.extend(application_artifacts);
         }
         if prepared.model.program.is_some() {
-            artifacts.extend(crate::binary_build::generate(
-                &self.root,
-                &prepared.model,
-                &prepared.model_bytes,
-                &lex_root,
-                &lex_manifest_bytes,
-            )?);
+            artifacts.extend(match exporter_owner.as_deref_mut() {
+                Some(owner) => {
+                    crate::binary_build::generate_owned(
+                        &self.root,
+                        &prepared.model,
+                        &prepared.model_bytes,
+                        &lex_root,
+                        &lex_manifest_bytes,
+                        owner,
+                        crate::exporter::Phase::ControllerBuild,
+                    )?
+                    .artifacts
+                }
+                None => crate::binary_build::generate(
+                    &self.root,
+                    &prepared.model,
+                    &prepared.model_bytes,
+                    &lex_root,
+                    &lex_manifest_bytes,
+                )?,
+            });
         }
         if prepared.model.library.is_some() {
-            artifacts.extend(crate::library_build::generate(
-                &self.root,
-                &prepared.model,
-                &prepared.model_bytes,
-                &lex_root,
-                &lex_manifest_bytes,
-            )?);
+            artifacts.extend(match exporter_owner {
+                Some(owner) => {
+                    crate::library_build::generate_owned(
+                        &self.root,
+                        &prepared.model,
+                        &prepared.model_bytes,
+                        &lex_root,
+                        &lex_manifest_bytes,
+                        owner,
+                        crate::exporter::Phase::ControllerBuild,
+                    )?
+                    .artifacts
+                }
+                None => crate::library_build::generate(
+                    &self.root,
+                    &prepared.model,
+                    &prepared.model_bytes,
+                    &lex_root,
+                    &lex_manifest_bytes,
+                )?,
+            });
         }
         if let Some(system) = &prepared.system {
             artifacts.push(("system.prism.json".to_owned(), system.bytes().to_vec()));
@@ -810,6 +861,7 @@ impl Controller {
         let mut inputs = json!({
             "application_generator_sha256": format!("{:x}", Sha256::digest([
                 include_bytes!("../application_build.rs").as_slice(),
+                include_bytes!("../lean_project.rs").as_slice(),
                 include_bytes!("../holo/archive.rs").as_slice(),
                 include_bytes!("../embedded/lean4-prod-rust.MANIFEST.sha256").as_slice(),
                 b"prismpm/build-artifacts/2".as_slice()
@@ -842,8 +894,13 @@ impl Controller {
         }
         if prepared.model.library.is_some() {
             inputs["library_artifacts_sha256"] = json!(content_id(&encode_value(&json!(rows))?));
-            inputs["library_generator_sha256"] =
-                json!(content_id(include_bytes!("../library_build.rs")));
+            inputs["library_generator_sha256"] = json!(content_id(
+                &[
+                    include_bytes!("../library_build.rs").as_slice(),
+                    include_bytes!("../lean_project.rs").as_slice(),
+                ]
+                .concat()
+            ));
             inputs["schema"] = json!("prismpm/build-inputs/3");
         }
         if prepared.model.program.is_some() {

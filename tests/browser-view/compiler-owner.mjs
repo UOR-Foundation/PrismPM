@@ -10,8 +10,22 @@ import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from 
 import {captureCompilerArtifact, compilerReadBarrier, observeCompilerRuntimeFile} from './compiler-artifact.mjs';
 
 const families = Object.freeze({
+  'holo-primary-component': Object.freeze({directory: 'holo-primary-component', executable: 'holo-primary-component-driver'}),
+  pkce: Object.freeze({directory: 'browser-pkce', executable: 'browser-pkce-driver'}),
+  'session-operation': Object.freeze({directory: 'browser-session-operation', executable: 'browser-session-operation-driver'}),
+  'signed-context': Object.freeze({directory: 'browser-signed-context', executable: 'browser-signed-context-driver'}),
+  'session-retention': Object.freeze({directory: 'browser-session-journal-retention', executable: 'browser-session-journal-retention-driver'}),
+  'publication-linkage': Object.freeze({directory: 'publication-context-linkage', executable: 'publication-context-linkage-driver'}),
+  'account-genesis': Object.freeze({directory: 'browser-account-genesis', executable: 'browser-account-genesis-driver'}),
+  p256: Object.freeze({directory: 'browser-p256', executable: 'browser-p256-driver'}),
   view: Object.freeze({directory: 'browser-view', executable: 'browser-workspace-view-driver'}),
+  effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),
+  presentation: Object.freeze({directory: 'browser-presentation', executable: 'browser-presentation-driver'}),
+  session: Object.freeze({directory: 'browser-session', executable: 'browser-session-driver'}),
+  'operation-journal': Object.freeze({directory: 'browser-operation-journal', executable: 'browser-operation-journal-driver'}),
+  budget: Object.freeze({directory: 'browser-budget', executable: 'browser-budget-driver'}),
   custody: Object.freeze({directory: 'browser-custody', executable: 'browser-custody-driver'}),
+  publication: Object.freeze({directory: 'publication-admission', executable: 'publication-admission-driver'}),
 });
 const owners = new WeakMap();
 function family(name) {

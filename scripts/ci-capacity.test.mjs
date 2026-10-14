@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {existsSync, mkdtempSync, readFileSync, rmSync} from 'node:fs';
 import {createRequire} from 'node:module';
@@ -23,7 +24,16 @@ const commands = [
   ['Packaging, API & Upstream Conformance', 120, './scripts/vv.sh package-api'],
 ];
 
+function sourceEvents(name, value) {
+  const expected = ['ci-parallel', 'honesty', 'reproducibility'].includes(name)
+    ? {pull_request: null, push: {branches: ['main']}, workflow_dispatch: null}
+    : name === 'vv' ? {push: {branches: ['main']}, workflow_dispatch: null}
+      : {workflow_dispatch: null};
+  assert.deepEqual(value.on, expected, name + ': complete source trigger contract');
+}
+
 function parallelContract(value) {
+  sourceEvents('ci-parallel', value);
   assert.deepEqual(Object.keys(value.jobs), ['gate']);
   const job = value.jobs.gate;
   assert.equal(job.name, '${{ matrix.name }}');
@@ -63,20 +73,96 @@ test('parallel policy refuses missing, duplicated, weakened or unbounded executi
     v => v.jobs.gate['timeout-minutes'] = 10,
     v => v.jobs.gate.if = 'false',
     v => v.jobs.extra = v.jobs.gate,
+    v => v.on.pull_request = {},
+    v => v.on.push = {branches: ['other']},
   ]) {
     const value = structuredClone(original); mutate(value);
     assert.throws(() => parallelContract(value));
   }
 });
 
+function workspaceUnitOwnership(source) {
+  const signature = 'fn run_unit_tests(root: &Path) -> Result<(), Fail> {';
+  const start = source.indexOf(signature), end = source.indexOf('\nfn validate_all(', start);
+  assert(start >= 0 && end > start && source.indexOf(signature, start + 1) === -1);
+  let body = source.slice(start + signature.length, end)
+    .replace(/^\s*\/\/[^\n]*$/gm, '').trim();
+  const progress = /^println!\("Running workspace unit and integration tests"\);\s*/.exec(body);
+  assert(progress); body = body.slice(progress[0].length);
+  const statements = [], arguments_ = [];
+  for (let index = 0; index < 2; index++) {
+    const statement = /^command\(\s*root,\s*"cargo",\s*&\[([\s\S]*?)\],?\s*\)\?;\s*/.exec(body);
+    assert(statement, 'both complete Cargo unit owners must execute and propagate failure');
+    statements.push(statement[0].trimEnd());
+    arguments_.push(JSON.parse('[' + statement[1].replace(/,\s*$/, '') + ']'));
+    body = body.slice(statement[0].length);
+  }
+  assert.match(body, /^Ok\(\(\)\)\s*\}$/);
+  assert.deepEqual(arguments_, [
+    ['test', '--workspace', '--bins', '--lib', '--tests', '--exclude', 'repo-conformance',
+      '--all-features', '--locked', '--offline'],
+    ['test', '--package', 'repo-conformance', '--lib', '--bins', '--all-features', '--locked', '--offline'],
+  ]);
+  return statements;
+}
+
+test('workspace units own conformance library and binaries without duplicate integration execution', () => {
+  workspaceUnitOwnership(readFileSync(new URL('../xtask/src/main.rs', import.meta.url), 'utf8'));
+});
+
+test('unit ownership refuses missing regressions, repeated integration, hidden execution and swallowed failures', () => {
+  const source = readFileSync(new URL('../xtask/src/main.rs', import.meta.url), 'utf8');
+  const [workspace, conformance] = workspaceUnitOwnership(source);
+  for (const mutate of [
+    value => value.replace(conformance, ''),
+    value => value.replace(conformance, conformance + conformance),
+    value => value.replace(conformance, conformance.replace('"--lib"', '"--tests"')),
+    value => value.replace(conformance, conformance.replace('"--bins",', '')),
+    value => value.replace(conformance, conformance.replace('"--all-features",', '')),
+    value => value.replace(conformance, conformance.replace('"--offline"', '"--frozen"')),
+    value => value.replace(workspace, workspace.replace('"--exclude",', '')),
+    value => value.replace(conformance, conformance.replace(')?;', ');')),
+    value => value.replace(conformance, 'if false { ' + conformance + ' }'),
+    value => value.replace(conformance, 'return Ok(());\n' + conformance),
+    value => value.replace(conformance, 'let _ = ' + conformance),
+  ]) assert.throws(() => workspaceUnitOwnership(mutate(source)));
+});
+
 test('read-only source workflows supersede by repository and ref, never unique run ID', () => {
   for (const name of ['ci-parallel', 'vv', 'bootstrap', 'reproducibility', 'honesty']) {
     const value = workflow(name);
+    sourceEvents(name, value);
     assert.equal(value.concurrency['cancel-in-progress'], true);
     assert(value.concurrency.group.includes('github.repository'));
     assert(value.concurrency.group.includes('github.ref'));
     assert(!value.concurrency.group.includes('github.run_id'));
     assert.deepEqual(value.permissions, {contents: 'read'});
+  }
+});
+
+test('source trigger policy refuses missing filtered broadened or redundant execution', () => {
+  for (const name of ['ci-parallel', 'honesty', 'reproducibility', 'vv', 'bootstrap']) {
+    const original = workflow(name);
+    const mutations = [
+      value => delete value.on.workflow_dispatch,
+      value => value.on.schedule = [{cron: '* * * * *'}],
+      value => value.on.pull_request_target = null,
+    ];
+    if (['ci-parallel', 'honesty', 'reproducibility'].includes(name)) {
+      mutations.push(value => delete value.on.pull_request,
+        value => value.on.pull_request = {branches: ['main']},
+        value => value.on.pull_request = {paths: ['src/**']});
+    } else mutations.push(value => value.on.pull_request = null);
+    if (name !== 'bootstrap') {
+      mutations.push(value => delete value.on.push,
+        value => value.on.push = null,
+        value => value.on.push = {branches: ['main', 'other']},
+        value => value.on.push = {branches: ['main'], paths: ['src/**']});
+    } else mutations.push(value => value.on.push = {branches: ['main']});
+    for (const mutate of mutations) {
+      const value = structuredClone(original); mutate(value);
+      assert.throws(() => sourceEvents(name, value), name);
+    }
   }
 });
 
@@ -233,11 +319,38 @@ const expectedMatrices = {
     'installed-sdk': platforms,
     native: [{platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
-  'sdk-candidate': {build: platforms.map(({os, arch}) => ({runner: os, architecture: arch}))},
+  'sdk-candidate': {
+    build: platforms.map(({os, arch}) => ({runner: os, architecture: arch})),
+    'unpublished-construction': platforms.map(({os, arch}) => ({runner: os, architecture: arch})),
+  },
   'native-golden': {'native-source-review': platforms},
 };
 
+// These six current union jobs have distinct publication/construction policy.
+// Bind their complete original bodies, not only the older donor build matrix;
+// only the explicitly reviewed timeout and matrix concurrency fields differ.
+const candidateJobs = {
+  'input-policy': [30, '1a2606aed5c40be2c5fd6ade291d4d8cc8f48b265ec77346e886d7e429331b1c'],
+  policy: [30, 'd8c166a9586b9ecf4e6852352218bdeec51b918562604c920fea38db8e13d499'],
+  build: [180, '54a93dd0777745bc3e2d455e06019b4971bce7fc4c3b2baed1451fbc796f143d'],
+  publish: [60, 'eed34aecea86d7fb123167999bb1a0048f62609f6fc91d6979eeb0dcb8340128'],
+  'unpublished-construction': [180, '1d3f4bfbee8ab48dcb68a2a754be821358dcd5658ea7993ad4e32aee7c023254'],
+  'construction-integrity': [90, '6cf032e9b0febd74a52489ce4f06439f93ddebb3e13910e503e9f68f90fc3fa7'],
+};
+function candidateContract(value) {
+  assert.deepEqual(Object.keys(value.jobs), Object.keys(candidateJobs));
+  const canonical = v => Array.isArray(v) ? v.map(canonical)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])])) : v;
+  for (const [id, [timeout, digest]] of Object.entries(candidateJobs)) {
+    const job = structuredClone(value.jobs[id]);
+    assert.equal(job['timeout-minutes'], timeout);
+    delete job['timeout-minutes'];
+    if (job.strategy) delete job.strategy['max-parallel'];
+    assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
+  }
+}
 function publicationContract(name, value) {
+  if (name === 'sdk-candidate') candidateContract(value);
   const actual = Object.fromEntries(Object.entries(value.jobs).filter(([, job]) => job.strategy).map(([id, job]) => {
     assert.equal(job.strategy['max-parallel'], 2);
     assert.equal(job.strategy['fail-fast'], false);
@@ -253,6 +366,15 @@ test('publication keeps non-canceling lifecycles and every original matrix row',
 });
 
 test('publication policy rejects removal or substitution of any original platform or product', () => {
+  for (const id of Object.keys(candidateJobs)) for (const mutate of [
+    v => delete v.jobs[id],
+    v => v.jobs[id].if = 'true',
+    v => v.jobs[id].steps = [],
+    v => v.jobs[id]['timeout-minutes']++,
+  ]) {
+    const value = workflow('sdk-candidate'); mutate(value);
+    assert.throws(() => publicationContract('sdk-candidate', value));
+  }
   for (const [name, matrices] of Object.entries(expectedMatrices)) for (const [job, rows] of Object.entries(matrices)) {
     for (let index = 0; index < rows.length; index++) for (const action of ['remove', 'substitute']) {
       const value = workflow(name), actual = value.jobs[job].strategy.matrix.include;

@@ -1,12 +1,14 @@
 // Synthetic parser/boundary tests are not installed CLI acceptance evidence.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,rmSync,renameSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,rmSync,renameSync,symlinkSync,linkSync,cpSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,validateGenerationWorkflow,verifySource,sourceRoots,sourceAliases,cli,checkAccepted,mutateModule,tree,verifyImage,verifyResult,testOutput,hash,canonical,fixtureProgram,modes,processTools,binaryPaths,completedChecks,unclaimed,inventoryEvidence,regularBytes,rejectChangedEvidence} from './binary-sdk-check.mjs';
-import {inventory,parserFixture} from './binary-sdk-check-fixtures.mjs';
+import {capture,validateGenerationWorkflow,verifySource,sourceRoots,sourceAliases,cli,checkAccepted as checkWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,hash,canonical,fixtureProgram,modes,processTools,binaryPaths,completedChecks,unclaimed,inventoryEvidence,regularBytes,rejectChangedEvidence as rejectWithAuthority} from './binary-sdk-check.mjs';
+import {inventory,parserFixture,sourceAuthorityFixture} from './binary-sdk-check-fixtures.mjs';
+const checkAccepted=(root,receipt)=>checkWithAuthority(root,receipt,sourceAuthorityFixture);
+const rejectChangedEvidence=(root,receipt,path)=>rejectWithAuthority(root,receipt,path,sourceAuthorityFixture);
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-binary-gate-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const put=(root,path,bytes)=>{mkdirSync(dirname(join(root,path)),{recursive:true});writeFileSync(join(root,path),bytes);};
@@ -69,6 +71,31 @@ test('source mutations preserve canonical single-module bytes',t=>{
 test('bounded byte and tree readers reject aliases and include unexpected outputs',t=>{
  const root=temporary(t);put(root,'source','original');const before=tree(root);assert.equal(regularBytes(join(root,'source')).toString(),'original');assert.throws(()=>regularBytes(join(root,'source'),2));mkdirSync(join(root,'unexpected'));assert.notDeepEqual(tree(root),before);rmSync(join(root,'unexpected'),{recursive:true});symlinkSync('source',join(root,'alias'));assert.throws(()=>tree(root));assert.throws(()=>regularBytes(join(root,'alias')));
 });
+test('shared held byte reader conserves native identity and refuses external links and live replacement',t=>{
+ const root=temporary(t),outside=temporary(t),path=join(root,'source');put(root,'source','original');
+ assert.equal(regularBytes(new URL('file://'+path),8).toString(),'original');
+ const nested=join(root,'données','子','preuve.txt');put(root,'données/子/preuve.txt','original');
+ assert.equal(regularBytes(nested,8).toString(),'original');
+ assert.equal(regularBytes(new URL('file://'+nested),8).toString(),'original');
+ symlinkSync(join(root,'données'),join(root,'parent-alias'));
+ assert.throws(()=>regularBytes(join(root,'parent-alias','子','preuve.txt'),8),/aliased/);
+ rmSync(join(root,'parent-alias'));
+ put(root,'empty','');assert.equal(regularBytes(join(root,'empty'),0).length,0);
+ for(const limit of [-1,1.5,Number.MAX_SAFE_INTEGER,288*1024*1024+1])assert.throws(()=>regularBytes(path,limit));
+ linkSync(path,join(outside,'outside-capture'));assert.throws(()=>regularBytes(path),/single-link/);assert.throws(()=>tree(root),/single-link/);rmSync(join(outside,'outside-capture'));
+ const script=`import assert from 'node:assert/strict';import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+ const [module,path,operation]=process.argv.slice(1),{regularBytes}=await import(module),read=fs.readSync,close=fs.closeSync;let changed=false,closed=false;
+ fs.readSync=(...args)=>{const count=read(...args);if(!changed){changed=true;if(operation==='link')fs.linkSync(path,path+'-link');else if(operation==='replace'){fs.renameSync(path,path+'-original');fs.writeFileSync(path,'original');}else if(operation==='read-close')throw new Error('read boundary failure');}return count;};
+ fs.closeSync=fd=>{close(fd);closed=true;if(operation==='read-close')throw new Error('close boundary failure');};syncBuiltinESMExports();
+ let error;try{regularBytes(path);}catch(value){error=value;}assert(error);assert(closed);
+ if(operation==='read-close'){assert(error instanceof AggregateError);assert.deepEqual(error.errors.map(value=>value.message),['read boundary failure','close boundary failure']);}
+ else assert.match(error.message,/file changed|single-link|held file pathname/);`;
+ for(const operation of ['link','replace','read-close']){
+  const selected=temporary(t);put(selected,'source','original');
+  const output=spawnSync(process.execPath,['--input-type=module','-e',script,new URL('./library-sdk-check.mjs',import.meta.url).href,join(selected,'source'),operation],{encoding:'utf8',timeout:15000,maxBuffer:1024*1024});
+  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,output.stderr);
+ }
+});
 
 // Coherently resealed parser fixtures are test-only and never passed to run().
 
@@ -90,11 +117,27 @@ test('complete proof and byte-bound acceptance reject missing changed or reseale
  {const aliased=temporary(t),receipt=parserFixture(aliased);renameSync(join(aliased,'.prism/build'),join(aliased,'outside-build'));symlinkSync('../outside-build',join(aliased,'.prism/build'));assert.throws(()=>checkAccepted(aliased,receipt),/directory alias/);}
  for(const value of [{},{schema:'prismpm/verify-result/1',build_id:'a'.repeat(64),attestation_id:'b'.repeat(64),verified_root:'../../outside'}])assert.throws(()=>checkAccepted(root,value));
 });
+test('binary current acceptance binds both complete owned phases to independent compiler source and original replay',t=>{
+ const valid=temporary(t),receipt=parserFixture(valid);checkAccepted(valid,receipt);
+ for(const authority of [undefined,{...sourceAuthorityFixture,archive_sha256:'9'.repeat(64)},{...sourceAuthorityFixture,toolchain:'latest'}])assert.throws(()=>checkWithAuthority(valid,receipt,authority));
+ for(const change of [
+  owner=>{owner.phases.pop();},owner=>{owner.phases.reverse();},owner=>{owner.phases[0].role='library';},
+  owner=>{owner.phases[0].model_sha256='9'.repeat(64);},owner=>{for(const phase of owner.phases)phase.lexlean_manifest_sha256='9'.repeat(64);},
+  owner=>{for(const phase of owner.phases)phase.artifacts.pop();},owner=>{for(const phase of owner.phases)phase.processes.pop();},
+  owner=>{owner.phases[0].processes[2].exporter.source_archive_sha256='9'.repeat(64);},
+  owner=>{for(const phase of owner.phases)phase.processes[2].argv[3]='Wrong.Module';},
+  owner=>{for(const phase of owner.phases)phase.processes[0].executable_sha256='9'.repeat(64);},
+  owner=>{for(const phase of owner.phases)phase.processes[4].argv=['generate-lockfile'];},
+  owner=>{for(const phase of owner.phases)phase.processes[5].executable_sha256='9'.repeat(64);},
+  owner=>{owner.phases[1].processes[3].stdout='invented replay';},
+  (owner,manifest)=>{manifest.schema='prismpm/binary-verification-manifest/1';delete manifest.exporter_owner;},
+ ]){const root=temporary(t);assert.throws(()=>checkAccepted(root,parserFixture(root,undefined,change)));}
+});
 test('outer result requires current image inventory source and every non-skipped owning test',()=>{
  const sourceSha='1'.repeat(64),inventorySha='2'.repeat(64),args=[image,revision,'amd64',sourceSha,inventorySha];
  const value={schema:'prismpm/installed-binary-check/1',scope:'installed-binary-package-only',status:'passed',sdk_image:image,source_revision:revision,source_sha256:sourceSha,inventory_sha256:inventorySha,architecture:'amd64',build_id:'3'.repeat(64),attestation_id:'4'.repeat(64),checks:[...completedChecks],unclaimed:[...unclaimed]};verifyResult(value,...args);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.inventory_sha256='9'.repeat(64),v=>v.source_revision='9'.repeat(40),v=>v.architecture='arm64']){const bad=structuredClone(value);change(bad);assert.throws(()=>verifyResult(bad,...args));}
- const tap='TAP version 13\n'+Array.from({length:18},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..18\n# tests 18\n# suites 0\n# pass 18\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 18','# tests 14')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
+ const tap='TAP version 13\n'+Array.from({length:20},(_,i)=>'ok '+(i+1)+' - gate '+i+'\n').join('')+'1..20\n# tests 20\n# suites 0\n# pass 20\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n';testOutput({status:0,signal:null,stdout:tap});for(const stdout of ['',tap.replace('# skipped 0','# skipped 1'),tap.replace('# tests 20','# tests 18')])assert.throws(()=>testOutput({status:0,signal:null,stdout}));
 });
 test('release retains existing mandatory gates and adds binary on both native platforms',()=>{
  const workflow=readFileSync(new URL('../.github/workflows/release.yml',import.meta.url),'utf8');
@@ -178,7 +221,12 @@ test('release retains existing mandatory gates and adds binary on both native pl
  assert.ok(!formatter.includes('--mount')&&!formatter.includes('--volume')&&!formatter.includes('--entrypoint')&&!formatter.includes('git push'));
  const transport=readFileSync(new URL('./binary-sdk-qualify.sh',import.meta.url),'utf8');
  for(const required of ['--publish 127.0.0.1::5000','--from-oci-layout --to-plain-http','"$endpoint/sdk@$digest"','"$root/scripts/binary-sdk-check.sh" "$image" "$revision" "$evidence/accepted"'])assert.ok(transport.includes(required),required);
- for(const name of ['ci-parallel','reproducibility'])assert.match(readFileSync(new URL('../.github/workflows/'+name+'.yml',import.meta.url),'utf8'),/pull_request:\n    branches: \[main, work\/compression-m0-reconcile\]/);
+ for(const name of ['ci-parallel','reproducibility']){
+  const value=readFileSync(new URL('../.github/workflows/'+name+'.yml',import.meta.url),'utf8');
+  const unfiltered=workflow=>{assert.match(workflow,/^  pull_request:\n(?=  [a-z]|\n\S)/m);assert.doesNotMatch(workflow,/^  pull_request_target:/m);};
+  unfiltered(value);assert.throws(()=>unfiltered(value.replace('  pull_request:\n','  pull_request:\n    branches: [main]\n')));
+  assert.throws(()=>unfiltered(value.replace('  pull_request:\n','  pull_request:\n    branches: [main, work/compression-m0-reconcile]\n')));
+ }
  const xtask=readFileSync(new URL('../xtask/src/main.rs',import.meta.url),'utf8');for(const path of ['scripts/binary-sdk-check.test.mjs','scripts/binary-sdk-check-shell.test.mjs'])assert.ok(xtask.includes('"'+path+'"'));
 });
 test('generated review is deliberate, exact-source, writer-owned and never acceptance',()=>{
@@ -236,6 +284,7 @@ with tarfile.open(root/'source.tar','w',format=tarfile.PAX_FORMAT) as archive:
 test('owning parser tests kill an omitted process-exit guard',t=>{
  const root=temporary(t),module=readFileSync(new URL('./binary-sdk-check.mjs',import.meta.url),'utf8'),guard='assert.equal(row.exit_code,0);';assert.equal(module.split(guard).length,2);
  for(const name of ['binary-sdk-check.mjs','binary-sdk-check.test.mjs','binary-sdk-check-fixtures.mjs','library-sdk-check.mjs','browser-api-sdk-check.mjs'])put(root,'scripts/'+name,name==='binary-sdk-check.mjs'?module.replace(guard,''):readFileSync(new URL('./'+name,import.meta.url)));
- put(root,'sdk/platform-lock.mjs',readFileSync(new URL('../sdk/platform-lock.mjs',import.meta.url)));
+ for(const name of ['library-sdk-fixture.mjs','installed-exporter-concurrency.mjs','sdk-command-owner.mjs','sdk-command-owner.py'])put(root,'scripts/'+name,readFileSync(new URL('./'+name,import.meta.url)));
+ cpSync(new URL('../sdk',import.meta.url),join(root,'sdk'),{recursive:true});
  const env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=closed binary parser rejects',join(root,'scripts/binary-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});assert.equal(output.error,undefined);assert.equal(output.status,1);assert.match(output.stdout,/Missing expected exception/);
 });

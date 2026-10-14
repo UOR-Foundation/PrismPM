@@ -12,7 +12,13 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 61] = [
+const CONTRACTS: [Contract; 63] = [
+    Contract {
+        id: "prismpm/binary-verification-manifest/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 2_097_152,
+        schema: include_bytes!("../schemas/binary-verification-manifest-v2.schema.json"),
+    },
     Contract {
         id: "prismpm/model-document/5",
         maximum_bytes: 16_777_216,
@@ -72,6 +78,12 @@ const CONTRACTS: [Contract; 61] = [
         maximum_bytes: 16_777_216,
         maximum_items: 65_536,
         schema: include_bytes!("../schemas/library-verification-manifest.schema.json"),
+    },
+    Contract {
+        id: "prismpm/library-verification-manifest/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 65_536,
+        schema: include_bytes!("../schemas/library-verification-manifest-v2.schema.json"),
     },
     Contract {
         id: "prismpm/model-document/3",
@@ -508,9 +520,65 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
         }
         return Ok(());
     }
-    if id == "prismpm/library-verification-manifest/1"
-        || id == "prismpm/binary-verification-manifest/1"
-    {
+    if matches!(
+        id,
+        "prismpm/library-verification-manifest/1"
+            | "prismpm/library-verification-manifest/2"
+            | "prismpm/binary-verification-manifest/1"
+            | "prismpm/binary-verification-manifest/2"
+    ) {
+        if matches!(
+            id,
+            "prismpm/library-verification-manifest/2" | "prismpm/binary-verification-manifest/2"
+        ) {
+            let role = if id == "prismpm/library-verification-manifest/2" {
+                "library"
+            } else {
+                "binary"
+            };
+            crate::exporter::validate_owner_record(
+                &value["exporter_owner"],
+                value["model_sha256"]
+                    .as_str()
+                    .expect("schema-validated model hash"),
+                role,
+            )
+            .map_err(|error| PrismError::new("PP4004", error.message))?;
+            if value["exporter_owner"]["phases"][1]["artifacts"] != value["artifacts"] {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "profile owner products differ from the complete artifact bindings",
+                ));
+            }
+            let processes =
+                crate::release_verification::process_records(&value["processes"], false)
+                    .map_err(|error| PrismError::new("PP4004", error.message))?;
+            let replay = value["exporter_owner"]["phases"][1]["processes"]
+                .as_array()
+                .expect("validated owner replay");
+            if processes
+                .windows(replay.len())
+                .filter(|rows| *rows == replay.as_slice())
+                .count()
+                != 1
+                || processes
+                    .get(1)
+                    .is_none_or(|row| row["tool"] != "lake-version")
+                || value["exporter_owner"]["phases"]
+                    .as_array()
+                    .expect("validated phases")
+                    .iter()
+                    .any(|phase| {
+                        phase["processes"][0]["executable_sha256"]
+                            != processes[1]["executable_sha256"]
+                    })
+            {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "profile owner differs from original replay or native preflight",
+                ));
+            }
+        }
         let mut prior = None;
         for row in value["artifacts"]
             .as_array()

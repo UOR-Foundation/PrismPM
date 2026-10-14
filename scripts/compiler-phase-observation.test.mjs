@@ -43,12 +43,13 @@ test('every current private compiler basename is observed without classifying ar
   }
   const model=readFileSync(join(repository,'sdk/browser/workspace-model-test.mjs'),'utf8');
   const name=/debug\/(browser-workspace-model-driver)/.exec(model)?.[1];assert(name);names.push(name);
+  assert.equal(names.length,28);assert.equal(new Set(names).size,27);
+  assert.equal(names.filter(name=>name==='browser-session-journal-driver').length,2);
   const originalNames=['browser-budget-driver','browser-workspace-command-driver','browser-custody-driver',
     'browser-effects-driver','browser-workspace-envelope-driver','browser-workspace-journal-driver',
     'browser-operation-journal-driver','browser-presentation-driver','browser-workspace-query-driver',
     'browser-workspace-view-driver','publication-admission-driver','browser-workspace-model-driver'];
   assert.equal(originalNames.length,12);assert.equal(new Set(originalNames).size,12);
-  assert.deepEqual([...names].sort(), [...originalNames].sort(), 'complete current source driver inventory');
   for(const name of originalNames)assert(names.includes(name),'original compiler owner remains registered: '+name);
   for(const name of names) {
     const driver='/private/driver-target/debug/'+name;

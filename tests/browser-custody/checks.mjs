@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {prepare, run, sha, repository, draft} from './compile.mjs';
 import {corpus, maximumCorpus} from './corpus.mjs';
@@ -118,5 +118,9 @@ export function verifyModelMutation(kind, compilerOwner = null) {
       source: build.verified.source_id, attestation: build.verified.attestation_id,
       ir: build.generation.ir_sha256, wasm: sha(build.wasmBytes), vector: vector.id,
       request: sha(vector.request), response: sha(vector.response)};
-  } finally { if (passed) rmSync(build.work, {recursive: true, force: true}); }
+  } finally {
+    // Retain original source, proofs and generated products for independent
+    // review. Compiler tools belong to the guarded owner, not this workspace.
+    if (!passed) process.stderr.write('Retained failed custody mutation ' + build.work + '\n');
+  }
 }

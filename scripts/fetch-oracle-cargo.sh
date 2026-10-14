@@ -10,14 +10,23 @@ fi
 
 # Acquisition is separate from the offline verifier and production Cargo graph.
 # Browser compiler fixtures are internal gates, not external standards oracles.
-# Release-package verification also owns an independently locked compiler graph;
-# root workspace resolution cannot supply all of its locked registry versions.
+# Release packaging also verifies the independently locked upstream compiler.
 # Review these pins whenever an independently locked verification graph changes.
 sha256sum --check --strict <<'CHECKSUMS'
 ec19fdecf241b6e502726c1740bdc962dffc7fc1eaf456468ba0836b8fb2272a  tests/hologram-oracle/Cargo.toml
 16e2a6e4ce47c12b3510813b605897a377981b8314d031775a4ec99e89b5c277  tests/hologram-oracle/Cargo.lock
 5be0cb25a1bc7ebff4a709c6dd4c724ae787c6d97e4e9b0a9070ca2cafa71f89  tests/holo-codec-oracle/Cargo.toml
 8ab0b99efa9ab6f44d9368d026aefadcefae4640cc92c814947609b41aaf0df4  tests/holo-codec-oracle/Cargo.lock
+ec81bd62c5874aaea817f464a808a7c573b0333cef7366c72f2d9def2fbf17fc  tests/holo-browser-codec/Cargo.toml
+0074e95dc75e42ad8f802da1b5d51aca3b212e6a6cb0970e1907ec9d040dc88c  tests/holo-browser-codec/Cargo.lock
+4dd15f80c01d69faca648ab395ace50d011bc432a6f9366bd2728047c64b097f  tests/holo-primary-component/driver/Cargo.toml
+de5501406cb55fd264f6ade6966d0498bfb2980864ddea34c9e842c08ca95840  tests/holo-primary-component/driver/Cargo.lock
+f47de2480171c5a472195bd28d5f493a63eb8de77aa56b2efac6e20206cd1cc4  tests/browser-pkce/driver/Cargo.toml
+3c5c02d77d212861985ee7d6d5658e693b8e9b2fbfcac4a75a9e8fae4aa7192a  tests/browser-pkce/driver/Cargo.lock
+706f54f5e894732179faf1a183e791bf2053674dc9cff4f54e7b38894642d826  tests/browser-session-operation/driver/Cargo.toml
+53d3f9642ec2e21195a1106cc7aff4272f74ac22310757849cd094aa8ba431f9  tests/browser-session-operation/driver/Cargo.lock
+f235a287b2de052206be0951ce0669cae230f5145c1a0a564d0d48551f803039  tests/browser-signed-context/driver/Cargo.toml
+c46e6b2e18edefe7556f42864d8bffbcf949bb7d14e8f7109e702ef00e0dc1d5  tests/browser-signed-context/driver/Cargo.lock
 1e0a368fc436907ea62dab3cf44d73a4aad133584ae6dd9799d741aa82fe1f68  tests/browser-workspace/Cargo.toml
 3d27b77bec3b81bc28bbcac4e606bb0dfe83df7bc900e3607fbb08ad73dc03fa  tests/browser-workspace/Cargo.lock
 a8ddd90c616555741a750f91d820b80827438612523624c5afdc7e0301a76493  tests/browser-envelope/driver/Cargo.toml
@@ -35,6 +44,12 @@ dd24ad15a6178d8917b181a3ca2b97d2989d4c684d112efc0a65cdb98357d27e  tests/browser-
 2b05b3bd44c54329ea46161d50e227de6714330c6706f7b00c6c30122bb306d6  tests/browser-effects/driver/Cargo.lock
 cd971655426523e79de558c58706629b633f18f55b977f9441279879139b96b8  tests/browser-presentation/driver/Cargo.toml
 f35425d3c10f529eae5760cdc53fb3ffd598240415a67016dbf49194592283de  tests/browser-presentation/driver/Cargo.lock
+b0b774f35dc26abaf653abcd7e7b6b89d93d55d92131a71af83758f361d7f10a  tests/browser-p256/driver/Cargo.toml
+e459cdda09d3afb626a05b755427409c2d5fd0558d0caeae0d42eb9e9e0c584f  tests/browser-p256/driver/Cargo.lock
+85abf4a3ba0d41065b4bbd2144b871df063d4c1a42ec6e1664d99f45cc4af36d  tests/browser-account-genesis/driver/Cargo.toml
+fe99a6a9e16ac628039bd54e03df542dd89290d559db8f3ef9cd496cbfe9e5a7  tests/browser-account-genesis/driver/Cargo.lock
+5f597a966ad257bde250c2b71914bb943cc16ffbbb8cf16513d4d9c103fb3d06  tests/browser-session/driver/Cargo.toml
+673aaa8bb9ad67e1316f81d88ea4f5daba202e6a663ed7510821721b86d57081  tests/browser-session/driver/Cargo.lock
 367929deb65c746365b59a6055c76f8e0ff97f334d08ca5382bc163474346213  tests/browser-custody/driver/Cargo.toml
 75a9c3b0754d0c085c18a0091f6ce8922ab5b64834a8a996c2c1d2d5307dcacb  tests/browser-custody/driver/Cargo.lock
 10c2a425a0028ebe478c5a2e4f4435623634ed6529cf7193a2185aed9852206f  tests/browser-operation-journal/driver/Cargo.toml
@@ -43,6 +58,26 @@ d833db76924bdf573f4d0cd47a24b585bb454879be0ff668670629688277039f  tests/publicat
 ea11b8abbdb0b258776a17359d98948f06ce12486dae7fcb06639574c3c33baa  tests/publication-admission/driver/Cargo.lock
 fc49c5659bded9db17612c76d47370fd715e4fa900f2b0aa8617e77a0fb13581  tests/browser-budget/driver/Cargo.toml
 8693ae0f8f674d3e38013956e129759665d35dfe2f31001fbed782759bdcaa3d  tests/browser-budget/driver/Cargo.lock
+a8291f5d959eecad36132347f4fca977e269f480a29035cc6d83c01f7a541601  tests/browser-dynamic-choice/driver/Cargo.toml
+f5d4e898ddd6f8e34db29285cfb4ccd2aeff33e0faa36d3607b2460a4afe164e  tests/browser-dynamic-choice/driver/Cargo.lock
+554299f7adcdd1d795ffcbf9b361644cd2408f97b3a5ce6b4fe12c57c196ca19  tests/browser-semantic-presentation/driver/Cargo.toml
+f02b87be7e1d7515f850fdf697318ab767d436cea069c6aa890533cac87f6023  tests/browser-semantic-presentation/driver/Cargo.lock
+0d45a369833e299f051bc7cbd1089f01985d281932abedcbbf318767a3b9d40d  tests/browser-session-journal/driver/Cargo.toml
+c65e168b53c5f8f84ba9ffff93a968cca4dc747018ee16e55c3ac11ffaa4d3d5  tests/browser-session-journal/driver/Cargo.lock
+0d45a369833e299f051bc7cbd1089f01985d281932abedcbbf318767a3b9d40d  tests/browser-session-journal/reservation-driver/Cargo.toml
+c65e168b53c5f8f84ba9ffff93a968cca4dc747018ee16e55c3ac11ffaa4d3d5  tests/browser-session-journal/reservation-driver/Cargo.lock
+c62b9b7e736fd1180e9883a1a87695822c0915d163297a7a547f9fcda324824f  tests/browser-session-journal-retention/driver/Cargo.toml
+e04c0fc4132b3c0f1a22ada9c1254c3efbf2451fa7f516cd8e60add99ef9c9ff  tests/browser-session-journal-retention/driver/Cargo.lock
+96d3d1ae6d8d06c70d3ea07b049ffa583bb2da837429e65cc910d6638aeefce1  tests/browser-session-journal-recovery/driver/Cargo.toml
+fcd90c21e8c23f2c0e7163cceea7c9cc93d31765ff748c08ab4b9b01619ac514  tests/browser-session-journal-recovery/driver/Cargo.lock
+22871f6a98106fc729773a850574a71cd19821a575000d92e38233581e54e9fb  tests/browser-session-payloads/driver/Cargo.toml
+7af3b327d6b0c91545b5e8debd5b4ed361887da5870ac70afd25a8376713606b  tests/browser-session-payloads/driver/Cargo.lock
+f3f8226238c13d68103452ec38a5a8c86e53b1aede0a0af2792d60b0caabd03e  tests/browser-session-recovery-frames/driver/Cargo.toml
+a2a14ef17d31b2a50a73f618b98e706e8812e1b209a131122189699dea58b728  tests/browser-session-recovery-frames/driver/Cargo.lock
+4e28d2bb5acc49e2464a01d168c15644fcc6922eda263b6225c4fa6cd45a41f0  tests/publication-context-linkage/driver/Cargo.toml
+809ecbb65913a279580e2bfbbb29b27a2c1bad59e6c9ab636ae97c6c42cb4d66  tests/publication-context-linkage/driver/Cargo.lock
+2fb0bb8ba645ff99e72007455fbbb9b5ee0716e2182fb061f3a84ae37ffb1379  sdk/oracles/oscal/Cargo.toml
+1e33bbf4be333f4f745e976f7b8529c559aea7b7dcc5b7905ca75ce416d5d2e1  sdk/oracles/oscal/Cargo.lock
 63e9f1793c48cddffd4c8378fe230ea1972a128ded41a2dda5814e841fefc2f4  vendor/lean4-prod/rust/Cargo.toml
 5e16d324b08b942c476099b6c10235f4ddd58bca28aaf69514b8a88c9252c88f  vendor/lean4-prod/rust/Cargo.lock
 CHECKSUMS
@@ -63,6 +98,11 @@ cp tests/hologram-oracle/src/main.rs "$oracle_work/harness/src/main.rs"
 
 for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/holo-codec-oracle/Cargo.toml \
+  tests/holo-browser-codec/Cargo.toml \
+  tests/holo-primary-component/driver/Cargo.toml \
+  tests/browser-pkce/driver/Cargo.toml \
+  tests/browser-session-operation/driver/Cargo.toml \
+  tests/browser-signed-context/driver/Cargo.toml \
   tests/browser-workspace/Cargo.toml \
   tests/browser-envelope/driver/Cargo.toml \
   tests/browser-journal/driver/Cargo.toml \
@@ -71,10 +111,23 @@ for manifest in "$oracle_work/harness/Cargo.toml" \
   tests/browser-view/driver/Cargo.toml \
   tests/browser-effects/driver/Cargo.toml \
   tests/browser-presentation/driver/Cargo.toml \
+  tests/browser-p256/driver/Cargo.toml \
+  tests/browser-account-genesis/driver/Cargo.toml \
+  tests/browser-session/driver/Cargo.toml \
   tests/browser-custody/driver/Cargo.toml \
   tests/browser-operation-journal/driver/Cargo.toml \
   tests/publication-admission/driver/Cargo.toml \
   tests/browser-budget/driver/Cargo.toml \
+  tests/browser-dynamic-choice/driver/Cargo.toml \
+  tests/browser-semantic-presentation/driver/Cargo.toml \
+  tests/browser-session-journal/driver/Cargo.toml \
+  tests/browser-session-journal/reservation-driver/Cargo.toml \
+  tests/browser-session-journal-retention/driver/Cargo.toml \
+  tests/browser-session-journal-recovery/driver/Cargo.toml \
+  tests/browser-session-payloads/driver/Cargo.toml \
+  tests/browser-session-recovery-frames/driver/Cargo.toml \
+  tests/publication-context-linkage/driver/Cargo.toml \
+  sdk/oracles/oscal/Cargo.toml \
   vendor/lean4-prod/rust/Cargo.toml; do
   cargo fetch --locked --manifest-path "$manifest"
   cargo metadata --locked --offline --format-version 1 --manifest-path "$manifest" >/dev/null
