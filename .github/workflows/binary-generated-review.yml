@@ -49,6 +49,7 @@ jobs:
           cp model/dependencies.toml target/binary-generated-review/dependencies.toml
           cp Cargo.lock target/binary-generated-review/Cargo.lock
       - name: Run the unchanged owning writers and their checks in the pinned devcontainer
+        id: generated_prefix
         uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
@@ -97,7 +98,6 @@ jobs:
             just stdlib-package-check
             just check-fixtures
             just package-release-crates-check
-            node scripts/reconcile-lexlean.mjs --validate-generated
       - name: Preserve only an inert review patch after all owning checks pass
         shell: bash
         run: |
@@ -112,6 +112,17 @@ jobs:
             'Review-only generated-source proposal. Not SDK acceptance or a release. Source, native golden, installed SDK, security, reproducibility and release gates remain mandatory.' \
             > "$evidence/UNACCEPTED.txt"
           (cd "$evidence" && sha256sum source-revision.txt source-tree.txt dependencies.toml Cargo.lock generation.log generated.patch changed-paths.txt UNACCEPTED.txt > SHA256SUMS)
+      - name: Run the complete generated-evidence audit in the pinned devcontainer
+        # Preserve reviewable shared records before checking their native joins.
+        # A failed proposal capture cannot suppress this mandatory audit.
+        if: ${{ always() && !cancelled() && steps.generated_prefix.outcome == 'success' }}
+        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
+        with:
+          push: never
+          runCmd: |
+            set -euo pipefail
+            exec > target/binary-generated-review/validation.log 2>&1
+            node scripts/reconcile-lexlean.mjs --validate-generated
       - name: Preserve diagnostic status even when preparation fails
         if: always()
         shell: bash

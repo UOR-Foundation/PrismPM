@@ -189,9 +189,27 @@ export function validateGenerationWorkflow(workflow){
   'just codegen','just fixtures-write','just golden-write "BinaryProgram prerequisite PR #186: exact source $source_revision"',
   'just stdlib-package-write','CARGO_NET_OFFLINE=true cargo package --locked --offline --target-dir target',
   'just golden-check','just stdlib-package-check','just check-fixtures','just package-release-crates-check',
-  'node scripts/reconcile-lexlean.mjs --validate-generated','git diff --binary HEAD',
+  'git diff --binary HEAD','node scripts/reconcile-lexlean.mjs --validate-generated',
  ]){const next=workflow.indexOf(command);assert.ok(next>previous,'complete ordered owning generation: '+command);previous=next;}
  assert.ok(workflow.indexOf('if: always()')>previous,'failure diagnostics must not admit a partial patch');
+ const generation='      - name: Run the unchanged owning writers and their checks in the pinned devcontainer\n';
+ const preservation='      - name: Preserve only an inert review patch after all owning checks pass\n';
+ const validation='      - name: Run the complete generated-evidence audit in the pinned devcontainer\n';
+ const diagnostics='      - name: Preserve diagnostic status even when preparation fails\n';
+ for(const name of [generation,preservation,validation,diagnostics])assert.equal(workflow.split(name).length,2,'one original preparation owner');
+ const start=workflow.indexOf(generation),capture=workflow.indexOf(preservation),audit=workflow.indexOf(validation),end=workflow.indexOf(diagnostics);
+ assert(start<capture&&capture<audit&&audit<end,'reviewable generation precedes the mandatory audit');
+ assert.ok(workflow.slice(start,capture).startsWith(generation+'        id: generated_prefix\n        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca\n        with:\n          push: never\n          runCmd: |\n            set -euo pipefail\n'));
+ assert.equal(workflow.slice(audit,end),validation+
+  '        # Preserve reviewable shared records before checking their native joins.\n'+
+  '        # A failed proposal capture cannot suppress this mandatory audit.\n'+
+  "        if: ${{ always() && !cancelled() && steps.generated_prefix.outcome == 'success' }}\n"+
+  '        uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca\n'+
+  '        with:\n          push: never\n          runCmd: |\n            set -euo pipefail\n'+
+  '            exec > target/binary-generated-review/validation.log 2>&1\n'+
+  '            node scripts/reconcile-lexlean.mjs --validate-generated\n');
+ assert.equal(workflow.split('node scripts/reconcile-lexlean.mjs --validate-generated').length,2,'one complete audit');
+ assert.doesNotMatch(workflow.slice(start,audit),/^        if:|\|\| true|\bif false\b|\bset \+e\b/m,'unconditional fail-closed preparation owners');
 }
 export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,20),20,'complete original binary gate tests and added custody controls');}
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){

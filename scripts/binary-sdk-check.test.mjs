@@ -236,7 +236,21 @@ test('generated review is deliberate, exact-source, writer-owned and never accep
   ['test "$SOURCE_REVISION" = "$GITHUB_SHA"','true'],['just golden-check','echo skipped golden'],
   ['just stdlib-package-check','echo skipped stdlib'],['just check-fixtures','echo skipped fixtures'],
   ['push: never','push: always'],['devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca','devcontainers/ci@main'],
+  ['        id: generated_prefix\n',''],
+  ["always() && !cancelled() && steps.generated_prefix.outcome == 'success'","success()"],
+  ["steps.generated_prefix.outcome == 'success'","steps.generated_prefix.outcome != 'failure'"],
+  ["steps.generated_prefix.outcome == 'success'","steps.generated_prefix.outcome == 'success' && steps.capture.outcome == 'success'"],
+  ['            node scripts/reconcile-lexlean.mjs --validate-generated','            node scripts/reconcile-lexlean.mjs --validate-generated || true'],
+  ['            node scripts/reconcile-lexlean.mjs --validate-generated','            if false; then node scripts/reconcile-lexlean.mjs --validate-generated; fi'],
+  ['            exec > target/binary-generated-review/validation.log 2>&1','            true'],
+  ['      - name: Preserve only an inert review patch after all owning checks pass\n','      - name: Preserve only an inert review patch after all owning checks pass\n        if: false\n'],
+  ['git diff --binary HEAD','git diff --binary HEAD || true'],
  ]){assert.ok(workflow.includes(before));assert.throws(()=>validateGenerationWorkflow(workflow.replace(before,after)));}
+ const audit='      - name: Run the complete generated-evidence audit in the pinned devcontainer\n';
+ const capture='      - name: Preserve only an inert review patch after all owning checks pass\n';
+ const diagnostics='      - name: Preserve diagnostic status even when preparation fails\n';
+ const c=workflow.indexOf(capture),a=workflow.indexOf(audit),d=workflow.indexOf(diagnostics);
+ assert.throws(()=>validateGenerationWorkflow(workflow.slice(0,c)+workflow.slice(a,d)+workflow.slice(c,a)+workflow.slice(d)));
 });
 test('source acquisition validates every immutable archive member before writing',t=>{
  const makeArchive=`import copy,io,json,pathlib,sys,tarfile
