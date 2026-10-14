@@ -9,7 +9,9 @@ only after mounting its role/live semantics. Identical text is not rewritten.
 Mount/removal failure terminates ownership and removes listeners.
 
 DK23 owns 37 checks: wire 5, DOM 5, replay 2, provenance 7 and generated SDK owner
-18. DK15 retains 34; DK29 retains the separate 35-check exporter-seed owner.
+18. The current P-256 integration retains DK15's 36 checks and DK29's separate
+38-check exporter-seed owner. These counts describe registered suites, not
+qualification of this presentation owner on the current integration head.
 The compiler uses the current exact compiler-only input inventory and closed
 family API, with the wider presentation inputs checked separately. Original
 compiler substitution and terminal-retirement controls remain required.

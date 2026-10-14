@@ -883,6 +883,12 @@ level = "build"
 statement = "The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance."
 
 [[id]]
+id = "DK-34"
+suite = "sdk"
+level = "build"
+statement = "Private source-owned P-256 public-key validation checks complete uncompressed SEC1 points with bounded generated field arithmetic and authoritative key-validation vectors before account or signature admission without claiming possession, authority or cryptographic certification."
+
+[[id]]
 id = "OC-01"
 suite = "oci"
 level = "build"
