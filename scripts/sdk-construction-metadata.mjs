@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {crc32} from 'node:zlib';
 import {resolveStoredZip64,validateStoredDataDescriptor} from './sdk-construction-archive.mjs';
 
-const names=['construction.json','sdk.oci.tar',...['authority-result.json','candidate.json','cli.json','config.json',
+const constructionNames=['construction.json','sdk.oci.tar',...['authority-result.json','candidate.json','cli.json','config.json',
  'digest.txt','inventory.json','manifest.json','model-check.json','standards.lock','tamper.json'].map(n=>'evidence/'+n)].sort();
 const number=n=>{assert(n>=0n&&n<=BigInt(Number.MAX_SAFE_INTEGER));return Number(n);};
 const utf8=b=>new TextDecoder('utf-8',{fatal:true}).decode(b);
@@ -14,7 +14,10 @@ const extras=b=>{
  return rows;
 };
 
-export async function readConstructionMetadata(byteLength,range,timeout=900000){
+async function readMetadata(byteLength,range,timeout,profile){
+ assert(profile==='construction'||profile==='source-ci','closed metadata profile required');
+ const sourceCi=profile==='source-ci';
+ const names=sourceCi?['source-ci.json','sdk.oci.tar','image-config.json','image-manifest.json','input-manifest.json','input-policy.json','standards.lock'].sort():constructionNames;
  assert(Number.isSafeInteger(byteLength)&&byteLength>22&&byteLength<=64*1024**3+96*1024**2);
  assert.equal(typeof range,'function');assert(Number.isSafeInteger(timeout)&&timeout>0&&timeout<=900000);
  const deadline=performance.now()+timeout,controller=new AbortController();let readBytes=0,calls=0,expire;
@@ -45,7 +48,7 @@ export async function readConstructionMetadata(byteLength,range,timeout=900000){
    for(const [key,sentinel]of[['count',65535],['size',0xffffffff],['offset',0xffffffff]])
     if(ordinary[key]!==sentinel)assert.equal(ordinary[key],{count,size,offset}[key]);
   }
-  assert.equal(count,12);assert(size>0&&size<=262144);assert.equal(offset+size,directoryEnd);
+  assert.equal(count,names.length);assert(size>0&&size<=262144);assert.equal(offset+size,directoryEnd);
   const directory=await read(offset,size),rows=[];let p=0,total=0;
   for(let i=0;i<count;i++){
    assert(p+46<=directory.length);const h=directory.subarray(p,p+46);assert.equal(h.readUInt32LE(0),0x02014b50);
@@ -56,8 +59,9 @@ export async function readConstructionMetadata(byteLength,range,timeout=900000){
    const e=extras(directory.subarray(p+46+nl,p+46+nl+el)),s=resolveStoredZip64({expanded:h.readUInt32LE(24),compressed:h.readUInt32LE(20),offset:h.readUInt32LE(42)},e.get(1));
    assert.equal(s.compressed,s.expanded);assert(s.expanded>0&&s.expanded<=64*1024**3);
    if(name!=='sdk.oci.tar'){
-    const limit=['construction.json','evidence/candidate.json'].includes(name)?65536:
-     ['evidence/config.json','evidence/manifest.json'].includes(name)?4*1024**2:64*1024**2;
+    const limit=['construction.json','evidence/candidate.json','source-ci.json','input-policy.json'].includes(name)?65536:
+     ['evidence/config.json','evidence/manifest.json','image-config.json','image-manifest.json'].includes(name)?4*1024**2:
+     name==='input-manifest.json'?32*1024**2:64*1024**2;
     assert(s.expanded<=limit,'metadata member budget exceeded');total+=s.expanded;assert(total<=96*1024**2,'aggregate metadata budget exceeded');
    }
    rows.push({name,flags,size:s.expanded,local:s.offset,checksum:h.readUInt32LE(16)});p=next;
@@ -85,4 +89,12 @@ export async function readConstructionMetadata(byteLength,range,timeout=900000){
   assert(performance.now()<=deadline,'construction metadata acquisition deadline exceeded');
   return {scope:'selected-metadata-only-not-authentication-or-complete-archive-integrity',members,selected_bytes:readBytes,range_calls:calls};
  }finally{clearTimeout(timer);controller.abort();}
+}
+// Legacy construction retains exactly twelve members; no caller-selected
+// inventory can widen either profile or enter the legacy authority validators.
+export async function readConstructionMetadata(byteLength,range,timeout=900000){
+ return readMetadata(byteLength,range,timeout,'construction');
+}
+export async function readSourceCiMetadata(byteLength,range,timeout=900000){
+ return readMetadata(byteLength,range,timeout,'source-ci');
 }

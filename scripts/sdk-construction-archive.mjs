@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {crc32} from 'node:zlib';
 import {beginConstructionStage} from './sdk-construction-stage.mjs';
+import {sourceCiArchiveIntegrityPlan} from './sdk-source-ci-contract.mjs';
 
 const sha=b=>'sha256:'+createHash('sha256').update(b).digest('hex');
 const verifiedArchives=new WeakMap();
@@ -102,16 +103,20 @@ function tarVerifier(manifestBytes,configBytes){
  };
 }
 
-async function verifyStream(stream,plan,timeout,stage){
+async function verifyStream(stream,input,timeout,stage,profile='construction'){
  assert(stream instanceof Readable,'owned bounded Node readable transport required');
+ assert(profile==='construction'||profile==='source-ci','closed archive verification profile required');
+ const plan=profile==='construction'?input:sourceCiArchiveIntegrityPlan(input);
  keys(plan,['artifact','archive','members']);
  for(const row of[plan.artifact,plan.archive])keys(row,['byte_length','digest']);
  const artifact={...plan.artifact},archive={...plan.archive};
  for(const row of[artifact,archive]){integer(row.byte_length,64*1024**3+96*1024**2);digest(row.digest);}
  integer(archive.byte_length,64*1024**3);integer(timeout,1800000);
- assert(plan.members instanceof Map&&plan.members.size===11);
- const names=['construction.json',...['authority-result.json','candidate.json','cli.json','config.json','digest.txt','inventory.json',
-  'manifest.json','model-check.json','standards.lock','tamper.json'].map(n=>'evidence/'+n)].sort();
+ const sourceCi=profile==='source-ci';
+ assert(plan.members instanceof Map&&plan.members.size===(sourceCi?6:11));
+ const names=(sourceCi?['source-ci.json','image-config.json','image-manifest.json','input-manifest.json','input-policy.json','standards.lock']:
+  ['construction.json',...['authority-result.json','candidate.json','cli.json','config.json','digest.txt','inventory.json',
+  'manifest.json','model-check.json','standards.lock','tamper.json'].map(n=>'evidence/'+n)]).sort();
  assert.deepEqual([...plan.members.keys()].sort(),names);
  let total=0;const expected=new Map();
  for(const [path,b]of plan.members){assert(Buffer.isBuffer(b));integer(b.length,path==='construction.json'?65536:64*1024**2);total+=b.length;
@@ -120,13 +125,16 @@ async function verifyStream(stream,plan,timeout,stage){
  // precedes the private snapshot allocation, hashing and parsing.
  const members=new Map([...plan.members].map(([path,b])=>[path,Buffer.from(b)]));
  for(const [path,b]of members)expected.set(path,{size:b.length,digest:sha(b)});
+ if(!sourceCi){
  const record=json(members.get('construction.json'));
  assert.deepEqual(record.archive,{path:'sdk.oci.tar',...archive},'construction record/archive binding differs');
  const mb=members.get('evidence/manifest.json');assert.deepEqual(record.manifest,{digest:sha(mb),byte_length:mb.length});
  assert.deepEqual(record.smoke_evidence.map(r=>[r.path,r.byte_length,r.digest]).sort(),
   [...members].filter(([p])=>p!=='construction.json').map(([p,b])=>[p,b.length,sha(b)]).sort(),'construction record/smoke binding differs');
+ }
  expected.set('sdk.oci.tar',{size:archive.byte_length,digest:archive.digest});
- const tar=tarVerifier(members.get('evidence/manifest.json'),members.get('evidence/config.json'));
+ const count=names.length+1;
+ const tar=tarVerifier(members.get(sourceCi?'image-manifest.json':'evidence/manifest.json'),members.get(sourceCi?'image-config.json':'evidence/config.json'));
  const end=performance.now()+timeout,iterator=stream[Symbol.asyncIterator](),hash=createHash('sha256');
  const deadline=new AbortController();
  const timer=setTimeout(()=>{const error=Error('construction stream deadline exceeded');deadline.abort(error);stream.destroy(error);},timeout);
@@ -153,7 +161,7 @@ async function verifyStream(stream,plan,timeout,stage){
  async function read(n){assert(n<=262144);const b=Buffer.alloc(n);let at=0;await consume(n,part=>{part.copy(b,at);at+=part.length;});return b;}
  const locals=[];
  try{
-  for(let i=0;i<12;i++){
+  for(let i=0;i<count;i++){
    const local=position,h=await read(30);assert.equal(h.readUInt32LE(0),0x04034b50);
    const flags=h.readUInt16LE(6),method=h.readUInt16LE(8),nl=h.readUInt16LE(26),el=h.readUInt16LE(28);
    assert.equal(flags&~0x0808,0);assert.equal(method,0,'locked compression-level-zero construction transport required');
@@ -183,12 +191,12 @@ async function verifyStream(stream,plan,timeout,stage){
   if(h.readUInt32LE(0)===0x06064b50){
    wide=true;const z=Buffer.concat([h,await read(52)]),zip64Offset=position-56;
    assert.equal(z.readBigUInt64LE(4),44n);assert.equal(z.readUInt32LE(16),0);assert.equal(z.readUInt32LE(20),0);
-   assert.equal(z.readBigUInt64LE(24),12n);assert.equal(z.readBigUInt64LE(32),12n);assert.equal(number(z.readBigUInt64LE(40)),size);assert.equal(number(z.readBigUInt64LE(48)),offset);
+   assert.equal(z.readBigUInt64LE(24),BigInt(count));assert.equal(z.readBigUInt64LE(32),BigInt(count));assert.equal(number(z.readBigUInt64LE(40)),size);assert.equal(number(z.readBigUInt64LE(48)),offset);
    const locator=await read(20);assert.equal(locator.readUInt32LE(0),0x07064b50);assert.equal(locator.readUInt32LE(4),0);assert.equal(number(locator.readBigUInt64LE(8)),zip64Offset);assert.equal(locator.readUInt32LE(16),1);h=await read(4);
   }
   assert.equal(h.readUInt32LE(0),0x06054b50);h=Buffer.concat([h,await read(18)]);
   assert.equal(h.readUInt16LE(4),0);assert.equal(h.readUInt16LE(6),0);
-  for(const [n,want,sentinel]of[[h.readUInt16LE(8),12,65535],[h.readUInt16LE(10),12,65535],[h.readUInt32LE(12),size,0xffffffff],[h.readUInt32LE(16),offset,0xffffffff]])
+  for(const [n,want,sentinel]of[[h.readUInt16LE(8),count,65535],[h.readUInt16LE(10),count,65535],[h.readUInt32LE(12),size,0xffffffff],[h.readUInt32LE(16),offset,0xffffffff]])
    assert(n===want||(wide&&n===sentinel),'ordinary/ZIP64 directory identities differ');
   await read(h.readUInt16LE(20));assert.equal(position,artifact.byte_length);assert.equal(current.length,0,'trailing original ZIP bytes');
   done=(await next()).done;assert.equal(done,true,'trailing original ZIP stream');
@@ -200,9 +208,9 @@ async function verifyStream(stream,plan,timeout,stage){
  }finally{clearTimeout(timer);if(!completed)stream.destroy();}
 }
 
-async function verifyAndClose(stream,plan,timeout,stage){
+async function verifyAndClose(stream,plan,timeout,stage,profile='construction'){
  assert(stream instanceof Readable,'owned bounded Node readable transport required');
- let result,failure;try{result=await verifyStream(stream,plan,timeout,stage);}catch(error){failure=error;}
+ let result,failure;try{result=await verifyStream(stream,plan,timeout,stage,profile);}catch(error){failure=error;}
  // Destroy is a request, not a close observation. Keep a separate fixed cleanup
  // budget, retain the original failure, and never issue output on uncertain close.
  try{
@@ -219,6 +227,26 @@ async function verifyAndClose(stream,plan,timeout,stage){
 }
 
 export async function verifyConstructionArchiveStream(stream,plan,timeout=1800000){return verifyAndClose(stream,plan,timeout);}
+
+// Separate closed DATA-only profile; no old dual-native metadata/SDK authority
+// is extended. Only buffers retained by the original source-CI join enter it.
+export async function verifySourceCiArchiveStream(stream,metadataHandle,timeout=1800000){
+ return verifyAndClose(stream,metadataHandle,timeout,undefined,'source-ci');
+}
+
+export async function stageSourceCiArchiveStream(stream,metadataHandle,parent,timeout=1800000){
+ let stage;
+ try{
+  assert(stream instanceof Readable);integer(timeout,1800000);const end=performance.now()+timeout;
+  const plan=sourceCiArchiveIntegrityPlan(metadataHandle);stage=beginConstructionStage(parent,plan.archive,end);
+  const integrity=await verifyAndClose(stream,metadataHandle,Math.max(1,Math.floor(end-performance.now())),stage,'source-ci');
+  const handle=await stage.seal(integrity);return {integrity,handle};
+ }catch(error){
+  let cleanup;try{if(stage)stage.retire();}catch(e){cleanup=e;}
+  if(stream instanceof Readable&&!stream.closed){try{await verifyAndClose(stream,{invalid:true},1);}catch(e){if(!stream.closed)cleanup=cleanup?new AggregateError([cleanup,e]):e;}}
+  if(cleanup)throw new AggregateError([error,cleanup],'source-CI archive staging and retirement failed');throw error;
+ }
+}
 
 export async function stageConstructionArchiveStream(stream,plan,parent,timeout=1800000){
  let stage;
