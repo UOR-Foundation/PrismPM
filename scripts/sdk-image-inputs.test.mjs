@@ -100,13 +100,21 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     const acquisition = commands.filter(command => command.includes('apt-get '));
     assert.equal(acquisition.length, 1, 'one signed snapshot acquisition owner');
     const command = acquisition[0].replace(/\s+/g, ' ');
-    assert.equal(hash(command), 'f384f79a7f25b79e0dca7de3f66d9cf747414d61f054567f54e15a09aa91906d',
+    assert.equal(hash(command), 'b44daff2cec315e3672cfa332a5a50769910d35167f3444dfc23160cd518c3a7',
       'the complete signed snapshot acquisition and cleanup instruction must remain unchanged');
-    const update = 'apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 update';
-    const install = 'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 install --no-install-recommends --yes "build-essential=${build_essential}" "pkg-config=${pkg_config}"';
+    const update = 'apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update';
+    const install = 'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes "build-essential=${build_essential}" "pkg-config=${pkg_config}"';
     assert.deepEqual(command.split(' && ').filter(segment => segment.includes('apt-get')), [update, install],
       'the exact update and install must execute unconditionally in that order without overrides');
     assert(command.includes('test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f ! -name ubuntu.sources -print -quit)" = ""'));
+    const admission = phase => `/usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py ${phase} --architecture "$TARGETARCH" --snapshot "${'${snapshot}'}"`;
+    assert.equal(command.split(admission('prepare')).length, 2);
+    assert.equal(command.split(admission('verify')).length, 2);
+    assert(command.indexOf(admission('prepare')) < command.indexOf('rm /etc/apt/sources.list.d/nodesource.list'));
+    assert(command.indexOf('rm /etc/apt/sources.list.d/nodesource.list') < command.indexOf(admission('verify')));
+    assert(command.indexOf(admission('verify')) < command.indexOf(update), 'closed native sources must be verified before any acquisition');
+    assert(commands.includes('COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/runtime-sources/configure.py /opt/prismpm/runtime-sources/configure.py'));
+    assert(commands.includes('COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/runtime-sources/fixtures/amd64.nodesource.list /prepared/source/sdk/runtime-sources/fixtures/arm64.nodesource.list /opt/prismpm/runtime-sources/fixtures/'));
     assert(!/allow-unauthenticated|allow-insecure|Check-Valid-Until|Check-Date|ignore-missing|fix-missing|trusted=yes|\|\| true/.test(command));
   };
   check(recipe);
@@ -116,30 +124,53 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     ['Acquire::https::Timeout=30', 'Acquire::https::Timeout=0'],
     ['Acquire::http::Pipeline-Depth=0', 'Acquire::http::Pipeline-Depth=1'],
     ['Acquire::https::Pipeline-Depth=0', 'Acquire::https::Pipeline-Depth=1'],
+    ['Acquire::CompressionTypes::Order=xz', 'Acquire::CompressionTypes::Order=gz'],
+    ['-o Acquire::CompressionTypes::Order=xz ', ''],
+    ['Acquire::CompressionTypes::Order=xz', 'Acquire::CompressionTypes::Order::=xz'],
     ['"build-essential=${build_essential}"', 'build-essential'],
     ['"pkg-config=${pkg_config}"', 'pkg-config'],
     [' install --no-install-recommends', ' install --allow-unauthenticated --no-install-recommends'],
     ['&& apt-get --error-on=any', '&& true # apt-get --error-on=any'],
     ['&& apt-get -o Acquire::Retries=3', '&& true # apt-get -o Acquire::Retries=3'],
-    ['Acquire::https::Pipeline-Depth=0 update', 'Acquire::https::Pipeline-Depth=0 -o Acquire::Retries=0 update'],
+    ['Acquire::CompressionTypes::Order=xz update', 'Acquire::CompressionTypes::Order=xz -o Acquire::Retries=0 update'],
+    ['Acquire::CompressionTypes::Order=xz update', 'Acquire::CompressionTypes::Order=xz -o Acquire::CompressionTypes::Order=gz update'],
     [' install --no-install-recommends', ' -o Acquire::Retries=0 install --no-install-recommends'],
     [' update \\\n', ' update || true \\\n'],
     [' install --no-install-recommends', ' install --ignore-missing --no-install-recommends'],
     ['rm /etc/apt/sources.list.d/nodesource.list', 'true'],
-    ['${snapshot}#', 'https://archive.ubuntu.com/ubuntu/#'],
+    ['--snapshot "${snapshot}"', '--snapshot "https://archive.ubuntu.com/ubuntu/"'],
+    ['configure.py prepare', 'configure.py verify'],
+    ['configure.py verify', 'configure.py prepare'],
+    ['configure.py prepare --architecture "$TARGETARCH"', 'configure.py prepare --architecture "amd64"'],
     ['--error-on=any', '--error-on=any -o Acquire::Check-Valid-Until=false'],
     ['--error-on=any', '--error-on=any -o Acquire::AllowInsecureRepositories=true'],
-  ]) assert.throws(() => check(recipe.replace(from, to)));
+  ]) {
+    assert(recipe.includes(from), `runtime mutation anchor missing: ${from}`);
+    assert.notEqual(from, to);
+    assert.throws(() => check(recipe.replace(from, to)), `runtime mutation must refuse: ${from}`);
+  }
   const options = ['Acquire::Retries=3', 'Acquire::http::Timeout=30', 'Acquire::https::Timeout=30',
-    'Acquire::http::Pipeline-Depth=0', 'Acquire::https::Pipeline-Depth=0'];
+    'Acquire::http::Pipeline-Depth=0', 'Acquire::https::Pipeline-Depth=0', 'Acquire::CompressionTypes::Order=xz'];
   for (const option of options) {
     const at = recipe.lastIndexOf(option);
     assert(at > recipe.indexOf(option), 'both actual update and install must own the bound');
-    assert.throws(() => check(recipe.slice(0, at) + option.replace(/=\d+$/, option.endsWith('=0') ? '=1' : '=0') + recipe.slice(at + option.length)));
+    const changed = option.endsWith('=xz') ? option.replace(/=xz$/, '=gz')
+      : option.replace(/=\d+$/, option.endsWith('=0') ? '=1' : '=0');
+    assert.notEqual(changed, option);
+    assert.throws(() => check(recipe.slice(0, at) + changed + recipe.slice(at + option.length)));
   }
   for (const operation of ['update', 'install']) {
     const expression = operation === 'update' ? /apt-get --error-on=any[^\n]+update/ : /apt-get -o[^\n]+install --no-install-recommends --yes/;
     assert.throws(() => check(recipe.replace(expression, 'true')));
+  }
+  for (const phase of ['prepare', 'verify']) {
+    const invocation = `/usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py ${phase} --architecture "$TARGETARCH" --snapshot "${'${snapshot}'}"`;
+    assert(recipe.includes(invocation), 'both source-admission mutation anchors must exist');
+    for (const replacement of ['true', invocation.replace('--architecture "$TARGETARCH"', '--architecture "amd64"'),
+      invocation.replace('--snapshot "${snapshot}"', '--snapshot "https://archive.ubuntu.com/ubuntu/"')]) {
+      assert.notEqual(replacement, invocation);
+      assert.throws(() => check(recipe.replace(invocation, replacement)));
+    }
   }
   assert.equal(readFileSync(new URL('../sdk/runtime-os.lock', import.meta.url), 'utf8'),
     '# Runtime packages added to the digest-pinned Playwright base image.\n'
@@ -154,6 +185,15 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     const [key, value] = option.split('=');
     assert(configured.stdout.split('\n').includes(`${key} "${value}";`), 'actual APT option must remain effective');
   }
+});
+
+test('both native runtime source profiles and real filesystem refusals are executable', () => {
+  const result = spawnSync('/usr/bin/python3', ['-I', '-B',
+    new URL('../sdk/runtime-sources/configure_test.py', import.meta.url).pathname],
+  {encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024});
+  assert.equal(result.error, undefined); assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /Ran 14 tests/);
 });
 
 test('real APT refuses transient index failure before package installation', {timeout: 30000}, async t => {
@@ -175,6 +215,7 @@ test('real APT refuses transient index failure before package installation', {ti
       '-o', `Dir::Etc::sourcelist=${source}`, '-o', 'Dir::Etc::sourceparts=-',
       '-o', 'Acquire::Retries=3', '-o', 'Acquire::http::Timeout=30', '-o', 'Acquire::https::Timeout=30',
       '-o', 'Acquire::http::Pipeline-Depth=0', '-o', 'Acquire::https::Pipeline-Depth=0',
+      '-o', 'Acquire::CompressionTypes::Order=xz',
       ...(strict ? ['--error-on=any'] : []), 'update'];
     const child = spawn('apt-get', argv, {env: {...process.env, http_proxy: '', https_proxy: '',
       HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', no_proxy: '127.0.0.1'}});
@@ -191,13 +232,38 @@ test('real APT refuses transient index failure before package installation', {ti
   assert(requests >= 2 && requests <= 8, 'both acquisitions must use finite retry counts');
 });
 
+test('real tool-target initialization creates absent parents and rejects retained targets', t => {
+  const root = mkdtempSync(join(tmpdir(), 'rust-tool-target-init-'));
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  for (const path of ['../.devcontainer/Dockerfile', '../sdk/Dockerfile']) {
+    const recipe = readFileSync(new URL(path, import.meta.url), 'utf8');
+    const command = imageStages(recipe).get('rust_oracle_tools').instructions.find(line => line.startsWith('RUN '));
+    const initialization = command.slice(4).split(' && cargo install ')[0];
+    for (const missingParents of [false, true]) {
+      const target = join(root, path.includes('.devcontainer') ? 'dev' : 'sdk', String(missingParents), 'absent-parent', 'target');
+      const quoted = "'" + target.replaceAll("'", "'\\''") + "'";
+      const actual = initialization.replaceAll('/opt/prismpm/rust-oracle-target', quoted);
+      if (missingParents) {
+        assert.throws(() => execFileSync('/bin/sh', ['-eu', '-c', actual.replace('mkdir -p -m 0700', 'mkdir -m 0700')], {stdio: 'pipe', timeout: 5000}));
+      }
+      execFileSync('/bin/sh', ['-eu', '-c', actual], {stdio: 'pipe', timeout: 5000});
+      assert.equal(lstatSync(target).mode & 0o777, 0o700);
+      assert.throws(() => execFileSync('/bin/sh', ['-eu', '-c', actual], {stdio: 'pipe', timeout: 5000}));
+    }
+  }
+});
+
 test('development and SDK recipes share the exact isolated pinned Rust tool construction', () => {
   const sdk = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
   const dev = readFileSync(new URL('../.devcontainer/Dockerfile', import.meta.url), 'utf8');
-  const instructions = ['ENV SOURCE_DATE_EPOCH=0', ...[
+  const builds = [
     ['wasm-bindgen-cli', '0.2.122'], ['wasm-tools', '1.258.0'],
     ['wasmtime-cli', '48.0.1'], ['cargo-local-registry', '0.2.12'],
-  ].map(([name, version]) => `RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools ${name} --version ${version}`)];
+  ].map(([name, version]) => `cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target ${name} --version ${version}`);
+  const instructions = ['ENV SOURCE_DATE_EPOCH=0', 'RUN ' + [
+    'test ! -e /opt/prismpm/rust-oracle-target', 'mkdir -p -m 0700 /opt/prismpm/rust-oracle-target',
+    ...builds, 'rm -rf /opt/prismpm/rust-oracle-target',
+  ].join(' && ')];
   const check = recipe => {
     assert.equal(recipe.split('\n')[0], '# syntax=docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25');
     assert.deepEqual(imageStages(recipe).get('rust_oracle_tools'), {
@@ -215,6 +281,14 @@ test('development and SDK recipes share the exact isolated pinned Rust tool cons
       recipe.replace('wasm-tools --version 1.258.0', 'wasm-tools --version 1.257.0'),
       recipe.replace('ENV SOURCE_DATE_EPOCH=0', 'ENV SOURCE_DATE_EPOCH=0\nCOPY . /source'),
       recipe.replace('/rust-oracle-tools/bin/ /usr/local/cargo/bin/', '/rust-oracle-tools/ /usr/local/cargo/bin/'),
+      recipe.replace('test ! -e /opt/prismpm/rust-oracle-target && ', ''),
+      recipe.replace('mkdir -p -m 0700 /opt/prismpm/rust-oracle-target', 'mkdir -p -m 0777 /opt/prismpm/rust-oracle-target'),
+      recipe.replace('mkdir -p -m 0700', 'mkdir -m 0700'),
+      recipe.replace('--target-dir /opt/prismpm/rust-oracle-target ', ''),
+      recipe.replaceAll('--target-dir /opt/prismpm/rust-oracle-target', '--target-dir /tmp/ambient-target'),
+      recipe.replace(' && rm -rf /opt/prismpm/rust-oracle-target', ''),
+      recipe.replace('ENV SOURCE_DATE_EPOCH=0', 'ENV SOURCE_DATE_EPOCH=0\nENV CARGO_TARGET_DIR=/tmp/global'),
+      recipe.replace('RUN test ! -e', 'RUN --mount=type=cache,target=/opt/prismpm/rust-oracle-target test ! -e'),
     ]) assert.throws(() => check(changed));
   }
 });

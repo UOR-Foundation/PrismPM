@@ -2,10 +2,9 @@
 # Keep this source-independent stage identical in both image recipes.
 FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS rust_oracle_tools
 ENV SOURCE_DATE_EPOCH=0
-RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasm-bindgen-cli --version 0.2.122
-RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasm-tools --version 1.258.0
-RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools wasmtime-cli --version 48.0.1
-RUN cargo install --locked --root /opt/prismpm/rust-oracle-tools cargo-local-registry --version 0.2.12
+# One fresh layer-local target reuses only Cargo-validated dependencies between
+# four real installations. Same-layer cleanup keeps build products out of images.
+RUN test ! -e /opt/prismpm/rust-oracle-target && mkdir -p -m 0700 /opt/prismpm/rust-oracle-target && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target wasm-bindgen-cli --version 0.2.122 && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target wasm-tools --version 1.258.0 && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target wasmtime-cli --version 48.0.1 && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target cargo-local-registry --version 0.2.12 && rm -rf /opt/prismpm/rust-oracle-target
 
 FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS input_tools
 ARG TARGETARCH
@@ -335,6 +334,8 @@ RUN python3 -B /opt/prismpm/browser-engine/install_test.py \
 
 ARG SOURCE_DATE_EPOCH=0
 COPY --from=source_inputs /prepared/source/sdk/runtime-os.lock /tmp/prismpm-runtime-os.lock
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/runtime-sources/configure.py /opt/prismpm/runtime-sources/configure.py
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/runtime-sources/fixtures/amd64.nodesource.list /prepared/source/sdk/runtime-sources/fixtures/arm64.nodesource.list /opt/prismpm/runtime-sources/fixtures/
 
 # Downstream template gates compile their small repository-specific policy
 # crates inside the SDK. Resolve the native linker exclusively from one
@@ -345,13 +346,12 @@ RUN set -eu; \
     build_essential=$(sed -n 's/^build-essential=//p' /tmp/prismpm-runtime-os.lock); \
     pkg_config=$(sed -n 's/^pkg-config=//p' /tmp/prismpm-runtime-os.lock); \
     test -n "$snapshot"; test -n "$build_essential"; test -n "$pkg_config"; \
-    sed -i \
-      "s#http://azure.archive.ubuntu.com/ubuntu/#${snapshot}#; s#http://security.ubuntu.com/ubuntu/#${snapshot}#" \
-      /etc/apt/sources.list.d/ubuntu.sources \
+    /usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py prepare --architecture "$TARGETARCH" --snapshot "${snapshot}" \
     && rm /etc/apt/sources.list.d/nodesource.list \
     && test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f ! -name ubuntu.sources -print -quit)" = "" \
-    && apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 update \
-    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 install --no-install-recommends --yes \
+    && /usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py verify --architecture "$TARGETARCH" --snapshot "${snapshot}" \
+    && apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update \
+    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes \
       "build-essential=${build_essential}" \
       "pkg-config=${pkg_config}" \
     && dpkg-query -W -f='${binary:Package}\t${Version}\n' \

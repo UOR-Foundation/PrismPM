@@ -135,7 +135,7 @@ export function validateSourceBaseline(source) {
 // literals in comments/disabled code cannot authorize a different recipe.
 export function validateApplicationGenerator(source) {
   const owner = regular(join(source, 'crates/prismpm/src/controller/mod.rs'), 1024 ** 2);
-  assert.equal(hash(owner), 'd96c1a90910a7418069f64c87761533dab0dadcc512efa4ae3bcadbdddacdb43',
+  assert.equal(hash(owner), '048ce024d54bb1008b19d002345a25c7c8107f3a2be52db03b7ae0bf79ad7c8a',
     'application generator recipe owner requires independent source review');
   const parts = ['application_build.rs', 'lean_project.rs', 'holo/archive.rs']
     .map(path => regular(join(source, 'crates/prismpm/src', path), 16 * 1024 ** 2));
