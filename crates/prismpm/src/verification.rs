@@ -313,6 +313,19 @@ pub(crate) fn executable(name: &str) -> Result<PathBuf, PrismError> {
     ))
 }
 
+// Coalesce only adjacent pre-child selections. Bootstrap keeps every original
+// pinned launcher check; SDK commands retain fresh selected-executable hashes.
+pub(crate) fn executables<const N: usize>(names: [&str; N]) -> Result<[PathBuf; N], PrismError> {
+    if crate::sdk::inventory_path().is_some() {
+        return crate::sdk::executables(names);
+    }
+    let mut paths = std::array::from_fn(|_| PathBuf::new());
+    for (name, path) in names.into_iter().zip(&mut paths) {
+        *path = executable(name)?;
+    }
+    Ok(paths)
+}
+
 pub(crate) struct Toolchain {
     lake: PathBuf,
     rustfmt: PathBuf,
@@ -335,11 +348,8 @@ pub(crate) fn preflight_toolchain(
             ))
         }
     };
-    let lake = executable("lake")?;
-    let lean = executable("lean")?;
-    let rustfmt = executable("rustfmt")?;
-    let rustc = executable("rustc")?;
-    let timeout = executable("timeout")?;
+    let [lake, lean, rustfmt, rustc, timeout] =
+        executables(["lake", "lean", "rustfmt", "rustc", "timeout"])?;
     let no_env = BTreeMap::new();
     let lean_version = format!(
         "Lean (version 4.32.1, {lean_host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n"
@@ -578,8 +588,8 @@ fn run_hologram_oracle(
     write(&harness.join("src/main.rs"), HOLOGRAM_ORACLE_MAIN)?;
     write(&harness.join("browser.mjs"), HOLOGRAM_ORACLE_BROWSER)?;
 
-    let cargo = executable("cargo")?;
-    let node = executable("node")?
+    let [cargo, node] = executables(["cargo", "node"])?;
+    let node = node
         .canonicalize()
         .map_err(|error| PrismError::new("PP5301", format!("browser Node executable: {error}")))?;
     let browser = crate::browser_oracle::verified_browser()?;
@@ -2601,6 +2611,17 @@ pub(crate) fn run(
         );
     }
 
+    // These parsed inputs have completed every identity, declaration, coverage,
+    // and routing check. The independent second verification root needs the
+    // owned attested module map and canonical artifact bytes, not their parsed
+    // copies or the completed LexLean engine/result metadata.
+    drop(lex_snapshot);
+    drop(lex_value);
+    drop(lex_manifest_value);
+    drop(build_manifest);
+    drop(lex_engine);
+    drop(lex_verified);
+
     let staging_parent = output_root.join(".verify-work");
     std::fs::create_dir_all(&staging_parent)
         .map_err(|error| PrismError::new("PP4002", format!("verification work: {error}")))?;
@@ -2929,7 +2950,7 @@ pub(crate) fn run(
         },
         "build_id": build.build_id,
         "execution": execution,
-        "lexlean_attestation_id": lex_verified.attestation_id.to_string(),
+        "lexlean_attestation_id": lex_attestation_id,
         "processes": process_value,
         "export_roots": export_roots,
         "package_export_roots": package_roots,
