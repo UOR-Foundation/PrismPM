@@ -330,6 +330,7 @@ pub(crate) fn validate(
         "verification build identity differs",
     )?;
     let processes = process_records(&manifest["processes"], false)?;
+    validate_capsule_context(&manifest, processes)?;
     if model.application.is_none() {
         // Reject malformed native transcripts before reconstructing the full
         // source graph. These untrusted declarations authorize no success:
@@ -871,6 +872,26 @@ fn validate_exporter_execution(value: &Value) -> Result<(), PrismError> {
     .map_err(|error| invalid(error.message))
 }
 
+// Structural provenance is not producer authentication. Only current owned
+// application/library /2 families can bind this third acquisition mode; the
+// historical /1 and unchanged default native family never gain that authority.
+fn validate_capsule_context(manifest: &Value, processes: &[Value]) -> Result<(), PrismError> {
+    let capsule = processes
+        .iter()
+        .any(|row| row["exporter"]["acquisition"]["mode"] == "controller-capsule");
+    ensure(
+        !capsule
+            || matches!(
+                manifest["schema"].as_str(),
+                Some(
+                    "prismpm/application-verification-manifest/2"
+                        | "prismpm/library-verification-manifest/2"
+                )
+            ),
+        "controller capsule requires current owned application or library evidence",
+    )
+}
+
 fn validate_exporter_measurement(value: &Value) -> Result<(), PrismError> {
     ensure(
         digest(&value["source_archive_sha256"])?
@@ -880,6 +901,16 @@ fn validate_exporter_measurement(value: &Value) -> Result<(), PrismError> {
     let executable = &value["executable"];
     keys(executable, &["byte_length", "mode", "sha256"])?;
     digest(&executable["sha256"])?;
+    if value["acquisition"]["mode"] == "controller-capsule" {
+        let target = &value["acquisition"]["executable"];
+        keys(target, &["byte_length", "mode", "sha256"])?;
+        ensure(
+            target["byte_length"] == executable["byte_length"]
+                && target["mode"] == executable["mode"]
+                && target["sha256"] == executable["sha256"],
+            "source-built compiler target differs from retained exporter measurement",
+        )?;
+    }
     ensure(
         executable["byte_length"]
             .as_u64()
@@ -912,6 +943,7 @@ fn validate_exporter_authority(
 ) -> Result<(), PrismError> {
     let manifest = canonical_json(file(verification_files, "manifest.json")?, false)?;
     let processes = process_records(&manifest["processes"], false)?;
+    validate_capsule_context(&manifest, processes)?;
     let platform = process_platform(processes)?;
     let mut executions: Vec<Value> = processes
         .iter()
@@ -1092,7 +1124,7 @@ fn process_order(rows: &[Value], tools: &[&str]) -> Result<(), PrismError> {
 
 // Retained execution determines the platform, not the reader's current host
 // and not a receipt's self-selected SDK inventory row.
-fn process_platform(rows: &[Value]) -> Result<&'static str, PrismError> {
+pub(crate) fn process_platform(rows: &[Value]) -> Result<&'static str, PrismError> {
     let preflight = rows
         .get(..PREFLIGHT.len())
         .ok_or_else(|| invalid("verification native preflight is incomplete"))?;

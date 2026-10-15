@@ -51,6 +51,29 @@ fn identity(metadata: &std::fs::Metadata) -> Identity {
 pub(crate) struct Snapshot(BTreeMap<String, (Identity, Option<String>)>);
 
 impl Snapshot {
+    #[cfg(all(test, unix))]
+    pub(super) fn witness(&self) -> serde_json::Value {
+        // Bounded diagnostics of the actual census, not an acceptance receipt.
+        // Stream every exact native/byte row instead of printing file bodies.
+        let mut digest = Sha256::new();
+        for (name, row) in &self.0 {
+            digest.update((name.len() as u64).to_be_bytes());
+            digest.update(name.as_bytes());
+            let row = format!("{row:?}");
+            digest.update((row.len() as u64).to_be_bytes());
+            digest.update(row.as_bytes());
+        }
+        serde_json::json!({
+            "schema":"prismpm/compiler-native-snapshot-diagnostic/1",
+            "entries":self.0.len(),
+            "bytes":self.0.values().filter(|(native, _)| !native.directory).map(|(native, _)| native.length).sum::<u64>(),
+            "all_native_byte_rows_sha256":format!("{:x}", digest.finalize()),
+            "row_encoding":"length-framed UTF-8 path and Rust Debug of complete Identity/hash pair",
+            "root":format!("{:?}", self.0.get("")),
+            "executable":format!("{:?}", self.0.get(".lake/build/bin/prod-export")),
+        })
+    }
+
     pub(super) fn same_source(&self, other: &Self) -> bool {
         let source = |name: &str| name != ".lake" && !name.starts_with(".lake/");
         if self
@@ -349,6 +372,20 @@ pub(super) fn require_executable(root: &Path) -> Result<(), PrismError> {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct FileWitness(Identity, String);
 
+pub(super) fn archive_input(path: &Path) -> Result<Option<FileWitness>, PrismError> {
+    match std::fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(failure()),
+        Ok(_) => {
+            let witness = capture_file(path)?;
+            if witness.1 != format!("{:x}", Sha256::digest(super::ARCHIVE)) {
+                return Err(failure());
+            }
+            Ok(Some(witness))
+        }
+    }
+}
+
 /// Full bounded bytes and all native fields, before and after the held read.
 /// Trusted toolchain files can have existing hard links; their exact link
 /// count is conserved, not adopted as a package-source permission.
@@ -406,6 +443,12 @@ pub(super) struct LauncherWitness {
     file: FileWitness,
 }
 
+impl LauncherWitness {
+    pub(super) fn resolved_sha256(&self) -> &str {
+        &self.file.1
+    }
+}
+
 /// Preserve the original executable selector's permitted proxy path rather
 /// than changing the actual command to its resolution. Bind both that exact
 /// path (including an existing symlink) and the complete resolved file.
@@ -436,9 +479,82 @@ pub(super) fn capture_launcher(path: &Path) -> Result<LauncherWitness, PrismErro
     })
 }
 
+/// Controller loading needs only path metadata, not directory read access.
+/// Capture early identity without acquiring an execution/cwd authority. The
+/// actual held descriptor must later join this exact origin before first use.
+pub(super) struct ProjectOrigin {
+    path: std::path::PathBuf,
+    original: Identity,
+}
+
+fn same_directory_origin(before: &Identity, after: &Identity) -> bool {
+    #[cfg(unix)]
+    {
+        before.directory
+            && after.directory
+            && (
+                before.native.0,
+                before.native.1,
+                before.native.2,
+                before.native.6,
+                before.native.7,
+            ) == (
+                after.native.0,
+                after.native.1,
+                after.native.2,
+                after.native.6,
+                after.native.7,
+            )
+    }
+    #[cfg(not(unix))]
+    {
+        before == after
+    }
+}
+
+impl ProjectOrigin {
+    pub(super) fn capture(path: &Path) -> Result<Self, PrismError> {
+        if path.canonicalize().ok().as_deref() != Some(path) {
+            return Err(failure());
+        }
+        let original = identity(&std::fs::symlink_metadata(path).map_err(|_| failure())?);
+        if !original.directory {
+            return Err(failure());
+        }
+        let result = Self {
+            path: path.to_owned(),
+            original,
+        };
+        result.verify_path(path)?;
+        Ok(result)
+    }
+    pub(super) fn verify_path(&self, path: &Path) -> Result<(), PrismError> {
+        if path != self.path
+            || path.canonicalize().ok().as_deref() != Some(path)
+            || !same_directory_origin(
+                &self.original,
+                &identity(&std::fs::symlink_metadata(path).map_err(|_| failure())?),
+            )
+        {
+            return Err(failure());
+        }
+        Ok(())
+    }
+    pub(super) fn open(&self, path: &Path) -> Result<Cwd, PrismError> {
+        self.verify_path(path)?;
+        let held = Cwd::open(path)?;
+        if !same_directory_origin(&self.original, &held.original) {
+            return Err(failure());
+        }
+        self.verify_path(path)?;
+        Ok(held)
+    }
+}
+
 /// Hold actual cwd ancestry while the child runs. Build commands legitimately
 /// add children, so size/link/timestamp changes are observed but do not replace
 /// the original held directory's device/inode/owner/group/mode identity.
+#[derive(Debug)]
 pub(super) struct Cwd {
     path: std::path::PathBuf,
     held: std::fs::File,
@@ -475,6 +591,12 @@ impl Cwd {
         };
         result.verify()?;
         Ok(result)
+    }
+    pub(super) fn verify_path(&self, path: &Path) -> Result<(), PrismError> {
+        if self.path != path {
+            return Err(failure());
+        }
+        self.verify()
     }
     pub(super) fn verify(&self) -> Result<(), PrismError> {
         if self.path.canonicalize().ok().as_deref() != Some(self.path.as_path()) {
@@ -697,6 +819,215 @@ fn capture_members(
         }
     }
     Ok(Snapshot(observed))
+}
+
+/// Immutable compiler inputs, captured only from the private source-only
+/// constructor after its actual build. Native identities are not portable:
+/// materialization admits a new complete native snapshot, never the old one.
+pub(super) struct Capsule {
+    entries: BTreeMap<String, (u32, Option<Vec<u8>>)>,
+    bytes: u64,
+    origin: Snapshot,
+}
+
+impl std::fmt::Debug for Capsule {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        out.debug_struct("CompilerCapsule")
+            .field("entries", &self.entries.len())
+            .field("bytes", &self.bytes)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Capsule {
+    #[cfg(all(test, unix))]
+    pub(super) fn origin_witness(&self) -> serde_json::Value {
+        self.origin.witness()
+    }
+
+    pub(super) fn capture(root: &Path, expected: &Snapshot) -> Result<Self, PrismError> {
+        if &self::capture(root)? != expected {
+            return Err(failure());
+        }
+        let mut entries = BTreeMap::new();
+        let mut total = 0_u64;
+        for (relative, (native, digest)) in &expected.0 {
+            let path = root.join(relative);
+            let metadata = std::fs::symlink_metadata(&path).map_err(|_| failure())?;
+            if identity(&metadata) != *native {
+                return Err(failure());
+            }
+            #[cfg(unix)]
+            let mode = {
+                use std::os::unix::fs::MetadataExt;
+                metadata.mode() & 0o777
+            };
+            #[cfg(not(unix))]
+            let mode = 0;
+            let bytes = if native.directory {
+                None
+            } else {
+                let mut options = std::fs::OpenOptions::new();
+                options.read(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.custom_flags(
+                        (rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK).bits() as i32,
+                    );
+                }
+                let mut file = options.open(&path).map_err(|_| failure())?;
+                if identity(&file.metadata().map_err(|_| failure())?) != *native {
+                    return Err(failure());
+                }
+                // The original complete census already charged every file,
+                // source member and build byte before this bounded allocation.
+                let mut bytes = Vec::new();
+                file.by_ref()
+                    .take(native.length + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(|_| failure())?;
+                if bytes.len() as u64 != native.length
+                    || Some(format!("{:x}", Sha256::digest(&bytes))) != *digest
+                    || identity(&file.metadata().map_err(|_| failure())?) != *native
+                {
+                    return Err(failure());
+                }
+                total = total.checked_add(native.length).ok_or_else(failure)?;
+                Some(bytes)
+            };
+            entries.insert(relative.clone(), (mode, bytes));
+        }
+        if &self::capture(root)? != expected {
+            return Err(failure());
+        }
+        Ok(Self {
+            entries,
+            bytes: total,
+            origin: expected.clone(),
+        })
+    }
+
+    pub(super) fn inventory(&self) -> serde_json::Value {
+        serde_json::Value::Array(
+            self.entries
+                .iter()
+                .map(|(path, (mode, bytes))| match bytes {
+                    Some(bytes) => serde_json::json!({"path":path,"kind":"file","mode":mode,
+                    "byte_length":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes))}),
+                    None => serde_json::json!({"path":path,"kind":"directory","mode":mode}),
+                })
+                .collect(),
+        )
+    }
+
+    fn verify(&self) -> Result<(), PrismError> {
+        if self.entries.len() != self.origin.0.len() {
+            return Err(failure());
+        }
+        let mut total = 0_u64;
+        for (relative, (mode, bytes)) in &self.entries {
+            let (native, digest) = self.origin.0.get(relative).ok_or_else(failure)?;
+            if native.directory != bytes.is_none()
+                || digest.as_deref()
+                    != bytes
+                        .as_ref()
+                        .map(|bytes| format!("{:x}", Sha256::digest(bytes)))
+                        .as_deref()
+            {
+                return Err(failure());
+            }
+            if let Some(bytes) = bytes {
+                if bytes.len() as u64 != native.length {
+                    return Err(failure());
+                }
+                total = total.checked_add(native.length).ok_or_else(failure)?;
+            }
+            #[cfg(unix)]
+            if native.native.2 & 0o777 != *mode {
+                return Err(failure());
+            }
+            #[cfg(not(unix))]
+            let _ = mode;
+        }
+        if total != self.bytes {
+            return Err(failure());
+        }
+        Ok(())
+    }
+
+    pub(super) fn materialize(&self, root: &Path) -> Result<Snapshot, PrismError> {
+        use std::io::Write;
+        self.verify()?;
+        // Source comes from the original validated archive, not a caller or
+        // capsule pathname. Only the exact compiler constructor's build tree
+        // is copied, without rewriting a Lake trace, timestamp or path.
+        let before = capture_source(root).map_err(|error| {
+            error.with_note("compiler capsule materialize: original source admission")
+        })?;
+        for (relative, (mode, bytes)) in &self.entries {
+            if relative != ".lake" && !relative.starts_with(".lake/") {
+                continue;
+            }
+            let path = root.join(relative);
+            if let Some(bytes) = bytes {
+                let mut options = std::fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600).custom_flags(
+                        (rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK).bits() as i32,
+                    );
+                }
+                let mut file = options.open(&path).map_err(|error| {
+                    failure().with_note(format!("compiler capsule create {relative}: {error}"))
+                })?;
+                file.write_all(bytes).map_err(|error| {
+                    failure().with_note(format!("compiler capsule write {relative}: {error}"))
+                })?;
+            } else {
+                std::fs::create_dir(&path).map_err(|error| {
+                    failure().with_note(format!("compiler capsule directory {relative}: {error}"))
+                })?;
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(*mode)).map_err(
+                    |error| {
+                        failure()
+                            .with_note(format!("compiler capsule permissions {relative}: {error}"))
+                    },
+                )?;
+            }
+            #[cfg(not(unix))]
+            let _ = mode;
+        }
+        let after = self::capture(root).map_err(|error| {
+            error.with_note("compiler capsule materialize: complete post-copy capture")
+        })?;
+        if !before.same_source(&after) || after.0.len() != self.entries.len() {
+            return Err(failure());
+        }
+        for (relative, (mode, bytes)) in &self.entries {
+            let (native, digest) = after.0.get(relative).ok_or_else(failure)?;
+            if native.directory != bytes.is_none()
+                || digest.as_deref()
+                    != bytes
+                        .as_ref()
+                        .map(|bytes| format!("{:x}", Sha256::digest(bytes)))
+                        .as_deref()
+            {
+                return Err(failure());
+            }
+            #[cfg(unix)]
+            if native.native.2 & 0o777 != *mode {
+                return Err(failure());
+            }
+        }
+        Ok(after)
+    }
 }
 
 #[cfg(test)]
@@ -1364,6 +1695,113 @@ mod cold_library_tests {
     #[test]
     fn complete_build_entry_and_per_file_bounds_are_enforced_before_retention() {
         let (_temporary, root) = fixture(true);
+        // This private-inventory control represents the actual
+        // private constructor's root, not the generic custody fixture mode.
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+        // Actual native capture: paired non-BMP Unicode and a Linux backslash
+        // are real normal filename characters, not extra traversal syntax.
+        for name in [".lake/scalar-\u{1f331}", ".lake/back\\slash"] {
+            std::fs::write(root.join(name), b"valid UTF-8 path").unwrap();
+        }
+        let captured = capture(&root).unwrap();
+        let inventory = Capsule::capture(&root, &captured).unwrap().inventory();
+        validate_capsule_inventory(&inventory).unwrap();
+        // The unreleased public cache document was removed because physical
+        // cache bits are not semantic artifacts. Its real closure/bounds/data
+        // controls still exercise the production private inventory validator.
+        let file = inventory
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|row| row["path"] == ".lake/build/bin/prod-export")
+            .unwrap();
+        let directory = inventory
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|row| row["path"] == ".lake")
+            .unwrap();
+        let reject =
+            |changed: serde_json::Value| assert!(validate_capsule_inventory(&changed).is_err());
+        for index in [file, directory] {
+            for key in inventory[index].as_object().unwrap().keys() {
+                let mut changed = inventory.clone();
+                changed[index].as_object_mut().unwrap().remove(key);
+                reject(changed);
+            }
+            let mut changed = inventory.clone();
+            changed[index]["unowned"] = serde_json::json!(true);
+            reject(changed);
+            for mode in [
+                serde_json::json!(-1),
+                serde_json::json!(512),
+                serde_json::json!(4095),
+                serde_json::json!("493"),
+                serde_json::Value::Null,
+            ] {
+                let mut changed = inventory.clone();
+                changed[index]["mode"] = mode;
+                reject(changed);
+            }
+            for path in [
+                "/absolute",
+                "../escape",
+                "a/../b",
+                ".",
+                "a/./b",
+                "a//b",
+                "a/",
+                "a\0b",
+            ] {
+                let mut changed = inventory.clone();
+                changed[index]["path"] = serde_json::json!(path);
+                reject(changed);
+            }
+        }
+        for (index, name, value) in [
+            (directory, "kind", serde_json::json!("file")),
+            (file, "kind", serde_json::json!("directory")),
+            (file, "kind", serde_json::json!("symlink")),
+            (file, "kind", serde_json::json!("hardlink")),
+            (directory, "byte_length", serde_json::json!(0)),
+            (directory, "sha256", serde_json::json!("0".repeat(64))),
+            (file, "target", serde_json::json!("elsewhere")),
+            (file, "sha256", serde_json::json!("G".repeat(64))),
+            (file, "byte_length", serde_json::json!(-1)),
+            (file, "byte_length", serde_json::json!(FILE_BYTES + 1)),
+            (file, "byte_length", serde_json::json!("1")),
+            (file, "path", serde_json::json!("")),
+        ] {
+            let mut changed = inventory.clone();
+            changed[index][name] = value;
+            reject(changed);
+        }
+        for mutation in 0..5 {
+            let mut changed = inventory.clone();
+            let rows = changed.as_array_mut().unwrap();
+            match mutation {
+                0 => rows.swap(0, 1),
+                1 => rows.insert(1, rows[1].clone()),
+                2 => {
+                    rows.remove(0);
+                }
+                3 => rows.retain(|row| row["path"] != ".lake/build"),
+                4 => {
+                    rows.iter_mut()
+                        .find(|row| row["path"] == "Prod/Export.lean")
+                        .unwrap()["sha256"] = serde_json::json!("0".repeat(64));
+                }
+                _ => unreachable!(),
+            }
+            reject(changed);
+        }
+        let mut impossible = inventory.as_array().unwrap().clone();
+        impossible.push(serde_json::json!({"path":".lake/impossible\0name","kind":"file","mode":0o600,"byte_length":0,"sha256":format!("{:x}",Sha256::digest(b""))}));
+        impossible.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+        assert!(
+            validate_capsule_inventory(&serde_json::Value::Array(impossible)).is_err(),
+            "NUL cannot name a native filesystem member"
+        );
         let initial = capture(&root)
             .unwrap()
             .0
@@ -1415,4 +1853,101 @@ mod cold_library_tests {
             "proxy redirection is not byte equality"
         );
     }
+}
+
+/// Validate a complete compiler inventory against the compiled source archive.
+/// A serialized inventory alone is never a host execution authority.
+pub(super) fn validate_capsule_inventory(value: &serde_json::Value) -> Result<(), PrismError> {
+    let rows = value.as_array().ok_or_else(failure)?;
+    let sources = source_members()?;
+    if rows.len() > FILES + sources.len() + 1 || rows.is_empty() {
+        return Err(failure());
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut build_entries = 0;
+    let mut build_bytes = 0;
+    let mut previous: Option<&str> = None;
+    for row in rows {
+        let path = row["path"].as_str().ok_or_else(failure)?;
+        if previous.is_some_and(|old| old >= path) || !seen.insert(path) {
+            return Err(failure());
+        }
+        previous = Some(path);
+        if path.contains('\0') || (!path.is_empty() && member_name(Path::new(path))? != path) {
+            return Err(failure());
+        }
+        let directory = row["kind"] == "directory";
+        let keys = if directory {
+            vec!["kind", "mode", "path"]
+        } else {
+            vec!["byte_length", "kind", "mode", "path", "sha256"]
+        };
+        if row
+            .as_object()
+            .is_none_or(|v| v.keys().map(String::as_str).ne(keys))
+        {
+            return Err(failure());
+        }
+        let mode = row["mode"].as_u64().ok_or_else(failure)?;
+        if mode > 0o777 {
+            return Err(failure());
+        }
+        let length = if directory {
+            0
+        } else {
+            row["byte_length"].as_u64().ok_or_else(failure)?
+        };
+        if !directory {
+            let hash = row["sha256"].as_str().ok_or_else(failure)?;
+            if row["kind"] != "file"
+                || hash.len() != 64
+                || !hash
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err(failure());
+            }
+        }
+        if path == ".lake" || path.starts_with(".lake/") {
+            charge_build(&mut build_entries, &mut build_bytes, length)?;
+        } else if path.is_empty() {
+            if !directory || mode != 0o700 {
+                return Err(failure());
+            }
+        } else {
+            let source = sources.get(path).ok_or_else(failure)?;
+            if source.directory != directory
+                || source.mode.is_some_and(|m| u64::from(m) != mode)
+                || (!directory
+                    && (length != source.bytes.len() as u64
+                        || row["sha256"] != format!("{:x}", Sha256::digest(&source.bytes))))
+            {
+                return Err(failure());
+            }
+        }
+    }
+    if !seen.contains("")
+        || !seen.contains(".lake")
+        || sources.keys().any(|p| !seen.contains(p.as_str()))
+    {
+        return Err(failure());
+    }
+    for path in &seen {
+        if path.is_empty() {
+            continue;
+        }
+        let parent = Path::new(path)
+            .parent()
+            .ok_or_else(failure)?
+            .to_str()
+            .ok_or_else(failure)?;
+        if !seen.contains(parent)
+            || !rows
+                .iter()
+                .any(|r| r["path"] == parent && r["kind"] == "directory")
+        {
+            return Err(failure());
+        }
+    }
+    Ok(())
 }

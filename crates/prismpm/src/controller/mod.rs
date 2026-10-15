@@ -37,6 +37,14 @@ fn library_generator_identity() -> String {
         ),
         ("exporter.rs", include_bytes!("../exporter.rs").as_slice()),
         (
+            "exporter/tools.rs",
+            include_bytes!("../exporter/tools.rs").as_slice(),
+        ),
+        (
+            "exporter/capsule.rs",
+            include_bytes!("../exporter/capsule.rs").as_slice(),
+        ),
+        (
             "exporter/owner.rs",
             include_bytes!("../exporter/owner.rs").as_slice(),
         ),
@@ -119,6 +127,7 @@ fn require_verified_build(
 #[derive(Debug, Clone)]
 pub struct Controller {
     pub(crate) root: PathBuf,
+    pub(crate) compiler_tools: std::sync::Arc<crate::exporter::tools::CompilerTools>,
 }
 
 /// Request for a no-write model check.
@@ -493,7 +502,12 @@ impl Controller {
         // An existing lock binds every SDK execution, not only `lock check`.
         // Empty/source projects may still load before their initial binding.
         crate::sdk::check_existing_lock(&root)?;
-        Ok(Self { root })
+        let compiler_tools =
+            std::sync::Arc::new(crate::exporter::tools::CompilerTools::new(&root)?);
+        Ok(Self {
+            root,
+            compiler_tools,
+        })
     }
 
     fn prepare_release_in_worker(
@@ -716,8 +730,40 @@ impl Controller {
         release: Option<&str>,
         exporter_owner: Option<&mut crate::exporter::VerifyExporterOwner>,
     ) -> Result<BuildResult, PrismError> {
+        if let Some(owner) = exporter_owner {
+            return self.with_prepared_release(
+                request.config_path.as_deref(),
+                release,
+                |prepared| self.build_prepared(prepared, Some(owner)),
+            );
+        }
+        if !crate::exporter::tools::eligible() {
+            return self.with_prepared_release(
+                request.config_path.as_deref(),
+                release,
+                |prepared| self.build_prepared(prepared, None),
+            );
+        }
         self.with_prepared_release(request.config_path.as_deref(), release, |prepared| {
-            self.build_prepared(prepared, exporter_owner)
+            // Native owners are constructed, used and retired on this worker.
+            let mut owner = crate::exporter::VerifyExporterOwner::with_tools(
+                std::sync::Arc::clone(&self.compiler_tools),
+            );
+            match self.build_prepared(prepared, Some(&mut owner)) {
+                Ok(value) => {
+                    owner.finish_build()?;
+                    Ok(value)
+                }
+                Err(mut primary) => {
+                    if let Err(cleanup) = owner.abort() {
+                        primary.message.push_str(&format!(
+                            "; exporter cleanup also failed: {}",
+                            cleanup.message
+                        ));
+                    }
+                    Err(primary)
+                }
+            }
         })
     }
 
@@ -1160,12 +1206,59 @@ mod release_tests;
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    #[test]
+    #[cfg(unix)]
+    fn loading_execute_only_project_does_not_require_directory_read_permission() {
+        use std::os::unix::fs::PermissionsExt;
+        let parent = tempfile::tempdir().unwrap();
+        let path = parent.path().join("execute-only");
+        std::fs::create_dir(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o111)).unwrap();
+        let read_denied = std::fs::read_dir(&path).is_err();
+        let loaded = Controller::load(&path);
+        // Restore only this test-created directory for its ordinary cleanup.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(
+            loaded.is_ok(),
+            "metadata-only loading must retain original loader behavior"
+        );
+        if rustix::process::geteuid().as_raw() != 0 {
+            assert!(
+                read_denied,
+                "the real nonroot test must exercise read denial"
+            );
+        }
+        eprintln!("compiler-input-loader-permission {{\"actual_directory_read_denied\":{read_denied},\"load_succeeded\":true}}");
+    }
+
+    #[test]
+    fn compiler_inputs_are_private_to_controller_clones_not_independent_loads() {
+        fn send_sync<T: Send + Sync>() {}
+        send_sync::<Controller>();
+        let project = tempfile::tempdir().unwrap();
+        let controller = Controller::load(project.path()).unwrap();
+        let clone = controller.clone();
+        let independent = Controller::load(project.path()).unwrap();
+        assert!(std::sync::Arc::ptr_eq(
+            &controller.compiler_tools,
+            &clone.compiler_tools
+        ));
+        assert!(!std::sync::Arc::ptr_eq(
+            &controller.compiler_tools,
+            &independent.compiler_tools
+        ));
+        assert!(!format!("{controller:?}").contains("Prod/Export"));
+    }
+
     #[test]
     fn library_generator_binds_each_actual_cold_owner_source_without_hash_overrides() {
         let paths = [
             "library_build.rs",
             "lean_project.rs",
             "exporter.rs",
+            "exporter/tools.rs",
+            "exporter/capsule.rs",
             "exporter/owner.rs",
             "exporter/custody.rs",
             "exporter/directory.rs",
@@ -1177,6 +1270,8 @@ mod tests {
             include_bytes!("../library_build.rs").as_slice(),
             include_bytes!("../lean_project.rs").as_slice(),
             include_bytes!("../exporter.rs").as_slice(),
+            include_bytes!("../exporter/tools.rs").as_slice(),
+            include_bytes!("../exporter/capsule.rs").as_slice(),
             include_bytes!("../exporter/owner.rs").as_slice(),
             include_bytes!("../exporter/custody.rs").as_slice(),
             include_bytes!("../exporter/directory.rs").as_slice(),

@@ -54,7 +54,7 @@ export function lockFixture(authority=sourceAuthorityFixture,standards=Buffer.fr
    if(encode(captured.lock)!==bytes.toString())throw Error('synthetic graph lock differs');return captured.evidence;}};
 }
 
-export const sourceAuthorityFixture={archive_sha256:'3'.repeat(64),toolchain:'leanprover/lean4:v4.32.1'};
+export const sourceAuthorityFixture={archive_sha256:hash(readFileSync(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),toolchain:'leanprover/lean4:v4.32.1'};
 export function qualificationFixture(binding,authority=sourceAuthorityFixture) {
  const manifest=seedManifestFixture(binding.platform.split('/')[1],authority),bytes=encode(manifest)+'\n';
  const lake=manifest.configuration.environment.PATH.split(':')[0]+'/lake';
@@ -72,18 +72,26 @@ export function qualificationFixture(binding,authority=sourceAuthorityFixture) {
  return {schema:'prismpm/exporter-qualification/1',scope:'installed-native-compiler-only',binding:structuredClone(binding),manifests:[bytes,bytes],construction,
   relocation:{scope:'compiler-relocation-measurement-only',manifest_sha256:hash(bytes),construction:{manifest_sha256:hash(bytes),construction:construction.raw_construction[0]},observations}};
 }
+// Closed synthetic parser fixture; these constructed records are not executed
+// compiler evidence, SDK admission, or a private ToolSeed.
+export function controllerCapsuleFixture(binding,authority=sourceAuthorityFixture){
+ return {schema:'prismpm/exporter-acquisition/1',mode:'controller-capsule',archive_sha256:authority.archive_sha256,
+  compiler_revision:binding.compiler_revision,platform:binding.platform,toolchain:authority.toolchain,
+  executable_sha256:'4'.repeat(64),executable:{byte_length:1234,mode:0o755,sha256:'4'.repeat(64)},lean_sha256:'e'.repeat(64),
+  construction:{tool:'lean4-prod-build',argv:['build','prod-export'],executable_sha256:'e'.repeat(64),exit_code:0,stdout:'synthetic parser-only construction',stderr:''}};
+}
 export function resultFixture(binding,sourceAuthority=sourceAuthorityFixture){
  const build_id='d'.repeat(64);
  const tools=['lean-version','lake-version','rustfmt-version','rustc-version','timeout-version','lake-build-generated','lean4-prod-build','prod-export','native-library-package','native-library-std-lock','native-library-std-acceptance','native-library-no_std-lock','native-library-no_std-acceptance'];
  const runs=Array.from({length:4},(_,index)=>{
-  const acquisition=index<2?'cold':'sdk-seed';
+  const acquisition=index<2?'controller-capsule':'sdk-seed';
   const processes=tools.map(tool=>({tool,argv:[],executable_sha256:'e'.repeat(64),exit_code:0,stdout:'parser fixture',stderr:''}));
   processes[5].argv=['build','PrismGenerated'];processes[6].argv=['build','prod-export'];
   processes[8].argv=['package','--locked','--offline','--allow-dirty'];
   processes[7].argv=['exe','prod-export'];
   processes[7].exporter={schema:'prismpm/exporter-execution/1',source_archive_sha256:sourceAuthority.archive_sha256,
    executable:{byte_length:1234,mode:0o755,sha256:index<2?'4'.repeat(64):binding.exporter_sha256},
-   acquisition:index<2?{schema:'prismpm/exporter-acquisition/1',mode:'cold'}:{schema:'prismpm/exporter-acquisition/1',mode:'sdk-seed',
+   acquisition:index<2?controllerCapsuleFixture(binding,sourceAuthority):{schema:'prismpm/exporter-acquisition/1',mode:'sdk-seed',
     platform:binding.platform,inventory_sha256:binding.inventory_sha256,manifest_sha256:binding.seed_manifest_sha256,
     executable_sha256:binding.exporter_sha256,compiler_revision:binding.compiler_revision,toolchain:sourceAuthority.toolchain,archive_sha256:sourceAuthority.archive_sha256}};
   const value={schema:'prismpm/library-verification-manifest/2',scope:'native-library-only',build_id,processes,

@@ -1,10 +1,13 @@
 //! One fresh acquisition boundary for the pinned Lean exporter package.
 
+mod capsule;
 mod custody;
 pub(crate) mod directory;
 mod owner;
+pub(crate) mod tools;
 
 pub(crate) use owner::validate_binding as validate_owner_binding;
+pub(crate) use owner::validate_preflight as validate_owner_preflight;
 pub(crate) use owner::validate_record as validate_owner_record;
 pub(crate) use owner::{GenerationContext, Phase, ProductEvidence, VerifyExporterOwner};
 
@@ -131,6 +134,7 @@ pub(crate) fn run_export_with_custody(
     failure_code: &'static str,
     acquisition: &serde_json::Value,
     expected: &custody::Snapshot,
+    seed: Option<&tools::ToolSeed>,
 ) -> Result<crate::verification::ProcessRecord, PrismError> {
     if args.first().map(String::as_str) != Some("exe")
         || args.get(1).map(String::as_str) != Some("prod-export")
@@ -152,6 +156,22 @@ pub(crate) fn run_export_with_custody(
         .map_err(|error| PrismError::new("PP5008", error.to_string()))?;
     let before = measure_executable(&child)?;
     validate_acquisition(acquisition, &before.sha256)?;
+    match (acquisition["mode"].as_str(), seed) {
+        (Some("controller-capsule"), Some(seed)) => seed.bind(acquisition, &before.sha256)?,
+        (Some("controller-capsule"), None) => {
+            return Err(PrismError::new(
+                "PP5008",
+                "live private compiler input is required",
+            ))
+        }
+        (_, Some(_)) => {
+            return Err(PrismError::new(
+                "PP5008",
+                "private compiler input cannot relabel another acquisition",
+            ))
+        }
+        (_, None) => (),
+    }
     let result = crate::verification::run_process(
         tool,
         program,
@@ -161,6 +181,9 @@ pub(crate) fn run_export_with_custody(
         replacements,
         failure_code,
     );
+    if let Some(seed) = seed {
+        seed.bind(acquisition, &before.sha256)?;
+    }
     if custody::capture(cwd)? != package_before {
         return Err(PrismError::new(
             "PP5008",
@@ -240,6 +263,9 @@ pub(crate) fn validate_acquisition(
     if value == &cold_acquisition() {
         return Ok(());
     }
+    if value["mode"] == "controller-capsule" {
+        return capsule::validate(value, executable);
+    }
     let fields = [
         "archive_sha256",
         "compiler_revision",
@@ -318,6 +344,12 @@ pub(crate) fn validate_acquisition_authority(
     if value == &cold_acquisition() {
         return Ok(());
     }
+    // Source-built capsule structure uses the same authenticated retained
+    // producer/artifact envelope as cold construction, not the SDK lock.
+    // Only the live typed ToolSeed can authorize runtime execution.
+    if value["mode"] == "controller-capsule" {
+        return capsule::validate(value, executable);
+    }
     let fail = || {
         PrismError::new(
             "PP5008",
@@ -370,6 +402,7 @@ pub(crate) fn acquire_for(
 pub(crate) struct Acquisition {
     pub(crate) receipt: serde_json::Value,
     pub(crate) snapshot: custody::Snapshot,
+    pub(crate) seed: Option<std::sync::Arc<tools::ToolSeed>>,
 }
 
 pub(crate) fn before_first_build(
@@ -449,6 +482,7 @@ fn acquire_for_owned_inner(
         return Ok(Acquisition {
             receipt: cold_acquisition(),
             snapshot: custody::capture_source(destination)?,
+            seed: None,
         });
     };
     let parent = destination
@@ -533,6 +567,7 @@ fn acquire_for_owned_inner(
         return Ok(Acquisition {
             receipt,
             snapshot: custody::capture_source(destination)?,
+            seed: None,
         });
     }
     let publish = || {
@@ -595,7 +630,11 @@ fn acquire_for_owned_inner(
     stage.expect_empty()?;
     stage.close()?;
     helper.close()?;
-    Ok(Acquisition { receipt, snapshot })
+    Ok(Acquisition {
+        receipt,
+        snapshot,
+        seed: None,
+    })
 }
 
 /// A repository-backed verifier must use the same pinned source as builders.
@@ -807,6 +846,7 @@ mod tests {
             "PP5004",
             &cold_acquisition(),
             &expected,
+            None,
         )
         .unwrap_err();
         assert_eq!(error.code, "PP5008");
@@ -848,6 +888,7 @@ mod tests {
                 "PP5004",
                 &cold_acquisition(),
                 &snapshot,
+                None,
             )
         };
         let record = invoke().unwrap();

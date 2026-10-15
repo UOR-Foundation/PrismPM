@@ -1336,6 +1336,37 @@ caller caches and a digest recomputed from the installed inventory are not
 independent authority. An advertised seed that is absent or malformed fails
 closed; it does not fall back to cold construction.
 
+The current library/application verification-manifest `/2` owner paths additionally
+admit `controller-capsule` acquisition. Its closed ten-field public receipt binds
+the registered source archive/revision, exact Lean toolchain and native platform,
+the actual successful `lean4-prod-build` command (`build prod-export`), selected
+Lean launcher and complete exporter measurement. `executable` has exactly
+`byte_length`, `mode` and `sha256`; its digest must equal `executable_sha256`,
+and all three values must equal the retained child measurement. The full public
+receipt, not a projection, must agree across independent constructions and the
+original controller-build/replay/top-level owner positions.
+
+Raw compiler-cache inventories and their digest are private custody data, not
+public provenance or reproducibility inputs: valid independent Lean builds can
+produce different cache bytes. The private constructor still captures, hashes,
+copies and rechecks every source/build member and its complete parent closure.
+Its unchanged limits are 70 pinned source members, at most 4,096 build members
+and one root (4,167 total), 256 MiB per file and 512 MiB build bytes. Private
+inventory tests retain closed row types, path/mode/length bounds, canonicality,
+duplicate/order/source/parent checks and the exact at-limit/over-limit controls.
+Neither `files`, `files_document` nor `capsule_sha256` is admitted in the current
+public receipt. Parent manifest limits remain 16 MiB/65,536 items.
+
+Schema validation and coherent caller-constructed receipt data supply no host
+authority. The private constructor, held native inputs, full private inventory,
+per-child launcher/cwd guards, normalized construction record and consumer-phase
+joins remain mandatory. Capsules reuse only constructed tools: every model,
+proof, export, package, native/Wasm oracle, browser journey, original control and
+deadline still executes; a stale capsule fails closed without cold fallback.
+Historical library `/1` remains cold/SDK-seed only and does not admit capsules.
+SDK-seed qualification retains its independent authenticated inventory and
+original cold, warm and concurrent execution obligations.
+
 The closed `prismpm/exporter-seed/1` manifest binds the registered compiler
 revision/archive, native platform, exact build configuration, complete source,
 toolchain and runtime closure, and every seed path, mode, length and hash.
@@ -3382,7 +3413,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-26` | `sdk` | The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance. | §12 |
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
-| `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
+| `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and operation-private controller compiler capsules to their actual source, construction and native child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
 | `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance. | §12 |
 | `DK-31` | `sdk` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. | §12 |
 | `DK-32` | `sdk` | Private source-owned signed contexts bind exact expected statements and keys to actual cryptographic verification and opaque captured evidence through complete generated and browser oracles without granting account, mailbox, organization or freshness authority. | §12 |

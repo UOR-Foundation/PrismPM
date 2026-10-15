@@ -5,15 +5,18 @@ import {createHash} from 'node:crypto';
 import {copyFileSync,existsSync,mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {checkAccepted} from './library-sdk-check.mjs';
+import {compilerRevision} from '../sdk/inventory-metadata.mjs';
 
 const [project,encodedReceipt,archive,toolchain]=process.argv.slice(2);
-const receipt=JSON.parse(encodedReceipt),compiler={toolchain};
+const receipt=JSON.parse(encodedReceipt),compiler={toolchain,revision:compilerRevision(readFileSync(new URL('../model/dependencies.toml',import.meta.url),'utf8')),platform:'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]};
 const canonical=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)
  ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const original=join(project,receipt.verified_root),bytes=readFileSync(join(original,'manifest.json'));
 const baseline=JSON.parse(bytes);
-checkAccepted(project,receipt,archive,compiler);
+const acquisition=baseline.processes[7].exporter.acquisition.mode;
+const binding={compiler_revision:compiler.revision,platform:compiler.platform};
+checkAccepted(project,receipt,archive,compiler,acquisition,binding);
 const mutations=[
  value=>{for(const phase of value.exporter_owner.phases)phase.processes[2].argv.push('--unowned');value.processes[7].argv.push('--unowned');},
  value=>{for(const phase of value.exporter_owner.phases)phase.lexlean_manifest_sha256='f'.repeat(64);},
@@ -30,9 +33,9 @@ for(const mutate of mutations){
  try{
   for(const name of ['lexlean-attestation.json','library-acceptance.json'])copyFileSync(join(original,name),join(directory,name));
   writeFileSync(join(directory,'manifest.json'),body,{flag:'wx'});
-  assert.throws(()=>checkAccepted(project,{...receipt,attestation_id:id,verified_root:'.prism/verified/'+id},archive,compiler));
+  assert.throws(()=>checkAccepted(project,{...receipt,attestation_id:id,verified_root:'.prism/verified/'+id},archive,compiler,acquisition,binding));
  }finally{rmSync(directory,{recursive:true});}
 }
 assert(readFileSync(join(original,'manifest.json')).equals(bytes));
-checkAccepted(project,receipt,archive,compiler);
+checkAccepted(project,receipt,archive,compiler,acquisition,binding);
 console.log(JSON.stringify({schema:'prismpm/native-library-reader-regression/1',real_baseline:'passed',mutations_rejected:mutations.length,restored_baseline:'passed'}));

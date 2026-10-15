@@ -615,3 +615,96 @@ pub(crate) fn reject_mutations(
         rejected(&changed, "native execution");
     }
 }
+
+#[test]
+fn controller_capsules_cannot_broaden_historical_or_default_native_families() {
+    // Parser counterexamples, never fabricated producer or host execution facts.
+    let capsule = json!({"exporter":{"acquisition":{"mode":"controller-capsule"}}});
+    for schema in [
+        "prismpm/application-verification-manifest/1",
+        "prismpm/library-verification-manifest/1",
+        "prismpm/verification-manifest/2",
+        "unknown",
+    ] {
+        assert!(
+            validate_capsule_context(&json!({"schema":schema}), &[capsule.clone()]).is_err(),
+            "{schema}"
+        );
+        for mode in ["cold", "sdk-seed"] {
+            let legacy = json!({"exporter":{"acquisition":{"mode":mode}}});
+            validate_capsule_context(&json!({"schema":schema}), &[legacy]).unwrap();
+        }
+    }
+    for schema in [
+        "prismpm/application-verification-manifest/2",
+        "prismpm/library-verification-manifest/2",
+    ] {
+        validate_capsule_context(&json!({"schema":schema}), &[capsule.clone()]).unwrap();
+    }
+}
+
+#[test]
+fn capsule_target_measurement_cannot_be_relabelled_independently_of_its_inventory() {
+    // The public construction identity binds the full actual measurement,
+    // never a volatile private Lake-cache inventory.
+    let target = json!({"byte_length":1234,"mode":0o755,"sha256":"b".repeat(64)});
+    let execution = json!({"source_archive_sha256":hex(include_bytes!("../../vendor/lean4-prod/lean.tar")),
+        "executable":target,
+        "acquisition":{"mode":"controller-capsule","executable":target}});
+    validate_exporter_measurement(&execution).unwrap();
+    for field in ["byte_length", "mode", "sha256"] {
+        let mut changed = execution.clone();
+        changed["acquisition"]["executable"][field] = match field {
+            "byte_length" => json!(1235),
+            "mode" => json!(0o775),
+            _ => json!("c".repeat(64)),
+        };
+        assert!(validate_exporter_measurement(&changed).is_err(), "{field}");
+    }
+}
+
+#[test]
+fn capsule_preflight_composition_joins_both_phases_without_broadening_old_modes() {
+    // Typed reader counterexamples only, not a native producer attestation.
+    let host = "x86_64-unknown-linux-gnu";
+    let outputs = [
+        format!("Lean (version 4.32.1, {host}, commit f054605aea4b840552cca2e725580bffd1e1b704, Release)\n"),
+        "Lake version 5.0.0-src+f054605 (Lean version 4.32.1)\n".to_owned(),
+        "rustfmt 1.9.0-stable (8bab26f4f6 2026-07-14)\n".to_owned(),
+        format!("commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\nhost: {host}\nrelease: 1.97.1\n"),
+        "timeout (GNU coreutils) 9.4\n".to_owned(),
+    ];
+    let processes: Vec<_> = PREFLIGHT.iter().zip(outputs).map(|(tool,stdout)| json!({
+        "tool":tool,"argv":if *tool=="rustc-version" {vec!["--version","--verbose"]} else {vec!["--version"]},
+        "executable_sha256":"e".repeat(64),"exit_code":0,"stdout":stdout,"stderr":""
+    })).collect();
+    let acquisition = json!({"mode":"controller-capsule","platform":"linux/amd64","lean_sha256":"e".repeat(64),
+        "construction":{"executable_sha256":"e".repeat(64)}});
+    let owner = json!({"phases":[{"processes":[{},{},{"exporter":{"acquisition":acquisition}}]},
+        {"processes":[{},{},{"exporter":{"acquisition":acquisition}}]}]});
+    crate::exporter::validate_owner_preflight(&owner, &processes).unwrap();
+    for phase in 0..2 {
+        for (field, value) in [
+            ("lean_sha256", json!("f".repeat(64))),
+            ("platform", json!("linux/arm64")),
+            ("construction", json!({"executable_sha256":"f".repeat(64)})),
+        ] {
+            let mut bad = owner.clone();
+            bad["phases"][phase]["processes"][2]["exporter"]["acquisition"][field] = value;
+            assert!(
+                crate::exporter::validate_owner_preflight(&bad, &processes).is_err(),
+                "{phase}/{field}"
+            );
+        }
+    }
+    for missing in 0..PREFLIGHT.len() {
+        let mut bad = processes.clone();
+        bad.remove(missing);
+        assert!(crate::exporter::validate_owner_preflight(&owner, &bad).is_err());
+    }
+    for mode in ["cold", "sdk-seed"] {
+        let legacy =
+            json!({"phases":[{"processes":[{},{},{"exporter":{"acquisition":{"mode":mode}}}]}]});
+        crate::exporter::validate_owner_preflight(&legacy, &[]).unwrap();
+    }
+}

@@ -463,6 +463,8 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             let processes =
                 crate::release_verification::process_records(&value["processes"], false)
                     .map_err(|error| PrismError::new("PP4004", error.message))?;
+            crate::exporter::validate_owner_preflight(&value["exporter_owner"], processes)
+                .map_err(|error| PrismError::new("PP4004", error.message))?;
             let replay = value["exporter_owner"]["phases"][1]["processes"]
                 .as_array()
                 .expect("validated owner replay");

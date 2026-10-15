@@ -166,6 +166,29 @@ pub(crate) fn validate_export_identity(
     Ok(())
 }
 
+/// Keep the pinned codegen rejection while exposing its actual nominal names.
+/// This changes diagnostics only; no type is renamed, erased or admitted.
+fn codegen_diagnostic(module: &prod_ir::Module, error: prod_codegen::Error) -> PrismError {
+    let mut diagnostic = PrismError::new("PP4102", error.to_string());
+    if let prod_codegen::Error::DuplicateTypeName(short) = error {
+        let names = module
+            .types
+            .iter()
+            .filter(|declaration| declaration.name.rsplit('.').next() == Some(short.as_str()))
+            .map(|declaration| declaration.name.as_str())
+            .collect::<BTreeSet<_>>();
+        if names.len() > 1 {
+            diagnostic
+                .message
+                .push_str("; fully qualified colliding Lean types: ");
+            diagnostic
+                .message
+                .push_str(&names.into_iter().collect::<Vec<_>>().join(", "));
+        }
+    }
+    diagnostic
+}
+
 /// Generate unaccepted native artifacts; verification owns acceptance evidence.
 pub(crate) fn export_arguments(
     modules: &BTreeSet<String>,
@@ -436,6 +459,7 @@ fn generate_in(
             "PP5004",
             &exporter_acquisition,
             &export_custody,
+            owned.and_then(|(_, context)| context.seed()),
         ),
     }?);
     let mut artifacts = Vec::new();
@@ -484,7 +508,7 @@ fn generate_in(
             dependencies: Vec::new(),
         },
     )
-    .map_err(|error| PrismError::new("PP4102", error.to_string()))?;
+    .map_err(|error| codegen_diagnostic(&module, error))?;
     let package_root = workspace.join("package");
     for file in package.files {
         relative(&file.path)?;
@@ -554,7 +578,7 @@ fn generate_in(
 
 #[cfg(test)]
 mod tests {
-    use super::{regular_bytes, validate_export_identity};
+    use super::{codegen_diagnostic, regular_bytes, validate_export_identity};
     use prod_ir::{Definition, Expr, Module, Type};
     use serde_json::{json, Value};
 
@@ -582,6 +606,65 @@ mod tests {
                 .collect(),
         };
         (coverage, roots_document, module, roots)
+    }
+
+    #[test]
+    fn native_codegen_duplicate_type_diagnostic_retains_actual_qualified_ir_names() {
+        let (_, _, mut module, _) = fixture(&["Owner.acceptance"]);
+        module.types = [
+            "Zulu.Fixed",
+            "Alpha.Fixed",
+            "Zulu.Fixed",
+            "Noise.FixedTail",
+            "Noise.Other",
+        ]
+        .into_iter()
+        .map(|name| prod_ir::TypeDecl {
+            name: name.to_owned(),
+            ctors: vec![],
+            unsupported: None,
+        })
+        .collect();
+        let original = module.clone();
+        let rejected = prod_codegen::generate_module(&module).unwrap_err();
+        assert_eq!(
+            rejected,
+            prod_codegen::Error::DuplicateTypeName("Fixed".to_owned())
+        );
+        let message = rejected.to_string();
+        let diagnostic = codegen_diagnostic(&module, rejected);
+        assert_eq!(diagnostic.code, "PP4102");
+        assert_eq!(
+            diagnostic.message,
+            format!("{message}; fully qualified colliding Lean types: Alpha.Fixed, Zulu.Fixed")
+        );
+        assert_eq!(
+            module, original,
+            "diagnostics cannot rewrite actual parsed IR"
+        );
+        module.types.reverse();
+        let rejected = prod_codegen::generate_module(&module).unwrap_err();
+        assert_eq!(diagnostic, codegen_diagnostic(&module, rejected));
+    }
+
+    #[test]
+    fn native_codegen_unrelated_rejection_diagnostic_is_unchanged() {
+        for body in [
+            Expr::Opaque("unchanged diagnostic".to_owned()),
+            Expr::Param(1),
+        ] {
+            let (_, _, mut module, _) = fixture(&["Owner.acceptance"]);
+            module.definitions[0].body = body;
+            let original = module.clone();
+            let rejected = prod_codegen::generate_module(&module).unwrap_err();
+            assert!(matches!(
+                &rejected,
+                prod_codegen::Error::OpaqueExpr(_) | prod_codegen::Error::ParamOutOfBounds(1)
+            ));
+            let expected = crate::PrismError::new("PP4102", rejected.to_string());
+            assert_eq!(codegen_diagnostic(&module, rejected), expected);
+            assert_eq!(module, original);
+        }
     }
 
     #[test]

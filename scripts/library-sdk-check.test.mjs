@@ -5,9 +5,10 @@ import {cpSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSyn
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {test} from 'node:test';
-import {capture,verifySource,sourceRoots,sourceAliases,cli,readHistoricalLibraryEvidence,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock} from './library-sdk-check.mjs';
-import {lockFixture,resultFixture,sourceAuthorityFixture} from './library-sdk-fixture.mjs';
+import {capture,verifySource,sourceRoots,sourceAliases,cli,readHistoricalLibraryEvidence,checkAccepted as checkAcceptedWithAuthority,mutateModule,tree,verifyImage,verifyResult,testOutput,validateCapturedLock,verifyExporterProcess,validateVerificationOwner} from './library-sdk-check.mjs';
+import {lockFixture,resultFixture,sourceAuthorityFixture,controllerCapsuleFixture} from './library-sdk-fixture.mjs';
 const checkAccepted=(project,receipt)=>readHistoricalLibraryEvidence(project,receipt,'3'.repeat(64));
+import {capsuleSourceRows,validateControllerCapsule} from './controller-capsule-reader.mjs';
 
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-library-gate-test-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
@@ -28,7 +29,7 @@ test('closed shipped-library source binding includes implementation, fixtures, s
  for(const path of ['crates/prismpm/src','crates/prismpm/schemas','tests/fixtures/library/native-library/project','scripts/library-sdk-check.mjs','scripts/library-sdk-check.test.mjs',
   'scripts/sdk-command-owner.mjs','scripts/sdk-command-owner.py',
   'scripts/hologram-source-pins.mjs','scripts/hologram-source-pins.test.mjs','crates/prismpm/tests/hologram_interop.rs',
-  'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock']){
+  'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock','scripts/controller-capsule-reader.mjs']){
   assert.ok(sourceRoots.includes(path));put(root,path+'/input','mutated');assert.throws(()=>verifySource(root,expected),/source closure/);put(root,path+'/input','source');
  }
  put(root,'crates/prismpm/src/nested/target/extra','ordinary source');assert.throws(()=>verifySource(root,expected),/source closure/);
@@ -109,7 +110,7 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  const fixture=lockFixture(),binding=fixture.binding('amd64'),value=resultFixture(binding);
  const verify=(value,authority=binding)=>verifyResult(value,authority,sourceAuthorityFixture);verify(value);
  for(const change of [v=>v.checks.pop(),v=>v.checks.reverse(),v=>v.extra=true,v=>v.scope='production-release',v=>v.build_id='mutable',
-  v=>v.runs.pop(),v=>v.runs.reverse(),v=>v.runs[2].acquisition='cold',v=>v.runs[3].root=v.runs[2].root,
+  v=>v.runs.pop(),v=>v.runs.reverse(),v=>v.runs[0].acquisition='cold',v=>v.runs[2].acquisition='cold',v=>v.runs[3].root=v.runs[2].root,
   v=>v.runs[2].manifest+=' ',v=>v.binding.inventory_sha256='f'.repeat(64),
   v=>delete v.acceptance_rejection,v=>v.acceptance_rejection.root='Other.Root',
   v=>v.acceptance_rejection.extra=true,v=>v.acceptance_rejection.result.diagnostic.code='PP5008',
@@ -129,6 +130,60 @@ test('outer acceptance refuses absent or partial run results and incomplete or s
  for(const change of [v=>v.concurrency.environments.pop(),v=>v.concurrency.environments[0].PATH='/tmp/foreign',
   v=>v.concurrency.environments[0].LD_PRELOAD='/tmp/injected.so',v=>v.concurrency.environments[0].CARGO_TARGET_DIR='/tmp/reuse']){
   const bad=structuredClone(value);change(bad);assert.throws(()=>verify(bad));
+ }
+ const originalArchive=readFileSync(new URL('../vendor/lean4-prod/lean.tar',import.meta.url));
+ const sources=capsuleSourceRows(originalArchive);assert.equal(sources.archive_sha256,sourceAuthorityFixture.archive_sha256);
+ for(const bytes of [originalArchive.subarray(0,-1),Buffer.concat([originalArchive,Buffer.from([1])]),Buffer.alloc(1024)])
+  assert.throws(()=>capsuleSourceRows(bytes));
+ const context={compiler_revision:binding.compiler_revision,platform:binding.platform,lean_sha256:'e'.repeat(64),lake_sha256:'e'.repeat(64)};
+ const capsule=controllerCapsuleFixture(binding),target={byte_length:1234,mode:0o755,sha256:'4'.repeat(64)};
+ validateControllerCapsule(capsule,target,sourceAuthorityFixture,context);
+ const unicode=structuredClone(capsule);
+ // NUL and paired non-BMP scalars are valid in normalized process streams.
+ unicode.construction.stdout='paired \u{1f331} and output NUL \0';unicode.construction.stderr='paired \u{1f331}';
+ validateControllerCapsule(unicode,target,sourceAuthorityFixture,context);
+ for(const scalar of ['\ud800','\udc00'])for(const stream of ['stdout','stderr']){
+  const bad=structuredClone(capsule);bad.construction[stream]=scalar;
+  assert.throws(()=>validateControllerCapsule(bad,target,sourceAuthorityFixture,context));
+ }
+ // Full cache data remains private constructor/copy custody. It cannot be
+ // injected as an extra semantic or authentication field in any public receipt.
+ for(const [field,values]of Object.entries({files_document:['[]','[[[]]]','[{"kind":"file","kind":"directory"}]',' '.repeat(16*1024*1024+1)],
+  capsule_sha256:[fixture.hash('private diagnostic data')],private_origin:[{dev:'1',ino:'2'}]})){
+  for(const value of values){const bad={...capsule,[field]:value};assert.throws(()=>validateControllerCapsule(bad,target,sourceAuthorityFixture,context));}
+ }
+ for(const change of [v=>v.executable.byte_length++,v=>v.executable.mode=0o775,
+  v=>v.executable.sha256='f'.repeat(64),v=>v.executable.extra=true,v=>v.executable.byte_length=0,
+  v=>v.executable.byte_length=256*1024*1024+1,v=>v.executable.mode=0o644,
+  v=>v.construction.stderr='\r',v=>v.platform='linux/arm64',v=>v.compiler_revision='f'.repeat(40)]){
+  const bad=structuredClone(capsule);change(bad);
+  assert.throws(()=>validateControllerCapsule(bad,target,sourceAuthorityFixture,context));
+ }
+ const sourceLeg=JSON.parse(value.runs[0].manifest);
+ for(const schema of ['prismpm/library-verification-manifest/1','prismpm/application-verification-manifest/1','prismpm/verification-manifest/2']){
+  const bad=structuredClone(sourceLeg);bad.schema=schema;
+  assert.throws(()=>validateVerificationOwner(bad,'library','controller-capsule',binding,sourceAuthorityFixture));
+ }
+ assert.throws(()=>verifyExporterProcess(sourceLeg.processes[7],'prod-export','sdk-seed',binding,sourceAuthorityFixture),
+  'source capsule cannot substitute for the independently locked SDK leg');
+ for(const mutate of [
+  m=>m.processes[7].exporter.acquisition.mode='cold',
+  m=>m.processes[7].exporter.acquisition.construction.tool='lake-build-generated',
+  m=>m.processes[7].exporter.acquisition.construction.argv=['build','PrismGenerated'],
+  m=>m.processes[7].exporter.acquisition.construction.exit_code=1,
+  m=>m.processes[7].exporter.acquisition.construction.executable_sha256='f'.repeat(64),
+  m=>m.processes[7].exporter.acquisition.lean_sha256='f'.repeat(64),
+  m=>m.processes[7].exporter.acquisition.executable.sha256='f'.repeat(64),
+  m=>m.processes[7].exporter.acquisition.executable.mode=0o775,
+  m=>m.processes[7].exporter.acquisition.executable.byte_length++,
+  m=>m.processes[7].exporter.acquisition.files_document='[]',
+  m=>m.processes[7].exporter.acquisition.capsule_sha256='f'.repeat(64),
+  m=>m.processes[7].exporter.acquisition.extra=true,
+  m=>m.exporter_owner.phases[0].processes[2].exporter.acquisition.construction.stdout+='changed',
+ ]){
+  const bad=structuredClone(value),manifest=JSON.parse(bad.runs[0].manifest);mutate(manifest);
+  bad.runs[0].manifest=fixture.encode(manifest);bad.runs[0].manifest_sha256=fixture.hash(bad.runs[0].manifest);
+  assert.throws(()=>verify(bad));
  }
  for(const mutate of [m=>m.processes.pop(),m=>m.processes[7].exporter.acquisition.mode='cold',
   m=>m.processes[7].exporter.acquisition.platform='linux/arm64',m=>m.processes[7].exporter.executable.sha256='f'.repeat(64),
@@ -239,6 +294,7 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
  const valid=temporary(t),receipt=parserFixture(valid);checkAccepted(valid,receipt);
  assert.throws(()=>checkAcceptedWithAuthority(valid,receipt,'3'.repeat(64)),/both original exporter phases/);
  for(const change of [
+  ({manifest})=>{manifest.processes[7].exporter.acquisition=controllerCapsuleFixture(lockFixture().binding('amd64'));},
   ({manifest})=>{manifest.extra=true;},({manifest})=>{delete manifest.scope;},
   ({manifest})=>{manifest.processes[0].extra=true;},({manifest})=>{delete manifest.processes[0].argv;},
   ({manifest})=>{manifest.processes[0].argv=[42];},({manifest})=>{manifest.processes.pop();},
@@ -268,6 +324,11 @@ test('closed native evidence parser rejects coherently resealed model, acceptanc
   (root,receipt)=>put(root,'.prism/build/'+receipt.build_id+'/unexpected','extra output'),
  ]){const root=temporary(t),receipt=parserFixture(root);change(root,receipt);assert.throws(()=>checkAccepted(root,receipt));}
  put(valid,'.prism/build/'+receipt.build_id+'/library/package/src/lib.rs','tampered actual bytes');assert.throws(()=>checkAccepted(valid,receipt));
+ const historicalCapsuleRoot=temporary(t),historicalCapsule=parserFixture(historicalCapsuleRoot,({manifest})=>{
+  manifest.processes[7].exporter.acquisition=controllerCapsuleFixture(lockFixture().binding('amd64'));
+ });
+ assert.throws(()=>readHistoricalLibraryEvidence(historicalCapsuleRoot,historicalCapsule,'3'.repeat(64),
+  {revision:'a'.repeat(40),toolchain:sourceAuthorityFixture.toolchain,platform:'linux/amd64'},'controller-capsule',lockFixture().binding('amd64')),/historical \/1/);
  const compiler={revision:'6'.repeat(40),toolchain:'leanprover/lean4:v4.32.1',platform:'linux/amd64'};
  const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
  const encode=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]])):v);
@@ -320,6 +381,8 @@ test('owning CLI test kills a removed process-exit guard',t=>{
  const guard='assert.equal(output.status,expected.code ? exits[expected.code] : 0, "CLI exit class");';assert.equal(module.split(guard).length,2);
  put(root,'scripts/library-sdk-check.mjs',module.replace(guard,''));put(root,'scripts/browser-api-sdk-check.mjs',readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url)));put(root,'scripts/library-sdk-check.test.mjs',readFileSync(new URL('./library-sdk-check.test.mjs',import.meta.url)));
  put(root,'scripts/library-sdk-fixture.mjs',readFileSync(new URL('./library-sdk-fixture.mjs',import.meta.url)));
+ put(root,'scripts/controller-capsule-reader.mjs',readFileSync(new URL('./controller-capsule-reader.mjs',import.meta.url)));
+ put(root,'vendor/lean4-prod/lean.tar',readFileSync(new URL('../vendor/lean4-prod/lean.tar',import.meta.url)));
  for(const name of ['sdk-command-owner.mjs','sdk-command-owner.py'])
   put(root,'scripts/'+name,readFileSync(new URL('./'+name,import.meta.url)));
  put(root,'scripts/installed-exporter-concurrency.mjs',readFileSync(new URL('./installed-exporter-concurrency.mjs',import.meta.url)));

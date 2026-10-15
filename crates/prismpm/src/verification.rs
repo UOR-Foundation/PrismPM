@@ -2609,7 +2609,9 @@ pub(crate) fn run(
     request: VerifyRequest,
     release: Option<&str>,
 ) -> Result<VerifyResult, PrismError> {
-    let mut exporter_owner = crate::exporter::VerifyExporterOwner::default();
+    let mut exporter_owner = crate::exporter::VerifyExporterOwner::with_tools(
+        std::sync::Arc::clone(&controller.compiler_tools),
+    );
     let build = controller.build_release_with_owner(
         BuildRequest {
             config_path: request.config_path.clone(),
@@ -2989,6 +2991,7 @@ pub(crate) fn run(
                 "PP5004",
                 &exporter_acquisition,
                 &export_custody,
+                None,
             )?);
             Ok(out)
         };

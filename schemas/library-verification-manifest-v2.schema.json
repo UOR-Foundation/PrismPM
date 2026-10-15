@@ -204,6 +204,9 @@
                       "platform",
                       "toolchain"
                     ]
+                  },
+                  {
+                    "$ref": "#/$defs/controllerCapsuleAcquisition"
                   }
                 ]
               },
@@ -393,6 +396,197 @@
           "sha256"
         ]
       }
+    },
+    "controllerCapsuleAcquisition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "prismpm/exporter-acquisition/1"
+        },
+        "mode": {
+          "const": "controller-capsule"
+        },
+        "archive_sha256": {
+          "const": "7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf"
+        },
+        "compiler_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "toolchain": {
+          "type": "string",
+          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "platform": {
+          "enum": [
+            "linux/amd64",
+            "linux/arm64"
+          ]
+        },
+        "construction": {
+          "$ref": "#/$defs/controllerCapsuleConstruction"
+        },
+        "executable_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "lean_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "executable": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "byte_length": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 268435456
+            },
+            "mode": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 511,
+              "not": {
+                "enum": [
+                  0,
+                  2,
+                  4,
+                  6,
+                  16,
+                  18,
+                  20,
+                  22,
+                  32,
+                  34,
+                  36,
+                  38,
+                  48,
+                  50,
+                  52,
+                  54,
+                  128,
+                  130,
+                  132,
+                  134,
+                  144,
+                  146,
+                  148,
+                  150,
+                  160,
+                  162,
+                  164,
+                  166,
+                  176,
+                  178,
+                  180,
+                  182,
+                  256,
+                  258,
+                  260,
+                  262,
+                  272,
+                  274,
+                  276,
+                  278,
+                  288,
+                  290,
+                  292,
+                  294,
+                  304,
+                  306,
+                  308,
+                  310,
+                  384,
+                  386,
+                  388,
+                  390,
+                  400,
+                  402,
+                  404,
+                  406,
+                  416,
+                  418,
+                  420,
+                  422,
+                  432,
+                  434,
+                  436,
+                  438
+                ]
+              }
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "byte_length",
+            "mode",
+            "sha256"
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "mode",
+        "archive_sha256",
+        "compiler_revision",
+        "toolchain",
+        "platform",
+        "construction",
+        "executable_sha256",
+        "lean_sha256",
+        "executable"
+      ]
+    },
+    "controllerCapsuleConstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "const": "lean4-prod-build"
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "const": "build"
+            },
+            {
+              "const": "prod-export"
+            }
+          ],
+          "items": false
+        },
+        "executable_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "exit_code": {
+          "const": 0
+        },
+        "stdout": {
+          "type": "string",
+          "maxLength": 16777216
+        },
+        "stderr": {
+          "type": "string",
+          "maxLength": 16777216
+        }
+      },
+      "required": [
+        "tool",
+        "argv",
+        "executable_sha256",
+        "exit_code",
+        "stdout",
+        "stderr"
+      ]
     }
   }
 }

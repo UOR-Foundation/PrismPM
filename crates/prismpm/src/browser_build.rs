@@ -347,6 +347,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         "PP5004",
         &exporter_acquisition,
         &export_custody,
+        None,
     )?);
     let mut export = BTreeMap::new();
     for name in ["kernel.ir", "coverage.json", "roots.json"] {

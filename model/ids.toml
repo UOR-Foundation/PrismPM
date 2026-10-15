@@ -892,7 +892,7 @@ statement = "SDK lock acquisition validates exact OCI metadata graphs and a clos
 id = "DK-29"
 suite = "sdk"
 level = "build"
-statement = "Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance."
+statement = "Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and operation-private controller compiler capsules to deterministic source/construction provenance and complete native child measurements, while retaining full cache custody privately without replacing cold construction, actual exports or application acceptance."
 
 [[id]]
 id = "DK-30"

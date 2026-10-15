@@ -13,6 +13,7 @@ import {captureSdkMetadataEvidence} from '../sdk/metadata-evidence-cli.mjs';
 import {verifyMetadataEvidence} from '../sdk/metadata-evidence.mjs';
 import {qualifyMigration,verifyMigration} from '../sdk/migration-qualification.mjs';
 import {captureInstalledCustody,runConcurrentInstalled,verifyCustody,installedEnvironment} from './installed-exporter-concurrency.mjs';
+import {validateControllerCapsule} from './controller-capsule-reader.mjs';
 export {verifyImage};
 
 export const sourceRoots=Object.freeze([
@@ -25,6 +26,7 @@ export const sourceRoots=Object.freeze([
  'model','language','schemas','stdlib','sdk','standards','standards.lock','adapters','LICENSE-MIT','LICENSE-APACHE',
  'tests/fixtures/library/native-library/project','tests/hologram-oracle','vendor',
  'scripts/browser-api-sdk-check.mjs','scripts/library-sdk-check.mjs','scripts/library-sdk-check.sh',
+ 'scripts/controller-capsule-reader.mjs',
  'scripts/sdk-command-owner.mjs','scripts/sdk-command-owner.py',
  'scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/library-sdk-fixture.mjs','scripts/library-owner-reader-replay.mjs','.github/workflows/release.yml',
  'scripts/installed-exporter-concurrency.mjs','scripts/installed-exporter-concurrency.test.mjs','scripts/portable-oracle-process-owner.py',
@@ -215,7 +217,7 @@ export function readHistoricalLibraryEvidence(project,receipt,exporterArchiveSha
  return readLibraryEvidence(project,receipt,exporterArchiveSha256,compilerIdentity,requiredAcquisition,binding,true);
 }
 function readLibraryEvidence(project,receipt,exporterArchiveSha256,compilerIdentity,requiredAcquisition,binding,historical){
- assert(['cold','sdk-seed'].includes(requiredAcquisition));
+ assert(['cold','sdk-seed','controller-capsule'].includes(requiredAcquisition));
  hex(exporterArchiveSha256);
  keys(receipt,['schema','build_id','attestation_id','verified_root']);
  assert.equal(receipt.schema,'prismpm/verify-result/1');hex(receipt.build_id);hex(receipt.attestation_id);
@@ -227,6 +229,7 @@ function readLibraryEvidence(project,receipt,exporterArchiveSha256,compilerIdent
  assert.ok(manifestBytes.equals(Buffer.from(canonical(manifest))),'canonical verification manifest');assert.ok(acceptanceBytes.equals(Buffer.from(canonical(acceptance))),'canonical library acceptance');
  const owned=manifest.schema==='prismpm/library-verification-manifest/2';
  assert(owned||historical,'current SDK acceptance requires both original exporter phases');
+ assert(owned||requiredAcquisition!=='controller-capsule','historical /1 cannot admit controller capsules');
  keys(manifest,['acceptance_sha256','artifacts','build_id','lexlean_attestation_sha256','model_sha256','processes','schema','scope',...(owned?['exporter_owner']:[])]);
  assert.equal(hash(manifestBytes),receipt.attestation_id);assert(owned||manifest.schema==='prismpm/library-verification-manifest/1');assert.equal(manifest.scope,'native-library-only');assert.equal(manifest.build_id,receipt.build_id);
  const lexBytes=regularBytes(join(verified,'lexlean-attestation.json')),lexAttestation=JSON.parse(lexBytes);
@@ -253,7 +256,13 @@ function readLibraryEvidence(project,receipt,exporterArchiveSha256,compilerIdent
    const acquisition=row.exporter.acquisition;
    assert.equal(acquisition?.mode,requiredAcquisition,'required exporter acquisition was not executed');
    if(acquisition?.mode==='cold') same(acquisition,{schema:'prismpm/exporter-acquisition/1',mode:'cold'},'closed cold acquisition required');
-   else {
+   else if(acquisition?.mode==='controller-capsule'){
+    assert(owned&&compilerIdentity,'current owned capsule evidence requires independent compiler identity');
+    validateControllerCapsule(acquisition,row.exporter.executable,
+     {archive_sha256:exporterArchiveSha256,toolchain:compilerIdentity.toolchain},
+     {compiler_revision:compilerIdentity.revision,platform:compilerIdentity.platform,
+      lean_sha256:manifest.processes[0].executable_sha256,lake_sha256:manifest.processes[1].executable_sha256});
+   }else {
     keys(acquisition,['schema','mode','inventory_sha256','manifest_sha256','executable_sha256','archive_sha256','compiler_revision','platform','toolchain']);
     assert.equal(acquisition.schema,'prismpm/exporter-acquisition/1');assert.equal(acquisition.mode,'sdk-seed');
     for(const field of ['inventory_sha256','manifest_sha256','executable_sha256','archive_sha256']) hex(acquisition[field]);
@@ -351,12 +360,12 @@ export async function run(root,image,lockBytes){
  const positive=(project,args)=>cli(project,args,{schema:'prismpm/'+args[0]+'-result/1'});
  try{
   const first=fixture(),before=tree(first),checked=positive(first,['check']);same(tree(first),before,'check modified source');
-  const accepted=positive(first,['verify']),evidence=checkAccepted(first,accepted,exporterArchiveSha256,compilerIdentity,'cold',binding);assert.equal(checked.model_id,evidence.model_id);
-  retain(first,accepted,'cold');
+  const accepted=positive(first,['verify']),evidence=checkAccepted(first,accepted,exporterArchiveSha256,compilerIdentity,'controller-capsule',binding);assert.equal(checked.model_id,evidence.model_id);
+  retain(first,accepted,'controller-capsule');
   const firstBuild=tree(evidence.build),second=fixture(),secondBuild=positive(second,['build']);assert.equal(secondBuild.build_id,accepted.build_id);
   same(tree(join(second,'.prism/build',secondBuild.build_id)),firstBuild,'complete build differs across fresh absolute roots');noVerification(second);
-  const secondVerify=positive(second,['verify']);assert.equal(secondVerify.build_id,accepted.build_id);checkAccepted(second,secondVerify,exporterArchiveSha256,compilerIdentity,'cold',binding);
-  retain(second,secondVerify,'cold');
+  const secondVerify=positive(second,['verify']);assert.equal(secondVerify.build_id,accepted.build_id);checkAccepted(second,secondVerify,exporterArchiveSha256,compilerIdentity,'controller-capsule',binding);
+  retain(second,secondVerify,'controller-capsule');
   const beforeProduct=tree(first);cli(first,['build','--locked','-t','ghcr.io/uor-foundation/prismpm-library-probe:0.1.0'],{code:'PP6101',message:'native-library acceptance is not product-release or deployment acceptance'});same(tree(first),beforeProduct,'product refusal wrote outputs');
   const descriptor=regularBytes(join(source,'src/Foundation/Library/V1/Model.lex.tex')).toString('utf8');const descriptorRow=descriptor.split('\n').filter(line=>line.startsWith('\\semanticdata{'));assert.equal(descriptorRow.length,1);const nominal=JSON.parse(descriptorRow[0].slice('\\semanticdata{'.length,-1));
   const mutations=[
@@ -370,7 +379,7 @@ export async function run(root,image,lockBytes){
   const changed=positive(mutant,['check']);assert.notEqual(changed.semantic_id,checked.semantic_id);
   const rejection=cli(mutant,['verify'],{code:'PP5006',assertion:acceptanceRoot});noVerification(mutant);
   const acceptance_rejection={schema:'prismpm/generated-acceptance-rejection/1',root:acceptanceRoot,result:rejection};
-  writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored,exporterArchiveSha256,compilerIdentity,'cold',binding);
+  writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored,exporterArchiveSha256,compilerIdentity,'controller-capsule',binding);
   for(let index=0;index<2;index++){
    const warm=fixture();assert(!existsSync(join(warm,'prismpm.lock')),'warm fixture must not replace a source lock');
    writeFileSync(join(warm,'prismpm.lock'),lockBytes,{flag:'wx',mode:0o600});
@@ -406,8 +415,8 @@ export async function run(root,image,lockBytes){
  }finally{rmSync(work,{recursive:true,force:true});}
 }
 
-export function verifyExporterProcess(process,role,mode,binding,sourceAuthority){
- assert(['prod-export','application-export'].includes(role));assert(['cold','sdk-seed'].includes(mode));
+export function verifyExporterProcess(process,role,mode,binding,sourceAuthority,nativeContext){
+ assert(['prod-export','application-export'].includes(role));assert(['cold','sdk-seed','controller-capsule'].includes(mode));
  keys(sourceAuthority,['archive_sha256','toolchain']);hex(sourceAuthority.archive_sha256);
  assert.match(sourceAuthority.toolchain,/^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/);
  keys(process,['tool','argv','executable_sha256','exit_code','stdout','stderr','exporter']);
@@ -422,6 +431,7 @@ export function verifyExporterProcess(process,role,mode,binding,sourceAuthority)
  assert(Number.isSafeInteger(exporter.executable.byte_length)&&exporter.executable.byte_length>0&&exporter.executable.byte_length<=256*1024*1024);
  assert(Number.isSafeInteger(exporter.executable.mode)&&exporter.executable.mode>=0&&exporter.executable.mode<=0o777&&(exporter.executable.mode&0o111));
  if(mode==='cold')same(exporter.acquisition,{schema:'prismpm/exporter-acquisition/1',mode:'cold'},'closed retained cold receipt');
+ else if(mode==='controller-capsule')validateControllerCapsule(exporter.acquisition,exporter.executable,sourceAuthority,nativeContext);
  else{
   keys(exporter.acquisition,['schema','mode','inventory_sha256','manifest_sha256','executable_sha256','archive_sha256','compiler_revision','platform','toolchain']);
   assert.equal(exporter.acquisition.schema,'prismpm/exporter-acquisition/1');
@@ -437,6 +447,7 @@ export function verifyExporterProcess(process,role,mode,binding,sourceAuthority)
 // parsing remains separate and never qualifies a newly installed SDK.
 export function validateVerificationOwner(manifest,role,mode,binding,sourceAuthority){
  const owner=manifest.exporter_owner;
+ assert.equal(manifest.schema,'prismpm/'+role+'-verification-manifest/2','current owned evidence required');
  keys(owner,['schema','phases']);assert.equal(owner.schema,'prismpm/verification-exporter-owner/1');
  assert(Array.isArray(owner.phases)&&owner.phases.length===2);
  const tools=role==='library'?['lake-build-generated','lean4-prod-build','prod-export','native-library-package']:
@@ -444,6 +455,8 @@ export function validateVerificationOwner(manifest,role,mode,binding,sourceAutho
  assert(['library','application'].includes(role));
  const lake=manifest.processes.find(row=>row.tool==='lake-version');assert(lake,'independent native Lake preflight required');
  hex(lake.executable_sha256);
+ const lean=manifest.processes.find(row=>row.tool==='lean-version');assert(lean,'independent native Lean preflight required');hex(lean.executable_sha256);
+ const nativeContext={compiler_revision:binding?.compiler_revision,platform:binding?.platform,lean_sha256:lean.executable_sha256,lake_sha256:lake.executable_sha256};
  for(const [index,phase] of owner.phases.entries()){
   keys(phase,['phase','role','model_sha256','lexlean_manifest_sha256','artifacts','processes']);
   assert.equal(phase.phase,['controller-build','replay'][index]);assert.equal(phase.role,role);
@@ -458,7 +471,7 @@ export function validateVerificationOwner(manifest,role,mode,binding,sourceAutho
   assert(Array.isArray(phase.processes)&&phase.processes.length===tools.length);
   same(phase.processes.map(row=>row.tool),tools);
   for(const [number,row] of phase.processes.entries()){
-   if(number===2)verifyExporterProcess(row,tools[2],mode,binding,sourceAuthority);
+   if(number===2)verifyExporterProcess(row,tools[2],mode,binding,sourceAuthority,nativeContext);
    else{
     keys(row,['tool','argv','executable_sha256','exit_code','stdout','stderr']);assert.equal(row.exit_code,0);
     same(row.argv,number===3?['package','--locked','--offline','--allow-dirty']:['build',number===0?'PrismGenerated':'prod-export']);
@@ -512,7 +525,7 @@ export function verifyResult(value,binding,sourceAuthority){
  for(const [index,row] of allRuns.entries()){
   keys(row,['root','acquisition','manifest','manifest_sha256']);
   assert.match(row.root,/^\/tmp\/prismpm-library-sdk-[A-Za-z0-9]+\/fixture-[0-9]+$/);
-  assert.equal(row.acquisition,index<2?'cold':'sdk-seed');assert.equal(typeof row.manifest,'string');
+  assert.equal(row.acquisition,index<2?'controller-capsule':'sdk-seed');assert.equal(typeof row.manifest,'string');
   assert(Buffer.byteLength(row.manifest)<=16*1024*1024);assert.equal(hash(Buffer.from(row.manifest)),row.manifest_sha256);
   const manifest=JSON.parse(row.manifest);assert.equal(canonical(manifest),row.manifest);
   keys(manifest,['acceptance_sha256','artifacts','build_id','exporter_owner','lexlean_attestation_sha256','model_sha256','processes','schema','scope']);
@@ -529,7 +542,8 @@ export function verifyResult(value,binding,sourceAuthority){
    assert(Array.isArray(process.argv)&&process.argv.every(argument=>typeof argument==='string'));
    assert.equal(typeof process.stdout,'string');assert.equal(typeof process.stderr,'string');
   }
-  verifyExporterProcess(manifest.processes[7],'prod-export',row.acquisition,binding,sourceAuthority);
+  verifyExporterProcess(manifest.processes[7],'prod-export',row.acquisition,binding,sourceAuthority,
+   {compiler_revision:binding.compiler_revision,platform:binding.platform,lean_sha256:manifest.processes[0].executable_sha256,lake_sha256:manifest.processes[1].executable_sha256});
   validateVerificationOwner(manifest,'library',row.acquisition,binding,sourceAuthority);
  }
 }

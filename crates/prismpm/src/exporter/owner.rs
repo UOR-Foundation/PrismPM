@@ -33,6 +33,7 @@ pub(crate) trait ProductEvidence {
 /// the actual exporter build boundary. Not a caller-produced cache handle.
 pub(crate) struct GenerationContext<'a> {
     receipt: &'a Value,
+    seed: Option<&'a super::tools::ToolSeed>,
     snapshot: &'a custody::Snapshot,
     first: bool,
     built: std::cell::RefCell<Option<custody::Snapshot>>,
@@ -52,11 +53,28 @@ struct LibraryGeneration {
 }
 
 impl GenerationContext<'_> {
+    pub(crate) fn seed(&self) -> Option<&super::tools::ToolSeed> {
+        self.seed
+    }
+    pub(crate) fn check_input(&self) -> Result<(), PrismError> {
+        if let Some(seed) = self.seed {
+            seed.verify()?;
+        }
+        Ok(())
+    }
     pub(crate) fn receipt(&self) -> &Value {
         self.receipt
     }
     pub(crate) fn before_build(&self, project: &Path, package: &Path) -> Result<(), PrismError> {
-        let checked = if self.first {
+        self.check_input()?;
+        let checked = if self.first && self.seed.is_some() {
+            self.seed.expect("private input checked").before_build(
+                project,
+                package,
+                self.receipt,
+                self.snapshot,
+            )
+        } else if self.first {
             super::before_first_build(project, package, self.receipt, self.snapshot)
         } else if custody::capture(package)? == *self.snapshot {
             Ok(())
@@ -70,6 +88,7 @@ impl GenerationContext<'_> {
         Ok(())
     }
     pub(crate) fn after_build(&self, package: &Path) -> Result<custody::Snapshot, PrismError> {
+        self.check_input()?;
         if self.built.borrow().is_some() {
             return Err(failure(
                 "private exporter build custody cannot be recaptured",
@@ -167,6 +186,7 @@ impl GenerationContext<'_> {
         if !valid {
             return Err(failure("original library command/cwd/environment differs"));
         }
+        self.check_input()?;
         self.directory.borrow().ready()?;
         self.namespace.ready()?;
         let before = custody::capture_optional(self.package)?;
@@ -190,6 +210,7 @@ impl GenerationContext<'_> {
                 code,
                 self.receipt,
                 expected,
+                self.seed,
             )
         } else {
             crate::verification::run_process(
@@ -204,6 +225,7 @@ impl GenerationContext<'_> {
         };
         // A failed command is not an exemption from native/source custody.
         let checked: Result<(), PrismError> = (|| {
+            self.check_input()?;
             directory.verify()?;
             if custody::capture_launcher(program)? != program_before {
                 return Err(failure("actual library launcher changed during command"));
@@ -262,11 +284,15 @@ struct Package {
     acquisition: Value,
     snapshot: Option<custody::Snapshot>,
     executable: Option<ExecutableMeasurement>,
+    seed: Option<std::sync::Arc<super::tools::ToolSeed>>,
 }
 
 impl Package {
     fn retire(self) -> Result<(), PrismError> {
         let check = || {
+            if let Some(seed) = &self.seed {
+                seed.verify_sdk()?;
+            }
             self.namespace
                 .as_ref()
                 .ok_or_else(|| failure("private exporter namespace absent"))?
@@ -308,6 +334,7 @@ pub(crate) struct VerifyExporterOwner {
     project_identity: Option<custody::Cwd>,
     inputs: Option<(String, String)>,
     workspace: Option<PathBuf>,
+    tools: Option<std::sync::Arc<super::tools::CompilerTools>>,
 }
 
 fn failure(message: &str) -> PrismError {
@@ -319,6 +346,28 @@ fn digest(bytes: &[u8]) -> String {
 }
 
 impl VerifyExporterOwner {
+    pub(crate) fn with_tools(tools: std::sync::Arc<super::tools::CompilerTools>) -> Self {
+        let mut owner = Self::default();
+        owner.tools = Some(tools);
+        owner
+    }
+    /// A standalone build retires its one producer without claiming verification.
+    pub(crate) fn finish_build(mut self) -> Result<(), PrismError> {
+        if self.poisoned
+            || self.phases.len() > 1
+            || self.package.is_some() != (!self.phases.is_empty())
+        {
+            return Err(failure("standalone exporter phase incomplete"));
+        }
+        if let Some(project) = &self.project_identity {
+            project.verify()?;
+        }
+        if let Some(package) = self.package.take() {
+            package.retire()?;
+        }
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn generate<T: ProductEvidence>(
         &mut self,
@@ -395,7 +444,7 @@ impl VerifyExporterOwner {
         result
     }
 
-    fn abort(&mut self) -> Result<(), PrismError> {
+    pub(crate) fn abort(&mut self) -> Result<(), PrismError> {
         self.poisoned = true;
         self.phases.clear();
         if let Some(package) = self.package.take() {
@@ -459,6 +508,7 @@ impl VerifyExporterOwner {
                 acquisition: Value::Null,
                 snapshot: None,
                 executable: None,
+                seed: None,
             });
             let package = self
                 .package
@@ -466,6 +516,11 @@ impl VerifyExporterOwner {
                 .expect("private owner established before acquisition");
             let acquisition =
                 super::acquire_for_owned(&project, &package.path, package.directory.scope())?;
+            let acquisition = match &self.tools {
+                Some(tools) => tools.admit(&project, &package.path, acquisition)?,
+                None => acquisition,
+            };
+            package.seed = acquisition.seed;
             package.namespace = Some(super::directory::Directory::existing(
                 &package.path,
                 package.directory.scope(),
@@ -477,6 +532,9 @@ impl VerifyExporterOwner {
             package.snapshot = Some(acquisition.snapshot);
         }
         let package = self.package.as_mut().expect("private package established");
+        if let Some(seed) = &package.seed {
+            seed.verify()?;
+        }
         package.directory.ready()?;
         package
             .namespace
@@ -493,7 +551,16 @@ impl VerifyExporterOwner {
         }
         if let Some(snapshot) = &package.snapshot {
             if self.phases.is_empty() {
-                super::before_first_build(&project, &package.path, &package.acquisition, snapshot)?;
+                if let Some(seed) = &package.seed {
+                    seed.before_build(&project, &package.path, &package.acquisition, snapshot)?;
+                } else {
+                    super::before_first_build(
+                        &project,
+                        &package.path,
+                        &package.acquisition,
+                        snapshot,
+                    )?;
+                }
             } else if &custody::capture(&package.path)? != snapshot {
                 return Err(failure("private exporter custody changed between phases"));
             }
@@ -502,6 +569,7 @@ impl VerifyExporterOwner {
         // executes real `lake build prod-export`, and performs its actual export.
         let context = GenerationContext {
             receipt: &package.acquisition,
+            seed: package.seed.as_deref(),
             snapshot: package
                 .snapshot
                 .as_ref()
@@ -538,7 +606,22 @@ impl VerifyExporterOwner {
         if library_required {
             package.snapshot = Some(last_snapshot);
         }
-        let product = result?;
+        let checked = match &package.seed {
+            Some(seed) => seed.verify(),
+            None => Ok(()),
+        };
+        let product = match (result, checked) {
+            (Err(mut original), Err(custody)) => {
+                original.message.push_str(&format!(
+                    "; compiler input also failed: {}",
+                    custody.message
+                ));
+                return Err(original);
+            }
+            (Err(original), _) => return Err(original),
+            (Ok(_), Err(custody)) => return Err(custody),
+            (Ok(product), Ok(())) => product,
+        };
         if library_required
             && (product.role() != "library"
                 || commands != 4
@@ -761,6 +844,15 @@ pub(crate) fn validate_record(
                     != phases[0]["processes"][3]["executable_sha256"])
         {
             return Err(failure("exporter owner original package process differs"));
+        }
+        let execution = &processes[2]["exporter"];
+        if execution["acquisition"]["mode"] == "controller-capsule"
+            && execution["acquisition"]["construction"]["executable_sha256"]
+                != processes[0]["executable_sha256"]
+        {
+            return Err(failure(
+                "capsule constructor differs from the original phase Lake",
+            ));
         }
         if let Some(prior) = executable {
             if prior != &processes[2]["exporter"] {
@@ -1672,6 +1764,7 @@ pub(crate) fn validate_binding(
         .iter()
         .find(|row| row["tool"] == "lake-version")
         .ok_or_else(|| failure("independent native Lake preflight is absent"))?;
+    validate_preflight(value, processes)?;
     for phase in phases {
         if phase["lexlean_manifest_sha256"] != digest(lex_manifest)
             || phase["artifacts"] != *artifacts
@@ -1680,6 +1773,41 @@ pub(crate) fn validate_binding(
         {
             return Err(failure(
                 "exporter owner source, products, arguments or native tool differ",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Additional composition for the new /2-only acquisition. Old cold/SDK
+/// records retain their original validation; this is not producer authentication.
+pub(crate) fn validate_preflight(value: &Value, processes: &[Value]) -> Result<(), PrismError> {
+    let phases = value["phases"]
+        .as_array()
+        .ok_or_else(|| failure("exporter phases absent"))?;
+    if !phases.iter().any(|phase| {
+        phase["processes"][2]["exporter"]["acquisition"]["mode"] == "controller-capsule"
+    }) {
+        return Ok(());
+    }
+    let lean = processes
+        .iter()
+        .find(|row| row["tool"] == "lean-version")
+        .ok_or_else(|| failure("independent native Lean preflight is absent"))?;
+    let lake = processes
+        .iter()
+        .find(|row| row["tool"] == "lake-version")
+        .ok_or_else(|| failure("independent native Lake preflight is absent"))?;
+    let platform = crate::release_verification::process_platform(processes)?;
+    for phase in phases {
+        let acquisition = &phase["processes"][2]["exporter"]["acquisition"];
+        if acquisition["mode"] == "controller-capsule"
+            && (acquisition["lean_sha256"] != lean["executable_sha256"]
+                || acquisition["platform"] != platform
+                || acquisition["construction"]["executable_sha256"] != lake["executable_sha256"])
+        {
+            return Err(failure(
+                "capsule constructor, Lean or platform differs from native preflight",
             ));
         }
     }

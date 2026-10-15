@@ -864,6 +864,7 @@ fn generate_in(
         "PP5004",
         &exporter_acquisition,
         &export_custody,
+        owned.and_then(|(_, context)| context.seed()),
     )?;
     let kernel_bytes = std::fs::read(export.join("kernel.ir"))
         .map_err(|error| PrismError::new("PP5004", format!("kernel.ir: {error}")))?;
