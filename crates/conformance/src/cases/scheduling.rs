@@ -35,7 +35,6 @@ fn compiler_slot() -> CompilerSlot {
 pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
     matches!(
         id,
-<<<<<<< HEAD
         "DK-10"
             | "DK-11"
             | "DK-12"
@@ -50,21 +49,30 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-23"
             | "DK-24"
             | "DK-25"
+            | "DK-26"
             | "DK-27"
+            | "DK-30"
+            | "DK-33"
+            | "DK-34"
+            | "DK-37"
+            | "DK-38"
+            | "DK-31"
+            | "DK-32"
+            | "DK-35"
             | "HO-13"
+            | "HO-15"
             | "OC-07"
             | "OC-08"
             | "OC-09"
+            | "OC-10"
             | "ST-11"
             | "ST-12"
             | "ST-13"
             | "ST-14"
             | "ST-15"
             | "ST-16"
+            | "ST-17"
             | "SY-08"
-=======
-        "DK-10" | "DK-11" | "DK-12" | "DK-13" | "DK-14" | "DK-15" | "DK-16" | "DK-17" | "OC-07"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
     )
     .then(compiler_slot)
 }
@@ -88,7 +96,6 @@ mod tests {
 
     #[test]
     fn every_waiting_compiler_owner_runs_once_without_overlap_or_skip() {
-<<<<<<< HEAD
         let owners = (10..=18)
             .map(|id| format!("DK-{id}"))
             .chain([
@@ -97,24 +104,31 @@ mod tests {
                 "DK-23".to_owned(),
                 "DK-24".to_owned(),
                 "DK-25".to_owned(),
+                "DK-26".to_owned(),
                 "DK-27".to_owned(),
+                "DK-30".to_owned(),
+                "DK-33".to_owned(),
+                "DK-34".to_owned(),
+                "DK-37".to_owned(),
+                "DK-38".to_owned(),
+                "DK-31".to_owned(),
+                "DK-32".to_owned(),
+                "DK-35".to_owned(),
                 "HO-13".to_owned(),
+                "HO-15".to_owned(),
                 "OC-07".to_owned(),
                 "OC-08".to_owned(),
                 "OC-09".to_owned(),
+                "OC-10".to_owned(),
                 "ST-11".to_owned(),
                 "ST-12".to_owned(),
                 "ST-13".to_owned(),
                 "ST-14".to_owned(),
                 "ST-15".to_owned(),
                 "ST-16".to_owned(),
+                "ST-17".to_owned(),
                 "SY-08".to_owned(),
             ])
-=======
-        let owners = (10..=17)
-            .map(|id| format!("DK-{id}"))
-            .chain(["OC-07".to_owned()])
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
             .collect::<Vec<_>>();
         let barrier = Arc::new(Barrier::new(owners.len() + 1));
         let active = AtomicUsize::new(0);
@@ -135,15 +149,13 @@ mod tests {
         });
         let mut actual = completed.into_inner().unwrap();
         actual.sort();
-        assert_eq!(actual, owners);
+        let mut expected = owners;
+        expected.sort();
+        assert_eq!(actual, expected);
         assert_eq!(active.load(Ordering::SeqCst), 0);
-<<<<<<< HEAD
         for id in [
             "DK-07", "DK-08", "DK-09", "DK-19", "RP-01", "ST-10", "VR-01",
         ] {
-=======
-        for id in ["DK-07", "DK-08", "DK-09", "DK-18", "RP-01", "VR-01"] {
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
             assert!(
                 for_owner(id).is_none(),
                 "lightweight dispatch is unchanged: {id}"

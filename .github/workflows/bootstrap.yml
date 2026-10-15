@@ -1,16 +1,21 @@
 name: Bootstrap honesty gate
 
+# Automatic acceptance is owned by vv.yml, including its real bootstrap gate.
+# Keep this unchanged complete invocation available for explicit diagnosis.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: bootstrap-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native-gate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
