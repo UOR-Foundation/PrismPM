@@ -614,7 +614,6 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
-<<<<<<< HEAD
 Formatting checks a closed inventory of authored test manifests and Rust inputs.
 Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
 
@@ -638,8 +637,6 @@ cache tag; private compiler-driver builds use one job, no incremental state and
 no development debug symbols to bound temporary storage. Generated program
 builds, kernel checks, native/Wasm execution and oracle cases are unchanged.
 
-=======
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
 `prismpm/golden-comparison/1` regression-only comparison profile. Before
@@ -652,7 +649,6 @@ and artifact descriptor remains significant. These projections are not
 verification or release evidence. Actual verification and same-executable
 two-root reproducibility continue to bind and compare complete raw evidence.
 
-<<<<<<< HEAD
 Golden execution profiles distinguish Debian 12 AMD64 development from Ubuntu
 24.04 AMD64 and ARM64 SDK processes. The actual OS release and compiled process
 architecture select the profile; unknown or missing profiles fail closed.
@@ -685,8 +681,6 @@ copy bytes and metadata allowance is required. Initialization failure or
 interruption prohibits generation. Both golden commands remain network-disabled,
 locked and offline; no caller cache, dependency refresh or host compiler is used.
 
-=======
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
 CI resource diagnostics are separate from acceptance evidence. Host and
 devcontainer observers record only allowlisted numeric resource measurements,
 at most every 30 seconds for six hours, 721 samples and 8 MiB per observer.
@@ -697,7 +691,6 @@ invocations remain mandatory. Diagnostics upload runs even after gate failure
 when the runner is reachable; runner loss can prevent upload and never implies
 acceptance or a diagnosed resource cause.
 
-<<<<<<< HEAD
 Consecutive source gates share one exact-source, digest-addressed test SDK
 session and its invocation-owned temporary registry. Both unchanged `just vv`
 commands execute sequentially in the same workspace with separate evidence;
@@ -716,8 +709,6 @@ allowed. The runtime is an SDK-inventoried build input. Its execution-mode
 diagnostic is separate from unchanged `prismpm/bootstrap-evidence/2` acceptance.
 All current SDK commands and V&V gates remain native on both architectures.
 
-=======
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
 Compiler-heavy owning conformance suites and shared verification initialization
 execute one at a time within a conformance process. Nested requests reuse the
 owning slot; a failed owner releases it without suppressing subsequent tests.
@@ -1449,6 +1440,19 @@ every library artifact byte. Registry-format consumers of the exact package
 execute every modeled acceptance root under both `std` and `no_std + alloc`;
 false results, computation errors, omissions and changed bytes fail closed.
 
+Within one Linux library verification worker, build and independent replay
+may share only a freshly acquired, source-bound private exporter tool package.
+Both phases retain distinct generated Lean, proof, export and package work;
+each executes the original Lake build/export and Cargo package commands.
+Complete source, compiled-runtime, executable and namespace custody is checked
+around actual children, including failures, and owned retirement completes
+before acceptance publication. The original process-record schema and thirteen
+verification processes are unchanged; warm build output remains actual output.
+The library generator identity binds the complete owner/helper source closure.
+Public standalone builds and each separate verification/root start cold; no
+SDK seed, caller cache, generated-model result or cross-invocation owner is used.
+Application and generic stdlib/full-runtime verification remain unchanged.
+
 Only then are `prismpm/library-acceptance/1` and
 `prismpm/library-verification-manifest/1` atomically published. This is finite
 native-code evidence, not a universal semantic proof, standards certification,
@@ -2047,6 +2051,19 @@ defects. Its devcontainer uses the exact SDK image digest and its workflows call
 a full-commit-pinned thin action/reusable workflow that executes the same CLI.
 There is no copied validation, generation, publication or deployment logic.
 
+The reusable SDK's optional `invocation-key` identifies one caller job/project
+within its workflow. Callers opting into read-only CI supersession MUST use a
+distinct, stable lowercase ASCII key for each independent invocation. Keys are
+1–64 characters, start with a letter or digit, and contain only lowercase
+letters, digits, dots, underscores and hyphens. This prevents case-insensitive
+GitHub concurrency aliases. Only `check`, `build`,
+`verify` and `test` with a nonempty key can supersede earlier work on the same
+repository, caller workflow file and ref. Existing callers without a key retain independent
+execution. Deployment, promotion, recovery and other operations never enter
+this cancellation group. All existing SDK inputs and outputs are preserved.
+The key is validated in a separate, non-concurrent job before the execution
+job can enter its group; invalid keys cannot cancel a valid invocation.
+
 The shared Action exposes `export-browser` with `reference` and `output` inputs
 passed unchanged to the SDK's existing command. The SDK owns immutable-reference,
 release-evidence and new direct-child destination validation. Export executes
@@ -2065,6 +2082,17 @@ jobs sign and push with short-lived identity. Protected environments authorize
 deployment, and post-deployment verification attaches evidence. The release
 digest is created once and passed between jobs; no deployment job rebuilds,
 uses a mutable tag, edits generated output, or skips missing evidence.
+
+CI retains every original validation owner and complete command. One closed
+12-owner matrix limits total parallel execution to three jobs; publication
+matrices retain both native platforms and their non-canceling lifecycles.
+Complete two-pass VV and native-source-review budgets remain 360 minutes;
+the existing per-owner bounds are unchanged by scheduling reconciliation.
+SDK callers without a read-only invocation key, including authorized mutations,
+remain independently executable without a callee queue that can discard pending
+work. Opt-in read-only supersession uses the separately validated caller key.
+Actual-YAML policy tests are not scheduling, timing or execution acceptance:
+complete-gate and real-caller evidence is still required.
 
 Template checking is read-only. Explicit update creates a reviewable patch or
 automated pull request because GitHub template repositories do not propagate

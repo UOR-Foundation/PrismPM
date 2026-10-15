@@ -7,12 +7,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-<<<<<<< HEAD
 import { boundedLog, compilerProcess, dockerUsage, keyNumbers, limits, monitor, pressure, redactor } from './ci-observe.mjs';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
-=======
-import { boundedLog, dockerUsage, keyNumbers, limits, monitor, pressure, redactor } from './ci-observe.mjs';
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
 
 const script = fileURLToPath(new URL('./ci-observe.mjs', import.meta.url));
 const repository = dirname(dirname(script));
@@ -56,7 +52,6 @@ test('numeric allowlists reject names, command lines, environment and malformed 
   assert.equal(rows[1].cpuPercent, null);
   assert.ok(!JSON.stringify(rows).includes(secret));
   assert.equal(dockerUsage(Array(300).fill(valid).join('\n')).length, limits.containers);
-<<<<<<< HEAD
   const fields = Array(22).fill('0');
   fields[0] = 'S'; fields[1] = '11'; fields[11] = '23'; fields[12] = '5'; fields[21] = '400';
   const stat = (name = 'lean', data = fields) => `12 (${name}) ${data.join(' ')}\n`;
@@ -69,8 +64,6 @@ test('numeric allowlists reject names, command lines, environment and malformed 
   assert.equal(compilerProcess(stat().replace('12 (', '0 (')), null);
   assert.equal(compilerProcess(stat('lean', fields.slice(0, 21))), null);
   assert.equal(compilerProcess('x'.repeat(4097)), null);
-=======
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
 });
 
 test('credential redaction spans every chunk boundary and never echoes environment names', () => {
@@ -357,13 +350,8 @@ test('actual normative twice-VV workflow propagates first/second failures and re
   const body = workflow('vv.yml').jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd;
   const check = candidate => {
     for (const [first, second] of [[0, 0], [19, 0], [0, 23], [19, 23]]) {
-<<<<<<< HEAD
       const {root, env: baseEnv} = fixture(t);
       const env = sessionFixture(root, baseEnv, {readDuringPreparation: true, image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
-=======
-      const {root, env} = fixture(t);
-      mkdirSync(join(root, 'scripts'));
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
       copyFileSync(script, join(root, 'scripts/ci-observe.mjs'));
       const just = join(root, 'bin/just');
       writeFileSync(just, `#!${process.execPath}\nconst fs=require('node:fs');const assert=require('node:assert/strict');assert.deepEqual(process.argv.slice(2),['vv']);const path='count';const count=fs.existsSync(path)?Number(fs.readFileSync(path))+1:1;fs.writeFileSync(path,String(count));process.stdout.write('call:'+count+'\\n');process.exit(count===1?${first}:${second});\n`);
@@ -382,17 +370,10 @@ test('actual normative twice-VV workflow propagates first/second failures and re
     }
   };
   check(body);
-<<<<<<< HEAD
   assert.throws(() => check(body.replace('--with-sdk bash -euo pipefail', '--with-sdk bash')));
 });
 
 test('all observed workflows retain their full gates, always stop/upload, and keep pinned actions', () => {
-=======
-  assert.throws(() => check(body.replace('set -euo pipefail\n', '')));
-});
-
-test('both actual workflows retain their full gates, always stop/upload, and keep pinned actions', () => {
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
   for (const [name, job, runs] of [['bootstrap.yml', 'native-gate', 1], ['vv.yml', 'vv', 2]]) {
     const steps = workflow(name).jobs[job].steps;
     const start = steps.findIndex(step => step.run?.includes('ci-observe.mjs start'));
@@ -407,7 +388,6 @@ test('both actual workflows retain their full gates, always stop/upload, and kee
     assert.equal(steps[gate]['continue-on-error'], undefined);
     for (const step of steps.filter(value => value.uses)) assert.match(step.uses, /@[0-9a-f]{40}$/);
   }
-<<<<<<< HEAD
   const native = workflow('native-golden.yml').jobs['native-source-review'].steps;
   const start = native.findIndex(step => step.run === 'node scripts/ci-observe.mjs start "$RUNNER_TEMP/native-observer"');
   const gate = native.findIndex(step => step.name === 'Generate review-only native records');
@@ -418,7 +398,225 @@ test('both actual workflows retain their full gates, always stop/upload, and kee
   assert.equal(native[upload].with['retention-days'], 7);
   assert.equal(native[gate]['continue-on-error'], undefined);
   for (const step of native.filter(value => value.uses)) assert.match(step.uses, /@[0-9a-f]{40}$/);
-=======
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
   assert.match(readFileSync(join(repository, 'xtask/src/main.rs'), 'utf8'), /"scripts\/ci-observe\.test\.mjs"/);
+});
+
+// Source-policy checks do not establish real GitHub scheduling or execution.
+test('actual validation workflows preserve complete budgets, scoped cancellation and bounded fanout', () => {
+  const prefixes = {
+    'bootstrap.yml': 'bootstrap',
+    'ci-parallel.yml': 'ci-parallel',
+    'honesty.yml': 'honesty',
+    'reproducibility.yml': 'reproducibility',
+    'vv.yml': 'vv',
+  };
+  const actual = Object.fromEntries([...Object.keys(prefixes), 'native-golden.yml'].map(name => [name, workflow(name)]));
+  const owners = [
+    ['Lint & Dependency Policy', 45, 'cargo fmt --check\ncargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings\ncargo deny --frozen --all-features check'],
+    ['Model & Audits', 45, 'bash scripts/bootstrap-verify.sh --check-source\ncargo xtask validate'],
+    ['Workspace Unit Tests', 180, './scripts/vv.sh unit-tests'],
+    ['Conformance / contracts', 120, './scripts/vv.sh conformance contracts'],
+    ['Conformance / core', 120, './scripts/vv.sh conformance core'],
+    ['Conformance / holo-stdlib', 180, './scripts/vv.sh conformance holo-stdlib'],
+    ['Conformance / desktop-browser', 210, './scripts/vv.sh conformance desktop-browser'],
+    ['Conformance / system-oci', 180, './scripts/vv.sh conformance system-oci'],
+    ['Conformance / verification-schemas', 90, './scripts/vv.sh conformance verification-schemas'],
+    ['Fixtures & Reviewed Golden Outputs', 90, 'cargo xtask check-fixtures\ncargo run --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\ncargo xtask check-golden'],
+    ['Lean 4 Proofs & Formal Verification', 75, 'cargo xtask verify-examples\ncargo run --locked --offline --target-dir target/vendor-lexlean --manifest-path vendor/lexlean/Cargo.toml -- --project lexlean.toml fmt --check\ncargo run --locked --offline --target-dir target/vendor-lexlean --manifest-path vendor/lexlean/Cargo.toml -- --project lexlean.toml lock --check'],
+    ['Packaging, API & Upstream Conformance', 120, './scripts/vv.sh package-api'],
+  ];
+  const budgets = {
+    'bootstrap.yml': {'native-gate': 360},
+    'ci-parallel.yml': {gate: '${{ matrix.timeout }}'},
+    'honesty.yml': {honesty: 45},
+    'reproducibility.yml': {reproducibility: 90},
+    'vv.yml': {vv: 360},
+    'native-golden.yml': {'native-source-review': 360},
+  };
+  const check = candidate => {
+    assert.deepEqual(Object.keys(candidate).sort(), Object.keys(actual).sort());
+    for (const [name, prefix] of Object.entries(prefixes)) {
+      const suffix = ['bootstrap.yml', 'vv.yml'].includes(name)
+        ? '${{ github.repository }}-${{ github.ref }}'
+        : '${{ github.repository }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}';
+      assert.deepEqual(candidate[name].concurrency, {group: prefix + '-' + suffix, 'cancel-in-progress': true});
+      assert.deepEqual(candidate[name].permissions, {contents: 'read'});
+      for (const job of Object.values(candidate[name].jobs)) {
+        assert.equal(job['continue-on-error'], undefined);
+        assert.equal(job.if, undefined);
+      }
+    }
+    for (const [name, expected] of Object.entries(budgets)) {
+      assert.deepEqual(Object.keys(candidate[name].jobs), Object.keys(expected));
+      for (const [id, bound] of Object.entries(expected)) assert.equal(candidate[name].jobs[id]['timeout-minutes'], bound);
+    }
+    const gate = candidate['ci-parallel.yml'].jobs.gate;
+    assert.equal(gate.name, '${{ matrix.name }}');
+    assert.equal(gate['runs-on'], 'ubuntu-24.04');
+    assert.deepEqual(Object.keys(gate.strategy), ['fail-fast', 'max-parallel', 'matrix']);
+    assert.equal(gate.strategy['fail-fast'], false);
+    assert.equal(gate.strategy['max-parallel'], 3);
+    assert.deepEqual(Object.keys(gate.strategy.matrix), ['include']);
+    assert.deepEqual(gate.strategy.matrix.include.map(row => {
+      assert.deepEqual(Object.keys(row), ['name', 'timeout', 'commands']);
+      return {...row, commands: row.commands.trim()};
+    }), owners.map(([name, timeout, commands]) => ({name, timeout, commands})));
+    assert.deepEqual(gate.steps.map(step => step.uses), [
+      'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+      'devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6',
+    ]);
+    assert.equal(gate.steps[0].with['fetch-depth'], 0);
+    assert.equal(gate.steps[1].with.push, 'never');
+    assert.equal(gate.steps[1].with.runCmd, 'set -euo pipefail\n${{ matrix.commands }}\n');
+  };
+  check(actual);
+  const reject = mutate => {
+    const candidate = structuredClone(actual);
+    mutate(candidate);
+    assert.throws(() => check(candidate), {name: 'AssertionError'});
+  };
+  for (const name of Object.keys(prefixes)) {
+    reject(value => { value[name].concurrency.group = '${{ github.repository }}'; });
+    reject(value => { value[name].concurrency.group += '-${{ github.run_id }}'; });
+    reject(value => { value[name].concurrency['cancel-in-progress'] = false; });
+    reject(value => { delete value[name].concurrency; });
+    reject(value => { Object.values(value[name].jobs)[0]['timeout-minutes'] = 30; });
+    reject(value => { Object.values(value[name].jobs)[0]['continue-on-error'] = true; });
+    reject(value => { Object.values(value[name].jobs)[0].if = 'false'; });
+  }
+  reject(value => { value['vv.yml'].jobs.vv['timeout-minutes'] = 180; });
+  reject(value => { value['native-golden.yml'].jobs['native-source-review']['timeout-minutes'] = 180; });
+  reject(value => { delete value['ci-parallel.yml'].jobs.gate.strategy['max-parallel']; });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.strategy['max-parallel'] = 6; });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.strategy['fail-fast'] = true; });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.strategy.matrix.include.pop(); });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.strategy.matrix.include.push(value['ci-parallel.yml'].jobs.gate.strategy.matrix.include[0]); });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.strategy.matrix.include[0].commands = 'cargo fmt --check'; });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.strategy.matrix.include[3].commands += ' || true'; });
+  reject(value => { delete value['ci-parallel.yml'].jobs.gate; });
+  reject(value => { value['ci-parallel.yml'].jobs.extra = structuredClone(value['ci-parallel.yml'].jobs.gate); });
+  reject(value => { value['ci-parallel.yml'].jobs.gate.steps[1].with.runCmd = '${{ matrix.commands }}'; });
+});
+
+test('actual reusable SDK policy keeps sibling calls independent without narrowing its API or execution', () => {
+  const actual = workflow('sdk.yml');
+  const inputs = {
+    'sdk-image': {required: true, type: 'string'},
+    command: {required: true, type: 'string'},
+    context: {default: '.', type: 'string'},
+    reference: {default: '', type: 'string'},
+    release: {default: '', type: 'string'},
+    target: {default: '', type: 'string'},
+    plan: {default: '', type: 'string'},
+    backup: {default: '', type: 'string'},
+    'restore-target': {default: '', type: 'string'},
+    detach: {default: false, type: 'boolean'},
+    authorized: {default: false, type: 'boolean'},
+    'secret-directory': {default: '.prismpm/secrets', type: 'string'},
+    bundle: {default: '', type: 'string'},
+    'trusted-root': {default: '', type: 'string'},
+    policy: {default: '', type: 'string'},
+    'promotion-to': {default: '', type: 'string'},
+    environment: {default: '', type: 'string'},
+  };
+  const invocationKey = {
+    description: 'Optional stable lowercase ASCII caller job/project key (1-64 letters, digits, dots, underscores or hyphens), unique within its workflow; read-only supersession only',
+    default: '', type: 'string',
+  };
+  const outputNames = ['release-digest', 'plan-digest', 'evidence-digest', 'policy-path', 'trusted-root-path', 'signature-referrer'];
+  const action = 'UOR-Foundation/PrismPM/action@f785ee46d794886c29b7efe80c2b261e48733a15';
+  const forwarding = Object.fromEntries(Object.keys(inputs).map(name => [name, '${{ inputs.' + name + ' }}']));
+  const readOnly = 'contains(fromJSON(\'["check", "build", "verify", "test"]\'), inputs.command)';
+  const optedIn = readOnly + " && inputs.invocation-key != ''";
+  const check = candidate => {
+    assert.deepEqual(Object.keys(candidate), ['name', 'on', 'permissions', 'jobs']);
+    assert.deepEqual(Object.keys(candidate.on), ['workflow_call']);
+    assert.deepEqual(Object.keys(candidate.on.workflow_call), ['inputs', 'outputs']);
+    assert.deepEqual(candidate.on.workflow_call.inputs, {...inputs, 'invocation-key': invocationKey});
+    assert.deepEqual(candidate.on.workflow_call.outputs, Object.fromEntries(outputNames.map(name => [name, {
+      value: '${{ jobs.invoke-readonly.outputs.' + name + ' || jobs.invoke.outputs.' + name + ' }}',
+    }])));
+    assert.deepEqual(candidate.permissions, {});
+    assert.deepEqual(Object.keys(candidate.jobs), ['validate-invocation-key', 'invoke-readonly', 'invoke']);
+    const validation = candidate.jobs['validate-invocation-key'];
+    const readonly = candidate.jobs['invoke-readonly'];
+    const job = candidate.jobs.invoke;
+    assert.deepEqual(Object.keys(validation).sort(), ['if', 'runs-on', 'timeout-minutes', 'permissions', 'outputs', 'steps'].sort());
+    assert.equal(validation.if, optedIn);
+    assert.equal(validation['runs-on'], 'ubuntu-24.04');
+    assert.equal(validation['timeout-minutes'], 5);
+    assert.deepEqual(validation.permissions, {});
+    assert.deepEqual(validation.outputs, {key: '${{ steps.validate.outputs.key }}'});
+    assert.deepEqual(validation.steps, [{
+      id: 'validate',
+      env: {LC_ALL: 'C', INVOCATION_KEY: '${{ inputs.invocation-key }}'},
+      run: 'set -euo pipefail\n[[ "$INVOCATION_KEY" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]\nprintf \'key=%s\\n\' "$INVOCATION_KEY" >> "$GITHUB_OUTPUT"\n',
+    }]);
+    assert.deepEqual(Object.keys(job).sort(), ['runs-on', 'if', 'timeout-minutes', 'permissions', 'outputs', 'steps'].sort());
+    assert.equal(job.if, '${{ !(' + optedIn + ') }}');
+    assert.equal(job['runs-on'], 'ubuntu-24.04');
+    assert.equal(job['timeout-minutes'], 360);
+    assert.deepEqual(job.permissions, {contents: 'read'});
+    const outputs = Object.fromEntries(outputNames.map(name => [name, '${{ steps.prism.outputs.' + name + ' }}']));
+    assert.deepEqual(job.outputs, outputs);
+    const steps = [
+      {uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262', with: {'fetch-depth': 0}},
+      {
+        name: 'Fetch locked SDK inputs', if: readOnly, uses: action,
+        with: {'sdk-image': forwarding['sdk-image'], command: 'fetch', context: forwarding.context},
+      },
+      {id: 'prism', uses: action, with: forwarding},
+    ];
+    assert.deepEqual(job.steps, steps);
+    assert.deepEqual(Object.keys(readonly).sort(), ['needs', 'if', 'runs-on', 'timeout-minutes', 'concurrency', 'permissions', 'outputs', 'steps'].sort());
+    assert.equal(readonly.needs, 'validate-invocation-key');
+    assert.equal(readonly.if, "needs.validate-invocation-key.result == 'success'");
+    assert.equal(readonly['runs-on'], 'ubuntu-24.04');
+    assert.equal(readonly['timeout-minutes'], 360);
+    assert.deepEqual(readonly.permissions, job.permissions);
+    assert.deepEqual(readonly.outputs, outputs);
+    assert.deepEqual(readonly.concurrency, {
+      group: 'prismpm-sdk-readonly-${{ github.repository }}-${{ github.workflow_ref }}-${{ github.ref }}-${{ needs.validate-invocation-key.outputs.key }}',
+      'cancel-in-progress': true,
+    });
+    const fetch = {...steps[1]};
+    delete fetch.if;
+    assert.deepEqual(readonly.steps, [steps[0], fetch, steps[2]]);
+  };
+  check(actual);
+  const reject = mutate => {
+    const candidate = structuredClone(actual);
+    mutate(candidate);
+    assert.throws(() => check(candidate), {name: 'AssertionError'});
+  };
+  const unsafeGroup = {group: 'prismpm-sdk-invoke-${{ github.workflow }}-${{ github.ref }}', 'cancel-in-progress': false, queue: 'max'};
+  reject(value => { value.jobs.invoke.concurrency = unsafeGroup; });
+  reject(value => { value.jobs.invoke.concurrency = {...unsafeGroup, 'cancel-in-progress': true}; });
+  reject(value => { value.jobs.invoke.concurrency = {...unsafeGroup, queue: 'single'}; });
+  reject(value => { value.jobs.invoke.concurrency = {group: '${{ github.workflow }}-${{ github.ref }}'}; });
+  reject(value => { value.jobs.invoke.concurrency = {group: 'prismpm-sdk-invoke-${{ github.workflow }}'}; });
+  reject(value => { value.jobs.invoke.concurrency = {group: 'prismpm-sdk-invoke-${{ github.ref }}'}; });
+  reject(value => { value.concurrency = unsafeGroup; });
+  reject(value => { value.jobs.invoke['timeout-minutes'] = 60; });
+  reject(value => { value.jobs.invoke['continue-on-error'] = true; });
+  reject(value => { value.jobs.invoke.if = 'false'; });
+  reject(value => { value.jobs.invoke.needs = 'validate-invocation-key'; });
+  reject(value => { value.jobs.extra = structuredClone(value.jobs.invoke); });
+  reject(value => { value.on.workflow_call.inputs['queue-key'] = {type: 'string', default: ''}; });
+  reject(value => { delete value.on.workflow_call.inputs.environment; });
+  reject(value => { value.on.workflow_call.inputs.authorized.default = true; });
+  reject(value => { delete value.on.workflow_call.outputs['evidence-digest']; });
+  reject(value => { delete value.jobs.invoke.outputs['evidence-digest']; });
+  reject(value => { delete value.jobs.invoke.steps[2].with.release; });
+  reject(value => { value.jobs.invoke.steps[2].with.command = 'build'; });
+  reject(value => { value.jobs.invoke.steps[2].uses = 'UOR-Foundation/PrismPM/action@main'; });
+  reject(value => { value.jobs.invoke.steps[1].if = 'false'; });
+  reject(value => { value.jobs.invoke.steps[1].with.command = 'build'; });
+  reject(value => { value.jobs.invoke.steps.pop(); });
+  reject(value => { value.jobs['invoke-readonly'].if = 'always()'; });
+  reject(value => { delete value.jobs['invoke-readonly'].needs; });
+  reject(value => { value.jobs['validate-invocation-key'].concurrency = unsafeGroup; });
+  reject(value => { value.jobs['invoke-readonly'].concurrency.group = unsafeGroup.group; });
+  reject(value => { value.jobs['invoke-readonly'].steps[2].with.command = 'build'; });
+  reject(value => { value.jobs['validate-invocation-key'].steps[0].run = 'true\n'; });
 });

@@ -189,7 +189,6 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/oracle-source-closure.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
-<<<<<<< HEAD
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
             "scripts/sdk-vv-inputs.test.mjs",
@@ -197,21 +196,24 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-image-inputs.test.mjs",
             "scripts/sdk-vv-check.test.mjs",
             "scripts/native-golden.test.mjs",
+            "scripts/ingress-nginx-projection.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
+            "scripts/compiler-phase-observation.test.mjs",
+            "scripts/compiler-phase-transport.test.mjs",
+            "tests/browser-view/compiler-owner.test.mjs",
+            "tests/browser-view/compiler-artifact.test.mjs",
+            "tests/browser-view/compiler-artifact-mutations.test.mjs",
+            "tests/browser-view/compiler-runtime.test.mjs",
+            "tests/browser-view/compiler-runtime-mutations.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",
             "scripts/release-gate-evidence.test.mjs",
             "scripts/refresh-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
+            "scripts/ci-capacity.test.mjs",
             "scripts/vv-sdk-session.test.mjs",
             "sdk/bootstrap/runner.test.mjs",
-=======
-            "scripts/browser-prerequisites.test.mjs",
-            "scripts/release-phases.test.mjs",
-            "scripts/refresh-osv.test.mjs",
-            "scripts/ci-observe.test.mjs",
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
         ],
     )?;
     audit::audit_no_handwritten_lean(root)?;
@@ -938,14 +940,9 @@ fn check_golden(root: &Path, write: bool) -> Result<(), Fail> {
         );
         return Ok(());
     }
-<<<<<<< HEAD
     let observed = golden::read_platform(root, platform)?;
     golden::native_records(&observed, &expected, platform)?;
     golden::compare(&observed, &expected)?;
-=======
-    let observed = tree_files(&destination)?;
-    repo_conformance::golden::compare(&observed, &expected)?;
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
     println!(
         "check-golden: {} files match reviewed build {} ({platform:?})",
         observed.len(),
@@ -1103,6 +1100,8 @@ fn package_api_check(root: &Path) -> Result<(), Fail> {
         "sdk/asyncapi-runtime/launcher.sh",
         "sdk/asyncapi-runtime/launcher.test.mjs",
         "sdk/oracles/kubernetes-validator.mjs",
+        "adapters/ingress-nginx-kind-v1.15.1.yaml",
+        "adapters/ingress-nginx-kind-v1.15.1.json",
         "src/prod_alloc_counter.rs.inc",
         "standards.lock",
         "stdlib/src/Foundation/Holo.lex.tex",
