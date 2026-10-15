@@ -10,6 +10,9 @@
 pub mod acceptance;
 mod application_build;
 pub mod authority;
+mod binary_build;
+mod binary_cli;
+mod binary_verification;
 mod browser_build;
 mod browser_oracle;
 pub mod cli;

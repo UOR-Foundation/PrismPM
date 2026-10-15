@@ -214,6 +214,7 @@ The three honesty levels:
 | `DK-37` | `build` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. |
 | `DK-38` | `build` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. |
 | `DK-35` | `build` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. |
+| `DK-36` | `build` | Closed BinaryProgram packages preserve arbitrary bytes through native std, no_std, Core-Wasm and generated bounded raw file and stdio adapters, independently replayed without application or deployment claims. |
 
 ## security
 

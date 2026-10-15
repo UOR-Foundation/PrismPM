@@ -12,7 +12,37 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 58] = [
+const CONTRACTS: [Contract; 63] = [
+    Contract {
+        id: "prismpm/binary-verification-manifest/2",
+        maximum_bytes: 16_777_216,
+        maximum_items: 2_097_152,
+        schema: include_bytes!("../schemas/binary-verification-manifest-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/model-document/5",
+        maximum_bytes: 16_777_216,
+        maximum_items: 2_097_152,
+        schema: include_bytes!("../schemas/model-document-v5.schema.json"),
+    },
+    Contract {
+        id: "prismpm/binary-build-binding/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 2_097_152,
+        schema: include_bytes!("../schemas/binary-build-binding.schema.json"),
+    },
+    Contract {
+        id: "prismpm/binary-acceptance/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 2_097_152,
+        schema: include_bytes!("../schemas/binary-acceptance.schema.json"),
+    },
+    Contract {
+        id: "prismpm/binary-verification-manifest/1",
+        maximum_bytes: 16_777_216,
+        maximum_items: 2_097_152,
+        schema: include_bytes!("../schemas/binary-verification-manifest.schema.json"),
+    },
     Contract {
         id: "prismpm/sdk-lock-migration/1",
         maximum_bytes: 201_326_592,
@@ -402,6 +432,55 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         id,
+        "prismpm/binary-build-binding/1" | "prismpm/binary-acceptance/1"
+    ) {
+        let program: crate::holo::binary_program::BinaryProgram =
+            serde_json::from_value(value["program"].clone())
+                .map_err(|error| PrismError::new("PP4004", error.to_string()))?;
+        crate::holo::binary_program::validate(&program)?;
+        if id == "prismpm/binary-acceptance/1" {
+            let expected = if program
+                .acceptance_vectors
+                .iter()
+                .any(|vector| !vector.response.is_empty())
+            {
+                "passed"
+            } else {
+                "not-exercised-empty-responses"
+            };
+            if value["io_coverage"]["output_write"] != expected {
+                return Err(PrismError::new(
+                    "PP4004",
+                    "binary I/O coverage must disclose empty-response profiles",
+                ));
+            }
+            for (row, mode) in value["executions"]
+                .as_array()
+                .expect("validated executions")
+                .iter()
+                .zip([
+                    "std",
+                    "no_std",
+                    "core-wasm",
+                    "cli-stdio",
+                    "cli-file",
+                    "cli-mixed",
+                ])
+            {
+                if row["mode"] != mode
+                    || row["vector_count"].as_u64() != Some(program.acceptance_vectors.len() as u64)
+                {
+                    return Err(PrismError::new(
+                        "PP4004",
+                        "binary acceptance omits or substitutes a transport/vector",
+                    ));
+                }
+            }
+        }
+        return Ok(());
+    }
+    if matches!(
+        id,
         "prismpm/library-build-binding/1" | "prismpm/library-acceptance/1"
     ) {
         let invalid =
@@ -443,21 +522,32 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         id,
-        "prismpm/library-verification-manifest/1" | "prismpm/library-verification-manifest/2"
+        "prismpm/library-verification-manifest/1"
+            | "prismpm/library-verification-manifest/2"
+            | "prismpm/binary-verification-manifest/1"
+            | "prismpm/binary-verification-manifest/2"
     ) {
-        if id == "prismpm/library-verification-manifest/2" {
+        if matches!(
+            id,
+            "prismpm/library-verification-manifest/2" | "prismpm/binary-verification-manifest/2"
+        ) {
+            let role = if id == "prismpm/library-verification-manifest/2" {
+                "library"
+            } else {
+                "binary"
+            };
             crate::exporter::validate_owner_record(
                 &value["exporter_owner"],
                 value["model_sha256"]
                     .as_str()
                     .expect("schema-validated model hash"),
-                "library",
+                role,
             )
             .map_err(|error| PrismError::new("PP4004", error.message))?;
             if value["exporter_owner"]["phases"][1]["artifacts"] != value["artifacts"] {
                 return Err(PrismError::new(
                     "PP4004",
-                    "library owner products differ from the complete artifact bindings",
+                    "profile owner products differ from the complete artifact bindings",
                 ));
             }
             let processes =
@@ -485,7 +575,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             {
                 return Err(PrismError::new(
                     "PP4004",
-                    "library owner differs from original replay or native preflight",
+                    "profile owner differs from original replay or native preflight",
                 ));
             }
         }
@@ -524,7 +614,10 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(
         id,
-        "prismpm/model-document/2" | "prismpm/model-document/3" | "prismpm/model-document/4"
+        "prismpm/model-document/2"
+            | "prismpm/model-document/3"
+            | "prismpm/model-document/4"
+            | "prismpm/model-document/5"
     ) {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
             PrismError::new(

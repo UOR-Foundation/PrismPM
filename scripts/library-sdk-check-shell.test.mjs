@@ -47,7 +47,11 @@ process.exit(64);
 function fixture(t){
  const work=mkdtempSync(join(tmpdir(),'prismpm-library-shell-'));t.after(()=>rmSync(work,{recursive:true,force:true}));
  const root=join(work,'source');mkdirSync(root);
- for(const row of capturedSource.files){const destination=join(root,row.path);mkdirSync(dirname(destination),{recursive:true});if(row.kind==='directory')mkdirSync(destination,{recursive:true});else if(row.kind==='file')copyFileSync(join(source,row.path),destination);else symlinkSync(row.target,destination);}
+ // Only fixture setup is shared: every scenario retains independent file
+ // inodes, source roots and logs; its real shell still performs fresh checks.
+ const directories=new Set(capturedSource.files.flatMap(row=>[dirname(join(root,row.path)),...(row.kind==='directory'?[join(root,row.path)]:[])]));
+ for(const directory of [...directories].sort())mkdirSync(directory,{recursive:true});
+ for(const row of capturedSource.files){const destination=join(root,row.path);if(row.kind==='file')copyFileSync(join(source,row.path),destination);else if(row.kind==='symlink')symlinkSync(row.target,destination);}
  writeFileSync(join(root,'standards.lock'),sdk.standards);
  const architecture=process.arch==='x64'?'amd64':'arm64';
  writeFileSync(join(work,'lock.json'),sdk.bytes);
@@ -60,8 +64,7 @@ function fixture(t){
    patch:[{op:'test',path:'',value:JSON.parse(historical.document)},{op:'replace',path:'',value:sdk.lock}]}}}));
  writeFileSync(join(work,'inventory.json'),sdk.lock.platforms.find(row=>row.platform==='linux/'+architecture).inventory_document);
  writeFileSync(join(work,'compiler.json'),JSON.stringify(qualificationFixture(sdk.binding(architecture),sourceAuthority)));
- writeFileSync(join(work,'result.json'),JSON.stringify(resultFixture(sdk.binding(architecture),{
-  archive_sha256:createHash('sha256').update(readFileSync(join(root,'vendor/lean4-prod/lean.tar'))).digest('hex'),toolchain:readFileSync(join(root,'lean-toolchain'),'utf8').trim()})));
+ writeFileSync(join(work,'result.json'),JSON.stringify(resultFixture(sdk.binding(architecture),sourceAuthority)));
  const bin=join(work,'bin');mkdirSync(bin);writeFileSync(join(bin,'docker'),dockerMock);chmodSync(join(bin,'docker'),0o755);
  writeFileSync(join(bin,'git'),'#!/usr/bin/env node\nconst args=process.argv.slice(2);if(args.includes("rev-parse"))console.log(process.env.RECORDED_REVISION);else if(!args.includes("status"))process.exit(64);\n');chmodSync(join(bin,'git'),0o755);
  return{work,root,env:{...process.env,DOCKER_CONFIG:join(work,'absent-credentials'),PATH:bin+':'+process.env.PATH,RECORDED_SOURCE:root,RECORDED_CALLS:join(work,'calls.jsonl'),RECORDED_IMAGE:image,RECORDED_REVISION:revision,RECORDED_LOCK:join(work,'lock.json'),RECORDED_ACQUISITION:join(work,'acquisition.json'),RECORDED_INVENTORY:join(work,'inventory.json'),RECORDED_COMPILER:join(work,'compiler.json'),RECORDED_RESULT:join(work,'result.json')}};
@@ -145,11 +148,11 @@ test('real shell invokes the confined Docker sequence and inspects actual termin
    const value=JSON.parse(readFileSync(path));mutate(value);writeFileSync(path,JSON.stringify(value));
    const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);
   });
- await cases(tasks);
+ try{await cases(tasks);}finally{assert.deepEqual(capture(source,revision),capturedSource,'original fixture source changed');}
 });
 
 test('real shell orchestration tests reject removed execution and changed runtime entrypoint mutants',async t=>{
- await cases([
+ try{await cases([
   ['docker container start --attach "$container" > "$sdk_work/acquisition.json"','true > "$sdk_work/acquisition.json"'],
   ['docker container start --attach --interactive "$container" < "$sdk_work/lock.json" > "$sdk_work/result.json"','true > "$sdk_work/result.json"'],
   ['docker container start --attach --interactive "$container" < "$sdk_work/lock.json" > "$sdk_work/compiler.json"','true > "$sdk_work/compiler.json"'],
@@ -158,5 +161,6 @@ test('real shell orchestration tests reject removed execution and changed runtim
   ['--entrypoint node --user 1000:1000','--entrypoint node --user 0:0'],
   ['/tmp:rw,exec,nosuid,nodev,size=768m','/tmp:rw,exec,nosuid,nodev,size=8g'],
   ['node scripts/library-sdk-check.mjs run "$image")','node scripts/browser-api-sdk-check.mjs run "$image")'],
- ].map(([before,after])=>async()=>{const context=fixture(t),path=join(context.root,'scripts/library-sdk-check.sh'),script=readFileSync(path,'utf8');assert.equal(script.split(before).length,2);writeFileSync(path,script.replace(before,after));await assert.rejects(()=>accepted(context),error=>error.code==='ERR_ASSERTION'&&!error.message.includes('shell transport'));}));
+ ].map(([before,after])=>async()=>{const context=fixture(t),path=join(context.root,'scripts/library-sdk-check.sh'),script=readFileSync(path,'utf8');assert.equal(script.split(before).length,2);writeFileSync(path,script.replace(before,after));await assert.rejects(()=>accepted(context),error=>error.code==='ERR_ASSERTION'&&!error.message.includes('shell transport'));}));}
+ finally{assert.deepEqual(capture(source,revision),capturedSource,'original fixture source changed');}
 });

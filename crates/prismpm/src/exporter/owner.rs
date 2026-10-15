@@ -413,6 +413,16 @@ pub(crate) fn validate_record(
             "application-exporter",
             "application-export",
         ],
+        "binary" => vec![
+            "lake-build-generated",
+            "lean4-prod-build",
+            "prod-export",
+            "binary-program-package",
+            "binary-cli-lock",
+            "binary-cli-build",
+            "binary-cli-package",
+            "binary-core-wasm-build",
+        ],
         _ => return Err(failure("exporter owner role differs")),
     };
     let mut executable = None;
@@ -468,6 +478,10 @@ pub(crate) fn validate_record(
                 .any(|(row, tool)| row["tool"] != *tool)
             || processes[0]["argv"] != json!(["build", "PrismGenerated"])
             || processes[1]["argv"] != json!(["build", "prod-export"])
+            || !processes[2]["argv"].as_array().is_some_and(|arguments| {
+                arguments.first() == Some(&json!("exe"))
+                    && arguments.get(1) == Some(&json!("prod-export"))
+            })
             || processes[..3]
                 .iter()
                 .any(|row| row["executable_sha256"] != processes[0]["executable_sha256"])
@@ -481,6 +495,23 @@ pub(crate) fn validate_record(
                     != phases[0]["processes"][3]["executable_sha256"])
         {
             return Err(failure("exporter owner original package process differs"));
+        }
+        if role == "binary" {
+            let expected = [
+                json!(["package", "--locked", "--offline", "--allow-dirty"]),
+                json!(["generate-lockfile", "--offline"]),
+                json!(["build", "--locked", "--offline", "--release"]),
+                json!(["package", "--locked", "--offline", "--allow-dirty"]),
+                json!(["build", "--locked", "--offline", "--release"]),
+            ];
+            if processes[3..].iter().zip(expected).any(|(row, argv)| {
+                row["argv"] != argv
+                    || row["executable_sha256"] != phases[0]["processes"][3]["executable_sha256"]
+            }) {
+                return Err(failure(
+                    "exporter owner original binary Cargo processes differ",
+                ));
+            }
         }
         if let Some(prior) = executable {
             if prior != &processes[2]["exporter"] {
@@ -508,6 +539,200 @@ pub(crate) fn validate_record(
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+
+    // Constructed strict-reader controls only, never compiler execution evidence.
+    fn binary_owner_reader_fixture() -> (Value, Vec<Value>, Vec<String>) {
+        let arguments = ["exe", "prod-export", "--out", "$BINARY_WORK/export"]
+            .map(str::to_owned)
+            .to_vec();
+        let tools = [
+            "lake-build-generated",
+            "lean4-prod-build",
+            "prod-export",
+            "binary-program-package",
+            "binary-cli-lock",
+            "binary-cli-build",
+            "binary-cli-package",
+            "binary-core-wasm-build",
+        ];
+        let argv = [
+            json!(["build", "PrismGenerated"]),
+            json!(["build", "prod-export"]),
+            json!(arguments),
+            json!(["package", "--locked", "--offline", "--allow-dirty"]),
+            json!(["generate-lockfile", "--offline"]),
+            json!(["build", "--locked", "--offline", "--release"]),
+            json!(["package", "--locked", "--offline", "--allow-dirty"]),
+            json!(["build", "--locked", "--offline", "--release"]),
+        ];
+        let mut generation = tools.iter().zip(argv).enumerate().map(|(index, (tool, argv))| {
+            json!({"tool":tool,"argv":argv,"executable_sha256":digest(if index < 3 {b"lake"} else {b"cargo"}),
+                "exit_code":0,"stdout":"strict-reader fixture only","stderr":""})
+        }).collect::<Vec<_>>();
+        generation[2]["exporter"] = json!({"schema":"prismpm/exporter-execution/1",
+            "source_archive_sha256":digest(include_bytes!("../../vendor/lean4-prod/lean.tar")),
+            "executable":{"byte_length":1234,"mode":0o755,"sha256":digest(b"parser-only exporter")},
+            "acquisition":{"schema":"prismpm/exporter-acquisition/1","mode":"cold"}});
+        let artifacts =
+            json!([{"path":"binary/parser-only","byte_length":12,"sha256":digest(b"parser-only")}]);
+        let phases = ["controller-build", "replay"].map(|phase| {
+            json!({"phase":phase,"role":"binary",
+                "model_sha256":digest(b"model"),"lexlean_manifest_sha256":digest(b"manifest"),
+                "artifacts":artifacts,"processes":generation})
+        });
+        let owner = json!({"schema":"prismpm/verification-exporter-owner/1","phases":phases});
+        let mut processes = vec![json!({"tool":"lake-version","argv":["--version"],
+            "executable_sha256":digest(b"lake"),"exit_code":0,"stdout":"strict-reader fixture only","stderr":""})];
+        processes.extend(generation);
+        (owner, processes, arguments)
+    }
+
+    #[test]
+    fn binary_owner_reader_requires_actual_exporter_prefix_and_evidence_in_both_phases() {
+        let (owner, _, _) = binary_owner_reader_fixture();
+        validate_record(&owner, &digest(b"model"), "binary").unwrap();
+        for arguments in [
+            json!([]),
+            json!(["exe"]),
+            json!(["build", "prod-export"]),
+            json!(["exe", "other"]),
+        ] {
+            let mut changed = owner.clone();
+            for phase in changed["phases"].as_array_mut().unwrap() {
+                phase["processes"][2]["argv"] = arguments.clone();
+                phase["processes"][2]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("exporter");
+            }
+            assert!(validate_record(&changed, &digest(b"model"), "binary").is_err());
+        }
+        for index in 0..2 {
+            let mut changed = owner.clone();
+            changed["phases"][index]["processes"][2]
+                .as_object_mut()
+                .unwrap()
+                .remove("exporter");
+            assert!(validate_record(&changed, &digest(b"model"), "binary").is_err());
+        }
+    }
+
+    #[test]
+    fn complete_binary_owner_reader_binds_source_products_tools_and_original_replay() {
+        let (owner, processes, arguments) = binary_owner_reader_fixture();
+        let artifacts = owner["phases"][0]["artifacts"].clone();
+        validate_binding(
+            &owner,
+            &digest(b"model"),
+            "binary",
+            b"manifest",
+            &artifacts,
+            &processes,
+            &arguments,
+        )
+        .unwrap();
+        for index in 0..8 {
+            let mut changed = owner.clone();
+            changed["phases"][0]["processes"][index]["exit_code"] = json!(1);
+            assert!(validate_record(&changed, &digest(b"model"), "binary").is_err());
+        }
+        for index in 3..8 {
+            for field in ["argv", "executable_sha256"] {
+                let mut changed = owner.clone();
+                for phase in changed["phases"].as_array_mut().unwrap() {
+                    phase["processes"][index][field] = if field == "argv" {
+                        json!([])
+                    } else {
+                        json!(digest(b"other cargo"))
+                    };
+                }
+                // Coherently substituting *every* Cargo binary needs the independent
+                // SDK boundary; this control changes one original process only.
+                assert!(validate_record(&changed, &digest(b"model"), "binary").is_err());
+            }
+        }
+        let mut changed = owner.clone();
+        for phase in changed["phases"].as_array_mut().unwrap() {
+            phase["processes"][2]["exporter"]["source_archive_sha256"] =
+                json!(digest(b"other source"));
+        }
+        assert!(validate_record(&changed, &digest(b"model"), "binary").is_err());
+        let mut absent = owner.clone();
+        absent["phases"].as_array_mut().unwrap().pop();
+        assert!(validate_record(&absent, &digest(b"model"), "binary").is_err());
+        for (manifest, model, products, transcript, argv) in [
+            (
+                b"other manifest".as_slice(),
+                digest(b"model"),
+                artifacts.clone(),
+                processes.clone(),
+                arguments.clone(),
+            ),
+            (
+                b"manifest".as_slice(),
+                digest(b"other model"),
+                artifacts.clone(),
+                processes.clone(),
+                arguments.clone(),
+            ),
+            (
+                b"manifest".as_slice(),
+                digest(b"model"),
+                json!([]),
+                processes.clone(),
+                arguments.clone(),
+            ),
+            (
+                b"manifest".as_slice(),
+                digest(b"model"),
+                artifacts.clone(),
+                processes[..1].to_vec(),
+                arguments.clone(),
+            ),
+            (
+                b"manifest".as_slice(),
+                digest(b"model"),
+                artifacts.clone(),
+                processes.clone(),
+                vec!["exe".to_owned()],
+            ),
+        ] {
+            assert!(validate_binding(
+                &owner,
+                &model,
+                "binary",
+                manifest,
+                &products,
+                &transcript,
+                &argv
+            )
+            .is_err());
+        }
+        let mut duplicate = processes.clone();
+        duplicate.extend_from_slice(&processes[1..]);
+        assert!(validate_binding(
+            &owner,
+            &digest(b"model"),
+            "binary",
+            b"manifest",
+            &artifacts,
+            &duplicate,
+            &arguments
+        )
+        .is_err());
+        let mut native = processes.clone();
+        native[0]["executable_sha256"] = json!(digest(b"other lake"));
+        assert!(validate_binding(
+            &owner,
+            &digest(b"model"),
+            "binary",
+            b"manifest",
+            &artifacts,
+            &native,
+            &arguments
+        )
+        .is_err());
+    }
 
     // Unaccepted custody fixture only. No compiler execution or production
     // acceptance is claimed; its empty transcript must never pass finish().

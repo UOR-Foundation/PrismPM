@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {constants,closeSync,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,mkdtempSync,openSync,readFileSync,readlinkSync,readdirSync,readSync,rmSync,chmodSync,writeFileSync} from 'node:fs';
+import {constants,closeSync,cpSync,existsSync,fstatSync,lstatSync,mkdirSync,mkdtempSync,openSync,readFileSync,readlinkSync,realpathSync,readdirSync,readSync,rmSync,chmodSync,writeFileSync} from 'node:fs';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {verifyImage,verifyTap} from './browser-api-sdk-check.mjs';
@@ -60,17 +60,36 @@ const hex=value=>{assert.equal(typeof value,'string');assert.match(value,/^[0-9a
 const canonical=value=>JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]])):v);
 const same=(actual,expected,message)=>assert.ok(canonical(actual)===canonical(expected),message);
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value),'closed object');same(Object.keys(value).sort(),names.slice().sort(),'closed object fields');};
-function regularBytes(path,maximum=64*1024*1024){
- const before=lstatSync(path);assert.ok(before.isFile()&&!before.isSymbolicLink()&&before.size<=maximum,'bounded regular file: '+path);
- const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+export function regularBytes(path,maximum=64*1024*1024){
+ assert(Number.isSafeInteger(maximum)&&maximum>=0&&maximum<=288*1024*1024,'declared bounded file limit');
+ const selected=path instanceof URL?fileURLToPath(path):resolve(path);
+ assert.equal(realpathSync.native(selected),selected,'file pathname or parent is aliased');
+ const fields=['dev','ino','mode','size','uid','gid','nlink','mtimeNs','ctimeNs'];
+ const before=lstatSync(selected,{bigint:true});
+ const regular=value=>assert(value.isFile()&&!value.isSymbolicLink()&&value.nlink===1n&&value.size>=0n&&value.size<=BigInt(maximum),'bounded single-link regular file: '+selected);
+ regular(before);
+ const fd=openSync(selected,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+ let bytes,primary,secondary;
  try{
-  const opened=fstatSync(fd);for(const key of ['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(opened[key],before[key],'file changed');
-  const bytes=Buffer.alloc(opened.size+1);let size=0;
-  while(size<bytes.length){const count=readSync(fd,bytes,size,bytes.length-size,null);if(!count)break;size+=count;}
-  assert.equal(size,opened.size,'file length changed');
-  for(const after of [fstatSync(fd),lstatSync(path)]){assert.ok(after.isFile()&&!after.isSymbolicLink());for(const key of ['dev','ino','size','mtimeMs','ctimeMs'])assert.equal(after[key],opened[key],'file changed');}
-  return bytes.subarray(0,size);
- }finally{closeSync(fd);}
+  const opened=fstatSync(fd,{bigint:true});regular(opened);
+  for(const key of fields)assert.equal(opened[key],before[key],'file changed');
+  if(process.platform==='linux')assert.equal(readlinkSync('/proc/self/fd/'+fd),selected,'held file pathname differs');
+  bytes=Buffer.alloc(Number(opened.size));let offset=0;
+  while(offset<bytes.length){
+   const count=readSync(fd,bytes,offset,Math.min(65536,bytes.length-offset),null);
+   assert(count>0,'file truncated');offset+=count;
+  }
+  assert.equal(readSync(fd,Buffer.alloc(1),0,1,null),0,'file grew');
+  for(const after of [fstatSync(fd,{bigint:true}),lstatSync(selected,{bigint:true})]){
+   regular(after);for(const key of fields)assert.equal(after[key],opened[key],'file changed');
+  }
+  assert.equal(realpathSync.native(selected),selected,'file pathname or parent changed');
+  if(process.platform==='linux')assert.equal(readlinkSync('/proc/self/fd/'+fd),selected,'held file pathname changed');
+ }catch(error){primary=error;}
+ try{closeSync(fd);}catch(error){secondary=error;}
+ if(primary&&secondary)throw new AggregateError([primary,secondary],'file read and close failed');
+ if(primary)throw primary;if(secondary)throw secondary;
+ return bytes;
 }
 
 // Only independently acquired metadata is admitted. The native bytes below
@@ -439,9 +458,18 @@ export function validateVerificationOwner(manifest,role,mode,binding,sourceAutho
  const owner=manifest.exporter_owner;
  keys(owner,['schema','phases']);assert.equal(owner.schema,'prismpm/verification-exporter-owner/1');
  assert(Array.isArray(owner.phases)&&owner.phases.length===2);
- const tools=role==='library'?['lake-build-generated','lean4-prod-build','prod-export','native-library-package']:
-  ['application-lean','application-exporter','application-export'];
- assert(['library','application'].includes(role));
+ const toolSets={
+  library:['lake-build-generated','lean4-prod-build','prod-export','native-library-package'],
+  application:['application-lean','application-exporter','application-export'],
+  binary:['lake-build-generated','lean4-prod-build','prod-export','binary-program-package',
+   'binary-cli-lock','binary-cli-build','binary-cli-package','binary-core-wasm-build'],
+ };
+ assert(Object.hasOwn(toolSets,role));const tools=toolSets[role];
+ const binaryCargo=[
+  ['package','--locked','--offline','--allow-dirty'],
+  ['generate-lockfile','--offline'],['build','--locked','--offline','--release'],
+  ['package','--locked','--offline','--allow-dirty'],['build','--locked','--offline','--release'],
+ ];
  const lake=manifest.processes.find(row=>row.tool==='lake-version');assert(lake,'independent native Lake preflight required');
  hex(lake.executable_sha256);
  for(const [index,phase] of owner.phases.entries()){
@@ -461,7 +489,8 @@ export function validateVerificationOwner(manifest,role,mode,binding,sourceAutho
    if(number===2)verifyExporterProcess(row,tools[2],mode,binding,sourceAuthority);
    else{
     keys(row,['tool','argv','executable_sha256','exit_code','stdout','stderr']);assert.equal(row.exit_code,0);
-    same(row.argv,number===3?['package','--locked','--offline','--allow-dirty']:['build',number===0?'PrismGenerated':'prod-export']);
+    same(row.argv,number<3?['build',number===0?'PrismGenerated':'prod-export']:
+     role==='binary'?binaryCargo[number-3]:['package','--locked','--offline','--allow-dirty']);
    }
    if(number<3)assert.equal(row.executable_sha256,lake.executable_sha256);
    else {hex(row.executable_sha256);assert.equal(row.executable_sha256,owner.phases[0].processes[3].executable_sha256);}
@@ -474,7 +503,7 @@ export function validateVerificationOwner(manifest,role,mode,binding,sourceAutho
  same(first.processes[2].argv,replay.processes[2].argv);
  assert.equal(manifest.processes.slice(0,manifest.processes.length-tools.length+1).filter((_,index)=>canonical(manifest.processes.slice(index,index+tools.length))===canonical(replay.processes)).length,1,
   'replay must be exactly one original retained transcript window');
- if(role==='library')same(replay.artifacts,manifest.artifacts);
+ if(['library','binary'].includes(role))same(replay.artifacts,manifest.artifacts);
  return owner;
 }
 

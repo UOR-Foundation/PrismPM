@@ -9,6 +9,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 
 | Schema | JSON Schema | Media type | Limits | Compatibility |
 | --- | --- | --- | --- | --- |
+| `prismpm/binary-verification-manifest/2` | `schemas/binary-verification-manifest-v2.schema.json` | `application/vnd.prismpm.binary-verification-manifest.v2+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
 | `prismpm/model-document/4` | `schemas/model-document-v4.schema.json` | `application/vnd.prismpm.model-document.v4+json` | 16777216 bytes / 65536 items | `closed`; `exact-major` |
 | `prismpm/browser-publication-integrity/1` | `schemas/browser-publication-integrity.schema.json` | `application/vnd.prismpm.browser-publication-integrity.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `prismpm/library-build-binding/1` | `schemas/library-build-binding.schema.json` | `application/vnd.prismpm.library-build-binding.v1+json` | 4194304 bytes / 4096 items | `closed`; `exact-major` |
@@ -67,6 +68,10 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/verify-result/1` | `schemas/verify-result.schema.json` | `application/vnd.prismpm.verify-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `uor/template-contract/1` | `schemas/template-contract.schema.json` | `application/vnd.uor.template.contract.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `uor/template-lock/1` | `schemas/template-lock.schema.json` | `application/vnd.uor.template.lock.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
+| `prismpm/model-document/5` | `schemas/model-document-v5.schema.json` | `application/vnd.prismpm.model-document-v5+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
+| `prismpm/binary-build-binding/1` | `schemas/binary-build-binding.schema.json` | `application/vnd.prismpm.binary-build-binding+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
+| `prismpm/binary-acceptance/1` | `schemas/binary-acceptance.schema.json` | `application/vnd.prismpm.binary-acceptance+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
+| `prismpm/binary-verification-manifest/1` | `schemas/binary-verification-manifest.schema.json` | `application/vnd.prismpm.binary-verification-manifest+json` | 16777216 bytes / 2097152 items | `closed`; `exact-major` |
 
 ## Command state and mutation boundaries
 

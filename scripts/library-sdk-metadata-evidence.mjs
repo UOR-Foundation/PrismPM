@@ -2,10 +2,10 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {constants,closeSync,fstatSync,linkSync,lstatSync,mkdirSync,mkdtempSync,openSync,readSync,readdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
-import {dirname,join,resolve} from 'node:path';
+import {constants,closeSync,fstatSync,linkSync,lstatSync,mkdirSync,mkdtempSync,openSync,readdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
+import {basename,dirname,join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {verifyImage,verifySource,validateAcquisitionBytes,validateCapturedLock,verifyResult} from './library-sdk-check.mjs';
+import {regularBytes,verifyImage,verifySource,validateAcquisitionBytes,validateCapturedLock,verifyResult} from './library-sdk-check.mjs';
 import {validateQualification} from '../sdk/exporter-qualification.mjs';
 import {verifyMigration} from '../sdk/migration-qualification.mjs';
 import {verifyMetadataEvidence,joinNativeMetadata} from '../sdk/metadata-evidence.mjs';
@@ -15,21 +15,7 @@ const canonical=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='objec
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const names=['acquisition.json','compiler.json','custody.json','image.json','inventory.json','result.json','source.json','standards.lock'].sort();
 const bound=name=>name==='acquisition.json'?288*1024*1024:64*1024*1024;
-function regular(path,maximum) {
-  const before=lstatSync(path,{bigint:true});
-  assert(before.isFile()&&!before.isSymbolicLink()&&before.nlink===1n&&before.size<=BigInt(maximum));
-  const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
-  try {
-    const bytes=Buffer.alloc(Number(before.size));
-    for(let at=0;at<bytes.length;) {const count=readSync(fd,bytes,at,bytes.length-at,null);assert(count>0);at+=count;}
-    assert.equal(readSync(fd,Buffer.alloc(1),0,1,null),0);
-    for(const after of [fstatSync(fd,{bigint:true}),lstatSync(path,{bigint:true})]) {
-      assert(after.isFile()&&!after.isSymbolicLink());
-      for(const key of ['dev','ino','nlink','mode','size','mtimeNs','ctimeNs'])assert.equal(after[key],before[key]);
-    }
-    return bytes;
-  } finally {closeSync(fd);}
-}
+const regular=regularBytes;
 const contextKeys=['sdk_image','source_revision','architecture'];
 function contextCheck(context) {
   assert.deepEqual(Object.keys(context).sort(),contextKeys.slice().sort());
@@ -47,7 +33,7 @@ export async function captureLane(directory,root,context) {
   const acquisition=validateAcquisitionBytes(files.get('acquisition.json'));
   const json=name=>JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(files.get(name)));
   verifyImage(json('image.json'),context.sdk_image,context.architecture,context.source_revision);
-  assert.equal(json('source.json').revision,context.source_revision);verifySource(root,json('source.json'));
+  const source=json('source.json');assert.equal(source.revision,context.source_revision);
   assert(files.get('standards.lock').equals(regular(join(root,'standards.lock'),16*1024*1024)));
   const lockBytes=Buffer.from(canonical(acquisition.lock));
   const binding=validateCapturedLock(lockBytes,context.sdk_image,context.architecture,
@@ -60,6 +46,9 @@ export async function captureLane(directory,root,context) {
     toolchain:regular(join(root,'lean-toolchain'),1024).toString().trim()};
   validateQualification(json('compiler.json'),binding,authority,files.get('inventory.json'));verifyResult(json('result.json'),binding,authority);
   assert.deepEqual(json('custody.json'),{scope:'filesystem-custody-only',checks:6,status:'passed'});
+  // Cheap malformed evidence refuses before full source hashing; every possible
+  // success still joins the entire fresh source after asynchronous replay.
+  verifySource(root,source);
   const row={platform:binding.platform,sdk_image:context.sdk_image,source_revision:context.source_revision,
     inventory_document:files.get('inventory.json').toString(),standards_base64:files.get('standards.lock').toString('base64')};
   return {files,row,lockBytes,metadata:acquisition.metadata,
@@ -68,9 +57,15 @@ export async function captureLane(directory,root,context) {
       unclaimed:['full-VV','SDK-release','consumer-adoption','product-readiness']}};
 }
 export async function writeLane(directory,output,root,context) {
-  const captured=await captureLane(directory,root,context);
+  contextCheck(context);
   root=resolve(root);output=resolve(output);
   assert.equal(output,join(root,'target/library-sdk-evidence/linux-'+context.architecture));
+  assert(!lstatSync(output,{throwIfNoEntry:false}),'fresh non-overwriting native evidence directory required');
+  for(const path of [join(root,'target'),dirname(output)]) {
+    const entry=lstatSync(path,{throwIfNoEntry:false});
+    if(entry){assert(entry.isDirectory()&&!entry.isSymbolicLink());assert.equal(realpathSync(path),path);}
+  }
+  const captured=await captureLane(directory,root,context);
   for(const path of [join(root,'target'),dirname(output)]) {
     if(!lstatSync(path,{throwIfNoEntry:false}))mkdirSync(path,{mode:0o755});
     assert(lstatSync(path).isDirectory()&&!lstatSync(path).isSymbolicLink());assert.equal(realpathSync(path),path);
@@ -102,19 +97,46 @@ export async function joinLanes(directories,root,image,revision) {
 }
 
 export async function packLane(directory,output,root,context) {
-  const captured=await readLane(directory,root,context);
+  contextCheck(context);
   output=resolve(output);assert.equal(realpathSync(dirname(output)),dirname(output));
   assert(!lstatSync(output,{throwIfNoEntry:false}),'fresh non-overwriting native evidence archive required');
-  const stage=mkdtempSync(join(dirname(output),'.native-metadata-'));
+  const parent=dirname(output),fields=['dev','ino','mode','size','uid','gid','nlink','mtimeNs','ctimeNs'];
+  const original=lstatSync(parent,{bigint:true});assert(original.isDirectory()&&!original.isSymbolicLink());
+  const fd=openSync(parent,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  // A parent-process-qualified descriptor remains usable by the tar child
+  // without inheriting private descriptors across exec.
+  const held='/proc/'+process.pid+'/fd/'+fd;
+  const checkParent=expected=>{
+    assert.equal(realpathSync(held),parent,'archive parent namespace changed');
+    assert.equal(realpathSync(parent),parent,'archive parent became aliased');
+    for(const current of [fstatSync(fd,{bigint:true}),lstatSync(parent,{bigint:true})])
+      for(const field of fields)assert.equal(current[field],expected[field],'archive parent identity changed');
+  };
+  let stage,stageIdentity,primary;const secondary=[];
   try {
+    checkParent(original);
+    const captured=await readLane(directory,root,context);
+    checkParent(original);
+    assert(!lstatSync(output,{throwIfNoEntry:false}),'fresh non-overwriting native evidence archive required');
+    stage=mkdtempSync(join(held,'.native-metadata-'));stageIdentity=lstatSync(stage,{bigint:true});
+    const stagedParent=fstatSync(fd,{bigint:true});
     const evidence=join(stage,'evidence');mkdirSync(evidence,{mode:0o700});
     for(const [name,bytes] of captured.files)writeFileSync(join(evidence,name),bytes,{flag:'wx',mode:0o444});
     writeFileSync(join(evidence,'evidence.json'),canonical(captured.manifest)+'\n',{flag:'wx',mode:0o444});
     const archive=join(stage,'evidence.tar');
     execFileSync('/usr/bin/tar',['--format=ustar','--sort=name','--mtime=@0','--owner=0','--group=0','--numeric-owner',
       '-cf',archive,'-C',stage,'evidence'],{timeout:120000,maxBuffer:1024*1024});
-    linkSync(archive,output);
-  } finally {rmSync(stage,{recursive:true});}
+    checkParent(stagedParent);
+    linkSync(archive,join(held,basename(output)));
+  } catch(error){primary=error;}
+  if(stage)try {
+    const named=lstatSync(stage,{bigint:true});
+    for(const field of ['dev','ino','mode','uid','gid'])assert.equal(named[field],stageIdentity[field],'archive staging namespace changed');
+    rmSync(stage,{recursive:true});
+  } catch(error){secondary.push(error);}
+  try{closeSync(fd);}catch(error){secondary.push(error);}
+  if(primary&&secondary.length)throw new AggregateError([primary,...secondary],'archive packing and retirement failed');
+  if(primary)throw primary;if(secondary.length)throw new AggregateError(secondary,'archive retirement failed');
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
