@@ -63,13 +63,15 @@ export function frozenInputs() {
     'tests/browser-view/workspace-products.mjs',
     'vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust/MANIFEST.sha256','vendor/lexlean/MANIFEST.sha256',
   ]);
-  for (const path of compilerInputPaths('session')) files.add(path);
   const captured = new Map();
   const read = path => {
     assert.ok(files.has(path), 'registered complete session input required');
     if (!captured.has(path)) captured.set(path, captureFile(join(repository,path)));
     return captured.get(path).bytes;
   };
+  // Inventory expansion and pin validation use these same stable captures;
+  // asking the path-only helper to reopen manifests would read each twice.
+  for (const path of compilerInputPaths('session',read)) files.add(path);
   for (const tree of ['vendor/lexlean','vendor/lean4-prod/rust']) {
     for (const line of read(tree+'/MANIFEST.sha256').toString('utf8').trimEnd().split('\n')) {
       const row=/^([0-9a-f]{64})  ([A-Za-z0-9_./-]+)$/.exec(line); assert.ok(row);

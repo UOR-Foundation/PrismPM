@@ -32,7 +32,7 @@ function family(name) {
   assert.ok(typeof name === 'string' && Object.hasOwn(families, name), 'registered compiler family required');
   return families[name];
 }
-function requiredInputs(name) {
+function requiredInputs(name, read = path => file(join(repository, path))) {
   const selected = family(name), manifest = 'tests/' + selected.directory + '/driver/Cargo.toml';
   const paths = new Set([manifest, manifest.replace('Cargo.toml', 'Cargo.lock'), manifest.replace('Cargo.toml', 'src/main.rs'),
     'lean-toolchain', 'rust-toolchain.toml', 'model/dependencies.toml', 'model/authorities.toml',
@@ -41,7 +41,7 @@ function requiredInputs(name) {
     'tests/browser-view/compiler-owner-checks.mjs', 'tests/browser-view/verification-products.mjs']);
   for (const tree of ['vendor/lexlean', 'vendor/lean4-prod/rust']) {
     const manifestPath = tree + '/MANIFEST.sha256'; paths.add(manifestPath);
-    for (const line of file(join(repository, manifestPath)).toString().trimEnd().split('\n')) {
+    for (const line of read(manifestPath).toString().trimEnd().split('\n')) {
       const row = /^([a-f0-9]{64})  ([A-Za-z0-9_./-]+)$/.exec(line); assert.ok(row, 'registered compiler manifest row');
       assert(!row[2].startsWith('/') && !row[2].split('/').some(part => !part || part === '.' || part === '..'));
       const path = tree + '/' + row[2]; assert(!paths.has(path), 'duplicate compiler input'); paths.add(path);
@@ -51,8 +51,9 @@ function requiredInputs(name) {
 }
 // Paths are not compiler authority: callers must capture their actual sources
 // and retain every authentic owner/digest/native join before execution.
-export function compilerInputPaths(name) {
-  return Object.freeze(requiredInputs(name));
+export function compilerInputPaths(name, read) {
+  assert.ok(read === undefined || typeof read === 'function', 'compiler manifest byte reader required');
+  return Object.freeze(requiredInputs(name, read));
 }
 export function captureCompilerInputs(name) {
   return inputMap(Object.fromEntries(compilerInputPaths(name).map(path => [path, sha(file(join(repository, path)))])));

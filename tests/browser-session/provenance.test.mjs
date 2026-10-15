@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import {syncBuiltinESMExports} from 'node:module';
+import {runInNewContext} from 'node:vm';
 import {chmodSync,copyFileSync,linkSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,renameSync,rmSync,symlinkSync,unlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {provenanceProfile,presentationOutputRows} from '../browser-presentation/provenance.mjs';
 import {modules,frozenInputs,assertFrozenInputs,repository,sha} from './compile.mjs';
+import {compilerInputPaths} from '../browser-view/compiler-owner.mjs';
+import {captureFile} from '../browser-view/file-custody.mjs';
 import {sourceRoots,suites} from '../../scripts/browser-api-sdk-check.mjs';
 
 test('session provenance admits only the registered complete family, never a caller subset',()=>{
@@ -163,6 +166,26 @@ test('source and installed session registration retain the entire original owner
 
 test('session pins validate the same once-captured bytes at every fresh barrier',()=>{
   const open=fs.openSync, raw=fs.readFileSync;
+  const source=readFileSync(new URL('./compile.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf('const modulePath = '),end=source.indexOf('export function assertFrozenInputs(');
+  const pinBegin=source.indexOf('function pins(read) {'),pinEnd=source.indexOf('export function prepare(');
+  assert(begin>=0&&end>begin&&pinBegin>end&&pinEnd>pinBegin);
+  const capturedProgram=(source.slice(begin,end)+source.slice(pinBegin,pinEnd))
+    .replace('export function frozenInputs(', 'function frozenInputs(');
+  const joinPoint="compilerInputPaths('session',read)";
+  assert.equal(capturedProgram.split(joinPoint).length,2,'exact captured-byte inventory join to mutate');
+  // Unit counterfactual only: execute the actual capture/pin functions on real
+  // repository descriptors, reverting only the duplicate-read join. No fake
+  // compiler/model/result or caller-provided input bytes grant authority.
+  const duplicateCapture=runInNewContext(capturedProgram.replace(joinPoint,"compilerInputPaths('session')")+
+    '\nfrozenInputs;', {assert,lstatSync,realpathSync:fs.realpathSync,join,repository,modules,
+      compilerInputPaths,captureFile,sha,provenanceProfile});
+  for(const reader of [null,{},[],true,1,'reader'])
+    assert.throws(()=>compilerInputPaths('session',reader),/compiler manifest byte reader/);
+  let called=false;
+  assert.throws(()=>compilerInputPaths('unregistered',()=>{called=true;assert.fail('unregistered family read');}),
+    /registered compiler family/);
+  assert.equal(called,false,'path reader cannot select an unregistered compiler family');
   let opened=new Map();
   try {
     fs.openSync=function(path,...args) {
@@ -181,5 +204,8 @@ test('session pins validate the same once-captured bytes at every fresh barrier'
     for(let barrier=0;barrier<2;barrier++) {
       opened=new Map();assertFrozenInputs(inputs);verifyReads();
     }
+    opened=new Map();duplicateCapture();
+    assert.throws(verifyReads,/one stable descriptor capture per path per barrier/,
+      'unchanged exact-once assertion must kill a duplicated manifest-read mutant');
   } finally {fs.openSync=open;fs.readFileSync=raw;syncBuiltinESMExports();}
 });
