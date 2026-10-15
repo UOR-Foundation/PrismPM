@@ -72,6 +72,10 @@ test('product invocation uses installed executable and exact locked release argu
 });
 
 test('retained application regeneration requires source-bound native seed evidence, never cold fallback',()=>{
+ const applicationExporter=value=>{
+  const exporters=value.processes.filter(row=>row.tool==='application-export'||Object.hasOwn(row,'exporter'));
+  assert.equal(exporters.length,1);return exporters[0];
+ };
  for(const architecture of ['amd64','arm64']){
   const binding=lockFixture().binding(architecture),library=JSON.parse(resultFixture(binding).runs[2].manifest);
   const exporter=library.processes[7];exporter.tool='application-export';
@@ -81,27 +85,32 @@ test('retained application regeneration requires source-bound native seed eviden
   const lexlean_manifest=Buffer.from(canonical({outputs:[{kind:'lean',path:'modules/Probe.lean'}]}));
   exporter.argv=['exe','prod-export','--module','Probe','--root','Probe.main','--ir-module','Calculator','--out','$APPLICATION_WORK/export'];
   const manifest={schema:'prismpm/application-verification-manifest/2',build_id:'a'.repeat(64),model_sha256:sha(model).slice(7),
-   acceptance_sha256:'c'.repeat(64),lexlean_attestation_sha256:'d'.repeat(64),processes:[library.processes[1],...generation]};
+   acceptance_sha256:'c'.repeat(64),lexlean_attestation_sha256:'d'.repeat(64),processes:[library.processes[0],library.processes[1],...generation]};
   manifest.exporter_owner=ownerFixture(manifest,'application',generation);
   for(const phase of manifest.exporter_owner.phases)phase.lexlean_manifest_sha256=sha(lexlean_manifest).slice(7);
   const buildEvidence={model,lexlean_manifest,artifacts:structuredClone(manifest.exporter_owner.phases[0].artifacts)};
   const verify=value=>validateSeededApplication(Buffer.from(canonical(value)),manifest.build_id,'sha256:'+manifest.model_sha256,binding,sourceAuthorityFixture,buildEvidence);
   const actual=verify(manifest);assert.equal(actual.manifest,canonical(manifest));assert.equal(actual.manifest_sha256,sha(canonical(manifest)));
   for(const mutate of [v=>v.extra=true,v=>v.schema='prismpm/library-verification-manifest/1',v=>v.build_id='f'.repeat(64),
-   v=>v.model_sha256='f'.repeat(64),v=>v.processes=[],v=>v.processes.push(v.processes[3]),v=>v.processes[3].tool='prod-export',
-   v=>v.processes[3].argv=[],v=>v.processes[3].exit_code=1,v=>delete v.processes[3].exporter,
-   v=>v.processes[3].exporter.acquisition={schema:'prismpm/exporter-acquisition/1',mode:'cold'},
-   v=>v.processes[3].exporter.executable.sha256='f'.repeat(64),v=>v.processes[3].exporter.executable.mode=-1,
-   v=>v.processes[3].exporter.source_archive_sha256='f'.repeat(64),
+   // Preflight parser controls only: no independent expected Lean hash is
+   // available here to reject an otherwise well-formed substituted digest.
+   v=>v.processes.shift(),v=>v.processes[0].tool='foreign-lean-version',
+   v=>delete v.processes[0].executable_sha256,v=>v.processes[0].executable_sha256='changed',
+   v=>v.processes[0].exit_code=1,
+   v=>v.model_sha256='f'.repeat(64),v=>v.processes=[],v=>v.processes.push(applicationExporter(v)),v=>applicationExporter(v).tool='prod-export',
+   v=>applicationExporter(v).argv=[],v=>applicationExporter(v).exit_code=1,v=>delete applicationExporter(v).exporter,
+   v=>applicationExporter(v).exporter.acquisition={schema:'prismpm/exporter-acquisition/1',mode:'cold'},
+   v=>applicationExporter(v).exporter.executable.sha256='f'.repeat(64),v=>applicationExporter(v).exporter.executable.mode=-1,
+   v=>applicationExporter(v).exporter.source_archive_sha256='f'.repeat(64),
    ...['platform','inventory_sha256','manifest_sha256','archive_sha256','compiler_revision','toolchain','executable_sha256']
-    .map(field=>v=>{v.processes[3].exporter.acquisition[field]='changed';}),
+    .map(field=>v=>{applicationExporter(v).exporter.acquisition[field]='changed';}),
    v=>delete v.exporter_owner,v=>v.exporter_owner.phases.reverse(),v=>v.exporter_owner.phases.pop(),
    v=>v.exporter_owner.phases[0].artifacts[0].sha256='f'.repeat(64),
    v=>v.exporter_owner.phases[0].processes[2].exporter.source_archive_sha256='f'.repeat(64),
    v=>v.exporter_owner.phases[0].processes[2].exporter.acquisition.platform='linux/invalid',
    v=>v.exporter_owner.phases[0].processes[0].executable_sha256='f'.repeat(64),
    v=>v.exporter_owner.phases[1].processes[2].argv.push('--undeclared'),
-   v=>{for(const phase of v.exporter_owner.phases)phase.processes[2].argv[5]='Foreign.main';v.processes[3].argv[5]='Foreign.main';},
+   v=>{for(const phase of v.exporter_owner.phases)phase.processes[2].argv[5]='Foreign.main';applicationExporter(v).argv[5]='Foreign.main';},
    v=>{for(const phase of v.exporter_owner.phases)phase.artifacts[0].sha256='f'.repeat(64);},
    v=>{for(const phase of v.exporter_owner.phases)phase.lexlean_manifest_sha256='f'.repeat(64);},
   ]){
