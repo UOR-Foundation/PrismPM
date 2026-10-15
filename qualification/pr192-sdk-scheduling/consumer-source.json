@@ -1,0 +1,217 @@
+{
+  "schema": "prismpm/private-sdk-scheduling-consumer/1",
+  "repository": "UOR-Foundation/PrismPM",
+  "revision": "d0174e1d64339f73091fe4c59d5d6bf532a37d1f",
+  "fixture": "HO-11",
+  "sdk_image": "ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:60226bc791d4c0e5613402a6be7e63f4963d3faf7f327befcf56fc0e41d0ce21",
+  "files": [
+    {
+      "path": "lake-manifest.json",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/lake-manifest.json",
+      "blob": "7f2f1d261703751678bb1c7da685ba276b2837b9",
+      "bytes": 132,
+      "sha256": "6ff5b426644265e0ef6cc07d4f3019807c539d197026f3618b0502331141c03f"
+    },
+    {
+      "path": "lakefile.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/lakefile.toml",
+      "blob": "534d746489d00241c9fb4ca8892451095a9a0a5a",
+      "bytes": 122,
+      "sha256": "02ecae110d2f6c8cd0992a33a18d128c1341f6112184206550398a1f8f911414"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-component-kind.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-component-kind.toml",
+      "blob": "dbd4780fd730208aef8e37d8085cb89a4fe03a86",
+      "bytes": 356,
+      "sha256": "bb54f236dd64badfc74d57ee43a0f4d886786b9270edb07347f062541bec613e"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-component.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-component.toml",
+      "blob": "af43c9c8e28f20c9d00ca0c69448c39a0e7407a5",
+      "bytes": 337,
+      "sha256": "ef7345b3d4cb74e68c5da598895f13cd887cca2d2247058a1fd062adc2597c50"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-concern.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-concern.toml",
+      "blob": "75fc2dfb50fc795b0a63b772d8e98905a822a96a",
+      "bytes": 329,
+      "sha256": "e2b1b3f560e85d0fb51f75b19b1c18b9f5f83f48eaf952b6c9a9a75ae73f3248"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-edge-kind.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-edge-kind.toml",
+      "blob": "ff413a4bcb2c3ff6d7bd54c6cfd9739a570f6252",
+      "bytes": 336,
+      "sha256": "333c549f1db8311e47c74e391839649e20ba45495f6c40843348a45588db444f"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-edge.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-edge.toml",
+      "blob": "64cf40e85e5ff5aef253d79bf9e0216136587606",
+      "bytes": 317,
+      "sha256": "3a9d18d8e28a3a3b50be9d1315037fd2c426d56cfc8e2f6115a4b0785e6a5840"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-model-kind.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-model-kind.toml",
+      "blob": "0414bacc7c4927a00815933a216c3f444c9d9cb8",
+      "bytes": 339,
+      "sha256": "ccb283501e64ab83914728371e1e2fdf8301837bc502804c4bd18c1d49128ada"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-stakeholder.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-stakeholder.toml",
+      "blob": "c3ff77d92a25e11ca9aad4326fe6f20d1c8d4c54",
+      "bytes": 331,
+      "sha256": "f8e4bc507df3cf0e384d6c9a92912500ddca2004be3cfeede0f3cc3d38a04ec7"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-standard-reference.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-standard-reference.toml",
+      "blob": "1eac4a3efa14810e0f74148cb729f22e74dc3cf0",
+      "bytes": 359,
+      "sha256": "07e3dcf71b75ee0dcfe8441894e5ad3744f042577c502619b3bedb787c86ca1b"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-text-application-model.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-text-application-model.toml",
+      "blob": "23ca3d904d7557f9076974190ce72c80b79d3a9c",
+      "bytes": 382,
+      "sha256": "6d92d1a7d29d4516dde60bd9539e758b1076dfbf889860e3e435f289c504b9d1"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-view-class.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-view-class.toml",
+      "blob": "a49493d642a696ed6fbca9b7418500befcca7e14",
+      "bytes": 339,
+      "sha256": "ef9465462b1adcf5c36b10b2669f03057d5215bbfd10e863db58e81727408fdb"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-view.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-view.toml",
+      "blob": "b75ebfa3acd6cc5b975bbda727db32c53785a747",
+      "bytes": 316,
+      "sha256": "2bee3378b0f94165eb8f023279eaab32ec70c5e112e3c06bce7237a1498e0e31"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-viewpoint-class.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-viewpoint-class.toml",
+      "blob": "fb12ac479ebb2d15daa60d1aeebfe1a10b9016cc",
+      "bytes": 359,
+      "sha256": "c1efce0dd43342b471433ae8a89d7cc46876d54ef3200aed8e08e817f36795cf"
+    },
+    {
+      "path": "language/prism.arch/entries/arch-viewpoint.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/arch-viewpoint.toml",
+      "blob": "005fb8730c47248d21ab623e8211307908dea2d2",
+      "bytes": 336,
+      "sha256": "a6f53b7f4c58950d7230fb6445a35a80e3a93772fb024b5e7c09381c10cd466c"
+    },
+    {
+      "path": "language/prism.arch/entries/holo-flat-validation-input.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/holo-flat-validation-input.toml",
+      "blob": "9489644b73398c326d7be1f0d955c46677100a36",
+      "bytes": 369,
+      "sha256": "e3a0cf83efd144e1aa3ed6ce5b67ea3bed1df1c4f198c71655c817b65b1d0108"
+    },
+    {
+      "path": "language/prism.arch/entries/holo-normalized-model.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/holo-normalized-model.toml",
+      "blob": "919f2c8aa55dacde44861bf35b691f29b19a5670",
+      "bytes": 358,
+      "sha256": "5f7f66774560717cfa55842e30e8fc1b097e1e038b0eba6da6ea3312b583080e"
+    },
+    {
+      "path": "language/prism.arch/entries/holo-standards-profile.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/entries/holo-standards-profile.toml",
+      "blob": "dfe904272b687b4a49cb4731f8151e52639a339b",
+      "bytes": 360,
+      "sha256": "1cf436bcdcc986f4ffcb41db1f31eba74aab4e534a867b4dc5d6d6cf7523417d"
+    },
+    {
+      "path": "language/prism.arch/lexicon.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/language/prism.arch/lexicon.toml",
+      "blob": "e7cd9de062977bddfd883b12b52831ed912c95e4",
+      "bytes": 169,
+      "sha256": "8ab357ccbdc3437ad3b98e37ee62bc17df04efb08906d1d4b1c4d58877c20ce8"
+    },
+    {
+      "path": "lean-toolchain",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/lean-toolchain",
+      "blob": "2b61957be5f4986fcc464cb4f62322f2d6ca3dfc",
+      "bytes": 25,
+      "sha256": "8e3538e0ab5f81a3ee04927d8838c8c674e0e112838b4b3ce87ec218143276af"
+    },
+    {
+      "path": "lexlean.lock",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/lexlean.lock",
+      "blob": "fd4b43273be02e9e87ed691265afd75e8504307a",
+      "bytes": 1959,
+      "sha256": "c2855088d028d9d4c11f744f0e31c661d0cefcbeb407fd8dee9a3c1521535e94"
+    },
+    {
+      "path": "lexlean.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/lexlean.toml",
+      "blob": "65f1748c2caab285690df7400c505b33a0d674f3",
+      "bytes": 749,
+      "sha256": "255c44bb54375f125b44ebe0e27b84d4de8a0b00fa7a243d0eb950540ded150c"
+    },
+    {
+      "path": "prismpm.toml",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/prismpm.toml",
+      "blob": "018b92895d2bf643e80d6a7deced372de8e41704",
+      "bytes": 186,
+      "sha256": "873c23f7e0c039504a791069979aef229a6d98ddc2134c6704e337e0b47e90d3"
+    },
+    {
+      "path": "src/Foundation/Bytes.lex.tex",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/src/Foundation/Bytes.lex.tex",
+      "blob": "5e856dabbbab24e72298699a8b24a6e253d036a6",
+      "bytes": 2488,
+      "sha256": "0dab854d52ddf68da4d560aefc8c0ae17d771dd8e5d3e6f2879b4095676e76e4"
+    },
+    {
+      "path": "src/Foundation/Utf8.lex.tex",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/src/Foundation/Utf8.lex.tex",
+      "blob": "c1ab461dc147d220e1a8a9c3e5b535743d0c9489",
+      "bytes": 845,
+      "sha256": "da95b0dc154f6fdc0a87e7af9ec87b149627726d6e88888399f22af00a1cefdf"
+    },
+    {
+      "path": "src/Foundation/View/Text/V1/Model.lex.tex",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/src/Foundation/View/Text/V1/Model.lex.tex",
+      "blob": "7cc30eb5ebc774dbef017f7579a4a2ff711b007f",
+      "bytes": 2229,
+      "sha256": "0330f25d081010dd718aa4f02298df3c9ad0b95cdc3d51fee085e3fcbc3fc9dd"
+    },
+    {
+      "path": "src/TextRequest.lex.tex",
+      "source_path": "tests/fixtures/holo/ho-11-text-application/project/src/TextRequest.lex.tex",
+      "blob": "d7507e29e12a0e9399822aaf687444da1b3c14fb",
+      "bytes": 6474,
+      "sha256": "10821a775ac934cc7ba64c3960fcafc993bdf403af5a90295c471fdce70742c8"
+    },
+    {
+      "path": "standards.lock",
+      "source_path": "standards.lock",
+      "blob": "369c9d48b1170aee541a312096e8a172d290d953",
+      "bytes": 59711,
+      "sha256": "4396feba2f6ef28ed69bfccecba29398fd30c22861d30a6a2a9cde3d00b34426"
+    },
+    {
+      "path": "prismpm.lock",
+      "source_path": "prismpm.lock",
+      "source_repository": "UOR-Foundation/calculator-example",
+      "source_revision": "fb4658adbc2c4b68e6537fd616cfb6896001e3d0",
+      "blob": "cec41c29f6caf8ace4ea2cbf1fb38db3d242bdaa",
+      "bytes": 8996,
+      "sha256": "5ee081904bacc478e07a0706421c4a09fe02121e0e0c65391ca2395ec1b41bac"
+    }
+  ],
+  "runtime_qualified": false,
+  "consumer_sdk_lock_repository": "UOR-Foundation/calculator-example",
+  "consumer_sdk_lock_revision": "fb4658adbc2c4b68e6537fd616cfb6896001e3d0"
+}
