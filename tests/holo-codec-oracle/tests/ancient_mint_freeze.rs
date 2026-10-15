@@ -1,160 +1,215 @@
-use std::fs;
-use std::path::Path;
+//! Legacy pinned reference wire-codec regressions only.
+//! These synthetic vectors neither construct Ancient Mint nor qualify the
+//! current hologram-live format, a PrismPM application, or release acceptance.
 use hologram::archive::{HoloLoader, HoloWriter, SectionKind};
-use hologram::space::{
-    address_bytes, AppManifest, Capabilities, CapabilitySet, Layer, LayerKind, Realization,
-};
-use serde_json::json;
+use hologram::space::{address_bytes, AppManifest, Realization};
+use serde_json::{json, Value};
 
-fn empty_capabilities() -> Vec<u8> {
-    CapabilitySet::new(Capabilities {
-        storage_roots: Vec::new(),
-        storage_quota_bytes: 0,
-        network_fetch_endpoints: Vec::new(),
-        network_announce_endpoints: Vec::new(),
-        publish_channels: Vec::new(),
-        subscribe_channels: Vec::new(),
-        memory_max_bytes: 0,
-        cpu_time_per_event_ms: 0,
-        priority_weight: 0,
-    })
-    .canonicalize()
+fn fixture() -> Value {
+    let value: Value = serde_json::from_str(include_str!("../../data/holo-codec-v1.json"))
+        .expect("repository-owned reference codec vector");
+    assert_eq!(value["schema"], "prismpm/holo-codec-oracle/1");
+    assert_eq!(
+        value["oracle"]["revision"],
+        "2bda6a9a9476872dade705bd61ece4209607f6da"
+    );
+    assert_eq!(
+        value["scope"],
+        "Synthetic wire-codec vectors; not executable-application, conformance, or release acceptance."
+    );
+    value
 }
 
-fn upstream_extension(key: &str, value: &[u8]) -> Vec<u8> {
-    let mut writer = HoloWriter::new();
-    writer.add_extension(key, value.to_vec());
-    let archive = writer
-        .finish()
-        .expect("upstream synthetic extension framing");
+fn unhex(value: &Value) -> Vec<u8> {
+    let text = value.as_str().expect("reference vector hex string");
+    assert_eq!(text.len() % 2, 0);
+    text.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+        .collect()
+}
+
+fn section_kind(value: &Value) -> SectionKind {
+    match value.as_u64().expect("reference section kind") {
+        15 => SectionKind::AppManifest,
+        8 => SectionKind::Metadata,
+        14 => SectionKind::Extension,
+        16 => SectionKind::ContentBlob,
+        kind => panic!("unexpected reference section kind {kind}"),
+    }
+}
+
+// Match the existing pinned producer's complete physical parse stages, not a
+// new strict-profile or application-acceptance predicate.
+fn physical_outcome(bytes: &[u8]) -> Value {
+    let loader = match HoloLoader::from_bytes(bytes) {
+        Ok(loader) => loader,
+        Err(error) => return json!({"stage": "header-footer", "error": format!("{error:?}")}),
+    };
+    let plan = match loader.into_plan() {
+        Ok(plan) => plan,
+        Err(error) => return json!({"stage": "section-table", "error": format!("{error:?}")}),
+    };
+    for section in plan.sections() {
+        if let Err(error) = plan.section(section.kind) {
+            return json!({"stage": "section-payload", "error": format!("{error:?}")});
+        }
+    }
+    if let Err(error) = plan.content_blobs() {
+        return json!({"stage": "content-blob", "error": format!("{error:?}")});
+    }
+    if let Err(error) = plan.extensions() {
+        return json!({"stage": "extension", "error": format!("{error:?}")});
+    }
+    json!({"stage": "accepted-physical-archive"})
+}
+
+#[test]
+fn pinned_reference_archive_round_trips_every_section() {
+    let vector = fixture();
+    let archive = unhex(&vector["archive"]["bytes_hex"]);
+    let body = unhex(&vector["archive"]["body_hex"]);
+    let footer = unhex(&vector["archive"]["footer_hex"]);
+    assert!(archive.starts_with(b"HOLO\x04\x00"));
+    assert_eq!([body.as_slice(), footer.as_slice()].concat(), archive);
+    assert_eq!(footer, blake3::hash(&body).as_bytes().to_vec());
+    assert_eq!(
+        address_bytes(&archive).to_string(),
+        vector["archive"]["kappa"].as_str().unwrap()
+    );
+
+    let rows = vector["archive"]["sections"].as_array().unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| row["kind"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![15, 8, 14, 14, 16, 16, 16, 16]
+    );
+    let sections = rows
+        .iter()
+        .map(|row| (section_kind(&row["kind"]), unhex(&row["payload_hex"])))
+        .collect::<Vec<_>>();
+    assert_eq!(HoloWriter::assemble(sections), archive);
+
     let plan = HoloLoader::from_bytes(&archive)
         .unwrap()
         .into_plan()
         .unwrap();
-    plan.section(SectionKind::Extension).unwrap().to_vec()
+    assert_eq!(plan.sections().len(), rows.len());
+    for (actual, expected) in plan.sections().iter().zip(rows) {
+        assert_eq!(actual.kind as u8 as u64, expected["kind"].as_u64().unwrap());
+        assert_eq!(actual.offset, expected["offset"].as_u64().unwrap());
+        assert_eq!(actual.length, expected["length"].as_u64().unwrap());
+        let start = usize::try_from(actual.offset).unwrap();
+        let length = usize::try_from(actual.length).unwrap();
+        assert_eq!(
+            &archive[start..start + length],
+            unhex(&expected["payload_hex"])
+        );
+    }
+    let manifest = unhex(&vector["manifest"]["bytes_hex"]);
+    assert_eq!(plan.app_manifest().unwrap(), manifest);
+    assert_eq!(
+        AppManifest::decode(&manifest).unwrap().canonicalize(),
+        manifest
+    );
+    let references = <AppManifest as Realization>::references(&manifest).unwrap();
+    let expected = vector["manifest"]["references"].as_array().unwrap();
+    assert_eq!(references.len(), expected.len());
+    for (actual, expected) in references.iter().zip(expected) {
+        assert_eq!(actual.to_string(), expected.as_str().unwrap());
+    }
+    let directory = unhex(&vector["archive_inputs"]["directory_json_hex"]);
+    let provenance = unhex(&vector["archive_inputs"]["provenance_json_hex"]);
+    assert_eq!(
+        plan.extensions().unwrap(),
+        vec![
+            (
+                "https://hologram.foundation/extension/application-directory/v1",
+                directory.as_slice()
+            ),
+            (
+                "https://uor.foundation/extension/prismpm-model/v1",
+                provenance.as_slice()
+            )
+        ]
+    );
+    let blobs = vector["archive_inputs"]["blobs_hex"].as_array().unwrap();
+    let parsed_blobs = plan.content_blobs().unwrap();
+    assert_eq!(parsed_blobs.len(), 4);
+    assert_eq!(blobs.len(), 4);
+    let label_length = address_bytes(b"").as_bytes().len();
+    for ((actual_label, actual_content), blob) in parsed_blobs.iter().zip(blobs) {
+        let payload = unhex(blob);
+        assert!(payload.len() >= label_length);
+        assert_eq!(*actual_label, &payload[..label_length]);
+        assert_eq!(*actual_content, &payload[label_length..]);
+        assert_eq!(address_bytes(actual_content).as_bytes(), *actual_label);
+    }
+    assert_eq!(
+        physical_outcome(&archive),
+        json!({"stage": "accepted-physical-archive"})
+    );
 }
 
 #[test]
-fn compute_and_assemble_ancient_mint_holo() {
-    let base_dir = Path::new("/media/citizen/b361d448-7c51-413a-aa23-9515cb626930/home/citizen/Multiplicity/Phase Mirror");
-    let model_path = base_dir.join("artifacts/ancient_mint_model.prism.json");
-    let manifest_path = base_dir.join("artifacts/ancient_mint_manifest.json");
-
-    let model_bytes = fs::read(&model_path).expect("read model.prism.json");
-    let manifest_bytes = fs::read(&manifest_path).expect("read manifest.json");
-
-    let capabilities = empty_capabilities();
-    let cap_kappa = address_bytes(&capabilities);
-    let model_kappa = address_bytes(&model_bytes);
-
-    let app_manifest = AppManifest {
-        primary: None,
-        requires: cap_kappa,
-        layers: vec![
-            Layer {
-                kind: LayerKind::View,
-                content: model_kappa,
-                entry: "model.prism.json".to_owned(),
-                aux: "portable".to_owned(),
-            }
-        ],
-        children: Vec::new(),
-    };
-    app_manifest.validate().unwrap();
-    let canonical_manifest = app_manifest.canonicalize();
-    let app_manifest_kappa = address_bytes(&canonical_manifest);
-
-    let directory = serde_json::to_vec(&json!({
-        "schema_version": 1,
-        "primary_layer": null,
-        "requires_kappa": cap_kappa.to_string(),
-        "layers": [{
-            "position": 0,
-            "kind": "view",
-            "content_kappa": model_kappa.to_string(),
-            "entry": "model.prism.json",
-            "surface": "portable"
-        }],
-        "children": [],
-        "blobs": [{
-            "kappa": model_kappa.to_string(),
-            "byte_length": model_bytes.len()
-        }]
-    })).unwrap();
-
-    let provenance = serde_json::to_vec(&json!({
-        "schema": "prismpm/model-provenance/1",
-        "model_id": "33e35edc7cf68cdf6082f46569978a193eaeb8ad9137c8b5f84b13d65471cf16",
-        "semantic_id": "600f92bcbd3a96aee14922f1cff22b4616bcb7df84625af245f1a609d1f7c93b",
-        "source_id": "d8743aefc1c7d166b96d8d6b90911bea5478fc9e3d4c82be7f4809c52886810b",
-        "model_content_kappa": model_kappa.to_string(),
-        "application_kappa": app_manifest_kappa.to_string()
-    })).unwrap();
-
-    let mut sections = vec![
-        (SectionKind::AppManifest, canonical_manifest),
-        (SectionKind::Metadata, manifest_bytes),
-        (
-            SectionKind::Extension,
-            upstream_extension("https://hologram.foundation/extension/application-directory/v1", &directory),
-        ),
-        (
-            SectionKind::Extension,
-            upstream_extension("https://uor.foundation/extension/prismpm-model/v1", &provenance),
-        ),
-    ];
-
-    let mut blobs = vec![
-        (cap_kappa, capabilities),
-        (model_kappa, model_bytes),
-    ];
-    blobs.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
-    for (label, bytes) in blobs {
-        let mut payload = label.as_bytes().to_vec();
-        payload.extend_from_slice(&bytes);
-        sections.push((SectionKind::ContentBlob, payload));
+fn pinned_reference_loader_preserves_all_existing_malformed_outcomes() {
+    let vector = fixture();
+    let cases = vector["malformed_archives"].as_array().unwrap();
+    assert_eq!(
+        cases
+            .iter()
+            .map(|row| row["name"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec![
+            "bad-magic",
+            "older-version",
+            "newer-version",
+            "nonzero-flags",
+            "nonzero-padding",
+            "wrong-section-count",
+            "unknown-section-kind",
+            "out-of-range-offset",
+            "payload-inside-table",
+            "out-of-range-length",
+            "bad-footer",
+            "trailing-payload-byte"
+        ]
+    );
+    for case in cases {
+        assert_eq!(case["strict_profile_accepts"], false);
+        // Some legacy upstream parses succeed. Preserve those exact observed
+        // outcomes without claiming the strict PrismPM profile accepted them.
+        assert_eq!(
+            physical_outcome(&unhex(&case["bytes_hex"])),
+            case["upstream"],
+            "{}",
+            case["name"]
+        );
     }
+}
 
-    let archive = HoloWriter::assemble(sections);
-
-    // Verify valid Hologram v4 header and footer
-    assert!(archive.starts_with(b"HOLO\x04\x00"));
-    let footer = &archive[archive.len() - 32..];
-    let computed_footer = blake3::hash(&archive[..archive.len() - 32]);
-    assert_eq!(footer, computed_footer.as_bytes());
-
-    let archive_kappa = address_bytes(&archive);
-    let fingerprint_hex = computed_footer.to_hex().to_string();
-
-    // Verify loader
-    let plan = HoloLoader::from_bytes(&archive).unwrap().into_plan().unwrap();
-    assert_eq!(plan.sections().len(), 6);
-
-    // Write .holo archive to artifacts, docs, and project build directory
-    let holo_dest_artifact = base_dir.join("artifacts/ancient_mint.holo");
-    let holo_dest_doc = base_dir.join("docs/ancient_mint.holo");
-    let holo_dest_build = base_dir.join("projects/Ancient Mint/.prism/build/31a993428b9760d880a7e91b9a558006d373625ea4a6678e66a2095b18405f1f/AncientMint.holo");
-
-    fs::write(&holo_dest_artifact, &archive).unwrap();
-    fs::write(&holo_dest_doc, &archive).unwrap();
-    fs::write(&holo_dest_build, &archive).unwrap();
-
-    // Acceptance attestation ID (canonical hash over provenance + archive kappa)
-    let attestation_bytes = serde_json::to_vec(&json!({
-        "schema": "prismpm/application-acceptance/1",
-        "archive_kappa": archive_kappa.to_string(),
-        "archive_fingerprint": fingerprint_hex,
-        "application_kappa": app_manifest_kappa.to_string(),
-        "model_id": "33e35edc7cf68cdf6082f46569978a193eaeb8ad9137c8b5f84b13d65471cf16",
-        "status": "accepted"
-    })).unwrap();
-    let attestation_id = format!("blake3:{}", blake3::hash(&attestation_bytes).to_hex());
-
-    println!("=== ANCIENT MINT HOLOGRAPHIC FREEZE SUMMARY ===");
-    println!("archive_byte_length: {}", archive.len());
-    println!("archive_kappa: {}", archive_kappa);
-    println!("archive_fingerprint: {}", fingerprint_hex);
-    println!("application_kappa: {}", app_manifest_kappa);
-    println!("model_content_kappa: {}", model_kappa);
-    println!("attestation_id: {}", attestation_id);
+#[test]
+fn pinned_reference_archive_rejects_unsealed_mutations_and_truncation() {
+    let vector = fixture();
+    let archive = unhex(&vector["archive"]["bytes_hex"]);
+    let expected = &vector["malformed_archives"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["name"] == "bad-footer")
+        .unwrap()["upstream"];
+    let payload =
+        usize::try_from(vector["archive"]["sections"][0]["offset"].as_u64().unwrap()).unwrap();
+    for index in [payload, archive.len() - 1] {
+        let mut changed = archive.clone();
+        changed[index] ^= 1;
+        assert_eq!(&physical_outcome(&changed), expected);
+    }
+    for length in [0, 1, 5, 9, archive.len() - 1] {
+        assert!(
+            HoloLoader::from_bytes(&archive[..length]).is_err(),
+            "truncated length {length}"
+        );
+    }
 }

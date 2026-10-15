@@ -61,6 +61,7 @@ jobs:
             commands: |
               cargo xtask check-fixtures
               cargo run --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle
+              cargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle
               cargo xtask check-golden
           - name: Lean 4 Proofs & Formal Verification
             timeout: 75

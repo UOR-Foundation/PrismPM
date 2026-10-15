@@ -19,7 +19,7 @@ const commands = [
   ['Conformance / desktop-browser', 210, './scripts/vv.sh conformance desktop-browser'],
   ['Conformance / system-oci', 180, './scripts/vv.sh conformance system-oci'],
   ['Conformance / verification-schemas', 90, './scripts/vv.sh conformance verification-schemas'],
-  ['Fixtures & Reviewed Golden Outputs', 90, 'cargo xtask check-fixtures\ncargo run --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\ncargo xtask check-golden'],
+  ['Fixtures & Reviewed Golden Outputs', 90, 'cargo xtask check-fixtures\ncargo run --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\ncargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\ncargo xtask check-golden'],
   ['Lean 4 Proofs & Formal Verification', 75, 'cargo xtask verify-examples\ncargo run --locked --offline --target-dir target/vendor-lexlean --manifest-path vendor/lexlean/Cargo.toml -- --project lexlean.toml fmt --check\ncargo run --locked --offline --target-dir target/vendor-lexlean --manifest-path vendor/lexlean/Cargo.toml -- --project lexlean.toml lock --check'],
   ['Packaging, API & Upstream Conformance', 120, './scripts/vv.sh package-api'],
 ];
@@ -65,6 +65,9 @@ test('parallel policy refuses missing, duplicated, weakened or unbounded executi
     v => v.jobs.gate.strategy.matrix.include.pop(),
     v => v.jobs.gate.strategy.matrix.include.push(v.jobs.gate.strategy.matrix.include[0]),
     v => v.jobs.gate.strategy.matrix.include[0].commands = 'cargo fmt --check',
+    v => v.jobs.gate.strategy.matrix.include[9].commands = v.jobs.gate.strategy.matrix.include[9].commands.replace('cargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\n', ''),
+    v => v.jobs.gate.strategy.matrix.include[9].commands = v.jobs.gate.strategy.matrix.include[9].commands.replace('cargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\n', 'cargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\ncargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle\n'),
+    v => v.jobs.gate.strategy.matrix.include[9].commands = v.jobs.gate.strategy.matrix.include[9].commands.replace('cargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle', 'cargo test --locked --offline --manifest-path tests/holo-codec-oracle/Cargo.toml --target-dir target/holo-codec-oracle -- missing-test --exact'),
     v => v.jobs.gate.strategy.matrix.include[3].commands += ' || true',
     v => v.jobs.gate.strategy['max-parallel'] = 12,
     v => v.jobs.gate.strategy['fail-fast'] = true,

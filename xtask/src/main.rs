@@ -769,6 +769,20 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         ],
     )?;
 
+    command(
+        root,
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "tests/holo-codec-oracle/Cargo.toml",
+            "--target-dir",
+            "target/holo-codec-oracle",
+        ],
+    )?;
+
     println!("VV gate 8/15: generated Lean build, replay, axiom audit, and source audit");
     verify_examples(root, false)?;
     audit::audit_no_handwritten_lean(root)?;

@@ -174,6 +174,8 @@ const SOURCES: &[&str] = &[
 // The workspace integration target includes this authored module. Its name
 // describes the code it tests, not code generated into this file.
 const WORKSPACE_SOURCES: &[&str] = &["tests/holo-wire-generated.rs"];
+// These integration targets are formatted by their existing HARNESSES cargo fmt.
+const HARNESS_TEST_SOURCES: &[&str] = &["tests/holo-codec-oracle/tests/ancient_mint_freeze.rs"];
 // This oracle's dependencies are privately extracted for execution. Format
 // its authored source directly without resolving that absent dependency tree.
 const SOURCE_ONLY_MANIFESTS: &[&str] = &["tests/hologram-oracle/Cargo.toml"];
@@ -189,6 +191,7 @@ fn inventory() -> Vec<&'static str> {
         .flat_map(|(manifest, source)| [*manifest, *source])
         .chain(SOURCES.iter().copied())
         .chain(WORKSPACE_SOURCES.iter().copied())
+        .chain(HARNESS_TEST_SOURCES.iter().copied())
         .chain(SOURCE_ONLY_MANIFESTS.iter().copied())
         .collect()
 }
