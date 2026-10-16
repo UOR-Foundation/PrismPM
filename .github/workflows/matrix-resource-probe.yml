@@ -21,6 +21,12 @@ jobs:
           ref: dc1f9cf94c4f84fd7f690e5e84de4bd83d0c79da
           persist-credentials: false
           path: product
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: UOR-Foundation/template
+          ref: e0e11ecb1b38e202116d9806887363848629d439
+          persist-credentials: false
+          path: template-source
       - name: Prepare the ephemeral runner for the original SDK archive
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
@@ -56,6 +62,12 @@ jobs:
           docker pull "127.0.0.1:5000/sdk@$digest"
           printf 'PROBE_IMAGE=127.0.0.1:5000/sdk@%s\n' "$digest" >> "$GITHUB_ENV"
           rm sdk-archive/sdk.oci.tar
+      - name: Bind the diagnostic through the original canonical single-platform renderer
+        run: |
+          bash template-source/bootstrap/render.sh ghcr.io/afflom/lexlean-matmul-sdk@sha256:612218babb20d07f6a5dec0c9bd294b96f94302748d58fbb1599f03c71ad25a3 UOR-Foundation/PrismPM/action@366b48e142cd9a6ea9dc01abc970f536a5fb931a e0e11ecb1b38e202116d9806887363848629d439
+          cp template-source/prismpm.lock product/prismpm.lock
+          cp template-source/standards.lock product/standards.lock
+          cp product/prismpm.lock diagnostic/canonical-sdk-lock.json
       - name: Prepare a diagnostic application selection with the SDK-owned standard library
         run: |
           docker run --rm --user "$(id -u):$(id -g)" --volume "$PWD/product:$PWD/product" --workdir "$PWD/product" --env PRISMPM_EPHEMERAL_HOME=1 "$PROBE_IMAGE" bash -c '
