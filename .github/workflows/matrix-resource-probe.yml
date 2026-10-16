@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: afflom/lexlean-matmul
-          ref: ddd8821f5175e4c82b7adfe91b269aacda6097f5
+          ref: 4691234eb0e6cc2136a75037c4864806d2afe91c
           persist-credentials: false
           path: product
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -78,7 +78,7 @@ jobs:
             node --input-type=module -e '\''import fs from "node:fs";let s=fs.readFileSync("lexlean.toml","utf8");s=s.replace(/^entrypoints = .*$/m,"entrypoints = [\"src/Application.lex.tex\"]");fs.writeFileSync("lexlean.toml",s);'\''
             lexlean lock
           '
-      - name: Build the diagnostic owned-list application through the original SDK
+      - name: Build the original-reader diagnostic metadata through the original SDK
         id: build
         continue-on-error: true
         run: |
@@ -89,7 +89,7 @@ jobs:
       - name: Probe the actual generated import-free Wasm
         if: steps.build.outcome == 'success'
         env:
-          PROBE_COMMIT: ddd8821f5175e4c82b7adfe91b269aacda6097f5
+          PROBE_COMMIT: 4691234eb0e6cc2136a75037c4864806d2afe91c
         run: |
           cat > diagnostic/probe.mjs <<'JS'
           import fs from 'node:fs';
@@ -103,6 +103,18 @@ jobs:
           if(bytes.length!==item.byte_length || sha(bytes)!==item.sha256.replace('sha256:',''))throw Error('Wasm manifest mismatch');
           fs.copyFileSync(base+item.path,'diagnostic/application.wasm');
           fs.copyFileSync('product/'+build.manifest_path,'diagnostic/manifest.json');
+          let sourceBytes=0;
+          for(const file of manifest.files) {
+            if(!/^(?:cargo\/(?:package\/|kernel\.ir$|roots\.json$|coverage\.json$|[^/]+\.crate$)|core-wasm\/package\/|application\/(?:target-profile|model-provenance|source-manifest)\.json$)/.test(file.path))continue;
+            if(file.path.split('/').some(part=>!part||part==='.'||part==='..'))throw Error('Noncanonical generated source path');
+            const content=fs.readFileSync(base+file.path);
+            if(content.length!==file.byte_length||sha(content)!==file.sha256.replace('sha256:',''))throw Error('Generated source manifest mismatch: '+file.path);
+            sourceBytes+=content.length;
+            if(sourceBytes>536870912)throw Error('Diagnostic source capture exceeds declared 512MiB cap');
+            const target='diagnostic/generated/'+file.path;
+            fs.mkdirSync(target.slice(0,target.lastIndexOf('/')),{recursive:true});fs.writeFileSync(target,content);
+          }
+          if(!fs.existsSync('diagnostic/generated/cargo/kernel.ir')||!fs.existsSync('diagnostic/generated/cargo/package/src/lib.rs')||!fs.existsSync('diagnostic/generated/core-wasm/package/src/lib.rs'))throw Error('Generated source capture is incomplete');
           const module=await WebAssembly.compile(bytes);
           if(WebAssembly.Module.imports(module).length)throw Error('Unexpected Wasm imports');
           const req=(...xs)=>xs.join('\t'),csv=xs=>xs.join(',');
