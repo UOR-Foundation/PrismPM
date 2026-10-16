@@ -33,11 +33,13 @@ jobs:
           printf '%s  %s\n' bf7459038ee892e434c1ce501d62c10416b36daca7962179de041db6706f75cf sdk-archive.zip | sha256sum --check --strict
           unzip -q sdk-archive.zip -d sdk-archive
           cp sdk-archive/construction.json diagnostic/original-construction.json
+          bash sdk-source/scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
+          export PATH="$RUNNER_TEMP/oras:$PATH"
+          printf '%s\n' "$RUNNER_TEMP/oras" >> "$GITHUB_PATH"
           bash sdk-source/scripts/sdk-candidate.sh inspect sdk-archive/sdk.oci.tar amd64 366b48e142cd9a6ea9dc01abc970f536a5fb931a diagnostic/oci
           rm sdk-archive.zip
       - name: Transport the immutable OCI image without format conversion
         run: |
-          bash sdk-source/scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
           mkdir zot-config
           printf '%s\n' '{"distSpecVersion":"1.1.1","http":{"address":"0.0.0.0","port":5000},"log":{"level":"warn"},"storage":{"rootDirectory":"/tmp/zot"}}' > zot-config/config.json
           docker volume create matrix-probe-config
