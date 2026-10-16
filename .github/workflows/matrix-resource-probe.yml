@@ -1,0 +1,119 @@
+name: diagnostic matrix resource probe
+on:
+  push:
+    branches: [ci/lexlean-matmul-resource-probe-2026-10-16]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: 366b48e142cd9a6ea9dc01abc970f536a5fb931a
+          path: sdk-source
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: afflom/lexlean-matmul
+          ref: dc1f9cf
+          persist-credentials: false
+          path: product
+      - name: Prepare the ephemeral runner for the original SDK archive
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          mkdir diagnostic sdk-archive
+      - name: Fetch and verify the original official construction artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/UOR-Foundation/PrismPM/actions/artifacts/11953742351/zip > sdk-archive.zip
+          printf '%s  %s\n' bf7459038ee892e434c1ce501d62c10416b36daca7962179de041db6706f75cf sdk-archive.zip | sha256sum --check --strict
+          unzip -q sdk-archive.zip -d sdk-archive
+          cp sdk-archive/construction.json diagnostic/original-construction.json
+          bash sdk-source/scripts/sdk-candidate.sh inspect sdk-archive/sdk.oci.tar amd64 366b48e142cd9a6ea9dc01abc970f536a5fb931a diagnostic/oci
+          rm sdk-archive.zip
+      - name: Transport the immutable OCI image without format conversion
+        run: |
+          bash sdk-source/scripts/sdk-candidate.sh install-oras "$RUNNER_TEMP/oras"
+          mkdir zot-config
+          printf '%s\n' '{"distSpecVersion":"1.1.1","http":{"address":"0.0.0.0","port":5000},"log":{"level":"warn"},"storage":{"rootDirectory":"/tmp/zot"}}' > zot-config/config.json
+          docker volume create matrix-probe-config
+          docker container create --name matrix-probe-registry --publish 127.0.0.1:5000:5000 --read-only --tmpfs /tmp:rw,nosuid,nodev --volume matrix-probe-config:/config ghcr.io/project-zot/zot@sha256:cd2aea942f428630bcb4190542be6abd35e14177aab84fc7ccad0dca8ecb363d serve /config/config.json
+          docker container cp zot-config/config.json matrix-probe-registry:/config/config.json
+          docker container start matrix-probe-registry
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5000/v2/ >/dev/null; then break; fi
+            sleep 0.25
+          done
+          digest=$(cat diagnostic/oci/digest.txt)
+          "$RUNNER_TEMP/oras/oras" cp --from-oci-layout --to-plain-http "sdk-archive/sdk.oci.tar@$digest" 127.0.0.1:5000/sdk:probe
+          test "$("$RUNNER_TEMP/oras/oras" resolve --plain-http 127.0.0.1:5000/sdk:probe)" = "$digest"
+          docker pull "127.0.0.1:5000/sdk@$digest"
+          printf 'PROBE_IMAGE=127.0.0.1:5000/sdk@%s\n' "$digest" >> "$GITHUB_ENV"
+          rm sdk-archive/sdk.oci.tar
+      - name: Prepare a diagnostic application selection with the SDK-owned standard library
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$PWD/product:$PWD/product" --workdir "$PWD/product" --env PRISMPM_EPHEMERAL_HOME=1 "$PROBE_IMAGE" bash -c '
+            set -euo pipefail
+            mkdir -p .prism/sdk/inputs/stdlib
+            tar -xf /opt/prismpm/share/stdlib-sources.tar -C .prism/sdk/inputs/stdlib
+            node --input-type=module -e '\''import fs from "node:fs";let s=fs.readFileSync("lexlean.toml","utf8");s=s.replace(/^entrypoints = .*$/m,"entrypoints = [\"src/Application.lex.tex\"]");s=s.replace(/\[\[lexicon_source\]\]\npackage = "prism\.(arch|qual|sec)"[\s\S]*?(?=\n\[|$)/g,"");fs.writeFileSync("lexlean.toml",s);'\''
+            lexlean lock
+          '
+      - name: Build the unchanged mathematical application through the original SDK
+        id: build
+        continue-on-error: true
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$PWD/product:$PWD/product" --workdir "$PWD/product" --env PRISMPM_EPHEMERAL_HOME=1 "$PROBE_IMAGE" bash -c '
+            ulimit -s 65536
+            exec prismpm --json build
+          ' > diagnostic/build.json 2> diagnostic/build.stderr
+      - name: Probe the actual generated import-free Wasm
+        if: steps.build.outcome == 'success'
+        env:
+          PROBE_COMMIT: dc1f9cf
+        run: |
+          cat > diagnostic/probe.mjs <<'JS'
+          import fs from 'node:fs';
+          import {createHash} from 'node:crypto';
+          const sha=b=>createHash('sha256').update(b).digest('hex');
+          const build=JSON.parse(fs.readFileSync('diagnostic/build.json'));
+          const manifest=JSON.parse(fs.readFileSync('product/'+build.manifest_path));
+          const item=manifest.files.find(f=>/^core-wasm\/[^/]+\.wasm$/.test(f.path));
+          const base='product/'+build.manifest_path.slice(0,build.manifest_path.lastIndexOf('/'))+'/';
+          const bytes=fs.readFileSync(base+item.path);
+          if(bytes.length!==item.byte_length || sha(bytes)!==item.sha256.replace('sha256:',''))throw Error('Wasm manifest mismatch');
+          fs.copyFileSync(base+item.path,'diagnostic/application.wasm');
+          fs.copyFileSync('product/'+build.manifest_path,'diagnostic/manifest.json');
+          const module=await WebAssembly.compile(bytes);
+          if(WebAssembly.Module.imports(module).length)throw Error('Unexpected Wasm imports');
+          const req=(...xs)=>xs.join('\t'),csv=xs=>xs.join(',');
+          const max=9218868437227405311n,min=1n,negmax=max+(1n<<63n),negmin=min+(1n<<63n);
+          const cases=[['integer-1',req(1,'matmul',1,1,1,2,3)],['ieee64-1',req(1,'ieee','f64','nearest',1,1,1,4607182418800017408n,4611686018427387904n)],['ieee64-maximum',req(1,'ieee','f64','nearest',1,1,1,max,max)]];
+          for(const n of [1,2,8]){
+            const k=4;
+            const a=Array.from({length:n*k},(_,i)=>[max,min,max,min][i%k]);
+            const b=Array.from({length:k*n},(_,i)=>[max,min,negmax,negmin][Math.floor(i/n)]);
+            cases.push(['ieee64-mixed-'+n,req(1,'ieee','f64','nearest',n,k,n,csv(a),csv(b))]);
+          }
+          cases.push(['integer64digits-8',req(1,'matmul',8,8,8,csv(Array(64).fill('9'.repeat(64))),csv(Array(64).fill('9'.repeat(64))))]);
+          const results=[];
+          for(const[label,input]of cases){
+            const instance=await WebAssembly.instantiate(module,{});const e=instance.exports;
+            const row={label,request_bytes:Buffer.byteLength(input),request_sha256:sha(input),memory_before:e.memory.buffer.byteLength};
+            try{const b=Buffer.from(input);const p=e.holo_alloc(b.length)>>>0;new Uint8Array(e.memory.buffer,p,b.length).set(b);const r=BigInt.asUintN(64,e.holo_run(p,b.length));const off=Number(r>>32n),len=Number(r&0xffffffffn);row.response=Buffer.from(e.memory.buffer,off,len).toString();row.status='returned';}
+            catch(error){row.status='trapped';row.error={name:error.name,message:error.message,stack:error.stack};}
+            row.memory_after=e.memory.buffer.byteLength;results.push(row);console.log(JSON.stringify(row));fs.writeFileSync('diagnostic/resource-probe.json',JSON.stringify({schema:'lexlean-matmul/resource-diagnostic/1',qualified_for_release:false,sdk_image:process.env.PROBE_IMAGE,source:process.env.PROBE_COMMIT,wasm_sha256:sha(bytes),results},null,2)+'\n');
+          }
+          JS
+          timeout 300 node diagnostic/probe.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: matrix-sdk-resource-diagnostic
+          path: diagnostic
+          if-no-files-found: error
+          retention-days: 3
