@@ -72,9 +72,9 @@ jobs:
         run: |
           docker run --rm --user "$(id -u):$(id -g)" --volume "$PWD/product:$PWD/product" --workdir "$PWD/product" --env PRISMPM_EPHEMERAL_HOME=1 "$PROBE_IMAGE" bash -c '
             set -euo pipefail
-            mkdir -p .prism/sdk/inputs/stdlib
-            tar -xf /opt/prismpm/share/stdlib-sources.tar --strip-components=1 -C .prism/sdk/inputs/stdlib
-            node --input-type=module -e '\''import fs from "node:fs";let s=fs.readFileSync("lexlean.toml","utf8");s=s.replace(/^entrypoints = .*$/m,"entrypoints = [\"src/Application.lex.tex\"]");s=s.replace(/\[\[lexicon_source\]\]\npackage = "prism\.(arch|qual|sec)"[\s\S]*?(?=\n\[|$)/g,"");fs.writeFileSync("lexlean.toml",s);'\''
+            mkdir -p .prism/sdk/inputs
+            tar -xf /opt/prismpm/share/stdlib-sources.tar -C .prism/sdk/inputs
+            node --input-type=module -e '\''import fs from "node:fs";let s=fs.readFileSync("lexlean.toml","utf8");s=s.replace(/^entrypoints = .*$/m,"entrypoints = [\"src/Application.lex.tex\"]");fs.writeFileSync("lexlean.toml",s);'\''
             lexlean lock
           '
       - name: Build the unchanged mathematical application through the original SDK
