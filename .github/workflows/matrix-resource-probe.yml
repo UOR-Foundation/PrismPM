@@ -66,7 +66,7 @@ jobs:
         run: |
           bash template-source/bootstrap/render.sh ghcr.io/afflom/lexlean-matmul-sdk@sha256:612218babb20d07f6a5dec0c9bd294b96f94302748d58fbb1599f03c71ad25a3 UOR-Foundation/PrismPM/action@366b48e142cd9a6ea9dc01abc970f536a5fb931a e0e11ecb1b38e202116d9806887363848629d439
           cp template-source/prismpm.lock product/prismpm.lock
-          cp template-source/standards.lock product/standards.lock
+          docker run --rm --entrypoint cat ghcr.io/afflom/lexlean-matmul-sdk@sha256:612218babb20d07f6a5dec0c9bd294b96f94302748d58fbb1599f03c71ad25a3 /opt/prismpm/share/standards.lock > product/standards.lock
           cp product/prismpm.lock diagnostic/canonical-sdk-lock.json
       - name: Prepare a diagnostic application selection with the SDK-owned standard library
         run: |
