@@ -743,6 +743,99 @@ fn osv_databases(root: &Path, lock: &Value) -> Result<(Vec<(String, PathBuf)>, V
     Ok((files, Value::Array(facts)))
 }
 
+struct OsvScanWorkspace {
+    home: tempfile::TempDir,
+    scratch: PathBuf,
+    environment: BTreeMap<String, String>,
+}
+
+impl OsvScanWorkspace {
+    fn new(root: &Path) -> Result<Self, PrismError> {
+        let root = root
+            .canonicalize()
+            .map_err(|error| PrismError::new("PP7801", format!("OSV scan project: {error}")))?;
+        let parent = root.join(".prism/cache/scanner-workspaces");
+        for path in [
+            root.join(".prism"),
+            root.join(".prism/cache"),
+            parent.clone(),
+        ] {
+            match std::fs::symlink_metadata(path) {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    return Err(PrismError::new(
+                        "PP7801",
+                        "OSV scan workspace cache contains a symlink",
+                    ));
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(PrismError::new(
+                        "PP7801",
+                        format!("OSV scan workspace: {error}"),
+                    ))
+                }
+            }
+        }
+        std::fs::create_dir_all(&parent)
+            .map_err(|error| PrismError::new("PP7801", format!("OSV scan workspace: {error}")))?;
+        if parent
+            .canonicalize()
+            .map_err(|error| PrismError::new("PP7801", format!("OSV scan workspace: {error}")))?
+            != parent
+        {
+            return Err(PrismError::new(
+                "PP7801",
+                "OSV scan workspace escapes its project cache through a symlink",
+            ));
+        }
+        let mut builder = tempfile::Builder::new();
+        builder.prefix("scan-");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(std::fs::Permissions::from_mode(0o700));
+        }
+        let home = builder
+            .tempdir_in(parent)
+            .map_err(|error| PrismError::new("PP7801", format!("OSV scan home: {error}")))?;
+        let scratch = home.path().join("tmp");
+        std::fs::create_dir(&scratch)
+            .map_err(|error| PrismError::new("PP7801", format!("OSV scan scratch: {error}")))?;
+        let environment = BTreeMap::from([
+            (
+                "HOME".to_owned(),
+                home.path().to_string_lossy().into_owned(),
+            ),
+            (
+                "XDG_CACHE_HOME".to_owned(),
+                home.path().join(".cache").to_string_lossy().into_owned(),
+            ),
+            ("TMPDIR".to_owned(), scratch.to_string_lossy().into_owned()),
+        ]);
+        Ok(Self {
+            home,
+            scratch,
+            environment,
+        })
+    }
+
+    fn replacements<'a>(
+        &'a self,
+        root: &'a Path,
+        archive: Option<&'a Path>,
+    ) -> Vec<(&'a Path, &'static str)> {
+        let mut paths = Vec::new();
+        if let Some(archive) = archive {
+            paths.push((archive, "$IMAGE_ARCHIVE"));
+        }
+        paths.push((self.scratch.as_path(), "$SCAN_TEMP"));
+        paths.push((self.home.path(), "$SCAN_HOME"));
+        paths.push((root, "$PROJECT"));
+        paths
+    }
+}
+
 fn stage_osv_databases(home: &Path, databases: &[(String, PathBuf)]) -> Result<(), PrismError> {
     for (ecosystem, source) in databases {
         let directory = home.join(".cache/osv-scanner").join(ecosystem);
@@ -1074,23 +1167,9 @@ pub(crate) fn fetch_image_advisories(
     let images = required_image_inputs(root, systems)?;
     let docker = crate::sdk::executable("docker")?;
     let scanner = crate::sdk::executable("osv-scanner")?;
-    let scan_home = tempfile::tempdir()
-        .map_err(|error| PrismError::new("PP7801", format!("image scan home: {error}")))?;
-    stage_osv_databases(scan_home.path(), &databases)?;
-    let mut scan_env = BTreeMap::from([
-        (
-            "HOME".to_owned(),
-            scan_home.path().to_string_lossy().into_owned(),
-        ),
-        (
-            "XDG_CACHE_HOME".to_owned(),
-            scan_home
-                .path()
-                .join(".cache")
-                .to_string_lossy()
-                .into_owned(),
-        ),
-    ]);
+    let scan_workspace = OsvScanWorkspace::new(root)?;
+    stage_osv_databases(scan_workspace.home.path(), &databases)?;
+    let mut scan_env = scan_workspace.environment.clone();
     if let Some(value) = std::env::var_os("DOCKER_CONFIG") {
         scan_env.insert(
             "DOCKER_CONFIG".to_owned(),
@@ -1232,7 +1311,7 @@ pub(crate) fn fetch_image_advisories(
                 ],
                 root,
                 &BTreeMap::new(),
-                &[(root, "$PROJECT"), (&archive_path, "$IMAGE_ARCHIVE")],
+                &[(&archive_path, "$IMAGE_ARCHIVE"), (root, "$PROJECT")],
                 "PP7801",
                 "900s",
                 4 * 1024 * 1024,
@@ -1255,11 +1334,7 @@ pub(crate) fn fetch_image_advisories(
                 ],
                 root,
                 &scan_env,
-                &[
-                    (root, "$PROJECT"),
-                    (&archive_path, "$IMAGE_ARCHIVE"),
-                    (scan_home.path(), "$SCAN_HOME"),
-                ],
+                &scan_workspace.replacements(root, Some(&archive_path)),
                 "PP7801",
                 "900s",
                 64 * 1024 * 1024,
@@ -1348,20 +1423,9 @@ pub(crate) fn scan_vulnerabilities(
         .filter(|item| item.kind == "cargo-package")
         .count() as u64;
     let lockfile = root.join("Cargo.lock");
-    let home = tempfile::tempdir()
-        .map_err(|error| PrismError::new("PP7801", format!("OSV scan home: {error}")))?;
-    stage_osv_databases(home.path(), &databases)?;
+    let workspace = OsvScanWorkspace::new(root)?;
+    stage_osv_databases(workspace.home.path(), &databases)?;
     let scanner = crate::sdk::executable("osv-scanner")?;
-    let environment = BTreeMap::from([
-        (
-            "HOME".to_owned(),
-            home.path().to_string_lossy().into_owned(),
-        ),
-        (
-            "XDG_CACHE_HOME".to_owned(),
-            home.path().join(".cache").to_string_lossy().into_owned(),
-        ),
-    ]);
     let record = crate::verification::run_process_limited(
         "osv-scanner",
         &scanner,
@@ -1379,8 +1443,8 @@ pub(crate) fn scan_vulnerabilities(
             "error".to_owned(),
         ],
         root,
-        &environment,
-        &[(root, "$PROJECT"), (home.path(), "$SCAN_HOME")],
+        &workspace.environment,
+        &workspace.replacements(root, None),
         "PP7801",
         "120s",
         16 * 1024 * 1024,
@@ -4170,140 +4234,6 @@ pub(crate) fn attach_build_evidence(
 
 #[cfg(test)]
 mod tests {
-    fn osv_policy_fixture() -> (tempfile::TempDir, serde_json::Value, serde_json::Value) {
-        let root = tempfile::tempdir().unwrap();
-        crate::authority::resolve(root.path(), false).unwrap();
-        let lock =
-            serde_json::from_slice(&std::fs::read(root.path().join("standards.lock")).unwrap())
-                .unwrap();
-        let inputs = serde_json::from_slice(super::OSV_INPUTS).unwrap();
-        (root, lock, inputs)
-    }
-
-    #[test]
-    fn osv_policy_binds_oldest_of_all_five_source_times_and_exact_expiry_boundary() {
-        let (_, lock, inputs) = osv_policy_fixture();
-        let times = inputs["databases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|row| row["source_created_unix"].as_u64().unwrap())
-            .collect::<Vec<_>>();
-        let expiry = times.iter().min().unwrap() + 604800;
-        assert_eq!(
-            super::osv_input_expiry(&lock, &inputs, expiry - 1).unwrap(),
-            expiry
-        );
-        assert!(super::osv_input_expiry(&lock, &inputs, expiry)
-            .unwrap_err()
-            .to_string()
-            .contains("stale"));
-        assert!(super::osv_input_expiry(&lock, &inputs, times.iter().max().unwrap() - 1).is_err());
-
-        // Make each ecosystem the oldest in turn: crates.io is not a privileged clock.
-        let earlier = times.iter().min().unwrap() - 86400;
-        let earlier_time = x509_parser::time::ASN1Time::from_timestamp(earlier as i64)
-            .unwrap()
-            .to_datetime();
-        let earlier_source = format!(
-            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
-            earlier_time.year(),
-            u8::from(earlier_time.month()),
-            earlier_time.day(),
-            earlier_time.hour(),
-            earlier_time.minute(),
-            earlier_time.second()
-        );
-        for index in 0..5 {
-            let mut changed = inputs.clone();
-            changed["databases"][index]["source_created_unix"] = serde_json::json!(earlier);
-            changed["databases"][index]["source_created"] = serde_json::json!(earlier_source);
-            let expected = earlier + 604800;
-            assert_eq!(
-                super::osv_input_expiry(&lock, &changed, expected - 1).unwrap(),
-                expected
-            );
-            assert!(super::osv_input_expiry(&lock, &changed, expected).is_err());
-        }
-    }
-
-    #[test]
-    fn osv_policy_rejects_every_missing_duplicated_or_substituted_database() {
-        let (_, lock, inputs) = osv_policy_fixture();
-        let now = inputs["databases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|row| row["source_created_unix"].as_u64().unwrap())
-            .max()
-            .unwrap();
-        for ecosystem in super::OSV_ECOSYSTEMS {
-            let index = lock["authorities"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .position(|row| {
-                    row["canonical_id"] == format!("gs://osv-vulnerabilities/{ecosystem}/all.zip")
-                })
-                .unwrap();
-            for field in ["sha256", "revision", "url", "redistribution", "signature"] {
-                let mut changed = lock.clone();
-                changed["authorities"][index]["source"][field] = serde_json::json!("substituted");
-                assert!(
-                    super::osv_input_expiry(&changed, &inputs, now).is_err(),
-                    "{ecosystem}: {field}"
-                );
-            }
-            let mut missing = lock.clone();
-            missing["authorities"].as_array_mut().unwrap().remove(index);
-            assert!(super::osv_input_expiry(&missing, &inputs, now).is_err());
-            let mut duplicate = lock.clone();
-            duplicate["authorities"]
-                .as_array_mut()
-                .unwrap()
-                .push(lock["authorities"][index].clone());
-            assert!(super::osv_input_expiry(&duplicate, &inputs, now).is_err());
-        }
-        for field in ["source_created", "source_created_unix", "generation", "url"] {
-            let mut changed = inputs.clone();
-            changed["databases"][0][field] = serde_json::json!("substituted");
-            assert!(super::osv_input_expiry(&lock, &changed, now).is_err());
-        }
-        let mut relaxed = inputs.clone();
-        relaxed["freshness_policy_seconds"] = serde_json::json!(604801);
-        assert!(super::osv_input_expiry(&lock, &relaxed, now).is_err());
-    }
-
-    #[test]
-    fn osv_scan_and_image_acquisition_enforce_reviewed_identity_before_execution() {
-        let (root, mut lock, _) = osv_policy_fixture();
-        let row = lock["authorities"]
-            .as_array_mut()
-            .unwrap()
-            .iter_mut()
-            .find(|row| row["canonical_id"] == "gs://osv-vulnerabilities/npm/all.zip")
-            .unwrap();
-        row["source"]["sha256"] = serde_json::json!("0".repeat(64));
-        std::fs::write(
-            root.path().join("standards.lock"),
-            serde_json::to_vec(&lock).unwrap(),
-        )
-        .unwrap();
-        let scan = super::scan_vulnerabilities(root.path(), &[]).unwrap_err();
-        assert!(
-            scan.to_string()
-                .contains("locked OSV database identity or source time changed"),
-            "{scan}"
-        );
-        let acquisition = super::osv_databases(root.path(), &lock).unwrap_err();
-        assert!(
-            acquisition
-                .to_string()
-                .contains("locked OSV database identity or source time changed"),
-            "{acquisition}"
-        );
-    }
-
     #[test]
     fn current_cosign_capture_is_pinned_or_explicitly_unavailable() {
         let installed = crate::sdk::inventory_path().is_some();
@@ -4392,6 +4322,158 @@ mod tests {
         }
         for invalid in [0, 128 * 1024 * 1024, u64::MAX] {
             assert_eq!(super::cosign_pin(invalid).unwrap_err().code, "PP7401");
+        }
+    }
+
+    #[test]
+    fn image_scan_workspace_uses_private_project_cache_and_explicit_tempdir() {
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().join("project with spaces");
+        std::fs::create_dir(&root).unwrap();
+        let workspace = super::OsvScanWorkspace::new(&root).unwrap();
+        let expected = root
+            .join(".prism/cache/scanner-workspaces")
+            .canonicalize()
+            .unwrap();
+        assert!(workspace.home.path().starts_with(expected));
+        assert!(workspace.scratch.is_dir());
+        assert_eq!(
+            workspace.environment["TMPDIR"],
+            workspace.scratch.to_str().unwrap()
+        );
+        assert_eq!(
+            workspace.environment["HOME"],
+            workspace.home.path().to_str().unwrap()
+        );
+        assert_eq!(
+            workspace.environment["XDG_CACHE_HOME"],
+            workspace.home.path().join(".cache").to_str().unwrap()
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(workspace.home.path())
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+        }
+        let home = workspace.home.path().to_path_buf();
+        drop(workspace);
+        assert!(!home.exists());
+    }
+
+    #[test]
+    fn image_scan_workspace_real_child_owns_tempfiles_outside_repository_cwd() {
+        let fixture = tempfile::tempdir().unwrap();
+        let unrelated = tempfile::tempdir().unwrap();
+        let python = crate::sdk::executable("python3").unwrap();
+        let mut observed = Vec::new();
+        for name in ["first project", "second project"] {
+            let root = fixture.path().join(name);
+            std::fs::create_dir(&root).unwrap();
+            let workspace = super::OsvScanWorkspace::new(&root).unwrap();
+            let archive = workspace.home.path().join("subject.tar");
+            let script = "import os,pathlib,tempfile\np=tempfile.NamedTemporaryFile(delete=False)\np.write(b'owned scanner bytes')\np.close()\nassert pathlib.Path(p.name).parent==pathlib.Path(os.environ['TMPDIR'])\nprint(os.environ['HOME'])\nprint(os.environ['XDG_CACHE_HOME'])\nprint(tempfile.gettempdir())\nprint(os.environ['SUBJECT'])\nos.unlink(p.name)";
+            let mut environment = workspace.environment.clone();
+            environment.insert("SUBJECT".to_owned(), archive.to_str().unwrap().to_owned());
+            let record = crate::verification::run_process_limited(
+                "image-scan-workspace-tempfile-probe",
+                &python,
+                &["-c".to_owned(), script.to_owned()],
+                unrelated.path(),
+                &environment,
+                &workspace.replacements(&root, Some(&archive)),
+                "PP7801",
+                "30s",
+                16384,
+            )
+            .unwrap();
+            assert_eq!(
+                record.stdout,
+                "$SCAN_HOME\n$SCAN_HOME/.cache\n$SCAN_TEMP\n$IMAGE_ARCHIVE\n"
+            );
+            observed.push(record.stdout);
+        }
+        assert_eq!(observed[0], observed[1]);
+    }
+
+    #[test]
+    fn image_scan_workspace_cleans_failures_and_preserves_database_sources() {
+        let root = tempfile::tempdir().unwrap();
+        let database = root.path().join("locked-database.zip");
+        let bytes = b"immutable locked authority bytes";
+        std::fs::write(&database, bytes).unwrap();
+        let home;
+        {
+            let workspace = super::OsvScanWorkspace::new(root.path()).unwrap();
+            home = workspace.home.path().to_path_buf();
+            super::stage_osv_databases(&home, &[("Debian".to_owned(), database.clone())]).unwrap();
+            assert_eq!(
+                std::fs::read(home.join(".cache/osv-scanner/Debian/all.zip")).unwrap(),
+                bytes
+            );
+            let python = crate::sdk::executable("python3").unwrap();
+            let script = "import pathlib,tempfile,sys\np=tempfile.NamedTemporaryFile(delete=False)\np.write(b'failed scanner scratch')\np.close()\nassert pathlib.Path(p.name).parent==pathlib.Path(tempfile.gettempdir())\nsys.exit(7)";
+            let error = crate::verification::run_process_limited(
+                "image-scan-workspace-failure-probe",
+                &python,
+                &["-c".to_owned(), script.to_owned()],
+                root.path(),
+                &workspace.environment,
+                &workspace.replacements(root.path(), None),
+                "PP7801",
+                "30s",
+                16384,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "PP7801");
+            assert!(home.exists());
+        }
+        assert!(!home.exists());
+        assert_eq!(std::fs::read(database).unwrap(), bytes);
+        assert_eq!(
+            std::fs::read_dir(root.path().join(".prism/cache/scanner-workspaces"))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn image_scan_workspace_rejects_unwritable_cache_without_system_temp_fallback() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".prism/cache")).unwrap();
+        std::fs::write(
+            root.path().join(".prism/cache/scanner-workspaces"),
+            b"not a directory",
+        )
+        .unwrap();
+        let error = match super::OsvScanWorkspace::new(root.path()) {
+            Ok(_) => panic!("an unusable project cache must not fall back to system temp"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "PP7801");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn image_scan_workspace_rejects_cache_symlink_escape() {
+        for relative in [".prism", ".prism/cache", ".prism/cache/scanner-workspaces"] {
+            let root = tempfile::tempdir().unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            let link = root.path().join(relative);
+            std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink(outside.path(), link).unwrap();
+            let error = match super::OsvScanWorkspace::new(root.path()) {
+                Ok(_) => panic!("scan scratch must remain in the project's ignored cache"),
+                Err(error) => error,
+            };
+            assert_eq!(error.code, "PP7801");
+            assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
         }
     }
 

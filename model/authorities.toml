@@ -1,7 +1,45 @@
 spec = "prismpm/authorities/2"
 
+[[authority]]
+id = "BLAKE3-VECTORS-1-5-5"
+name = "BLAKE3 immutable digest vectors"
+issuer = "BLAKE3 team"
+canonical_identifier = "BLAKE3-team/BLAKE3/test_vectors/test_vectors.json"
+edition = "1.5.5"
+source_role = "normative"
+immutable_url = "https://raw.githubusercontent.com/BLAKE3-team/BLAKE3/81f772a4cd70dc0325047a6a737d2f6f4b92180e/test_vectors/test_vectors.json"
+revision = "81f772a4cd70dc0325047a6a737d2f6f4b92180e"
+acquired_sha256 = "dcb91ea8accc77e6d6e632af7cdc1a99a9f3ae78cf648da595c7d064db32f624"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/json"
+license = "CC0-1.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-04"
+supersession_policy = "explicit-lock-update-only"
+statement = "All 35 upstream digest vectors qualify hash, keyed-hash, derive-key, extended output and the archive content-identity adapter; not cryptographic proof or durable storage."
+realized_by = ["HO-14"]
+
 # Retrieval dates are evidence metadata only. Exact revisions and acquired
 # SHA-256 values, never dates or mutable names, determine locked identity.
+
+[[authority]]
+id = "IETF-RFC-7636"
+name = "Proof Key for Code Exchange by OAuth Public Clients"
+issuer = "IETF"
+canonical_identifier = "RFC 7636"
+edition = "September 2015"
+source_role = "normative"
+immutable_url = "https://www.rfc-editor.org/rfc/rfc7636.txt"
+revision = "RFC7636-2015"
+acquired_sha256 = "1972e5d81cbaba7066cfd46374207bc2b4546b085ed5dd9b034e79e023e0ca31"
+signature = "not-published-or-not-relied-upon"
+media_type = "text/plain"
+license = "LicenseRef-IETF-Trust-2015"
+redistribution = "redistributable"
+retrieval_date = "2026-09-28"
+supersession_policy = "explicit-lock-update-only"
+statement = "Sections 4.1-4.2 and Appendix B define the ST-17 S256 client primitive and imported example, not complete OAuth or mailbox authentication."
+realized_by = ["ST-17"]
 
 [[authority]]
 id = "LEAN-REL-4-32-1"
@@ -663,176 +701,96 @@ statement = "The locked OSV schema owns vulnerability-exchange validation; datab
 realized_by = ["AU-05", "SC-04"]
 
 [[authority]]
-<<<<<<< HEAD
-id = "OSV-CRATES-DB-G1791016356716892"
+id = "OSV-CRATES-DB-G1792096384043606"
 name = "OSV crates.io vulnerability database snapshot"
 issuer = "OpenSSF OSV project"
 canonical_identifier = "gs://osv-vulnerabilities/crates.io/all.zip"
-edition = "gcs-generation-1791016356716892"
+edition = "gcs-generation-1792096384043606"
 source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/crates.io/all.zip?generation=1791016356716892"
-revision = "1791016356716892"
-acquired_sha256 = "f0ceccc2365efb94eaba8c8408b8fc71f4b3ab4a63989dc8d9bcb7a97cdcba7b"
-=======
-id = "OSV-CRATES-DB-G1789723713081168"
-name = "OSV crates.io vulnerability database snapshot"
-issuer = "OpenSSF OSV project"
-canonical_identifier = "gs://osv-vulnerabilities/crates.io/all.zip"
-edition = "gcs-generation-1789723713081168"
-source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/crates.io/all.zip?generation=1789723713081168"
-revision = "1789723713081168"
-acquired_sha256 = "a260782a542ffa8e4387558d358aeedf5555dbf4b1df3b00bced2e1b14a8ac22"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/crates.io/all.zip?generation=1792096384043606"
+revision = "1792096384043606"
+acquired_sha256 = "5ebac98116c0148f8a2b72615cbd3e60c3c5e937786e2427714546f8fc686f5b"
 signature = "gcs-generation-and-acquired-sha256"
 media_type = "application/zip"
 license = "record-level upstream provenance; no aggregate relicensing claim"
 redistribution = "citation-only"
-<<<<<<< HEAD
-retrieval_date = "2026-10-03"
-=======
-retrieval_date = "2026-09-19"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+retrieval_date = "2026-10-16"
 supersession_policy = "explicit-lock-update-only"
 statement = "This immutable crates.io snapshot bounds offline vulnerability facts; it does not establish current status after its acquisition time."
 realized_by = ["AU-05", "SC-04"]
 
 [[authority]]
-<<<<<<< HEAD
-id = "OSV-DEBIAN-DB-G1791021748693294"
+id = "OSV-DEBIAN-DB-G1792130564825991"
 name = "OSV Debian vulnerability database snapshot"
 issuer = "OpenSSF OSV project"
 canonical_identifier = "gs://osv-vulnerabilities/Debian/all.zip"
-edition = "gcs-generation-1791021748693294"
+edition = "gcs-generation-1792130564825991"
 source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Debian/all.zip?generation=1791021748693294"
-revision = "1791021748693294"
-acquired_sha256 = "b49ac72948636982c083903523475f9f42ccc6161c1a9abfd90eaa91ef8173f4"
-=======
-id = "OSV-DEBIAN-DB-G1789772800438247"
-name = "OSV Debian vulnerability database snapshot"
-issuer = "OpenSSF OSV project"
-canonical_identifier = "gs://osv-vulnerabilities/Debian/all.zip"
-edition = "gcs-generation-1789772800438247"
-source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Debian/all.zip?generation=1789772800438247"
-revision = "1789772800438247"
-acquired_sha256 = "8682d4e50bac6e25eaaae280288f64ee8e009b1bdd46bc9f06ac546e59da2395"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Debian/all.zip?generation=1792130564825991"
+revision = "1792130564825991"
+acquired_sha256 = "019d7daaca77666111070f333fb1e5d047ad40d50ba852391018979d08005bb9"
 signature = "gcs-generation-and-acquired-sha256"
 media_type = "application/zip"
 license = "record-level upstream provenance; no aggregate relicensing claim"
 redistribution = "citation-only"
-<<<<<<< HEAD
-retrieval_date = "2026-10-03"
-=======
-retrieval_date = "2026-09-19"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+retrieval_date = "2026-10-16"
 supersession_policy = "explicit-lock-update-only"
 statement = "This immutable Debian snapshot bounds offline vulnerability facts for image packages; it does not establish current status after its acquisition time."
 realized_by = ["AU-05", "SC-04"]
 
 [[authority]]
-<<<<<<< HEAD
-id = "OSV-GO-DB-G1791024451949238"
+id = "OSV-GO-DB-G1792097294361139"
 name = "OSV Go vulnerability database snapshot"
 issuer = "OpenSSF OSV project"
 canonical_identifier = "gs://osv-vulnerabilities/Go/all.zip"
-edition = "gcs-generation-1791024451949238"
+edition = "gcs-generation-1792097294361139"
 source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip?generation=1791024451949238"
-revision = "1791024451949238"
-acquired_sha256 = "3af974072be912a3b660553658e09077014026b91e0ae0668cfbb5da3fd9da4a"
-=======
-id = "OSV-GO-DB-G1789755542983649"
-name = "OSV Go vulnerability database snapshot"
-issuer = "OpenSSF OSV project"
-canonical_identifier = "gs://osv-vulnerabilities/Go/all.zip"
-edition = "gcs-generation-1789755542983649"
-source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip?generation=1789755542983649"
-revision = "1789755542983649"
-acquired_sha256 = "c258e9106752589b886a2c78984e7c0a9f3fdfbf438caed21a57c808481c2ae0"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Go/all.zip?generation=1792097294361139"
+revision = "1792097294361139"
+acquired_sha256 = "3f3c63ba77efa8a7f0c47f572c69692eb538c26a5ff70b6e84926078e10ad914"
 signature = "gcs-generation-and-acquired-sha256"
 media_type = "application/zip"
 license = "record-level upstream provenance; no aggregate relicensing claim"
 redistribution = "citation-only"
-<<<<<<< HEAD
-retrieval_date = "2026-10-03"
-=======
-retrieval_date = "2026-09-19"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+retrieval_date = "2026-10-16"
 supersession_policy = "explicit-lock-update-only"
 statement = "This immutable Go snapshot bounds offline vulnerability facts for statically linked image packages; it does not establish current status after its acquisition time."
 realized_by = ["AU-05", "SC-04"]
 
 [[authority]]
-<<<<<<< HEAD
-id = "OSV-NPM-DB-G1791008266630460"
+id = "OSV-NPM-DB-G1792124305700257"
 name = "OSV npm vulnerability database snapshot"
 issuer = "OpenSSF OSV project"
 canonical_identifier = "gs://osv-vulnerabilities/npm/all.zip"
-edition = "gcs-generation-1791008266630460"
+edition = "gcs-generation-1792124305700257"
 source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/npm/all.zip?generation=1791008266630460"
-revision = "1791008266630460"
-acquired_sha256 = "a3e624ef9bac73b88eee9f745abb260d16ddbc531295d683f75ba59df85a83e8"
-=======
-id = "OSV-NPM-DB-G1789770960544023"
-name = "OSV npm vulnerability database snapshot"
-issuer = "OpenSSF OSV project"
-canonical_identifier = "gs://osv-vulnerabilities/npm/all.zip"
-edition = "gcs-generation-1789770960544023"
-source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/npm/all.zip?generation=1789770960544023"
-revision = "1789770960544023"
-acquired_sha256 = "6486bcd1195de4deedfc39d1658fad0d52702125804e521d630c9601b8840ca8"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/npm/all.zip?generation=1792124305700257"
+revision = "1792124305700257"
+acquired_sha256 = "c242de6ea6f70b5491ca1e536ac7533e719349cea740db2f8d59d25ee729c0cd"
 signature = "gcs-generation-and-acquired-sha256"
 media_type = "application/zip"
 license = "record-level upstream provenance; no aggregate relicensing claim"
 redistribution = "citation-only"
-<<<<<<< HEAD
-retrieval_date = "2026-10-03"
-=======
-retrieval_date = "2026-09-19"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+retrieval_date = "2026-10-16"
 supersession_policy = "explicit-lock-update-only"
 statement = "This immutable npm snapshot bounds offline vulnerability facts for JavaScript image packages; it does not establish current status after its acquisition time."
 realized_by = ["AU-05", "SC-04"]
 
 [[authority]]
-<<<<<<< HEAD
-id = "OSV-UBUNTU-DB-G1790980378457307"
+id = "OSV-UBUNTU-DB-G1791997399062112"
 name = "OSV Ubuntu vulnerability database snapshot"
 issuer = "OpenSSF OSV project"
 canonical_identifier = "gs://osv-vulnerabilities/Ubuntu/all.zip"
-edition = "gcs-generation-1790980378457307"
+edition = "gcs-generation-1791997399062112"
 source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Ubuntu/all.zip?generation=1790980378457307"
-revision = "1790980378457307"
-acquired_sha256 = "481a6953ebcc750220f78eef6b1c2c82af90ef7b74fbaaaf1467213c53c82514"
-=======
-id = "OSV-UBUNTU-DB-G1789776290924582"
-name = "OSV Ubuntu vulnerability database snapshot"
-issuer = "OpenSSF OSV project"
-canonical_identifier = "gs://osv-vulnerabilities/Ubuntu/all.zip"
-edition = "gcs-generation-1789776290924582"
-source_role = "informative"
-immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Ubuntu/all.zip?generation=1789776290924582"
-revision = "1789776290924582"
-acquired_sha256 = "7b8ce1077fffc3b0eff05183bc511717fbaafb034cdf7f99842f2a819ab4c9b9"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+immutable_url = "https://osv-vulnerabilities.storage.googleapis.com/Ubuntu/all.zip?generation=1791997399062112"
+revision = "1791997399062112"
+acquired_sha256 = "9c4f5e08e3a7490c90c78ac85f72004d5715c8b1641e9d5ed9e65a6438dd986d"
 signature = "gcs-generation-and-acquired-sha256"
 media_type = "application/zip"
 license = "record-level upstream provenance; no aggregate relicensing claim"
 redistribution = "citation-only"
-<<<<<<< HEAD
-retrieval_date = "2026-10-03"
-=======
-retrieval_date = "2026-09-19"
->>>>>>> 79f36f1c (feat: add ci-observe tests and refresh OSV scripts)
+retrieval_date = "2026-10-16"
 supersession_policy = "explicit-lock-update-only"
 statement = "This immutable Ubuntu snapshot bounds offline vulnerability facts for image packages; it does not establish current status after its acquisition time."
 realized_by = ["AU-05", "SC-04"]

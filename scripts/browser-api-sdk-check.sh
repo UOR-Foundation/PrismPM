@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Independent post-build closure test; never consumes the external-oracle image override.
 set -euo pipefail
-test "$#" -eq 2 || { echo 'usage: browser-api-sdk-check.sh IMAGE@sha256:DIGEST SOURCE_COMMIT' >&2; exit 64; }
+test "$#" -eq 2 -o "$#" -eq 3 || { echo 'usage: browser-api-sdk-check.sh IMAGE@sha256:DIGEST SOURCE_COMMIT [EXPLICIT_REGISTRY_CA]' >&2; exit 64; }
 image=$1
 revision=$2
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 helper="$root/scripts/browser-api-sdk-check.mjs"
+if test "$#" -eq 3; then
+  node "$root/scripts/sdk-qualification-trust.mjs" "$3"
+  export NODE_EXTRA_CA_CERTS=$3
+fi
 [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]] || exit 64
 [[ $revision =~ ^[0-9a-f]{40}$ ]] || exit 64
 test "$(git -C "$root" rev-parse HEAD)" = "$revision"
@@ -35,6 +39,9 @@ done < <(node "$helper" roots)
 node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"
 docker container cp "$container:/opt/prismpm/browser/." "$sdk_work/browser"
 node "$helper" modules "$root" "$sdk_work/browser"
+mkdir -p "$sdk_work/share/account-genesis"
+docker container cp "$container:/opt/prismpm/share/account-genesis/." "$sdk_work/share/account-genesis"
+node "$helper" account-construction "$sdk_work" "$sdk_work/source.json"
 docker container cp "$container:/usr/local/bin/prismpm-devcontainer-init" "$sdk_work/entrypoint.sh"
 cmp "$root/sdk/devcontainer-init.sh" "$sdk_work/entrypoint.sh"
 docker container rm "$container" >/dev/null
