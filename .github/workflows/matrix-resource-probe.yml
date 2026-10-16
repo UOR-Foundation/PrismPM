@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: afflom/lexlean-matmul
-          ref: dc1f9cf
+          ref: dc1f9cf94c4f84fd7f690e5e84de4bd83d0c79da
           persist-credentials: false
           path: product
       - name: Prepare the ephemeral runner for the original SDK archive
@@ -74,7 +74,7 @@ jobs:
       - name: Probe the actual generated import-free Wasm
         if: steps.build.outcome == 'success'
         env:
-          PROBE_COMMIT: dc1f9cf
+          PROBE_COMMIT: dc1f9cf94c4f84fd7f690e5e84de4bd83d0c79da
         run: |
           cat > diagnostic/probe.mjs <<'JS'
           import fs from 'node:fs';
