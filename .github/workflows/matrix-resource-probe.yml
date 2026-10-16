@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: afflom/lexlean-matmul
-          ref: 11a9fb8c9205745e903f4bf9e0ca7b5474e0ec14
+          ref: ddd8821f5175e4c82b7adfe91b269aacda6097f5
           persist-credentials: false
           path: product
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -89,7 +89,7 @@ jobs:
       - name: Probe the actual generated import-free Wasm
         if: steps.build.outcome == 'success'
         env:
-          PROBE_COMMIT: 11a9fb8c9205745e903f4bf9e0ca7b5474e0ec14
+          PROBE_COMMIT: ddd8821f5175e4c82b7adfe91b269aacda6097f5
         run: |
           cat > diagnostic/probe.mjs <<'JS'
           import fs from 'node:fs';
