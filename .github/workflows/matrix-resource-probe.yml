@@ -1,4 +1,4 @@
-name: diagnostic matrix resource probe
+name: diagnostic owned-list matrix resource probe
 on:
   push:
     branches: [ci/lexlean-matmul-resource-probe-2026-10-16]
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: afflom/lexlean-matmul
-          ref: dc1f9cf94c4f84fd7f690e5e84de4bd83d0c79da
+          ref: 11a9fb8c9205745e903f4bf9e0ca7b5474e0ec14
           persist-credentials: false
           path: product
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -31,6 +31,7 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           mkdir diagnostic sdk-archive
+          cp product/verification/owned-list-resource-diagnostic.json diagnostic/source-scope.json
       - name: Fetch and verify the original official construction artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,7 +78,7 @@ jobs:
             node --input-type=module -e '\''import fs from "node:fs";let s=fs.readFileSync("lexlean.toml","utf8");s=s.replace(/^entrypoints = .*$/m,"entrypoints = [\"src/Application.lex.tex\"]");fs.writeFileSync("lexlean.toml",s);'\''
             lexlean lock
           '
-      - name: Build the unchanged mathematical application through the original SDK
+      - name: Build the diagnostic owned-list application through the original SDK
         id: build
         continue-on-error: true
         run: |
@@ -88,7 +89,7 @@ jobs:
       - name: Probe the actual generated import-free Wasm
         if: steps.build.outcome == 'success'
         env:
-          PROBE_COMMIT: dc1f9cf94c4f84fd7f690e5e84de4bd83d0c79da
+          PROBE_COMMIT: 11a9fb8c9205745e903f4bf9e0ca7b5474e0ec14
         run: |
           cat > diagnostic/probe.mjs <<'JS'
           import fs from 'node:fs';
@@ -106,22 +107,31 @@ jobs:
           if(WebAssembly.Module.imports(module).length)throw Error('Unexpected Wasm imports');
           const req=(...xs)=>xs.join('\t'),csv=xs=>xs.join(',');
           const max=9218868437227405311n,min=1n,negmax=max+(1n<<63n),negmin=min+(1n<<63n);
-          const cases=[['integer-1',req(1,'matmul',1,1,1,2,3)],['ieee64-1',req(1,'ieee','f64','nearest',1,1,1,4607182418800017408n,4611686018427387904n)],['ieee64-maximum',req(1,'ieee','f64','nearest',1,1,1,max,max)]];
+          const ok=(m,n,cells)=>req(1,'ok',m,n,csv(cells));
+          const cases=[['integer-1',req(1,'matmul',1,1,1,2,3),ok(1,1,[6])],['ieee64-1',req(1,'ieee','f64','nearest',1,1,1,4607182418800017408n,4611686018427387904n),ok(1,1,[4611686018427387904n])],['ieee64-maximum',req(1,'ieee','f64','nearest',1,1,1,max,max),ok(1,1,[9218868437227405312n])]];
           for(const n of [1,2,8]){
             const k=4;
             const a=Array.from({length:n*k},(_,i)=>[max,min,max,min][i%k]);
             const b=Array.from({length:k*n},(_,i)=>[max,min,negmax,negmin][Math.floor(i/n)]);
-            cases.push(['ieee64-mixed-'+n,req(1,'ieee','f64','nearest',n,k,n,csv(a),csv(b))]);
+            cases.push(['ieee64-mixed-'+n,req(1,'ieee','f64','nearest',n,k,n,csv(a),csv(b)),ok(n,n,Array(n*n).fill(0))]);
           }
-          cases.push(['integer64digits-8',req(1,'matmul',8,8,8,csv(Array(64).fill('9'.repeat(64))),csv(Array(64).fill('9'.repeat(64))))]);
+          const huge=10n**64n-1n;
+          cases.push(['integer64digits-8',req(1,'matmul',8,8,8,csv(Array(64).fill(huge)),csv(Array(64).fill(huge))),ok(8,8,Array(64).fill(8n*huge*huge))]);
+          for(const route of ['direct','table']) {
+            cases.push(['codec-grid-modulo-'+route,req(1,'codec',route,'grid:8:-3,0,7',1,1,2,2,'0,255'),ok(1,2,[-6,-6])]);
+            cases.push(['codec-packed-low-first-'+route,req(1,'codec',route,'grid:8:-1,1;packed:8',1,1,8,1,5),ok(1,8,[1,-1,1,-1,-1,-1,-1,-1])]);
+            cases.push(['codec-runs-whole-word-'+route,req(1,'codec',route,'book:8:2:3,4/5,6;runs:8:3,0',1,1,3,2,0),ok(1,3,[6,8,6])]);
+            cases.push(['codec-e8-zero-'+route,req(1,'codec',route,'e8:8',1,1,8,7,0),ok(1,8,Array(8).fill(0))]);
+          }
           const results=[];
-          for(const[label,input]of cases){
+          for(const[label,input,expected]of cases){
             const instance=await WebAssembly.instantiate(module,{});const e=instance.exports;
             const row={label,request_bytes:Buffer.byteLength(input),request_sha256:sha(input),memory_before:e.memory.buffer.byteLength};
-            try{const b=Buffer.from(input);const p=e.holo_alloc(b.length)>>>0;new Uint8Array(e.memory.buffer,p,b.length).set(b);const r=BigInt.asUintN(64,e.holo_run(p,b.length));const off=Number(r>>32n),len=Number(r&0xffffffffn);row.response=Buffer.from(e.memory.buffer,off,len).toString();row.status='returned';}
-            catch(error){row.status='trapped';row.error={name:error.name,message:error.message,stack:error.stack};}
-            row.memory_after=e.memory.buffer.byteLength;results.push(row);console.log(JSON.stringify(row));fs.writeFileSync('diagnostic/resource-probe.json',JSON.stringify({schema:'lexlean-matmul/resource-diagnostic/1',qualified_for_release:false,sdk_image:process.env.PROBE_IMAGE,source:process.env.PROBE_COMMIT,wasm_sha256:sha(bytes),results},null,2)+'\n');
+            try{const b=Buffer.from(input);const p=e.holo_alloc(b.length)>>>0;new Uint8Array(e.memory.buffer,p,b.length).set(b);const r=BigInt.asUintN(64,e.holo_run(p,b.length));const off=Number(r>>32n),len=Number(r&0xffffffffn);row.response=Buffer.from(e.memory.buffer,off,len).toString();row.status='returned';row.expected=expected;row.passed=row.response===expected;}
+            catch(error){row.status='trapped';row.passed=false;row.error={name:error.name,message:error.message,stack:error.stack};}
+            row.memory_after=e.memory.buffer.byteLength;results.push(row);console.log(JSON.stringify(row));fs.writeFileSync('diagnostic/resource-probe.json',JSON.stringify({schema:'lexlean-matmul/resource-diagnostic/1',qualified_for_release:false,sdk_image:process.env.PROBE_IMAGE,source:process.env.PROBE_COMMIT,wasm_sha256:sha(bytes),results,passed:results.length===cases.length&&results.every(r=>r.passed)},null,2)+'\n');
           }
+          if(results.length!==cases.length||results.some(r=>!r.passed))throw Error('Diagnostic generated Core-Wasm probe failed; inspect exact build and resource evidence.');
           JS
           timeout 300 node diagnostic/probe.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
