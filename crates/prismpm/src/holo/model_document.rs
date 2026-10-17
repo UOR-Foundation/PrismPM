@@ -69,6 +69,8 @@ pub enum Application {
     Legacy(Box<ApplicationModel>),
     /// Explicit UTF-8 byte-request application declaration.
     Text(Box<TextApplicationModel>),
+    /// Closed, capability-free guided workbench.
+    Workbench(Box<super::workbench::WorkbenchApplication>),
     /// Source-owned browser orchestration declaration; runtime remains unavailable.
     Browser(Box<super::browser_application::BrowserApplication>),
 }
@@ -79,6 +81,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.name,
             Self::Text(value) => &value.name,
+            Self::Workbench(value) => &value.name,
             Self::Browser(value) => &value.name,
         }
     }
@@ -88,6 +91,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.cargo_name,
             Self::Text(value) => &value.cargo_name,
+            Self::Workbench(value) => &value.cargo_name,
             Self::Browser(value) => &value.cargo_name,
         }
     }
@@ -97,6 +101,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.cargo_version,
             Self::Text(value) => &value.cargo_version,
+            Self::Workbench(value) => &value.cargo_version,
             Self::Browser(value) => &value.cargo_version,
         }
     }
@@ -106,6 +111,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.cargo_description,
             Self::Text(value) => &value.cargo_description,
+            Self::Workbench(value) => &value.cargo_description,
             Self::Browser(value) => &value.cargo_description,
         }
     }
@@ -115,6 +121,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.cargo_repository,
             Self::Text(value) => &value.cargo_repository,
+            Self::Workbench(value) => &value.cargo_repository,
             Self::Browser(value) => &value.cargo_repository,
         }
     }
@@ -124,6 +131,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.cargo_homepage,
             Self::Text(value) => &value.cargo_homepage,
+            Self::Workbench(value) => &value.cargo_homepage,
             Self::Browser(value) => &value.cargo_homepage,
         }
     }
@@ -133,6 +141,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.library_roots,
             Self::Text(value) => &value.library_roots,
+            Self::Workbench(value) => &value.library_roots,
             Self::Browser(value) => &value.library_roots,
         }
     }
@@ -142,6 +151,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.acceptance_vectors,
             Self::Text(value) => &value.acceptance_vectors,
+            Self::Workbench(value) => &value.acceptance_vectors,
             Self::Browser(value) => &value.acceptance_vectors,
         }
     }
@@ -151,6 +161,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.entry_root,
             Self::Text(value) => &value.entry_root,
+            Self::Workbench(value) => &value.entry_root,
             Self::Browser(value) => &value.entry_root,
         }
     }
@@ -160,6 +171,7 @@ impl Application {
         match self {
             Self::Legacy(value) => &value.core_contract,
             Self::Text(value) => &value.core_contract,
+            Self::Workbench(value) => &value.core_contract,
             Self::Browser(value) => &value.core_contract,
         }
     }
@@ -169,6 +181,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.request_maximum,
             Self::Text(value) => value.request_maximum,
+            Self::Workbench(value) => value.request_maximum,
             Self::Browser(value) => value.request_maximum,
         }
     }
@@ -178,6 +191,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.response_maximum,
             Self::Text(value) => value.response_maximum,
+            Self::Workbench(value) => value.response_maximum,
             Self::Browser(value) => value.response_maximum,
         }
     }
@@ -187,6 +201,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.guest_allocation_maximum,
             Self::Text(value) => value.guest_allocation_maximum,
+            Self::Workbench(value) => value.guest_allocation_maximum,
             Self::Browser(value) => value.guest_allocation_maximum,
         }
     }
@@ -196,6 +211,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.capabilities_empty,
             Self::Text(value) => value.capabilities_empty,
+            Self::Workbench(value) => value.capabilities_empty,
             Self::Browser(value) => value.capabilities_empty,
         }
     }
@@ -205,6 +221,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.fat_archive,
             Self::Text(value) => value.fat_archive,
+            Self::Workbench(value) => value.fat_archive,
             Self::Browser(value) => value.fat_archive,
         }
     }
@@ -214,6 +231,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.primary_layer,
             Self::Text(value) => value.primary_layer,
+            Self::Workbench(value) => value.primary_layer,
             Self::Browser(value) => value.primary_layer,
         }
     }
@@ -223,6 +241,7 @@ impl Application {
         match self {
             Self::Legacy(value) => value.view_layer,
             Self::Text(value) => value.view_layer,
+            Self::Workbench(value) => value.view_layer,
             Self::Browser(value) => value.view_layer,
         }
     }
@@ -233,6 +252,7 @@ impl Application {
             Self::Text(value) if value.profile == "prismpm/text-application/2" => {
                 value.core_memory_pages.unwrap_or(32)
             }
+            Self::Workbench(value) => value.core_memory_pages,
             _ => 32,
         }
     }
@@ -243,6 +263,7 @@ impl Application {
             Self::Text(value) if value.profile == "prismpm/text-application/2" => {
                 value.core_stack_bytes
             }
+            Self::Workbench(value) => Some(value.core_stack_bytes),
             _ => None,
         }
     }
