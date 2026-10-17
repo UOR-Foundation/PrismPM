@@ -53,6 +53,7 @@ fn workbench_closed_contract_roundtrip_preserves_explicit_resources() {
         "/application/view/errors/0",
         "/application/view/statuses",
         "/application/view/labels",
+        "/application/view/execution",
     ] {
         let original = value.pointer(pointer).unwrap().as_object().unwrap();
         for key in original.keys() {
@@ -74,6 +75,22 @@ fn workbench_closed_contract_roundtrip_preserves_explicit_resources() {
             .as_object_mut()
             .unwrap()
             .insert("unmodeled".into(), json!(true));
+        assert!(!validator.is_valid(&bad));
+        assert!(serde_json::from_value::<ModelDocument>(bad).is_err());
+    }
+    assert_eq!(
+        value["application"]["view"]["execution"]["wasm_cache_policy"],
+        "no-store"
+    );
+    for policy in [
+        json!("default"),
+        json!("force-cache"),
+        json!(""),
+        json!(null),
+        json!(0),
+    ] {
+        let mut bad = value.clone();
+        bad["application"]["view"]["execution"]["wasm_cache_policy"] = policy;
         assert!(!validator.is_valid(&bad));
         assert!(serde_json::from_value::<ModelDocument>(bad).is_err());
     }

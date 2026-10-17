@@ -1,10 +1,11 @@
 Feature: holo
 
   @HO-17 @build
-  Scenario: The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples and error recovery to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics.
+  Scenario: The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics.
     Given a closed Text V3 source application with exact framed acceptance vectors
     When generated native, Wasm, worker and portable Hologram owners execute
     Then modeled results and recovery are real, current and bounded and malformed or stale evidence is rejected
+    And a returning visitor's cached prior Wasm is not reused by the modeled no-store worker acquisition
 
 
   @HO-16 @build

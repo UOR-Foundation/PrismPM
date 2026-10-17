@@ -232,7 +232,7 @@ statement = "The explicit text/2 profile binds modeled Core-Wasm memory and stac
 id = "HO-17"
 suite = "holo"
 level = "build"
-statement = "The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples and error recovery to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics."
+statement = "The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics."
 
 [[id]]
 id = "CT-01"
