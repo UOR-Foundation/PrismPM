@@ -13,6 +13,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 mod tests;
 
+mod workbench;
+
 pub(super) type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
 
 const MAX_METADATA_ALIASES: usize = 65_536;
@@ -282,7 +284,7 @@ fn constructor_list(
                 return Err(PrismError::new(
                     "PP2001",
                     format!("application field {name} is not a closed list"),
-                ))
+                ));
             }
         }
     }
@@ -401,6 +403,125 @@ fn bytes(value: &Value, field: &str) -> Result<Vec<u8>, PrismError> {
         .collect()
 }
 
+fn metadata_bytes(
+    definitions: &Definitions<'_>,
+    module: &str,
+    value: &Value,
+    field: &str,
+) -> Result<Vec<u8>, PrismError> {
+    fn collect<'a>(
+        definitions: &'a Definitions<'a>,
+        module: &'a str,
+        value: &'a Value,
+        state: &mut (usize, BTreeSet<(&'a str, &'a str)>, Vec<u8>),
+        depth: usize,
+        field: &str,
+    ) -> Result<(), PrismError> {
+        state.0 = state
+            .0
+            .checked_sub(1)
+            .ok_or_else(|| PrismError::new("PP2001", "byte metadata exceeds its work budget"))?;
+        if depth > 128 {
+            return Err(PrismError::new(
+                "PP2001",
+                "byte metadata exceeds its depth bound",
+            ));
+        }
+        match value.get("kind").and_then(Value::as_str) {
+            Some("call") => {
+                if !value
+                    .get("arguments")
+                    .and_then(Value::as_array)
+                    .is_some_and(Vec::is_empty)
+                {
+                    return Err(PrismError::new(
+                        "PP2001",
+                        "byte metadata calls must be closed",
+                    ));
+                }
+                let (owner, name, declaration) = definition(
+                    definitions,
+                    module,
+                    value.get("function").ok_or_else(|| {
+                        PrismError::new("PP2001", "byte metadata call is malformed")
+                    })?,
+                )?;
+                if !declaration
+                    .get("parameters")
+                    .and_then(Value::as_array)
+                    .is_some_and(Vec::is_empty)
+                    || declaration.pointer("/result/kind").and_then(Value::as_str) != Some("bytes")
+                {
+                    return Err(PrismError::new(
+                        "PP2001",
+                        "byte metadata aliases require a closed Bytes definition",
+                    ));
+                }
+                if !state.1.insert((owner, name)) {
+                    return Err(PrismError::new(
+                        "PP2001",
+                        "byte metadata contains a cyclic alias",
+                    ));
+                }
+                let result = collect(
+                    definitions,
+                    owner,
+                    declaration.get("body").ok_or_else(|| {
+                        PrismError::new("PP2001", "byte metadata alias has no body")
+                    })?,
+                    state,
+                    depth + 1,
+                    field,
+                );
+                state.1.remove(&(owner, name));
+                result
+            }
+            Some("primitive") => {
+                let arguments = value
+                    .get("arguments")
+                    .and_then(Value::as_array)
+                    .filter(|values| values.len() == 2);
+                if value.get("operation").and_then(Value::as_str) != Some("append")
+                    || value.pointer("/result/kind").and_then(Value::as_str) != Some("bytes")
+                    || arguments.is_none()
+                {
+                    return Err(PrismError::new(
+                        "PP2001",
+                        "byte metadata only admits the closed Bytes append primitive",
+                    ));
+                }
+                let arguments = arguments.expect("checked binary append");
+                collect(definitions, module, &arguments[0], state, depth + 1, field)?;
+                collect(definitions, module, &arguments[1], state, depth + 1, field)
+            }
+            Some("bytes") => {
+                let length = value
+                    .get("hex")
+                    .and_then(Value::as_str)
+                    .map(|hex| hex.len() / 2)
+                    .ok_or_else(|| {
+                        PrismError::new("PP2001", "byte metadata literal is malformed")
+                    })?;
+                if length > 16_777_216usize.saturating_sub(state.2.len()) {
+                    return Err(PrismError::new(
+                        "PP2001",
+                        "byte metadata exceeds its 16 MiB bound",
+                    ));
+                }
+                state.2.extend(bytes(value, field)?);
+                Ok(())
+            }
+            _ => Err(PrismError::new(
+                "PP2001",
+                "byte metadata requires literal Bytes, a closed Bytes alias or binary append",
+            )),
+        }
+    }
+    let mut state = (MAX_METADATA_ALIASES, BTreeSet::new(), Vec::new());
+    collect(definitions, module, value, &mut state, 0, field)?;
+    Ok(state.2)
+}
+
 fn acceptance_vectors(
     definitions: &Definitions<'_>,
     fields: &BTreeMap<&str, (&str, &Value)>,
@@ -415,16 +536,23 @@ fn acceptance_vectors(
         match value.get("kind").and_then(Value::as_str) {
             Some("nil") => return Ok(result),
             Some("cons") => {
-                let values = record(
+                let values = record_with_unevaluated_fields(
                     definitions,
                     module,
                     value.get("head").ok_or_else(|| {
                         PrismError::new("PP2001", "acceptance vector list has no head")
                     })?,
+                    &["request", "response"],
                 )?;
                 result.push(ApplicationAcceptanceVector {
-                    request: bytes(field(&values, "request")?.1, "request")?,
-                    response: bytes(field(&values, "response")?.1, "response")?,
+                    request: {
+                        let (owner, value) = field(&values, "request")?;
+                        metadata_bytes(definitions, owner, value, "request")?
+                    },
+                    response: {
+                        let (owner, value) = field(&values, "response")?;
+                        metadata_bytes(definitions, owner, value, "response")?
+                    },
                 });
                 value = value.get("tail").ok_or_else(|| {
                     PrismError::new("PP2001", "acceptance vector list has no tail")
@@ -574,6 +702,24 @@ pub fn project_application(
             "browser application profile requires its exact source-owned type",
         ));
     }
+    if fields
+        .get("profile")
+        .is_some_and(|(_, value)| value["value"] == super::workbench::PROFILE)
+        || declaration
+            .pointer("/result/member/module")
+            .and_then(Value::as_str)
+            == Some("Foundation.View.Text.V3.Model")
+    {
+        return projected_document(
+            snapshot,
+            Application::Workbench(Box::new(workbench::project(
+                &definitions,
+                module,
+                declaration,
+                &fields,
+            )?)),
+        );
+    }
     let request_maximum = u32::try_from(unsigned(&fields, "requestMaximum", "uint32")?)
         .map_err(|_| PrismError::new("PP2001", "requestMaximum exceeds UInt32"))?;
     let response_maximum = u32::try_from(unsigned(&fields, "responseMaximum", "uint32")?)
@@ -702,6 +848,7 @@ fn projected_document(
 ) -> Result<Option<ModelDocument>, PrismError> {
     let document = ModelDocument {
         schema: match &application {
+            Application::Workbench(_) => "prismpm/model-document/6",
             Application::Legacy(_) => "prismpm/model-document/1",
             Application::Text(value) if value.profile == "prismpm/text-application/2" => {
                 "prismpm/model-document/5"

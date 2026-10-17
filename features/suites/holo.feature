@@ -1,5 +1,12 @@
 Feature: holo
 
+  @HO-17 @build
+  Scenario: The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples and error recovery to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics.
+    Given a closed Text V3 source application with exact framed acceptance vectors
+    When generated native, Wasm, worker and portable Hologram owners execute
+    Then modeled results and recovery are real, current and bounded and malformed or stale evidence is rejected
+
+
   @HO-16 @build
   Scenario: The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults.
     Given a source-owned text/2 application with explicit Core-Wasm memory and stack bounds
