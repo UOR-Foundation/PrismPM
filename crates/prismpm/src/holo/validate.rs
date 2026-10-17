@@ -82,6 +82,8 @@ fn contains_index<T>(rows: &[T], index: u64) -> bool {
 pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
     let expected_schema = if doc.library.is_some() {
         "prismpm/model-document/3"
+    } else if matches!(&doc.application, Some(Application::Workbench(_))) {
+        "prismpm/model-document/6"
     } else if matches!(&doc.application, Some(Application::Browser(_))) {
         "prismpm/model-document/4"
     } else if let Some(Application::Text(application)) = &doc.application {
@@ -137,6 +139,7 @@ pub fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
         match application {
             Application::Legacy(value) => validate_application(value)?,
             Application::Text(value) => validate_text_application(value)?,
+            Application::Workbench(value) => super::workbench::validate(value)?,
             Application::Browser(value) => super::browser_application::validate(value)?,
         }
         return Ok(());

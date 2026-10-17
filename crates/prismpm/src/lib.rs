@@ -37,6 +37,7 @@ pub mod template;
 mod test_compiler;
 pub mod upstream_conformance;
 mod verification;
+mod workbench;
 
 pub use controller::Controller;
 pub use error::{DiagnosticCode, PrismError};

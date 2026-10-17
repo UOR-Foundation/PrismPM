@@ -8,5 +8,6 @@ pub mod library;
 pub mod model_document;
 pub mod projector;
 pub mod validate;
+pub mod workbench;
 
 pub use model_document::ModelDocument;
