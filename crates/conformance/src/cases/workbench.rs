@@ -36,7 +36,7 @@ fn rust(root: &Path, target: Option<&str>, expected: usize) {
 
 pub(super) fn verify(root: &Path) {
     rust(root, Some("workbench_application"), 4);
-    rust(root, None, 2);
+    rust(root, None, 3);
     super::node_suite::verify_exact(
         root,
         "HO-17",
