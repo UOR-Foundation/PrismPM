@@ -412,6 +412,28 @@ fn application_view(
 ) -> Result<(GeneratedViewV1, String, String), PrismError> {
     let (generated, model_id, view_model_id) =
         match application {
+            Application::Research(application) => {
+                let model_id = content_id(&encode_value(
+                    &serde_json::to_value(model)
+                        .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+                )?);
+                let view_model_id = content_id(&encode_value(
+                    &serde_json::to_value(&application.view)
+                        .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+                )?);
+                let entry = application.entry_root.rsplit('.').next().ok_or_else(|| {
+                    PrismError::new("PP2001", "application entry root is malformed")
+                })?;
+                let generated = crate::research_workbench::generate(
+                    module,
+                    application,
+                    &model_id,
+                    &view_model_id,
+                    core_sha,
+                    entry,
+                )?;
+                return Ok((generated, model_id, view_model_id));
+            }
             Application::Workbench(application) => {
                 let model_id = content_id(&encode_value(
                     &serde_json::to_value(model)
@@ -730,6 +752,7 @@ pub(crate) fn application_export_arguments(
             // Cargo identity, preserving the legacy Calculator's exact output.
             Application::Text(application) => application.cargo_name.replace('-', "_"),
             Application::Workbench(application) => application.cargo_name.replace('-', "_"),
+            Application::Research(application) => application.cargo_name.replace('-', "_"),
             Application::Browser(application) => application.cargo_name.replace('-', "_"),
         },
         "--out".to_owned(),

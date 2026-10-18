@@ -235,6 +235,12 @@ level = "build"
 statement = "The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics."
 
 [[id]]
+id = "HO-18"
+suite = "holo"
+level = "build"
+statement = "The capability-free Text/4 research workbench binds explicit source actions, exact selectable tables and comparison panels, verified runtime model identity, and explicit local UTF-8 case transfer to correlated cancellable guest execution without interpreting domain mathematics or case semantics, while preserving Text/1 through Text/3."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

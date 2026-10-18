@@ -102,6 +102,7 @@ fn adapter(
     view: &TextViewV1,
     binding: &TextBrowserAdapterBinding,
     fallible: bool,
+    identity: bool,
 ) -> GeneratedPackage {
     let cargo = format!(
         "[package]\nname = \"{}\"\nversion = \"{}\"\nedition = \"2021\"\npublish = false\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[dependencies]\njs-sys = \"=0.3.99\"\nwasm-bindgen = \"=0.2.122\"\n{} = \"={}\"\n",
@@ -112,10 +113,16 @@ fn adapter(
     } else {
         ""
     };
-    let source = format!(
+    let mut source = format!(
         "use wasm_bindgen::prelude::*;\n\n// Transport copies allocate only after their byte limits are checked.\n// The core's own allocation bound remains an application-model obligation.\n#[wasm_bindgen]\npub fn invoke_bytes(input: JsValue) -> Result<js_sys::Uint8Array, JsValue> {{\n    let input = input.dyn_into::<js_sys::Uint8Array>().map_err(|_| JsValue::from_str(\"expected Uint8Array\"))?;\n    if input.length() > {} {{ return Err(JsValue::from_str(\"input byte limit\")); }}\n    let bytes = input.to_vec();\n    core::str::from_utf8(&bytes).map_err(|_| JsValue::from_str(\"invalid input UTF-8\"))?;\n    let output = {}::{}(bytes){result_adapter};\n    if output.len() > {} {{ return Err(JsValue::from_str(\"output byte limit\")); }}\n    core::str::from_utf8(&output).map_err(|_| JsValue::from_str(\"invalid output UTF-8\"))?;\n    Ok(js_sys::Uint8Array::from(output.as_slice()))\n}}\n",
         view.max_input_bytes, binding.core_crate_name.replace('-', "_"), binding.core_function, view.max_output_bytes,
     );
+    if identity {
+        source.push_str(&format!(
+            "\n#[wasm_bindgen]\npub fn model_id() -> String {{ String::from({}) }}\n",
+            json(&view.model_id)
+        ));
+    }
     let mut files = vec![file("Cargo.toml", cargo), file("src/lib.rs", source)];
     let records = records(&files);
     files.push(file("generation-manifest.json", format!(
@@ -150,7 +157,7 @@ pub fn generate_text_view_v1(
     view: &TextViewV1,
     binding: &TextBrowserAdapterBinding,
 ) -> Result<GeneratedViewV1, Error> {
-    generate(view, binding, false)
+    generate(view, binding, false, false)
 }
 
 /// Generate the same closed View using the exact module's byte-entry effect.
@@ -168,6 +175,23 @@ pub fn generate_text_view_v1_for_module(
         view,
         binding,
         crate::byte_entry_is_fallible(module, &binding.core_function)?,
+        false,
+    )
+}
+
+/// Generate the Text/4 adapter with its actual model identity export. This is
+/// additive; the existing Text/1 entrypoints preserve their emitted bytes.
+pub fn generate_text_view_v4_for_module(
+    module: &prod_ir::Module,
+    view: &TextViewV1,
+    binding: &TextBrowserAdapterBinding,
+) -> Result<GeneratedViewV1, Error> {
+    validate(view, binding)?;
+    generate(
+        view,
+        binding,
+        crate::byte_entry_is_fallible(module, &binding.core_function)?,
+        true,
     )
 }
 
@@ -175,6 +199,7 @@ fn generate(
     view: &TextViewV1,
     binding: &TextBrowserAdapterBinding,
     fallible: bool,
+    identity: bool,
 ) -> Result<GeneratedViewV1, Error> {
     validate(view, binding)?;
     let html = index_html(view);
@@ -196,7 +221,7 @@ fn generate(
         file("app.js", hologram_js),
         file("index.html", html),
     ];
-    let browser_adapter = adapter(view, binding, fallible);
+    let browser_adapter = adapter(view, binding, fallible, identity);
     let hologram_bundle = generate_holoview_bundle(&hologram_assets)?;
     let view_manifest = file("view-manifest.json", format!(
         "{{\"browser_adapter\":[{}],\"generated_core_sha256\":{},\"hologram_bundle\":{{\"path\":{},\"sha256\":{}}},\"max_input_bytes\":{},\"max_output_bytes\":{},\"model_id\":{},\"profile\":\"prism.text-view/1\",\"projections\":[{{\"files\":[{}],\"target\":\"browser-wasm-bindgen\"}},{{\"files\":[{}],\"target\":\"hologram-intent-v1\"}}],\"schema\":\"lean4-prod/text-view-projection/1\",\"view_model_id\":{}}}\n",

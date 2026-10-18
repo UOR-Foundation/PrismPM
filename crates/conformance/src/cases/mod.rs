@@ -15,6 +15,7 @@ mod native_library;
 mod node_suite;
 mod organization_lifecycle;
 mod owner_timing;
+mod research_workbench;
 mod saved_recovery;
 mod scoped_administration;
 mod workbench;
@@ -412,6 +413,7 @@ pub fn run_at(root: &Path, id: &str) {
         ),
 
         "HO-17" => workbench::verify(root),
+        "HO-18" => research_workbench::verify(root),
 
         "HO-16" => {
             let browser = Command::new("timeout")

@@ -247,6 +247,122 @@ extra, reordered or forged journey/index evidence cannot satisfy verification.
 Actual HTTP-cache return-visitor and worker lifecycle tests, bounded result negatives and native compiled
 source-fixture verification supplement model/projection/schema mutation checks.
 
+The additive `Foundation.View.Text.V4.Model.TextApplication` declares
+`prismpm/text-application/4` in closed `prismpm/model-document/7` (HO-18).
+Its `WorkbenchView` retains Text/3's source-owned guidance, finite design,
+privacy, accessible lifecycle and byte computation rules. It adds closed
+source-owned `ActionSpec`, `ResearchSpec`, `CaseExchangeSpec` and
+`RuntimeBinding` declarations. It admits no product arithmetic, request parser,
+case parser, inspection algorithm, route comparison or trace computation in
+JavaScript. Text/1 through Text/3 keep their existing shapes, limits and
+transport versions.
+
+The mounted main surface orders computation, research actions and local case
+exchange before reference sections and the documentation footer. Its header
+provides native fragment links to the focusable computation, research and case
+destinations, using the admitted compute label, research title and case title.
+The existing guide and external-link navigation remains available. Selecting
+an output cell updates its research selection without an automatic panel jump.
+
+When a busy transition disables the focused initiating button, the renderer
+owns its focus only for that invocation, including local file reading before
+guest execution. Completion restores a connected, visible, enabled trigger
+only if native disabling left focus on the body and no subsequent keyboard,
+pointer or focus action abandoned it. Source-error field focus takes precedence.
+Edits, cancellation, retirement and terminal paths dispose that ownership and
+its listeners; a hidden trigger is never refocused.
+
+A Text/4 action sends its modeled prefix, U+001F, and a canonical JSON object
+with exactly `version`, `operation`, `request`, `values`, `row`, `column`,
+`controls`, `model_id` and `case_text`, in that order. Version is 1; selections
+are UInt32 values and all other fields are strings or ordered string arrays.
+Guided values follow the selected operation's declared fields. The reserved
+`raw` operation sends an exact raw draft and no guided values. Tool operations
+send their declared controls. Literal separators inside opaque strings survive
+JSON framing. Every submitted string must contain only well-formed Unicode
+scalars; UTF-8 byte accounting occurs before framing and again for the complete
+frame. Source input, case content and protocol replies are never silently
+normalized or truncated. Compute prefixes are unique per operation; explicit
+trace, comparison, inspection, tool and case actions have modeled labels,
+help, ordered fields and deadlines from 100 through 180000 milliseconds.
+Ordinary compute never implicitly executes an expensive research action.
+
+Text/4 replies have the eleven Text/3 result fields with version 2, plus
+`action`, `selection`, `tables`, `panels`, `comparison` and `exchange`.
+The selection has exactly row/column. Each table has an ID, title, column labels
+and complete string rows; each comparison panel has its own ID, title, shape,
+cells and exact executable request/response. Comparison status is closed to
+none/equivalent/different/error. The SDK validates exact keys, duplicate keys,
+Unicode, action/operation correlation, modeled IDs and every nested count and
+shape before rendering. Display copy is limited to 16384 UTF-8 bytes per
+string and excludes C0/C1 control characters; opaque request, response and case
+text retain their source bytes within the separate transport limits.
+Table pagination retains every source row and permits direct page selection;
+it never substitutes a truncated report. Result-cell and explicit row/column
+selection are keyboard-operable and invalidate stale pending actions.
+
+Case exchange is an explicit local UTF-8 file operation. Its closed statuses
+are none/exported/imported/identity-mismatch. A reply supplies a download name,
+opaque file text and an optional typed draft with operation, ordered values,
+raw request, inspection/tool controls and selected row/column. The SDK applies
+only validated declared fields. Exact source-restored values, raw requests and
+controls survive HTML control line-ending normalization until that individual
+control receives an explicit input or change event, including a same-value
+event. Editing one control does not discard untouched source strings in other
+controls. Operation changes, examples and reset discard obsolete restored
+authority. Raw inspection controls use the initial
+operation's inspection schema. Export snapshots the current inspection or
+standalone tool controls. File read, invalid UTF-8 and size errors reference
+modeled error hints. Source code owns versioned file parsing, duplicate and
+unknown-field rejection, identity interpretation and actual recomputation.
+Recorded answers never populate a fresh result without that source execution.
+A foreign-identity reply exposes the mismatch and a separate explicit recompute
+action. No local storage, history, upload or automatic download is introduced.
+
+The generated Text/4 browser adapter exports `model_id()`. The Worker checks
+that exact identity against the renderer's embedded canonical model identity
+before accepting actions, while retaining the mandatory same-origin no-store
+Wasm fetch. `RuntimeBinding.modelIdentity.CurrentModel` also keys the initial
+`app.css`, `app.js`, its module Worker and the generated binding JavaScript URLs with
+exactly `?model_id=<canonical-model-sha256>`. The query contains only the
+public lowercase64-hex model identity, never operands or case content. The
+Worker inherits that current module revision, and the binding imports that
+same revision, so a previous deployment's cached JavaScript cannot silently
+select an older adapter. Wasm retains its separate no-store acquisition. The Hologram projection receives the same identity from its bound
+renderer. Case actions therefore receive the actual executing model identity,
+not an authored self-reference. The complete visible model identity wraps at
+narrow viewports without truncation or horizontal page overflow. Draft edits,
+operation/tool changes, cell
+selection, cancellation and reset retire pending generations across every new
+action. Retry preserves the captured current action and timeout; stale replies
+cannot replace changed drafts. The generated assets retain the six-file export
+closure. The generated head declares an empty `data:,` icon before asset
+references to suppress implicit browser favicon network requests; it adds no
+seventh runtime file. `prismpm/workbench-view-projection/2` names the actual
+`hologram-intent-v2` projection.
+
+Only Text/4 selects the upstream closed portable View intent version 2. The
+official handler admits at most 2097152 decoded UTF-8 request bytes and 4194304
+cumulative UTF-8 output bytes across at most sixteen outputs, and echoes version
+2. Malformed UTF-8, unknown intent names/versions and first-over-bound payloads
+are rejected by the real handler. Legacy profiles continue to select version
+1 with its 65536/1048576 limits. Native verification preserves every modeled
+direct and resident vector, actually submits oversized UTF-8 requests to the
+handler to prove refusal, and separately probes the first over-bound multibyte
+request. Text/4's independently declared guest allocation and response bounds
+remain constrained by its modeled Core-Wasm memory and stack.
+
+The Text/4 model document alone admits at most 67108864 canonical bytes and
+33554432 recursively counted items. This finite versioned bound covers genuine
+large acceptance byte arrays, including request and guest-allocation boundary
+vectors; earlier profile contracts and the 16777216-byte dependency source
+archive reader remain unchanged. HO-18 requires real source projection,
+first-over-byte/item controls, strict Worker/action/case lifecycle controls and
+a complete compiled source fixture. That fixture exercises actual 2097152-byte
+input, 4194304-byte allocation, first-over-input refusal and 4194304-byte
+multibyte output through generated browser, direct/resident guest and official
+version-2 native intent owners, with complete portable browser journeys.
+
 The separate `Foundation.View.Text.V2.Model.TextApplication` declares
 `prismpm/text-application/2` in closed `prismpm/model-document/5`. It retains
 the V1 byte-request and View contract and adds explicit `coreMemoryPages` and
@@ -3489,6 +3605,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-15` | `holo` | The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application. | §3 |
 | `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics. | §3 |
+| `HO-18` | `holo` | The capability-free Text/4 research workbench binds explicit source actions, exact selectable tables and comparison panels, verified runtime model identity, and explicit local UTF-8 case transfer to correlated cancellable guest execution without interpreting domain mathematics or case semantics, while preserving Text/1 through Text/3. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

@@ -6,7 +6,7 @@ import stat
 import sys
 import tarfile
 
-ARCHIVE_SHA256 = "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66"
+ARCHIVE_SHA256 = "fd6dec8dadac61309efd33e44be02beef03a2391b8a5614e64a6c8e5755357e2"
 
 
 def identity(value):
@@ -49,7 +49,7 @@ def verify(archive, root):
                 assert member.size <= 16 * 1024 * 1024, "source file bound exceeded"
                 digest = hashlib.sha256(source.extractfile(member).read()).hexdigest()
             expected[name] = (member.isdir(), member.mode & 0o777, member.size if member.isfile() else 0, digest)
-    assert len(expected) == 454, "pinned source inventory differs"
+    assert len(expected) == 937, "pinned source inventory differs"
     children = {}
     for name in expected:
         parent, _, leaf = name.rpartition("/")
@@ -100,7 +100,7 @@ def verify(archive, root):
     assert actual == expected, "source inventory incomplete"
     final, final_identity = read_file(archive)
     assert identity(final_identity) == identity(archive_identity) and final == raw, "source archive changed"
-    print("pinned source: 454 entries, exact types, modes, sizes and bytes")
+    print("pinned source: 937 entries, exact types, modes, sizes and bytes")
 
 
 if __name__ == "__main__":

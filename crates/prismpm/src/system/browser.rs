@@ -80,6 +80,7 @@ pub(crate) fn validate_application(
         crate::holo::model_document::Application::Legacy(_)
             | crate::holo::model_document::Application::Text(_)
             | crate::holo::model_document::Application::Workbench(_)
+            | crate::holo::model_document::Application::Research(_)
     ) || !application.capabilities_empty()
         || system["components"][0]["version"] != application.cargo_version().as_str()
         || system["application_profile"]["application_model_digest"]

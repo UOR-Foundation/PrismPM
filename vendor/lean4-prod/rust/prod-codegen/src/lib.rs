@@ -137,7 +137,8 @@ pub use package::{
 };
 pub use sdk::{generate_sdks, SdkBindings};
 pub use text_view::{
-    generate_text_view_v1, generate_text_view_v1_for_module, TextBrowserAdapterBinding, TextViewV1,
+    generate_text_view_v1, generate_text_view_v1_for_module, generate_text_view_v4_for_module,
+    TextBrowserAdapterBinding, TextViewV1,
 };
 pub use view::{
     generate_holoview_bundle, generate_view_v1, BrowserAdapterBinding, EvaluatedViewV1,

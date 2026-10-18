@@ -43,7 +43,7 @@ fn test_hologram_oracle_pinned_source_identities() {
     // 1. Pinned Hologram Live source archive checksum
     assert_eq!(
         sha256_file(&r.join("crates/prismpm/vendor/hologram-live.tar")),
-        "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66",
+        "fd6dec8dadac61309efd33e44be02beef03a2391b8a5614e64a6c8e5755357e2",
         "pinned Hologram Live vendor tarball checksum changed"
     );
 
@@ -65,7 +65,7 @@ fn test_hologram_oracle_pinned_source_identities() {
     );
     assert_eq!(
         sha256_file(&r.join("crates/prismpm/src/embedded/hologram-oracle.browser.mjs")),
-        "992e3831e3e471f95f91ae59f7c2d23098f197d8b4a03df2a3dbcde99f2a0524",
+        "4cf648208d144e9e09747c16682dee58b2872ba4f95527c01dfdf3d1f9047033",
         "hologram-oracle browser.mjs checksum changed"
     );
 

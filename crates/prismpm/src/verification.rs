@@ -27,7 +27,7 @@ const EXECUTION_CORPUS_SOURCE: &str = include_str!("../model/execution-corpus.to
 const ALLOCATION_COUNTER_SOURCE: &str = include_str!("prod_alloc_counter.rs.inc");
 const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../vendor/hologram-live.tar");
 const HOLOGRAM_ORACLE_SOURCE_SHA256: &str =
-    "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66";
+    "fd6dec8dadac61309efd33e44be02beef03a2391b8a5614e64a6c8e5755357e2";
 const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.toml");
 const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.lock");
 const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("embedded/hologram-oracle.main.rs");
@@ -595,10 +595,7 @@ fn run_hologram_oracle(
         .application
         .as_ref()
         .ok_or_else(|| PrismError::new("PP5301", "oracle has no application"))?;
-    validate_portable_target_bounds(
-        application.request_maximum(),
-        application.response_maximum(),
-    )?;
+    validate_portable_application_bounds(application)?;
     crate::holo::browser_application::require_runtime(application)?;
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
         return Err(PrismError::new(
@@ -717,23 +714,38 @@ fn validate_portable_target_bounds(
     Ok(())
 }
 
+fn validate_portable_application_bounds(
+    application: &crate::holo::model_document::Application,
+) -> Result<(), PrismError> {
+    if matches!(
+        application,
+        crate::holo::model_document::Application::Research(_)
+    ) {
+        if application.request_maximum() > 2_097_152 || application.response_maximum() > 4_194_304 {
+            return Err(PrismError::new("PP5301", "Text/4 bounds exceed pinned portable View version 2 transport limits (request: 2097152 bytes; response: 4194304 bytes)"));
+        }
+        return Ok(());
+    }
+    validate_portable_target_bounds(
+        application.request_maximum(),
+        application.response_maximum(),
+    )
+}
+
 pub(crate) fn validate_hologram_oracle_report(
     report: &Value,
     application: &crate::holo::model_document::Application,
     identities: &Value,
 ) -> Result<(), PrismError> {
     use crate::holo::model_document::Application;
-    validate_portable_target_bounds(
-        application.request_maximum(),
-        application.response_maximum(),
-    )?;
+    validate_portable_application_bounds(application)?;
     let invalid = || {
         PrismError::new(
             "PP5301",
             "pinned Hologram oracle did not return complete portable browser acceptance",
         )
     };
-    let keys = [
+    let mut keys = vec![
         "application_kappa",
         "archive_fingerprint",
         "archive_kappa",
@@ -747,9 +759,13 @@ pub(crate) fn validate_hologram_oracle_report(
         "view_attached",
         "view_detached",
     ];
+    let research = matches!(application, Application::Research(_));
+    if research {
+        keys.insert(6, "intent_transport_rejections");
+    }
     if report
         .as_object()
-        .is_none_or(|object| object.keys().map(String::as_str).ne(keys))
+        .is_none_or(|object| object.keys().map(String::as_str).ne(keys.iter().copied()))
     {
         return Err(invalid());
     }
@@ -779,8 +795,23 @@ pub(crate) fn validate_hologram_oracle_report(
         .filter(|vector| {
             std::str::from_utf8(&vector.request).is_ok()
                 && std::str::from_utf8(&vector.response).is_ok()
+                && (!research || vector.request.len() <= 2_097_152)
         })
         .count();
+    if research {
+        let rejected = vectors
+            .iter()
+            .filter(|vector| {
+                vector.request.len() > 2_097_152
+                    && std::str::from_utf8(&vector.request).is_ok()
+                    && std::str::from_utf8(&vector.response).is_ok()
+            })
+            .count()
+            + 1;
+        if report["intent_transport_rejections"] != rejected {
+            return Err(invalid());
+        }
+    }
     if report["schema"] != "prismpm/hologram-oracle/2"
         || report["footer_verified"] != true
         || report["guest_allocation_boundary"] != "verified"
@@ -801,6 +832,9 @@ pub(crate) fn validate_hologram_oracle_report(
             Application::Browser(_) => {
                 return crate::holo::browser_application::require_runtime(application);
             }
+            Application::Research(value) => crate::holo::research_workbench::oracle_vectors(value)
+                .ui
+                .contains(&index),
             Application::Workbench(value) => crate::holo::workbench::oracle_vectors(value)
                 .ui
                 .contains(&index),
@@ -829,7 +863,10 @@ pub(crate) fn validate_hologram_oracle_report(
         return Err(invalid());
     }
     let mut names = vec!["attachment-assets", "modeled-vectors"];
-    if matches!(application, Application::Workbench(_)) {
+    if matches!(
+        application,
+        Application::Workbench(_) | Application::Research(_)
+    ) {
         names.extend(["workbench-direct-vectors", "workbench-ui-input-boundaries"]);
     }
     names.extend([
@@ -843,9 +880,12 @@ pub(crate) fn validate_hologram_oracle_report(
         Application::Browser(_) => {
             return crate::holo::browser_application::require_runtime(application);
         }
-        Application::Text(_) | Application::Workbench(_) => {
+        Application::Text(_) | Application::Workbench(_) | Application::Research(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
-            if matches!(application, Application::Workbench(_)) {
+            if matches!(
+                application,
+                Application::Workbench(_) | Application::Research(_)
+            ) {
                 names.extend([
                     "workbench-guided-edit",
                     "workbench-typed-error-recovery",
@@ -853,7 +893,16 @@ pub(crate) fn validate_hologram_oracle_report(
                     "workbench-timeout-retry",
                     "workbench-result-validation",
                 ]);
-                "utf8-workbench"
+                if research {
+                    names.extend([
+                        "research-actions",
+                        "research-case-exchange",
+                        "research-stale-owner",
+                    ]);
+                    "utf8-research-workbench"
+                } else {
+                    "utf8-workbench"
+                }
             } else {
                 "utf8-text"
             }
@@ -870,6 +919,13 @@ pub(crate) fn validate_hologram_oracle_report(
         "cases":cases, "vector_indexes":indexes, "skipped":0, "retries":0, "status":"passed"});
     if let Application::Workbench(value) = application {
         let selected = crate::holo::workbench::oracle_vectors(value);
+        expected["direct_vector_indexes"] = json!(selected.direct);
+        expected["ui_transport_rejected_indexes"] = json!(selected.transport_rejected);
+        expected["textarea_normalized_vector_indexes"] = json!(selected.normalized);
+        expected["unrepresentable_frame_vector_indexes"] = json!(selected.unrepresentable);
+    }
+    if let Application::Research(value) = application {
+        let selected = crate::holo::research_workbench::oracle_vectors(value);
         expected["direct_vector_indexes"] = json!(selected.direct);
         expected["ui_transport_rejected_indexes"] = json!(selected.transport_rejected);
         expected["textarea_normalized_vector_indexes"] = json!(selected.normalized);

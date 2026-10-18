@@ -12,7 +12,19 @@ struct Contract {
     schema: &'static [u8],
 }
 
-const CONTRACTS: [Contract; 61] = [
+const CONTRACTS: [Contract; 63] = [
+    Contract {
+        id: "prismpm/workbench-view-projection/2",
+        maximum_bytes: 1_048_576,
+        maximum_items: 4096,
+        schema: include_bytes!("../schemas/workbench-view-projection-v2.schema.json"),
+    },
+    Contract {
+        id: "prismpm/model-document/7",
+        maximum_bytes: 67_108_864,
+        maximum_items: 33_554_432,
+        schema: include_bytes!("../schemas/model-document-v7.schema.json"),
+    },
     Contract {
         id: "prismpm/workbench-view-projection/1",
         maximum_bytes: 1_048_576,
@@ -547,6 +559,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
             | "prismpm/model-document/4"
             | "prismpm/model-document/5"
             | "prismpm/model-document/6"
+            | "prismpm/model-document/7"
     ) {
         let document = serde_json::from_value(value.clone()).map_err(|error| {
             PrismError::new(
@@ -557,6 +570,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
                     "prismpm/model-document/2"
                         | "prismpm/model-document/5"
                         | "prismpm/model-document/6"
+                        | "prismpm/model-document/7"
                 ) {
                     "PP2009"
                 } else {

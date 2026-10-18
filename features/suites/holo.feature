@@ -106,3 +106,11 @@ Feature: holo
     Given a valid archive and one-field-at-a-time mutations
     When Holo/1 validation executes
     Then every disagreement is rejected before acceptance
+
+  @HO-18 @build
+  Scenario: The capability-free Text/4 research workbench binds explicit source actions, exact selectable tables and comparison panels, verified runtime model identity, and explicit local UTF-8 case transfer to correlated cancellable guest execution without interpreting domain mathematics or case semantics, while preserving Text/1 through Text/3.
+    Given a closed Text/4 application with action, report, and case-transfer authorities
+    When actual generated browser and native Hologram consumers execute research and file journeys
+    Then exact model identity, bounded strict reports, every paginated row, explicit recomputation, and stale-owner rejection are enforced
+    And asynchronous initiating focus survives native disabling unless a later user action or source error takes ownership
+    And the Text/1 through Text/3 contracts remain unchanged

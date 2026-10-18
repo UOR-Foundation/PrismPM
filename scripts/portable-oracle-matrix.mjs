@@ -51,7 +51,7 @@ const inputs = [
 ];
 const captured = inputs.map(path => capture(join(root, path)));
 captured.push(capture(process.execPath), capture(browser), capture('/usr/bin/python3'));
-assert.equal(captured[0].measurement.sha256, 'caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66');
+assert.equal(captured[0].measurement.sha256, 'fd6dec8dadac61309efd33e44be02beef03a2391b8a5614e64a6c8e5755357e2');
 for (const [actual, embedded] of [['Cargo.toml', 'Cargo.toml'], ['Cargo.lock', 'Cargo.lock'], ['src/main.rs', 'main.rs']])
   assert(readFileSync(join(root, 'tests/hologram-oracle', actual))
     .equals(readFileSync(join(root, 'crates/prismpm/src/embedded/hologram-oracle.' + embedded))));
@@ -171,7 +171,7 @@ try {
     const database = privateGitObjects(process.env.CARGO_HOME, environment.CARGO_HOME, name, revision);
     run('git-object-integrity-' + name, '/usr/bin/git', ['--git-dir=' + database, 'fsck', '--strict', '--no-reflogs'], work, 30);
   }
-  mkdirSync(join(work, 'hologram-live'));
+  mkdirSync(join(work, 'hologram-live'),{mode:0o700});
   mkdirSync(join(work, 'harness/src'), {recursive: true});
   // Preserve pinned modes while assigning ownership to the local verifier.
   run('source-extraction', '/usr/bin/tar', ['--no-same-owner', '--same-permissions', '-xf', captured[0].path, '-C', join(work, 'hologram-live')], work, 30);
