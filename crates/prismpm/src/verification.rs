@@ -2422,6 +2422,53 @@ fn application_harness(
     Ok(format!("fn main() {{\n{vectors}}}\n"))
 }
 
+// The complete binary validator runs before bounded ABI presentation. The
+// inspection record remains independent evidence, never a substitute parser.
+fn inspect_application_core_wasm(
+    wasm_tools: &Path,
+    wasm_path: &Path,
+    build_root: &Path,
+    replacements: &[(&Path, &str)],
+) -> Result<[ProcessRecord; 2], PrismError> {
+    let no_env = BTreeMap::new();
+    let validated = run_process(
+        "core-wasm-validate",
+        wasm_tools,
+        &[
+            "validate".to_owned(),
+            wasm_path.to_string_lossy().into_owned(),
+        ],
+        build_root,
+        &no_env,
+        replacements,
+        "PP5101",
+    )?;
+    let printed = run_process(
+        "core-wasm-inspect",
+        wasm_tools,
+        &[
+            "print".to_owned(),
+            "--skeleton".to_owned(),
+            wasm_path.to_string_lossy().into_owned(),
+        ],
+        build_root,
+        &no_env,
+        replacements,
+        "PP5101",
+    )?;
+    if printed.stdout.contains("(import ")
+        || !printed.stdout.contains("(export \"memory\"")
+        || !printed.stdout.contains("(export \"holo_alloc\"")
+        || !printed.stdout.contains("(export \"holo_run\"")
+    {
+        return Err(PrismError::new(
+            "PP5103",
+            "Core-Wasm imports or exports disagree with the closed guest ABI",
+        ));
+    }
+    Ok([validated, printed])
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_application(
     controller: &Controller,
@@ -2474,43 +2521,16 @@ fn run_application(
         &wasm_path,
     )?);
     let wasm_tools = executable("wasm-tools")?;
-    let no_env = BTreeMap::new();
     let replacements = [
         (controller.root.as_path(), "$PROJECT"),
         (build_root, "$BUILD"),
     ];
-    processes.push(run_process(
-        "core-wasm-validate",
+    processes.extend(inspect_application_core_wasm(
         &wasm_tools,
-        &[
-            "validate".to_owned(),
-            wasm_path.to_string_lossy().into_owned(),
-        ],
+        &wasm_path,
         build_root,
-        &no_env,
         &replacements,
-        "PP5101",
     )?);
-    let printed = run_process(
-        "core-wasm-inspect",
-        &wasm_tools,
-        &["print".to_owned(), wasm_path.to_string_lossy().into_owned()],
-        build_root,
-        &no_env,
-        &replacements,
-        "PP5101",
-    )?;
-    if printed.stdout.contains("(import ")
-        || !printed.stdout.contains("(export \"memory\"")
-        || !printed.stdout.contains("(export \"holo_alloc\"")
-        || !printed.stdout.contains("(export \"holo_run\"")
-    {
-        return Err(PrismError::new(
-            "PP5103",
-            "Core-Wasm imports or exports disagree with the closed guest ABI",
-        ));
-    }
-    processes.push(printed);
 
     let work = tempfile::Builder::new()
         .prefix("prismpm-application-verify-")
@@ -3705,6 +3725,130 @@ mod tests {
                 json!(["--signal=TERM", "--kill-after=5", expected]),
                 "{tool}"
             );
+        }
+    }
+
+    fn core_wasm_inspection_fixture(root: &Path, wat: &str) -> PathBuf {
+        let text = root.join("fixture.wat");
+        let binary = root.join("fixture.wasm");
+        std::fs::write(&text, wat).unwrap();
+        run_process(
+            "core-wasm-test-parse",
+            &executable("wasm-tools").unwrap(),
+            &[
+                "parse".into(),
+                text.to_string_lossy().into_owned(),
+                "-o".into(),
+                binary.to_string_lossy().into_owned(),
+            ],
+            root,
+            &BTreeMap::new(),
+            &[(root, "$BUILD")],
+            "PP5101",
+        )
+        .unwrap();
+        binary
+    }
+
+    const CORE_WASM_INSPECTION_MODULE: &str = r#"(module
+      (memory (export "memory") 128 128)
+      (func (export "holo_alloc") (param i32) (result i32) i32.const 0)
+      (func (export "holo_run") (param i32 i32) (result i64) i64.const 0))"#;
+
+    #[test]
+    fn core_wasm_inspection_accepts_large_valid_structural_projection() {
+        let work = tempfile::tempdir().unwrap();
+        // The real printer escapes each NUL as three WAT bytes. This generic
+        // data segment is valid inside the declared eight-MiB memory, while
+        // its full textual presentation exceeds the unchanged 16-MiB cap.
+        let mut wat = CORE_WASM_INSPECTION_MODULE.trim_end_matches(')').to_owned();
+        // Restore the final function delimiter removed together with module.
+        wat.push(')');
+        wat.push_str(" (data (i32.const 0) \"");
+        wat.push_str(&"\\00".repeat(6 * 1024 * 1024));
+        wat.push_str("\"))");
+        let binary = core_wasm_inspection_fixture(work.path(), &wat);
+        prod_codegen::validate_core_wasm_resources(&std::fs::read(&binary).unwrap(), 128, None)
+            .unwrap();
+        let records = inspect_application_core_wasm(
+            &executable("wasm-tools").unwrap(),
+            &binary,
+            work.path(),
+            &[(work.path(), "$BUILD")],
+        )
+        .expect("a valid large binary must not require a full textual body dump");
+        assert_eq!(records[0].tool, "core-wasm-validate");
+        assert_eq!(records[1].tool, "core-wasm-inspect");
+        assert_eq!(records[0].argv, ["validate", "$BUILD/fixture.wasm"]);
+        assert_eq!(
+            records[1].argv,
+            ["print", "--skeleton", "$BUILD/fixture.wasm"]
+        );
+        for record in records {
+            assert_eq!(record.exit_code, 0);
+            assert!(record.stdout.len() <= CHILD_OUTPUT_LIMIT);
+            assert!(record.stderr.len() <= CHILD_OUTPUT_LIMIT);
+            assert_eq!(record.executable_sha256.len(), 64);
+        }
+    }
+
+    #[test]
+    fn core_wasm_inspection_requires_full_binary_validation() {
+        let work = tempfile::tempdir().unwrap();
+        // A structurally printable body can still have the wrong stack type.
+        let wat = CORE_WASM_INSPECTION_MODULE.replace("i64.const 0", "i32.const 0");
+        let binary = core_wasm_inspection_fixture(work.path(), &wat);
+        run_process(
+            "skeleton-alone-is-not-validation",
+            &executable("wasm-tools").unwrap(),
+            &[
+                "print".into(),
+                "--skeleton".into(),
+                binary.to_string_lossy().into_owned(),
+            ],
+            work.path(),
+            &BTreeMap::new(),
+            &[(work.path(), "$BUILD")],
+            "PP5101",
+        )
+        .unwrap();
+        let error = inspect_application_core_wasm(
+            &executable("wasm-tools").unwrap(),
+            &binary,
+            work.path(),
+            &[],
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "PP5101");
+        assert!(error.message.starts_with("core-wasm-validate exited "));
+    }
+
+    #[test]
+    fn core_wasm_inspection_rejects_imports_and_missing_exports() {
+        let imported = CORE_WASM_INSPECTION_MODULE.replacen(
+            "(module",
+            "(module (import \"host\" \"foreign\" (func))",
+            1,
+        );
+        let mut cases = vec![("import", imported)];
+        for name in ["memory", "holo_alloc", "holo_run"] {
+            cases.push((
+                name,
+                CORE_WASM_INSPECTION_MODULE.replace(&format!("(export \"{name}\")"), ""),
+            ));
+        }
+        for (name, wat) in cases {
+            let work = tempfile::tempdir().unwrap();
+            let binary = core_wasm_inspection_fixture(work.path(), &wat);
+            let error = inspect_application_core_wasm(
+                &executable("wasm-tools").unwrap(),
+                &binary,
+                work.path(),
+                &[],
+            )
+            .expect_err(name);
+            assert_eq!(error.code, "PP5103", "{name}: {error:?}");
+            assert!(error.message.contains("closed guest ABI"));
         }
     }
 

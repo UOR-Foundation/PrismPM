@@ -1023,6 +1023,16 @@ compiler retains 900 seconds and its
 execution retains 600 seconds. Every phase uses TERM then a five-second KILL
 grace period and independent 16,777,216-byte stdout/stderr limits. Named export,
 per-module kernel checks and browser deadlines retain their existing bounds.
+Core-Wasm verification validates the complete binary before inspecting its
+structural ABI with the pinned `wasm-tools print --skeleton`. Function bodies,
+data contents and element contents are omitted only from this presentation;
+complete binary type validation and model-owned memory, stack and typed ABI
+checks remain mandatory. The inspection still retains all import/export and
+signature declarations under the same 300-second and 16,777,216-byte limits.
+Valid large bodies do not require a full textual dump; structural-output
+overflow remains `PP5007`. Source-free readers admit only the exact ordered
+`validate <guest>` and `print --skeleton <guest>` records bound to that build,
+and still reject imports, missing required exports and invalid binaries.
 Process records contain normalized arguments/output, exit status, and SHA-256
 of the executable bytes. Timeout, signal, overflow, malformed output, nonzero
 exit, or missing executable is a registered failure.

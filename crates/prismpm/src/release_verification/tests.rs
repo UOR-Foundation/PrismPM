@@ -615,3 +615,57 @@ pub(crate) fn reject_mutations(
         rejected(&changed, "native execution");
     }
 }
+
+#[test]
+fn core_wasm_inspection_source_free_records_bind_exact_structural_argv() {
+    let build = "a".repeat(64);
+    let guest = "core-wasm/generic_core_wasm.wasm";
+    let path = format!("$BUILD/{guest}");
+    let printed = "(module (export \"memory\" (memory 0)) (export \"holo_alloc\" (func 0)) (export \"holo_run\" (func 1)))";
+    let rows = vec![
+        json!({"argv":["validate",path],"stdout":""}),
+        json!({"argv":["print","--skeleton",path],"stdout":printed}),
+    ];
+    application_core_wasm_processes(&rows, &build, guest).unwrap();
+    let absolute = format!("/retained/{build}/{guest}");
+    let mut admitted_absolute = rows.clone();
+    admitted_absolute[0]["argv"][1] = json!(absolute);
+    admitted_absolute[1]["argv"][2] = json!(absolute);
+    application_core_wasm_processes(&admitted_absolute, &build, guest).unwrap();
+    for (offset, argv) in [
+        (0, json!(["validate", "--skeleton", path])),
+        (0, json!(["validate", "$BUILD/core-wasm/foreign.wasm"])),
+        (1, json!(["print", path])),
+        (1, json!(["print", "--fold-instructions", path])),
+        (1, json!(["print", "--skeleton", "--skeleton", path])),
+        (
+            1,
+            json!(["print", "--skeleton", "$BUILD/core-wasm/foreign.wasm"]),
+        ),
+        (
+            1,
+            json!([
+                "print",
+                "--skeleton",
+                format!("/retained/{}/{guest}", "b".repeat(64))
+            ]),
+        ),
+    ] {
+        let mut changed = rows.clone();
+        changed[offset]["argv"] = argv;
+        assert!(application_core_wasm_processes(&changed, &build, guest).is_err());
+    }
+    for missing in [0, 1] {
+        let mut changed = rows.clone();
+        changed.remove(missing);
+        assert!(application_core_wasm_processes(&changed, &build, guest).is_err());
+    }
+    for name in ["memory", "holo_alloc", "holo_run"] {
+        let mut changed = rows.clone();
+        changed[1]["stdout"] = json!(printed.replace(&format!("(export \"{name}\""), "(other"));
+        assert!(application_core_wasm_processes(&changed, &build, guest).is_err());
+    }
+    let mut changed = rows;
+    changed[1]["stdout"] = json!(format!("(import \"host\" \"foreign\" (func)) {printed}"));
+    assert!(application_core_wasm_processes(&changed, &build, guest).is_err());
+}

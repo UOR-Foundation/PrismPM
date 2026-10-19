@@ -53,6 +53,8 @@ Feature: verification
     Given verification running offline
     When Lean and Lake execute
     Then all operations succeed without network access
+    And large valid Core-Wasm guests retain complete binary validation and bounded structural ABI inspection
+    And imports, missing ABI exports, invalid hidden bodies and forged inspection arguments are rejected
 
   @VR-10 @build
   Scenario: Process execution limits output size and execution time strictly.
