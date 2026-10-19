@@ -18,6 +18,7 @@ mod owner_timing;
 mod research_workbench;
 mod saved_recovery;
 mod scoped_administration;
+mod verification_offline;
 mod workbench;
 
 use node_suite::verify as verify_node_suite;
@@ -3995,7 +3996,7 @@ fn verify_verification(root: &Path, id: &str) {
             "crates/prismpm/src/verification.rs",
             &["PP5002", "PP5003", "PP5004"],
         ),
-        "VR-09" => assert!(!read(root, "crates/prismpm/src/verification.rs").contains("http")),
+        "VR-09" => verification_offline::verify(root),
         "VR-10" => assert_contains(
             root,
             "crates/prismpm/src/verification.rs",
