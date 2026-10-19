@@ -54,7 +54,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
         build-essential ca-certificates coreutils=9.1-1 curl git libgmp10 \
-        libssl-dev pkg-config python3=3.11.2-1+b1 ripgrep unzip xz-utils \
+        libssl-dev pkg-config python3=3.11.2-1+b1 ripgrep unzip xz-utils zstd=1.5.4+dfsg2-5 \
     && rm -rf /var/lib/apt/lists/*
 
 # The complete fixed Chromium input is independent of the unchanged driver,
@@ -124,9 +124,33 @@ RUN curl -sSfL https://github.com/leanprover/elan/releases/download/v4.2.3/elan-
     && echo "df0b2b3a439961ffcbb3985214365ffe40f49bc871df04dff268c7d8e21ca8b2  elan.tar.gz" | sha256sum -c - \
     && mkdir -p /tmp/elan-bin && tar -xzf elan.tar.gz -C /tmp/elan-bin \
     && /tmp/elan-bin/elan-init -y --no-modify-path --default-toolchain none \
-    && rm -rf elan.tar.gz /tmp/elan-bin \
-    && elan toolchain install leanprover/lean4:v4.32.1 \
-    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1
+    && rm -rf elan.tar.gz /tmp/elan-bin
+
+ARG TARGETARCH
+# Use the official byte-pinned archives with the image's curl TLS stack.
+# Elan 4.2.3 remains the exact proxy; it rejects a second install of this tree.
+RUN case "$TARGETARCH" in \
+      amd64) lean_archive=lean-4.32.1-linux.tar.zst; lean_sha=57d5c062a6b4bae6fba511a1704aa124dff461c37d0fc94585637fbb7d951b50 ;; \
+      arm64) lean_archive=lean-4.32.1-linux_aarch64.tar.zst; lean_sha=99b51cb2ba2ae402c03185f2ca656e82b6c37d28ca99f3b07a1c2d04b58a039a ;; \
+      *) exit 64 ;; \
+    esac \
+    && curl --disable --proto '=https' --proto-redir '=https' --fail --location --silent --show-error "https://github.com/leanprover/lean4/releases/download/v4.32.1/${lean_archive}" --output /tmp/lean.tar.zst \
+    && echo "${lean_sha}  /tmp/lean.tar.zst" | sha256sum --check --strict \
+    && tar --list --zstd --file /tmp/lean.tar.zst > /tmp/lean.members \
+    && awk -v prefix="${lean_archive%.tar.zst}/" 'index($0,prefix) != 1 || $0 ~ /(^|\/)\.\.(\/|$)/ { print "Lean archive member refused" > "/dev/stderr"; exit 1 } END { if (NR == 0) exit 1 }' /tmp/lean.members \
+    && test ! -e /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && test ! -L /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && mkdir -p /usr/local/elan/toolchains \
+    && mkdir /usr/local/elan/toolchains/.lean-4.32.1-install \
+    && tar --extract --zstd --no-same-owner --file /tmp/lean.tar.zst --strip-components=1 --directory /usr/local/elan/toolchains/.lean-4.32.1-install \
+    && test -x /usr/local/elan/toolchains/.lean-4.32.1-install/bin/lean \
+    && test -x /usr/local/elan/toolchains/.lean-4.32.1-install/bin/lake \
+    && mv --no-clobber --no-target-directory /usr/local/elan/toolchains/.lean-4.32.1-install /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && test ! -e /usr/local/elan/toolchains/.lean-4.32.1-install \
+    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lean --version \
+    && ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lake --version \
+    && rm /tmp/lean.tar.zst /tmp/lean.members
 
 RUN curl -sSfL https://github.com/casey/just/releases/download/1.57.0/just-1.57.0-x86_64-unknown-linux-musl.tar.gz -o just.tar.gz \
     && echo "45b548094283cb9739af8f13273b8cddeee869f5b4ef2bb631b1f311cb566155  just.tar.gz" | sha256sum -c - \

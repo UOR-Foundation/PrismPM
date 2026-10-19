@@ -217,11 +217,15 @@ Feature: sdk
   @DK-02 @build
   Scenario: Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence.
     Given the locked PrismPM production fixture with the exact signed timestamped native Ubuntu snapshot, complete suites and components, keyring and package versions
+    And the checksum-pinned Elan 4.2.3 installer and exact official per-architecture Lean 4.32.1 GitHub release archives and published checksums
     When the DK-02 contract is exercised
     And both APT acquisition commands select eight imported failed-file retries, 30-second HTTP and HTTPS timeouts, zero pipeline depth and xz ordering
     And update uses error-on-any so incomplete indexes and failed installation refuse construction without changing pins or trust
     And production recipe and effective configuration checks reject planted retry, timeout, source, signature and failure-bypass defects
     And the real HTTP 503 fixture uses three retries and its own 30-second deadline solely to distinguish strict failure from missing-index success
+    And verified HTTPS acquisition and strict archive checksums precede safe member listing and staged extraction without preserving archive ownership or clobbering the normal canonical Elan toolchain directory
+    And the pinned zstd prerequisite, complete recursive modes and existing executable probes are retained
+    And planted archive, architecture, checksum-order, member, destination, ownership, canonical-path, mode and probe defects are rejected without a TLS bypass, mirror, linked toolchain or host fallback
     Then its positive evidence passes and its planted defect is rejected
     And complete native construction on both architectures remains required without an eventual-recovery or whole-graph elapsed-time claim
 
@@ -234,6 +238,7 @@ Feature: sdk
   @DK-04 @build
   Scenario: The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline.
     Given the locked PrismPM production fixture with the exact root, vendored LexLean and pinned oracle manifest and lock closure
+    And the pinned Lean toolchain has been acquired and verified into its normal canonical directory before source compilation
     When the DK-04 contract is exercised
     And locked root, vendored LexLean and oracle fetches finish before the three main source release builds with acquisition-only CARGO_NET_RETRY eight and CARGO_HTTP_TIMEOUT 30
     And the oracle helper retains its manifest and lock checks and locked offline metadata checks

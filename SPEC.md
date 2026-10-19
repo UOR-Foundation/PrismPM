@@ -2257,6 +2257,28 @@ APT's imported failed-file acquisition behavior. They do not introduce an
 outer retry of package installation, compilation or image construction, or
 permit alternate mirrors, missing indexes, signature bypasses or changed pins.
 
+SDK and development toolchain acquisition (DK-02 and DK-04) MUST retain the
+checksum-pinned Elan 4.2.3 installer with no default toolchain. Lean 4.32.1 MUST
+come directly from its declared native-architecture `tar.zst` asset in the
+official `leanprover/lean4` GitHub release. The recipe MUST pin that asset and
+its published SHA-256, use verified HTTPS, and check the complete archive's
+strict checksum before listing or extraction. The pinned `zstd` prerequisite
+MUST be explicit. A nonempty member list MUST use the declared release prefix
+and reject parent-directory traversal. Extraction MUST use `--no-same-owner`
+into a fresh sibling staging directory, and publish without clobbering an
+existing canonical destination. Verified contents MUST retain the normal
+archive layout under Elan's canonical
+`/usr/local/elan/toolchains/leanprover--lean4---v4.32.1` directory, with the full
+recursive `a+rX,go-w` mode adjustment and existing version and executable
+probes preserved. Acquisition, checksum, extraction or probe failure fails
+construction. TLS bypasses, alternate mirrors, custom linked toolchain aliases,
+Elan download fallbacks and host toolchain fallbacks are forbidden.
+Recipe controls MUST reject substituted architecture assets or checksums,
+verification after listing or extraction, unsafe members, destination
+collisions, changed canonical paths and omitted ownership, mode or probe
+steps. This archive acquisition does not qualify the constructed image or
+guarantee eventual network recovery.
+
 Before the three main source release builds (DK-04), the recipe MUST complete
 `cargo fetch --locked` for the root workspace, the vendored LexLean manifest,
 and every pinned oracle graph selected by `scripts/fetch-oracle-cargo.sh`.

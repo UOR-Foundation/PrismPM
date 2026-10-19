@@ -254,6 +254,13 @@ test('read-only helper copies retain searchable SDK ancestors for unprivileged c
 
 test('pinned runtime package acquisition is bounded and refuses incomplete indexes', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const mutate = (before, after) => {
+    const start = recipe.indexOf(' AS runtime_base\n');
+    assert(start > 0, 'actual runtime stage boundary required');
+    const changed = recipe.slice(start).replace(before, after);
+    assert.notEqual(changed, recipe.slice(start), 'runtime policy mutation must affect its actual owning stage');
+    return recipe.slice(0, start) + changed;
+  };
   const check = text => {
     const commands = imageStages(text).get('runtime_base').instructions;
     const acquisition = commands.filter(command => command.includes('apt-get '));
@@ -306,7 +313,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
   ]) {
     assert(recipe.includes(from), `runtime mutation anchor missing: ${from}`);
     assert.notEqual(from, to);
-    assert.throws(() => check(recipe.replace(from, to)), `runtime mutation must refuse: ${from}`);
+    assert.throws(() => check(mutate(from, to)), `runtime mutation must refuse: ${from}`);
   }
   const options = ['Acquire::Retries=8', 'Acquire::http::Timeout=30', 'Acquire::https::Timeout=30',
     'Acquire::http::Pipeline-Depth=0', 'Acquire::https::Pipeline-Depth=0', 'Acquire::CompressionTypes::Order=xz'];
@@ -320,7 +327,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
   }
   for (const operation of ['update', 'install']) {
     const expression = operation === 'update' ? /apt-get --error-on=any[^\n]+update/ : /apt-get -o[^\n]+install --no-install-recommends --yes/;
-    assert.throws(() => check(recipe.replace(expression, 'true')));
+    assert.throws(() => check(mutate(expression, 'true')));
   }
   for (const phase of ['prepare', 'verify']) {
     const invocation = `/usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py ${phase} --architecture "$TARGETARCH" --snapshot "${'${snapshot}'}"`;
@@ -328,7 +335,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     for (const replacement of ['true', invocation.replace('--architecture "$TARGETARCH"', '--architecture "amd64"'),
       invocation.replace('--snapshot "${snapshot}"', '--snapshot "https://archive.ubuntu.com/ubuntu/"')]) {
       assert.notEqual(replacement, invocation);
-      assert.throws(() => check(recipe.replace(invocation, replacement)));
+      assert.throws(() => check(mutate(invocation, replacement)));
     }
   }
   assert.equal(readFileSync(new URL('../sdk/runtime-os.lock', import.meta.url), 'utf8'),
@@ -453,41 +460,168 @@ test('development and SDK recipes share the exact isolated pinned Rust tool cons
   }
 });
 
-test('both recipes normalize the complete pinned Lean toolchain before unprivileged use', () => {
-  const pin = 'leanprover/lean4:v4.32.1';
-  const root = '/usr/local/elan/toolchains/leanprover--lean4---v4.32.1';
-  const check = recipe => {
-    const commands = [...imageStages(recipe).values()].flatMap(stage => stage.instructions);
-    const installs = commands.filter(command => command.includes(`elan toolchain install ${pin}`));
-    assert.equal(installs.length, 1, 'exactly one pinned Lean construction');
-    assert.match(installs[0].replace(/\s+/g, ' '), new RegExp(`elan toolchain install ${pin.replaceAll('.', '\\.')} && chmod -R a\\+rX,go-w ${root.replaceAll('.', '\\.')}(?: &&|$)`),
-      'normalization must cover the entire pinned toolchain in its construction instruction');
+const leanPin = 'leanprover/lean4:v4.32.1';
+const leanRoot = '/usr/local/elan/toolchains/leanprover--lean4---v4.32.1';
+const leanArchives = {
+  amd64: ['lean-4.32.1-linux.tar.zst', '57d5c062a6b4bae6fba511a1704aa124dff461c37d0fc94585637fbb7d951b50'],
+  arm64: ['lean-4.32.1-linux_aarch64.tar.zst', '99b51cb2ba2ae402c03185f2ca656e82b6c37d28ca99f3b07a1c2d04b58a039a'],
+};
+
+function leanRecipeCommand(recipe) {
+  const commands = [...imageStages(recipe).values()].flatMap(stage => stage.instructions);
+  const installs = commands.filter(command => command.startsWith('RUN ') && command.includes('lean_archive='));
+  assert.equal(installs.length, 1, 'exactly one verified official Lean archive construction');
+  assert(commands.some(command => command.includes('apt-get ') && command.includes('zstd=1.5.4+dfsg2-5')),
+    'both recipes must supply the pinned archive decompressor');
+  const command = installs[0].slice(4).replace(/\s+/g, ' ');
+  for (const [arch, [archive, digest]] of Object.entries(leanArchives)) {
+    assert(command.includes(`${arch}) lean_archive=${archive}; lean_sha=${digest} ;;`), 'native archive and digest must remain paired');
+  }
+  const ordered = [
+    '*) exit 64 ;;',
+    'curl --disable --proto \'=https\' --proto-redir \'=https\' --fail --location --silent --show-error "https://github.com/leanprover/lean4/releases/download/v4.32.1/${lean_archive}" --output /tmp/lean.tar.zst',
+    'echo "${lean_sha}  /tmp/lean.tar.zst" | sha256sum --check --strict',
+    'tar --list --zstd --file /tmp/lean.tar.zst > /tmp/lean.members',
+    'awk -v prefix="${lean_archive%.tar.zst}/"',
+    `test ! -e ${leanRoot}`,
+    `test ! -L ${leanRoot}`,
+    'mkdir /usr/local/elan/toolchains/.lean-4.32.1-install',
+    'tar --extract --zstd --no-same-owner --file /tmp/lean.tar.zst --strip-components=1 --directory /usr/local/elan/toolchains/.lean-4.32.1-install',
+    'test -x /usr/local/elan/toolchains/.lean-4.32.1-install/bin/lean',
+    'test -x /usr/local/elan/toolchains/.lean-4.32.1-install/bin/lake',
+    `mv --no-clobber --no-target-directory /usr/local/elan/toolchains/.lean-4.32.1-install ${leanRoot}`,
+    'test ! -e /usr/local/elan/toolchains/.lean-4.32.1-install',
+    `chmod -R a+rX,go-w ${leanRoot}`,
+    `ELAN_TOOLCHAIN=${leanPin} lean --version`,
+    `ELAN_TOOLCHAIN=${leanPin} lake --version`,
+    'rm /tmp/lean.tar.zst /tmp/lean.members',
+  ];
+  let previous = -1;
+  for (const step of ordered) {
+    const at = command.indexOf(step.replace(/\s+/g, ' '));
+    assert(at > previous, `missing or reordered actual Lean construction step: ${step}`); previous = at;
+  }
+  assert(command.includes("index($0,prefix) != 1 || $0 ~ /(^|\\/)\\.\\.(\\/|$)/ { print \"Lean archive member refused\" > \"/dev/stderr\"; exit 1 } END { if (NR == 0) exit 1 }"),
+    'archive must have the exact selected prefix and no parent traversal before extraction');
+  assert(!/(?:^|\s)(?:--insecure|-k)(?:\s|$)/.test(command), 'verified TLS must not be bypassed');
+  assert(!commands.some(command => command.includes(`elan toolchain install ${leanPin}`)),
+    'Elan4.2.3 refuses already-installed toolchains; do not invoke its network installer after direct installation');
+  return installs[0].slice(4);
+}
+
+function leanArchiveFixture(t) {
+  const root = mkdtempSync(join(tmpdir(), 'sdk-lean-archive-'));
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  let serial = 0;
+  return (recipe, {arch = 'amd64', prefix, missing = '', digestMismatch = false, destination = '', mutate = command => command} = {}) => {
+    const work = join(root, String(serial++)), bin = join(work, 'bin'), tree = join(work, 'tree'), record = join(work, 'record.jsonl');
+    mkdirSync(bin, {recursive: true}); mkdirSync(tree);
+    const selected = leanArchives[arch] ?? leanArchives.amd64;
+    const archivePrefix = selected[0].replace(/\.tar\.zst$/, '');
+    mkdirSync(join(tree, archivePrefix, 'bin'), {recursive: true});
+    mkdirSync(join(tree, archivePrefix, 'lib'));
+    for (const name of ['lean', 'lake']) if (name !== missing) {
+      writeFileSync(join(tree, archivePrefix, 'bin', name), `#!/bin/sh\n[ "$ELAN_TOOLCHAIN" = '${leanPin}' ] || exit 71\nprintf 'fixture ${name} 4.32.1\\n'\n`, {mode: 0o700});
+    }
+    writeFileSync(join(tree, archivePrefix, 'lib', 'kernel-fixture'), 'synthetic kernel fixture, not a Lean compiler\n', {mode: 0o600});
+    symlinkSync('kernel-fixture', join(tree, archivePrefix, 'lib', 'kernel-alias'));
+    const transport = join(work, 'transport.tar');
+    execFileSync('/bin/tar', ['--create', '--file', transport, '--owner=12345', '--group=12345', '--directory', tree,
+      ...(prefix ? ['--transform', `s#^${archivePrefix.replaceAll('.', '\\.')}#${prefix}#`] : []), archivePrefix]);
+    const bytes = readFileSync(transport);
+    const recording = `#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');const argv=process.argv.slice(2);const tool=require('node:path').basename(process.argv[1]);fs.appendFileSync(process.env.SDK_LEAN_RECORD,JSON.stringify({tool,argv})+'\\n');
+if(tool==='curl'){fs.copyFileSync(process.env.SDK_LEAN_TRANSPORT,argv[argv.indexOf('--output')+1]);}
+else if(tool==='tar'){const result=cp.spawnSync('/bin/tar',argv.filter(arg=>arg!=='--zstd'),{stdio:'inherit'});process.exit(result.status??99);}
+else throw Error('unexpected fixture transport');\n`;
+    for (const name of ['curl', 'tar']) writeFileSync(join(bin, name), recording, {mode: 0o755});
+    const toolchains = join(work, 'toolchains'), target = join(toolchains, 'leanprover--lean4---v4.32.1');
+    for (const name of ['lean', 'lake']) writeFileSync(join(bin, name), `#!/bin/sh\nexec '${target}/bin/${name}' "$@"\n`, {mode: 0o755});
+    if (destination) {
+      mkdirSync(toolchains);
+      if (destination === 'symlink') symlinkSync('absent', target);
+      else { const retained = destination === 'temporary' ? join(toolchains, '.lean-4.32.1-install') : target; mkdirSync(retained); writeFileSync(join(retained, 'sentinel'), 'retained\n'); }
+    }
+    // Only fixture byte/decompression transports differ: no network or installed
+    // zstd is used here. SHA-256, GNUtar listing/extraction, fresh destinations,
+    // atomic publication and full-tree permissions execute as authored. The full
+    // official zstd/root-ownership/toolchain proof is a separate required owner.
+    let command = leanRecipeCommand(recipe).replaceAll('/usr/local/elan/toolchains', toolchains)
+      .replaceAll('/tmp/lean.tar.zst', join(work, 'lean.tar.zst')).replaceAll('/tmp/lean.members', join(work, 'lean.members'));
+    for (const [, digest] of Object.values(leanArchives)) command = command.replaceAll(digest, digestMismatch ? '0'.repeat(64) : hash(bytes));
+    command = mutate(command);
+    const actual = spawnSync('/bin/sh', ['-eu', '-c', command], {cwd: work, env: {...process.env, PATH: `${bin}:${process.env.PATH}`,
+      TARGETARCH: arch, SDK_LEAN_RECORD: record, SDK_LEAN_TRANSPORT: transport}, encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024});
+    assert.equal(actual.error, undefined); assert.equal(actual.signal, null);
+    const rows = existsSync(record) ? readFileSync(record, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
+    return {...actual, rows, target, work, toolchains};
   };
+}
+
+test('both recipes verify native official Lean archives and normalize the whole toolchain before unprivileged use', t => {
+  const run = leanArchiveFixture(t);
   for (const path of ['../sdk/Dockerfile', '../.devcontainer/Dockerfile']) {
     const recipe = readFileSync(new URL(path, import.meta.url), 'utf8');
-    check(recipe);
-    for (const changed of [
-      recipe.replace(` && chmod -R a+rX,go-w ${root}`, ''),
-      recipe.replace(`    && chmod -R a+rX,go-w ${root}`, ''),
-      recipe.replace('chmod -R a+rX,go-w', 'chmod a+rX,go-w'),
-      recipe.replace('chmod -R a+rX,go-w', 'chmod -R a+rX'),
-      recipe.replace(`chmod -R a+rX,go-w ${root}`, `chmod -R a+rX,go-w ${root}/bin`),
-    ]) assert.throws(() => check(changed));
+    leanRecipeCommand(recipe);
+    for (const arch of ['amd64', 'arm64']) {
+      const actual = run(recipe, {arch});
+      assert.equal(actual.status, 0, actual.stderr);
+      assert.deepEqual(actual.rows.map(row => row.tool), ['curl', 'tar', 'tar']);
+      assert(actual.rows[0].argv.includes(`https://github.com/leanprover/lean4/releases/download/v4.32.1/${leanArchives[arch][0]}`));
+      assert.equal(lstatSync(join(actual.target, 'lib/kernel-fixture')).mode & 0o777, 0o644);
+      assert.equal(lstatSync(join(actual.target, 'bin/lean')).mode & 0o777, 0o755);
+      assert.equal(lstatSync(join(actual.target, 'bin/lean')).uid, process.getuid());
+      assert.equal(readlinkSync(join(actual.target, 'lib/kernel-alias')), 'kernel-fixture');
+    }
+    const failed = run(recipe, {digestMismatch: true});
+    assert.notEqual(failed.status, 0); assert.match(failed.stderr, /checksum did NOT match/);
+    assert.deepEqual(failed.rows.map(row => row.tool), ['curl'], 'wrong digest must refuse before listing or extracting');
+    for (const options of [{arch: 'foreign'}, {prefix: 'foreign-root'}, {prefix: 'lean-4.32.1-linux/../foreign'},
+      {missing: 'lean'}, {missing: 'lake'}, {destination: 'directory'}, {destination: 'symlink'}, {destination: 'temporary'}]) {
+      const actual = run(recipe, options); assert.notEqual(actual.status, 0);
+      assert(!actual.rows.some(row => row.tool === 'tar' && row.argv.includes('--extract')) || options.missing,
+        'untrusted archive/destination must stop before extraction');
+      if (options.prefix) {
+        assert.match(actual.stderr, /Lean archive member refused/);
+        assert(readFileSync(join(actual.work, 'lean.members'), 'utf8').includes(options.prefix), 'actual archived member must carry the rejected prefix/traversal');
+      }
+      if (options.destination === 'directory') assert.equal(readFileSync(join(actual.target, 'sentinel'), 'utf8'), 'retained\n');
+      if (options.destination === 'symlink') assert.equal(readlinkSync(actual.target), 'absent');
+      if (options.missing) assert(!existsSync(actual.target), 'incomplete toolchain must not be published');
+    }
+    const omittedPermissions = run(recipe, {mutate: command => command.replace(`chmod -R a+rX,go-w ${command.match(/mv --no-clobber --no-target-directory \S+ (\S+)/)[1]}`, 'true')});
+    assert.equal(omittedPermissions.status, 0);
+    assert.equal(lstatSync(join(omittedPermissions.target, 'lib/kernel-fixture')).mode & 0o777, 0o600,
+      'omitted normalization must reproduce inaccessible retained files');
+    for (const [before, after] of [
+      [leanArchives.amd64[1], leanArchives.arm64[1]], ['amd64) lean_archive=', 'foreign) lean_archive='],
+      ['github.com/leanprover/lean4/releases/download', 'mirror.invalid/lean'], ['--check --strict', '--check'],
+      ['--output /tmp/lean.tar.zst', '--output /tmp/lean.tar.zst --insecure'],
+      ['--no-same-owner ', ''], ['--strip-components=1', '--strip-components=2'],
+      ['index($0,prefix) != 1', 'index($0,prefix) == 0'], ['test ! -L ', 'test -L '],
+      ['mv --no-clobber --no-target-directory', 'mv'], ['chmod -R a+rX,go-w', 'chmod -R a+rX'],
+      ['zstd=1.5.4+dfsg2-5', 'zstd'],
+    ]) {
+      const start = recipe.lastIndexOf('\nRUN ', recipe.indexOf('lean_archive=')) + 1;
+      assert(start > 0, 'actual Lean construction instruction required');
+      const changed = before.startsWith('zstd=') ? recipe.replace(before, after)
+        : recipe.slice(0, start) + recipe.slice(start).replace(before, after);
+      assert.notEqual(changed, recipe, `actual Lean mutation anchor required: ${before}`);
+      assert.throws(() => leanRecipeCommand(changed), `actual Lean policy mutation must refuse: ${before}`);
+    }
   }
   const checkDevelopmentShims = recipe => {
     const commands = imageStages(recipe).get('development').instructions.map(command => command.replace(/\s+/g, ' '));
     const environment = commands.indexOf('ENV CARGO_HOME=/home/vscode/.cargo ELAN_HOME=/home/vscode/.elan');
     assert(environment >= 0, 'normal development home aliases must be configured');
     for (const binary of ['lean', 'lake']) {
-      const probe = commands.findIndex(command => command.includes(
-        `runuser -u vscode -- env ELAN_TOOLCHAIN=${pin} ${binary} --version`));
+      const probe = commands.findIndex(command => command.includes(`runuser -u vscode -- env ELAN_TOOLCHAIN=${leanPin} ${binary} --version`));
       assert(probe > environment, 'actual unprivileged shim probe must follow the final home configuration');
     }
   };
   const development = readFileSync(new URL('../.devcontainer/Dockerfile', import.meta.url), 'utf8');
   checkDevelopmentShims(development);
   for (const binary of ['lean', 'lake']) assert.throws(() => checkDevelopmentShims(development.replace(
-    `runuser -u vscode -- env ELAN_TOOLCHAIN=${pin} ${binary} --version`, 'true')));
+    `runuser -u vscode -- env ELAN_TOOLCHAIN=${leanPin} ${binary} --version`, 'true')));
 });
 
 test('pinned tool layers exclude source inputs while the build retains both verified closure and policy', t => {
