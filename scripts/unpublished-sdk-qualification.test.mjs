@@ -102,6 +102,27 @@ test('every work and cleanup command charges its original five-second supervisor
  for(const token of['whole_deadline=$((started+21600))','work_deadline=$((whole_deadline-180))','remaining=$((deadline-SECONDS-2))','(( remaining>=bound )) || bound=$remaining','(( cleanup_deadline<=whole_deadline )) || cleanup_deadline=$whole_deadline','21600-(SECONDS-started)-180-5','PRISMPM_QUALIFICATION_WHOLE_END_UTC_MS=$owner_end_epoch_ms'])assert(shell.includes(token),token);
  assert(text.includes('Math.min(remaining*1000,utcRemaining)'),'host creation/startup must consume the same fixed remaining owner clock');
 });
+
+test('large owned daemon volumes receive bounded normal retirement within the unchanged whole cleanup deadline',()=>{
+ const text=source('scripts/unpublished-sdk-qualification.mjs');
+ const call=/await docker\('remove-owned-resource',\[row\.kind,'rm',row\.id\],([^;]+)\);await absent\(row\.kind,row\.id\)/.exec(text);
+ assert(call,'normal removal must retain its exact owned identity and subsequent absence proof');
+ const selected=kind=>runInNewContext(call[1],{row:{kind}});
+ assert.equal(selected('volume'),120000,'large daemon data must not inherit the ten-second metadata budget');
+ for(const kind of ['container','network'])assert.equal(selected(kind),10000);
+ for(const now of [0,60000,120000,174999]){
+  const budget=qualificationCommandBudget(selected('volume'),180000,now);
+  assert.equal(budget,Math.min(120000,180000-now-5000));
+  assert(budget+5000<=180000-now,'normal removal and supervisor closure share the original remaining deadline');
+ }
+ assert.throws(()=>qualificationCommandBudget(selected('volume'),180000,175000));
+ assert(text.includes('cleanupEnd=Math.min(wholeEnd,performance.now()+180000)'));
+ assert(text.includes('qualificationCommandBudget(timeout,cleaning?cleanupEnd:end)'));
+ assert(!/\[row\.kind,'rm','(?:--force|-f)'/.test(text));
+ const mutant=text.replace(call[1],'10000');
+ const changed=/await docker\('remove-owned-resource',\[row\.kind,'rm',row\.id\],([^;]+)\);await absent\(row\.kind,row\.id\)/.exec(mutant);
+ assert.notEqual(runInNewContext(changed[1],{row:{kind:'volume'}}),120000);
+});
 test('the private TLS registry runs as its actual owner and only its new empty volume receives bounded root initialization',()=>{
  const text=source('scripts/unpublished-sdk-qualification.mjs');
  const verify=value=>{

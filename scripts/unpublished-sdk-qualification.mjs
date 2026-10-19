@@ -283,7 +283,10 @@ export async function qualifyUnpublishedSdk(plan,destination,secret){
      }
     }
     if(row.kind==='container'&&current.State.Running){await docker('stop-owned-container',['stop','--time','20',row.id],25000);const stopped=await inspect(row.kind,row.id);assert.equal(stopped.State.Running,false);}
-    await docker('remove-owned-resource',[row.kind,'rm',row.id],10000);await absent(row.kind,row.id);if(row.id!==row.name)await absent(row.kind,row.name);
+    // Removing a complete daemon data volume can outlast a metadata request.
+    // The existing command budget still charges removal and supervisor closure
+    // to the earlier original whole-owner/180-second cleanup deadline.
+    await docker('remove-owned-resource',[row.kind,'rm',row.id],row.kind==='volume'?120000:10000);await absent(row.kind,row.id);if(row.id!==row.name)await absent(row.kind,row.name);
     closed.push({kind:row.kind,id:row.id,name:row.name,original_id_and_name_absent:true,force_removal:false});
    }catch(error){secondary.push(String(error));}
   }
