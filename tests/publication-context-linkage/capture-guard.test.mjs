@@ -6,7 +6,7 @@ import test from 'node:test';
 import {decodeCaptureCbor, decodeCaptureJson, projectCapturedSource} from './capture-oracle.mjs';
 import {encode} from './corpus.mjs';
 import {frozenInputs, repository} from './compile.mjs';
-import {requireCaptureCompletion} from './capture-owner.mjs';
+import {requireCaptureCompletion, requireCaptureGateInventory} from './capture-owner.mjs';
 import {localModuleInputs} from '../browser-view/local-module-inputs.mjs';
 
 test('independent capture decoder and owning source closure are complete and canonical', t => {
@@ -42,6 +42,22 @@ test('independent capture decoder and owning source closure are complete and can
   assert.throws(() => decodeCaptureJson(Buffer.from('{}'), 'unknown'), /closed captured JSON format/);
   for (const value of [undefined, null, {}, {path:'/tmp/saved-receipt', sha256:'a'.repeat(64)}])
     assert.throws(() => requireCaptureCompletion(value), /actual fresh capture and generated replay completion required/);
+  const gateSource = readFileSync(join(repository, 'crates/conformance/src/cases/node_suite.rs'), 'utf8');
+  const gateTests = [...gateSource.matchAll(/#\[test\]\s+fn ([A-Za-z0-9_]+)\(/g)]
+    .map(match => 'cases::node_suite::tests::' + match[1] + ': test').sort();
+  assert.equal(gateTests.length, 11, 'all actual authored exact-gate tests are registered');
+  const listing = [...gateTests, '11 tests, 0 benchmarks'].join('\n') + '\n';
+  assert.equal(requireCaptureGateInventory(listing), listing);
+  for (const row of gateTests) {
+    assert.throws(() => requireCaptureGateInventory(listing.replace(row + '\n', '')),
+      /complete current exact-gate regression inventory/);
+    assert.throws(() => requireCaptureGateInventory(row + '\n' + listing),
+      /complete current exact-gate regression inventory/);
+  }
+  for (const changed of [listing.replace('11 tests,', '8 tests,'),
+    listing.replace('11 tests,', '12 tests,'), [...gateTests].reverse().join('\n') + '\n11 tests, 0 benchmarks\n',
+    'cases::node_suite::tests::invented_owner: test\n' + listing])
+    assert.throws(() => requireCaptureGateInventory(changed), /complete current exact-gate regression inventory/);
   for (const value of [0, 23, 24, 255, 256, 65535, 65536, 0xffffffff, '', 'é\ufeff',
     Buffer.alloc(0), Buffer.alloc(24, 0xa5), [1, 0, [Buffer.alloc(32, 4), 'source']]])
     assert.deepEqual(decodeCaptureCbor(encode(value)), value);
