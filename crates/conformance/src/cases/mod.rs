@@ -3472,7 +3472,7 @@ fn verify_holo(root: &Path, id: &str) {
             ),
             (
                 "/application/profile",
-                serde_json::json!("prismpm/text-application/2"),
+                serde_json::json!("prismpm/text-application/unknown"),
                 "PP2009",
             ),
             (
