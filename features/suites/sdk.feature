@@ -205,8 +205,11 @@ Feature: sdk
   @DK-09 @build
   Scenario: The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery.
     Given independent browser contexts and explicit manual pairing
+    And the complete real-browser peer suite runs with only a loopback interface in a network-none container
+    And each isolated test context grants microphone permission only to its local acceptance origin for host-candidate enumeration without media acquisition
     When real ordered peer data channels exchange opaque bounded bytes
     Then malformed and excessive traffic, stale signaling, and closed sessions fail explicitly
+    And no external ICE service, replacement transport, omitted test or extended operation deadline supplies the result
 
   @DK-01 @build
   Scenario: One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas.

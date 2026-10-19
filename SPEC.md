@@ -2387,6 +2387,20 @@ Text application profile or change Holo/1 capability negotiation.
   Applications must authenticate records and authorize replication separately.
   Backpressure, deadlines and teardown are explicit, not silent message loss.
 
+The browser acceptance harness runs the complete peer suite in a network-none
+container with only its loopback interface. Its pinned Chromium launch permits
+loopback peer connections using Chromium's own WebRTC test switch; this changes
+only acceptance infrastructure, never the shipped browser modules. Both normal
+and persistent Chromium launches preserve the same policy. No external ICE
+service, network access, replacement transport, skipped test or longer operation
+deadline may substitute for the real isolated peer sessions.
+The peer fixtures additionally grant microphone permission only to their local
+acceptance origin in each isolated context, because Chromium uses that permission
+to allow host-candidate enumeration. They never request or capture media. The
+grant ends with the context and does not apply to unrelated browser suites or
+shipped applications. This verifies the explicitly granted local fixture state;
+it does not claim permission-free discovery on a loopback-only host.
+
 Host error codes are carried without payload/key material. Cryptography uses
 `invalid-input`, `identity-corrupt`, `crypto-unavailable`. Storage additionally
 uses `identity-exists`, `head-conflict`, `missing-object`, `object-corrupt`,

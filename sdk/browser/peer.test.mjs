@@ -5,6 +5,9 @@ import {withBrowser} from './browser-test-server.mjs';
 async function participant(t, {browser, baseURL}, options = {}) {
   const context = await browser.newContext();
   t.after(() => context.close());
+  // Chromium gates loopback host-candidate enumeration on media permission.
+  // Grant only this fixture origin; no media is requested or captured.
+  await context.grantPermissions(['microphone'], {origin: new URL(baseURL).origin});
   const page = await context.newPage();
   const unexpected = [];
   context.on('request', request => {

@@ -86,8 +86,8 @@ test('missing imported accessibility oracle cannot count as semantic mutant evid
 
 test('actual browser launch failure cannot count as semantic mutant evidence', t => {
   const result = counterexampleGate(t, ({work, server, replace}) => {
-    replace(server, '.launch({headless: true, executablePath})',
-      '.launch({headless: true, executablePath:' + JSON.stringify(join(work, 'absent-browser')) + '})');
+    replace(server, '.launch(launchOptions)',
+      '.launch({...launchOptions, executablePath:' + JSON.stringify(join(work, 'absent-browser')) + '})');
   });
   assert.match(result.error, /executable doesn't exist|ENOENT|does not exist/i);
 });
