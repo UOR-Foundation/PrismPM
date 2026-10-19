@@ -1586,7 +1586,7 @@ test('portable oracle owns the complete two-profile and two-trigger boundary inv
   assert.deepEqual(matrix.profiles[1].journeys, [...common, 'text-response-bounds', 'text-safe-rendering', 'detached-session']);
 });
 
-test('the existing interoperability binary owns both complete acceptances and one fresh matrix', () => {
+test('the existing interoperability binary owns both complete acceptances and one fresh matrix', t => {
   const rust = read('crates/prismpm/tests/hologram_interop.rs');
   assert.match(rust, /#\[test\]\s+fn test_portable_view_profiles_and_owned_failure_matrix\(\)/);
   for (const name of ['calculator_hologram_oracle_interoperability_acceptance', 'text_application_hologram_oracle_interoperability_acceptance']) {
@@ -1603,6 +1603,50 @@ test('the existing interoperability binary owns both complete acceptances and on
   assert.match(owner, /'build', '--locked', '--offline'/);
   assert.match(owner, /assert\.equal\(outcomes\.length, 78/);
   assert.match(owner, /executable\.verify\(\)/);
+  // Execute the actual pre-compiler checks against captured register/output
+  // bytes. The real matrix applies these same checks to both fresh subjects.
+  const start = owner.indexOf('const dependencyRegister = ');
+  const end = owner.indexOf('for (const [actual, embedded]', start);
+  const outputStart = owner.indexOf('  const provenance = capture(');
+  const outputEnd = owner.indexOf('  const profile = matrix.profiles[index]', outputStart);
+  assert(start >= 0 && end > start && outputStart >= 0 && outputEnd > outputStart);
+  const registerCheck = owner.slice(start, end), outputCheck = owner.slice(outputStart, outputEnd);
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'prism-oracle-provenance-')));
+  t.after(() => rmSync(directory, {recursive:true, force:true}));
+  mkdirSync(join(directory, 'model'));
+  mkdirSync(join(directory, 'application'));
+  const register = read('model/dependencies.toml');
+  const selected = register.split('[[dependency]]').filter(section => /^id = "hologram-live"$/m.test(section));
+  assert.equal(selected.length, 1);
+  const revision = /^revision = "([0-9a-f]{40})"$/m.exec(selected[0])[1];
+  const execute = (registerBytes, value, check = outputCheck) => {
+    writeFileSync(join(directory, 'model/dependencies.toml'), registerBytes);
+    writeFileSync(join(directory, 'application/model-provenance.json'), JSON.stringify(value));
+    return runInNewContext(`(() => {${registerCheck}\n${check}\nreturn captured.length;})()`, {
+      assert, capture, readFileSync, join, root:directory, path:directory,
+      captured:[capture(join(directory, 'model/dependencies.toml'))],
+    });
+  };
+  assert.equal(execute(register, {hologram_live_commit:revision}), 2);
+  const refusal = error => error.code === 'ERR_ASSERTION'
+    && error.message.includes('generated application provenance differs from the registered Hologram Live oracle');
+  for (const value of ['d8208266d8abdc2445b7bbc0cef412a566adfaf1', '0'.repeat(40), null])
+    assert.throws(() => execute(register, {hologram_live_commit:value}), refusal);
+  const alternate = '1'.repeat(40);
+  const changed = register.replace(`revision = "${revision}"`, `revision = "${alternate}"`);
+  assert.notEqual(changed, register);
+  assert.equal(execute(changed, {hologram_live_commit:alternate}), 2);
+  assert.throws(() => execute(changed, {hologram_live_commit:revision}), refusal);
+  for (const invalid of [
+    register.replace('id = "hologram-live"', 'id = "other-live"'),
+    register + '\n[[dependency]]\nid = "hologram-live"\nrevision = "' + revision + '"\nrole = "validation-oracle"\n',
+    register.replace(`revision = "${revision}"`, 'revision = "unknown"'),
+  ]) assert.throws(() => execute(invalid, {hologram_live_commit:revision}), {code:'ERR_ASSERTION'});
+  const equality = "  assert.equal(JSON.parse(readFileSync(provenance.path, 'utf8')).hologram_live_commit, liveRevision,\n"
+    + "    'generated application provenance differs from the registered Hologram Live oracle');\n";
+  assert.equal(outputCheck.split(equality).length, 2);
+  assert.equal(execute(register, {hologram_live_commit:'0'.repeat(40)}, outputCheck.replace(equality, '')), 2,
+    'omitting the real output equality admits the deliberately wrong provenance');
 });
 
 test('portable probe rejects undeclared triggers and infrastructure keyboard claims before opening inputs', () => {

@@ -20,7 +20,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 use std::path::{Component, Path, PathBuf};
 
-const HOLOGRAM_LIVE_COMMIT: &str = "d8208266d8abdc2445b7bbc0cef412a566adfaf1";
 const UOR_HOLOGRAM_COMMIT: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
 const DEPENDENCY_REGISTER: &str = include_str!("../model/dependencies.toml");
 const STDLIB_RELEASE_SOURCE: &str = include_str!("../stdlib/release.json");
@@ -867,6 +866,7 @@ fn generate_in(
         .map_err(|error| PrismError::new("PP9001", format!("dependencies: {error}")))?;
     let lexlean = dependency(&dependency_register, "lexlean")?;
     let lean4_prod = dependency(&dependency_register, "lean4-prod")?;
+    let hologram_live = dependency(&dependency_register, "hologram-live")?;
 
     let mut work = crate::exporter::directory::Directory::temporary(
         "prismpm-application-",
@@ -1282,7 +1282,7 @@ fn generate_in(
             lexlean_commit: lexlean.revision.clone(),
             lexlean_package_sha256: artifact_sha(lexlean, ".crate")?,
             lean4_prod_commit: lean4_prod.revision.clone(),
-            hologram_live_commit: HOLOGRAM_LIVE_COMMIT.to_owned(),
+            hologram_live_commit: hologram_live.revision.clone(),
             uor_hologram_commit: UOR_HOLOGRAM_COMMIT.to_owned(),
             target_profile_id: sha256(&target_profile),
             lean_manifest_sha256: sha256(lex_manifest_bytes),
