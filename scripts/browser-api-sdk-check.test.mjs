@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawnSync,execFileSync} from 'node:child_process';
-import {existsSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync,openSync,closeSync,ftruncateSync} from 'node:fs';
+import {existsSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync,openSync,closeSync,ftruncateSync,chmodSync,lstatSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,relative,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -276,6 +276,83 @@ function stageGate(root,helper) {
  put(root,'sdk/account-genesis-artifact.mjs',sdkSource('sdk/account-genesis-artifact.mjs'));
  return join(root,'scripts/browser-api-sdk-check.test.mjs');
 }
+test('browser shell extracts every original read-only tree completely as the nonroot owner and refuses failed producers',t=>{
+ assert.equal(typeof process.getuid,'function');assert.ok(process.getuid()>0,'this permission regression must run as the real nonroot owner');
+ const shell=sdkSource('scripts/browser-api-sdk-check.sh'),setup=/^set [^\n]+$/m.exec(shell)?.[0];
+ assert.equal(setup,'set -euo pipefail');
+ const routes=[
+  ['$container:/opt/prismpm/share/conformance-root/$path','$sdk_work/source/$(dirname "$path")'],
+  ['$container:/opt/prismpm/browser/.','$sdk_work/browser'],
+  ['$container:/opt/prismpm/share/account-genesis/.','$sdk_work/share/account-genesis'],
+ ];
+ const selected=script=>{
+  const copies=routes.map(([from,to])=>{
+   const lines=script.split('\n').map(line=>line.trim()).filter(line=>line.startsWith(`docker container cp "${from}" `));
+   assert.equal(lines.length,1,'one actual installed-tree copy: '+from);
+   const line=lines[0],prefix=`docker container cp "${from}" - | `;
+   assert.ok(line.startsWith(prefix),'the original Docker copy must produce the archive on stdout: '+from);
+   const extract=line.slice(prefix.length);
+   assert.equal(extract,`tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "${to}"`,
+    'the selected original archive must use the existing owned parent and all nonroot extraction guards');
+   return {line,extract,at:script.indexOf(line)};
+  });
+  const verify='node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"',verified=script.indexOf(verify);
+  assert.equal(script.split(verify).length,2,'original complete installed-source verification remains mandatory');
+  assert.ok(script.includes('done < <(node "$helper" roots)'),'copy every original registered source root');
+  assert.ok(copies[0].at<verified&&verified<copies[1].at,'verify the complete source copy before module checks');
+  assert.ok(copies[1].at<script.indexOf('node "$helper" modules "$root" "$sdk_work/browser"'));
+  assert.ok(copies[2].at<script.indexOf('node "$helper" account-construction "$sdk_work" "$sdk_work/source.json"'));
+  return copies;
+ };
+ const copies=selected(shell);
+ for(const copy of copies){
+  assert.throws(()=>selected(shell.replace(copy.line,'true')));
+  for(const flag of ['--no-same-owner ','--no-same-permissions ','--delay-directory-restore '])
+   assert.throws(()=>selected(shell.replace(copy.line,copy.line.replace(flag,''))));
+ }
+ assert.throws(()=>selected(shell.replace('node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"','true')));
+ const root=mkdtempSync(join(tmpdir(),'prismpm-browser-copy-permissions-'));
+ const writable=path=>{
+  const s=lstatSync(path);assert.ok(!s.isSymbolicLink());chmodSync(path,(s.mode&0o777)|(s.isDirectory()?0o700:0o600));
+  if(s.isDirectory())for(const name of readdirSync(path))writable(join(path,name));
+ };
+ t.after(()=>{writable(root);rmSync(root,{recursive:true,force:true});});
+ const inventory=directory=>{
+  const rows=[];const walk=(path,name)=>{
+   const s=lstatSync(path);assert.ok(!s.isSymbolicLink());assert.equal(s.uid,process.getuid());assert.equal(s.gid,process.getgid());
+   if(s.isDirectory()){rows.push({path:name,kind:'directory'});for(const child of readdirSync(path).sort())walk(join(path,child),name?name+'/'+child:child);}
+   else{assert.ok(s.isFile());rows.push({path:name,kind:'file',bytes:readFileSync(path).toString('hex')});}
+  };walk(directory,'');return rows;
+ };
+ const tarVersion=spawnSync('tar',['--version'],{encoding:'utf8',timeout:5000,maxBuffer:1048576});
+ assert.equal(tarVersion.error,undefined);assert.equal(tarVersion.status,0);assert.match(tarVersion.stdout,/^tar \(GNU tar\)/);
+ for(const [index,copy]of copies.entries()){
+  const parent=join(root,'input-'+index),entry=index===0?'.cargo':'.',input=index===0?join(parent,entry):parent;
+  mkdirSync(join(input,'nested','empty-directory'),{recursive:true});
+  writeFileSync(join(input,'config.toml'),'[build]\n# complete original copy\n');
+  writeFileSync(join(input,'nested','binary'),Buffer.from([0,255,128,10,0,42]));writeFileSync(join(input,'nested','empty-file'),Buffer.alloc(0));
+  const expected=inventory(input);
+  for(const path of [input,join(input,'nested'),join(input,'nested','empty-directory')])chmodSync(path,0o555);
+  for(const path of [join(input,'config.toml'),join(input,'nested','binary'),join(input,'nested','empty-file')])chmodSync(path,0o444);
+  const archive=spawnSync('tar',['--create','--format=gnu','--numeric-owner','--owner=0','--group=0','-C',parent,'-f','-',entry],
+   {timeout:5000,maxBuffer:1048576,env:{PATH:process.env.PATH,LC_ALL:'C'}});
+  assert.equal(archive.error,undefined);assert.equal(archive.signal,null);assert.equal(archive.status,0,archive.stderr.toString());
+  const execute=(producer,options=setup)=>{
+   const work=mkdtempSync(join(root,'output-'));
+   for(const path of ['source','browser','share/account-genesis'])mkdirSync(join(work,path),{recursive:true});
+   const result=spawnSync('bash',['--noprofile','--norc','-c',options+'\n'+producer+' | '+copy.extract],
+    {input:archive.stdout,timeout:5000,maxBuffer:1048576,env:{PATH:process.env.PATH,LC_ALL:'C',sdk_work:work,path:'.cargo'}});
+   assert.equal(result.error,undefined);assert.equal(result.signal,null);
+   const destination=join(work,index===0?'source/.cargo':index===1?'browser':'share/account-genesis');
+   assert.deepEqual(inventory(destination),expected,'all nested, empty and binary members survive the actual selected extractor');
+   assert.deepEqual(inventory(input),expected,'the original read-only fixture is never changed');return result;
+  };
+  const good=execute('cat');assert.equal(good.status,0,good.stderr.toString());
+  const refuses=result=>assert.equal(result.status,17,'the original archive producer failure must survive successful extraction');
+  refuses(execute('{ cat; exit 17; }'));
+  const omitted=execute('{ cat; exit 17; }',setup.replace(' pipefail',''));assert.equal(omitted.status,0);assert.throws(()=>refuses(omitted));
+ }
+});
 test('actual installed module trees reject missing extra changed and aliased module bytes', async t => {
  assert.equal(typeof browserGate.verifyModules, 'function');
  const source = temporary(t), installed = temporary(t);

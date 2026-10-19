@@ -17,7 +17,7 @@ const revision='a'.repeat(40),sdk=lockFixture(sourceAuthority),image=sdk.image;
 const metadata=await sdk.metadataEvidence();
 const capturedSource=capture(source,revision);
 const dockerMock=`#!/usr/bin/env node
-const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2),root=process.env.RECORDED_SOURCE,log=process.env.RECORDED_CALLS;
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),args=process.argv.slice(2),root=process.env.RECORDED_SOURCE,log=process.env.RECORDED_CALLS;
 const earlier=fs.existsSync(log)?fs.readFileSync(log,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse):[];
 fs.appendFileSync(log,JSON.stringify(args)+'\\n');
 const id='c'.repeat(64);
@@ -29,7 +29,13 @@ if(args[0]==='container'&&args[1]==='cp'){
  if(from==='/opt/prismpm/share/inventory.json'){fs.copyFileSync(process.env.RECORDED_INVENTORY,args[3]);process.exit(0);}
  if(from==='/opt/prismpm/share/standards.lock'){fs.copyFileSync(path.join(root,'standards.lock'),args[3]);process.exit(0);}
  const input=from.startsWith(prefix)?path.join(root,from.slice(prefix.length)):from==='/usr/local/bin/prismpm-devcontainer-init'?path.join(root,'sdk/devcontainer-init.sh'):null;
- if(!input)process.exit(65);fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
+ if(!input)process.exit(65);
+ if(args[3]==='-'){
+  if(process.env.RECORDED_COPY_TAR_CORRUPT==='1'){process.stdout.write('not an archive');process.exit(0);}
+  const archive=cp.spawnSync('/usr/bin/tar',['--create','--file','-','--directory',path.dirname(input),'--',path.basename(input)],{stdio:['ignore','inherit','inherit'],timeout:10000});
+  process.exit(archive.status===0?Number(process.env.RECORDED_COPY_STATUS||0):65);
+ }
+ fs.cpSync(input,args[3],{recursive:true,verbatimSymlinks:true});process.exit(0);
 }
 if(args[0]==='container'&&args[1]==='start'){
  const created=earlier.filter(row=>row[0]==='container'&&row[1]==='create').at(-1);
@@ -110,6 +116,7 @@ async function accepted(context){
  for(const index of starts)assert.equal(calls[index+1][1],'inspect');
  for(const index of [1,3])assert.ok(calls[starts[index]].includes('--interactive'));
  assert.ok(calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].endsWith('/scripts/library-sdk-check.test.mjs')));
+ assert.ok(calls.some(row=>row[0]==='container'&&row[1]==='cp'&&row[2].endsWith('/.cargo')&&row[3]==='-'),'recording Docker emits a real GNUtar source archive to the real extractor');
  assert.match(result.stdout,/native-library SDK closure passed/);
 }
 
@@ -127,6 +134,7 @@ test('real shell invokes the confined Docker sequence and inspects actual termin
   ['RECORDED_LOCK_OUTPUT',['', '{}',sdk.bytes.toString()+'\n']],
   ['RECORDED_OUTPUT',['', 'TAP version 13\n1..0 # SKIP\n','{}']],
   ['RECORDED_COMPILER_OUTPUT',['{}']],['RECORDED_CUSTODY_OUTPUT',['{}']],
+  ['RECORDED_COPY_STATUS',['7']],['RECORDED_COPY_TAR_CORRUPT',['1']],
  ])for(const output of outputs)tasks.push(async()=>{const context=fixture(t);context.env[field]=output;const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);});
  for(const transform of [
   raw=>'{"lock":{},'+raw.slice(1),raw=>'{"\\u006cock":{},'+raw.slice(1),
@@ -159,4 +167,10 @@ test('real shell orchestration tests reject removed execution and changed runtim
   ['/tmp:rw,exec,nosuid,nodev,size=768m','/tmp:rw,exec,nosuid,nodev,size=8g'],
   ['node scripts/library-sdk-check.mjs run "$image")','node scripts/browser-api-sdk-check.mjs run "$image")'],
  ].map(([before,after])=>async()=>{const context=fixture(t),path=join(context.root,'scripts/library-sdk-check.sh'),script=readFileSync(path,'utf8');assert.equal(script.split(before).length,2);writeFileSync(path,script.replace(before,after));await assert.rejects(()=>accepted(context),error=>error.code==='ERR_ASSERTION'&&!error.message.includes('shell transport'));}));
+ // The producer can emit a complete valid TAR and still fail. Only pipefail
+ // preserves that refusal after the real GNUtar extractor succeeds.
+ const context=fixture(t),path=join(context.root,'scripts/library-sdk-check.sh'),script=readFileSync(path,'utf8');
+ assert.equal(script.split('set -euo pipefail').length,2);
+ context.env.RECORDED_COPY_STATUS='7';writeFileSync(path,script.replace('set -euo pipefail','set -eu'));
+ const {result}=await execute(context);assert.equal(result.status,0,'removing pipefail must expose the deliberately ignored valid-TAR producer failure');
 });

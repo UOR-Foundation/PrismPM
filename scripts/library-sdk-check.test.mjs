@@ -308,6 +308,19 @@ test('release job keeps both native library and browser gates mandatory for each
  assert.match(workflow,/bash root-a\/scripts\/library-sdk-check\.sh "\$\(cat \.shipped-image\/sdk-image.txt\)" "\$GITHUB_SHA"/);
  assert.match(workflow,/os: ubuntu-24.04-arm/);assert.match(workflow,/name: library-sdk-\$\{\{ matrix.name \}\}/);
  const wrapper=readFileSync(new URL('./library-sdk-check.sh',import.meta.url),'utf8');
+ const copy='docker container cp "$container:/opt/prismpm/share/conformance-root/$path" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "$sdk_work/source/$(dirname "$path")"';
+ const copiedSource=script=>{
+  assert.ok(script.includes('set -euo pipefail'),'both original Docker producer and GNUtar extractor must succeed');
+  assert.equal(script.split(copy).length,2,'complete original source-root archive uses delayed nonroot extraction once');
+  const verify='node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"';
+  assert.ok(script.indexOf(verify)>script.indexOf(copy),'the complete extracted source and declared aliases remain verified');
+ };
+ copiedSource(wrapper);
+ for(const [before,after]of [[copy,copy.replace('--no-same-owner ','')],[copy,copy.replace('--no-same-permissions ','')],
+  [copy,copy.replace('--delay-directory-restore ','')],['set -euo pipefail','set -eu'],
+  ['node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"','true']]){
+  assert.ok(wrapper.includes(before));assert.throws(()=>copiedSource(wrapper.replace(before,after)));
+ }
  for(const required of ['--user 1000:1000 --read-only --network none','--cap-drop ALL','--security-opt no-new-privileges','--tmpfs /tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','node scripts/library-sdk-check.mjs run'])assert.ok(wrapper.includes(required),required);
  const execution=wrapper.slice(wrapper.indexOf('# Execution has no network'));
  assert.ok(!execution.includes('--volume')&&!execution.includes('--mount'));

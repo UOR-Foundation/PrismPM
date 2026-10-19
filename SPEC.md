@@ -2195,6 +2195,13 @@ criteria can be accepted. Private-registry execution is not publication, signing
 release promotion or immutable downstream Hologram adoption; those remain required
 where specified. Unit TLS/archive fixtures are never installed-image evidence.
 
+Normal removal of an owned large volume receives at most 120 seconds, clipped
+by the remaining original 180-second cleanup envelope and its five-second
+reserve. Container and network removal retain their shorter bounds. Exact
+owned identity, labels, configuration and observed ID/name absence remain
+required; timeout is a qualification failure, never permission for forced
+removal, an extended envelope or an assumed retirement.
+
 The additive `construction_integrity` workflow mode authenticates fixed GitHub
 API responses and selects an explicit source/run/attempt/two-artifact tuple.
 It is mutually exclusive with construction and publication. Older construction
@@ -2512,6 +2519,18 @@ only temporary writable caches. Complete TAP summaries, no omissions/skips, and
 native architecture/revision labels are required. Both native SDK architectures
 run this check in release.yml's required reproducibility job. A prior oracle SDK
 may support source bootstrap; it cannot satisfy this shipped-SDK acceptance.
+
+Post-build browser, native-library and product checks copy complete original
+Docker archives into fresh nonroot-owned staging. GNUtar extraction does not
+preserve archive ownership, applies the extracting user's umask, and delays
+directory mode restoration until all descendants have been written. The producer and extractor
+must both succeed. Complete source bytes, tree inventories and the exact admitted
+library aliases remain independently verified; links are not dereferenced and
+extra, changed, missing or escaping members still reject. Browser module and
+account-genesis trees and the product OCI receiver graph retain their original
+byte checks. This private extraction changes neither the immutable SDK's modes
+nor the nonroot, read-only, no-network runtime owners. Archive fixtures establish
+copy behavior only, not installed SDK acceptance.
 
 The closed installed module inventory includes the private effect, safe
 presentation, operation-journal and credential-custody adapters. Missing, extra, changed or aliased

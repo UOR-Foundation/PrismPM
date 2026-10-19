@@ -257,4 +257,8 @@ Feature: sdk
   Scenario: SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation.
     Given the locked PrismPM production fixture
     When the DK-06 contract is exercised
+    And complete original Docker archives are extracted into fresh nonroot-owned staging with delayed directory mode restoration
+    And source hashes, complete trees and admitted alias texts and targets remain verified without dereferencing links or changing immutable SDK modes
+    And a failed archive producer or extractor cannot report a successful installed owner
+    And normal owned-volume removal is bounded by 120 seconds and the remaining original 180-second cleanup envelope with its five-second reserve and exact identity and absence checks
     Then its positive evidence passes and its planted defect is rejected
