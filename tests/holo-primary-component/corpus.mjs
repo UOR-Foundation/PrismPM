@@ -7,7 +7,7 @@ export function codecCorpus(fixture) {
   assert.equal(fixture.schema, 'prismpm/primary-codec-oracle/1');
   assert.equal(fixture.scope, 'synthetic-codec-only');
   assert.equal(fixture.hologram_revision, '2bda6a9a9476872dade705bd61ece4209607f6da');
-  assert.equal(fixture.live_revision, 'd8208266d8abdc2445b7bbc0cef412a566adfaf1');
+  assert.equal(fixture.live_revision, '9847e00212e4c5c46767ad7ba9baa678ffa808f0');
   const rows = [], names = new Set();
   const add = (id, operation, response, ...arguments_) => {
     assert.ok(!names.has(id)); names.add(id); rows.push({id, operation, response, arguments: arguments_});
