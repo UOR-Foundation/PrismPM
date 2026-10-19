@@ -2,11 +2,14 @@
 
 `Release.lex.tex` models A/B releases for the Calculator selected through this
 fixture's LexLean configuration. Both models and manifests bind
-`sha256:2c1adf65faae1f1a417a25b756c7d520c6d4fc55b4973cdb7947bae8d0538e00`.
+`sha256:5e77f921b96b5561d4994ce719ac1313f11c13748266aebc117e6e4467beab29`.
 
-The original source-selection owner reported this digest in a genuine PP2101
-refusal (pr184-c07-browser-selected-source-diagnostic-v1-20261014). The four bindings were explicitly
-updated; verification never repairs stale source or removes negative controls.
+The original source-selection owner reported a genuine PP2101 refusal
+(pr184-c07-browser-selected-source-diagnostic-v1-20261014). The current four
+bindings are refreshed from the selected application digest reported by both
+browser-system owners in source CI run 39172905969 at revision 2bc86cce. The
+production emitter closure is unchanged by this fixture correction. Verification
+never repairs stale source or removes negative controls.
 
 Run in a Docker-enabled devcontainer with the immutable imported-oracle image
 available to its daemon (no image pull is performed by the oracle runner):
