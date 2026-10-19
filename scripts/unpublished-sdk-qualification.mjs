@@ -228,7 +228,7 @@ export async function qualifyUnpublishedSdk(plan,destination,secret){
    '--mount','type=bind,source='+dirname(source)+',target='+dirname(source),'--mount','type=bind,source='+source+',target='+source+',readonly',
    '--mount','type=bind,source='+target+',target='+target,
    '--mount','type=bind,source='+ca+',target=/run/prismpm-qualification-ca.crt,readonly',
-   '--mount','type=bind,source='+ca+',target=/etc/docker/certs.d/'+authority+'/ca.crt,readonly',lock.images.dind.reference,'dockerd','--host=unix:///var/run/docker.sock','--data-root=/var/lib/docker']);
+   '--mount','type=bind,source='+ca+',target=/etc/docker/certs.d/'+authority+'/ca.crt,readonly',lock.images.dind.reference,'dockerd','--group=root','--host=unix:///var/run/docker.sock','--data-root=/var/lib/docker']);
   await docker('start-owned-daemon',['start',daemon.id]);
   let ready=false;
   for(let n=0;n<30;n++){

@@ -149,7 +149,7 @@ test('the existing real admission shell excludes unpublished qualification from 
   assert(job.if.includes('!inputs.development_only'));assert(job.if.includes("inputs.construction_source_revision == ''"));assert(job.if.includes("inputs.construction_integrity == ''"));
  }
 });
-test('only the freshly owned ignored target is writable through wrapper namespaces and the original fixed library evidence path stays intact',()=>{
+test('only the freshly owned ignored target is writable through wrapper namespaces and the original fixed library evidence path stays intact',async()=>{
  const driver=source('scripts/unpublished-sdk-qualification.mjs'),shell=source('scripts/unpublished-sdk-qualification.sh');
  const verify=(text,outer)=>{
   assert.equal((text.match(/'type=bind,source='\+target\+',target='\+target/g)||[]).length,2,'daemon and original-owner runner need the same narrowly writable target');
@@ -162,4 +162,36 @@ test('only the freshly owned ignored target is writable through wrapper namespac
  const missing=driver.replace("'type=bind,source='+target+',target='+target", "'type=bind,source=/unrelated,target=/unrelated'");assert.notEqual(missing,driver);assert.throws(()=>verify(missing,shell));
  const writable=shell.replace('type=bind,source=$root,target=$root,readonly','type=bind,source=$root,target=$root');assert.notEqual(writable,shell);assert.throws(()=>verify(driver,writable));
  assert(source('scripts/library-sdk-check.sh').includes('"$root/target/library-sdk-evidence/linux-$architecture"'));
+ // Execute the actual private daemon/owner setup with an inert recording
+ // transport. This checks command wiring, not Docker or kernel acceptance.
+ const pair=async(value,arch,phase)=>{
+  const begin=value.indexOf('const daemon=await own('),end=value.indexOf('const execution=await docker(',begin);
+  assert(begin>0&&end>begin);
+  const recorded=[],socket={name:'owned-socket'},network={name:'owned-network'};
+  const actual=await runInNewContext('(async()=>{'+value.slice(begin,end)+';return {daemon,runner};})()',{
+   own:async(kind,name,args)=>{recorded.push({kind,name,args:Array.from(args)});return {id:name,name};},
+   docker:async(label,args)=>{assert.equal(label==='start-owned-daemon'||label==='probe-owned-daemon',true);return {status:0,stdout:Buffer.from('28.4.0\n')};},
+   assert,Buffer,prefix:'owned',ownerLabel:'owned-label',nonce:'nonce',network,socket,data:{name:'owned-data'},
+   dirname:()=>'/private',source:'/private/root-a',target:'/private/root-a/target',ca:'/private/ca.crt',authority:'172.29.88.1:5000',
+   lock:{images:{dind:{reference:JSON.parse(sourceLock).images.dind.reference}}},
+   uid:1001,gid:1001,toolImage:'sha256:'+'2'.repeat(64),graph:{image:'private/sdk@sha256:'+'3'.repeat(64)},
+   plan:{arch,phase,selection:{expected:{revision}}},process:{env:{}}
+  });
+  assert.equal(actual.daemon.id,'owned-daemon');assert.equal(actual.runner.id,'owned-owner');
+  assert.equal(recorded.length,2);return recorded;
+ };
+ const sourceLock=source('sdk/vv-runtime.lock.json');
+ const access=async value=>{
+  for(const arch of['amd64','arm64'])for(const phase of['prerequisites','installed']){
+   const [daemon,owner]=await pair(value,arch,phase),d=daemon.args,o=owner.args;
+   assert.deepEqual(d.slice(d.indexOf('dockerd')),['dockerd','--group=root','--host=unix:///var/run/docker.sock','--data-root=/var/lib/docker']);
+   assert.equal(o[o.indexOf('--user')+1],'1001:1001');assert.equal(o.filter(x=>x==='--group-add').length,1);assert.equal(o[o.indexOf('--group-add')+1],'0');
+   assert(d.includes('type=volume,source=owned-socket,target=/var/run'));assert(o.includes('type=volume,source=owned-socket,target=/var/run'));
+   assert(!o.includes('--privileged'));assert(!d.includes('--group-add'));
+  }
+ };
+ await access(driver);
+ for(const [before,after]of[["'dockerd','--group=root'","'dockerd'"],["'--group=root'","'--group=docker'"],["'--group-add','0'","'--group-add','101'"]]){
+  const changed=driver.replace(before,after);assert.notEqual(changed,driver);await assert.rejects(()=>access(changed));
+ }
 });
