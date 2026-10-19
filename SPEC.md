@@ -2236,6 +2236,41 @@ claim atomic isolation against a same-user filesystem attacker.
 This is image-input construction; full V&V execution, freshness, independent
 native-platform and immutable-image acceptance remain separate gates.
 
+SDK runtime package acquisition (DK-02) MUST retain the signed, timestamped
+Ubuntu snapshot, native architecture, complete suite/component closure,
+keyring and exact package versions selected by `sdk/runtime-os.lock` and the
+source configurator. Both APT update and install MUST select
+`Acquire::Retries=8`, HTTP and HTTPS timeouts of 30 seconds, pipeline depth zero
+and `xz` compression ordering. Update MUST use `--error-on=any`; an incomplete
+index acquisition or failed install fails construction. Retry and backoff use
+APT's imported failed-file acquisition behavior. They do not introduce an
+outer retry of package installation, compilation or image construction, or
+permit alternate mirrors, missing indexes, signature bypasses or changed pins.
+
+Before the three main source release builds (DK-04), the recipe MUST complete
+`cargo fetch --locked` for the root workspace, the vendored LexLean manifest,
+and every pinned oracle graph selected by `scripts/fetch-oracle-cargo.sh`.
+That helper's exact manifest/lock checks and `cargo metadata --locked --offline`
+checks MUST remain intact. These acquisition commands alone select
+`CARGO_NET_RETRY=8` and `CARGO_HTTP_TIMEOUT=30`, using Cargo's imported retry
+behavior without persisting those settings into the installed runtime.
+The subsequent PrismPM CLI, conformance binaries and vendored LexLean release
+builds MUST each be invoked once with `--locked --offline`; the newly built CLI
+MUST still execute `authority resolve --locked` before the latter two builds.
+Acquisition, authority-resolution or compilation failure fails construction.
+
+The retry counts and timeouts apply to the respective package-manager
+operations; they guarantee neither eventual network recovery nor a total
+elapsed bound over all acquired files and dependency graphs. Cargo offline
+mode constrains its dependency acquisition, not arbitrary process networking.
+Recipe/configuration checks and planted policy, ordering, lock and trust
+defects MUST exercise the production settings. The local HTTP 503 APT fixture
+uses the explicitly smaller `Acquire::Retries=3` policy and a 30-second test
+deadline to distinguish strict failure from a successful update with missing
+indexes; it does not measure exhaustion or timing of the production eight-retry
+policy. Complete native SDK construction on both architectures remains a
+separate required observation before image acceptance.
+
 Read-only helper copies MUST enter explicitly created, searchable SDK
 directories. Both build and native runtime stages create their required
 `/opt/prismpm` helper ancestors as mode 0755 before `COPY --chmod=0444`;

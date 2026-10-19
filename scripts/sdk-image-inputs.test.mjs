@@ -67,7 +67,7 @@ function fixture(t) {
 test('every source-derived image COPY consumes the verified committed source stage', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
   const checkLockAdmission = text => assert.match(text,
-    /RUN cargo build --locked --release --package prismpm \\\n    && target\/release\/prismpm --json --project \. authority resolve --locked \\\n    && cargo build --locked --release --package repo-conformance --bins/,
+    /RUN cargo build --locked --offline --release --package prismpm \\\n    && target\/release\/prismpm --json --project \. authority resolve --locked \\\n    && cargo build --locked --offline --release --package repo-conformance --bins/,
     'actual newly built CLI must admit the shipped lock before further SDK compilation');
   checkLockAdmission(recipe);
   assert.throws(() => checkLockAdmission(recipe.replace('    && target/release/prismpm --json --project . authority resolve --locked \\\n', '')));
@@ -92,6 +92,136 @@ function imageStages(recipe) {
   }
   return stages;
 }
+
+const cargoAcquisition = [
+  'CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 cargo fetch --locked',
+  'CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml',
+  'CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 bash scripts/fetch-oracle-cargo.sh',
+];
+const cargoCompilation = [
+  'cargo build --locked --offline --release --package prismpm',
+  'target/release/prismpm --json --project . authority resolve --locked',
+  'cargo build --locked --offline --release --package repo-conformance --bins',
+  'cargo build --locked --offline --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean',
+];
+const cargoOrder = ['root-fetch', 'vendor-fetch', 'oracle-fetch', 'build-prismpm', 'authority', 'build-conformance', 'build-lexlean'];
+
+function cargoRecipeCommands(recipe) {
+  return imageStages(recipe).get('build').instructions
+    .filter(command => command.startsWith('RUN ') && /cargo (?:fetch|build) --locked/.test(command))
+    .map(command => command.slice(4).split(' && mkdir -p /opt/prismpm/share')[0]);
+}
+
+function checkCargoRecipe(recipe) {
+  assert.deepEqual(cargoRecipeCommands(recipe).map(command => command.replace(/\s+/g, ' ').trim()),
+    [cargoAcquisition.join(' && '), cargoCompilation.join(' && ')],
+    'one locked acquisition instruction must precede single offline compilation and lock admission');
+  assert(!imageStages(recipe).get('build').instructions.some(command => /^ENV .*CARGO_(?:NET_RETRY|HTTP_TIMEOUT)/.test(command)),
+    'acquisition transport settings must not become ambient compilation settings');
+}
+
+function cargoRecipeFixture(t) {
+  const root = mkdtempSync(join(tmpdir(), 'sdk-cargo-recipe-'));
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  let serial = 0;
+  return (recipe, failure = '') => {
+    const work = join(root, String(serial++)), bin = join(work, 'bin'), record = join(work, 'record.jsonl');
+    for (const path of [bin, join(work, 'target/release'), join(work, 'scripts')]) mkdirSync(path, {recursive: true});
+    const recorder = `#!${process.execPath}\nconst fs=require('node:fs');const argv=process.argv.slice(2);let kind;
+if(process.env.SDK_RECIPE_AUTHORITY==='1')kind='authority';
+else if(argv[0]==='fixture-oracle-acquisition')kind='oracle-fetch';
+else if(argv[0]==='fetch')kind=argv.includes('--manifest-path')?'vendor-fetch':'root-fetch';
+else if(argv[0]==='build')kind=argv.includes('prismpm')?'build-prismpm':argv.includes('repo-conformance')?'build-conformance':'build-lexlean';
+else throw Error('unexpected recording transport invocation');
+fs.appendFileSync(process.env.SDK_RECIPE_RECORD,JSON.stringify({kind,argv,retry:process.env.CARGO_NET_RETRY??null,timeout:process.env.CARGO_HTTP_TIMEOUT??null})+'\\n');
+if(kind===process.env.SDK_RECIPE_FAILURE){console.error('fixture failure: Could not resolve hostname');process.exit(101);}\n`;
+    writeFileSync(join(bin, 'cargo'), recorder, {mode: 0o755});
+    writeFileSync(join(work, 'target/release/prismpm'), '#!/bin/sh\nSDK_RECIPE_AUTHORITY=1 exec cargo "$@"\n', {mode: 0o755});
+    // The oracle script is a recording transport here. Its native 33-manifest fetch/metadata
+    // internals and Cargo's own retry implementation are not executed by this unit fixture.
+    writeFileSync(join(work, 'scripts/fetch-oracle-cargo.sh'), '#!/bin/sh\nexec cargo fixture-oracle-acquisition\n');
+    const environment = {...process.env, PATH: `${bin}:${process.env.PATH}`, SDK_RECIPE_RECORD: record, SDK_RECIPE_FAILURE: failure};
+    delete environment.CARGO_NET_RETRY; delete environment.CARGO_HTTP_TIMEOUT;
+    const results = [];
+    for (const command of cargoRecipeCommands(recipe)) {
+      const result = spawnSync('/bin/sh', ['-eu', '-c', command],
+        {cwd: work, env: environment, encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024});
+      assert.equal(result.error, undefined); assert.equal(result.signal, null);
+      results.push(result);
+      if (result.status !== 0) break;
+    }
+    const rows = existsSync(record) ? readFileSync(record, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
+    return {rows, status: results.at(-1)?.status, stderr: results.map(result => result.stderr).join('')};
+  };
+}
+
+test('locked acquisition completes before offline builds with transport settings confined to acquisition', t => {
+  const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
+  const run = cargoRecipeFixture(t), actual = run(recipe);
+  assert.equal(actual.status, 0); assert.deepEqual(actual.rows.map(row => row.kind), cargoOrder);
+  for (const row of actual.rows) {
+    assert.equal(row.retry, row.kind.endsWith('-fetch') ? '8' : null);
+    assert.equal(row.timeout, row.kind.endsWith('-fetch') ? '30' : null);
+    if (row.kind.startsWith('build-')) assert(row.argv.includes('--locked') && row.argv.includes('--offline'));
+  }
+  checkCargoRecipe(recipe);
+  const refuse = (before, after) => {
+    const mutant = recipe.replace(before, after);
+    assert.notEqual(mutant, recipe, 'policy mutation must change the actual recipe');
+    assert.throws(() => checkCargoRecipe(mutant));
+  };
+  for (const command of cargoAcquisition) {
+    for (const changed of [command.replace('CARGO_NET_RETRY=8 ', ''), command.replace('CARGO_HTTP_TIMEOUT=30 ', ''),
+      command.replace('NET_RETRY=8', 'NET_RETRY=3'), command.replace('HTTP_TIMEOUT=30', 'HTTP_TIMEOUT=0')]) {
+      refuse(command, changed);
+    }
+    refuse(command, '');
+    if (command.includes('--locked')) refuse(command, command.replace('--locked', '--offline'));
+  }
+  for (let index = 0; index < cargoAcquisition.length - 1; index++) {
+    const separator = ' \\\n    && ';
+    refuse(cargoAcquisition[index] + separator + cargoAcquisition[index + 1],
+      cargoAcquisition[index + 1] + separator + cargoAcquisition[index]);
+  }
+  for (const command of cargoCompilation.filter(command => command.startsWith('cargo '))) {
+    assert.throws(() => checkCargoRecipe(recipe.replace(command, command.replace('--offline ', ''))));
+    assert.throws(() => checkCargoRecipe(recipe.replace(command, command.replace('--locked ', ''))));
+  }
+  assert.throws(() => checkCargoRecipe(recipe.replace('RUN ' + cargoAcquisition[0], 'ENV CARGO_NET_RETRY=8\nRUN ' + cargoAcquisition[0])));
+  assert.throws(() => checkCargoRecipe(recipe.replace('    && mkdir -p /opt/prismpm/share \\\n    && node sdk/generate-account-genesis', '    && cargo fetch --locked \\\n    && mkdir -p /opt/prismpm/share \\\n    && node sdk/generate-account-genesis')));
+});
+
+test('each acquisition refusal prevents every release build and preserves its nonzero status', t => {
+  const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8'), run = cargoRecipeFixture(t);
+  for (const failure of cargoOrder.slice(0, 3)) {
+    const actual = run(recipe, failure);
+    assert.equal(actual.status, 101); assert.match(actual.stderr, /Could not resolve hostname/);
+    assert.deepEqual(actual.rows.map(row => row.kind), cargoOrder.slice(0, cargoOrder.indexOf(failure) + 1),
+      `${failure} must stop before compilation or later acquisition`);
+  }
+  const ignored = recipe.replace(cargoAcquisition[0], cargoAcquisition[0] + ' || true');
+  const mutant = run(ignored, 'root-fetch');
+  assert(mutant.rows.some(row => row.kind.startsWith('build-')), 'omitted failure propagation must exercise the unsafe continuation');
+  assert.throws(() => assert.equal(mutant.status, 101));
+});
+
+test('each offline build and authority admission is single-shot even for network-looking errors', t => {
+  const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8'), run = cargoRecipeFixture(t);
+  for (const failure of cargoOrder.slice(3)) {
+    const actual = run(recipe, failure);
+    assert.equal(actual.status, 101); assert.match(actual.stderr, /Could not resolve hostname/);
+    assert.deepEqual(actual.rows.map(row => row.kind), cargoOrder.slice(0, cargoOrder.indexOf(failure) + 1));
+    for (const row of actual.rows.filter(row => row.kind.startsWith('build-'))) {
+      assert(row.argv.includes('--locked') && row.argv.includes('--offline'), 'every actual compiler invocation must be offline');
+      assert.equal(row.retry, null); assert.equal(row.timeout, null);
+    }
+    assert.equal(actual.rows.filter(row => row.kind === failure).length, 1);
+  }
+  const repeated = recipe.replace(cargoCompilation[0], `${cargoCompilation[0]} || ${cargoCompilation[0]}`);
+  const mutant = run(repeated, 'build-prismpm');
+  assert.equal(mutant.rows.filter(row => row.kind === 'build-prismpm').length, 2);
+  assert.throws(() => assert.equal(mutant.rows.filter(row => row.kind === 'build-prismpm').length, 1));
+});
 
 test('read-only helper copies retain searchable SDK ancestors for unprivileged consumers', () => {
   const recipe = readFileSync(new URL('../sdk/Dockerfile', import.meta.url), 'utf8');
@@ -129,10 +259,10 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     const acquisition = commands.filter(command => command.includes('apt-get '));
     assert.equal(acquisition.length, 1, 'one signed snapshot acquisition owner');
     const command = acquisition[0].replace(/\s+/g, ' ');
-    assert.equal(hash(command), 'b44daff2cec315e3672cfa332a5a50769910d35167f3444dfc23160cd518c3a7',
+    assert.equal(hash(command), '32774b591dfd645c22c285ecbfcfa3993ca17b51bf0af14e93b438f6199b606a',
       'the complete signed snapshot acquisition and cleanup instruction must remain unchanged');
-    const update = 'apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update';
-    const install = 'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes "build-essential=${build_essential}" "pkg-config=${pkg_config}"';
+    const update = 'apt-get --error-on=any -o Acquire::Retries=8 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update';
+    const install = 'apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes "build-essential=${build_essential}" "pkg-config=${pkg_config}"';
     assert.deepEqual(command.split(' && ').filter(segment => segment.includes('apt-get')), [update, install],
       'the exact update and install must execute unconditionally in that order without overrides');
     assert(command.includes('test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f ! -name ubuntu.sources -print -quit)" = ""'));
@@ -148,7 +278,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
   };
   check(recipe);
   for (const [from, to] of [
-    ['--error-on=any ', ''], ['Acquire::Retries=3', 'Acquire::Retries=0'],
+    ['--error-on=any ', ''], ['Acquire::Retries=8', 'Acquire::Retries=0'],
     ['Acquire::http::Timeout=30', 'Acquire::http::Timeout=0'],
     ['Acquire::https::Timeout=30', 'Acquire::https::Timeout=0'],
     ['Acquire::http::Pipeline-Depth=0', 'Acquire::http::Pipeline-Depth=1'],
@@ -160,7 +290,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     ['"pkg-config=${pkg_config}"', 'pkg-config'],
     [' install --no-install-recommends', ' install --allow-unauthenticated --no-install-recommends'],
     ['&& apt-get --error-on=any', '&& true # apt-get --error-on=any'],
-    ['&& apt-get -o Acquire::Retries=3', '&& true # apt-get -o Acquire::Retries=3'],
+    ['&& apt-get -o Acquire::Retries=8', '&& true # apt-get -o Acquire::Retries=8'],
     ['Acquire::CompressionTypes::Order=xz update', 'Acquire::CompressionTypes::Order=xz -o Acquire::Retries=0 update'],
     ['Acquire::CompressionTypes::Order=xz update', 'Acquire::CompressionTypes::Order=xz -o Acquire::CompressionTypes::Order=gz update'],
     [' install --no-install-recommends', ' -o Acquire::Retries=0 install --no-install-recommends'],
@@ -178,7 +308,7 @@ test('pinned runtime package acquisition is bounded and refuses incomplete index
     assert.notEqual(from, to);
     assert.throws(() => check(recipe.replace(from, to)), `runtime mutation must refuse: ${from}`);
   }
-  const options = ['Acquire::Retries=3', 'Acquire::http::Timeout=30', 'Acquire::https::Timeout=30',
+  const options = ['Acquire::Retries=8', 'Acquire::http::Timeout=30', 'Acquire::https::Timeout=30',
     'Acquire::http::Pipeline-Depth=0', 'Acquire::https::Pipeline-Depth=0', 'Acquire::CompressionTypes::Order=xz'];
   for (const option of options) {
     const at = recipe.lastIndexOf(option);
@@ -225,7 +355,8 @@ test('both native runtime source profiles and real filesystem refusals are execu
   assert.match(result.stderr, /Ran 14 tests/);
 });
 
-test('real APT refuses transient index failure before package installation', {timeout: 30000}, async t => {
+test('real APT Retry3 fixture proves strict index-failure semantics before package installation', {timeout: 30000}, async t => {
+  // This bounded Retry3 counterfactual checks strict failure semantics, not production Retry8 exhaustion.
   const work = mkdtempSync(join(tmpdir(), 'prismpm-apt-index-owner-'));
   t.after(() => rmSync(work, {recursive: true}));
   let requests = 0;

@@ -216,9 +216,14 @@ Feature: sdk
 
   @DK-02 @build
   Scenario: Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence.
-    Given the locked PrismPM production fixture
+    Given the locked PrismPM production fixture with the exact signed timestamped native Ubuntu snapshot, complete suites and components, keyring and package versions
     When the DK-02 contract is exercised
+    And both APT acquisition commands select eight imported failed-file retries, 30-second HTTP and HTTPS timeouts, zero pipeline depth and xz ordering
+    And update uses error-on-any so incomplete indexes and failed installation refuse construction without changing pins or trust
+    And production recipe and effective configuration checks reject planted retry, timeout, source, signature and failure-bypass defects
+    And the real HTTP 503 fixture uses three retries and its own 30-second deadline solely to distinguish strict failure from missing-index success
     Then its positive evidence passes and its planted defect is rejected
+    And complete native construction on both architectures remains required without an eventual-recovery or whole-graph elapsed-time claim
 
   @DK-03 @build
   Scenario: Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics.
@@ -228,9 +233,14 @@ Feature: sdk
 
   @DK-04 @build
   Scenario: The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline.
-    Given the locked PrismPM production fixture
+    Given the locked PrismPM production fixture with the exact root, vendored LexLean and pinned oracle manifest and lock closure
     When the DK-04 contract is exercised
+    And locked root, vendored LexLean and oracle fetches finish before the three main source release builds with acquisition-only CARGO_NET_RETRY eight and CARGO_HTTP_TIMEOUT 30
+    And the oracle helper retains its manifest and lock checks and locked offline metadata checks
+    And the CLI, conformance binaries and vendored LexLean each receive one locked offline release build invocation with actual newly built CLI locked authority resolution before the latter two builds
+    And planted omitted or reordered fetches, changed locks, online builds and persisted acquisition settings are rejected
     Then its positive evidence passes and its planted defect is rejected
+    And acquisition or compilation failure refuses construction without an outer compiler retry or an arbitrary-process network-isolation claim
 
   @DK-05 @build
   Scenario: SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle.

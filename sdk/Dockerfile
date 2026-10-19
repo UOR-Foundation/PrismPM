@@ -243,13 +243,13 @@ RUN mkdir -p /opt/prismpm/share/standards/oracles \
       /opt/prismpm/share/standards/oracles/devcontainer-c95ffeed-base.schema.json \
     && cp standards/oracles/kubernetes-1.36.4-swagger.json \
       /opt/prismpm/share/standards/oracles/kubernetes-1.36.4-swagger.json
-RUN cargo build --locked --release --package prismpm \
+RUN CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 cargo fetch --locked \
+    && CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
+    && CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 bash scripts/fetch-oracle-cargo.sh
+RUN cargo build --locked --offline --release --package prismpm \
     && target/release/prismpm --json --project . authority resolve --locked \
-    && cargo build --locked --release --package repo-conformance --bins \
-    && cargo build --locked --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean \
-    && cargo fetch --locked \
-    && cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
-    && bash scripts/fetch-oracle-cargo.sh \
+    && cargo build --locked --offline --release --package repo-conformance --bins \
+    && cargo build --locked --offline --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean \
     && mkdir -p /opt/prismpm/share \
     && node sdk/generate-account-genesis.mjs install \
     && install -m 0755 target/release/prismpm /usr/local/bin/prismpm \
@@ -352,8 +352,8 @@ RUN set -eu; \
     && rm /etc/apt/sources.list.d/nodesource.list \
     && test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f ! -name ubuntu.sources -print -quit)" = "" \
     && /usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py verify --architecture "$TARGETARCH" --snapshot "${snapshot}" \
-    && apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update \
-    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes \
+    && apt-get --error-on=any -o Acquire::Retries=8 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update \
+    && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes \
       "build-essential=${build_essential}" \
       "pkg-config=${pkg_config}" \
     && dpkg-query -W -f='${binary:Package}\t${Version}\n' \
