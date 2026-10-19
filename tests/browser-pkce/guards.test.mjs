@@ -5,6 +5,7 @@ import {createPkceS256, PkceError} from '../../sdk/browser/pkce.mjs';
 import {corpus, officialExample, RFC_SHA256} from './corpus.mjs';
 import {frozenInputs, verifyFrozenInputs, sourceClosure, assertCapturedPkceSources,
   assertPkceCompilerInputs} from './compile.mjs';
+import {captureCompilerInputs} from '../browser-view/compiler-owner.mjs';
 
 test('RFC source and exact independent corpus cannot be omitted', () => {
   assert.equal(officialExample().verifier, 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
@@ -36,15 +37,20 @@ test('private PKCE artifact options reject aliases, accessors and extra authorit
 test('source custody captures the exact complete module and oracle graph', () => {
   const inputs = frozenInputs(), sources = sourceClosure(); assertCapturedPkceSources(inputs, sources);
   for (const name of ['sdk/browser/pkce.mjs', 'sdk/browser/identity.mjs', 'tests/browser-pkce/oracles/rfc7636.txt',
-    'tests/browser-view/kernel-provenance.mjs', 'tests/browser-view/compiler-artifact.mjs']) assert.ok(inputs[name]);
+    'tests/browser-view/kernel-provenance.mjs', 'tests/browser-view/compiler-artifact.mjs',
+    'tests/browser-view/verification-products.mjs']) assert.ok(inputs[name]);
+  for (const [path, digest] of Object.entries(captureCompilerInputs('pkce')))
+    assert.equal(inputs[path], digest, 'complete actual compiler input closure: ' + path);
   sources.delete('Foundation.Bytes'); assert.throws(() => assertCapturedPkceSources(inputs, sources), /source module inventory/);
 });
 
 test('PKCE input custody refuses copied maps and missing transitive inputs', () => {
   const inputs = frozenInputs(); verifyFrozenInputs(inputs);
   assert.throws(() => verifyFrozenInputs(Object.freeze({...inputs})), /actual complete captured PKCE inputs/);
-  const missing = {...inputs}; delete missing['tests/browser-view/compiler-owner.mjs'];
-  assert.throws(() => verifyFrozenInputs(Object.freeze(missing)), /actual complete captured PKCE inputs/);
+  for (const path of ['tests/browser-view/compiler-owner.mjs', 'tests/browser-view/verification-products.mjs']) {
+    const missing = {...inputs}; delete missing[path];
+    assert.throws(() => verifyFrozenInputs(Object.freeze(missing)), /actual complete captured PKCE inputs/);
+  }
   assert.ok(Object.isFrozen(inputs));
 });
 
