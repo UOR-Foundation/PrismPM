@@ -2189,6 +2189,12 @@ It measures expanded layer lengths and original DiffIDs without filesystem
 extraction. Actual storage admissions preserve the original reserves; inadequate
 hosted capacity fails without qualification. Explicit read-only CA plumbing changes
 only transport trust, never image bytes, oracle cases, limits or acceptance readers.
+The daemon and original-owner containers mount the same primary CA outside every
+writable bind or volume destination, resolving the pinned images' `/var/run`
+alias to `/run` when checking containment. Their primary read-only CA targets,
+the owner's CA argument and `NODE_EXTRA_CA_CERTS` agree. The daemon's separate
+read-only authority-specific `certs.d` CA mount and all original strict CA file,
+path, size, stability, PEM and signature checks remain unchanged.
 The existing browser/library/migration/metadata, two complete installed V&V passes,
 and product owners run unchanged on both native platforms before their original
 criteria can be accepted. Private-registry execution is not publication, signing,

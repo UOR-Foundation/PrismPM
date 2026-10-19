@@ -263,5 +263,6 @@ Feature: sdk
     And complete original Docker archives are extracted into fresh nonroot-owned staging with delayed directory mode restoration
     And source hashes, complete trees and admitted alias texts and targets remain verified without dereferencing links or changing immutable SDK modes
     And a failed archive producer or extractor cannot report a successful installed owner
+    And the identical primary read-only CA target and owner trust arguments remain outside every writable bind and volume destination after resolving the pinned runtime path aliases
     And normal owned-volume removal is bounded by 120 seconds and the remaining original 180-second cleanup envelope with its five-second reserve and exact identity and absence checks
     Then its positive evidence passes and its planted defect is rejected
