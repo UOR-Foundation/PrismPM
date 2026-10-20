@@ -1776,6 +1776,25 @@ process bypasses the container entrypoint; an insufficient hard limit is
 `PP5401`. Source, installed-image and native construction tests exercise
 the actual launcher, CLI entry path and child limits.
 
+For opted-in `PRISMPM_EPHEMERAL_HOME=1` execution, the SDK launcher supplies
+unset or empty `XDG_CACHE_HOME`, `XDG_CONFIG_HOME` and `XDG_RUNTIME_DIR` from
+one fresh private parent in the invocation's existing temporary filesystem.
+The new parent and its cache, config and runtime children have mode 0700 and
+belong to the actual command identity: UID/GID 1000 after the existing
+initial-root handoff, otherwise the unchanged nonroot UID/GID. Nonempty
+caller-selected XDG values, canonical `HOME`, `TMPDIR`, requested command
+umask, argv, stack policy, exit status and the `exec` handoff remain unchanged.
+The launcher does not repair or change caller-selected XDG paths. Directory
+setup failure refuses the requested command. These are ephemeral SDK defaults,
+not persistent configuration or a complete freedesktop login-session runtime.
+The existing owner retires container temporary storage; persistent temporary
+volumes retain their existing explicit owner-retirement obligation. There is
+no command-exit deletion or shell supervisor in the launcher. Real-entrypoint
+regressions observe child environment, UID/GID, mode, writable bytes, explicit
+settings and distinct invocations without substituting identity or launcher
+implementations. Complete native construction and installed qualification
+remain separate required observations.
+
 `prismpm/sdk-lock/2` pins the exact multi-platform SDK index bytes and digest,
 exactly one `linux/amd64` and one `linux/arm64` child manifest, and each child's
 actual inventory digest, exact `inventory_document` bytes (including any final

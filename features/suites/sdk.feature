@@ -231,6 +231,10 @@ Feature: sdk
     And planted archive, architecture, checksum-order, member, destination, ownership, canonical-path, mode and probe defects are rejected without a TLS bypass, mirror, linked toolchain or host fallback
     Then its positive evidence passes and its planted defect is rejected
     And complete native construction on both architectures remains required without an eventual-recovery or whole-graph elapsed-time claim
+    And opted-in ephemeral SDK execution supplies unset or empty XDG cache, config and runtime settings from one fresh temporary parent with child-owned mode 0700 directories
+    And explicit XDG settings, canonical HOME, requested umask and the original exec, argv and exit behavior remain unchanged
+    And real-entrypoint regressions observe private defaults, caller settings and distinct invocations without replacing the launcher or identity operations
+    And directory setup failure refuses the command while temporary storage retirement remains the existing container or volume owner's obligation
     And complete installed browser-suite stdout and stderr finish forwarding before later execution or failure reporting, retaining both original and forwarding failures without replacing owning acceptance
 
   @DK-03 @build
