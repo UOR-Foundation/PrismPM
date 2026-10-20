@@ -41,6 +41,8 @@ test('every session barrier freshly checks original file custody and manifest me
   for(const path of Object.keys(original)){
     const destination=join(root,path);mkdirSync(dirname(destination),{recursive:true});
     copyFileSync(join(repository,path),destination);
+    // Mutation witnesses use owned copies; installed originals remain read-only.
+    chmodSync(destination,(lstatSync(destination).mode&0o777)|0o200);
   }
   const isolated=await import(pathToFileURL(join(root,'tests/browser-session/compile.mjs')).href);
   const observe=()=>{const inputs=isolated.frozenInputs();isolated.assertFrozenInputs(inputs);return inputs;};
