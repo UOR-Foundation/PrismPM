@@ -231,6 +231,7 @@ Feature: sdk
     And planted archive, architecture, checksum-order, member, destination, ownership, canonical-path, mode and probe defects are rejected without a TLS bypass, mirror, linked toolchain or host fallback
     Then its positive evidence passes and its planted defect is rejected
     And complete native construction on both architectures remains required without an eventual-recovery or whole-graph elapsed-time claim
+    And complete installed browser-suite stdout and stderr finish forwarding before later execution or failure reporting, retaining both original and forwarding failures without replacing owning acceptance
 
   @DK-03 @build
   Scenario: Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics.

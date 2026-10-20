@@ -250,6 +250,29 @@ async function launchSuite(program,args,options){
  return {status:result.status,signal:result.signal,stdout:result.stdout.toString('utf8'),stderr:result.stderr.toString('utf8')};
 }
 
+// A fulfilled write callback is the forwarding boundary, not an SDK pass.
+const emitStdout=text=>new Promise((resolve,reject)=>{
+ // A failed write also emits a stream error; consume that owned error so
+ // forwarding can preserve the original suite failure instead of escaping.
+ const failed=error=>reject(error);
+ process.stdout.once('error',failed);
+ try{
+  process.stdout.write(text,error=>{
+   if(error){reject(error);return;}
+   process.stdout.removeListener('error',failed);resolve();
+  });
+ }catch(error){process.stdout.removeListener('error',failed);reject(error);}
+});
+async function forwardSuiteOutput(emit,text,primary){
+ try{await emit(text);}
+ catch(error){
+  if(primary)throw new AggregateError([primary,error],
+   'owning suite failed and diagnostic forwarding failed',{cause:primary});
+  throw error;
+ }
+ if(primary)throw primary;
+}
+
 async function runSuiteCollection(root,executions,launch,emit){
  root=resolve(root);
  // Preflight the complete inventory before any test can execute. The installed
@@ -267,11 +290,14 @@ async function runSuiteCollection(root,executions,launch,emit){
   try{
    output=await launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:execution.exactTests?deadline:deadline+100000,maxBuffer:64*1024*1024,env,...(execution.exactTests?{owned:true}:{})});
   }catch(error){
-   emit('SDK browser suite '+identity(execution)+'\n'+(error.result?.stdout??'')+(error.result?.stderr??''));
-   throw error;
+   await forwardSuiteOutput(emit,'SDK browser suite '+identity(execution)+'\n'
+    +(error.result?.stdout??'')+(error.result?.stderr??''),error);
   }
-  emit('SDK browser suite '+identity(execution)+'\n'+(output.stdout??'')+(output.stderr??''));
-  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+identity(execution));
+  let primary;
+  try{assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+identity(execution));}
+  catch(error){primary=error;}
+  await forwardSuiteOutput(emit,'SDK browser suite '+identity(execution)+'\n'
+   +(output.stdout??'')+(output.stderr??''),primary);
   const tests=verifyTap(output.stdout,execution.minimum);
   verifyFileCompletions(output.stdout,selected.get(identity(execution)),tests,execution.exactTests);
   completed.push({id:execution.id,...(execution.construction?{construction:execution.construction}:{}),tests});
@@ -281,13 +307,13 @@ async function runSuiteCollection(root,executions,launch,emit){
 
 // Invoked only in the inspected current SDK. Preserve the original26 owners
 // and both independent fallbacks, then execute all six complete file pairs.
-export async function runSuites(root,launch=launchSuite,emit=text=>process.stdout.write(text)){
+export async function runSuites(root,launch=launchSuite,emit=emitStdout){
  return runSuiteCollection(root,[...suites,...fallbackSuites,...standaloneSuites],launch,emit);
 }
 
 // Source VV has already executed the original registered DK/fallback owners.
 // Its separate standalone invocation still executes every original file pair.
-export async function runStandaloneSuites(root,launch=launchSuite,emit=text=>process.stdout.write(text)){
+export async function runStandaloneSuites(root,launch=launchSuite,emit=emitStdout){
  return runSuiteCollection(root,standaloneSuites,launch,emit);
 }
 

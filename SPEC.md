@@ -2579,6 +2579,12 @@ actual per-file test summaries. Every selected file must complete nonempty
 registered tests; automatic empty-module wrappers do not qualify. Exact file
 sets, closed completion rows and reconciled totals supplement, not replace,
 the existing minimum counts, deadlines and failure/skip/TODO rejection.
+Complete installed browser-suite diagnostics finish forwarding before another
+suite starts or a failed owner is reported. This includes stdout and stderr from
+nonzero children and owned-launch failures. If forwarding also fails, both the
+original owning failure and forwarding failure remain failures; no partial
+output can establish acceptance. Existing file sets, counts, limits and deadlines
+remain unchanged. Finite pipe fixtures test diagnostic retention only.
 
 ### 12.5 Modeled workspace interaction and private View host
 

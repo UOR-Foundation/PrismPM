@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {spawnSync,execFileSync} from 'node:child_process';
+import {spawn,spawnSync,execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {existsSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync,openSync,closeSync,ftruncateSync,chmodSync,lstatSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,relative,resolve} from 'node:path';
@@ -979,4 +980,129 @@ test('owning installed-module tests kill removed exact-tree and byte-equality gu
   assert.equal(result.error, undefined); assert.equal(result.status, 1);
   assert.match(result.stdout, /Missing expected exception/);
  }
+});
+
+
+test('installed suite diagnostics finish the real pipe before an actual failed child is reported', {timeout: 20000}, async t => {
+ const root=temporary(t);testFixtures(root);
+ stageGate(root,sdkSource('scripts/browser-api-sdk-check.mjs'));
+ const length=4*1024*1024,tail='\nFAILED-CHILD-STDOUT-END\n',err='FAILED-CHILD-STDERR-END\n';
+ const payload='x'.repeat(length)+tail;
+ // The first subprocess genuinely exits1 after flushing both original streams.
+ // Only the gate's forwarding into the second, deliberately backpressured pipe
+ // is under test. No compiler, browser or installed-SDK owner is substituted.
+ const failureSource=[
+  "const write=(stream,text)=>new Promise((resolve,reject)=>stream.write(text,error=>error?reject(error):resolve()));",
+  'await write(process.stdout,'+JSON.stringify('x')+'.repeat('+length+')+'+JSON.stringify(tail)+');',
+  'await write(process.stderr,'+JSON.stringify(err)+');',
+  'process.exitCode=1;',
+ ].join('\n');
+ const runner=join(root,'failed-suite-pipe.mjs');
+ put(root,'failed-suite-pipe.mjs',[
+  "import {spawnSync} from 'node:child_process';",
+  "import {runStandaloneSuites} from './scripts/browser-api-sdk-check.mjs';",
+  'const failureSource='+JSON.stringify(failureSource)+';',
+  'await runStandaloneSuites('+JSON.stringify(root)+',(_program,_args,options)=>spawnSync(process.execPath,',
+  " ['--input-type=module','-e',failureSource],{encoding:'utf8',env:options.env,timeout:5000,maxBuffer:8*1024*1024}));",
+ ].join('\n'));
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const child=spawn(process.execPath,[runner],{cwd:root,env,stdio:['ignore','pipe','pipe']});
+ const stdout=[],stderr=[];let outputBytes=0,errorBytes=0,launchError,overflow=false;
+ const stop=()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');};
+ const watchdog=setTimeout(stop,10000);watchdog.unref();
+ const closed=new Promise(resolve=>{
+  child.once('error',error=>{launchError=error;});
+  child.once('close',(status,signal)=>resolve({status,signal}));
+ });
+ child.stdout.on('data',bytes=>{outputBytes+=bytes.length;if(outputBytes>8*1024*1024){overflow=true;stop();}else stdout.push(bytes);});
+ child.stderr.on('data',bytes=>{errorBytes+=bytes.length;if(errorBytes>1024*1024){overflow=true;stop();}else stderr.push(bytes);});
+ child.stdout.pause();
+ const resume=setTimeout(()=>child.stdout.resume(),100);resume.unref();
+ t.after(()=>{clearTimeout(resume);clearTimeout(watchdog);stop();});
+ const result=await closed;clearTimeout(resume);clearTimeout(watchdog);
+ assert.ifError(launchError);assert.equal(overflow,false);assert.equal(result.signal,null);assert.equal(result.status,1);
+ assert.match(Buffer.concat(stderr).toString(),/complete owning Session Projection/);
+ const actual=Buffer.concat(stdout),expected=Buffer.from('SDK browser suite Session Projection\n'+payload+err);
+ assert.equal(actual.length,expected.length,'complete failed-child output must precede nonzero gate exit');
+ assert.equal(createHash('sha256').update(actual).digest('hex'),createHash('sha256').update(expected).digest('hex'));
+});
+
+test('installed suite async forwarding preserves launch and status failures when output also fails', async t => {
+ for(const mode of ['launch','status'])await t.test(mode,async t=>{
+  const root=temporary(t);testFixtures(root);
+  const original=Object.assign(new Error('original launch failure'),{result:{stdout:Buffer.from('ORIGINAL-OUT\n'),stderr:Buffer.from('ORIGINAL-ERR\n')}});
+  const launch=()=>{if(mode==='launch')throw original;return {error:undefined,status:1,signal:null,stdout:'ORIGINAL-OUT\n',stderr:'ORIGINAL-ERR\n'};};
+  let delivered=false,actual;
+  await assert.rejects(()=>runStandaloneSuites(root,launch,async text=>{
+   await new Promise(resolve=>setImmediate(resolve));delivered=true;actual=text;
+  }),error=>{
+   assert.equal(delivered,true,'async emission must finish before reporting the primary failure');
+   assert.equal(actual,'SDK browser suite Session Projection\nORIGINAL-OUT\nORIGINAL-ERR\n');
+   if(mode==='launch')assert.equal(error,original);else assert.match(error.message,/complete owning Session Projection/);
+   return true;
+  });
+  const forwarding=new Error('actual diagnostic forwarding failure');
+  await assert.rejects(()=>runStandaloneSuites(root,launch,()=>Promise.reject(forwarding)),error=>{
+   assert(error instanceof AggregateError,'neither primary failure nor forwarding failure may be hidden');
+   assert.equal(error.errors.length,2);assert.equal(error.errors[1],forwarding);
+   if(mode==='launch')assert.equal(error.errors[0],original);else assert.match(error.errors[0].message,/complete owning Session Projection/);
+   assert.equal(error.cause,error.errors[0]);return true;
+  });
+ });
+});
+
+
+test('installed suite default stdout preserves original failure on a real broken pipe', {timeout: 20000}, async t => {
+ const root=temporary(t);testFixtures(root);
+ stageGate(root,sdkSource('scripts/browser-api-sdk-check.mjs'));
+ const failureSource=[
+  "const write=(stream,text)=>new Promise((resolve,reject)=>stream.write(text,error=>error?reject(error):resolve()));",
+  'await write(process.stdout,'+JSON.stringify('BROKEN-ORIGINAL-OUT\n')+');',
+  'await write(process.stderr,'+JSON.stringify('BROKEN-ORIGINAL-ERR\n')+');',
+  'process.exitCode=1;',
+ ].join('\n');
+ const runner=join(root,'broken-suite-pipe.mjs');
+ put(root,'broken-suite-pipe.mjs',[
+  "import {spawnSync} from 'node:child_process';",
+  "import {runStandaloneSuites} from './scripts/browser-api-sdk-check.mjs';",
+  "const write=(stream,text)=>new Promise((resolve,reject)=>stream.write(text,error=>error?reject(error):resolve()));",
+  'const failureSource='+JSON.stringify(failureSource)+';let original;',
+  'await write(process.stderr,'+JSON.stringify('BROKEN-SINK-READY\n')+');',
+  "await new Promise(resolve=>process.stdin.once('data',resolve));",
+  'try{await runStandaloneSuites('+JSON.stringify(root)+',(_program,_args,options)=>{',
+  " original=spawnSync(process.execPath,['--input-type=module','-e',failureSource],{encoding:'utf8',env:options.env,timeout:5000,maxBuffer:1024*1024});return original;});}",
+  'catch(error){const row={original_status:original?.status,aggregate:error instanceof AggregateError,',
+  ' primary_message:error.errors?.[0]?.message??error.message,forwarding_code:error.errors?.[1]?.code??null,',
+  ' cause_is_primary:error.cause===error.errors?.[0]};',
+  ' await write(process.stderr,'+JSON.stringify('BROKEN-SINK-EVIDENCE ')+'+JSON.stringify(row)+'+JSON.stringify('\n')+');process.exitCode=1;}',
+ ].join('\n'));
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const child=spawn(process.execPath,[runner],{cwd:root,env,stdio:['pipe','pipe','pipe']});
+ const stderr=[];let size=0,launchError,inputError,overflow=false,closedReader=false;
+ const stop=()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');};
+ const watchdog=setTimeout(stop,10000);watchdog.unref();
+ const done=new Promise(resolve=>{
+  child.once('error',error=>{launchError=error;});
+  child.once('close',(status,signal)=>resolve({status,signal}));
+ });
+ child.stdin.on('error',error=>{inputError=error;});
+ child.stderr.on('data',bytes=>{
+  size+=bytes.length;if(size>1024*1024){overflow=true;stop();return;}stderr.push(bytes);
+  if(!closedReader&&Buffer.concat(stderr).toString().includes('BROKEN-SINK-READY\n')){
+   closedReader=true;
+   child.stdout.once('close',()=>child.stdin.end('go\n'));
+   child.stdout.destroy();
+  }
+ });
+ t.after(()=>{clearTimeout(watchdog);stop();});
+ const result=await done;clearTimeout(watchdog);
+ assert.ifError(launchError);assert.ifError(inputError);assert.equal(overflow,false);assert.equal(closedReader,true);
+ assert.equal(result.signal,null);assert.equal(result.status,1);
+ const text=Buffer.concat(stderr).toString(),prefix='BROKEN-SINK-EVIDENCE ';
+ const rows=text.split('\n').filter(line=>line.startsWith(prefix));assert.equal(rows.length,1,'actual default-emitter failure record');
+ const actual=JSON.parse(rows[0].slice(prefix.length));
+ assert.equal(actual.original_status,1);assert.equal(actual.aggregate,true);
+ assert.match(actual.primary_message,/complete owning Session Projection/);
+ assert.equal(actual.forwarding_code,'EPIPE');assert.equal(actual.cause_is_primary,true);
+ assert(!text.includes("Unhandled 'error' event"),'owned stdout error must not escape aggregation');
 });
