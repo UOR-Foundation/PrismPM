@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
 import {createECDH, ECDH} from 'node:crypto';
-import {cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, chmodSync, lstatSync, readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
 import {oraclePoints} from './oracles.mjs';
+
+// Only fresh owned fixtures are mutable; installed inputs remain read-only.
+function writableFixture(path) {
+  const stat = lstatSync(path);
+  if (stat.isDirectory()) {
+    chmodSync(path, 0o700);
+    for (const name of readdirSync(path)) writableFixture(join(path, name));
+  } else {
+    assert.ok(stat.isFile(), 'regular private fixture member');
+    chmodSync(path, 0o600);
+  }
+}
 
 test('complete original P-256 key-validation sources agree with independent OpenSSL point admission', () => {
   const cases = oraclePoints(); assert.equal(cases.length, 15);
@@ -22,6 +34,7 @@ test('substituted original vector bytes cannot be accepted through a self-update
   const work = mkdtempSync(join(tmpdir(), 'prismpm-p256-oracle-'));
   try {
     cpSync(new URL('./oracles/', import.meta.url), work, {recursive: true});
+    writableFixture(work);
     const path = join(work, 'PKV.rsp.base64'), bytes = Buffer.from(readFileSync(path, 'utf8').replaceAll('\n', ''), 'base64');
     bytes[0] ^= 1;
     writeFileSync(path, bytes.toString('base64').match(/.{1,76}/g).join('\n') + '\n');

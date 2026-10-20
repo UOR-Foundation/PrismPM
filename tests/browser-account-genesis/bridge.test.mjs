@@ -226,6 +226,8 @@ test('account owner captures its complete current compiler subset and refuses or
   for(const path of Object.keys(inputs)) {
     const destination=join(root,path);mkdirSync(dirname(destination),{recursive:true});
     copyFileSync(join(repository,path),destination);
+    // Mutation witnesses use owned copies; installed originals remain read-only.
+    chmodSync(destination,(lstatSync(destination).mode&0o777)|0o200);
   }
   const childSource=`import assert from 'node:assert/strict';
   import {chmodSync,copyFileSync,linkSync,lstatSync,readFileSync,renameSync,symlinkSync,unlinkSync,writeFileSync} from 'node:fs';

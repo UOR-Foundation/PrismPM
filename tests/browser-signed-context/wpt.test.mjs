@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, lstatSync, readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {captureWpt, verifyNativeWpt} from './wpt.mjs';
+
+// Only fresh owned fixtures are mutable; installed inputs remain read-only.
+function writableFixture(path) {
+  const stat = lstatSync(path);
+  if (stat.isDirectory()) {
+    chmodSync(path, 0o700);
+    for (const name of readdirSync(path)) writableFixture(join(path, name));
+  } else {
+    assert.ok(stat.isFile(), 'regular private fixture member');
+    chmodSync(path, 0o600);
+  }
+}
 
 test('complete pinned original ECDSA source and independent native vectors', () => {
   const capture = captureWpt();
@@ -20,6 +32,7 @@ test('original WPT pin rejects changed source even with self-consistent replacem
   const temporary = mkdtempSync(join(tmpdir(), 'prismpm-signed-context-wpt-'));
   t.after(() => rmSync(temporary, {recursive: true, force: true}));
   cpSync(new URL('../../sdk/browser/oracles/wpt-ecdsa/', import.meta.url), temporary, {recursive: true});
+  writableFixture(temporary);
   const directory = pathToFileURL(temporary + '/'); captureWpt(directory);
   const manifest = JSON.parse(readFileSync(join(temporary, 'source.json')));
   const row = manifest.files.find(row => row.path.endsWith('/ecdsa.js'));
