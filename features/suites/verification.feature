@@ -59,6 +59,8 @@ Feature: verification
   @VR-10 @build
   Scenario: Process execution limits output size and execution time strictly.
     Given child process execution
+    And isolated Cargo children receive two-job, zero-development-debug and non-incremental defaults
+    And explicit owned compiler settings retain precedence while unrelated ambient Cargo and Rust flags are refused
     When output exceeds buffer limits or times out
     Then process is terminated and failure diagnostic is recorded
 

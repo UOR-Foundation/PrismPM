@@ -1015,7 +1015,17 @@ and the list-input checks to pass.
 
 Every child is launched directly, never through a shell, with environment
 cleared except the minimum pinned tool homes/path plus an explicit `LEAN_PATH`
-for named export. The default child timeout is 300 seconds. Fresh generated
+for named export. At this shared isolation boundary, Cargo environment
+values default to two build jobs, zero development debug information, and
+incremental state disabled. Explicit owned caller values are applied after
+these defaults and retain precedence, including the private compiler drivers'
+one-job policy and the independent Hologram oracle's explicit policy. Ambient
+Cargo and Rust compiler overrides are not admitted through this defaulting
+rule. Caller-owned homes, offline settings, Rust flags, path remaps, targets and
+resource/linker arguments remain unchanged. These environment defaults do not
+remove std/no_std checks, ordinary package verification, independent tests or
+generated consumer execution, enlarge storage budgets, or establish a universal
+scratch-space bound. The default child timeout is 300 seconds. Fresh generated
 native Lean compilation has a fixed 600-second timeout for its complete module
 graph, through the closed library and application compilation phases
 `lake-build-generated` and `application-lean`. The independent Hologram oracle

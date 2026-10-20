@@ -1284,6 +1284,12 @@ pub(crate) fn run_process_limited_allowed(
             command.env(key, value);
         }
     }
+    // Resource defaults belong to the isolated child environment. An owned
+    // caller may select a different compiler policy through extra_env below.
+    command
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
+        .env("CARGO_INCREMENTAL", "0");
     for (key, value) in extra_env {
         command.env(key, value);
     }
@@ -3943,6 +3949,150 @@ mod tests {
                 assert!(excerpt.contains(" bytes omitted]\n"));
             }
         }
+    }
+
+    #[test]
+    fn child_cargo_defaults_preserve_owned_overrides_and_environment_isolation() {
+        const CHILD: &str = "PRISMPM_ISOLATED_CARGO_POLICY_TEST";
+        let hostile = BTreeMap::from([
+            ("CARGO_HOME", "/nonexistent/ambient-app-home"),
+            ("CARGO_NET_OFFLINE", "false"),
+            ("CARGO_BUILD_JOBS", "999"),
+            ("CARGO_PROFILE_DEV_DEBUG", "2"),
+            ("CARGO_INCREMENTAL", "1"),
+            ("RUSTFLAGS", "-C debuginfo=2"),
+            ("CARGO_ENCODED_RUSTFLAGS", "-C\u{1f}debuginfo=2"),
+            ("CARGO_PROFILE_RELEASE_DEBUG", "2"),
+            ("CARGO_TARGET_DIR", "/nonexistent/ambient-app-target"),
+        ]);
+        if std::env::var_os(CHILD).is_some() {
+            for (key, value) in &hostile {
+                assert_eq!(std::env::var(key).unwrap(), *value);
+            }
+            let root = tempfile::tempdir().unwrap();
+            let workspace = root.path().join("application work");
+            let cargo_home = root.path().join("private cargo");
+            std::fs::create_dir(&workspace).unwrap();
+            std::fs::create_dir(&cargo_home).unwrap();
+            let home = cargo_home.to_string_lossy().into_owned();
+            let remap = format!(
+                "--remap-path-prefix={}=$APPLICATION_WORK",
+                workspace.to_string_lossy()
+            );
+            let verification = BTreeMap::from([
+                ("CARGO_HOME".to_owned(), home.clone()),
+                ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
+            ]);
+            let mut generation = verification.clone();
+            generation.insert("RUSTFLAGS".to_owned(), remap.clone());
+            let mut owned_override = verification.clone();
+            owned_override.insert("CARGO_BUILD_JOBS".to_owned(), "1".to_owned());
+            owned_override.insert("CARGO_PROFILE_DEV_DEBUG".to_owned(), "1".to_owned());
+            owned_override.insert("CARGO_INCREMENTAL".to_owned(), "1".to_owned());
+            let script = "const keys=['CARGO_HOME','CARGO_NET_OFFLINE','CARGO_BUILD_JOBS','CARGO_PROFILE_DEV_DEBUG','CARGO_INCREMENTAL','RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','CARGO_PROFILE_RELEASE_DEBUG','CARGO_TARGET_DIR','LEAN_NUM_THREADS'];process.stdout.write(JSON.stringify(Object.fromEntries(keys.map(key=>[key,process.env[key]??null]))));";
+            let mut actual = serde_json::Map::new();
+            let mut expected = serde_json::Map::new();
+            // Collect every real isolated child before comparing, so RED
+            // exposes both application maps and preserves owned overrides.
+            for (phase, environment, expected_home, expected_offline, expected_flags, policy) in [
+                (
+                    "defaults",
+                    BTreeMap::new(),
+                    hostile["CARGO_HOME"].to_owned(),
+                    None,
+                    None,
+                    ("2", "0", "0"),
+                ),
+                (
+                    "generation",
+                    generation,
+                    home.clone(),
+                    Some("true"),
+                    Some(remap),
+                    ("2", "0", "0"),
+                ),
+                (
+                    "verification",
+                    verification,
+                    home.clone(),
+                    Some("true"),
+                    None,
+                    ("2", "0", "0"),
+                ),
+                (
+                    "owned-override",
+                    owned_override,
+                    home,
+                    Some("true"),
+                    None,
+                    ("1", "1", "1"),
+                ),
+            ] {
+                let observed = run_process(
+                    &format!("isolated-{phase}-cargo-policy-observer"),
+                    &executable("node").unwrap(),
+                    &["-e".to_owned(), script.to_owned()],
+                    &workspace,
+                    &environment,
+                    &[],
+                    "PP4102",
+                )
+                .unwrap();
+                assert!(observed.stderr.is_empty());
+                assert_eq!(observed.exit_code, 0);
+                actual.insert(
+                    phase.to_owned(),
+                    serde_json::from_str::<Value>(&observed.stdout).unwrap(),
+                );
+                expected.insert(
+                    phase.to_owned(),
+                    json!({
+                        "CARGO_HOME": expected_home,
+                        "CARGO_NET_OFFLINE": expected_offline,
+                        "CARGO_BUILD_JOBS": policy.0,
+                        "CARGO_PROFILE_DEV_DEBUG": policy.1,
+                        "CARGO_INCREMENTAL": policy.2,
+                        "RUSTFLAGS": expected_flags,
+                        "CARGO_ENCODED_RUSTFLAGS": null,
+                        "CARGO_PROFILE_RELEASE_DEBUG": null,
+                        "CARGO_TARGET_DIR": null,
+                        "LEAN_NUM_THREADS": "2",
+                    }),
+                );
+            }
+            assert_eq!(
+                actual, expected,
+                "actual child environments use defaults and preserve explicit owned policy",
+            );
+            return;
+        }
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "verification::tests::child_cargo_defaults_preserve_owned_overrides_and_environment_isolation",
+                "--nocapture",
+            ])
+            .envs(hostile)
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("running 1 test\n"), "{stdout}");
+        assert_eq!(
+            stdout.matches("test verification::tests::child_cargo_defaults_preserve_owned_overrides_and_environment_isolation ... ok").count(),
+            1,
+            "{stdout}",
+        );
+        assert!(
+            stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured;"),
+            "{stdout}",
+        );
     }
 
     #[test]
