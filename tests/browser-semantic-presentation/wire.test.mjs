@@ -2,8 +2,9 @@
 // in the owning gate; these independently constructed inputs cannot replace it.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {dirname, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {frozenInputs, assertFrozenInputs, assertBaselineSources, prepare, modules, repository, sha} from './compile.mjs';
@@ -13,8 +14,26 @@ import {captureDesignCatalogue, decodeSemanticPresentation, encodeSemanticPresen
   semanticCatalogueFits, semanticMainNode, semanticProgressFits} from '../../sdk/browser/semantic-presentation-wire.mjs';
 import {corpus, fixture, designs, light} from './corpus.mjs';
 import {semanticStyle} from '../../sdk/browser/semantic-presentation-style.mjs';
-import {assertBrowserJourneyInventory, assertPaletteInventory, captureBrowserEvidence, completeEvidence, replayBrowser, verifyNativeInventory} from './checks.mjs';
+import {assertBrowserJourneyInventory, assertPaletteInventory, captureBrowserEvidence, completeEvidence, createSemanticEvidenceDirectory, replayBrowser, verifyNativeInventory} from './checks.mjs';
 import {journeyCallInventory, journeyNames} from './browser.mjs';
+
+test('semantic evidence is private, unique and retained outside the retired build', t => {
+  const work = mkdtempSync(join(tmpdir(), 'semantic-build-retirement-test-'));
+  t.after(() => rmSync(work, {recursive: true, force: true}));
+  const evidence = createSemanticEvidenceDirectory();
+  t.after(() => rmSync(evidence, {recursive: true, force: true}));
+  const other = createSemanticEvidenceDirectory();
+  t.after(() => rmSync(other, {recursive: true, force: true}));
+  assert.equal(dirname(evidence), tmpdir());
+  assert.equal(dirname(other), tmpdir());
+  assert.notEqual(evidence, other);
+  assert.equal(lstatSync(evidence).mode & 0o777, 0o700);
+  const path = join(evidence, 'owner.json'), receipt = '{"complete":true}\n';
+  writeFileSync(path, receipt, {flag: 'wx'});
+  rmSync(work, {recursive: true});
+  assert.equal(readFileSync(path, 'utf8'), receipt);
+  assert.throws(() => writeFileSync(path, receipt, {flag: 'wx'}), {code: 'EEXIST'});
+});
 
 test('retained browser and mutant observations are detached and deeply immutable', () => {
   const original = {cases:['journey'], palettes:[{checks:[{foreground:'system'}]}],

@@ -223,7 +223,7 @@ test('new installed Node suites retain exact complete owning files and deadlines
  assert.equal(custody?.minimum, 11); assert.equal(custody?.deadline, 3600000);
  const semantic = suites.find(row => row.id === 'DK-38');
  assert.deepEqual(semantic?.files, ['tests/browser-semantic-presentation/wire.test.mjs', 'tests/browser-semantic-presentation/dom.test.mjs', 'sdk/browser/semantic-presentation.test.mjs']);
- assert.equal(semantic?.minimum, 29); assert.equal(semantic?.deadline, 3600000);
+ assert.equal(semantic?.minimum, 30); assert.equal(semantic?.deadline, 3600000);
  const journal = suites.find(row => row.id === 'DK-24');
  assert.deepEqual(journal?.files, ['sdk/browser/operation-journal.test.mjs']);
  assert.equal(journal?.minimum, 28); assert.equal(journal?.deadline, 3600000);
@@ -255,7 +255,7 @@ test('installed session kernel preserves its exact registered owner, complete so
 
 test('semantic owner registration preserves actual Rust files, minimum and deadline', async () => {
  const semantic = suites.find(row => row.id === 'DK-38');
- assert.ok(semantic); assert.equal(semantic.minimum, 29); assert.equal(semantic.deadline, 3600000);
+ assert.ok(semantic); assert.equal(semantic.minimum, 30); assert.equal(semantic.deadline, 3600000);
  const source = sdkSource('crates/conformance/src/cases/mod.rs');
  const owner = /"DK-38"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(source);
  assert.ok(owner); assert.equal(Number(owner[2]), semantic.minimum);
@@ -455,7 +455,7 @@ function testFixtures(root){for(const suite of [...suites,...fallbackSuites,...s
 test('standalone registry retains all six original inventories and distinct deadlines',async ()=>{
  const expected=[
   ['Session Projection',3600000,['tests/browser-session-journal/projection.test.mjs','tests/browser-session-journal/projection-owner.test.mjs'],[7,1]],
-  ['Session Reservation',3600000,['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],[10,23]],
+  ['Session Reservation',3600000,['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],[11,23]],
   ['Session Payload',3600000,['tests/browser-session-payloads/component.test.mjs','tests/browser-session-payloads/owner.test.mjs'],[4,30]],
   ['Session Recovery Frames',3600000,['tests/browser-session-recovery-frames/wire.test.mjs','tests/browser-session-recovery-frames/owner.test.mjs'],[3,1]],
   ['Session Journal Recovery',5500000,['tests/browser-session-journal-recovery/component.test.mjs','tests/browser-session-journal-recovery/owner.test.mjs'],[7,1]],
@@ -469,7 +469,7 @@ test('standalone registry retains all six original inventories and distinct dead
   for(const file of row.files)assert(sourceRoots.some(path=>file.startsWith(path+'/')));
   assert.match(sdkSource(row.files[1]),row.id==='Session Journal Recovery'?/timeout: 5400000/:/timeout:\s*3500000/);
  }
- assert.equal(standaloneSuites.reduce((sum,row)=>sum+row.minimum,0),109);
+ assert.equal(standaloneSuites.reduce((sum,row)=>sum+row.minimum,0),110);
  assert.equal(suites.length,26);assert.deepEqual(fallbackSuites,independentOwners);
 });
 
@@ -587,7 +587,7 @@ test('standalone file counts reject coherent redistribution even when the aggreg
   await assert.rejects(()=>runStandaloneSuites(root,spawnSync,()=>{}),/exact original standalone file test count/);
   put(root,first,testSource(one));put(root,second,testSource(two));
  }
- assert.equal((await runStandaloneSuites(root,spawnSync,()=>{})).reduce((sum,row)=>sum+row.tests,0),109);
+ assert.equal((await runStandaloneSuites(root,spawnSync,()=>{})).reduce((sum,row)=>sum+row.tests,0),110);
 });
 
 test('standalone unsuccessful original file completion cannot satisfy a passing aggregate',async t=>{
@@ -717,7 +717,7 @@ test('semantic suite refuses missing or empty siblings even with surplus real pa
 test('semantic registry regression kills owner, minimum and deadline substitutions', async t => {
  const original = sdkSource('scripts/browser-api-sdk-check.mjs');
  const row = original.split('\n').find(line => line.includes("{id:'DK-38'")); assert.ok(row);
- const changes = [row.replace('minimum:29', 'minimum:28'),
+ const changes = [row.replace('minimum:30', 'minimum:29'),
   row.replace('wire.test.mjs', 'substitute.test.mjs')];
  const mutated = changes.map(changed => original.replace(row, changed));
  const deadline = "deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38','ST-17','HO-15'].includes(row.id)?3600000:1500000";
@@ -739,7 +739,7 @@ test('installed semantic gate rejects omission of each false-evidence safeguard'
  const root = temporary(t); testFixtures(root);
  const semantic = suites.find(row => row.id === 'DK-38');
  const safeguards = ['missing oracle', 'launcher failure', 'closed page', 'no-op mutation', 'wrong semantic check'];
- const observations = ['immutable observations', 'exact journey and call inventory',
+ const observations = ['private retained evidence', 'immutable observations', 'exact journey and call inventory',
   'closed transcript engine', 'complete browser and mutant inventories'];
  const engineChecks = ['firefox generated journey', 'webkit generated journey',
   'firefox adapter mutants', 'webkit adapter mutants'];
@@ -754,7 +754,7 @@ test('installed semantic gate rejects omission of each false-evidence safeguard'
   + fixtures[index].filter(name => name !== omitted).map(name => `test(${JSON.stringify(name)},()=>{});\n`).join(''));
  fixtures.forEach((_, index) => write(index));
  assert.deepEqual((await runSuites(root, spawnSync, () => {})).find(row => row.id === 'DK-38'),
-  {id: 'DK-38', tests: 29});
+  {id: 'DK-38', tests: 30});
  for (const [index, required] of [[0, observations], [1, safeguards], [2, engineChecks]]) {
   for (const omitted of required) {
    write(index, omitted);

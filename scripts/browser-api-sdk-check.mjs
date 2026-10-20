@@ -70,7 +70,7 @@ export const suites=Object.freeze([
  {id:'DK-34',minimum:22,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
  {id:'DK-35',minimum:97,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-view/file-custody.test.mjs','tests/browser-session-operation/owner.test.mjs']},
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
- {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
+ {id:'DK-38',minimum:30,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
  {id:'ST-17',minimum:21,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
  {id:'HO-15',minimum:11,files:['tests/holo-primary-component/component.test.mjs','tests/holo-primary-component/owner.test.mjs']},
 ].map(row=>Object.freeze({...row,
@@ -86,7 +86,7 @@ export const fallbackSuites=Object.freeze([
 // replacements for DK owners or either fixed-null compiler fallback.
 export const standaloneSuites=Object.freeze([
  {id:'Session Projection',deadline:3600000,files:['tests/browser-session-journal/projection.test.mjs','tests/browser-session-journal/projection-owner.test.mjs'],exactTests:[7,1]},
- {id:'Session Reservation',deadline:3600000,files:['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],exactTests:[10,23]},
+ {id:'Session Reservation',deadline:3600000,files:['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],exactTests:[11,23]},
  {id:'Session Payload',deadline:3600000,files:['tests/browser-session-payloads/component.test.mjs','tests/browser-session-payloads/owner.test.mjs'],exactTests:[4,30]},
  {id:'Session Recovery Frames',deadline:3600000,files:['tests/browser-session-recovery-frames/wire.test.mjs','tests/browser-session-recovery-frames/owner.test.mjs'],exactTests:[3,1]},
  {id:'Session Journal Recovery',deadline:5500000,files:['tests/browser-session-journal-recovery/component.test.mjs','tests/browser-session-journal-recovery/owner.test.mjs'],exactTests:[7,1]},
