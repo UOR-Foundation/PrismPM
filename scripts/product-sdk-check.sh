@@ -45,7 +45,8 @@ container=$(docker container create --network none --read-only --platform "linux
 mkdir "$sdk_work/source"
 while IFS= read -r path; do
   mkdir -p "$sdk_work/source/$(dirname "$path")"
-  docker container cp "$container:/opt/prismpm/share/conformance-root/$path" "$sdk_work/source/$path"
+  # Defer read-only directory modes until descendants are written.
+  docker container cp "$container:/opt/prismpm/share/conformance-root/$path" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "$sdk_work/source/$(dirname "$path")"
 done < <(node "$helper" roots)
 node "$helper" verify "$sdk_work/source" "$evidence/source.json"
 docker container cp "$container:/opt/prismpm/share/inventory.json" "$evidence/inventory.json"
@@ -88,7 +89,8 @@ test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" =
 docker container cp "$container:/tmp/prismpm-product-cli/build.json" "$evidence/build.json"
 mkdir -p "$sdk_work/receiver/receiver/.prism"
 cp "$evidence/build.json" "$sdk_work/receiver/build.json"
-docker container cp "$container:/tmp/prismpm-product-cli/first/.prism/oci" "$sdk_work/receiver/receiver/.prism/oci"
+# Defer read-only directory modes until descendants are written.
+docker container cp "$container:/tmp/prismpm-product-cli/first/.prism/oci" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "$sdk_work/receiver/receiver/.prism"
 docker container rm "$container" >/dev/null
 container=''
 # A separate fresh volume carries only the immutable OCI graph and result facts.

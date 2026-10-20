@@ -92,7 +92,7 @@ export function composeComponent(owner, oracle) {
     source, input_ir_sha256:owner.generation.ir_sha256, model_content_kappa:modelId.kappa,
     guest_content_kappa:guestId.kappa, capabilities_content_kappa:capabilityId.kappa,
     application_kappa:applicationId.kappa, generated_packages:owner.generatedPackages,
-    hologram_live_revision:'d8208266d8abdc2445b7bbc0cef412a566adfaf1',
+    hologram_live_revision:'9847e00212e4c5c46767ad7ba9baa678ffa808f0',
     uor_hologram_revision:'2bda6a9a9476872dade705bd61ece4209607f6da'});
   const blobs = contents.map(([id, bytes]) => invoke('blob', [Buffer.from(id.kappa), bytes]));
   const body = invoke('body', [manifest, metadata, directory, provenance, ...blobs]);

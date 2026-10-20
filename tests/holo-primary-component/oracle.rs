@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use std::{error::Error, fs, sync::Arc};
 
 const COMPONENT: &str = "https://uor.foundation/extension/prismpm-component/v1";
-const LIVE: &str = "d8208266d8abdc2445b7bbc0cef412a566adfaf1";
+const LIVE: &str = "9847e00212e4c5c46767ad7ba9baa678ffa808f0";
 const HOLOGRAM: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
 
 fn hex(bytes: &[u8]) -> String {

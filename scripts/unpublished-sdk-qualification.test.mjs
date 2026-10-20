@@ -5,6 +5,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {spawnSync} from 'node:child_process';
 import {runInNewContext} from 'node:vm';
+import {posix} from 'node:path';
 import {unpublishedQualificationPlan,qualificationStorageBudget,conserveQualificationContainer,qualificationCommandBudget} from './unpublished-sdk-qualification.mjs';
 const revision='1'.repeat(40);
 const selection={revision,run_id:123,run_attempt:1,artifact_ids:{amd64:456,arm64:789}};
@@ -102,6 +103,27 @@ test('every work and cleanup command charges its original five-second supervisor
  for(const token of['whole_deadline=$((started+21600))','work_deadline=$((whole_deadline-180))','remaining=$((deadline-SECONDS-2))','(( remaining>=bound )) || bound=$remaining','(( cleanup_deadline<=whole_deadline )) || cleanup_deadline=$whole_deadline','21600-(SECONDS-started)-180-5','PRISMPM_QUALIFICATION_WHOLE_END_UTC_MS=$owner_end_epoch_ms'])assert(shell.includes(token),token);
  assert(text.includes('Math.min(remaining*1000,utcRemaining)'),'host creation/startup must consume the same fixed remaining owner clock');
 });
+
+test('large owned daemon volumes receive bounded normal retirement within the unchanged whole cleanup deadline',()=>{
+ const text=source('scripts/unpublished-sdk-qualification.mjs');
+ const call=/await docker\('remove-owned-resource',\[row\.kind,'rm',row\.id\],([^;]+)\);await absent\(row\.kind,row\.id\)/.exec(text);
+ assert(call,'normal removal must retain its exact owned identity and subsequent absence proof');
+ const selected=kind=>runInNewContext(call[1],{row:{kind}});
+ assert.equal(selected('volume'),120000,'large daemon data must not inherit the ten-second metadata budget');
+ for(const kind of ['container','network'])assert.equal(selected(kind),10000);
+ for(const now of [0,60000,120000,174999]){
+  const budget=qualificationCommandBudget(selected('volume'),180000,now);
+  assert.equal(budget,Math.min(120000,180000-now-5000));
+  assert(budget+5000<=180000-now,'normal removal and supervisor closure share the original remaining deadline');
+ }
+ assert.throws(()=>qualificationCommandBudget(selected('volume'),180000,175000));
+ assert(text.includes('cleanupEnd=Math.min(wholeEnd,performance.now()+180000)'));
+ assert(text.includes('qualificationCommandBudget(timeout,cleaning?cleanupEnd:end)'));
+ assert(!/\[row\.kind,'rm','(?:--force|-f)'/.test(text));
+ const mutant=text.replace(call[1],'10000');
+ const changed=/await docker\('remove-owned-resource',\[row\.kind,'rm',row\.id\],([^;]+)\);await absent\(row\.kind,row\.id\)/.exec(mutant);
+ assert.notEqual(runInNewContext(changed[1],{row:{kind:'volume'}}),120000);
+});
 test('the private TLS registry runs as its actual owner and only its new empty volume receives bounded root initialization',()=>{
  const text=source('scripts/unpublished-sdk-qualification.mjs');
  const verify=value=>{
@@ -149,7 +171,7 @@ test('the existing real admission shell excludes unpublished qualification from 
   assert(job.if.includes('!inputs.development_only'));assert(job.if.includes("inputs.construction_source_revision == ''"));assert(job.if.includes("inputs.construction_integrity == ''"));
  }
 });
-test('only the freshly owned ignored target is writable through wrapper namespaces and the original fixed library evidence path stays intact',()=>{
+test('only the freshly owned ignored target is writable through wrapper namespaces and the original fixed library evidence path stays intact',async()=>{
  const driver=source('scripts/unpublished-sdk-qualification.mjs'),shell=source('scripts/unpublished-sdk-qualification.sh');
  const verify=(text,outer)=>{
   assert.equal((text.match(/'type=bind,source='\+target\+',target='\+target/g)||[]).length,2,'daemon and original-owner runner need the same narrowly writable target');
@@ -162,4 +184,64 @@ test('only the freshly owned ignored target is writable through wrapper namespac
  const missing=driver.replace("'type=bind,source='+target+',target='+target", "'type=bind,source=/unrelated,target=/unrelated'");assert.notEqual(missing,driver);assert.throws(()=>verify(missing,shell));
  const writable=shell.replace('type=bind,source=$root,target=$root,readonly','type=bind,source=$root,target=$root');assert.notEqual(writable,shell);assert.throws(()=>verify(driver,writable));
  assert(source('scripts/library-sdk-check.sh').includes('"$root/target/library-sdk-evidence/linux-$architecture"'));
+ // Execute the actual private daemon/owner setup with an inert recording
+ // transport. This checks command wiring, not Docker or kernel acceptance.
+ const pair=async(value,arch,phase)=>{
+  const begin=value.indexOf('const daemon=await own('),end=value.indexOf('const execution=await docker(',begin);
+  assert(begin>0&&end>begin);
+  const recorded=[],socket={name:'owned-socket'},network={name:'owned-network'};
+  const actual=await runInNewContext('(async()=>{'+value.slice(begin,end)+';return {daemon,runner};})()',{
+   own:async(kind,name,args)=>{recorded.push({kind,name,args:Array.from(args)});return {id:name,name};},
+   docker:async(label,args)=>{assert.equal(label==='start-owned-daemon'||label==='probe-owned-daemon',true);return {status:0,stdout:Buffer.from('28.4.0\n')};},
+   assert,Buffer,prefix:'owned',ownerLabel:'owned-label',nonce:'nonce',network,socket,data:{name:'owned-data'},
+   dirname:()=>'/private',source:'/private/root-a',target:'/private/root-a/target',ca:'/private/ca.crt',authority:'172.29.88.1:5000',
+   lock:{images:{dind:{reference:JSON.parse(sourceLock).images.dind.reference}}},
+   uid:1001,gid:1001,toolImage:'sha256:'+'2'.repeat(64),graph:{image:'private/sdk@sha256:'+'3'.repeat(64)},
+   plan:{arch,phase,selection:{expected:{revision}}},process:{env:{}}
+  });
+  assert.equal(actual.daemon.id,'owned-daemon');assert.equal(actual.runner.id,'owned-owner');
+  assert.equal(recorded.length,2);return recorded;
+ };
+ const sourceLock=source('sdk/vv-runtime.lock.json');
+ const mounts=args=>args.flatMap((value,index)=>value==='--mount'?[Object.fromEntries(args[index+1].split(',').map(field=>{
+  const split=field.indexOf('=');return split<0?[field,true]:[field.slice(0,split),field.slice(split+1)];
+ }))]:[]);
+ // Both pinned images resolve this alias. Compare path components so a
+ // writable runtime volume cannot cover the explicit certificate mount.
+ const canonical=path=>{
+  const normalized=posix.normalize(path).replace(/\/$/,'')||'/';
+  return normalized==='/var/run'||normalized.startsWith('/var/run/')?'/run'+normalized.slice('/var/run'.length):normalized;
+ };
+ const primary=args=>{
+  const rows=mounts(args).filter(row=>row.type==='bind'&&row.source==='/private/ca.crt'&&!row.target.startsWith('/etc/docker/certs.d/'));
+  assert.equal(rows.length,1);assert.equal(rows[0].readonly,true,'primary CA must be read-only');return rows[0].target;
+ };
+ const access=async value=>{
+  for(const arch of['amd64','arm64'])for(const phase of['prerequisites','installed']){
+   const [daemon,owner]=await pair(value,arch,phase),d=daemon.args,o=owner.args;
+   assert.deepEqual(d.slice(d.indexOf('dockerd')),['dockerd','--group=root','--host=unix:///var/run/docker.sock','--data-root=/var/lib/docker']);
+   assert.equal(o[o.indexOf('--user')+1],'1001:1001');assert.equal(o.filter(x=>x==='--group-add').length,1);assert.equal(o[o.indexOf('--group-add')+1],'0');
+   assert(d.includes('type=volume,source=owned-socket,target=/var/run'));assert(o.includes('type=volume,source=owned-socket,target=/var/run'));
+   assert(!o.includes('--privileged'));assert(!d.includes('--group-add'));
+   const trust=o.at(-2);
+   assert.equal(primary(d),trust,'daemon primary CA and owner argument must agree');
+   assert.equal(primary(o),trust,'owner primary CA and owner argument must agree');
+   const trustEnvironment=o.flatMap((arg,index)=>arg==='--env'?[o[index+1]]:[]).filter(arg=>arg.startsWith('NODE_EXTRA_CA_CERTS='));
+   assert.deepEqual(trustEnvironment,['NODE_EXTRA_CA_CERTS='+trust]);
+   assert(d.includes('type=bind,source=/private/ca.crt,target=/etc/docker/certs.d/172.29.88.1:5000/ca.crt,readonly'));
+   for(const args of[d,o])for(const row of mounts(args).filter(row=>['bind','volume'].includes(row.type)&&!row.readonly)){
+    const parent=canonical(row.target),child=canonical(trust);
+    assert(child!==parent&&!child.startsWith(parent==='/'?'/':parent+'/'),'explicit CA overlaps writable mount: '+row.target);
+   }
+  }
+ };
+ await access(driver);
+ for(const [before,after]of[["'dockerd','--group=root'","'dockerd'"],["'--group=root'","'--group=docker'"],["'--group-add','0'","'--group-add','101'"]]){
+  const changed=driver.replace(before,after);assert.notEqual(changed,driver);await assert.rejects(()=>access(changed));
+ }
+ for(const [before,after]of[["target=/etc/prismpm-qualification-ca.crt,readonly'","target=/run/prismpm-qualification-ca.crt,readonly'"],["const trustCa='/etc/prismpm-qualification-ca.crt'","const trustCa='/run/prismpm-qualification-ca.crt'"],["target=/etc/prismpm-qualification-ca.crt,readonly'","target=/etc/prismpm-qualification-ca.crt'"]]){
+  const changed=driver.replace(before,after);assert.notEqual(changed,driver);await assert.rejects(()=>access(changed));
+ }
+ const overlap=driver.replaceAll('/etc/prismpm-qualification-ca.crt','/run/prismpm-qualification-ca.crt');
+ assert.notEqual(overlap,driver);await assert.rejects(()=>access(overlap),/explicit CA overlaps writable mount/);
 });

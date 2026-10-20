@@ -1830,10 +1830,16 @@ executes cleanly offline without external resolution or draft dependencies,
 reproducing package archives and passing downstream compilation. Full gate
 receipt `target/vv-evidence.json` binds all 15 gates as passed.
 
-## Independent Hologram Calculator/Text interoperability acceptance
+## Historical independent Hologram Calculator/Text interoperability acceptance
 
-Independent Hologram oracle interoperability acceptance for Calculator and
-Text applications is executed and digest-bound to release-closure records:
+These Calculator/Text results record the earlier Hologram-live revision
+`d8208266d8abdc2445b7bbc0cef412a566adfaf1` and the original archive digest
+listed below. They preserve the original release subjects and counts. Current
+acceptance requires fresh verification of the selected registered oracle
+archive and harness.
+
+The historical interoperability results are digest-bound to release-closure
+records:
 
 1. **Pinned oracle source and harness inputs**:
    - Upstream live source archive `crates/prismpm/vendor/hologram-live.tar` matches SHA-256 `caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66`.

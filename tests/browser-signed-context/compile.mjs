@@ -1,6 +1,6 @@
 // Private test orchestration; no host implementation of modeled transitions.
 import assert from 'node:assert/strict';
-import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -226,6 +226,19 @@ export function prepareSignedContext(compilerOwner, mutationId = null, expectedI
       assert.deepEqual(readFileSync(join(verified.root, 'build-manifest.json')), buildManifest);
       assert.equal(sha(readFileSync(ir)), generation.ir_sha256);
     }
+    unchanged();
+    // The completed local Lean build was consumed by the exporter above.
+    // Retire only its reconstructible Lake cache, retaining every staged
+    // source, kernel attestation/manifest, IR and generated execution artifact.
+    const completedLeanCache = join(lean, '.lake/build');
+    const completedLeanCacheStat = lstatSync(completedLeanCache);
+    assert.equal(realpathSync(lean), lean, 'unaliasable completed model Lean project');
+    assert.equal(realpathSync(completedLeanCache), completedLeanCache, 'unaliasable completed model Lake cache');
+    assert.ok(completedLeanCacheStat.isDirectory() && completedLeanCacheStat.uid === process.getuid(),
+      'owned completed model Lake cache required');
+    run('lake', ['clean'], lean);
+    assert.equal(lstatSync(completedLeanCache, {throwIfNoEntry: false}), undefined,
+      'completed model Lake cache must be retired');
     unchanged();
     complete = true;
     const generatedPackages = Object.freeze(Object.fromEntries([...packages].map(([name, package_]) => {

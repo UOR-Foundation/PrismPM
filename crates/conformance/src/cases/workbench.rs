@@ -36,12 +36,12 @@ fn rust(root: &Path, target: Option<&str>, expected: usize) {
 
 pub(super) fn verify(root: &Path) {
     rust(root, Some("workbench_application"), 4);
-    rust(root, None, 2);
+    rust(root, None, 3);
     super::node_suite::verify_exact(
         root,
         "HO-17",
         &[
-            ("scripts/portable-oracle-matrix.test.mjs", 59),
+            ("scripts/portable-oracle-matrix.test.mjs", 60),
             ("scripts/text-workbench.test.mjs", 23),
         ],
         "240000",

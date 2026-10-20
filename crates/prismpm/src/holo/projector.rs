@@ -521,7 +521,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 26] = [
+    const INPUTS: [(&str, &[u8]); 33] = [
         (
             "crates/prismpm/src/application_build.rs",
             include_bytes!("../application_build.rs"),
@@ -529,6 +529,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "crates/prismpm/src/holo/application.rs",
             include_bytes!("application.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/application/research_workbench.rs",
+            include_bytes!("application/research_workbench.rs"),
         ),
         (
             "crates/prismpm/src/holo/application/workbench.rs",
@@ -568,12 +572,28 @@ pub fn compute_emitter_semantics_id() -> String {
             include_bytes!("projector.rs"),
         ),
         (
+            "crates/prismpm/src/holo/research_workbench.rs",
+            include_bytes!("research_workbench.rs"),
+        ),
+        (
             "crates/prismpm/src/holo/validate.rs",
             include_bytes!("validate.rs"),
         ),
         (
             "crates/prismpm/src/holo/workbench.rs",
             include_bytes!("workbench.rs"),
+        ),
+        (
+            "crates/prismpm/src/research_workbench.rs",
+            include_bytes!("../research_workbench.rs"),
+        ),
+        (
+            "crates/prismpm/src/research_workbench/runtime.js",
+            include_bytes!("../research_workbench/runtime.js"),
+        ),
+        (
+            "crates/prismpm/src/research_workbench/style.css",
+            include_bytes!("../research_workbench/style.css"),
         ),
         (
             "crates/prismpm/src/workbench.rs",
@@ -616,8 +636,16 @@ pub fn compute_emitter_semantics_id() -> String {
             include_bytes!("../../schemas/model-document-v6.schema.json"),
         ),
         (
+            "schemas/model-document-v7.schema.json",
+            include_bytes!("../../schemas/model-document-v7.schema.json"),
+        ),
+        (
             "schemas/model-document.schema.json",
             include_bytes!("../../schemas/model-document.schema.json"),
+        ),
+        (
+            "schemas/workbench-view-projection-v2.schema.json",
+            include_bytes!("../../schemas/workbench-view-projection-v2.schema.json"),
         ),
         (
             "schemas/workbench-view-projection.schema.json",

@@ -1404,17 +1404,31 @@ fn application_binding(
         .map_err(|error| invalid(format!("application oracle: {error}")))?;
     crate::verification::validate_hologram_oracle_report(&report, application, &identities)
         .map_err(|error| invalid(format!("application oracle: {}", error.message)))?;
-    for (offset, command) in [(8, "validate"), (9, "print")] {
+    application_core_wasm_processes(&processes[8..10], build_id, &guest_name)
+}
+
+fn application_core_wasm_processes(
+    processes: &[Value],
+    build_id: &str,
+    guest_name: &str,
+) -> Result<(), PrismError> {
+    ensure(
+        processes.len() == 2,
+        "application Core-Wasm process pair differs",
+    )?;
+    for (offset, prefix) in [(0, &["validate"][..]), (1, &["print", "--skeleton"][..])] {
         let args = strings(&processes[offset]["argv"])?;
         ensure(
-            args.len() == 2
-                && args[0] == command
-                && (args[1].ends_with(&format!("/{build_id}/{guest_name}"))
-                    || args[1] == format!("$BUILD/{guest_name}")),
+            args.len() == prefix.len() + 1
+                && args.starts_with(prefix)
+                && args.last().is_some_and(|path| {
+                    path.ends_with(&format!("/{build_id}/{guest_name}"))
+                        || *path == format!("$BUILD/{guest_name}")
+                }),
             "application Core-Wasm process identity differs",
         )?;
     }
-    let printed = string(&processes[9]["stdout"])?;
+    let printed = string(&processes[1]["stdout"])?;
     ensure(
         !printed.contains("(import ")
             && ["memory", "holo_alloc", "holo_run"]

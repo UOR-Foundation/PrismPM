@@ -7,6 +7,9 @@ ENV SOURCE_DATE_EPOCH=0
 RUN test ! -e /opt/prismpm/rust-oracle-target && mkdir -p -m 0700 /opt/prismpm/rust-oracle-target && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target wasm-bindgen-cli --version 0.2.122 && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target wasm-tools --version 1.258.0 && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target wasmtime-cli --version 48.0.1 && cargo install --locked --root /opt/prismpm/rust-oracle-tools --target-dir /opt/prismpm/rust-oracle-target cargo-local-registry --version 0.2.12 && rm -rf /opt/prismpm/rust-oracle-target
 
 FROM docker.io/library/rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97 AS input_tools
+RUN apt-get --error-on=any update \
+    && apt-get install --no-install-recommends --yes zstd=1.5.4+dfsg2-5 \
+    && rm -rf /var/lib/apt/lists/*
 ARG TARGETARCH
 RUN case "$TARGETARCH" in \
       amd64) node_arch=x64; node_sha=d60acfe00a2932254bb0ad20e01b0d74397a0875595de719654b214f4b03f307 ;; \
@@ -112,11 +115,34 @@ RUN case "$TARGETARCH" in \
     && mkdir /tmp/elan \
     && tar --extract --gzip --file /tmp/elan.tar.gz --directory /tmp/elan \
     && /tmp/elan/elan-init -y --no-modify-path --default-toolchain none \
-    && elan toolchain install leanprover/lean4:v4.32.1 \
-    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
     && rm /tmp/elan.tar.gz \
     && rm /tmp/elan/elan-init \
     && rmdir /tmp/elan
+
+# Use the official byte-pinned archives with the image's curl TLS stack.
+# Elan 4.2.3 remains the exact proxy; it rejects a second install of this tree.
+RUN case "$TARGETARCH" in \
+      amd64) lean_archive=lean-4.32.1-linux.tar.zst; lean_sha=57d5c062a6b4bae6fba511a1704aa124dff461c37d0fc94585637fbb7d951b50 ;; \
+      arm64) lean_archive=lean-4.32.1-linux_aarch64.tar.zst; lean_sha=99b51cb2ba2ae402c03185f2ca656e82b6c37d28ca99f3b07a1c2d04b58a039a ;; \
+      *) exit 64 ;; \
+    esac \
+    && curl --disable --proto '=https' --proto-redir '=https' --fail --location --silent --show-error "https://github.com/leanprover/lean4/releases/download/v4.32.1/${lean_archive}" --output /tmp/lean.tar.zst \
+    && echo "${lean_sha}  /tmp/lean.tar.zst" | sha256sum --check --strict \
+    && tar --list --zstd --file /tmp/lean.tar.zst > /tmp/lean.members \
+    && awk -v prefix="${lean_archive%.tar.zst}/" 'index($0,prefix) != 1 || $0 ~ /(^|\/)\.\.(\/|$)/ { print "Lean archive member refused" > "/dev/stderr"; exit 1 } END { if (NR == 0) exit 1 }' /tmp/lean.members \
+    && test ! -e /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && test ! -L /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && mkdir -p /usr/local/elan/toolchains \
+    && mkdir /usr/local/elan/toolchains/.lean-4.32.1-install \
+    && tar --extract --zstd --no-same-owner --file /tmp/lean.tar.zst --strip-components=1 --directory /usr/local/elan/toolchains/.lean-4.32.1-install \
+    && test -x /usr/local/elan/toolchains/.lean-4.32.1-install/bin/lean \
+    && test -x /usr/local/elan/toolchains/.lean-4.32.1-install/bin/lake \
+    && mv --no-clobber --no-target-directory /usr/local/elan/toolchains/.lean-4.32.1-install /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && test ! -e /usr/local/elan/toolchains/.lean-4.32.1-install \
+    && chmod -R a+rX,go-w /usr/local/elan/toolchains/leanprover--lean4---v4.32.1 \
+    && ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lean --version \
+    && ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lake --version \
+    && rm /tmp/lean.tar.zst /tmp/lean.members
 
 COPY --from=rust_oracle_tools /opt/prismpm/rust-oracle-tools/bin/ /usr/local/cargo/bin/
 RUN rm -rf /usr/local/cargo/registry /usr/local/cargo/git
@@ -243,13 +269,13 @@ RUN mkdir -p /opt/prismpm/share/standards/oracles \
       /opt/prismpm/share/standards/oracles/devcontainer-c95ffeed-base.schema.json \
     && cp standards/oracles/kubernetes-1.36.4-swagger.json \
       /opt/prismpm/share/standards/oracles/kubernetes-1.36.4-swagger.json
-RUN cargo build --locked --release --package prismpm \
+RUN CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 cargo fetch --locked \
+    && CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
+    && CARGO_NET_RETRY=8 CARGO_HTTP_TIMEOUT=30 bash scripts/fetch-oracle-cargo.sh
+RUN cargo build --locked --offline --release --package prismpm \
     && target/release/prismpm --json --project . authority resolve --locked \
-    && cargo build --locked --release --package repo-conformance --bins \
-    && cargo build --locked --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean \
-    && cargo fetch --locked \
-    && cargo fetch --locked --manifest-path vendor/lexlean/Cargo.toml \
-    && bash scripts/fetch-oracle-cargo.sh \
+    && cargo build --locked --offline --release --package repo-conformance --bins \
+    && cargo build --locked --offline --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean \
     && mkdir -p /opt/prismpm/share \
     && node sdk/generate-account-genesis.mjs install \
     && install -m 0755 target/release/prismpm /usr/local/bin/prismpm \
@@ -352,8 +378,8 @@ RUN set -eu; \
     && rm /etc/apt/sources.list.d/nodesource.list \
     && test "$(find /etc/apt/sources.list.d -maxdepth 1 -type f ! -name ubuntu.sources -print -quit)" = "" \
     && /usr/bin/python3 -I -B /opt/prismpm/runtime-sources/configure.py verify --architecture "$TARGETARCH" --snapshot "${snapshot}" \
-    && apt-get --error-on=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update \
-    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes \
+    && apt-get --error-on=any -o Acquire::Retries=8 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz update \
+    && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::http::Pipeline-Depth=0 -o Acquire::https::Pipeline-Depth=0 -o Acquire::CompressionTypes::Order=xz install --no-install-recommends --yes \
       "build-essential=${build_essential}" \
       "pkg-config=${pkg_config}" \
     && dpkg-query -W -f='${binary:Package}\t${Version}\n' \

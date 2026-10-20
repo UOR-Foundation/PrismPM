@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[cfg(test)]
 mod tests;
 
+mod research_workbench;
 mod workbench;
 
 pub(super) type Definitions<'a> = BTreeMap<(String, String), &'a Value>;
@@ -704,6 +705,24 @@ pub fn project_application(
     }
     if fields
         .get("profile")
+        .is_some_and(|(_, value)| value["value"] == super::research_workbench::PROFILE)
+        || declaration
+            .pointer("/result/member/module")
+            .and_then(Value::as_str)
+            == Some("Foundation.View.Text.V4.Model")
+    {
+        return projected_document(
+            snapshot,
+            Application::Research(Box::new(research_workbench::project(
+                &definitions,
+                module,
+                declaration,
+                &fields,
+            )?)),
+        );
+    }
+    if fields
+        .get("profile")
         .is_some_and(|(_, value)| value["value"] == super::workbench::PROFILE)
         || declaration
             .pointer("/result/member/module")
@@ -849,6 +868,7 @@ fn projected_document(
     let document = ModelDocument {
         schema: match &application {
             Application::Workbench(_) => "prismpm/model-document/6",
+            Application::Research(_) => "prismpm/model-document/7",
             Application::Legacy(_) => "prismpm/model-document/1",
             Application::Text(value) if value.profile == "prismpm/text-application/2" => {
                 "prismpm/model-document/5"

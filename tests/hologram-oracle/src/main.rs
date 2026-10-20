@@ -8,10 +8,11 @@ use hologram::space::{address_bytes, AppManifest, Layer, Realization};
 use hologram_live::holo::{inspect_bytes, plan_bytes, HoloCatalog, HoloExecutor, HoloRuntime};
 use hologram_live::store::ObjectStore;
 use hologram_view_surface::{
-    PortableViewAttachment, PortableViewSurface, SurfaceFuture, ViewAttachmentId,
-    ViewIntentRequest, APPLICATION_INVOKE_INTENT, VIEW_INTENT_VERSION,
+    intent_limits, PortableViewAttachment, PortableViewSurface, SurfaceFuture, ViewAttachmentId,
+    ViewIntentRequest, APPLICATION_INVOKE_INTENT, VIEW_INTENT_VERSION, VIEW_INTENT_VERSION_2,
 };
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,17 @@ struct RecordingSurface {
 struct BrowserSurface {
     surface: Arc<RecordingSurface>,
     authority: String,
+    intent_version: u16,
+    model_id: Option<String>,
+    binding_path: Option<String>,
+}
+
+fn intent_version(application: &Value) -> u16 {
+    if application["profile"].as_str() == Some("prismpm/text-application/4") {
+        VIEW_INTENT_VERSION_2
+    } else {
+        VIEW_INTENT_VERSION
+    }
 }
 
 fn response(status: StatusCode, kind: &'static str, bytes: Vec<u8>) -> Response {
@@ -46,6 +58,100 @@ fn response(status: StatusCode, kind: &'static str, bytes: Vec<u8>) -> Response 
         .into_response()
 }
 
+fn asset_query_allowed(
+    host: &BrowserSurface,
+    method: &Method,
+    path: &str,
+    query: Option<&str>,
+) -> bool {
+    let Some(query) = query else {
+        return true;
+    };
+    host.intent_version == VIEW_INTENT_VERSION_2
+        && method == Method::GET
+        && (matches!(path, "/app.js" | "/app.css") || host.binding_path.as_deref() == Some(path))
+        && host
+            .model_id
+            .as_ref()
+            .is_some_and(|id| query == format!("model_id={id}"))
+}
+
+#[cfg(test)]
+mod research_asset_query_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn research_asset_query_is_exact_current_model_and_asset() {
+        let model_id = "a".repeat(64);
+        let host = BrowserSurface {
+            surface: Arc::new(RecordingSurface::default()),
+            authority: "127.0.0.1:4321".to_owned(),
+            intent_version: VIEW_INTENT_VERSION_2,
+            model_id: Some(model_id.clone()),
+            binding_path: Some("/fixture.js".to_owned()),
+        };
+        let query = format!("model_id={model_id}");
+        for path in ["/app.js", "/app.css", "/fixture.js"] {
+            let request = Request::builder()
+                .uri(format!("{path}?{query}"))
+                .header(header::HOST, &host.authority)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            assert_eq!(
+                portable_http(State(host.clone()), request).await.status(),
+                StatusCode::GONE,
+                "exact model query passes admission and reaches the absent attachment"
+            );
+        }
+        for (method, path, query) in [
+            (
+                Method::GET,
+                "/app.js",
+                format!("model_id={}", "b".repeat(64)),
+            ),
+            (Method::GET, "/app.js", format!("{query}&extra=1")),
+            (Method::GET, "/app.js", format!("{query}&{query}")),
+            (
+                Method::GET,
+                "/app.js",
+                format!("model_id=%61{}", "a".repeat(63)),
+            ),
+            (Method::GET, "/fixture_bg.wasm", query.clone()),
+            (Method::GET, "/other.js", query.clone()),
+            (Method::POST, "/app.js", query.clone()),
+            (Method::HEAD, "/app.css", query.clone()),
+        ] {
+            let request = Request::builder()
+                .method(method)
+                .uri(format!("{path}?{query}"))
+                .header(header::HOST, &host.authority)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            assert_eq!(
+                portable_http(State(host.clone()), request).await.status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        let legacy = BrowserSurface {
+            intent_version: VIEW_INTENT_VERSION,
+            ..host.clone()
+        };
+        assert!(!asset_query_allowed(
+            &legacy,
+            &Method::GET,
+            "/app.js",
+            Some(&query)
+        ));
+        assert!(asset_query_allowed(&legacy, &Method::GET, "/app.js", None));
+        assert!(asset_query_allowed(
+            &host,
+            &Method::GET,
+            "/fixture_bg.wasm",
+            None
+        ));
+    }
+}
+
 async fn portable_http(State(host): State<BrowserSurface>, request: Request) -> Response {
     let reject = |status| response(status, "text/plain; charset=utf-8", Vec::new());
     let origin = format!("http://{}", host.authority);
@@ -54,7 +160,12 @@ async fn portable_http(State(host): State<BrowserSurface>, request: Request) -> 
         .get(header::HOST)
         .and_then(|v| v.to_str().ok())
         != Some(host.authority.as_str())
-        || request.uri().query().is_some()
+        || !asset_query_allowed(
+            &host,
+            request.method(),
+            request.uri().path(),
+            request.uri().query(),
+        )
     {
         return reject(StatusCode::BAD_REQUEST);
     }
@@ -95,8 +206,12 @@ async fn portable_http(State(host): State<BrowserSurface>, request: Request) -> 
             return reject(StatusCode::UNSUPPORTED_MEDIA_TYPE);
         }
         // JSON may represent a UTF-8 payload byte using six ASCII bytes. The
-        // authoritative DTO separately enforces the decoded 64KiB byte bound.
-        let maximum = hologram_view_surface::MAX_INTENT_PAYLOAD_BYTES * 6 + 256;
+        // authoritative DTO separately enforces this version's decoded bound.
+        let limits = match intent_limits(host.intent_version) {
+            Ok(limits) => limits,
+            Err(_) => return reject(StatusCode::INTERNAL_SERVER_ERROR),
+        };
+        let maximum = limits.payload_bytes * 6 + 256;
         let body = match to_bytes(request.into_body(), maximum).await {
             Ok(body) => body,
             Err(_) => return reject(StatusCode::PAYLOAD_TOO_LARGE),
@@ -105,14 +220,17 @@ async fn portable_http(State(host): State<BrowserSurface>, request: Request) -> 
             Ok(value) => value,
             Err(_) => return reject(StatusCode::BAD_REQUEST),
         };
-        if intent.validate().is_err() {
+        if intent.version != host.intent_version || intent.validate().is_err() {
             return reject(StatusCode::BAD_REQUEST);
         }
         match attachment.intents.handle(&attachment.id, intent).await {
-            Ok(result) => match serde_json::to_vec(&result) {
-                Ok(bytes) => response(StatusCode::OK, "application/json", bytes),
-                Err(_) => reject(StatusCode::INTERNAL_SERVER_ERROR),
-            },
+            Ok(result) if result.version == host.intent_version => {
+                match serde_json::to_vec(&result) {
+                    Ok(bytes) => response(StatusCode::OK, "application/json", bytes),
+                    Err(_) => reject(StatusCode::INTERNAL_SERVER_ERROR),
+                }
+            }
+            Ok(_) => reject(StatusCode::INTERNAL_SERVER_ERROR),
             Err(_) => reject(StatusCode::BAD_REQUEST),
         }
     } else {
@@ -174,6 +292,7 @@ async fn browser_line(
 async fn browser_start(
     surface: Arc<RecordingSurface>,
     application: &Value,
+    model_id: &str,
     script: &std::path::Path,
     node: &std::path::Path,
     browser: &std::path::Path,
@@ -191,6 +310,18 @@ async fn browser_start(
     let host = BrowserSurface {
         surface,
         authority: authority.clone(),
+        intent_version: intent_version(application),
+        model_id: (intent_version(application) == VIEW_INTENT_VERSION_2)
+            .then(|| model_id.to_owned()),
+        binding_path: (intent_version(application) == VIEW_INTENT_VERSION_2).then(|| {
+            format!(
+                "/{}.js",
+                application["cargo_name"]
+                    .as_str()
+                    .unwrap_or("")
+                    .replace('-', "_")
+            )
+        }),
     };
     let server = tokio::spawn(async move {
         axum::serve(
@@ -212,17 +343,15 @@ async fn browser_start(
         .stderr(Stdio::inherit())
         .kill_on_drop(true)
         .spawn()?;
+    let mut browser_input = json!({"origin":format!("http://{authority}"), "application":application, "browser_executable":browser});
+    if intent_version(application) == VIEW_INTENT_VERSION_2 {
+        browser_input["model_id"] = json!(model_id);
+    }
     child
         .stdin
         .as_mut()
         .ok_or("browser stdin missing")?
-        .write_all(
-            format!(
-                "{}\n",
-                json!({"origin":format!("http://{authority}"), "application":application, "browser_executable":browser})
-            )
-            .as_bytes(),
-        )
+        .write_all(format!("{}\n", browser_input).as_bytes())
         .await?;
     let mut reader = BufReader::new(child.stdout.take().ok_or("browser stdout missing")?);
     let live = browser_line(&mut reader).await?;
@@ -280,6 +409,7 @@ fn allocation_boundary(
             "prismpm/text-application/1"
                 | "prismpm/text-application/2"
                 | "prismpm/text-application/3"
+                | "prismpm/text-application/4"
         )
     ) {
         vectors
@@ -316,24 +446,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let archive = std::fs::read(archive_path)?;
     let wasm = std::fs::read(wasm_path)?;
-    let model: Value = serde_json::from_slice(&std::fs::read(model_path)?)?;
+    let model_bytes = std::fs::read(model_path)?;
+    let model_id = format!("{:x}", Sha256::digest(&model_bytes));
+    let model: Value = serde_json::from_slice(&model_bytes)?;
     let application = &model["application"];
+    let intent_version = intent_version(application);
+    let research = application["profile"].as_str() == Some("prismpm/text-application/4");
     // Match the production fail-fast check to authoritative upstream constants,
     // before guest invocation or any model-sized negative-case allocation.
-    if hologram_view_surface::MAX_INTENT_PAYLOAD_BYTES != 65_536
+    if VIEW_INTENT_VERSION != 1
+        || VIEW_INTENT_VERSION_2 != 2
+        || hologram_view_surface::MAX_INTENT_PAYLOAD_BYTES != 65_536
         || hologram_view_surface::MAX_INTENT_OUTPUT_BYTES != 1_048_576
+        || hologram_view_surface::MAX_INTENT_V2_PAYLOAD_BYTES != 2_097_152
+        || hologram_view_surface::MAX_INTENT_V2_OUTPUT_BYTES != 4_194_304
+        || intent_limits(VIEW_INTENT_VERSION)?.payload_bytes != 65_536
+        || intent_limits(VIEW_INTENT_VERSION)?.output_bytes != 1_048_576
+        || intent_limits(VIEW_INTENT_VERSION_2)?.payload_bytes != 2_097_152
+        || intent_limits(VIEW_INTENT_VERSION_2)?.output_bytes != 4_194_304
     {
         return Err("pinned portable View transport limits changed".into());
     }
+    let limits = intent_limits(intent_version)?;
     for (field, maximum) in [
-        (
-            "request_maximum",
-            hologram_view_surface::MAX_INTENT_PAYLOAD_BYTES,
-        ),
-        (
-            "response_maximum",
-            hologram_view_surface::MAX_INTENT_OUTPUT_BYTES,
-        ),
+        ("request_maximum", limits.payload_bytes),
+        ("response_maximum", limits.output_bytes),
     ] {
         if application[field]
             .as_u64()
@@ -410,6 +547,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut intent_count = 0usize;
+    let mut intent_transport_rejections = 0usize;
     let mut lifecycle_request = None;
     for vector in vectors {
         let request = bytes(vector, "request")?;
@@ -422,20 +560,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (String::from_utf8(request), String::from_utf8(response))
         {
             let request = ViewIntentRequest {
-                version: VIEW_INTENT_VERSION,
+                version: intent_version,
                 name: APPLICATION_INVOKE_INTENT.to_owned(),
                 payload,
             };
+            let oversized = request.payload.len() > limits.payload_bytes;
             let intent = attachment
                 .intents
                 .handle(&attachment.id, request.clone())
-                .await?;
-            if intent.version != VIEW_INTENT_VERSION || intent.outputs != vec![expected.clone()] {
-                return Err("portable View intent disagrees with a modeled vector".into());
+                .await;
+            if research && oversized {
+                if intent.is_ok() {
+                    return Err("oversized modeled UTF-8 intent was admitted".into());
+                }
+                intent_transport_rejections += 1;
+            } else {
+                let intent = intent?;
+                if intent.version != intent_version || intent.outputs != vec![expected.clone()] {
+                    return Err("portable View intent disagrees with a modeled vector".into());
+                }
+                lifecycle_request.get_or_insert((request, expected));
+                intent_count += 1;
             }
-            lifecycle_request.get_or_insert((request, expected));
-            intent_count += 1;
         }
+    }
+    if research {
+        // This is one byte beyond the decoded budget, despite containing fewer
+        // Unicode scalars than that budget. A character-count mutant must fail.
+        let mut payload = "é".repeat(limits.payload_bytes / 2);
+        payload.push('x');
+        if payload.len() != limits.payload_bytes + 1 {
+            return Err("UTF-8 transport-boundary fixture has the wrong byte length".into());
+        }
+        let request = ViewIntentRequest {
+            version: intent_version,
+            name: APPLICATION_INVOKE_INTENT.to_owned(),
+            payload,
+        };
+        if attachment
+            .intents
+            .handle(&attachment.id, request)
+            .await
+            .is_ok()
+        {
+            return Err("first over-bound multibyte UTF-8 intent was admitted".into());
+        }
+        intent_transport_rejections += 1;
     }
     let allocation_cap = usize::try_from(
         application["guest_allocation_maximum"]
@@ -466,6 +636,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut browser, mut browser_output, server, stopped) = browser_start(
         surface.clone(),
         application,
+        &model_id,
         std::path::Path::new(&browser_script),
         std::path::Path::new(&node),
         std::path::Path::new(&browser),
@@ -478,7 +649,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .intents
         .handle(&attachment.id, lifecycle_request.clone())
         .await?;
-    if live.version != VIEW_INTENT_VERSION || live.outputs != vec![expected] {
+    if live.version != intent_version || live.outputs != vec![expected] {
         return Err("lifecycle intent no longer succeeds before stop".into());
     }
     session.stop().await?;
@@ -562,22 +733,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     runtime.unload(&resident_kappa).await?;
     runtime.unload(&resident_kappa).await?;
 
-    println!(
-        "{}",
-        serde_json::to_string(&json!({
-            "application_kappa": inspection.application_kappa,
-            "archive_fingerprint": inspection.archive_fingerprint,
-            "archive_kappa": session.archive_kappa(),
-            "direct_vectors": vectors.len(),
-            "footer_verified": true,
-            "guest_allocation_boundary": "verified",
-            "intent_vectors": intent_count,
-            "resident_vectors": vectors.len(),
-            "portable_browser": portable_browser,
-            "schema": "prismpm/hologram-oracle/2",
-            "view_attached": 1,
-            "view_detached": 1
-        }))?
-    );
+    let mut report = json!({
+        "application_kappa": inspection.application_kappa,
+        "archive_fingerprint": inspection.archive_fingerprint,
+        "archive_kappa": session.archive_kappa(),
+        "direct_vectors": vectors.len(),
+        "footer_verified": true,
+        "guest_allocation_boundary": "verified",
+        "intent_vectors": intent_count,
+        "resident_vectors": vectors.len(),
+        "portable_browser": portable_browser,
+        "schema": "prismpm/hologram-oracle/2",
+        "view_attached": 1,
+        "view_detached": 1
+    });
+    if research {
+        report["intent_transport_rejections"] = json!(intent_transport_rejections);
+    }
+    println!("{}", serde_json::to_string(&report)?);
     Ok(())
 }

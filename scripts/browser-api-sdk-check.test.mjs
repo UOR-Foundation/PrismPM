@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import {spawnSync,execFileSync} from 'node:child_process';
-import {existsSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync,openSync,closeSync,ftruncateSync} from 'node:fs';
+import {spawn,spawnSync,execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {existsSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,renameSync,symlinkSync,openSync,closeSync,ftruncateSync,chmodSync,lstatSync,readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,relative,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -222,7 +223,7 @@ test('new installed Node suites retain exact complete owning files and deadlines
  assert.equal(custody?.minimum, 11); assert.equal(custody?.deadline, 3600000);
  const semantic = suites.find(row => row.id === 'DK-38');
  assert.deepEqual(semantic?.files, ['tests/browser-semantic-presentation/wire.test.mjs', 'tests/browser-semantic-presentation/dom.test.mjs', 'sdk/browser/semantic-presentation.test.mjs']);
- assert.equal(semantic?.minimum, 29); assert.equal(semantic?.deadline, 3600000);
+ assert.equal(semantic?.minimum, 30); assert.equal(semantic?.deadline, 3600000);
  const journal = suites.find(row => row.id === 'DK-24');
  assert.deepEqual(journal?.files, ['sdk/browser/operation-journal.test.mjs']);
  assert.equal(journal?.minimum, 28); assert.equal(journal?.deadline, 3600000);
@@ -254,7 +255,7 @@ test('installed session kernel preserves its exact registered owner, complete so
 
 test('semantic owner registration preserves actual Rust files, minimum and deadline', async () => {
  const semantic = suites.find(row => row.id === 'DK-38');
- assert.ok(semantic); assert.equal(semantic.minimum, 29); assert.equal(semantic.deadline, 3600000);
+ assert.ok(semantic); assert.equal(semantic.minimum, 30); assert.equal(semantic.deadline, 3600000);
  const source = sdkSource('crates/conformance/src/cases/mod.rs');
  const owner = /"DK-38"\s*=>\s*\(\s*&\[([\s\S]*?)\],\s*(\d+),/.exec(source);
  assert.ok(owner); assert.equal(Number(owner[2]), semantic.minimum);
@@ -276,6 +277,83 @@ function stageGate(root,helper) {
  put(root,'sdk/account-genesis-artifact.mjs',sdkSource('sdk/account-genesis-artifact.mjs'));
  return join(root,'scripts/browser-api-sdk-check.test.mjs');
 }
+test('browser shell extracts every original read-only tree completely as the nonroot owner and refuses failed producers',t=>{
+ assert.equal(typeof process.getuid,'function');assert.ok(process.getuid()>0,'this permission regression must run as the real nonroot owner');
+ const shell=sdkSource('scripts/browser-api-sdk-check.sh'),setup=/^set [^\n]+$/m.exec(shell)?.[0];
+ assert.equal(setup,'set -euo pipefail');
+ const routes=[
+  ['$container:/opt/prismpm/share/conformance-root/$path','$sdk_work/source/$(dirname "$path")'],
+  ['$container:/opt/prismpm/browser/.','$sdk_work/browser'],
+  ['$container:/opt/prismpm/share/account-genesis/.','$sdk_work/share/account-genesis'],
+ ];
+ const selected=script=>{
+  const copies=routes.map(([from,to])=>{
+   const lines=script.split('\n').map(line=>line.trim()).filter(line=>line.startsWith(`docker container cp "${from}" `));
+   assert.equal(lines.length,1,'one actual installed-tree copy: '+from);
+   const line=lines[0],prefix=`docker container cp "${from}" - | `;
+   assert.ok(line.startsWith(prefix),'the original Docker copy must produce the archive on stdout: '+from);
+   const extract=line.slice(prefix.length);
+   assert.equal(extract,`tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "${to}"`,
+    'the selected original archive must use the existing owned parent and all nonroot extraction guards');
+   return {line,extract,at:script.indexOf(line)};
+  });
+  const verify='node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"',verified=script.indexOf(verify);
+  assert.equal(script.split(verify).length,2,'original complete installed-source verification remains mandatory');
+  assert.ok(script.includes('done < <(node "$helper" roots)'),'copy every original registered source root');
+  assert.ok(copies[0].at<verified&&verified<copies[1].at,'verify the complete source copy before module checks');
+  assert.ok(copies[1].at<script.indexOf('node "$helper" modules "$root" "$sdk_work/browser"'));
+  assert.ok(copies[2].at<script.indexOf('node "$helper" account-construction "$sdk_work" "$sdk_work/source.json"'));
+  return copies;
+ };
+ const copies=selected(shell);
+ for(const copy of copies){
+  assert.throws(()=>selected(shell.replace(copy.line,'true')));
+  for(const flag of ['--no-same-owner ','--no-same-permissions ','--delay-directory-restore '])
+   assert.throws(()=>selected(shell.replace(copy.line,copy.line.replace(flag,''))));
+ }
+ assert.throws(()=>selected(shell.replace('node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"','true')));
+ const root=mkdtempSync(join(tmpdir(),'prismpm-browser-copy-permissions-'));
+ const writable=path=>{
+  const s=lstatSync(path);assert.ok(!s.isSymbolicLink());chmodSync(path,(s.mode&0o777)|(s.isDirectory()?0o700:0o600));
+  if(s.isDirectory())for(const name of readdirSync(path))writable(join(path,name));
+ };
+ t.after(()=>{writable(root);rmSync(root,{recursive:true,force:true});});
+ const inventory=directory=>{
+  const rows=[];const walk=(path,name)=>{
+   const s=lstatSync(path);assert.ok(!s.isSymbolicLink());assert.equal(s.uid,process.getuid());assert.equal(s.gid,process.getgid());
+   if(s.isDirectory()){rows.push({path:name,kind:'directory'});for(const child of readdirSync(path).sort())walk(join(path,child),name?name+'/'+child:child);}
+   else{assert.ok(s.isFile());rows.push({path:name,kind:'file',bytes:readFileSync(path).toString('hex')});}
+  };walk(directory,'');return rows;
+ };
+ const tarVersion=spawnSync('tar',['--version'],{encoding:'utf8',timeout:5000,maxBuffer:1048576});
+ assert.equal(tarVersion.error,undefined);assert.equal(tarVersion.status,0);assert.match(tarVersion.stdout,/^tar \(GNU tar\)/);
+ for(const [index,copy]of copies.entries()){
+  const parent=join(root,'input-'+index),entry=index===0?'.cargo':'.',input=index===0?join(parent,entry):parent;
+  mkdirSync(join(input,'nested','empty-directory'),{recursive:true});
+  writeFileSync(join(input,'config.toml'),'[build]\n# complete original copy\n');
+  writeFileSync(join(input,'nested','binary'),Buffer.from([0,255,128,10,0,42]));writeFileSync(join(input,'nested','empty-file'),Buffer.alloc(0));
+  const expected=inventory(input);
+  for(const path of [input,join(input,'nested'),join(input,'nested','empty-directory')])chmodSync(path,0o555);
+  for(const path of [join(input,'config.toml'),join(input,'nested','binary'),join(input,'nested','empty-file')])chmodSync(path,0o444);
+  const archive=spawnSync('tar',['--create','--format=gnu','--numeric-owner','--owner=0','--group=0','-C',parent,'-f','-',entry],
+   {timeout:5000,maxBuffer:1048576,env:{PATH:process.env.PATH,LC_ALL:'C'}});
+  assert.equal(archive.error,undefined);assert.equal(archive.signal,null);assert.equal(archive.status,0,archive.stderr.toString());
+  const execute=(producer,options=setup)=>{
+   const work=mkdtempSync(join(root,'output-'));
+   for(const path of ['source','browser','share/account-genesis'])mkdirSync(join(work,path),{recursive:true});
+   const result=spawnSync('bash',['--noprofile','--norc','-c',options+'\n'+producer+' | '+copy.extract],
+    {input:archive.stdout,timeout:5000,maxBuffer:1048576,env:{PATH:process.env.PATH,LC_ALL:'C',sdk_work:work,path:'.cargo'}});
+   assert.equal(result.error,undefined);assert.equal(result.signal,null);
+   const destination=join(work,index===0?'source/.cargo':index===1?'browser':'share/account-genesis');
+   assert.deepEqual(inventory(destination),expected,'all nested, empty and binary members survive the actual selected extractor');
+   assert.deepEqual(inventory(input),expected,'the original read-only fixture is never changed');return result;
+  };
+  const good=execute('cat');assert.equal(good.status,0,good.stderr.toString());
+  const refuses=result=>assert.equal(result.status,17,'the original archive producer failure must survive successful extraction');
+  refuses(execute('{ cat; exit 17; }'));
+  const omitted=execute('{ cat; exit 17; }',setup.replace(' pipefail',''));assert.equal(omitted.status,0);assert.throws(()=>refuses(omitted));
+ }
+});
 test('actual installed module trees reject missing extra changed and aliased module bytes', async t => {
  assert.equal(typeof browserGate.verifyModules, 'function');
  const source = temporary(t), installed = temporary(t);
@@ -377,7 +455,7 @@ function testFixtures(root){for(const suite of [...suites,...fallbackSuites,...s
 test('standalone registry retains all six original inventories and distinct deadlines',async ()=>{
  const expected=[
   ['Session Projection',3600000,['tests/browser-session-journal/projection.test.mjs','tests/browser-session-journal/projection-owner.test.mjs'],[7,1]],
-  ['Session Reservation',3600000,['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],[10,23]],
+  ['Session Reservation',3600000,['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],[11,23]],
   ['Session Payload',3600000,['tests/browser-session-payloads/component.test.mjs','tests/browser-session-payloads/owner.test.mjs'],[4,30]],
   ['Session Recovery Frames',3600000,['tests/browser-session-recovery-frames/wire.test.mjs','tests/browser-session-recovery-frames/owner.test.mjs'],[3,1]],
   ['Session Journal Recovery',5500000,['tests/browser-session-journal-recovery/component.test.mjs','tests/browser-session-journal-recovery/owner.test.mjs'],[7,1]],
@@ -391,7 +469,7 @@ test('standalone registry retains all six original inventories and distinct dead
   for(const file of row.files)assert(sourceRoots.some(path=>file.startsWith(path+'/')));
   assert.match(sdkSource(row.files[1]),row.id==='Session Journal Recovery'?/timeout: 5400000/:/timeout:\s*3500000/);
  }
- assert.equal(standaloneSuites.reduce((sum,row)=>sum+row.minimum,0),109);
+ assert.equal(standaloneSuites.reduce((sum,row)=>sum+row.minimum,0),110);
  assert.equal(suites.length,26);assert.deepEqual(fallbackSuites,independentOwners);
 });
 
@@ -509,7 +587,7 @@ test('standalone file counts reject coherent redistribution even when the aggreg
   await assert.rejects(()=>runStandaloneSuites(root,spawnSync,()=>{}),/exact original standalone file test count/);
   put(root,first,testSource(one));put(root,second,testSource(two));
  }
- assert.equal((await runStandaloneSuites(root,spawnSync,()=>{})).reduce((sum,row)=>sum+row.tests,0),109);
+ assert.equal((await runStandaloneSuites(root,spawnSync,()=>{})).reduce((sum,row)=>sum+row.tests,0),110);
 });
 
 test('standalone unsuccessful original file completion cannot satisfy a passing aggregate',async t=>{
@@ -639,7 +717,7 @@ test('semantic suite refuses missing or empty siblings even with surplus real pa
 test('semantic registry regression kills owner, minimum and deadline substitutions', async t => {
  const original = sdkSource('scripts/browser-api-sdk-check.mjs');
  const row = original.split('\n').find(line => line.includes("{id:'DK-38'")); assert.ok(row);
- const changes = [row.replace('minimum:29', 'minimum:28'),
+ const changes = [row.replace('minimum:30', 'minimum:29'),
   row.replace('wire.test.mjs', 'substitute.test.mjs')];
  const mutated = changes.map(changed => original.replace(row, changed));
  const deadline = "deadline:row.id==='DK-35'?7200000:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-37','DK-38','ST-17','HO-15'].includes(row.id)?3600000:1500000";
@@ -661,7 +739,7 @@ test('installed semantic gate rejects omission of each false-evidence safeguard'
  const root = temporary(t); testFixtures(root);
  const semantic = suites.find(row => row.id === 'DK-38');
  const safeguards = ['missing oracle', 'launcher failure', 'closed page', 'no-op mutation', 'wrong semantic check'];
- const observations = ['immutable observations', 'exact journey and call inventory',
+ const observations = ['private retained evidence', 'immutable observations', 'exact journey and call inventory',
   'closed transcript engine', 'complete browser and mutant inventories'];
  const engineChecks = ['firefox generated journey', 'webkit generated journey',
   'firefox adapter mutants', 'webkit adapter mutants'];
@@ -676,7 +754,7 @@ test('installed semantic gate rejects omission of each false-evidence safeguard'
   + fixtures[index].filter(name => name !== omitted).map(name => `test(${JSON.stringify(name)},()=>{});\n`).join(''));
  fixtures.forEach((_, index) => write(index));
  assert.deepEqual((await runSuites(root, spawnSync, () => {})).find(row => row.id === 'DK-38'),
-  {id: 'DK-38', tests: 29});
+  {id: 'DK-38', tests: 30});
  for (const [index, required] of [[0, observations], [1, safeguards], [2, engineChecks]]) {
   for (const omitted of required) {
    write(index, omitted);
@@ -902,4 +980,350 @@ test('owning installed-module tests kill removed exact-tree and byte-equality gu
   assert.equal(result.error, undefined); assert.equal(result.status, 1);
   assert.match(result.stdout, /Missing expected exception/);
  }
+});
+
+
+test('installed suite diagnostics finish the real pipe before an actual failed child is reported', {timeout: 20000}, async t => {
+ const root=temporary(t);testFixtures(root);
+ stageGate(root,sdkSource('scripts/browser-api-sdk-check.mjs'));
+ const length=4*1024*1024,tail='\nFAILED-CHILD-STDOUT-END\n',err='FAILED-CHILD-STDERR-END\n';
+ const payload='x'.repeat(length)+tail;
+ // The first subprocess genuinely exits1 after flushing both original streams.
+ // Only the gate's forwarding into the second, deliberately backpressured pipe
+ // is under test. No compiler, browser or installed-SDK owner is substituted.
+ const failureSource=[
+  "const write=(stream,text)=>new Promise((resolve,reject)=>stream.write(text,error=>error?reject(error):resolve()));",
+  'await write(process.stdout,'+JSON.stringify('x')+'.repeat('+length+')+'+JSON.stringify(tail)+');',
+  'await write(process.stderr,'+JSON.stringify(err)+');',
+  'process.exitCode=1;',
+ ].join('\n');
+ const runner=join(root,'failed-suite-pipe.mjs');
+ put(root,'failed-suite-pipe.mjs',[
+  "import {spawnSync} from 'node:child_process';",
+  "import {runStandaloneSuites} from './scripts/browser-api-sdk-check.mjs';",
+  'const failureSource='+JSON.stringify(failureSource)+';',
+  'await runStandaloneSuites('+JSON.stringify(root)+',(_program,_args,options)=>spawnSync(process.execPath,',
+  " ['--input-type=module','-e',failureSource],{encoding:'utf8',env:options.env,timeout:5000,maxBuffer:8*1024*1024}));",
+ ].join('\n'));
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const child=spawn(process.execPath,[runner],{cwd:root,env,stdio:['ignore','pipe','pipe']});
+ const stdout=[],stderr=[];let outputBytes=0,errorBytes=0,launchError,overflow=false;
+ const stop=()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');};
+ const watchdog=setTimeout(stop,10000);watchdog.unref();
+ const closed=new Promise(resolve=>{
+  child.once('error',error=>{launchError=error;});
+  child.once('close',(status,signal)=>resolve({status,signal}));
+ });
+ child.stdout.on('data',bytes=>{outputBytes+=bytes.length;if(outputBytes>8*1024*1024){overflow=true;stop();}else stdout.push(bytes);});
+ child.stderr.on('data',bytes=>{errorBytes+=bytes.length;if(errorBytes>1024*1024){overflow=true;stop();}else stderr.push(bytes);});
+ child.stdout.pause();
+ const resume=setTimeout(()=>child.stdout.resume(),100);resume.unref();
+ t.after(()=>{clearTimeout(resume);clearTimeout(watchdog);stop();});
+ const result=await closed;clearTimeout(resume);clearTimeout(watchdog);
+ assert.ifError(launchError);assert.equal(overflow,false);assert.equal(result.signal,null);assert.equal(result.status,1);
+ assert.match(Buffer.concat(stderr).toString(),/complete owning Session Projection/);
+ const actual=Buffer.concat(stdout),expected=Buffer.from('SDK browser suite Session Projection\n'+payload+err);
+ assert.equal(actual.length,expected.length,'complete failed-child output must precede nonzero gate exit');
+ assert.equal(createHash('sha256').update(actual).digest('hex'),createHash('sha256').update(expected).digest('hex'));
+});
+
+test('installed suite async forwarding preserves launch and status failures when output also fails', async t => {
+ for(const mode of ['launch','status'])await t.test(mode,async t=>{
+  const root=temporary(t);testFixtures(root);
+  const original=Object.assign(new Error('original launch failure'),{result:{stdout:Buffer.from('ORIGINAL-OUT\n'),stderr:Buffer.from('ORIGINAL-ERR\n')}});
+  const launch=()=>{if(mode==='launch')throw original;return {error:undefined,status:1,signal:null,stdout:'ORIGINAL-OUT\n',stderr:'ORIGINAL-ERR\n'};};
+  let delivered=false,actual;
+  await assert.rejects(()=>runStandaloneSuites(root,launch,async text=>{
+   await new Promise(resolve=>setImmediate(resolve));delivered=true;actual=text;
+  }),error=>{
+   assert.equal(delivered,true,'async emission must finish before reporting the primary failure');
+   assert.equal(actual,'SDK browser suite Session Projection\nORIGINAL-OUT\nORIGINAL-ERR\n');
+   if(mode==='launch')assert.equal(error,original);else assert.match(error.message,/complete owning Session Projection/);
+   return true;
+  });
+  const forwarding=new Error('actual diagnostic forwarding failure');
+  await assert.rejects(()=>runStandaloneSuites(root,launch,()=>Promise.reject(forwarding)),error=>{
+   assert(error instanceof AggregateError,'neither primary failure nor forwarding failure may be hidden');
+   assert.equal(error.errors.length,2);assert.equal(error.errors[1],forwarding);
+   if(mode==='launch')assert.equal(error.errors[0],original);else assert.match(error.errors[0].message,/complete owning Session Projection/);
+   assert.equal(error.cause,error.errors[0]);return true;
+  });
+ });
+});
+
+
+test('installed suite default stdout preserves original failure on a real broken pipe', {timeout: 20000}, async t => {
+ const root=temporary(t);testFixtures(root);
+ stageGate(root,sdkSource('scripts/browser-api-sdk-check.mjs'));
+ const failureSource=[
+  "const write=(stream,text)=>new Promise((resolve,reject)=>stream.write(text,error=>error?reject(error):resolve()));",
+  'await write(process.stdout,'+JSON.stringify('BROKEN-ORIGINAL-OUT\n')+');',
+  'await write(process.stderr,'+JSON.stringify('BROKEN-ORIGINAL-ERR\n')+');',
+  'process.exitCode=1;',
+ ].join('\n');
+ const runner=join(root,'broken-suite-pipe.mjs');
+ put(root,'broken-suite-pipe.mjs',[
+  "import {spawnSync} from 'node:child_process';",
+  "import {runStandaloneSuites} from './scripts/browser-api-sdk-check.mjs';",
+  "const write=(stream,text)=>new Promise((resolve,reject)=>stream.write(text,error=>error?reject(error):resolve()));",
+  'const failureSource='+JSON.stringify(failureSource)+';let original;',
+  'await write(process.stderr,'+JSON.stringify('BROKEN-SINK-READY\n')+');',
+  "await new Promise(resolve=>process.stdin.once('data',resolve));",
+  'try{await runStandaloneSuites('+JSON.stringify(root)+',(_program,_args,options)=>{',
+  " original=spawnSync(process.execPath,['--input-type=module','-e',failureSource],{encoding:'utf8',env:options.env,timeout:5000,maxBuffer:1024*1024});return original;});}",
+  'catch(error){const row={original_status:original?.status,aggregate:error instanceof AggregateError,',
+  ' primary_message:error.errors?.[0]?.message??error.message,forwarding_code:error.errors?.[1]?.code??null,',
+  ' cause_is_primary:error.cause===error.errors?.[0]};',
+  ' await write(process.stderr,'+JSON.stringify('BROKEN-SINK-EVIDENCE ')+'+JSON.stringify(row)+'+JSON.stringify('\n')+');process.exitCode=1;}',
+ ].join('\n'));
+ const env={...process.env};delete env.NODE_TEST_CONTEXT;
+ const child=spawn(process.execPath,[runner],{cwd:root,env,stdio:['pipe','pipe','pipe']});
+ const stderr=[];let size=0,launchError,inputError,overflow=false,closedReader=false;
+ const stop=()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');};
+ const watchdog=setTimeout(stop,10000);watchdog.unref();
+ const done=new Promise(resolve=>{
+  child.once('error',error=>{launchError=error;});
+  child.once('close',(status,signal)=>resolve({status,signal}));
+ });
+ child.stdin.on('error',error=>{inputError=error;});
+ child.stderr.on('data',bytes=>{
+  size+=bytes.length;if(size>1024*1024){overflow=true;stop();return;}stderr.push(bytes);
+  if(!closedReader&&Buffer.concat(stderr).toString().includes('BROKEN-SINK-READY\n')){
+   closedReader=true;
+   child.stdout.once('close',()=>child.stdin.end('go\n'));
+   child.stdout.destroy();
+  }
+ });
+ t.after(()=>{clearTimeout(watchdog);stop();});
+ const result=await done;clearTimeout(watchdog);
+ assert.ifError(launchError);assert.ifError(inputError);assert.equal(overflow,false);assert.equal(closedReader,true);
+ assert.equal(result.signal,null);assert.equal(result.status,1);
+ const text=Buffer.concat(stderr).toString(),prefix='BROKEN-SINK-EVIDENCE ';
+ const rows=text.split('\n').filter(line=>line.startsWith(prefix));assert.equal(rows.length,1,'actual default-emitter failure record');
+ const actual=JSON.parse(rows[0].slice(prefix.length));
+ assert.equal(actual.original_status,1);assert.equal(actual.aggregate,true);
+ assert.match(actual.primary_message,/complete owning Session Projection/);
+ assert.equal(actual.forwarding_code,'EPIPE');assert.equal(actual.cause_is_primary,true);
+ assert(!text.includes("Unhandled 'error' event"),'owned stdout error must not escape aggregation');
+});
+
+
+// Private-scratch lifecycle fixtures exercise orchestration, never installed SDK acceptance.
+test('all original owning executions retire successful private scratch before the next launch',async t=>{
+ const root=temporary(t);testFixtures(root);const seen=[],forwarded=[];
+ const expectedEnv={...process.env};delete expectedEnv.NODE_TEST_CONTEXT;
+ const launch=(program,args,options)=>{
+  if(seen.length)assert.equal(existsSync(seen.at(-1)),false,'successful scratch survived into the next owner');
+  const scratch=options.env.TMPDIR;assert.equal(typeof scratch,'string','private suite TMPDIR required');
+  assert.match(scratch.slice(scratch.lastIndexOf('/')+1),/^prismpm-sdk-suite-[A-Za-z0-9]+$/);
+  assert(!seen.includes(scratch),'each original owner needs a fresh scratch root');
+  assert.equal(lstatSync(scratch).mode&0o077,0);assert.equal(lstatSync(scratch).uid,process.getuid());
+  assert.deepEqual(options.env,{...expectedEnv,TMPDIR:scratch});seen.push(scratch);
+  t.after(()=>rmSync(scratch,{recursive:true,force:true}));
+  put(scratch,'original-owner-marker','retained until complete output and receipts\n');
+  return spawnSync(program,args,options);
+ };
+ const emit=text=>{assert(existsSync(seen.at(-1)),'scratch retired before original diagnostic forwarding');forwarded.push(text);};
+ const completed=await runSuites(root,launch,emit);
+ const all=[...suites,...fallbackSuites,...standaloneSuites];
+ assert.deepEqual(completed.map(row=>row.id),all.map(row=>row.id));
+ assert.equal(seen.length,all.length);assert.equal(new Set(seen).size,all.length);assert.equal(forwarded.length,all.length);
+ for(const path of seen)assert.equal(existsSync(path),false,'a successful owner scratch remains');
+});
+
+test('failed launch status forwarding or incomplete owning receipts preserve private scratch',async t=>{
+ for(const defect of ['launch','status','forwarding','TAP','file-receipt']){
+  const root=temporary(t);testFixtures(root);let scratch;
+  const launch=(program,args,options)=>{
+   scratch=options.env.TMPDIR;assert.equal(typeof scratch,'string','private suite TMPDIR required');
+   t.after(()=>rmSync(scratch,{recursive:true,force:true}));put(scratch,'original-owner-marker',defect);
+   if(defect==='launch')throw Error('planted launch failure');
+   const result=spawnSync(program,args,options);assert.equal(result.status,0);
+   if(defect==='status')return {...result,status:1};
+   if(defect==='TAP')result.stdout=result.stdout.replace(/^# pass \d+$/m,'# pass 0');
+   if(defect==='file-receipt')result.stdout=result.stdout.replace(/^# prismpm-owning-file [^\n]*\n/m,'');
+   return result;
+  };
+  const emit=()=>{if(defect==='forwarding')throw Error('planted forwarding failure');};
+  const witness={launch:/planted launch failure/,status:/complete owning DK-07/,forwarding:/planted forwarding failure/,
+   TAP:/incomplete pass set/,'file-receipt':/complete selected test file summaries/}[defect];
+  await assert.rejects(()=>runSuites(root,launch,emit),witness,defect);
+  assert.equal(readFileSync(join(scratch,'original-owner-marker'),'utf8'),defect,'failed scratch was destroyed');
+ }
+});
+
+test('successful scratch retirement refuses a replaced aliased or less-private root',async t=>{
+ for(const defect of ['replaced','alias','mode']){
+  const root=temporary(t);testFixtures(root);let scratch,saved;
+  const launch=(program,args,options)=>{
+   scratch=options.env.TMPDIR;assert.equal(typeof scratch,'string','private suite TMPDIR required');saved=scratch+'.saved';
+   t.after(()=>{rmSync(scratch,{recursive:true,force:true});rmSync(saved,{recursive:true,force:true});});
+   put(scratch,'original-owner-marker',defect);const result=spawnSync(program,args,options);assert.equal(result.status,0);
+   if(defect==='mode')chmodSync(scratch,0o755);
+   else{renameSync(scratch,saved);if(defect==='alias')symlinkSync(saved,scratch);else mkdirSync(scratch,{mode:0o700});}
+   return result;
+  };
+  await assert.rejects(()=>runSuites(root,launch,()=>{}),/same completed owning suite scratch|unaliased completed owning suite scratch|owned private completed owning suite scratch/,defect);
+  assert.equal(readFileSync(join(defect==='mode'?scratch:saved,'original-owner-marker'),'utf8'),defect,'refused scratch was destroyed');
+  assert(lstatSync(scratch),'refused replacement/alias must remain observable');
+ }
+});
+
+test('the owning lifecycle control detects an omitted successful-scratch retirement',async t=>{
+ const root=temporary(t);testFixtures(root);const original=sdkSource('scripts/browser-api-sdk-check.mjs');
+ const marker='  retireSuccessfulSuiteScratch(scratch);';assert.equal(original.split(marker).length,2,'one actual retirement boundary');
+ stageGate(root,original.replace(marker,'  // planted missing successful scratch retirement'));
+ const run=(await import(pathToFileURL(join(root,'scripts/browser-api-sdk-check.mjs')).href)).runSuites;
+ const seen=[];let calls=0;
+ const launch=(program,args,options)=>{
+  const scratch=options.env.TMPDIR;assert.equal(typeof scratch,'string');
+  t.after(()=>rmSync(scratch,{recursive:true,force:true}));
+  calls++;if(seen.length)assert.equal(existsSync(seen.at(-1)),false,'successful scratch survived into the next owner');
+  seen.push(scratch);return spawnSync(program,args,options);
+ };
+ await assert.rejects(()=>run(root,launch,()=>{}),/successful scratch survived into the next owner/);
+ assert.equal(calls,2,'actual first owner passes before the omission is observed at the next launch');
+ assert.equal(seen.length,1);assert(existsSync(seen[0]),'the planted omission must leave actual private scratch');
+});
+
+
+// Whole-wrapper command recordings qualify only lifecycle controls, never Docker/SDK behavior.
+function recordBrowserWrapper(t,script,defect='') {
+ const root=temporary(t),bin=join(root,'fixture-bin'),state=join(root,'fixture-state.json');
+ put(root,'scripts/browser-api-sdk-check.sh',script);put(root,'sdk/devcontainer-init.sh','fixture entrypoint\n');
+ put(root,'scripts/browser-api-sdk-check.mjs','fixture helper\n');
+ writeFileSync(state,JSON.stringify({defect,next:1,volume:null,volume_created:false,containers:{},events:[]}));
+ put(bin,'docker','#!/usr/bin/python3\n'+VOLUME_DOCKER_FIXTURE);
+ put(bin,'git',"#!/usr/bin/python3\nimport sys\nif sys.argv[-2:]==['rev-parse','HEAD']:print('a'*40)\nelif sys.argv[-2:]==['status','--porcelain']:pass\nelse:sys.exit(99)\n");
+ put(bin,'node',"#!/usr/bin/python3\nimport json,sys\nm=sys.argv[2]\nif m=='capture':print('{}')\nelif m=='roots':print('fixture-root')\nelif m=='image':json.load(sys.stdin)\n");
+ for(const file of ['docker','git','node'])chmodSync(join(bin,file),0o755);
+ const result=spawnSync('/bin/bash',[join(root,'scripts/browser-api-sdk-check.sh'),image,revision],
+  {encoding:'utf8',timeout:20000,maxBuffer:1048576,env:{...process.env,PATH:bin+':'+process.env.PATH,
+   PRISM_VOLUME_FIXTURE_STATE:state,PRISM_VOLUME_FIXTURE_IMAGE:image}});
+ assert.equal(result.error,undefined,'bounded actual wrapper fixture');assert.equal(result.signal,null);
+ return {result,state:JSON.parse(readFileSync(state,'utf8'))};
+}
+function requireBrowserWrapperLifecycle(observation) {
+ const {result,state}=observation,events=state.events,creates=events.filter(row=>row.argv[0]==='container'&&row.argv[1]==='create');
+ assert.equal(result.status,0,result.stderr);assert(result.stdout.includes('browser SDK closure passed:'));
+ assert.equal(events.filter(row=>row.argv[0]==='volume'&&row.argv[1]==='create').length,1,'missing private same-daemon volume');
+ assert.deepEqual(creates.map(row=>row.role),['copy','init','owner']);
+ const init=creates.find(row=>row.role==='init'),owner=creates.find(row=>row.role==='owner');
+ for(const row of [init,owner])assert(row.argv.some(arg=>arg.includes('target=/tmp,volume-nocopy')),'private volume-nocopy required');
+ assert(init.argv.includes('0:0')&&owner.argv.includes('1000:1000'));
+ const started=events.filter(row=>row.argv[0]==='container'&&row.argv[1]==='start');
+ assert.equal(started.find(row=>row.role==='init').init_contract,true,'exact fresh-root sole-chmod initializer');
+ assert.equal(started.find(row=>row.role==='owner').admission,true,'missing actual filesystem 12 GiB admission');
+ assert.equal(started.find(row=>row.role==='owner').exec_original,true,'original owning Node must replace preflight shell');
+ assert.equal(events.filter(row=>row.argv[0]==='container'&&row.argv[1]==='rm').some(row=>row.forced),false);
+ assert.equal(Object.keys(state.containers).length,0);assert.equal(state.volume,null,'actual same-name volume absence required');
+ const removed=events.findIndex(row=>row.argv[0]==='volume'&&row.argv[1]==='rm');
+ assert(removed>=0&&events.slice(removed+1).some(row=>row.argv[0]==='volume'&&row.argv[1]==='ls'),'checked volume absence after normal removal');
+}
+const VOLUME_DOCKER_FIXTURE=String.raw`import io,json,os,sys,tarfile
+from pathlib import Path
+p=Path(os.environ['PRISM_VOLUME_FIXTURE_STATE']);a=sys.argv[1:];v=json.loads(p.read_text());d=v['defect'];event={'argv':a};v['events'].append(event)
+def done(code=0,out=''):
+ p.write_text(json.dumps(v));sys.stdout.write(out);sys.exit(code)
+def opt(flag,default=None):
+ return a[a.index(flag)+1] if flag in a else default
+if a[0]=='pull':done(0,'fixture pull\n')
+if a[:2]==['image','inspect']:done(0,'sha256:'+'f'*64+'\n' if '--format'in a else '[{}]\n')
+if a[0]=='volume':
+ action=a[1];name=a[-1]
+ if action=='ls':
+  if d=='ls-failure'and not v['volume_created']:done(37)
+  done(0,(v['volume']['name']+'\n')if v['volume'] else '')
+ if action=='create':
+  nonce=opt('--label').split('=',1)[1];v['volume']={'name':name,'nonce':nonce,'mode':None};v['volume_created']=True;done(0,name+'\n')
+ if action=='inspect':
+  if not v['volume']:done(1)
+  r=v['volume'];nonce='wrong-nonce'if d=='wrong-volume-nonce'else r['nonce'];done(0,f"{r['name']} local local 0 1 {nonce}\n")
+ if action=='rm':
+  if d=='owner-and-cleanup-failure':done(45)
+  if d!='volume-removal-lied':v['volume']=None
+  done(0,name+'\n')
+if a[0]=='container':
+ action=a[1]
+ if action=='ls':
+  pattern=opt('--filter','');rows=list(v['containers'].values())
+  if pattern.startswith('id='):rows=[r for r in rows if r['id']==pattern[3:]]
+  elif pattern.startswith('name=^/'):rows=[r for r in rows if r['name']==pattern[7:-1]]
+  done(0,''.join((r['name']if opt('--format')=='{{.Names}}'else r['id'][:12])+'\n'for r in rows))
+ if action=='create':
+  labels=[a[i+1]for i,x in enumerate(a)if x=='--label'];labels=dict(x.split('=',1)for x in labels)
+  name=opt('--name','baseline-'+str(v['next']));role=labels.get('org.uor.prismpm.browser-sdk-role','copy'if opt('--entrypoint')=='/usr/bin/true'else'owner')
+  cid=f"{v['next']:064x}";v['next']+=1;cmd=a[a.index(os.environ['PRISM_VOLUME_FIXTURE_IMAGE'])+1:]
+  r={'id':cid,'name':name,'role':role,'nonce':labels.get('org.uor.prismpm.browser-sdk-private',''),'running':False,'pid':0,'exit':0,'create':a,'cmd':cmd}
+  v['containers'][cid]=r;event['role']=role;event['id']=cid
+  if d=='lost-init-create'and role=='init':done(43)
+  done(0,cid+'\n')
+ if action=='cp':
+  if a[-1]=='-':
+   mem=io.BytesIO()
+   with tarfile.open(fileobj=mem,mode='w')as t:
+    n='fixture-root/file'if'/conformance-root/'in a[2]else'fixture-file';r=tarfile.TarInfo(n);body=b'fixture\n';r.size=len(body);r.mode=0o644;t.addfile(r,io.BytesIO(body))
+   p.write_text(json.dumps(v));sys.stdout.buffer.write(mem.getvalue());sys.exit(0)
+  Path(a[-1]).write_text('fixture entrypoint\n');done()
+ target=a[-1];r=next((r for r in v['containers'].values()if target in[r['id'],r['name']]),None)
+ if r is None:done(1)
+ event['role']=r['role'];event['id']=r['id']
+ if action=='inspect':
+  if opt('--format')=='{{.State.ExitCode}}':done(0,str(r['exit'])+'\n')
+  iid='e'*64 if d=='wrong-owner-image'and r['role']=='owner'else'f'*64
+  done(0,f"{r['id']} /{r['name']} sha256:{iid} {r['nonce']} {r['role']} {str(r['running']).lower()} {r['pid']}\n")
+ if action=='start':
+  if r['role']=='init':
+   event['init_contract']=all(x in' '.join(r['cmd'])for x in['lstatSync','readdirSync','s.uid===0','chmodSync("/tmp",0o1777)']);v['volume']['mode']=0o1777
+  if r['role']=='owner':
+   joined=' '.join(r['cmd']);event['admission']='statfsSync("/tmp"'in joined and'assert(available>=12n*1024n**3n'in joined;event['exec_original']='exec node scripts/browser-api-sdk-check.mjs run'in joined
+   event['mounted_volume']=opt('--unused')
+   if d in['owner-and-cleanup-failure','live-owner-failure']:
+    r['exit']=42;r['running']=d=='live-owner-failure';r['pid']=12345 if r['running'] else 0;done(42,'fixture original owner failure\n')
+  done()
+ if action=='stop':r['running']=False;r['pid']=0;done(0,r['id']+'\n')
+ if action=='rm':
+  event['forced']='--force'in a
+  if r['running']and'--force'not in a:done(1)
+  del v['containers'][r['id']];done(0,r['id']+'\n')
+raise RuntimeError('unexpected fake Docker argv '+repr(a))
+`;
+
+test('actual browser wrapper private-volume lifecycle rejects original tmpfs and removed admission or no-copy guards',t=>{
+ const candidate=sdkSource('scripts/browser-api-sdk-check.sh');requireBrowserWrapperLifecycle(recordBrowserWrapper(t,candidate));
+ const original="#!/usr/bin/env bash\n# Independent post-build closure test; never consumes the external-oracle image override.\nset -euo pipefail\ntest \"$#\" -eq 2 -o \"$#\" -eq 3 || { echo 'usage: browser-api-sdk-check.sh IMAGE@sha256:DIGEST SOURCE_COMMIT [EXPLICIT_REGISTRY_CA]' >&2; exit 64; }\nimage=$1\nrevision=$2\nroot=$(cd \"$(dirname \"$0\")/..\" && pwd -P)\nhelper=\"$root/scripts/browser-api-sdk-check.mjs\"\nif test \"$#\" -eq 3; then\n  node \"$root/scripts/sdk-qualification-trust.mjs\" \"$3\"\n  export NODE_EXTRA_CA_CERTS=$3\nfi\n[[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]] || exit 64\n[[ $revision =~ ^[0-9a-f]{40}$ ]] || exit 64\ntest \"$(git -C \"$root\" rev-parse HEAD)\" = \"$revision\"\ntest -z \"$(git -C \"$root\" status --porcelain)\"\ncase \"$(uname -m)\" in x86_64) architecture=amd64 ;; aarch64) architecture=arm64 ;; *) exit 64 ;; esac\nsdk_work=$(mktemp -d)\ncontainer=''\ncleanup() {\n  if test -n \"$container\"; then docker container rm --force \"$container\" >/dev/null 2>&1 || true; fi\n  # Docker preserves the image's read-only directory modes in this owned copy.\n  chmod -R u+rwX -- \"$sdk_work\"\n  rm -r -- \"$sdk_work\"\n}\ntrap cleanup EXIT\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\nnode \"$helper\" capture \"$root\" \"$revision\" > \"$sdk_work/source.json\"\ndocker pull --platform \"linux/$architecture\" \"$image\"\ndocker image inspect \"$image\" | node \"$helper\" image \"$image\" \"$architecture\" \"$revision\"\ncontainer=$(docker container create --network none --read-only --entrypoint /usr/bin/true \"$image\")\n[[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1\nmkdir \"$sdk_work/source\" \"$sdk_work/browser\"\nwhile IFS= read -r path; do\n  mkdir -p \"$sdk_work/source/$(dirname \"$path\")\"\n  # Defer read-only directory modes until descendants are written.\n  docker container cp \"$container:/opt/prismpm/share/conformance-root/$path\" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory \"$sdk_work/source/$(dirname \"$path\")\"\ndone < <(node \"$helper\" roots)\nnode \"$helper\" verify \"$sdk_work/source\" \"$sdk_work/source.json\"\n# Defer read-only directory modes until descendants are written.\ndocker container cp \"$container:/opt/prismpm/browser/.\" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory \"$sdk_work/browser\"\nnode \"$helper\" modules \"$root\" \"$sdk_work/browser\"\nmkdir -p \"$sdk_work/share/account-genesis\"\n# Defer read-only directory modes until descendants are written.\ndocker container cp \"$container:/opt/prismpm/share/account-genesis/.\" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory \"$sdk_work/share/account-genesis\"\nnode \"$helper\" account-construction \"$sdk_work\" \"$sdk_work/source.json\"\ndocker container cp \"$container:/usr/local/bin/prismpm-devcontainer-init\" \"$sdk_work/entrypoint.sh\"\ncmp \"$root/sdk/devcontainer-init.sh\" \"$sdk_work/entrypoint.sh\"\ndocker container rm \"$container\" >/dev/null\ncontainer=''\n# Only private temporary caches/builds are writable. The source, tools and browser\n# modules come from the inspected image; no host source or dependency mount exists.\ncontainer=$(docker container create --user 1000:1000 --read-only --network none --cap-drop ALL \\\n  --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \\\n  --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \\\n  --workdir /opt/prismpm/share/conformance-root \"$image\" \\\n  node scripts/browser-api-sdk-check.mjs run)\n[[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1\ndocker container start --attach \"$container\"\ntest \"$(docker container inspect --format '{{.State.ExitCode}}' \"$container\")\" = 0\ndocker container rm \"$container\" >/dev/null\ncontainer=''\nnode \"$helper\" verify \"$root\" \"$sdk_work/source.json\"\nprintf 'browser SDK closure passed: source=%s image=%s platform=linux/%s\\n' \"$revision\" \"$image\" \"$architecture\"\n";
+ const prior=recordBrowserWrapper(t,original);assert.equal(prior.result.status,0,prior.result.stderr);
+ assert.throws(()=>requireBrowserWrapperLifecycle(prior),/missing private same-daemon volume/);
+ const guard='assert(available>=12n*1024n**3n,"12 GiB private compiler reserve before original installed owners");';
+ assert.equal(candidate.split(guard).length,2,'one actual mounted-filesystem admission');
+ assert.throws(()=>requireBrowserWrapperLifecycle(recordBrowserWrapper(t,candidate.replace(guard,'void 0;'))),/missing actual filesystem 12 GiB admission/);
+ assert.throws(()=>requireBrowserWrapperLifecycle(recordBrowserWrapper(t,candidate.replaceAll(',volume-nocopy',''))),/private volume-nocopy required/);
+ const lied=recordBrowserWrapper(t,candidate,'volume-removal-lied');assert.notEqual(lied.result.status,0,'successful rm without actual absence must reject');
+ assert(!lied.result.stdout.includes('browser SDK closure passed:'));assert(lied.state.volume);
+});
+
+test('actual browser wrapper preserves original failures and refuses unknown-volume or container cleanup',t=>{
+ const candidate=sdkSource('scripts/browser-api-sdk-check.sh');
+ for(const [defect,status]of [['ls-failure',37],['wrong-volume-nonce',1],['wrong-owner-image',1],['owner-and-cleanup-failure',42]]){
+  const row=recordBrowserWrapper(t,candidate,defect);assert.equal(row.result.status,status,row.result.stderr);
+  assert(!row.result.stdout.includes('browser SDK closure passed:'));
+  if(defect==='ls-failure')assert.equal(row.state.events.some(e=>e.argv[0]==='volume'&&e.argv[1]==='create'),false);
+  if(defect==='wrong-volume-nonce'||defect==='wrong-owner-image'){
+   assert(row.state.volume);assert.equal(row.state.events.some(e=>e.argv[0]==='volume'&&e.argv[1]==='rm'),false,'unknown scope must not be removed');
+  }
+  if(defect==='owner-and-cleanup-failure')assert(row.result.stderr.includes('browser SDK owned cleanup failed'));
+ }
+});
+
+test('actual browser wrapper recovers lost create output and normally retires a live failed owner before its volume',t=>{
+ const candidate=sdkSource('scripts/browser-api-sdk-check.sh');
+ const lost=recordBrowserWrapper(t,candidate,'lost-init-create');assert.equal(lost.result.status,43,lost.result.stderr);
+ assert.equal(Object.keys(lost.state.containers).length,0);assert.equal(lost.state.volume,null);
+ const live=recordBrowserWrapper(t,candidate,'live-owner-failure');assert.equal(live.result.status,42,live.result.stderr);
+ const events=live.state.events,stop=events.findIndex(e=>e.argv[0]==='container'&&e.argv[1]==='stop');
+ assert(stop>=0);assert.deepEqual(events[stop].argv.slice(2,4),['--timeout','5']);
+ const removed=events.findIndex((e,i)=>i>stop&&e.argv[0]==='container'&&e.argv[1]==='rm');
+ const volume=events.findIndex(e=>e.argv[0]==='volume'&&e.argv[1]==='rm');assert(removed>stop&&volume>removed);
+ assert.equal(Object.keys(live.state.containers).length,0);assert.equal(live.state.volume,null);
+ assert.equal(events.some(e=>e.argv.includes('--force')),false);
 });

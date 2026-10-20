@@ -1,15 +1,15 @@
 // Complete private reservation component owner, not DK-30/public acceptance.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {chmodSync, lstatSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {prepareReservation, frozenInputs, run, sha, repository} from './reservation-compile.mjs';
+import {prepareReservation, frozenInputs, run, sha} from './reservation-compile.mjs';
 import {reservationCorpus} from './reservation-corpus.mjs';
 import {reservationMutations} from './reservation-mutations.mjs';
 import {reservationMaximumCorpus} from './reservation-maxima.mjs';
 import {tsv} from './runtime.mjs';
 import {prerequisite} from '../browser-view/prerequisites.mjs';
-import {verifyReservationNativeInventory} from './reservation-checks.mjs';
+import {createReservationEvidenceDirectory, verifyReservationNativeInventory} from './reservation-checks.mjs';
 import {verifyReservationInputSubstitutions} from './reservation-input-checks.mjs';
 
 function native(build, rows, name, refusal = false) {
@@ -103,8 +103,7 @@ test('source-owned complete journal reservation and real guard mutants', {timeou
     }
     assert.equal(maxima.length, 7, 'all full metadata and reserved recovery maxima executed');
   });
-  const directory = join(repository, 'target/reservation-verification'); mkdirSync(directory, {recursive: true});
-  const evidence = mkdtempSync(join(directory, 'run-'));
+  const evidence = createReservationEvidenceDirectory();
   writeFileSync(join(evidence, 'inputs.json'), JSON.stringify(inputs) + '\n', {flag: 'wx'});
   const positiveArchive = archive(baseline, join(evidence, 'positive-artifacts.tar.gz'), ['positive.tsv']);
   const receipt = {scope: 'reservation-component-only', source: baseline.verified.source_id,

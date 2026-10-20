@@ -27,6 +27,21 @@ if [ "${PRISMPM_EPHEMERAL_HOME:-}" = 1 ]; then
     : > "$cache_root/.seeded"
   fi
   export CARGO_HOME=$cache_root
+
+  # Private ephemeral defaults leave explicit caller paths and the exec handoff intact.
+  if [ -z "${XDG_CACHE_HOME:-}" ] || [ -z "${XDG_CONFIG_HOME:-}" ] || [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    xdg_parent=$(readlink -f -- "${TMPDIR:-/tmp}")
+    test -d "$xdg_parent"
+    xdg_root=$(umask 077; mktemp -d "$xdg_parent/prismpm-xdg.XXXXXXXXXX")
+    chmod 0700 "$xdg_root"
+    install -d -m 0700 "$xdg_root/cache" "$xdg_root/config" "$xdg_root/runtime"
+    if [ "$(id -u)" = 0 ]; then
+      chown 1000:1000 "$xdg_root/cache" "$xdg_root/config" "$xdg_root/runtime" "$xdg_root"
+    fi
+    export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$xdg_root/cache}"
+    export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$xdg_root/config}"
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$xdg_root/runtime}"
+  fi
 fi
 
 if [ "$(id -u)" = 0 ] && [ -S /var/run/docker.sock ]; then

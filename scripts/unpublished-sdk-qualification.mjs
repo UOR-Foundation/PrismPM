@@ -227,8 +227,8 @@ export async function qualifyUnpublishedSdk(plan,destination,secret){
    '--env','DOCKER_TLS_CERTDIR=','--mount','type=volume,source='+data.name+',target=/var/lib/docker','--mount','type=volume,source='+socket.name+',target=/var/run',
    '--mount','type=bind,source='+dirname(source)+',target='+dirname(source),'--mount','type=bind,source='+source+',target='+source+',readonly',
    '--mount','type=bind,source='+target+',target='+target,
-   '--mount','type=bind,source='+ca+',target=/run/prismpm-qualification-ca.crt,readonly',
-   '--mount','type=bind,source='+ca+',target=/etc/docker/certs.d/'+authority+'/ca.crt,readonly',lock.images.dind.reference,'dockerd','--host=unix:///var/run/docker.sock','--data-root=/var/lib/docker']);
+   '--mount','type=bind,source='+ca+',target=/etc/prismpm-qualification-ca.crt,readonly',
+   '--mount','type=bind,source='+ca+',target=/etc/docker/certs.d/'+authority+'/ca.crt,readonly',lock.images.dind.reference,'dockerd','--group=root','--host=unix:///var/run/docker.sock','--data-root=/var/lib/docker']);
   await docker('start-owned-daemon',['start',daemon.id]);
   let ready=false;
   for(let n=0;n<30;n++){
@@ -237,7 +237,7 @@ export async function qualifyUnpublishedSdk(plan,destination,secret){
    await new Promise(resolve=>setTimeout(resolve,250));
   }
   assert(ready,'actual pinned daemon not ready');
-  const trustCa='/run/prismpm-qualification-ca.crt';
+  const trustCa='/etc/prismpm-qualification-ca.crt';
   const script=plan.phase==='prerequisites'?
    'bash root-a/scripts/browser-api-sdk-check.sh "$1" "$2" "$3"; node root-a/scripts/library-sdk-check.mjs tests; bash root-a/scripts/library-sdk-check.sh "$1" "$2" "$3"':
    'bash root-a/scripts/sdk-vv-outer.sh "$1" "$2" "$4" "sdk-$4-full-sdk-vv" "$3"; node root-a/scripts/product-sdk-check.mjs tests; bash root-a/scripts/product-sdk-check.sh "$1" "$2" "sdk-$4-product-cli" "$3"';
@@ -283,7 +283,10 @@ export async function qualifyUnpublishedSdk(plan,destination,secret){
      }
     }
     if(row.kind==='container'&&current.State.Running){await docker('stop-owned-container',['stop','--time','20',row.id],25000);const stopped=await inspect(row.kind,row.id);assert.equal(stopped.State.Running,false);}
-    await docker('remove-owned-resource',[row.kind,'rm',row.id],10000);await absent(row.kind,row.id);if(row.id!==row.name)await absent(row.kind,row.name);
+    // Removing a complete daemon data volume can outlast a metadata request.
+    // The existing command budget still charges removal and supervisor closure
+    // to the earlier original whole-owner/180-second cleanup deadline.
+    await docker('remove-owned-resource',[row.kind,'rm',row.id],row.kind==='volume'?120000:10000);await absent(row.kind,row.id);if(row.id!==row.name)await absent(row.kind,row.name);
     closed.push({kind:row.kind,id:row.id,name:row.name,original_id_and_name_absent:true,force_removal:false});
    }catch(error){secondary.push(String(error));}
   }

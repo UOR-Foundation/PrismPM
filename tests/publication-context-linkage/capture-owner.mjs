@@ -17,6 +17,25 @@ export function requireCaptureCompletion(value) {
   assert.ok(completeOwners.has(value), 'actual fresh capture and generated replay completion required');
   return value;
 }
+const captureGateTests = Object.freeze([
+  'compiler_phase_diagnostics_are_closed_bounded_and_not_acceptance',
+  'complete_diagnostics_are_formatted_before_the_transport_write',
+  'complete_json_records_survive_competing_stdout_and_stderr_writers',
+  'diagnostics_precede_libtest_summary',
+  'exact_owner_inventory_rejects_an_actual_removed_capture_test',
+  'failure_excerpts_are_bounded_and_preserve_both_stream_ends',
+  'file_rows_are_closed_unique_nonempty_and_reconciled',
+  'invented_stdout_completion_does_not_become_a_registered_test',
+  'selected_file_inventory_is_closed_and_unique',
+  'selected_paths_reject_aliases_nonregular_and_omitted_files_before_execution',
+  'unavailable_or_oversized_diagnostics_do_not_become_acceptance_failures',
+].map(name => 'cases::node_suite::tests::' + name));
+export function requireCaptureGateInventory(list) {
+  assert.deepEqual(list.split('\n').filter(line => line.length > 0),
+    [...captureGateTests.map(name => name + ': test'), '11 tests, 0 benchmarks'],
+    'complete current exact-gate regression inventory before execution');
+  return list;
+}
 const captureInventoryRole = Symbol('captured actual release tree');
 export function sourceInventory(root, role = null) {
   assert.ok(role === null || role === captureInventoryRole);
@@ -107,24 +126,12 @@ function captureExecutable(work, source) {
     ['--exact', 'controller::release_tests::readonly_source_copy_is_mutable_only_in_the_private_fixture', '--nocapture'], source.root);
   assert.match(fixtureOutput, /test result: ok\. 1 passed; 0 failed; 0 ignored;/);
   writeFileSync(join(work, 'readonly-fixture.stdout'), fixtureOutput, {flag:'wx', mode:0o444});
-  const gateTests = [
-    'compiler_phase_diagnostics_are_closed_bounded_and_not_acceptance',
-    'diagnostics_precede_libtest_summary',
-    'exact_owner_inventory_rejects_an_actual_removed_capture_test',
-    'failure_excerpts_are_bounded_and_preserve_both_stream_ends',
-    'file_rows_are_closed_unique_nonempty_and_reconciled',
-    'invented_stdout_completion_does_not_become_a_registered_test',
-    'selected_file_inventory_is_closed_and_unique',
-    'selected_paths_reject_aliases_nonregular_and_omitted_files_before_execution',
-  ].map(name => 'cases::node_suite::tests::' + name);
   const gateList = run(gate.path, ['cases::node_suite::tests::', '--list'], source.root);
-  assert.deepEqual(gateList.split('\n').filter(line => line.length > 0),
-    [...gateTests.map(name => name + ': test'), '8 tests, 0 benchmarks'],
-    'complete current exact-gate regression inventory before execution');
+  requireCaptureGateInventory(gateList);
   writeFileSync(join(work, 'exact-gate.list'), gateList, {flag:'wx', mode:0o444});
   source.verify(); owner.verify(); gate.verify();
   const gateOutput = run(gate.path, ['cases::node_suite::tests::', '--nocapture'], source.root);
-  assert.match(gateOutput, /test result: ok\. 8 passed; 0 failed; 0 ignored; 0 measured;/);
+  assert.match(gateOutput, /test result: ok\. 11 passed; 0 failed; 0 ignored; 0 measured;/);
   writeFileSync(join(work, 'exact-gate.stdout'), gateOutput, {flag:'wx', mode:0o444});
   writeFileSync(join(work, 'exact-gate-evidence.json'), JSON.stringify(gate.evidence) + '\n', {flag:'wx', mode:0o444});
   assert.equal(readFileSync(join(target, 'CACHEDIR.TAG'), 'utf8').split('\n')[0],

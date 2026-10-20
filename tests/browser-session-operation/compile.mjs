@@ -38,6 +38,7 @@ export function frozenInputs() {
   for (const path of [...readdirSync(draft).filter(path => path.endsWith('.mjs')), 'src/Fixture.lex.tex', 'runner.rs', 'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
     files.add('tests/browser-session-operation/' + path);
   for (const path of ['tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
+    'tests/browser-view/verification-products.mjs',
     'tests/browser-view/kernel-provenance.test.mjs', 'tests/browser-view/local-module-inputs.test.mjs',
     'tests/browser-view/file-custody.test.mjs',
     'scripts/owning-node-reporter.mjs', 'crates/conformance/src/cases/node_suite.rs',

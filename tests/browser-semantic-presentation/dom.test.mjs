@@ -1,13 +1,25 @@
 // Component-only; mandatory owning tests also supply generated artifacts.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync, lstatSync, readdirSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {engines, journey, journeyNames, verifyMutants} from './browser.mjs';
+
+// Only fresh owned fixtures are mutable; installed inputs remain read-only.
+function writableFixture(path) {
+  const stat = lstatSync(path);
+  if (stat.isDirectory()) {
+    chmodSync(path, 0o700);
+    for (const name of readdirSync(path)) writableFixture(join(path, name));
+  } else {
+    assert.ok(stat.isFile(), 'regular private fixture member');
+    chmodSync(path, 0o600);
+  }
+}
 
 test('actual semantic DOM component and imported accessibility oracle', async t => {
   for (const engine of engines) {
@@ -59,6 +71,7 @@ function counterexampleGate(t, change) {
   const axe = dirname(require.resolve('axe-core/package.json',
     {paths:[join(repository, 'sdk/oracles'), '/opt/prismpm/oracles']}));
   cpSync(axe, join(work, 'sdk/oracles/node_modules/axe-core'), {recursive:true, errorOnExist:true});
+  writableFixture(work);
   const browser = join(work, 'tests/browser-semantic-presentation/browser.mjs');
   const server = join(work, 'sdk/browser/browser-test-server.mjs');
   change({work, browser, server, replace(path, from, to) {
@@ -86,8 +99,8 @@ test('missing imported accessibility oracle cannot count as semantic mutant evid
 
 test('actual browser launch failure cannot count as semantic mutant evidence', t => {
   const result = counterexampleGate(t, ({work, server, replace}) => {
-    replace(server, '.launch({headless: true, executablePath})',
-      '.launch({headless: true, executablePath:' + JSON.stringify(join(work, 'absent-browser')) + '})');
+    replace(server, '.launch(launchOptions)',
+      '.launch({...launchOptions, executablePath:' + JSON.stringify(join(work, 'absent-browser')) + '})');
   });
   assert.match(result.error, /executable doesn't exist|ENOENT|does not exist/i);
 });

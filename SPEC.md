@@ -247,6 +247,122 @@ extra, reordered or forged journey/index evidence cannot satisfy verification.
 Actual HTTP-cache return-visitor and worker lifecycle tests, bounded result negatives and native compiled
 source-fixture verification supplement model/projection/schema mutation checks.
 
+The additive `Foundation.View.Text.V4.Model.TextApplication` declares
+`prismpm/text-application/4` in closed `prismpm/model-document/7` (HO-18).
+Its `WorkbenchView` retains Text/3's source-owned guidance, finite design,
+privacy, accessible lifecycle and byte computation rules. It adds closed
+source-owned `ActionSpec`, `ResearchSpec`, `CaseExchangeSpec` and
+`RuntimeBinding` declarations. It admits no product arithmetic, request parser,
+case parser, inspection algorithm, route comparison or trace computation in
+JavaScript. Text/1 through Text/3 keep their existing shapes, limits and
+transport versions.
+
+The mounted main surface orders computation, research actions and local case
+exchange before reference sections and the documentation footer. Its header
+provides native fragment links to the focusable computation, research and case
+destinations, using the admitted compute label, research title and case title.
+The existing guide and external-link navigation remains available. Selecting
+an output cell updates its research selection without an automatic panel jump.
+
+When a busy transition disables the focused initiating button, the renderer
+owns its focus only for that invocation, including local file reading before
+guest execution. Completion restores a connected, visible, enabled trigger
+only if native disabling left focus on the body and no subsequent keyboard,
+pointer or focus action abandoned it. Source-error field focus takes precedence.
+Edits, cancellation, retirement and terminal paths dispose that ownership and
+its listeners; a hidden trigger is never refocused.
+
+A Text/4 action sends its modeled prefix, U+001F, and a canonical JSON object
+with exactly `version`, `operation`, `request`, `values`, `row`, `column`,
+`controls`, `model_id` and `case_text`, in that order. Version is 1; selections
+are UInt32 values and all other fields are strings or ordered string arrays.
+Guided values follow the selected operation's declared fields. The reserved
+`raw` operation sends an exact raw draft and no guided values. Tool operations
+send their declared controls. Literal separators inside opaque strings survive
+JSON framing. Every submitted string must contain only well-formed Unicode
+scalars; UTF-8 byte accounting occurs before framing and again for the complete
+frame. Source input, case content and protocol replies are never silently
+normalized or truncated. Compute prefixes are unique per operation; explicit
+trace, comparison, inspection, tool and case actions have modeled labels,
+help, ordered fields and deadlines from 100 through 180000 milliseconds.
+Ordinary compute never implicitly executes an expensive research action.
+
+Text/4 replies have the eleven Text/3 result fields with version 2, plus
+`action`, `selection`, `tables`, `panels`, `comparison` and `exchange`.
+The selection has exactly row/column. Each table has an ID, title, column labels
+and complete string rows; each comparison panel has its own ID, title, shape,
+cells and exact executable request/response. Comparison status is closed to
+none/equivalent/different/error. The SDK validates exact keys, duplicate keys,
+Unicode, action/operation correlation, modeled IDs and every nested count and
+shape before rendering. Display copy is limited to 16384 UTF-8 bytes per
+string and excludes C0/C1 control characters; opaque request, response and case
+text retain their source bytes within the separate transport limits.
+Table pagination retains every source row and permits direct page selection;
+it never substitutes a truncated report. Result-cell and explicit row/column
+selection are keyboard-operable and invalidate stale pending actions.
+
+Case exchange is an explicit local UTF-8 file operation. Its closed statuses
+are none/exported/imported/identity-mismatch. A reply supplies a download name,
+opaque file text and an optional typed draft with operation, ordered values,
+raw request, inspection/tool controls and selected row/column. The SDK applies
+only validated declared fields. Exact source-restored values, raw requests and
+controls survive HTML control line-ending normalization until that individual
+control receives an explicit input or change event, including a same-value
+event. Editing one control does not discard untouched source strings in other
+controls. Operation changes, examples and reset discard obsolete restored
+authority. Raw inspection controls use the initial
+operation's inspection schema. Export snapshots the current inspection or
+standalone tool controls. File read, invalid UTF-8 and size errors reference
+modeled error hints. Source code owns versioned file parsing, duplicate and
+unknown-field rejection, identity interpretation and actual recomputation.
+Recorded answers never populate a fresh result without that source execution.
+A foreign-identity reply exposes the mismatch and a separate explicit recompute
+action. No local storage, history, upload or automatic download is introduced.
+
+The generated Text/4 browser adapter exports `model_id()`. The Worker checks
+that exact identity against the renderer's embedded canonical model identity
+before accepting actions, while retaining the mandatory same-origin no-store
+Wasm fetch. `RuntimeBinding.modelIdentity.CurrentModel` also keys the initial
+`app.css`, `app.js`, its module Worker and the generated binding JavaScript URLs with
+exactly `?model_id=<canonical-model-sha256>`. The query contains only the
+public lowercase64-hex model identity, never operands or case content. The
+Worker inherits that current module revision, and the binding imports that
+same revision, so a previous deployment's cached JavaScript cannot silently
+select an older adapter. Wasm retains its separate no-store acquisition. The Hologram projection receives the same identity from its bound
+renderer. Case actions therefore receive the actual executing model identity,
+not an authored self-reference. The complete visible model identity wraps at
+narrow viewports without truncation or horizontal page overflow. Draft edits,
+operation/tool changes, cell
+selection, cancellation and reset retire pending generations across every new
+action. Retry preserves the captured current action and timeout; stale replies
+cannot replace changed drafts. The generated assets retain the six-file export
+closure. The generated head declares an empty `data:,` icon before asset
+references to suppress implicit browser favicon network requests; it adds no
+seventh runtime file. `prismpm/workbench-view-projection/2` names the actual
+`hologram-intent-v2` projection.
+
+Only Text/4 selects the upstream closed portable View intent version 2. The
+official handler admits at most 2097152 decoded UTF-8 request bytes and 4194304
+cumulative UTF-8 output bytes across at most sixteen outputs, and echoes version
+2. Malformed UTF-8, unknown intent names/versions and first-over-bound payloads
+are rejected by the real handler. Legacy profiles continue to select version
+1 with its 65536/1048576 limits. Native verification preserves every modeled
+direct and resident vector, actually submits oversized UTF-8 requests to the
+handler to prove refusal, and separately probes the first over-bound multibyte
+request. Text/4's independently declared guest allocation and response bounds
+remain constrained by its modeled Core-Wasm memory and stack.
+
+The Text/4 model document alone admits at most 67108864 canonical bytes and
+33554432 recursively counted items. This finite versioned bound covers genuine
+large acceptance byte arrays, including request and guest-allocation boundary
+vectors; earlier profile contracts and the 16777216-byte dependency source
+archive reader remain unchanged. HO-18 requires real source projection,
+first-over-byte/item controls, strict Worker/action/case lifecycle controls and
+a complete compiled source fixture. That fixture exercises actual 2097152-byte
+input, 4194304-byte allocation, first-over-input refusal and 4194304-byte
+multibyte output through generated browser, direct/resident guest and official
+version-2 native intent owners, with complete portable browser journeys.
+
 The separate `Foundation.View.Text.V2.Model.TextApplication` declares
 `prismpm/text-application/2` in closed `prismpm/model-document/5`. It retains
 the V1 byte-request and View contract and adds explicit `coreMemoryPages` and
@@ -899,7 +1015,17 @@ and the list-input checks to pass.
 
 Every child is launched directly, never through a shell, with environment
 cleared except the minimum pinned tool homes/path plus an explicit `LEAN_PATH`
-for named export. The default child timeout is 300 seconds. Fresh generated
+for named export. At this shared isolation boundary, Cargo environment
+values default to two build jobs, zero development debug information, and
+incremental state disabled. Explicit owned caller values are applied after
+these defaults and retain precedence, including the private compiler drivers'
+one-job policy and the independent Hologram oracle's explicit policy. Ambient
+Cargo and Rust compiler overrides are not admitted through this defaulting
+rule. Caller-owned homes, offline settings, Rust flags, path remaps, targets and
+resource/linker arguments remain unchanged. These environment defaults do not
+remove std/no_std checks, ordinary package verification, independent tests or
+generated consumer execution, enlarge storage budgets, or establish a universal
+scratch-space bound. The default child timeout is 300 seconds. Fresh generated
 native Lean compilation has a fixed 600-second timeout for its complete module
 graph, through the closed library and application compilation phases
 `lake-build-generated` and `application-lean`. The independent Hologram oracle
@@ -907,6 +1033,16 @@ compiler retains 900 seconds and its
 execution retains 600 seconds. Every phase uses TERM then a five-second KILL
 grace period and independent 16,777,216-byte stdout/stderr limits. Named export,
 per-module kernel checks and browser deadlines retain their existing bounds.
+Core-Wasm verification validates the complete binary before inspecting its
+structural ABI with the pinned `wasm-tools print --skeleton`. Function bodies,
+data contents and element contents are omitted only from this presentation;
+complete binary type validation and model-owned memory, stack and typed ABI
+checks remain mandatory. The inspection still retains all import/export and
+signature declarations under the same 300-second and 16,777,216-byte limits.
+Valid large bodies do not require a full textual dump; structural-output
+overflow remains `PP5007`. Source-free readers admit only the exact ordered
+`validate <guest>` and `print --skeleton <guest>` records bound to that build,
+and still reject imports, missing required exports and invalid binaries.
 Process records contain normalized arguments/output, exit status, and SHA-256
 of the executable bytes. Timeout, signal, overflow, malformed output, nonzero
 exit, or missing executable is a registered failure.
@@ -1640,6 +1776,25 @@ process bypasses the container entrypoint; an insufficient hard limit is
 `PP5401`. Source, installed-image and native construction tests exercise
 the actual launcher, CLI entry path and child limits.
 
+For opted-in `PRISMPM_EPHEMERAL_HOME=1` execution, the SDK launcher supplies
+unset or empty `XDG_CACHE_HOME`, `XDG_CONFIG_HOME` and `XDG_RUNTIME_DIR` from
+one fresh private parent in the invocation's existing temporary filesystem.
+The new parent and its cache, config and runtime children have mode 0700 and
+belong to the actual command identity: UID/GID 1000 after the existing
+initial-root handoff, otherwise the unchanged nonroot UID/GID. Nonempty
+caller-selected XDG values, canonical `HOME`, `TMPDIR`, requested command
+umask, argv, stack policy, exit status and the `exec` handoff remain unchanged.
+The launcher does not repair or change caller-selected XDG paths. Directory
+setup failure refuses the requested command. These are ephemeral SDK defaults,
+not persistent configuration or a complete freedesktop login-session runtime.
+The existing owner retires container temporary storage; persistent temporary
+volumes retain their existing explicit owner-retirement obligation. There is
+no command-exit deletion or shell supervisor in the launcher. Real-entrypoint
+regressions observe child environment, UID/GID, mode, writable bytes, explicit
+settings and distinct invocations without substituting identity or launcher
+implementations. Complete native construction and installed qualification
+remain separate required observations.
+
 `prismpm/sdk-lock/2` pins the exact multi-platform SDK index bytes and digest,
 exactly one `linux/amd64` and one `linux/arm64` child manifest, and each child's
 actual inventory digest, exact `inventory_document` bytes (including any final
@@ -2063,11 +2218,24 @@ It measures expanded layer lengths and original DiffIDs without filesystem
 extraction. Actual storage admissions preserve the original reserves; inadequate
 hosted capacity fails without qualification. Explicit read-only CA plumbing changes
 only transport trust, never image bytes, oracle cases, limits or acceptance readers.
+The daemon and original-owner containers mount the same primary CA outside every
+writable bind or volume destination, resolving the pinned images' `/var/run`
+alias to `/run` when checking containment. Their primary read-only CA targets,
+the owner's CA argument and `NODE_EXTRA_CA_CERTS` agree. The daemon's separate
+read-only authority-specific `certs.d` CA mount and all original strict CA file,
+path, size, stability, PEM and signature checks remain unchanged.
 The existing browser/library/migration/metadata, two complete installed V&V passes,
 and product owners run unchanged on both native platforms before their original
 criteria can be accepted. Private-registry execution is not publication, signing,
 release promotion or immutable downstream Hologram adoption; those remain required
 where specified. Unit TLS/archive fixtures are never installed-image evidence.
+
+Normal removal of an owned large volume receives at most 120 seconds, clipped
+by the remaining original 180-second cleanup envelope and its five-second
+reserve. Container and network removal retain their shorter bounds. Exact
+owned identity, labels, configuration and observed ID/name absence remain
+required; timeout is a qualification failure, never permission for forced
+removal, an extended envelope or an assumed retirement.
 
 The additive `construction_integrity` workflow mode authenticates fixed GitHub
 API responses and selects an explicit source/run/attempt/two-artifact tuple.
@@ -2119,6 +2287,63 @@ after acquisition refuses invocation. This observed-custody boundary does not
 claim atomic isolation against a same-user filesystem attacker.
 This is image-input construction; full V&V execution, freshness, independent
 native-platform and immutable-image acceptance remain separate gates.
+
+SDK runtime package acquisition (DK-02) MUST retain the signed, timestamped
+Ubuntu snapshot, native architecture, complete suite/component closure,
+keyring and exact package versions selected by `sdk/runtime-os.lock` and the
+source configurator. Both APT update and install MUST select
+`Acquire::Retries=8`, HTTP and HTTPS timeouts of 30 seconds, pipeline depth zero
+and `xz` compression ordering. Update MUST use `--error-on=any`; an incomplete
+index acquisition or failed install fails construction. Retry and backoff use
+APT's imported failed-file acquisition behavior. They do not introduce an
+outer retry of package installation, compilation or image construction, or
+permit alternate mirrors, missing indexes, signature bypasses or changed pins.
+
+SDK and development toolchain acquisition (DK-02 and DK-04) MUST retain the
+checksum-pinned Elan 4.2.3 installer with no default toolchain. Lean 4.32.1 MUST
+come directly from its declared native-architecture `tar.zst` asset in the
+official `leanprover/lean4` GitHub release. The recipe MUST pin that asset and
+its published SHA-256, use verified HTTPS, and check the complete archive's
+strict checksum before listing or extraction. The pinned `zstd` prerequisite
+MUST be explicit. A nonempty member list MUST use the declared release prefix
+and reject parent-directory traversal. Extraction MUST use `--no-same-owner`
+into a fresh sibling staging directory, and publish without clobbering an
+existing canonical destination. Verified contents MUST retain the normal
+archive layout under Elan's canonical
+`/usr/local/elan/toolchains/leanprover--lean4---v4.32.1` directory, with the full
+recursive `a+rX,go-w` mode adjustment and existing version and executable
+probes preserved. Acquisition, checksum, extraction or probe failure fails
+construction. TLS bypasses, alternate mirrors, custom linked toolchain aliases,
+Elan download fallbacks and host toolchain fallbacks are forbidden.
+Recipe controls MUST reject substituted architecture assets or checksums,
+verification after listing or extraction, unsafe members, destination
+collisions, changed canonical paths and omitted ownership, mode or probe
+steps. This archive acquisition does not qualify the constructed image or
+guarantee eventual network recovery.
+
+Before the three main source release builds (DK-04), the recipe MUST complete
+`cargo fetch --locked` for the root workspace, the vendored LexLean manifest,
+and every pinned oracle graph selected by `scripts/fetch-oracle-cargo.sh`.
+That helper's exact manifest/lock checks and `cargo metadata --locked --offline`
+checks MUST remain intact. These acquisition commands alone select
+`CARGO_NET_RETRY=8` and `CARGO_HTTP_TIMEOUT=30`, using Cargo's imported retry
+behavior without persisting those settings into the installed runtime.
+The subsequent PrismPM CLI, conformance binaries and vendored LexLean release
+builds MUST each be invoked once with `--locked --offline`; the newly built CLI
+MUST still execute `authority resolve --locked` before the latter two builds.
+Acquisition, authority-resolution or compilation failure fails construction.
+
+The retry counts and timeouts apply to the respective package-manager
+operations; they guarantee neither eventual network recovery nor a total
+elapsed bound over all acquired files and dependency graphs. Cargo offline
+mode constrains its dependency acquisition, not arbitrary process networking.
+Recipe/configuration checks and planted policy, ordering, lock and trust
+defects MUST exercise the production settings. The local HTTP 503 APT fixture
+uses the explicitly smaller `Acquire::Retries=3` policy and a 30-second test
+deadline to distinguish strict failure from a successful update with missing
+indexes; it does not measure exhaustion or timing of the production eight-retry
+policy. Complete native SDK construction on both architectures remains a
+separate required observation before image acceptance.
 
 Read-only helper copies MUST enter explicitly created, searchable SDK
 directories. Both build and native runtime stages create their required
@@ -2196,6 +2421,20 @@ Text application profile or change Holo/1 capability negotiation.
   Pairing can disclose local network addresses and requires direct reachability.
   Applications must authenticate records and authorize replication separately.
   Backpressure, deadlines and teardown are explicit, not silent message loss.
+
+The browser acceptance harness runs the complete peer suite in a network-none
+container with only its loopback interface. Its pinned Chromium launch permits
+loopback peer connections using Chromium's own WebRTC test switch; this changes
+only acceptance infrastructure, never the shipped browser modules. Both normal
+and persistent Chromium launches preserve the same policy. No external ICE
+service, network access, replacement transport, skipped test or longer operation
+deadline may substitute for the real isolated peer sessions.
+The peer fixtures additionally grant microphone permission only to their local
+acceptance origin in each isolated context, because Chromium uses that permission
+to allow host-candidate enumeration. They never request or capture media. The
+grant ends with the context and does not apply to unrelated browser suites or
+shipped applications. This verifies the explicitly granted local fixture state;
+it does not claim permission-free discovery on a loopback-only host.
 
 Host error codes are carried without payload/key material. Cryptography uses
 `invalid-input`, `identity-corrupt`, `crypto-unavailable`. Storage additionally
@@ -2330,6 +2569,18 @@ native architecture/revision labels are required. Both native SDK architectures
 run this check in release.yml's required reproducibility job. A prior oracle SDK
 may support source bootstrap; it cannot satisfy this shipped-SDK acceptance.
 
+Post-build browser, native-library and product checks copy complete original
+Docker archives into fresh nonroot-owned staging. GNUtar extraction does not
+preserve archive ownership, applies the extracting user's umask, and delays
+directory mode restoration until all descendants have been written. The producer and extractor
+must both succeed. Complete source bytes, tree inventories and the exact admitted
+library aliases remain independently verified; links are not dereferenced and
+extra, changed, missing or escaping members still reject. Browser module and
+account-genesis trees and the product OCI receiver graph retain their original
+byte checks. This private extraction changes neither the immutable SDK's modes
+nor the nonroot, read-only, no-network runtime owners. Archive fixtures establish
+copy behavior only, not installed SDK acceptance.
+
 The closed installed module inventory includes the private effect, safe
 presentation, operation-journal and credential-custody adapters. Missing, extra, changed or aliased
 installed modules reject. DK-20/DK-23..25 compiler fixtures and locked acquisition inputs belong to
@@ -2347,6 +2598,12 @@ actual per-file test summaries. Every selected file must complete nonempty
 registered tests; automatic empty-module wrappers do not qualify. Exact file
 sets, closed completion rows and reconciled totals supplement, not replace,
 the existing minimum counts, deadlines and failure/skip/TODO rejection.
+Complete installed browser-suite diagnostics finish forwarding before another
+suite starts or a failed owner is reported. This includes stdout and stderr from
+nonzero children and owned-launch failures. If forwarding also fails, both the
+original owning failure and forwarding failure remain failures; no partial
+output can establish acceptance. Existing file sets, counts, limits and deadlines
+remain unchanged. Finite pipe fixtures test diagnostic retention only.
 
 ### 12.5 Modeled workspace interaction and private View host
 
@@ -3489,6 +3746,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-15` | `holo` | The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application. | §3 |
 | `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The capability-free Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics. | §3 |
+| `HO-18` | `holo` | The capability-free Text/4 research workbench binds explicit source actions, exact selectable tables and comparison panels, verified runtime model identity, and explicit local UTF-8 case transfer to correlated cancellable guest execution without interpreting domain mathematics or case semantics, while preserving Text/1 through Text/3. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

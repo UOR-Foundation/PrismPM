@@ -20,7 +20,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 use std::path::{Component, Path, PathBuf};
 
-const HOLOGRAM_LIVE_COMMIT: &str = "d8208266d8abdc2445b7bbc0cef412a566adfaf1";
 const UOR_HOLOGRAM_COMMIT: &str = "2bda6a9a9476872dade705bd61ece4209607f6da";
 const DEPENDENCY_REGISTER: &str = include_str!("../model/dependencies.toml");
 const STDLIB_RELEASE_SOURCE: &str = include_str!("../stdlib/release.json");
@@ -412,6 +411,28 @@ fn application_view(
 ) -> Result<(GeneratedViewV1, String, String), PrismError> {
     let (generated, model_id, view_model_id) =
         match application {
+            Application::Research(application) => {
+                let model_id = content_id(&encode_value(
+                    &serde_json::to_value(model)
+                        .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+                )?);
+                let view_model_id = content_id(&encode_value(
+                    &serde_json::to_value(&application.view)
+                        .map_err(|error| PrismError::new("PP9001", error.to_string()))?,
+                )?);
+                let entry = application.entry_root.rsplit('.').next().ok_or_else(|| {
+                    PrismError::new("PP2001", "application entry root is malformed")
+                })?;
+                let generated = crate::research_workbench::generate(
+                    module,
+                    application,
+                    &model_id,
+                    &view_model_id,
+                    core_sha,
+                    entry,
+                )?;
+                return Ok((generated, model_id, view_model_id));
+            }
             Application::Workbench(application) => {
                 let model_id = content_id(&encode_value(
                     &serde_json::to_value(model)
@@ -730,6 +751,7 @@ pub(crate) fn application_export_arguments(
             // Cargo identity, preserving the legacy Calculator's exact output.
             Application::Text(application) => application.cargo_name.replace('-', "_"),
             Application::Workbench(application) => application.cargo_name.replace('-', "_"),
+            Application::Research(application) => application.cargo_name.replace('-', "_"),
             Application::Browser(application) => application.cargo_name.replace('-', "_"),
         },
         "--out".to_owned(),
@@ -844,6 +866,7 @@ fn generate_in(
         .map_err(|error| PrismError::new("PP9001", format!("dependencies: {error}")))?;
     let lexlean = dependency(&dependency_register, "lexlean")?;
     let lean4_prod = dependency(&dependency_register, "lean4-prod")?;
+    let hologram_live = dependency(&dependency_register, "hologram-live")?;
 
     let mut work = crate::exporter::directory::Directory::temporary(
         "prismpm-application-",
@@ -1259,7 +1282,7 @@ fn generate_in(
             lexlean_commit: lexlean.revision.clone(),
             lexlean_package_sha256: artifact_sha(lexlean, ".crate")?,
             lean4_prod_commit: lean4_prod.revision.clone(),
-            hologram_live_commit: HOLOGRAM_LIVE_COMMIT.to_owned(),
+            hologram_live_commit: hologram_live.revision.clone(),
             uor_hologram_commit: UOR_HOLOGRAM_COMMIT.to_owned(),
             target_profile_id: sha256(&target_profile),
             lean_manifest_sha256: sha256(lex_manifest_bytes),

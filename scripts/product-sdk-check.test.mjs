@@ -198,7 +198,11 @@ test('final receipt accepts no missing journey, substituted image, extra file or
 });
 
 const wrapper=()=>readFileSync(new URL('./product-sdk-check.sh',import.meta.url),'utf8');
+const originalSourceCopy='docker container cp "$container:/opt/prismpm/share/conformance-root/$path" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "$sdk_work/source/$(dirname "$path")"';
+const originalOciCopy='docker container cp "$container:/tmp/prismpm-product-cli/first/.prism/oci" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "$sdk_work/receiver/receiver/.prism"';
 function confinedShell(script){
+ assert(script.includes('set -euo pipefail'),'original archive producer and extractor both retain failure status');
+ for(const copy of [originalSourceCopy,originalOciCopy])assert.equal(script.split(copy).length,2,'one complete original archive per destination');
  const creates=script.match(/container=\$\(docker container create[\s\S]*?\)\n/g);assert.equal(creates?.length,4);
  for(const invocation of creates)assert(invocation.includes('--platform "linux/$architecture"'));
  assert(creates[0].includes('--entrypoint /usr/bin/true'));const [acquire,build,receiver]=creates.slice(1);
@@ -211,7 +215,6 @@ function confinedShell(script){
  assert(build.includes('source=$project_volume'));assert(receiver.includes('source=$receiver_volume'));assert(!receiver.includes('source=$project_volume'));
  assert.equal((script.match(/docker container start --attach "\$container"/g)??[]).length,3);
  assert.equal((script.match(/\.State.ExitCode/g)??[]).length,3);
- assert(script.includes('first/.prism/oci" "$sdk_work/receiver/receiver/.prism/oci"'));
  assert(script.includes('node "$helper" result "$evidence/result.json" "$image"'));
  assert(script.includes('node "$helper" verify "$root" "$evidence/source.json"'));
  assert(script.includes('--cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH'));
@@ -229,6 +232,11 @@ test('owning shell contract rejects missing executions, shared producer mount an
   ['source=$receiver_volume,target=/tmp','source=$project_volume,target=/tmp'],
   ['--user 1000:1000 --read-only --network none --cap-drop ALL','--user 1000:1000 --read-only --cap-drop ALL'],
   ['node "$helper" result "$evidence/result.json" "$image"','true'],
+  ['set -euo pipefail','set -eu'],
+  [originalSourceCopy,originalSourceCopy.replace('--no-same-owner ','')],
+  [originalSourceCopy,originalSourceCopy.replace('--delay-directory-restore ','')],
+  [originalOciCopy,originalOciCopy.replace('--no-same-permissions ','')],
+  [originalOciCopy,originalOciCopy.replace('--delay-directory-restore ','')],
  ]){assert(script.includes(before));assert.throws(()=>confinedShell(script.replace(before,after)));}
 });
 
@@ -294,6 +302,12 @@ if(args[1]==='create'){console.log(String(prior.filter(v=>v[0]==='docker'&&v[1]=
 if(args[1]==='rm')process.exit(0);
 if(args[1]==='cp'){
  const from=args[2],to=args[3];if(to.includes(':/tmp/'))process.exit(0);
+ if(to==='-'){
+  if(!from.endsWith('/.prism/oci'))process.exit(65);
+  if(env.RECORD_COPY_TAR_CORRUPT==='1'){process.stdout.write('not an archive');process.exit(0);}
+  const archive=cp.spawnSync('/usr/bin/tar',['--create','--file','-','--directory',env.RECORD_OCI_ROOT,'--','oci'],{stdio:['ignore','inherit','inherit'],timeout:10000});
+  process.exit(archive.status===0?Number(env.RECORD_COPY_STATUS||0):65);
+ }
  if(from.endsWith('/usr/local/bin/prismpm-devcontainer-init')){fs.copyFileSync(path.join(env.RECORD_SOURCE,'sdk/devcontainer-init.sh'),to);process.exit(0);}
  if(from.endsWith('/.prism/oci')){fs.mkdirSync(to,{recursive:true});put(path.join(to,'index.json'),'{}');process.exit(0);}
  put(to,'{}');process.exit(0);
@@ -307,8 +321,9 @@ if(args[1]==='inspect'){console.log(env.RECORD_EXIT||'0');process.exit(0);}
 process.exit(64);
 `;
  for(const name of ['node','docker','git','stat']){put(bin,name,recording);chmodSync(join(bin,name),0o755);}
+ const originalOci=join(root,'original-oci');put(originalOci,'oci/index.json','{}');
  return{root,source,env:{...process.env,PATH:bin+':'+process.env.PATH,RECORD_CALLS:logs,RECORD_SOURCE:source,RECORD_REVISION:revision,RECORD_RESULT:JSON.stringify(completed()),
-  RECORD_NODE:process.execPath,RECORD_HELPER:new URL('./product-sdk-check.mjs',import.meta.url).pathname}};
+  RECORD_NODE:process.execPath,RECORD_HELPER:new URL('./product-sdk-check.mjs',import.meta.url).pathname,RECORD_OCI_ROOT:originalOci}};
 }
 function shellRun(context){
  const child=spawnSync('/bin/bash',[join(context.source,'scripts/product-sdk-check.sh'),image,revision,join(context.root,'evidence')],{env:context.env,encoding:'utf8',timeout:20000,maxBuffer:1024*1024});
@@ -323,7 +338,7 @@ test('actual shell starts all three stages, checks exit status, and sends only O
  assert.equal(calls.filter(row=>row[0]==='docker'&&row[1]==='container'&&row[2]==='inspect').length,3);
  const producer=creates[2],receiver=creates[3];assert(producer.includes('--network'));assert(receiver.includes('none'));
  assert(receiver.some(arg=>arg.includes('source='+ '2'.repeat(64))));assert(!receiver.some(arg=>arg.includes('source='+ '1'.repeat(64))));
- const copies=calls.filter(row=>row[0]==='docker'&&row[1]==='container'&&row[2]==='cp');assert(copies.some(row=>row[3].endsWith('/first/.prism/oci')));
+ const copies=calls.filter(row=>row[0]==='docker'&&row[1]==='container'&&row[2]==='cp');assert(copies.some(row=>row[3].endsWith('/first/.prism/oci')&&row[4]==='-'));
  assert.match(child.stdout,/installed product CLI gate passed/);
 });
 
@@ -331,4 +346,5 @@ test('actual shell rejects acquisition/build/receiver failures, absent JSON and 
  for(const phase of ['acquire','build','receive']){const context=shellFixture(t);context.env.RECORD_FAIL=phase;const {child}=shellRun(context);assert.notEqual(child.status,0);assert.doesNotMatch(child.stdout,/gate passed/);}
  for(const invalid of ['', '{}', JSON.stringify({...completed(),status:'pending'})]){const context=shellFixture(t);context.env.RECORD_RESULT=invalid;const {child}=shellRun(context);assert.notEqual(child.status,0);assert.doesNotMatch(child.stdout,/gate passed/);}
  const context=shellFixture(t);context.env.RECORD_EXIT='7';const {child}=shellRun(context);assert.notEqual(child.status,0);assert.doesNotMatch(child.stdout,/gate passed/);
+ for(const [key,value]of [['RECORD_COPY_STATUS','7'],['RECORD_COPY_TAR_CORRUPT','1']]){const context=shellFixture(t);context.env[key]=value;const {child}=shellRun(context);assert.notEqual(child.status,0);assert.doesNotMatch(child.stdout,/gate passed/);}
 });

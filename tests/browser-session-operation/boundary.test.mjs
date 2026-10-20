@@ -8,6 +8,7 @@ import {operationCorpus} from './corpus.mjs';
 import {enqueueOperationObservation} from './browser.mjs';
 import {frozenInputs, verifyFrozenInputs, sourceClosure, assertCapturedOperationSources,
   assertOperationCompilerInputs} from './compile.mjs';
+import {captureCompilerInputs} from '../browser-view/compiler-owner.mjs';
 
 const roles = ['predecessor', 'session', 'observation', 'partition', 'descriptor'];
 const options = () => Object.fromEntries(roles.map(role => [role, {bytes: new Uint8Array(8), sha256: new Uint8Array(32)}]));
@@ -38,6 +39,8 @@ test('independent operation corpus distinguishes source rejection from complete 
 });
 test('private owner captures complete source and transitive local harness closure', () => {
   const inputs = frozenInputs(), sources = sourceClosure(); assertCapturedOperationSources(inputs, sources);
+  for (const [path, digest] of Object.entries(captureCompilerInputs('session-operation')))
+    assert.equal(inputs[path], digest, 'operation snapshot includes every actual compiler input ' + path);
   for (const path of ['sdk/browser/session-operation-capture.mjs', 'sdk/browser/session-storage.mjs',
     'sdk/browser/session-payloads.mjs', 'tests/browser-view/kernel-provenance.mjs',
     'tests/browser-view/compiler-owner.mjs', 'tests/browser-view/compiler-artifact.mjs']) assert.ok(inputs[path]);

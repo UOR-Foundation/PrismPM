@@ -9,6 +9,8 @@ import {mutations, mutateSource, mutationProbes} from './mutations.mjs';
 import {inputClosureAdversaries, matchingPackageManifest} from './adversaries.mjs';
 import {profileLinkCases} from './profile-links.mjs';
 import {captureGeneratedPackage} from '../browser-view/generated-package.mjs';
+import {captureCompilerInputs} from '../browser-view/compiler-owner.mjs';
+import {codecCorpus} from './corpus.mjs';
 
 test('matching manifest probes reach captured identity instead of failing canonical encoding', t => {
   // Synthetic generator output tests the actual package guard, not a compiler
@@ -95,10 +97,30 @@ test('owning input inventory includes external oracle, generated artifact guards
     'tests/holo-primary-component/oracle.rs', 'vendor/hologram-live.tar', 'tests/hologram-oracle/Cargo.lock',
     'tests/holo-primary-component/profile-links.mjs',
     'tests/browser-view/generated-package.mjs', 'tests/browser-view/generated-wasm.mjs',
+    'tests/browser-view/verification-products.mjs',
     'tests/browser-session-journal/runtime.mjs', 'tests/browser-effects/corpus.mjs'])
     assert.match(inputs[path], /^[a-f0-9]{64}$/, path);
+  for (const [path, digest] of Object.entries(captureCompilerInputs('holo-primary-component')))
+    assert.equal(inputs[path], digest, 'complete actual compiler input closure: ' + path);
   const source = readFileSync(join(repository, 'tests/holo-primary-component/oracle.rs'), 'utf8');
   assert.match(source, /catalog\.import\("source-session\.holo"\.into\(\), archive\.clone\(\)\)/);
+  const register = readFileSync(join(repository, 'model/dependencies.toml'), 'utf8');
+  const live = register.split('[[dependency]]').filter(section => /^id = "hologram-live"$/m.test(section));
+  assert.equal(live.length, 1, 'one selected independent live oracle');
+  const revision = /^revision = "([a-f0-9]{40})"$/m.exec(live[0])?.[1];
+  assert.match(revision, /^[a-f0-9]{40}$/);
+  for (const [path, pattern] of [
+    ['oracle.mjs', /assert\.equal\(revision, '([a-f0-9]{40})'\)/],
+    ['oracle.rs', /const LIVE: &str = "([a-f0-9]{40})";/],
+    ['checks.mjs', /hologram_live_revision:'([a-f0-9]{40})'/],
+    ['corpus.mjs', /assert\.equal\(fixture\.live_revision, '([a-f0-9]{40})'\)/],
+  ]) assert.equal(pattern.exec(readFileSync(join(repository, 'tests/holo-primary-component', path), 'utf8'))?.[1],
+    revision, 'every exact primary oracle binding shares the selected registered authority: ' + path);
+  for (const wrong of ['d8208266d8abdc2445b7bbc0cef412a566adfaf1', 'f'.repeat(40)])
+    assert.throws(() => codecCorpus({schema:'prismpm/primary-codec-oracle/1', scope:'synthetic-codec-only',
+      hologram_revision:'2bda6a9a9476872dade705bd61ece4209607f6da', live_revision:wrong}),
+    error => error.code === 'ERR_ASSERTION' && error.actual === wrong && error.expected === revision,
+    'old and unknown revisions must fail at the actual authority guard');
 });
 
 test('independent profile-link negative inventory retains all reference and source seams', () => {
@@ -113,8 +135,10 @@ test('independent profile-link negative inventory retains all reference and sour
 test('primary component input custody refuses copied maps and missing transitive files', () => {
   const inputs = frozenInputs(); verifyFrozenInputs(inputs);
   assert.throws(() => verifyFrozenInputs(Object.freeze({...inputs})), /actual complete captured input inventory/);
-  const omitted = {...inputs}; delete omitted['tests/browser-view/compiler-owner.mjs'];
-  assert.throws(() => verifyFrozenInputs(Object.freeze(omitted)), /actual complete captured input inventory/);
+  for (const path of ['tests/browser-view/compiler-owner.mjs', 'tests/browser-view/verification-products.mjs']) {
+    const omitted = {...inputs}; delete omitted[path];
+    assert.throws(() => verifyFrozenInputs(Object.freeze(omitted)), /actual complete captured input inventory/);
+  }
 });
 
 test('primary component compiler binding refuses fabricated handles before execution', () => {

@@ -2,11 +2,16 @@
 
 `Release.lex.tex` models A/B releases for the Calculator selected through this
 fixture's LexLean configuration. Both models and manifests bind
-`sha256:2c1adf65faae1f1a417a25b756c7d520c6d4fc55b4973cdb7947bae8d0538e00`.
+`sha256:3efd25f24760c7d4bffa5b12ab2900a706f277f4823182362a1359f76a387bc5`.
 
-The original source-selection owner reported this digest in a genuine PP2101
-refusal (pr184-c07-browser-selected-source-diagnostic-v1-20261014). The four bindings were explicitly
-updated; verification never repairs stale source or removes negative controls.
+The original source-selection owner reported a genuine PP2101 refusal
+(pr184-c07-browser-selected-source-diagnostic-v1-20261014). Source CI run
+39172905969 at revision 2bc86cce then reported the previous selected digest.
+After the production emitter was corrected to read the registered Hologram Live
+revision, the unchanged source-selection owner at revision d58d70bf reported a
+new genuine PP2101 refusal. The four current authored bindings use that actual
+selected application digest. Verification never repairs stale source or removes
+negative controls.
 
 Run in a Docker-enabled devcontainer with the immutable imported-oracle image
 available to its daemon (no image pull is performed by the oracle runner):

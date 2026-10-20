@@ -50,6 +50,7 @@ export function frozenInputs() {
     'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs'])
     files.add('tests/holo-primary-component/' + path);
   for (const path of ['tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs',
+    'tests/browser-view/verification-products.mjs',
     'tests/browser-session/wire.mjs', 'tests/browser-session/corpus.mjs',
     'tests/browser-session/maxima.mjs', 'tests/browser-session/budget.mjs',
     'sdk/browser/effects-wire.mjs', 'sdk/browser/effects-module.mjs', 'sdk/browser/presentation-wire.mjs',

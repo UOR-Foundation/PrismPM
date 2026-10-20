@@ -15,8 +15,10 @@ mod native_library;
 mod node_suite;
 mod organization_lifecycle;
 mod owner_timing;
+mod research_workbench;
 mod saved_recovery;
 mod scoped_administration;
+mod verification_offline;
 mod workbench;
 
 use node_suite::verify as verify_node_suite;
@@ -412,6 +414,7 @@ pub fn run_at(root: &Path, id: &str) {
         ),
 
         "HO-17" => workbench::verify(root),
+        "HO-18" => research_workbench::verify(root),
 
         "HO-16" => {
             let browser = Command::new("timeout")
@@ -772,7 +775,7 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-semantic-presentation/dom.test.mjs",
                 "sdk/browser/semantic-presentation.test.mjs",
             ],
-            29,
+            30,
         ),
         _ => unreachable!("closed browser host capability"),
     };
@@ -3469,7 +3472,7 @@ fn verify_holo(root: &Path, id: &str) {
             ),
             (
                 "/application/profile",
-                serde_json::json!("prismpm/text-application/2"),
+                serde_json::json!("prismpm/text-application/unknown"),
                 "PP2009",
             ),
             (
@@ -3993,7 +3996,7 @@ fn verify_verification(root: &Path, id: &str) {
             "crates/prismpm/src/verification.rs",
             &["PP5002", "PP5003", "PP5004"],
         ),
-        "VR-09" => assert!(!read(root, "crates/prismpm/src/verification.rs").contains("http")),
+        "VR-09" => verification_offline::verify(root),
         "VR-10" => assert_contains(
             root,
             "crates/prismpm/src/verification.rs",

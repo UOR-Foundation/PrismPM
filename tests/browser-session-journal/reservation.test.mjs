@@ -2,16 +2,35 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {spawnSync} from 'node:child_process';
-import {chmodSync, existsSync, readFileSync, renameSync} from 'node:fs';
-import {join} from 'node:path';
+import {chmodSync, existsSync, lstatSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {dirname, join} from 'node:path';
 import {abstractPosition, graphCapacity, exploreReservedGraph, UINT32_MAX} from './reservation-oracle.mjs';
 import {stateAt, resolutionTrace, reservationCorpus} from './reservation-corpus.mjs';
 import {reservationModule, reservationMutations, mutateReservationSource} from './reservation-mutations.mjs';
-import {verifyReservationNativeInventory} from './reservation-checks.mjs';
+import {createReservationEvidenceDirectory, verifyReservationNativeInventory} from './reservation-checks.mjs';
 import {reservationMaximumCorpus} from './reservation-maxima.mjs';
 import {decodeEffectWire as decode} from '../../sdk/browser/effects-wire.mjs';
 import {frozenInputs, repository} from './reservation-compile.mjs';
 import {verifyReservationInputSubstitutions} from './reservation-input-checks.mjs';
+
+test('reservation evidence is private, unique and retained outside the retired build', t => {
+  const work = mkdtempSync(join(tmpdir(), 'reservation-build-retirement-test-'));
+  t.after(() => rmSync(work, {recursive: true, force: true}));
+  const evidence = createReservationEvidenceDirectory();
+  t.after(() => rmSync(evidence, {recursive: true, force: true}));
+  const other = createReservationEvidenceDirectory();
+  t.after(() => rmSync(other, {recursive: true, force: true}));
+  assert.equal(dirname(evidence), tmpdir());
+  assert.equal(dirname(other), tmpdir());
+  assert.notEqual(evidence, other);
+  assert.equal(lstatSync(evidence).mode & 0o777, 0o700);
+  const path = join(evidence, 'owner.json'), receipt = '{"complete":true}\n';
+  writeFileSync(path, receipt, {flag: 'wx'});
+  rmSync(work, {recursive: true});
+  assert.equal(readFileSync(path, 'utf8'), receipt);
+  assert.throws(() => writeFileSync(path, receipt, {flag: 'wx'}), {code: 'EEXIST'});
+});
 
 test('direct private-input entry refuses the original source before any substitution', () => {
   const input = join(repository, 'tests/browser-effects/corpus.mjs'), before = readFileSync(input);

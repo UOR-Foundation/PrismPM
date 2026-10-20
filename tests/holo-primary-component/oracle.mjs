@@ -40,7 +40,7 @@ export function prepareOracle() {
   assert.equal(dependency.length, 1);
   assert.match(dependency[0], /^role = "validation-oracle"$/m);
   const revision = /^revision = "([0-9a-f]{40})"$/m.exec(dependency[0])?.[1];
-  assert.equal(revision, 'd8208266d8abdc2445b7bbc0cef412a566adfaf1');
+  assert.equal(revision, '9847e00212e4c5c46767ad7ba9baa678ffa808f0');
   const artifacts = dependency[0].split('[[dependency.artifact]]').slice(1)
     .filter(section => /^path = "vendor\/hologram-live.tar"$/m.test(section));
   assert.equal(artifacts.length, 1);

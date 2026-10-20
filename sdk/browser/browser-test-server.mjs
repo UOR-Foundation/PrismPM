@@ -32,6 +32,9 @@ function selectedEngine(options) {
 export async function withBrowser(callback, options = {}) {
   assert.equal(typeof callback, 'function');
   const engine = selectedEngine(options), {version, executablePath} = browserPins[engine];
+  // Network-none acceptance has only loopback for real peer connections.
+  const launchOptions = {headless: true, executablePath,
+    ...(engine === 'chromium' ? {args: ['--allow-loopback-in-peer-connection']} : {})};
   const server = createServer(async (request, response) => {
     if (request.method !== 'GET') { response.writeHead(405).end(); return; }
     if (request.url === '/') {
@@ -58,10 +61,10 @@ export async function withBrowser(callback, options = {}) {
       server.listen(0, '127.0.0.1', resolve);
     });
     const baseURL = `http://127.0.0.1:${server.address().port}/`;
-    browser = await playwright[engine].launch({headless: true, executablePath});
+    browser = await playwright[engine].launch(launchOptions);
     assert.equal(browser.version(), version);
     const launchPersistentContext = async userDataDir => {
-      const context = await playwright[engine].launchPersistentContext(userDataDir, {headless: true, executablePath});
+      const context = await playwright[engine].launchPersistentContext(userDataDir, launchOptions);
       persistentContexts.add(context);
       context.on('close', () => persistentContexts.delete(context));
       assert.equal(context.browser().version(), version);

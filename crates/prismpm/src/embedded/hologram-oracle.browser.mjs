@@ -242,21 +242,26 @@ try {
 const input = createInterface({input: process.stdin, crlfDelay: Infinity})[Symbol.asyncIterator]();
 const first = await input.next();
 assert.equal(first.done, false);
-const {origin, application: app, browser_executable: browserExecutable} = JSON.parse(first.value);
+const {origin, application: app, browser_executable: browserExecutable,model_id:expectedModelId} = JSON.parse(first.value);
 assert.equal(browserExecutable, process.arch === 'x64'
   ? '/ms-playwright/chromium_headless_shell-cft-157.0.8099.0/chrome-headless-shell-linux64/chrome-headless-shell'
   : '/ms-playwright/chromium_headless_shell-cft-157.0.8099.0/chrome-headless-shell-linux-arm64/chrome-headless-shell');
-assert.ok(Number.isInteger(app.request_maximum) && app.request_maximum > 0 && app.request_maximum <= 65_536,
+const research = app.profile === 'prismpm/text-application/4';
+if(research)assert.match(expectedModelId,/^[0-9a-f]{64}$/);
+const intentVersion = research ? 2 : 1;
+const intentRequestMaximum = research ? 2_097_152 : 65_536;
+const intentResponseMaximum = research ? 4_194_304 : 1_048_576;
+assert.ok(Number.isInteger(app.request_maximum) && app.request_maximum > 0 && app.request_maximum <= intentRequestMaximum,
   'request bound exceeds pinned portable View transport');
-assert.ok(Number.isInteger(app.response_maximum) && app.response_maximum > 0 && app.response_maximum <= 1_048_576,
+assert.ok(Number.isInteger(app.response_maximum) && app.response_maximum > 0 && app.response_maximum <= intentResponseMaximum,
   'response bound exceeds pinned portable View transport');
 const url = new URL(origin);
 assert.equal(url.hostname, '127.0.0.1');
 assert.equal(url.protocol, 'http:');
 assert.equal(url.origin, origin);
-const workbench = app.profile === 'prismpm/text-application/3';
+const workbench = research || app.profile === 'prismpm/text-application/3';
 const text = workbench || app.profile === 'prismpm/text-application/1' || app.profile === 'prismpm/text-application/2';
-const profile = workbench ? 'utf8-workbench' : text ? 'utf8-text' : 'legacy-numeric';
+const profile = research ? 'utf8-research-workbench' : workbench ? 'utf8-workbench' : text ? 'utf8-text' : 'legacy-numeric';
 const decode = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
 const view = app.view;
 const cases = [];
@@ -266,6 +271,9 @@ const transportRejectedIndexes = [];
 const textareaNormalizedIndexes = [];
 const unrepresentableFrameIndexes = [];
 let activeJourney = 'setup';
+let runtimeModelId=null;
+let appModulePath='app.js';
+const modelModuleRequests=[];
 browser = await chromium.launch({headless: true, executablePath: browserExecutable});
 assert.equal(browser.browserType().name(), 'chromium');
 assert.equal(browser.version(), '157.0.8099.0');
@@ -275,7 +283,9 @@ const unexpected = [];
 const allowed = new Set(['/', '/index.html', '/app.css', '/app.js', '/favicon.ico', '/_hologram/intent']);
 context.on('request', request => {
   const target = new URL(request.url());
-  if (target.origin !== origin || !allowed.has(target.pathname) || target.search) unexpected.push(request.url());
+  const keyed=research&&['/app.js','/app.css'].includes(target.pathname)&&target.search==='?model_id='+expectedModelId;
+  if(keyed)modelModuleRequests.push(target.search);
+  if (target.origin !== origin || !allowed.has(target.pathname) || (target.search&&!keyed)) unexpected.push(request.url());
 });
 page.setDefaultTimeout(10_000);
 const output = page.locator('#result');
@@ -290,6 +300,15 @@ function frame(vector) {
   const request = decode.decode(Uint8Array.from(vector.request));
   if (!workbench) return {request, input: request, button: '#submit', form: '#application-form', field: '#request'};
   const separator = '\u001f';
+  if (research) {
+    const boundary=request.indexOf(separator);assert.ok(boundary>0);
+    const prefix=request.slice(0,boundary),envelope=JSON.parse(request.slice(boundary+1));
+    assert.deepEqual(Object.keys(envelope),['version','operation','request','values','row','column','controls','model_id','case_text']);
+    assert.equal(JSON.stringify(envelope),request.slice(boundary+1),'UI examples require an exact canonical envelope; malformed source vectors remain direct tests');assert.equal(envelope.version,1);assert.ok(Array.isArray(envelope.values)&&envelope.values.every(v=>typeof v==='string'&&!/[\ud800-\udfff]/u.test(v)));assert.ok(typeof envelope.request==='string'&&!/[\ud800-\udfff]/u.test(envelope.request));assert.ok([envelope.row,envelope.column].every(v=>Number.isInteger(v)&&v>=0&&v<=4294967295));assert.deepEqual(envelope.controls,[]);assert.equal(envelope.case_text,'');assert.ok(envelope.model_id===''||/^[a-f0-9]{64}$/.test(envelope.model_id));
+    if(prefix===view.raw.request_prefix){assert.equal(envelope.operation,'raw');assert.deepEqual(envelope.values,[]);return {request,prefix,envelope,input:envelope.request,button:'#submit',form:'#application-form',field:'#request'};}
+    const operation=view.operations.find(row=>row.request_prefix===prefix);assert.ok(operation);assert.equal(envelope.operation,operation.id);assert.equal(envelope.request,'');assert.equal(envelope.values.length,operation.fields.length);
+    return {request,prefix,envelope,operation,values:envelope.values,button:'#guided-submit',form:'#guided-form',field:'#field-'+operation.fields.at(-1).id};
+  }
   if (request.startsWith(view.raw.request_prefix + separator)) return {request,
     input: request.slice(view.raw.request_prefix.length + 1), button: '#submit', form: '#application-form', field: '#request'};
   const operation = view.operations.find(row => request.startsWith(row.request_prefix + separator));
@@ -322,10 +341,12 @@ async function failedClientState(target, expectedDisplay) {
   } catch { return {state: 'unavailable'}; }
   finally { clearTimeout(timer); }
 }
-async function fill(vector, target = page) {
+async function fill(vector, target = page, {phase = 'ready'} = {}) {
+  assert.ok(['ready','pre-init'].includes(phase), 'unknown fill lifecycle phase');
   const request = decode.decode(Uint8Array.from(vector.request));
   if (workbench) {
     const prepared = frame(vector);
+    if(phase==='pre-init')assert.ok(!prepared.operation,'pre-init recovery requires the static raw frame');
     if (!prepared.operation) {
       await target.locator('#raw-editor').evaluate(node => {node.open = true;});
       await target.locator('#request').fill(prepared.input);
@@ -337,6 +358,7 @@ async function fill(vector, target = page) {
         else await control.fill(prepared.values[index]);
       }
     }
+    if(phase==='ready')await fillResearchSelection(prepared,target);
   } else if (text) await target.locator('#request').fill(request);
   else {
     const [version, operation, left, right] = request.split('\t');
@@ -347,6 +369,9 @@ async function fill(vector, target = page) {
     await target.locator('#right').fill(right);
     await target.locator('#operation').selectOption(String(option.discriminant));
   }
+}
+async function fillResearchSelection(prepared,target) {
+  if(research)for(const field of ['row','column']){const control=target.locator('#research-'+field);if(await control.inputValue()!==String(prepared.envelope[field])){await control.fill(String(prepared.envelope[field]));await control.dispatchEvent('change');}}
 }
 function displayed(vector) {
   const value = decode.decode(Uint8Array.from(vector.response));
@@ -371,7 +396,7 @@ function applicable(vector) {
     let prepared;
     try { prepared = frame(vector); }
     catch { unrepresentableFrameIndexes.push(app.acceptance_vectors.indexOf(vector)); return false; }
-    if (!prepared.operation && prepared.input.includes('\u001f')) {
+    if (!research && !prepared.operation && prepared.input.includes('\u001f')) {
       transportRejectedIndexes.push(app.acceptance_vectors.indexOf(vector)); return false;
     }
     if (prepared.operation?.fields.some((field, index) => field.kind === 'choice'
@@ -424,8 +449,9 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     const form = document.querySelector(formSelector);
     return button !== null && form !== null && !button.disabled && !form.hasAttribute('aria-busy');
   };
-  const expectedRequest = {version: 1, name: 'application.invoke',
-    payload: decode.decode(Uint8Array.from(vector.request))};
+  let expectedPayload=decode.decode(Uint8Array.from(vector.request));
+  if(research){const currentModelId=await target.locator('#case-model-id').textContent();const modelId=currentModelId||runtimeModelId;assert.match(modelId,/^[a-f0-9]{64}$/);if(currentModelId&&runtimeModelId)assert.equal(currentModelId,runtimeModelId);expectedPayload=prepared.prefix+'\u001f'+JSON.stringify({...prepared.envelope,model_id:modelId});}
+  const expectedRequest = {version: intentVersion, name: 'application.invoke',payload:expectedPayload};
   const events = [];
   let eventsTruncated = false;
   const record = event => { if (events.length < 32) events.push(event); else eventsTruncated = true; };
@@ -510,7 +536,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     check = 'response-json';
     const envelope = JSON.parse(replyBody.toString('utf-8'));
     check = 'response-envelope';
-    assert.deepEqual(envelope, {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
+    assert.deepEqual(envelope, {version: intentVersion, outputs: [decode.decode(Uint8Array.from(vector.response))]});
     check = null;
     phase = 'rendered-result';
     await shows(displayed(vector), target);
@@ -559,7 +585,7 @@ async function journey(name, work) {
 }
   await journey('attachment-assets', async () => {
     const modules = [];
-    const onModule = response => {if (response.url() === `${origin}/app.js` && response.request().resourceType() === 'script') modules.push(response);};
+    const onModule = response => {const target=new URL(response.url());if ((research?target.origin===origin&&target.pathname==='/app.js':response.url() === `${origin}/app.js`) && response.request().resourceType() === 'script') modules.push(response);};
     if (workbench) page.on('response', onModule);
     try {
     const navigation = await page.goto(`${origin}/`);
@@ -571,8 +597,10 @@ async function journey(name, work) {
       assert.equal(navigation.status(), 200);
       const initial = await page.evaluate(html => [...new DOMParser().parseFromString(html, 'text/html').scripts]
         .map(node => ({src: node.getAttribute('src'), type: node.getAttribute('type')})), await bounded(navigation.text()));
-      assert.deepEqual(initial, [{src: 'app.js', type: 'module'}]);
       await page.waitForFunction(() => document.querySelector('#guided-submit')?.disabled === false);
+      if(research){runtimeModelId=await page.locator('#case-model-id').textContent();assert.match(runtimeModelId,/^[a-f0-9]{64}$/);assert.equal(runtimeModelId,expectedModelId);appModulePath='app.js?model_id='+runtimeModelId;}
+      assert.deepEqual(initial, [{src: appModulePath, type: 'module'}]);
+      if(research){const sheet=await page.locator('link[rel=stylesheet]').getAttribute('href');assert.equal(sheet,'app.css?model_id='+runtimeModelId);}
       // The source renderer replaces the body, including its executing module
       // node. Authenticate the original document and its actual module fetch.
       assert.equal((await page.locator('script').all()).length, 0);
@@ -600,9 +628,9 @@ async function journey(name, work) {
         try { payload = decode.decode(Uint8Array.from(vector.request)); } catch { continue; }
         if (vector.request.length > app.request_maximum) continue;
         const reply = await fetch(`${origin}/_hologram/intent`, {method: 'POST', headers: {'content-type': 'application/json', origin},
-          body: JSON.stringify({version: 1, name: 'application.invoke', payload})});
+          body: JSON.stringify({version: intentVersion, name: 'application.invoke', payload})});
         assert.equal(reply.status, 200);
-        assert.deepEqual(await reply.json(), {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
+        assert.deepEqual(await reply.json(), {version: intentVersion, outputs: [decode.decode(Uint8Array.from(vector.response))]});
         directVectorIndexes.push(index);
       }
     });
@@ -670,7 +698,7 @@ async function journey(name, work) {
   await journey('pre-init-privacy', async () => {
     for (const mode of ['disabled', 'blocked']) {
       const privateContext = await browser.newContext({javaScriptEnabled: mode !== 'disabled'});
-      if (mode === 'blocked') await privateContext.route('**/app.js', route => route.abort());
+      if (mode === 'blocked') await privateContext.route(research?`${origin}/${appModulePath}`:'**/app.js', route => route.abort());
       const privatePage = await privateContext.newPage();
       await privatePage.goto(`${origin}/`);
       await privatePage.waitForLoadState('networkidle');
@@ -696,10 +724,10 @@ async function journey(name, work) {
     let release;
     const pending = new Promise(resolve => {release = resolve;});
     const delayModule = async route => {await pending; await route.continue();};
-    await delayed.route('**/app.js', delayModule);
+    await delayed.route(research?`${origin}/${appModulePath}`:'**/app.js', delayModule);
     const delayedPage = await delayed.newPage();
     await delayedPage.goto(`${origin}/`, {waitUntil: 'commit'});
-    await fill(recovery, delayedPage);
+    await fill(recovery, delayedPage, {phase:'pre-init'});
     assert.equal(await delayedPage.locator('#submit').isDisabled(), true);
     await statusShows(workbench ? view.statuses.initializing : text ? view.response_error : view.input_error, delayedPage);
     const before = [];
@@ -713,25 +741,26 @@ async function journey(name, work) {
     await delayedPage.waitForLoadState('networkidle');
     // The initialization fault has finished. Do not leave global Chromium
     // Fetch interception active while validating actual intent responses.
-    await delayed.unroute('**/app.js', delayModule);
+    await delayed.unroute(research?`${origin}/${appModulePath}`:'**/app.js', delayModule);
     const retained = await delayedPage.evaluate(selector => document.querySelector(selector).value, text ? '#request' : '#left');
     const expectedInput = workbench ? frame(recovery).input : decode.decode(Uint8Array.from(recovery.request));
     assert.equal(retained, text ? expectedInput : expectedInput.split('\t')[2]);
+    if(research)await fillResearchSelection(frame(recovery),delayedPage);
     await submit(recovery, delayedPage, false, {fillInputs: false});
     await delayed.close();
   });
   await journey('intent-boundaries', async () => {
-    const body = {version: 1, name: 'application.invoke', payload: decode.decode(Uint8Array.from(recovery.request))};
+    const body = {version: intentVersion, name: 'application.invoke', payload: decode.decode(Uint8Array.from(recovery.request))};
     const headers = {'content-type': 'application/json', origin};
     const request = (value, options = {}) => fetch(`${origin}/_hologram/intent`, {
       method: 'POST', headers, body: JSON.stringify(value), ...options,
     });
-    for (const value of [{...body, extra: true}, {...body, version: 2}, {...body, name: 'host.exec'},
-      {...body, payload: 'x'.repeat(65_537)}]) assert.equal((await request(value)).status, 400);
+    for (const value of [{...body, extra: true}, {...body, version: research ? 1 : 2}, {...body, name: 'host.exec'},
+      {...body, payload: 'x'.repeat(intentRequestMaximum+1)}]) assert.equal((await request(value)).status, 400);
     assert.equal((await request(body, {headers: {...headers, origin: 'https://untrusted.invalid'}})).status, 403);
     assert.equal((await request(body, {headers: {'content-type': 'application/json'}})).status, 403);
     assert.equal((await request(body, {headers: {...headers, 'content-type': 'text/plain'}})).status, 415);
-    assert.equal((await request(body, {body: 'x'.repeat(65_536 * 6 + 257)})).status, 413);
+    assert.equal((await request(body, {body: 'x'.repeat(intentRequestMaximum * 6 + 257)})).status, 413);
     assert.equal((await fetch(`${origin}/_hologram/intent`)).status, 405);
     assert.equal((await fetch(`${origin}/?draft=private`)).status, 400);
     assert.equal((await fetch(`${origin}/%2e%2e/secrets`)).status, 404);
@@ -740,8 +769,8 @@ async function journey(name, work) {
   if (text) {
     await journey('text-response-bounds', async () => {
       for (const [body, status] of [[Buffer.from([255]), 'compute_error'],
-        [Buffer.from(JSON.stringify({version: 1, outputs: ['x'.repeat(app.response_maximum + 1)]})), 'response_error'],
-        [Buffer.from(JSON.stringify({version: 1, outputs: []})), 'compute_error'],
+        [Buffer.from(JSON.stringify({version: intentVersion, outputs: ['x'.repeat(app.response_maximum + 1)]})), 'response_error'],
+        [Buffer.from(JSON.stringify({version: intentVersion, outputs: []})), 'compute_error'],
         [Buffer.from('x'.repeat(app.response_maximum * 6 + 257)), 'compute_error']]) {
         await page.route('**/_hologram/intent', route => route.fulfill({status: 200, contentType: 'application/json', body}));
         await fill(recovery);
@@ -759,7 +788,7 @@ async function journey(name, work) {
       const responseValue = workbench ? JSON.stringify({...JSON.parse(decode.decode(Uint8Array.from(recovery.response))),
         message: value, response: value, details: [value]}) : value;
       await page.route('**/_hologram/intent', route => route.fulfill({status: 200,
-        contentType: 'application/json', body: JSON.stringify({version: 1, outputs: [responseValue]})}));
+        contentType: 'application/json', body: JSON.stringify({version: intentVersion, outputs: [responseValue]})}));
       await fill(recovery);
       await page.locator('#submit').click();
       await shows(value);
@@ -809,12 +838,12 @@ async function journey(name, work) {
       const field = operation.fields[index];
       if (!alternate) values[index] = field.choices.length ? field.choices.find(choice => choice.value !== values[index]).value
         : values[index] === '0' ? '1' : '0';
-      const payload = operation.request_prefix + '\u001f' + values.join('\u001f');
+      const payload = operation.request_prefix + '\u001f' + (research?JSON.stringify({version:1,operation:operation.id,request:'',values,row:0,column:0,controls:[],model_id:await page.locator('#case-model-id').textContent(),case_text:''}):values.join('\u001f'));
       const reference = await fetch(`${origin}/_hologram/intent`, {method: 'POST', headers: {'content-type': 'application/json', origin},
-        body: JSON.stringify({version: 1, name: 'application.invoke', payload})});
+        body: JSON.stringify({version: intentVersion, name: 'application.invoke', payload})});
       assert.equal(reference.status, 200);
       const envelope = await reference.json();
-      assert.equal(envelope.version, 1); assert.equal(envelope.outputs.length, 1);
+      assert.equal(envelope.version, intentVersion); assert.equal(envelope.outputs.length, 1);
       if (alternate) assert.equal(envelope.outputs[0], alternate.expected_response, 'edited modeled example must retain its exact upstream response');
       const edited = framed(payload, envelope.outputs[0]);
       await submit(edited);
@@ -907,7 +936,7 @@ async function journey(name, work) {
         {...positive, details: Array(view.response.maximum_details + 1).fill('bounded')}];
       for (const value of invalid) {
         await page.route('**/_hologram/intent', route => route.fulfill({status: 200, contentType: 'application/json',
-          body: JSON.stringify({version: 1, outputs: [JSON.stringify(value)]})}));
+          body: JSON.stringify({version: intentVersion, outputs: [JSON.stringify(value)]})}));
         await fill(recovery);
         await page.locator('#submit').click();
         await statusShows(view.statuses.response_error);
@@ -915,6 +944,94 @@ async function journey(name, work) {
         await submit(recovery);
       }
     });
+    if (research) {
+      const first = valid.find(({vector}) => frame(vector).operation && JSON.parse(decode.decode(Uint8Array.from(vector.response))).cells.length > 0)?.vector;
+      assert.ok(first, 'selected-cell research requires an actual modeled nonempty result');
+      async function act(selector,target=page) {
+        const selectedId=await target.locator('#operation').inputValue(),selectedOperation=view.operations.find(op=>op.id===selectedId);
+        const selectedTool=await target.locator('#research-tool').inputValue(),tool=selector==='#research-tool-submit'?view.research.tools.find(tool=>tool.id===selectedTool):null;
+        const spec=selector==='#research-trace'?selectedOperation.trace:selector==='#research-compare'?selectedOperation.comparison:selector==='#research-inspect'?selectedOperation.inspection:selector==='#case-export'?view.case_exchange.export_action:selector==='#case-import'?view.case_exchange.import_action:selector==='#case-recompute'?view.case_exchange.recompute_action:tool?.action;
+        assert.ok(spec,'the native oracle dispatch selector must have an exact source ActionSpec');
+        const expectedOperation=tool?tool.id:selectedOperation.id;
+        const controlFields=spec.id===view.case_exchange.export_action.id?selectedOperation.inspection.fields:spec.fields;
+        const expectedControls=await Promise.all(controlFields.map(field=>target.locator((tool?'#tool-field-':selector==='#research-trace'?'#research-trace-field-':selector==='#research-compare'?'#research-comparison-field-':'#research-inspection-field-')+field.id).inputValue()));
+        const requests=[];const onRequest=request=>{if(request.url()===`${origin}/_hologram/intent`)requests.push(request);};
+        target.on('request',onRequest);
+        try {
+          const pending=target.waitForResponse(reply=>requests.includes(reply.request()));
+          await target.locator(selector).click();const reply=await pending;assert.equal(reply.status(),200);
+          assert.equal(requests.length,1,'an explicit research action owns exactly one request');
+          const body=requests[0].postDataJSON();assert.equal(body.version,2);assert.equal(body.name,'application.invoke');
+          assert.equal(body.payload.slice(0,body.payload.indexOf('\u001f')),spec.request_prefix,'the exact clicked source action prefix must own this request');
+          const envelope=JSON.parse(body.payload.slice(body.payload.indexOf('\u001f')+1));
+          assert.equal(envelope.operation,expectedOperation);assert.deepEqual(envelope.controls,expectedControls);
+          assert.equal(envelope.model_id,await target.locator('#case-model-id').textContent());
+          const reference=await fetch(`${origin}/_hologram/intent`,{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify(body)});
+          assert.equal(reference.status,200);const actual=await reply.json();assert.deepEqual(actual,await reference.json(),'the native UI must render its exact current source action');
+          assert.deepEqual(Object.keys(actual).sort(),['outputs','version']);assert.equal(actual.version,2);assert.equal(actual.outputs.length,1);
+          const report=JSON.parse(actual.outputs[0]);assert.equal(report.action,spec.id,'the source result must correlate to the exact clicked action');if(![view.case_exchange.import_action.id,view.case_exchange.recompute_action.id].includes(spec.id))assert.equal(report.operation,expectedOperation);await shows(report.response,target);
+          await target.waitForFunction(()=>document.querySelector('#status')?.dataset.state==='ready');
+          assert.equal(await target.locator('#research-output').getAttribute('data-action'),report.action);
+          assert.equal(await target.locator('#research-output').getAttribute('data-operation'),report.operation);
+          assert.match(await target.locator('#research-output').getAttribute('data-request-id'),/^[1-9][0-9]*$/);
+          return {report,envelope};
+        } finally {target.off('request',onRequest);}
+      }
+      async function tables(report) {
+        assert.equal(await page.locator('[data-research-table]').count(),report.tables.length);
+        for(const table of report.tables){const section=page.locator(`[data-research-table="${table.id}"]`);assert.deepEqual(await section.locator('thead th').allTextContents(),table.columns);
+          const pages=Math.max(1,Math.ceil(table.rows.length/view.research.page_rows));const observed=[];
+          for(let index=1;index<=pages;index++){
+            if(index>1){await page.locator(`[data-table-page="${table.id}"]`).fill(String(index));await page.locator(`[data-table-page="${table.id}"]`).dispatchEvent('change');}
+            const rows=await section.locator('tbody tr').evaluateAll(rows=>rows.map(row=>({index:Number(row.dataset.rowIndex),values:[...row.querySelectorAll('td')].map(cell=>cell.textContent)})));
+            for(const row of rows){assert.equal(row.index,observed.length);observed.push(row.values);}
+          }
+          assert.deepEqual(observed,table.rows,'every source table row must remain reachable without truncation');
+        }
+      }
+      await journey('research-actions',async()=>{
+        await submit(first);const result=JSON.parse(decode.decode(Uint8Array.from(first.response)));const row=result.rows-1,column=result.columns-1;
+        await page.locator(`#result-table button[data-row="${row}"][data-column="${column}"]`).click();
+        const traced=await act('#research-trace');assert.deepEqual(traced.envelope.row,row);assert.deepEqual(traced.envelope.column,column);
+        assert.deepEqual(traced.report.selection,{row,column});assert.ok(traced.report.tables.length>0);await tables(traced.report);
+        const compared=await act('#research-compare');assert.ok(compared.report.panels.length>=2);assert.equal(compared.report.comparison.status,'equivalent');
+        assert.equal(await page.locator('[data-comparison-panel]').count(),compared.report.panels.length);
+        for(const panel of compared.report.panels){const section=page.locator(`[data-comparison-panel="${panel.id}"]`);assert.deepEqual(await section.locator('tbody td').allTextContents(),panel.cells);assert.deepEqual(await section.locator('pre').allTextContents(),[panel.request,panel.response]);}
+        const inspected=await act('#research-inspect');assert.ok(inspected.report.tables.length>0);await tables(inspected.report);
+        for(const tool of view.research.tools){await page.locator('#research-tool').selectOption(tool.id);const inspected=await act('#research-tool-submit');assert.equal(inspected.envelope.operation,tool.id);assert.deepEqual(inspected.envelope.values,[]);assert.ok(inspected.report.tables.length>0);await tables(inspected.report);}
+      });
+      await journey('research-case-exchange',async()=>{
+        await submit(first);const exported=await act('#case-export');assert.equal(exported.report.exchange.status,'exported');
+        assert.equal(exported.report.exchange.file_name,view.case_exchange.file_name);assert.ok(Buffer.byteLength(exported.report.exchange.file_text)<=view.case_exchange.maximum_bytes);
+        const download=page.waitForEvent('download');await page.locator('#case-download').click();const saved=await download;assert.equal(saved.suggestedFilename(),view.case_exchange.file_name);
+        const {readFile}=await import('node:fs/promises');assert.equal(await readFile(await saved.path(),'utf8'),exported.report.exchange.file_text);
+        const requests=[];const listener=request=>{if(request.url()===`${origin}/_hologram/intent`)requests.push(request);};page.on('request',listener);
+        try{await page.locator('#case-file').setInputFiles({name:view.case_exchange.file_name,mimeType:view.case_exchange.media_type,buffer:Buffer.from(exported.report.exchange.file_text)});await page.waitForTimeout(50);assert.deepEqual(requests,[],'selecting a file must never compute or upload');}finally{page.off('request',listener);}
+        const imported=await act('#case-import');assert.equal(imported.envelope.case_text,exported.report.exchange.file_text);
+        assert.equal(imported.report.exchange.status,'imported','a case just exported by this exact source model must import and recompute under the same identity');assert.equal(imported.report.comparison.status,'equivalent');
+        // Generate a foreign-identity case through the unchanged source action,
+        // rather than parsing or editing the application's opaque case format.
+        const foreignId=exported.envelope.model_id==='b'.repeat(64)?'a'.repeat(64):'b'.repeat(64);
+        const foreignResponse=await fetch(`${origin}/_hologram/intent`,{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify({version:2,name:'application.invoke',payload:view.case_exchange.export_action.request_prefix+'\u001f'+JSON.stringify({...exported.envelope,model_id:foreignId})})});
+        assert.equal(foreignResponse.status,200);const foreignEnvelope=await foreignResponse.json();assert.equal(foreignEnvelope.version,2);assert.equal(foreignEnvelope.outputs.length,1);const foreign=JSON.parse(foreignEnvelope.outputs[0]);assert.equal(foreign.exchange.status,'exported');assert.notEqual(foreign.exchange.file_text,exported.report.exchange.file_text);
+        await page.locator('#case-file').setInputFiles({name:view.case_exchange.file_name,mimeType:view.case_exchange.media_type,buffer:Buffer.from(foreign.exchange.file_text)});
+        const mismatch=await act('#case-import');assert.equal(mismatch.report.exchange.status,'identity-mismatch');assert.equal(await page.locator('#result').textContent(),'');assert.equal(await page.locator('#case-recompute').isVisible(),true);
+        const verified=await act('#case-recompute');assert.equal(verified.report.exchange.status,'imported');assert.equal(verified.report.comparison.status,'equivalent');
+        for(const file of [{name:'invalid.json',mimeType:'application/json',buffer:Buffer.from([255])},{name:'large.json',mimeType:'application/json',buffer:Buffer.alloc(view.case_exchange.maximum_bytes+1,120)}]){
+          await page.locator('#case-file').setInputFiles(file);const invocations=[];const listener=request=>{if(request.url()===`${origin}/_hologram/intent`)invocations.push(request);};page.on('request',listener);
+          try{await page.locator('#case-import').click();await statusShows(view.statuses.input_error);assert.deepEqual(invocations,[]);assert.equal(await page.locator('#result-error').isVisible(),true);}finally{page.off('request',listener);}
+        }
+        await page.locator('#reset').click();assert.equal(await page.locator('#case-content').inputValue(),'');assert.equal(await page.locator('#case-file').inputValue(),'');assert.equal(await page.locator('#case-download').isDisabled(),true);
+        await submit(recovery);
+      });
+      await journey('research-stale-owner',async()=>{
+        await submit(first);let release,arrive;const held=new Promise(resolve=>{release=resolve;}),arrived=new Promise(resolve=>{arrive=resolve;});
+        const handler=async route=>{const response=await route.fetch();arrive();await held;try{await route.fulfill({response});}catch{}};
+        await page.route('**/_hologram/intent',handler);
+        try{await page.locator('#research-trace').click();await bounded(arrived);await statusShows(view.statuses.running);const previous=await page.locator('#research-row').inputValue();await page.locator('#research-row').fill(previous==='0'?'1':'0');await page.locator('#research-row').dispatchEvent('change');await statusShows(view.statuses.cancelled);release();await page.waitForTimeout(100);assert.equal(await page.locator('#research-tables').textContent(),'');assert.equal(await page.locator('#comparison-panels').textContent(),'');assert.equal(await page.locator('#research-output').getAttribute('data-request-id'),null);assert.equal(await page.locator('#status').evaluate(node=>node.closest('[aria-busy="true"]')===null),true);}finally{release();await page.unroute('**/_hologram/intent',handler);}
+        await page.locator('#research-row').fill('0');await page.locator('#research-row').dispatchEvent('change');await submit(recovery);
+      });
+    }
   }
   process.stdout.write(`${JSON.stringify({stage: 'live'})}\n`);
   const stopped = await input.next();
@@ -928,6 +1045,7 @@ async function journey(name, work) {
     await statusShows(workbench ? view.statuses.compute_error : text ? view.response_error : view.input_error);
     assert.equal((await fetch(`${origin}/app.js`)).status, 410);
   });
+  if(research){assert(modelModuleRequests.length>0);assert(modelModuleRequests.every(query=>query==='?model_id='+runtimeModelId));}
   assert.deepEqual(unexpected, []);
   process.stdout.write(`${JSON.stringify({schema: 'prismpm/portable-browser-oracle/1', profile,
     engine: browser.browserType().name(), browser_version: browser.version(), playwright: '1.62.1', cases, vector_indexes: vectorIndexes,

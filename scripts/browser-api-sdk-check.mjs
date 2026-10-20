@@ -1,9 +1,10 @@
 // Release test input binding, not a release receipt or replacement for source V&V.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {constants,closeSync,fstatSync,lstatSync,openSync,readFileSync,readdirSync,readSync} from 'node:fs';
+import {constants,closeSync,fstatSync,lstatSync,mkdtempSync,openSync,readFileSync,readdirSync,readSync,realpathSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {dirname,join,parse,resolve} from 'node:path';
+import {basename,dirname,join,parse,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
 import {verifyAccountGenesisConstruction} from '../sdk/account-genesis-artifact.mjs';
@@ -69,7 +70,7 @@ export const suites=Object.freeze([
  {id:'DK-34',minimum:22,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
  {id:'DK-35',minimum:97,files:['tests/browser-session-operation/boundary.test.mjs','tests/browser-view/kernel-provenance.test.mjs','tests/browser-view/local-module-inputs.test.mjs','tests/browser-view/file-custody.test.mjs','tests/browser-session-operation/owner.test.mjs']},
  {id:'DK-37',minimum:24,files:['contextual-effects.test.mjs']},
- {id:'DK-38',minimum:29,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
+ {id:'DK-38',minimum:30,files:['tests/browser-semantic-presentation/wire.test.mjs','tests/browser-semantic-presentation/dom.test.mjs','semantic-presentation.test.mjs']},
  {id:'ST-17',minimum:21,files:['tests/browser-pkce/guards.test.mjs','tests/browser-pkce/owner.test.mjs']},
  {id:'HO-15',minimum:11,files:['tests/holo-primary-component/component.test.mjs','tests/holo-primary-component/owner.test.mjs']},
 ].map(row=>Object.freeze({...row,
@@ -85,7 +86,7 @@ export const fallbackSuites=Object.freeze([
 // replacements for DK owners or either fixed-null compiler fallback.
 export const standaloneSuites=Object.freeze([
  {id:'Session Projection',deadline:3600000,files:['tests/browser-session-journal/projection.test.mjs','tests/browser-session-journal/projection-owner.test.mjs'],exactTests:[7,1]},
- {id:'Session Reservation',deadline:3600000,files:['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],exactTests:[10,23]},
+ {id:'Session Reservation',deadline:3600000,files:['tests/browser-session-journal/reservation.test.mjs','tests/browser-session-journal/reservation-owner.test.mjs'],exactTests:[11,23]},
  {id:'Session Payload',deadline:3600000,files:['tests/browser-session-payloads/component.test.mjs','tests/browser-session-payloads/owner.test.mjs'],exactTests:[4,30]},
  {id:'Session Recovery Frames',deadline:3600000,files:['tests/browser-session-recovery-frames/wire.test.mjs','tests/browser-session-recovery-frames/owner.test.mjs'],exactTests:[3,1]},
  {id:'Session Journal Recovery',deadline:5500000,files:['tests/browser-session-journal-recovery/component.test.mjs','tests/browser-session-journal-recovery/owner.test.mjs'],exactTests:[7,1]},
@@ -250,6 +251,47 @@ async function launchSuite(program,args,options){
  return {status:result.status,signal:result.signal,stdout:result.stdout.toString('utf8'),stderr:result.stderr.toString('utf8')};
 }
 
+// A fulfilled write callback is the forwarding boundary, not an SDK pass.
+const emitStdout=text=>new Promise((resolve,reject)=>{
+ // A failed write also emits a stream error; consume that owned error so
+ // forwarding can preserve the original suite failure instead of escaping.
+ const failed=error=>reject(error);
+ process.stdout.once('error',failed);
+ try{
+  process.stdout.write(text,error=>{
+   if(error){reject(error);return;}
+   process.stdout.removeListener('error',failed);resolve();
+  });
+ }catch(error){process.stdout.removeListener('error',failed);reject(error);}
+});
+async function forwardSuiteOutput(emit,text,primary){
+ try{await emit(text);}
+ catch(error){
+  if(primary)throw new AggregateError([primary,error],
+   'owning suite failed and diagnostic forwarding failed',{cause:primary});
+  throw error;
+ }
+ if(primary)throw primary;
+}
+
+function createSuiteScratch() {
+ const parent=realpathSync(tmpdir()),path=mkdtempSync(join(parent,'prismpm-sdk-suite-'));
+ assert.equal(dirname(path),parent);assert.match(basename(path),/^prismpm-sdk-suite-[A-Za-z0-9]+$/);
+ assert.equal(realpathSync(path),path,'unaliased private owning suite scratch');
+ const stat=lstatSync(path);
+ assert.ok(stat.isDirectory()&&stat.uid===process.getuid()&&(stat.mode&0o077)===0,'owned private owning suite scratch');
+ return {path,identity:{dev:stat.dev,ino:stat.ino,uid:stat.uid,gid:stat.gid,mode:stat.mode}};
+}
+function retireSuccessfulSuiteScratch(scratch) {
+ const {path,identity}=scratch;
+ assert.equal(realpathSync(path),path,'unaliased completed owning suite scratch');
+ const stat=lstatSync(path);
+ assert.ok(stat.isDirectory()&&stat.uid===process.getuid()&&(stat.mode&0o077)===0,'owned private completed owning suite scratch');
+ for(const key of ['dev','ino','uid','gid','mode'])assert.equal(stat[key],identity[key],'same completed owning suite scratch');
+ rmSync(path,{recursive:true,force:false,maxRetries:0});
+ assert.equal(lstatSync(path,{throwIfNoEntry:false}),undefined,'completed owning suite scratch must be retired');
+}
+
 async function runSuiteCollection(root,executions,launch,emit){
  root=resolve(root);
  // Preflight the complete inventory before any test can execute. The installed
@@ -262,18 +304,25 @@ async function runSuiteCollection(root,executions,launch,emit){
  const completed=[],env={...process.env};delete env.NODE_TEST_CONTEXT;
  for(const execution of executions){
   const deadline=execution.deadline;
+  const scratch=createSuiteScratch(),suiteEnv={...env,TMPDIR:scratch.path};
   const args=['--test','--test-concurrency=1','--test-reporter='+reporter,'--test-timeout='+deadline,...execution.files];
   let output;
   try{
-   output=await launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:execution.exactTests?deadline:deadline+100000,maxBuffer:64*1024*1024,env,...(execution.exactTests?{owned:true}:{})});
+   output=await launch(process.execPath,args,{cwd:root,encoding:'utf8',timeout:execution.exactTests?deadline:deadline+100000,maxBuffer:64*1024*1024,env:suiteEnv,...(execution.exactTests?{owned:true}:{})});
   }catch(error){
-   emit('SDK browser suite '+identity(execution)+'\n'+(error.result?.stdout??'')+(error.result?.stderr??''));
-   throw error;
+   await forwardSuiteOutput(emit,'SDK browser suite '+identity(execution)+'\n'
+    +(error.result?.stdout??'')+(error.result?.stderr??''),error);
   }
-  emit('SDK browser suite '+identity(execution)+'\n'+(output.stdout??'')+(output.stderr??''));
-  assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+identity(execution));
+  let primary;
+  try{assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0,'complete owning '+identity(execution));}
+  catch(error){primary=error;}
+  await forwardSuiteOutput(emit,'SDK browser suite '+identity(execution)+'\n'
+   +(output.stdout??'')+(output.stderr??''),primary);
   const tests=verifyTap(output.stdout,execution.minimum);
   verifyFileCompletions(output.stdout,selected.get(identity(execution)),tests,execution.exactTests);
+  // Only this fully successful owner's temporary workspace is retired. Failure
+  // and diagnostic-forwarding paths above preserve it until outer retirement.
+  retireSuccessfulSuiteScratch(scratch);
   completed.push({id:execution.id,...(execution.construction?{construction:execution.construction}:{}),tests});
  }
  assert.deepEqual(completed.map(identity),executions.map(identity));return completed;
@@ -281,13 +330,13 @@ async function runSuiteCollection(root,executions,launch,emit){
 
 // Invoked only in the inspected current SDK. Preserve the original26 owners
 // and both independent fallbacks, then execute all six complete file pairs.
-export async function runSuites(root,launch=launchSuite,emit=text=>process.stdout.write(text)){
+export async function runSuites(root,launch=launchSuite,emit=emitStdout){
  return runSuiteCollection(root,[...suites,...fallbackSuites,...standaloneSuites],launch,emit);
 }
 
 // Source VV has already executed the original registered DK/fallback owners.
 // Its separate standalone invocation still executes every original file pair.
-export async function runStandaloneSuites(root,launch=launchSuite,emit=text=>process.stdout.write(text)){
+export async function runStandaloneSuites(root,launch=launchSuite,emit=emitStdout){
  return runSuiteCollection(root,standaloneSuites,launch,emit);
 }
 

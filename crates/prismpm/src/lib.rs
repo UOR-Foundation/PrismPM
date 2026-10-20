@@ -29,6 +29,7 @@ pub mod oci;
 pub mod operations;
 mod process_resources;
 mod release_verification;
+mod research_workbench;
 pub mod sdk;
 pub mod supply_chain;
 pub mod system;

@@ -308,11 +308,39 @@ test('release job keeps both native library and browser gates mandatory for each
  assert.match(workflow,/bash root-a\/scripts\/library-sdk-check\.sh "\$\(cat \.shipped-image\/sdk-image.txt\)" "\$GITHUB_SHA"/);
  assert.match(workflow,/os: ubuntu-24.04-arm/);assert.match(workflow,/name: library-sdk-\$\{\{ matrix.name \}\}/);
  const wrapper=readFileSync(new URL('./library-sdk-check.sh',import.meta.url),'utf8');
+ const copy='docker container cp "$container:/opt/prismpm/share/conformance-root/$path" - | tar --extract --no-same-owner --no-same-permissions --delay-directory-restore --file - --directory "$sdk_work/source/$(dirname "$path")"';
+ const copiedSource=script=>{
+  assert.ok(script.includes('set -euo pipefail'),'both original Docker producer and GNUtar extractor must succeed');
+  assert.equal(script.split(copy).length,2,'complete original source-root archive uses delayed nonroot extraction once');
+  const verify='node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"';
+  assert.ok(script.indexOf(verify)>script.indexOf(copy),'the complete extracted source and declared aliases remain verified');
+ };
+ copiedSource(wrapper);
+ for(const [before,after]of [[copy,copy.replace('--no-same-owner ','')],[copy,copy.replace('--no-same-permissions ','')],
+  [copy,copy.replace('--delay-directory-restore ','')],['set -euo pipefail','set -eu'],
+  ['node "$helper" verify "$sdk_work/source" "$sdk_work/source.json"','true']]){
+  assert.ok(wrapper.includes(before));assert.throws(()=>copiedSource(wrapper.replace(before,after)));
+ }
  for(const required of ['--user 1000:1000 --read-only --network none','--cap-drop ALL','--security-opt no-new-privileges','--tmpfs /tmp:rw,exec,nosuid,nodev,size=8g','PRISMPM_EPHEMERAL_HOME=1','node scripts/library-sdk-check.mjs run'])assert.ok(wrapper.includes(required),required);
  const execution=wrapper.slice(wrapper.indexOf('# Execution has no network'));
  assert.ok(!execution.includes('--volume')&&!execution.includes('--mount'));
- const recipe=readFileSync(new URL('../sdk/Dockerfile',import.meta.url),'utf8');
- assert.match(recipe,/elan toolchain install leanprover\/lean4:v4\.32\.1 \\\n\s+&& chmod -R a\+rX,go-w \/usr\/local\/elan\/toolchains\/leanprover--lean4---v4\.32\.1/);
+ const root='/usr/local/elan/toolchains/leanprover--lean4---v4.32.1',staging='/usr/local/elan/toolchains/.lean-4.32.1-install';
+ const ordered=[`mv --no-clobber --no-target-directory ${staging} ${root}`,`test ! -e ${staging}`,
+  `chmod -R a+rX,go-w ${root}`,'ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lean --version','ELAN_TOOLCHAIN=leanprover/lean4:v4.32.1 lake --version'];
+ const normalize=recipe=>recipe.replace(/\\\r?\n\s*/g,' ').replace(/\s+/g,' ');
+ const check=recipe=>assert.ok(normalize(recipe).includes(ordered.join(' && ')),
+  'canonical publication must precede complete toolchain permissions and both exact remote probes');
+ for(const path of ['../sdk/Dockerfile','../.devcontainer/Dockerfile']){
+  const recipe=readFileSync(new URL(path,import.meta.url),'utf8');check(recipe);
+  const original=normalize(recipe),sequence=ordered.join(' && ');
+  assert.equal(original.split(sequence).length,2,'one actual canonical toolchain publication pipeline required');
+  for(const [before,after]of [[ordered[2],'true'],[ordered[2],ordered[2].replace('chmod -R','chmod')],
+   [ordered[2],ordered[2].replace(',go-w','')],[ordered[2],ordered[2]+'/bin'],[ordered[3],'true'],[ordered[4],'true'],
+   [ordered[2]+' && '+ordered[3],ordered[3]+' && '+ordered[2]]]){
+   assert.equal(sequence.split(before).length,2,'mutation must select the actual toolchain pipeline command once');
+   const changed=original.replace(sequence,sequence.replace(before,after));assert.notEqual(changed,original);assert.throws(()=>check(changed));
+  }
+ }
 });
 
 test('owning CLI test kills a removed process-exit guard',t=>{

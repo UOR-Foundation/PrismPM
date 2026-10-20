@@ -29,7 +29,7 @@ test('text_v2_resource_bounds preserve raw text through the actual browser oracl
     const fills = [];
     const page = {locator: selector => ({fill: async value => fills.push([selector, value])})};
     const actual = await runInNewContext(`(async () => {${selection}\n${functions}\nawait fill(vector); return {display: displayed(vector), applicable: applicable(vector)};})()`,
-      {assert, app: {profile, view: {}, request_maximum: 4096}, page, vector, TextDecoder, Uint8Array});
+      {assert, research:false, app: {profile, view: {}, request_maximum: 4096}, page, vector, TextDecoder, Uint8Array});
     assert.deepEqual(fills, [['#request', request]], profile);
     assert.equal(actual.display, response, profile);
     assert.equal(actual.applicable, true, profile);
@@ -51,7 +51,7 @@ test('text_v3_workbench actual oracle maps guided and raw frames and discloses e
     const page = {locator: selector => ({evaluate: async fn => fn({tagName:selector==='#field-message'&&field.kind==='choice'?'SELECT':'TEXTAREA'}),
       fill: async value => fills.push([selector,value]), selectOption: async value => fills.push([selector,value])})};
     const actual = await runInNewContext(`(async()=>{${selection}\nconst transportRejectedIndexes=[],textareaNormalizedIndexes=[],unrepresentableFrameIndexes=[];\n${frame}\n${functions}\nconst eligible=applicable(vector);if(eligible)await fill(vector);return{eligible,display:displayed(vector),transportRejectedIndexes,textareaNormalizedIndexes,unrepresentableFrameIndexes};})()`,
-      {assert,app,page,vector,TextDecoder,Uint8Array});
+      {assert,research:false,app,page,vector,TextDecoder,Uint8Array});
     assert.equal(actual.eligible,eligible);
     assert.equal(actual.display,'exact underlying wire');
     for(const name of ['transportRejectedIndexes','textareaNormalizedIndexes','unrepresentableFrameIndexes'])
@@ -94,7 +94,7 @@ test('text_v3_workbench actual oracle maps guided and raw frames and discloses e
       locator(selector) {return {async click(){clicks.push(selector);assert.equal(selector,button);}};},
     };
     const expected = workbench ? ['compute error','response error','compute error','compute error'] : Array(4).fill('legacy response error');
-    await runInNewContext('(async()=>{'+program.slice(start,end)+'})()', {assert,Buffer,page,view,workbench,
+    await runInNewContext('(async()=>{'+program.slice(start,end)+'})()', {assert,Buffer,page,view,workbench,intentVersion:1,
       app:{response_maximum:16},recovery:{request:[120]},frame:()=>({button}),
       journey:async(name,run)=>{assert.equal(name,'text-response-bounds');await run();},
       fill:async()=>{},submit:async()=>{},statusShows:async copy=>{copies.push(copy);assert.equal(copy,expected[responses.length-1]);}});
@@ -113,18 +113,23 @@ test('delayed module fault retires its exact route before the unchanged retained
   const start=source.indexOf("  await journey('delayed-init', async () => {");
   const end=source.indexOf("  await journey('intent-boundaries',",start);
   assert(start>=0&&end>start);
-  const body=source.slice(start,end);
+  const body=source.slice(start,end),selection=source.slice(source.indexOf('async function fillResearchSelection('),source.indexOf('function displayed('));
+  assert(selection.startsWith('async function fillResearchSelection('));
+  for(const research of [false,true]){
+  const appModulePath=research?'app.js?model_id='+'a'.repeat(64):'app.js';
+  const expectedRoute=research?'http://127.0.0.1/'+appModulePath:'**/app.js';
   const events=[];let handler,continued=false;const recovery={request:[120]};
   const locator={isDisabled:async()=>true};
-  const page={goto:async()=>events.push('goto'),locator:()=>locator,on(){},waitForTimeout:async()=>{},url:()=> 'http://127.0.0.1/',
+  const page={goto:async()=>events.push('goto'),locator:selector=>selector==='#submit'?locator:{inputValue:async()=> '0',fill:async value=>{assert(['#research-row','#research-column'].includes(selector));assert.equal(value,selector.endsWith('row')?'7':'2');events.push(selector);},dispatchEvent:async name=>assert.equal(name,'change')},on(){},waitForTimeout:async()=>{},url:()=> 'http://127.0.0.1/',
     async waitForLoadState(state){assert.equal(state,'networkidle');await handler({continue:async()=>{continued=true;events.push('continued');}});},
-    evaluate:async()=> 'x'};
-  const context={async route(pattern,value){assert.equal(pattern,'**/app.js');handler=value;events.push('route');},newPage:async()=>page,
-    async unroute(pattern,value){assert.equal(pattern,'**/app.js');assert.equal(value,handler);assert(continued);events.push('unroute');},close:async()=>events.push('close')};
-  await runInNewContext('(async()=>{'+body+'})()', {assert,browser:{newContext:async()=>context},origin:'http://127.0.0.1',recovery,workbench:false,text:true,view:{response_error:'not ready'},decode:new TextDecoder(),Uint8Array,
-    journey:async(name,run)=>{assert.equal(name,'delayed-init');await run();},fill:async()=>events.push('fill'),statusShows:async()=>{},
+    evaluate:async()=>{events.push('retained');return 'x';}};
+  const context={async route(pattern,value){assert.equal(pattern,expectedRoute);handler=value;events.push('route');},newPage:async()=>page,
+    async unroute(pattern,value){assert.equal(pattern,expectedRoute);assert.equal(value,handler);assert(continued);events.push('unroute');},close:async()=>events.push('close')};
+  await runInNewContext('(async()=>{'+selection+'\n'+body+'})()', {assert,research,appModulePath,browser:{newContext:async()=>context},origin:'http://127.0.0.1',recovery,workbench:research,text:true,view:{response_error:'not ready',statuses:{initializing:'not ready'}},frame:()=>({input:'x',envelope:{row:7,column:2}}),decode:new TextDecoder(),Uint8Array,
+    journey:async(name,run)=>{assert.equal(name,'delayed-init');await run();},fill:async(vector,target,context)=>{assert.equal(context.phase,'pre-init');events.push('fill');},statusShows:async()=>{},
     submit:async(vector,target,keyboard,options)=>{assert.equal(vector,recovery);assert.equal(target,page);assert.equal(keyboard,false);assert.equal(options.fillInputs,false);assert(events.includes('unroute'));events.push('submit');}});
-  assert.deepEqual(events,['route','goto','fill','continued','unroute','submit','close']);
+  assert.deepEqual(events,['route','goto','fill','continued','unroute','retained',...(research?['#research-row','#research-column']:[]),'submit','close']);
+  }
 });
 
 test('duplicate control owns its real response task and preserves rejection, envelope and byte bounds', async () => {
@@ -1347,7 +1352,7 @@ test('pinned archive comparison retains complete content and mode custody withou
   try {
     for (const mask of ['0022', '0077']) {
       const directory = join(root, mask);
-      mkdirSync(directory);
+      mkdirSync(directory,{mode:0o700});
       const extraction = spawnSync('/bin/sh', ['-c', 'umask "$1"; exec /usr/bin/tar --no-same-owner --same-permissions -xf "$2" -C "$3"', 'extract', mask, archive, directory], {timeout: 30000, maxBuffer: 65536});
       assert.ifError(extraction.error);
       assert.equal(extraction.signal, null);
@@ -1386,7 +1391,7 @@ source["verify"](sys.argv[2], sys.argv[3])
             'the actual early-refusal assertion kills buffering-before-validation');
         }
       }finally {rmSync(join(directory,'unexpected-stream-member'));}
-      const selected = join(directory, 'Cargo.toml'), original = readFileSync(selected);
+      const selected = join(directory, 'Cargo.toml'), original = readFileSync(selected), originalMode=actualFs.statSync(selected).mode&0o777;
       for (const mutation of ['bytes', 'missing', 'extra', 'mode', 'symlink', 'hardlink']) {
         if (mutation === 'bytes') writeFileSync(selected, Buffer.concat([original, Buffer.from('\n')]));
         if (mutation === 'missing') renameSync(selected, join(root, 'removed'));
@@ -1400,7 +1405,7 @@ source["verify"](sys.argv[2], sys.argv[3])
         if (mutation === 'bytes') writeFileSync(selected, original);
         if (mutation === 'missing') renameSync(join(root, 'removed'), selected);
         if (mutation === 'extra') rmSync(join(directory, 'unexpected'));
-        if (mutation === 'mode') chmodSync(selected, 0o664);
+        if (mutation === 'mode') chmodSync(selected, originalMode);
         if (mutation === 'symlink') { rmSync(selected); renameSync(join(root, 'removed'), selected); }
         if (mutation === 'hardlink') rmSync(join(root, 'alias'));
         assert.equal(check(archive, directory).status, 0, 'restored ' + mutation);
@@ -1581,7 +1586,7 @@ test('portable oracle owns the complete two-profile and two-trigger boundary inv
   assert.deepEqual(matrix.profiles[1].journeys, [...common, 'text-response-bounds', 'text-safe-rendering', 'detached-session']);
 });
 
-test('the existing interoperability binary owns both complete acceptances and one fresh matrix', () => {
+test('the existing interoperability binary owns both complete acceptances and one fresh matrix', t => {
   const rust = read('crates/prismpm/tests/hologram_interop.rs');
   assert.match(rust, /#\[test\]\s+fn test_portable_view_profiles_and_owned_failure_matrix\(\)/);
   for (const name of ['calculator_hologram_oracle_interoperability_acceptance', 'text_application_hologram_oracle_interoperability_acceptance']) {
@@ -1598,6 +1603,50 @@ test('the existing interoperability binary owns both complete acceptances and on
   assert.match(owner, /'build', '--locked', '--offline'/);
   assert.match(owner, /assert\.equal\(outcomes\.length, 78/);
   assert.match(owner, /executable\.verify\(\)/);
+  // Execute the actual pre-compiler checks against captured register/output
+  // bytes. The real matrix applies these same checks to both fresh subjects.
+  const start = owner.indexOf('const dependencyRegister = ');
+  const end = owner.indexOf('for (const [actual, embedded]', start);
+  const outputStart = owner.indexOf('  const provenance = capture(');
+  const outputEnd = owner.indexOf('  const profile = matrix.profiles[index]', outputStart);
+  assert(start >= 0 && end > start && outputStart >= 0 && outputEnd > outputStart);
+  const registerCheck = owner.slice(start, end), outputCheck = owner.slice(outputStart, outputEnd);
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'prism-oracle-provenance-')));
+  t.after(() => rmSync(directory, {recursive:true, force:true}));
+  mkdirSync(join(directory, 'model'));
+  mkdirSync(join(directory, 'application'));
+  const register = read('model/dependencies.toml');
+  const selected = register.split('[[dependency]]').filter(section => /^id = "hologram-live"$/m.test(section));
+  assert.equal(selected.length, 1);
+  const revision = /^revision = "([0-9a-f]{40})"$/m.exec(selected[0])[1];
+  const execute = (registerBytes, value, check = outputCheck) => {
+    writeFileSync(join(directory, 'model/dependencies.toml'), registerBytes);
+    writeFileSync(join(directory, 'application/model-provenance.json'), JSON.stringify(value));
+    return runInNewContext(`(() => {${registerCheck}\n${check}\nreturn captured.length;})()`, {
+      assert, capture, readFileSync, join, root:directory, path:directory,
+      captured:[capture(join(directory, 'model/dependencies.toml'))],
+    });
+  };
+  assert.equal(execute(register, {hologram_live_commit:revision}), 2);
+  const refusal = error => error.code === 'ERR_ASSERTION'
+    && error.message.includes('generated application provenance differs from the registered Hologram Live oracle');
+  for (const value of ['d8208266d8abdc2445b7bbc0cef412a566adfaf1', '0'.repeat(40), null])
+    assert.throws(() => execute(register, {hologram_live_commit:value}), refusal);
+  const alternate = '1'.repeat(40);
+  const changed = register.replace(`revision = "${revision}"`, `revision = "${alternate}"`);
+  assert.notEqual(changed, register);
+  assert.equal(execute(changed, {hologram_live_commit:alternate}), 2);
+  assert.throws(() => execute(changed, {hologram_live_commit:revision}), refusal);
+  for (const invalid of [
+    register.replace('id = "hologram-live"', 'id = "other-live"'),
+    register + '\n[[dependency]]\nid = "hologram-live"\nrevision = "' + revision + '"\nrole = "validation-oracle"\n',
+    register.replace(`revision = "${revision}"`, 'revision = "unknown"'),
+  ]) assert.throws(() => execute(invalid, {hologram_live_commit:revision}), {code:'ERR_ASSERTION'});
+  const equality = "  assert.equal(JSON.parse(readFileSync(provenance.path, 'utf8')).hologram_live_commit, liveRevision,\n"
+    + "    'generated application provenance differs from the registered Hologram Live oracle');\n";
+  assert.equal(outputCheck.split(equality).length, 2);
+  assert.equal(execute(register, {hologram_live_commit:'0'.repeat(40)}, outputCheck.replace(equality, '')), 2,
+    'omitting the real output equality admits the deliberately wrong provenance');
 });
 
 test('portable probe rejects undeclared triggers and infrastructure keyboard claims before opening inputs', () => {
@@ -1610,4 +1659,37 @@ test('portable probe rejects undeclared triggers and infrastructure keyboard cla
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, message);
   }
+});
+
+test('text_v4_research native UI partition preserves canonical envelopes and opaque raw separators',async()=>{
+  const program=read('crates/prismpm/src/embedded/hologram-oracle.browser.mjs');
+  const execute=async(program,request,{phase='ready',staticSkeleton=false}={})=>{
+    const selection=program.slice(program.indexOf('const workbench = '),program.indexOf('const cases = [];'));
+    const frame=program.slice(program.indexOf('function frame(vector) {'),program.indexOf('// Failure-only observations,'));
+    const functions=program.slice(program.indexOf('async function fill('),program.indexOf('const valid = app.acceptance_vectors'));
+    const field={id:'message',kind:'multiline',required:true,choices:[]},vector={request:[...Buffer.from(request)],response:[...Buffer.from('{"response":"source bytes"}')]};
+    const app={profile:'prismpm/text-application/4',request_maximum:4096,acceptance_vectors:[vector],view:{raw:{request_prefix:'raw-v4'},operations:[{id:'echo',request_prefix:'compute-v4',fields:[field]}]}};
+    const fills=[],selectors=[],page={locator:selector=>{selectors.push(selector);if(staticSkeleton&&!['#raw-editor','#request'].includes(selector))throw new Error('pre-init attempted postmount control '+selector);return{evaluate:async fn=>fn({tagName:'TEXTAREA'}),fill:async value=>fills.push([selector,value]),selectOption:async value=>fills.push([selector,value]),inputValue:async()=> '0',dispatchEvent:async()=>{}};}};
+    return await runInNewContext(`(async()=>{${selection}\nconst transportRejectedIndexes=[],textareaNormalizedIndexes=[],unrepresentableFrameIndexes=[];${frame}\n${functions}\nconst eligible=applicable(vector);if(eligible)await fill(vector,page,{phase});return {eligible,fills,selectors,transportRejectedIndexes,textareaNormalizedIndexes,unrepresentableFrameIndexes};})()`,{assert,research:true,app,page,vector,fills,selectors,phase,TextDecoder,Uint8Array});
+  };
+  const envelope={version:1,operation:'echo',request:'',values:['hello'],row:0,column:0,controls:[],model_id:'',case_text:''};
+  const wire=e=>'compute-v4\u001f'+JSON.stringify(e);
+  assert.equal((await execute(program,wire(envelope))).eligible,true);
+  const raw=await execute(program,'raw-v4\u001f'+JSON.stringify({...envelope,operation:'raw',request:'opaque\u001ftext',values:[]}));assert.equal(raw.eligible,true);assert.deepEqual(Array.from(raw.fills,row=>Array.from(row)),[['#request','opaque\u001ftext']]);
+  const rawFrame='raw-v4\u001f'+JSON.stringify({...envelope,operation:'raw',request:'opaque\u001ftext',values:[]});
+  const beforeInit=await execute(program,rawFrame,{phase:'pre-init',staticSkeleton:true});
+  assert.deepEqual(Array.from(beforeInit.fills,row=>Array.from(row)),[['#request','opaque\u001ftext']]);
+  assert.deepEqual(Array.from(beforeInit.selectors),['#raw-editor','#request'],'held initialization has only the source static raw skeleton');
+  await assert.rejects(()=>execute(program,wire(envelope),{phase:'pre-init',staticSkeleton:true}),/pre-init recovery requires the static raw frame/);
+  await assert.rejects(()=>execute(program,rawFrame,{phase:'other'}),/unknown fill lifecycle phase/);
+  const mounted=await execute(program,'raw-v4\u001f'+JSON.stringify({...envelope,operation:'raw',request:'opaque\u001ftext',values:[],row:7,column:2}));
+  assert.deepEqual(Array.from(mounted.fills,row=>Array.from(row)),[['#request','opaque\u001ftext'],['#research-row','7'],['#research-column','2']],'postmount recovery must not assume a zero selection');
+  const phaseGuard="if(phase==='ready')await fillResearchSelection(prepared,target);";assert.equal(program.split(phaseGuard).length,2);
+  await assert.rejects(()=>execute(program.replace(phaseGuard,'await fillResearchSelection(prepared,target);'),rawFrame,{phase:'pre-init',staticSkeleton:true}),/pre-init attempted postmount control #research-row/);
+  const retainedGuard="assert.equal(retained, text ? expectedInput : expectedInput.split('\\t')[2]);";
+  const retainedAt=program.indexOf(retainedGuard),selectionAt=program.indexOf('if(research)await fillResearchSelection(frame(recovery),delayedPage);',retainedAt);
+  assert(retainedAt>=0&&selectionAt>retainedAt&&selectionAt<program.indexOf('await submit(recovery, delayedPage, false, {fillInputs: false});',retainedAt));
+  for(const e of [{...envelope,operation:'other'},{...envelope,values:[]},{...envelope,controls:['undeclared']},{...envelope,model_id:'wrong'},{...envelope,request:'stale'},{...envelope,row:4294967296}])assert.equal((await execute(program,wire(e))).eligible,false);
+  const duplicate=wire(envelope).replace('"version":1','"version":1,"version":1');assert.equal((await execute(program,duplicate)).eligible,false);
+  const canonical="assert.equal(JSON.stringify(envelope),request.slice(boundary+1),'UI examples require an exact canonical envelope; malformed source vectors remain direct tests');";assert.equal(program.split(canonical).length,2);assert.equal((await execute(program.replace(canonical,''),duplicate)).eligible,true,'the canonical-byte guard must kill duplicate-erasure before a changed UI invocation');
 });

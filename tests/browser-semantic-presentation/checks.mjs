@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {chmodSync, lstatSync, mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {prepare, run, sha, repository, frozenInputs} from './compile.mjs';
 import {corpus, predicates, fixture, labels, designs} from './corpus.mjs';
@@ -12,6 +13,12 @@ export {assertPaletteInventory, executeWasm};
 const tsv = rows => rows.map(row => row.id + '\t' + Buffer.from(row.request).toString('hex')
   + '\t' + Buffer.from(row.response).toString('hex') + '\n').join('');
 export const closure = frozenInputs;
+
+export function createSemanticEvidenceDirectory() {
+  // The installed source is read-only. Keep receipts after build.work retires;
+  // the owning suite controls the lifetime of this private temporary sibling.
+  return mkdtempSync(join(tmpdir(), 'prismpm-semantic-verification-'));
+}
 
 export function captureBrowserEvidence(value) {
   const snapshot = structuredClone(value);
@@ -165,8 +172,7 @@ export function verifyWire(t) {
     }
   }
   assert.equal(build.maxima.length, 8);
-  const directory = join(repository, 'target/semantic-verification'); mkdirSync(directory, {recursive: true});
-  build.evidenceDirectory = mkdtempSync(join(directory, 'run-'));
+  build.evidenceDirectory = createSemanticEvidenceDirectory();
   build.positiveArchive = archive(build, build.evidenceDirectory, 'positive-artifacts', ['all-vectors.tsv']);
   build.mutationEvidence = [];
   build.browserEvidence = [];

@@ -205,8 +205,11 @@ Feature: sdk
   @DK-09 @build
   Scenario: The browser peer host boundary exchanges bounded ordered bytes over manually paired direct WebRTC sessions and rejects malformed signaling, framing, queue overflow, expired operations, and closed sessions without claiming peer authority or internet-wide discovery.
     Given independent browser contexts and explicit manual pairing
+    And the complete real-browser peer suite runs with only a loopback interface in a network-none container
+    And each isolated test context grants microphone permission only to its local acceptance origin for host-candidate enumeration without media acquisition
     When real ordered peer data channels exchange opaque bounded bytes
     Then malformed and excessive traffic, stale signaling, and closed sessions fail explicitly
+    And no external ICE service, replacement transport, omitted test or extended operation deadline supplies the result
 
   @DK-01 @build
   Scenario: One versioned SDK inventory closes over PrismPM, LexLean, Lean, lean4-prod, stdlib, oracles, adapters, and schemas.
@@ -216,9 +219,23 @@ Feature: sdk
 
   @DK-02 @build
   Scenario: Signed non-root amd64 and arm64 SDK images use digest-pinned bases and carry OCI, SPDX, and provenance evidence.
-    Given the locked PrismPM production fixture
+    Given the locked PrismPM production fixture with the exact signed timestamped native Ubuntu snapshot, complete suites and components, keyring and package versions
+    And the checksum-pinned Elan 4.2.3 installer and exact official per-architecture Lean 4.32.1 GitHub release archives and published checksums
     When the DK-02 contract is exercised
+    And both APT acquisition commands select eight imported failed-file retries, 30-second HTTP and HTTPS timeouts, zero pipeline depth and xz ordering
+    And update uses error-on-any so incomplete indexes and failed installation refuse construction without changing pins or trust
+    And production recipe and effective configuration checks reject planted retry, timeout, source, signature and failure-bypass defects
+    And the real HTTP 503 fixture uses three retries and its own 30-second deadline solely to distinguish strict failure from missing-index success
+    And verified HTTPS acquisition and strict archive checksums precede safe member listing and staged extraction without preserving archive ownership or clobbering the normal canonical Elan toolchain directory
+    And the pinned zstd prerequisite, complete recursive modes and existing executable probes are retained
+    And planted archive, architecture, checksum-order, member, destination, ownership, canonical-path, mode and probe defects are rejected without a TLS bypass, mirror, linked toolchain or host fallback
     Then its positive evidence passes and its planted defect is rejected
+    And complete native construction on both architectures remains required without an eventual-recovery or whole-graph elapsed-time claim
+    And opted-in ephemeral SDK execution supplies unset or empty XDG cache, config and runtime settings from one fresh temporary parent with child-owned mode 0700 directories
+    And explicit XDG settings, canonical HOME, requested umask and the original exec, argv and exit behavior remain unchanged
+    And real-entrypoint regressions observe private defaults, caller settings and distinct invocations without replacing the launcher or identity operations
+    And directory setup failure refuses the command while temporary storage retirement remains the existing container or volume owner's obligation
+    And complete installed browser-suite stdout and stderr finish forwarding before later execution or failure reporting, retaining both original and forwarding failures without replacing owning acceptance
 
   @DK-03 @build
   Scenario: Native Linux archives and OCI SDK execution produce identical platform-independent outputs and diagnostics.
@@ -228,9 +245,15 @@ Feature: sdk
 
   @DK-04 @build
   Scenario: The complete SDK lock and explicit fetch phase permit all build and verification phases to run locked and offline.
-    Given the locked PrismPM production fixture
+    Given the locked PrismPM production fixture with the exact root, vendored LexLean and pinned oracle manifest and lock closure
+    And the pinned Lean toolchain has been acquired and verified into its normal canonical directory before source compilation
     When the DK-04 contract is exercised
+    And locked root, vendored LexLean and oracle fetches finish before the three main source release builds with acquisition-only CARGO_NET_RETRY eight and CARGO_HTTP_TIMEOUT 30
+    And the oracle helper retains its manifest and lock checks and locked offline metadata checks
+    And the CLI, conformance binaries and vendored LexLean each receive one locked offline release build invocation with actual newly built CLI locked authority resolution before the latter two builds
+    And planted omitted or reordered fetches, changed locks, online builds and persisted acquisition settings are rejected
     Then its positive evidence passes and its planted defect is rejected
+    And acquisition or compilation failure refuses construction without an outer compiler retry or an arbitrary-process network-isolation claim
 
   @DK-05 @build
   Scenario: SDK bootstrap uses the prior accepted SDK, two clean self-rebuilds, and independent formal evidence verification without a trust cycle.
@@ -242,4 +265,9 @@ Feature: sdk
   Scenario: SDK execution rejects undeclared PATH tools, tampered executables, base drift, mutable inputs, and circular self-attestation.
     Given the locked PrismPM production fixture
     When the DK-06 contract is exercised
+    And complete original Docker archives are extracted into fresh nonroot-owned staging with delayed directory mode restoration
+    And source hashes, complete trees and admitted alias texts and targets remain verified without dereferencing links or changing immutable SDK modes
+    And a failed archive producer or extractor cannot report a successful installed owner
+    And the identical primary read-only CA target and owner trust arguments remain outside every writable bind and volume destination after resolving the pinned runtime path aliases
+    And normal owned-volume removal is bounded by 120 seconds and the remaining original 180-second cleanup envelope with its five-second reserve and exact identity and absence checks
     Then its positive evidence passes and its planted defect is rejected

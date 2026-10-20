@@ -48,15 +48,30 @@ const inputs = [
   'scripts/portable-oracle-diagnostics.mjs',
   'tests/data/portable-oracle-matrix.json', 'sdk/exporter-seed.mjs',
   'sdk/inventory-metadata.mjs',
+  'model/dependencies.toml',
 ];
 const captured = inputs.map(path => capture(join(root, path)));
 captured.push(capture(process.execPath), capture(browser), capture('/usr/bin/python3'));
-assert.equal(captured[0].measurement.sha256, 'caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66');
+assert.equal(captured[0].measurement.sha256, 'fd6dec8dadac61309efd33e44be02beef03a2391b8a5614e64a6c8e5755357e2');
+const dependencyRegister = captured.find(row => row.selected === join(root, 'model/dependencies.toml'));
+const liveDependencies = readFileSync(dependencyRegister.path, 'utf8').split('[[dependency]]').slice(1)
+  .filter(section => /^id = "hologram-live"$/m.test(section));
+assert.equal(liveDependencies.length, 1, 'one registered Hologram Live oracle required');
+assert.match(liveDependencies[0], /^role = "validation-oracle"$/m);
+const liveRevisions = [...liveDependencies[0].matchAll(/^revision = "([0-9a-f]{40})"$/gm)];
+assert.equal(liveRevisions.length, 1, 'one exact registered Hologram Live revision required');
+const liveRevision = liveRevisions[0][1];
+dependencyRegister.verify();
 for (const [actual, embedded] of [['Cargo.toml', 'Cargo.toml'], ['Cargo.lock', 'Cargo.lock'], ['src/main.rs', 'main.rs']])
   assert(readFileSync(join(root, 'tests/hologram-oracle', actual))
     .equals(readFileSync(join(root, 'crates/prismpm/src/embedded/hologram-oracle.' + embedded))));
 for (const [index, path] of artifacts.entries()) {
   assert.equal(JSON.parse(readFileSync(join(path, 'model.prism.json'))).application.name, matrix.profiles[index].name);
+  const provenance = capture(join(path, 'application/model-provenance.json'));
+  assert.equal(JSON.parse(readFileSync(provenance.path, 'utf8')).hologram_live_commit, liveRevision,
+    'generated application provenance differs from the registered Hologram Live oracle');
+  provenance.verify();
+  captured.push(provenance);
   const profile = matrix.profiles[index], binding = bindings[index];
   for (const [key, selected] of Object.entries({
     verification: binding.verification_manifest, model: join(path, 'model.prism.json'),
@@ -171,7 +186,7 @@ try {
     const database = privateGitObjects(process.env.CARGO_HOME, environment.CARGO_HOME, name, revision);
     run('git-object-integrity-' + name, '/usr/bin/git', ['--git-dir=' + database, 'fsck', '--strict', '--no-reflogs'], work, 30);
   }
-  mkdirSync(join(work, 'hologram-live'));
+  mkdirSync(join(work, 'hologram-live'),{mode:0o700});
   mkdirSync(join(work, 'harness/src'), {recursive: true});
   // Preserve pinned modes while assigning ownership to the local verifier.
   run('source-extraction', '/usr/bin/tar', ['--no-same-owner', '--same-permissions', '-xf', captured[0].path, '-C', join(work, 'hologram-live')], work, 30);

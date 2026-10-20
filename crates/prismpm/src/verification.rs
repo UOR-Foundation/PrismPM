@@ -27,7 +27,7 @@ const EXECUTION_CORPUS_SOURCE: &str = include_str!("../model/execution-corpus.to
 const ALLOCATION_COUNTER_SOURCE: &str = include_str!("prod_alloc_counter.rs.inc");
 const HOLOGRAM_ORACLE_SOURCE: &[u8] = include_bytes!("../vendor/hologram-live.tar");
 const HOLOGRAM_ORACLE_SOURCE_SHA256: &str =
-    "caf5c34ef2b21d58c1aa12acf81cb13ace1adaffb3c69a641f54f490ed61cf66";
+    "fd6dec8dadac61309efd33e44be02beef03a2391b8a5614e64a6c8e5755357e2";
 const HOLOGRAM_ORACLE_CARGO: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.toml");
 const HOLOGRAM_ORACLE_LOCK: &[u8] = include_bytes!("embedded/hologram-oracle.Cargo.lock");
 const HOLOGRAM_ORACLE_MAIN: &[u8] = include_bytes!("embedded/hologram-oracle.main.rs");
@@ -595,10 +595,7 @@ fn run_hologram_oracle(
         .application
         .as_ref()
         .ok_or_else(|| PrismError::new("PP5301", "oracle has no application"))?;
-    validate_portable_target_bounds(
-        application.request_maximum(),
-        application.response_maximum(),
-    )?;
+    validate_portable_application_bounds(application)?;
     crate::holo::browser_application::require_runtime(application)?;
     if format!("{:x}", Sha256::digest(HOLOGRAM_ORACLE_SOURCE)) != HOLOGRAM_ORACLE_SOURCE_SHA256 {
         return Err(PrismError::new(
@@ -717,23 +714,38 @@ fn validate_portable_target_bounds(
     Ok(())
 }
 
+fn validate_portable_application_bounds(
+    application: &crate::holo::model_document::Application,
+) -> Result<(), PrismError> {
+    if matches!(
+        application,
+        crate::holo::model_document::Application::Research(_)
+    ) {
+        if application.request_maximum() > 2_097_152 || application.response_maximum() > 4_194_304 {
+            return Err(PrismError::new("PP5301", "Text/4 bounds exceed pinned portable View version 2 transport limits (request: 2097152 bytes; response: 4194304 bytes)"));
+        }
+        return Ok(());
+    }
+    validate_portable_target_bounds(
+        application.request_maximum(),
+        application.response_maximum(),
+    )
+}
+
 pub(crate) fn validate_hologram_oracle_report(
     report: &Value,
     application: &crate::holo::model_document::Application,
     identities: &Value,
 ) -> Result<(), PrismError> {
     use crate::holo::model_document::Application;
-    validate_portable_target_bounds(
-        application.request_maximum(),
-        application.response_maximum(),
-    )?;
+    validate_portable_application_bounds(application)?;
     let invalid = || {
         PrismError::new(
             "PP5301",
             "pinned Hologram oracle did not return complete portable browser acceptance",
         )
     };
-    let keys = [
+    let mut keys = vec![
         "application_kappa",
         "archive_fingerprint",
         "archive_kappa",
@@ -747,9 +759,13 @@ pub(crate) fn validate_hologram_oracle_report(
         "view_attached",
         "view_detached",
     ];
+    let research = matches!(application, Application::Research(_));
+    if research {
+        keys.insert(6, "intent_transport_rejections");
+    }
     if report
         .as_object()
-        .is_none_or(|object| object.keys().map(String::as_str).ne(keys))
+        .is_none_or(|object| object.keys().map(String::as_str).ne(keys.iter().copied()))
     {
         return Err(invalid());
     }
@@ -779,8 +795,23 @@ pub(crate) fn validate_hologram_oracle_report(
         .filter(|vector| {
             std::str::from_utf8(&vector.request).is_ok()
                 && std::str::from_utf8(&vector.response).is_ok()
+                && (!research || vector.request.len() <= 2_097_152)
         })
         .count();
+    if research {
+        let rejected = vectors
+            .iter()
+            .filter(|vector| {
+                vector.request.len() > 2_097_152
+                    && std::str::from_utf8(&vector.request).is_ok()
+                    && std::str::from_utf8(&vector.response).is_ok()
+            })
+            .count()
+            + 1;
+        if report["intent_transport_rejections"] != rejected {
+            return Err(invalid());
+        }
+    }
     if report["schema"] != "prismpm/hologram-oracle/2"
         || report["footer_verified"] != true
         || report["guest_allocation_boundary"] != "verified"
@@ -801,6 +832,9 @@ pub(crate) fn validate_hologram_oracle_report(
             Application::Browser(_) => {
                 return crate::holo::browser_application::require_runtime(application);
             }
+            Application::Research(value) => crate::holo::research_workbench::oracle_vectors(value)
+                .ui
+                .contains(&index),
             Application::Workbench(value) => crate::holo::workbench::oracle_vectors(value)
                 .ui
                 .contains(&index),
@@ -829,7 +863,10 @@ pub(crate) fn validate_hologram_oracle_report(
         return Err(invalid());
     }
     let mut names = vec!["attachment-assets", "modeled-vectors"];
-    if matches!(application, Application::Workbench(_)) {
+    if matches!(
+        application,
+        Application::Workbench(_) | Application::Research(_)
+    ) {
         names.extend(["workbench-direct-vectors", "workbench-ui-input-boundaries"]);
     }
     names.extend([
@@ -843,9 +880,12 @@ pub(crate) fn validate_hologram_oracle_report(
         Application::Browser(_) => {
             return crate::holo::browser_application::require_runtime(application);
         }
-        Application::Text(_) | Application::Workbench(_) => {
+        Application::Text(_) | Application::Workbench(_) | Application::Research(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
-            if matches!(application, Application::Workbench(_)) {
+            if matches!(
+                application,
+                Application::Workbench(_) | Application::Research(_)
+            ) {
                 names.extend([
                     "workbench-guided-edit",
                     "workbench-typed-error-recovery",
@@ -853,7 +893,16 @@ pub(crate) fn validate_hologram_oracle_report(
                     "workbench-timeout-retry",
                     "workbench-result-validation",
                 ]);
-                "utf8-workbench"
+                if research {
+                    names.extend([
+                        "research-actions",
+                        "research-case-exchange",
+                        "research-stale-owner",
+                    ]);
+                    "utf8-research-workbench"
+                } else {
+                    "utf8-workbench"
+                }
             } else {
                 "utf8-text"
             }
@@ -870,6 +919,13 @@ pub(crate) fn validate_hologram_oracle_report(
         "cases":cases, "vector_indexes":indexes, "skipped":0, "retries":0, "status":"passed"});
     if let Application::Workbench(value) = application {
         let selected = crate::holo::workbench::oracle_vectors(value);
+        expected["direct_vector_indexes"] = json!(selected.direct);
+        expected["ui_transport_rejected_indexes"] = json!(selected.transport_rejected);
+        expected["textarea_normalized_vector_indexes"] = json!(selected.normalized);
+        expected["unrepresentable_frame_vector_indexes"] = json!(selected.unrepresentable);
+    }
+    if let Application::Research(value) = application {
+        let selected = crate::holo::research_workbench::oracle_vectors(value);
         expected["direct_vector_indexes"] = json!(selected.direct);
         expected["ui_transport_rejected_indexes"] = json!(selected.transport_rejected);
         expected["textarea_normalized_vector_indexes"] = json!(selected.normalized);
@@ -1228,6 +1284,12 @@ pub(crate) fn run_process_limited_allowed(
             command.env(key, value);
         }
     }
+    // Resource defaults belong to the isolated child environment. An owned
+    // caller may select a different compiler policy through extra_env below.
+    command
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
+        .env("CARGO_INCREMENTAL", "0");
     for (key, value) in extra_env {
         command.env(key, value);
     }
@@ -2366,6 +2428,53 @@ fn application_harness(
     Ok(format!("fn main() {{\n{vectors}}}\n"))
 }
 
+// The complete binary validator runs before bounded ABI presentation. The
+// inspection record remains independent evidence, never a substitute parser.
+fn inspect_application_core_wasm(
+    wasm_tools: &Path,
+    wasm_path: &Path,
+    build_root: &Path,
+    replacements: &[(&Path, &str)],
+) -> Result<[ProcessRecord; 2], PrismError> {
+    let no_env = BTreeMap::new();
+    let validated = run_process(
+        "core-wasm-validate",
+        wasm_tools,
+        &[
+            "validate".to_owned(),
+            wasm_path.to_string_lossy().into_owned(),
+        ],
+        build_root,
+        &no_env,
+        replacements,
+        "PP5101",
+    )?;
+    let printed = run_process(
+        "core-wasm-inspect",
+        wasm_tools,
+        &[
+            "print".to_owned(),
+            "--skeleton".to_owned(),
+            wasm_path.to_string_lossy().into_owned(),
+        ],
+        build_root,
+        &no_env,
+        replacements,
+        "PP5101",
+    )?;
+    if printed.stdout.contains("(import ")
+        || !printed.stdout.contains("(export \"memory\"")
+        || !printed.stdout.contains("(export \"holo_alloc\"")
+        || !printed.stdout.contains("(export \"holo_run\"")
+    {
+        return Err(PrismError::new(
+            "PP5103",
+            "Core-Wasm imports or exports disagree with the closed guest ABI",
+        ));
+    }
+    Ok([validated, printed])
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_application(
     controller: &Controller,
@@ -2418,43 +2527,16 @@ fn run_application(
         &wasm_path,
     )?);
     let wasm_tools = executable("wasm-tools")?;
-    let no_env = BTreeMap::new();
     let replacements = [
         (controller.root.as_path(), "$PROJECT"),
         (build_root, "$BUILD"),
     ];
-    processes.push(run_process(
-        "core-wasm-validate",
+    processes.extend(inspect_application_core_wasm(
         &wasm_tools,
-        &[
-            "validate".to_owned(),
-            wasm_path.to_string_lossy().into_owned(),
-        ],
+        &wasm_path,
         build_root,
-        &no_env,
         &replacements,
-        "PP5101",
     )?);
-    let printed = run_process(
-        "core-wasm-inspect",
-        &wasm_tools,
-        &["print".to_owned(), wasm_path.to_string_lossy().into_owned()],
-        build_root,
-        &no_env,
-        &replacements,
-        "PP5101",
-    )?;
-    if printed.stdout.contains("(import ")
-        || !printed.stdout.contains("(export \"memory\"")
-        || !printed.stdout.contains("(export \"holo_alloc\"")
-        || !printed.stdout.contains("(export \"holo_run\"")
-    {
-        return Err(PrismError::new(
-            "PP5103",
-            "Core-Wasm imports or exports disagree with the closed guest ABI",
-        ));
-    }
-    processes.push(printed);
 
     let work = tempfile::Builder::new()
         .prefix("prismpm-application-verify-")
@@ -3652,6 +3734,130 @@ mod tests {
         }
     }
 
+    fn core_wasm_inspection_fixture(root: &Path, wat: &str) -> PathBuf {
+        let text = root.join("fixture.wat");
+        let binary = root.join("fixture.wasm");
+        std::fs::write(&text, wat).unwrap();
+        run_process(
+            "core-wasm-test-parse",
+            &executable("wasm-tools").unwrap(),
+            &[
+                "parse".into(),
+                text.to_string_lossy().into_owned(),
+                "-o".into(),
+                binary.to_string_lossy().into_owned(),
+            ],
+            root,
+            &BTreeMap::new(),
+            &[(root, "$BUILD")],
+            "PP5101",
+        )
+        .unwrap();
+        binary
+    }
+
+    const CORE_WASM_INSPECTION_MODULE: &str = r#"(module
+      (memory (export "memory") 128 128)
+      (func (export "holo_alloc") (param i32) (result i32) i32.const 0)
+      (func (export "holo_run") (param i32 i32) (result i64) i64.const 0))"#;
+
+    #[test]
+    fn core_wasm_inspection_accepts_large_valid_structural_projection() {
+        let work = tempfile::tempdir().unwrap();
+        // The real printer escapes each NUL as three WAT bytes. This generic
+        // data segment is valid inside the declared eight-MiB memory, while
+        // its full textual presentation exceeds the unchanged 16-MiB cap.
+        let mut wat = CORE_WASM_INSPECTION_MODULE.trim_end_matches(')').to_owned();
+        // Restore the final function delimiter removed together with module.
+        wat.push(')');
+        wat.push_str(" (data (i32.const 0) \"");
+        wat.push_str(&"\\00".repeat(6 * 1024 * 1024));
+        wat.push_str("\"))");
+        let binary = core_wasm_inspection_fixture(work.path(), &wat);
+        prod_codegen::validate_core_wasm_resources(&std::fs::read(&binary).unwrap(), 128, None)
+            .unwrap();
+        let records = inspect_application_core_wasm(
+            &executable("wasm-tools").unwrap(),
+            &binary,
+            work.path(),
+            &[(work.path(), "$BUILD")],
+        )
+        .expect("a valid large binary must not require a full textual body dump");
+        assert_eq!(records[0].tool, "core-wasm-validate");
+        assert_eq!(records[1].tool, "core-wasm-inspect");
+        assert_eq!(records[0].argv, ["validate", "$BUILD/fixture.wasm"]);
+        assert_eq!(
+            records[1].argv,
+            ["print", "--skeleton", "$BUILD/fixture.wasm"]
+        );
+        for record in records {
+            assert_eq!(record.exit_code, 0);
+            assert!(record.stdout.len() <= CHILD_OUTPUT_LIMIT);
+            assert!(record.stderr.len() <= CHILD_OUTPUT_LIMIT);
+            assert_eq!(record.executable_sha256.len(), 64);
+        }
+    }
+
+    #[test]
+    fn core_wasm_inspection_requires_full_binary_validation() {
+        let work = tempfile::tempdir().unwrap();
+        // A structurally printable body can still have the wrong stack type.
+        let wat = CORE_WASM_INSPECTION_MODULE.replace("i64.const 0", "i32.const 0");
+        let binary = core_wasm_inspection_fixture(work.path(), &wat);
+        run_process(
+            "skeleton-alone-is-not-validation",
+            &executable("wasm-tools").unwrap(),
+            &[
+                "print".into(),
+                "--skeleton".into(),
+                binary.to_string_lossy().into_owned(),
+            ],
+            work.path(),
+            &BTreeMap::new(),
+            &[(work.path(), "$BUILD")],
+            "PP5101",
+        )
+        .unwrap();
+        let error = inspect_application_core_wasm(
+            &executable("wasm-tools").unwrap(),
+            &binary,
+            work.path(),
+            &[],
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "PP5101");
+        assert!(error.message.starts_with("core-wasm-validate exited "));
+    }
+
+    #[test]
+    fn core_wasm_inspection_rejects_imports_and_missing_exports() {
+        let imported = CORE_WASM_INSPECTION_MODULE.replacen(
+            "(module",
+            "(module (import \"host\" \"foreign\" (func))",
+            1,
+        );
+        let mut cases = vec![("import", imported)];
+        for name in ["memory", "holo_alloc", "holo_run"] {
+            cases.push((
+                name,
+                CORE_WASM_INSPECTION_MODULE.replace(&format!("(export \"{name}\")"), ""),
+            ));
+        }
+        for (name, wat) in cases {
+            let work = tempfile::tempdir().unwrap();
+            let binary = core_wasm_inspection_fixture(work.path(), &wat);
+            let error = inspect_application_core_wasm(
+                &executable("wasm-tools").unwrap(),
+                &binary,
+                work.path(),
+                &[],
+            )
+            .expect_err(name);
+            assert_eq!(error.code, "PP5103", "{name}: {error:?}");
+            assert!(error.message.contains("closed guest ABI"));
+        }
+    }
+
     #[test]
     fn child_output_overflow_is_a_registered_failure() {
         let error = limited("head", &["-c", "64", "/dev/zero"], "5", 16);
@@ -3743,6 +3949,150 @@ mod tests {
                 assert!(excerpt.contains(" bytes omitted]\n"));
             }
         }
+    }
+
+    #[test]
+    fn child_cargo_defaults_preserve_owned_overrides_and_environment_isolation() {
+        const CHILD: &str = "PRISMPM_ISOLATED_CARGO_POLICY_TEST";
+        let hostile = BTreeMap::from([
+            ("CARGO_HOME", "/nonexistent/ambient-app-home"),
+            ("CARGO_NET_OFFLINE", "false"),
+            ("CARGO_BUILD_JOBS", "999"),
+            ("CARGO_PROFILE_DEV_DEBUG", "2"),
+            ("CARGO_INCREMENTAL", "1"),
+            ("RUSTFLAGS", "-C debuginfo=2"),
+            ("CARGO_ENCODED_RUSTFLAGS", "-C\u{1f}debuginfo=2"),
+            ("CARGO_PROFILE_RELEASE_DEBUG", "2"),
+            ("CARGO_TARGET_DIR", "/nonexistent/ambient-app-target"),
+        ]);
+        if std::env::var_os(CHILD).is_some() {
+            for (key, value) in &hostile {
+                assert_eq!(std::env::var(key).unwrap(), *value);
+            }
+            let root = tempfile::tempdir().unwrap();
+            let workspace = root.path().join("application work");
+            let cargo_home = root.path().join("private cargo");
+            std::fs::create_dir(&workspace).unwrap();
+            std::fs::create_dir(&cargo_home).unwrap();
+            let home = cargo_home.to_string_lossy().into_owned();
+            let remap = format!(
+                "--remap-path-prefix={}=$APPLICATION_WORK",
+                workspace.to_string_lossy()
+            );
+            let verification = BTreeMap::from([
+                ("CARGO_HOME".to_owned(), home.clone()),
+                ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
+            ]);
+            let mut generation = verification.clone();
+            generation.insert("RUSTFLAGS".to_owned(), remap.clone());
+            let mut owned_override = verification.clone();
+            owned_override.insert("CARGO_BUILD_JOBS".to_owned(), "1".to_owned());
+            owned_override.insert("CARGO_PROFILE_DEV_DEBUG".to_owned(), "1".to_owned());
+            owned_override.insert("CARGO_INCREMENTAL".to_owned(), "1".to_owned());
+            let script = "const keys=['CARGO_HOME','CARGO_NET_OFFLINE','CARGO_BUILD_JOBS','CARGO_PROFILE_DEV_DEBUG','CARGO_INCREMENTAL','RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','CARGO_PROFILE_RELEASE_DEBUG','CARGO_TARGET_DIR','LEAN_NUM_THREADS'];process.stdout.write(JSON.stringify(Object.fromEntries(keys.map(key=>[key,process.env[key]??null]))));";
+            let mut actual = serde_json::Map::new();
+            let mut expected = serde_json::Map::new();
+            // Collect every real isolated child before comparing, so RED
+            // exposes both application maps and preserves owned overrides.
+            for (phase, environment, expected_home, expected_offline, expected_flags, policy) in [
+                (
+                    "defaults",
+                    BTreeMap::new(),
+                    hostile["CARGO_HOME"].to_owned(),
+                    None,
+                    None,
+                    ("2", "0", "0"),
+                ),
+                (
+                    "generation",
+                    generation,
+                    home.clone(),
+                    Some("true"),
+                    Some(remap),
+                    ("2", "0", "0"),
+                ),
+                (
+                    "verification",
+                    verification,
+                    home.clone(),
+                    Some("true"),
+                    None,
+                    ("2", "0", "0"),
+                ),
+                (
+                    "owned-override",
+                    owned_override,
+                    home,
+                    Some("true"),
+                    None,
+                    ("1", "1", "1"),
+                ),
+            ] {
+                let observed = run_process(
+                    &format!("isolated-{phase}-cargo-policy-observer"),
+                    &executable("node").unwrap(),
+                    &["-e".to_owned(), script.to_owned()],
+                    &workspace,
+                    &environment,
+                    &[],
+                    "PP4102",
+                )
+                .unwrap();
+                assert!(observed.stderr.is_empty());
+                assert_eq!(observed.exit_code, 0);
+                actual.insert(
+                    phase.to_owned(),
+                    serde_json::from_str::<Value>(&observed.stdout).unwrap(),
+                );
+                expected.insert(
+                    phase.to_owned(),
+                    json!({
+                        "CARGO_HOME": expected_home,
+                        "CARGO_NET_OFFLINE": expected_offline,
+                        "CARGO_BUILD_JOBS": policy.0,
+                        "CARGO_PROFILE_DEV_DEBUG": policy.1,
+                        "CARGO_INCREMENTAL": policy.2,
+                        "RUSTFLAGS": expected_flags,
+                        "CARGO_ENCODED_RUSTFLAGS": null,
+                        "CARGO_PROFILE_RELEASE_DEBUG": null,
+                        "CARGO_TARGET_DIR": null,
+                        "LEAN_NUM_THREADS": "2",
+                    }),
+                );
+            }
+            assert_eq!(
+                actual, expected,
+                "actual child environments use defaults and preserve explicit owned policy",
+            );
+            return;
+        }
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "verification::tests::child_cargo_defaults_preserve_owned_overrides_and_environment_isolation",
+                "--nocapture",
+            ])
+            .envs(hostile)
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("running 1 test\n"), "{stdout}");
+        assert_eq!(
+            stdout.matches("test verification::tests::child_cargo_defaults_preserve_owned_overrides_and_environment_isolation ... ok").count(),
+            1,
+            "{stdout}",
+        );
+        assert!(
+            stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured;"),
+            "{stdout}",
+        );
     }
 
     #[test]
