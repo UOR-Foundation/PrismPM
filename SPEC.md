@@ -1440,6 +1440,19 @@ every library artifact byte. Registry-format consumers of the exact package
 execute every modeled acceptance root under both `std` and `no_std + alloc`;
 false results, computation errors, omissions and changed bytes fail closed.
 
+Within one Linux library verification worker, build and independent replay
+may share only a freshly acquired, source-bound private exporter tool package.
+Both phases retain distinct generated Lean, proof, export and package work;
+each executes the original Lake build/export and Cargo package commands.
+Complete source, compiled-runtime, executable and namespace custody is checked
+around actual children, including failures, and owned retirement completes
+before acceptance publication. The original process-record schema and thirteen
+verification processes are unchanged; warm build output remains actual output.
+The library generator identity binds the complete owner/helper source closure.
+Public standalone builds and each separate verification/root start cold; no
+SDK seed, caller cache, generated-model result or cross-invocation owner is used.
+Application and generic stdlib/full-runtime verification remain unchanged.
+
 Only then are `prismpm/library-acceptance/1` and
 `prismpm/library-verification-manifest/1` atomically published. This is finite
 native-code evidence, not a universal semantic proof, standards certification,
@@ -2038,6 +2051,19 @@ defects. Its devcontainer uses the exact SDK image digest and its workflows call
 a full-commit-pinned thin action/reusable workflow that executes the same CLI.
 There is no copied validation, generation, publication or deployment logic.
 
+The reusable SDK's optional `invocation-key` identifies one caller job/project
+within its workflow. Callers opting into read-only CI supersession MUST use a
+distinct, stable lowercase ASCII key for each independent invocation. Keys are
+1–64 characters, start with a letter or digit, and contain only lowercase
+letters, digits, dots, underscores and hyphens. This prevents case-insensitive
+GitHub concurrency aliases. Only `check`, `build`,
+`verify` and `test` with a nonempty key can supersede earlier work on the same
+repository, caller workflow file and ref. Existing callers without a key retain independent
+execution. Deployment, promotion, recovery and other operations never enter
+this cancellation group. All existing SDK inputs and outputs are preserved.
+The key is validated in a separate, non-concurrent job before the execution
+job can enter its group; invalid keys cannot cancel a valid invocation.
+
 The shared Action exposes `export-browser` with `reference` and `output` inputs
 passed unchanged to the SDK's existing command. The SDK owns immutable-reference,
 release-evidence and new direct-child destination validation. Export executes
@@ -2056,6 +2082,17 @@ jobs sign and push with short-lived identity. Protected environments authorize
 deployment, and post-deployment verification attaches evidence. The release
 digest is created once and passed between jobs; no deployment job rebuilds,
 uses a mutable tag, edits generated output, or skips missing evidence.
+
+CI retains every original validation owner and complete command. One closed
+12-owner matrix limits total parallel execution to three jobs; publication
+matrices retain both native platforms and their non-canceling lifecycles.
+Complete two-pass VV and native-source-review budgets remain 360 minutes;
+the existing per-owner bounds are unchanged by scheduling reconciliation.
+SDK callers without a read-only invocation key, including authorized mutations,
+remain independently executable without a callee queue that can discard pending
+work. Opt-in read-only supersession uses the separately validated caller key.
+Actual-YAML policy tests are not scheduling, timing or execution acceptance:
+complete-gate and real-caller evidence is still required.
 
 Template checking is read-only. Explicit update creates a reviewable patch or
 automated pull request because GitHub template repositories do not propagate
