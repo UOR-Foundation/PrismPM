@@ -131,6 +131,10 @@ const definitions = [
   ['stdlib-sources', 'crate', '0.2.0-sources', 'sdk/stdlib-sources.tar'],
   ['timeout', 'binary', 'coreutils-9.4', '/usr/bin/timeout'],
   ['unicode-17.0.0-normalization-corpus', 'test-corpus', '17.0.0', 'standards/corpora/unicode-17.0.0', 'tree'],
+  ['mcp-conformance-232a9014-corpus', 'test-corpus', '232a9014457eaf4c59559916e3d616d2f7f28f05', 'standards/oracles/mcp-conformance-232a9014', 'tree'],
+  ['mcp-conformance-server', 'oracle', '2026-07-28+conformance-232a9014', '/usr/local/bin/mcp-conformance-server'],
+  ['mcp-schema-2026-07-28', 'schema', '80041ab0a139a8f4fb3adbc99f7ae9113ea59671', 'standards/oracles/mcp-schema-2026-07-28', 'tree'],
+  ['mcp-schema-validator', 'oracle', 'ajv-8.20.0+mcp-2026-07-28', '/usr/local/bin/mcp-schema-validator'],
   ['opentelemetry-0.136.0-signal-corpus', 'test-corpus', '0.136.0', 'standards/corpora/opentelemetry-0.136.0', 'tree'],
   ['workflow-reusable-sdk', 'workflow', '0.3.0', '.github/workflows/sdk.yml'],
 ];

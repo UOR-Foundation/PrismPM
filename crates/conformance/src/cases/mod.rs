@@ -966,6 +966,62 @@ fn verify_authorities(root: &Path, id: &str) {
                 .expect("the MCP server conformance oracle is bound");
             assert_ne!(schema["executable"], conformance["executable"]);
             assert_ne!(schema["output_schema"], Value::Null);
+            // MCP Apps is bound as text only: no oracle claims it.
+            let apps = authorities
+                .iter()
+                .find(|row| row["id"] == "MCP-APPS-2026-01-26")
+                .expect("MCP Apps is bound");
+            assert_eq!(apps["oracle_ids"], serde_json::json!([]));
+            assert!(oracles.iter().all(|row| !row["authority_ids"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|id| id == "MCP-APPS-2026-01-26")));
+            // The suite's requirements file is frozen by the binding: the
+            // genuine file is accepted and any other file is refused.
+            let frozen =
+                std::fs::read(root.join(
+                    "standards/oracles/mcp-conformance-232a9014/requirements/2026-07-28.yaml",
+                ))
+                .expect("the vendored frozen requirements file");
+            let archive = |bytes: &[u8]| {
+                let temp = tempfile::tempdir().unwrap();
+                let top = temp.path().join("conformance-232a9014");
+                std::fs::create_dir_all(top.join("requirements")).unwrap();
+                std::fs::write(top.join("requirements/2026-07-28.yaml"), bytes).unwrap();
+                let archive = temp.path().join("suite.tar.gz");
+                let status = Command::new("tar")
+                    .arg("-czf")
+                    .arg(&archive)
+                    .arg("-C")
+                    .arg(temp.path())
+                    .arg("conformance-232a9014")
+                    .status()
+                    .expect("tar");
+                assert!(status.success());
+                (temp, archive)
+            };
+            let (_keep, genuine) = archive(&frozen);
+            prismpm::authority::verify_frozen_archive("MCP-CONFORMANCE-232A9014", &genuine)
+                .expect("the frozen requirements file is accepted");
+            let text = String::from_utf8(frozen).unwrap();
+            for planted in [
+                text.replace("  - tools-list\n", ""),
+                format!("{text}\n"),
+                text.replace("dns-rebinding-protection", "dns-rebinding-protectionx"),
+            ] {
+                assert_ne!(planted, text);
+                let (_keep, archive) = archive(planted.as_bytes());
+                let error =
+                    prismpm::authority::verify_frozen_archive("MCP-CONFORMANCE-232A9014", &archive)
+                        .unwrap_err();
+                assert_eq!(error.code, "PP5402");
+                assert!(
+                    error.message.contains("differs from the frozen file"),
+                    "{}",
+                    error.message
+                );
+            }
         }
         "AU-09" => {
             let temp = tempfile::tempdir().unwrap();
@@ -981,28 +1037,114 @@ fn verify_authorities(root: &Path, id: &str) {
                 prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock)
                     .unwrap();
             std::fs::write(temp.path().join("prismpm.lock"), sdk_lock.bytes()).unwrap();
-            let transcript = tempfile::NamedTempFile::new().unwrap();
-            std::fs::write(
-                transcript.path(),
-                serde_json::to_vec(&serde_json::json!({
-                    "version": "prismpm/mcp-transcript/1",
-                    "spec": "2026-07-28",
-                    "messages": [{
-                        "direction": "client-to-server",
-                        "message": {"jsonrpc": "2.0", "id": 1, "method": "ping"}
-                    }]
-                }))
-                .unwrap(),
-            )
+            let message = |id: u64, method: &str| {
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": id, "method": method,
+                    "params": {"_meta": {
+                        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                        "io.modelcontextprotocol/clientInfo": {"name": "AU-09", "version": "1"},
+                        "io.modelcontextprotocol/clientCapabilities": {}
+                    }}
+                })
+            };
+            let transcript = |result_type: Option<&str>| {
+                let mut result =
+                    serde_json::json!({"tools": [], "ttlMs": 60000, "cacheScope": "public"});
+                if let Some(kind) = result_type {
+                    result["resultType"] = Value::String(kind.to_owned());
+                }
+                let file = tempfile::NamedTempFile::new().unwrap();
+                std::fs::write(
+                    file.path(),
+                    serde_json::to_vec(&serde_json::json!({
+                        "version": "prismpm/mcp-transcript/1",
+                        "spec": "2026-07-28",
+                        "messages": [
+                            {"direction": "client-to-server", "message": message(1, "tools/list")},
+                            {"direction": "server-to-client", "message": {
+                                "jsonrpc": "2.0", "id": 1, "result": result
+                            }}
+                        ]
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+                file
+            };
+            let run_schema = |file: &tempfile::NamedTempFile| {
+                prismpm::authority::run_oracle_with_bindings_in_project(
+                    temp.path(),
+                    "mcp-schema",
+                    file.path(),
+                    &BTreeMap::new(),
+                )
+            };
+            let accepted = run_schema(&transcript(Some("complete"))).unwrap();
+            assert!(accepted.valid && !accepted.covered.is_empty());
+            assert_eq!(accepted.oracle, "mcp-schema-2026-07-28");
+            let rejected = run_schema(&transcript(None)).unwrap_err();
+            assert_eq!(rejected.code, "PP5404");
+            assert!(
+                rejected.message.contains("ListToolsResultResponse"),
+                "{}",
+                rejected.message
+            );
+
+            // The server oracle runs the suite against a reference server. The
+            // positive control is the suite's own server plus the one line it
+            // lacks for 2026-07-28; the planted defect opens its listener.
+            let reference = std::fs::read_to_string(root.join(
+                "standards/oracles/mcp-conformance-232a9014/examples/servers/typescript/everything-server.ts",
+            ))
             .unwrap();
-            let result = prismpm::authority::run_oracle_with_bindings_in_project(
-                temp.path(),
-                "mcp-schema",
-                transcript.path(),
-                &BTreeMap::new(),
-            )
-            .unwrap();
-            assert!(result.valid && !result.covered.is_empty());
+            let replaced = |source: &str, from: &str, to: &str| {
+                assert_eq!(source.matches(from).count(), 1, "{from}");
+                source.replacen(from, to, 1)
+            };
+            let positive = replaced(
+                &reference,
+                "        write({ jsonrpc: '2.0', id, result });",
+                "        (result as any).resultType ??= 'complete';\n        write({ jsonrpc: '2.0', id, result });",
+            );
+            let planted = replaced(
+                &positive,
+                "const app = createMcpExpressApp();",
+                "const app = createMcpExpressApp({ host: '0.0.0.0' });",
+            );
+            let subject = |source: &str| {
+                let directory = tempfile::tempdir().unwrap();
+                std::fs::write(directory.path().join("server.ts"), source).unwrap();
+                std::fs::write(
+                    directory.path().join("prismpm-mcp-subject.json"),
+                    serde_json::to_vec(&serde_json::json!({
+                        "version": "prismpm/mcp-server-subject/1", "spec": "2026-07-28",
+                        "entry": "server.ts", "path": "/mcp", "modules": "suite-fixture"
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+                directory
+            };
+            let run_server = |directory: &tempfile::TempDir| {
+                prismpm::authority::run_oracle_with_bindings_in_project(
+                    temp.path(),
+                    "mcp-conformance-server",
+                    directory.path(),
+                    &BTreeMap::new(),
+                )
+            };
+            let passed = run_server(&subject(&positive)).unwrap();
+            assert!(passed.valid && passed.oracle == "mcp-conformance-server-2026-07-28");
+            assert!(passed.uncovered.iter().any(|text| text.contains("stdio")));
+            let failed = run_server(&subject(&planted)).unwrap_err();
+            assert_eq!(failed.code, "PP5404");
+            assert!(
+                failed.message.contains("dns-rebinding-protection"),
+                "the suite's diagnostic names the failing scenario: {}",
+                failed.message
+            );
+            // The two evidence kinds are separate attestations.
+            assert_ne!(accepted.attestation_digest, passed.attestation_digest);
         }
         _ => unreachable!(),
     }

@@ -210,13 +210,15 @@ RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/runtime \
     && chmod 0444 /opt/prismpm/runtime/profile.mjs \
     && chmod 0555 /opt/prismpm/runtime/runtime.mjs
 
-COPY --from=source_inputs /prepared/source/sdk/oracles/package.json /prepared/source/sdk/oracles/package-lock.json /prepared/source/sdk/oracles/asyncapi-parser.mjs /prepared/source/sdk/oracles/devcontainer-validator.mjs /prepared/source/sdk/oracles/git-signature-validator.mjs /prepared/source/sdk/oracles/kubernetes-validator.mjs /prepared/source/sdk/oracles/kubernetes-validator.test.mjs /prepared/source/sdk/oracles/slsa-validator.mjs /prepared/source/sdk/oracles/spdx-validator.mjs /opt/prismpm/oracles/
+COPY --from=source_inputs /prepared/source/sdk/oracles/package.json /prepared/source/sdk/oracles/package-lock.json /prepared/source/sdk/oracles/asyncapi-parser.mjs /prepared/source/sdk/oracles/devcontainer-validator.mjs /prepared/source/sdk/oracles/git-signature-validator.mjs /prepared/source/sdk/oracles/kubernetes-validator.mjs /prepared/source/sdk/oracles/kubernetes-validator.test.mjs /prepared/source/sdk/oracles/mcp-conformance-server.mjs /prepared/source/sdk/oracles/mcp-conformance-server.test.mjs /prepared/source/sdk/oracles/mcp-schema-validator.mjs /prepared/source/sdk/oracles/mcp-schema-validator.test.mjs /prepared/source/sdk/oracles/slsa-validator.mjs /prepared/source/sdk/oracles/spdx-validator.mjs /opt/prismpm/oracles/
 RUN npm ci --ignore-scripts --omit=dev --prefix /opt/prismpm/oracles \
-    && chmod 0555 /opt/prismpm/oracles/asyncapi-parser.mjs /opt/prismpm/oracles/devcontainer-validator.mjs /opt/prismpm/oracles/git-signature-validator.mjs /opt/prismpm/oracles/kubernetes-validator.mjs /opt/prismpm/oracles/slsa-validator.mjs /opt/prismpm/oracles/spdx-validator.mjs \
+    && chmod 0555 /opt/prismpm/oracles/asyncapi-parser.mjs /opt/prismpm/oracles/devcontainer-validator.mjs /opt/prismpm/oracles/git-signature-validator.mjs /opt/prismpm/oracles/kubernetes-validator.mjs /opt/prismpm/oracles/mcp-conformance-server.mjs /opt/prismpm/oracles/mcp-schema-validator.mjs /opt/prismpm/oracles/slsa-validator.mjs /opt/prismpm/oracles/spdx-validator.mjs \
     && ln -s /opt/prismpm/oracles/asyncapi-parser.mjs /usr/local/bin/asyncapi-parser \
     && ln -s /opt/prismpm/oracles/devcontainer-validator.mjs /usr/local/bin/devcontainer-validator \
     && ln -s /opt/prismpm/oracles/git-signature-validator.mjs /usr/local/bin/git-signature-validator \
     && ln -s /opt/prismpm/oracles/kubernetes-validator.mjs /usr/local/bin/kubernetes-validator \
+    && ln -s /opt/prismpm/oracles/mcp-conformance-server.mjs /usr/local/bin/mcp-conformance-server \
+    && ln -s /opt/prismpm/oracles/mcp-schema-validator.mjs /usr/local/bin/mcp-schema-validator \
     && ln -s /opt/prismpm/oracles/slsa-validator.mjs /usr/local/bin/slsa-validator \
     && ln -s /opt/prismpm/oracles/spdx-validator.mjs /usr/local/bin/spdx-validator \
     && printf '%s' '{"asyncapi":"3.1.0","channels":{},"info":{"title":"SDK oracle fixture","version":"1"}}' >/tmp/asyncapi-valid.json \
@@ -241,6 +243,23 @@ RUN mkdir -p /opt/prismpm/asyncapi-official/scripts \
     && chmod 0555 /opt/prismpm/asyncapi-official/scripts/launcher.sh \
     && ln -s /opt/prismpm/asyncapi-official/scripts/launcher.sh /usr/local/bin/asyncapi-official \
     && chmod -R a-w /opt/prismpm/asyncapi-official
+# The MCP conformance suite is built from its vendored upstream sources at the
+# locked commit; its frozen requirements file is digest-checked before use.
+RUN mkdir -p /opt/prismpm/mcp-conformance \
+    && cp -a standards/oracles/mcp-conformance-232a9014/. /opt/prismpm/mcp-conformance/ \
+    && echo 'ae2f4f6210fd729e2e318edd5bbfa31a43cee0bc608e48052fa26dbf1d939b57  /opt/prismpm/mcp-conformance/requirements/2026-07-28.yaml' | sha256sum --check --strict \
+    && npm ci --ignore-scripts --no-audit --no-fund --prefix /opt/prismpm/mcp-conformance \
+    && (cd /opt/prismpm/mcp-conformance && ./node_modules/.bin/tsdown src/index.ts --minify --clean --target node20 --no-fixed-extension) \
+    && npm prune --omit=dev --ignore-scripts --no-audit --no-fund --prefix /opt/prismpm/mcp-conformance \
+    && mkdir -p /opt/prismpm/mcp-conformance/fixture \
+    && cp -a standards/oracles/mcp-conformance-232a9014/examples/servers/typescript/package.json standards/oracles/mcp-conformance-232a9014/examples/servers/typescript/package-lock.json /opt/prismpm/mcp-conformance/fixture/ \
+    && npm ci --ignore-scripts --include=dev --no-audit --no-fund --prefix /opt/prismpm/mcp-conformance/fixture \
+    && chmod -R a-w /opt/prismpm/mcp-conformance \
+    && PRISMPM_MCP_SUITE_ROOT=/opt/prismpm/mcp-conformance PRISMPM_MCP_CONFORMANCE_CORPUS=/opt/prismpm/source/standards/oracles/mcp-conformance-232a9014 \
+      PRISMPM_MCP_SCHEMA_CORPUS=/opt/prismpm/source/standards/oracles/mcp-schema-2026-07-28 \
+      node --test --test-timeout=900000 /opt/prismpm/oracles/mcp-schema-validator.test.mjs /opt/prismpm/oracles/mcp-conformance-server.test.mjs
+RUN mkdir -p /opt/prismpm/share/standards/oracles/mcp-schema-2026-07-28 \
+    && cp standards/oracles/mcp-schema-2026-07-28/schema.json /opt/prismpm/share/standards/oracles/mcp-schema-2026-07-28/schema.json
 RUN mkdir -p /opt/prismpm/share/standards/oracles \
     && cp standards/oracles/devcontainer-c95ffeed-base.schema.json \
       /opt/prismpm/share/standards/oracles/devcontainer-c95ffeed-base.schema.json \

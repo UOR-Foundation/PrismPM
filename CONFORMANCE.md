@@ -351,6 +351,10 @@ The three honesty levels:
 | `ISO-25010-2023` | `2023` | https://www.iso.org/standard/78176.html | `not-acquired` | `FT-05`, `ST-05` |
 | `CLOUDEVENTS-1-0-2` | `1.0.2` | https://codeload.github.com/cloudevents/spec/tar.gz/fc1f6f31f5f011a72183f1bcea20c987cb683ade | `b9e35734ccddc3baae04b4a18c8539e3d9f4148bbcdf48cd7b65751ee3d62614` | `AU-01`, `SY-04` |
 | `CLOUDEVENTS-SDK-GO-2-16-2` | `2.16.2` | https://codeload.github.com/cloudevents/sdk-go/tar.gz/af3e8599b3316ab6b4b73ff69aa8ec0efddbb5bb | `542bd94a70070c58ab96c5fe49affb04af6dc371b7ea6d0ad6d09337e4b3836a` | `AU-06`, `SY-04` |
+| `MCP-2026-07-28` | `2026-07-28` | https://codeload.github.com/modelcontextprotocol/modelcontextprotocol/tar.gz/80041ab0a139a8f4fb3adbc99f7ae9113ea59671 | `b0a70543278c720097f3b579e6a6eb864e4502b00d45d31504712789e647772e` | `AU-08`, `AU-09` |
+| `MCP-TASKS-SEP-2663` | `SEP-2663@80041ab0` | https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/80041ab0a139a8f4fb3adbc99f7ae9113ea59671/seps/2663-tasks-extension.md | `2bd75e527a0796ffbc07ed34c47307a43c78de1e3001eada52e601051c09a385` | `AU-08` |
+| `MCP-CONFORMANCE-232A9014` | `0.2.0-alpha.10+232a9014` | https://codeload.github.com/modelcontextprotocol/conformance/tar.gz/232a9014457eaf4c59559916e3d616d2f7f28f05 | `23f39518f67861dc2a82ecb542c578e20b713ae09661486b69a78cd49cb0e71e` | `AU-08`, `AU-09` |
+| `MCP-APPS-2026-01-26` | `2026-01-26` | https://raw.githubusercontent.com/modelcontextprotocol/ext-apps/298e884ec3f02daba085acdb02042d73bd00b355/specification/2026-01-26/apps.mdx | `ee452a7d1b9b7fb900acfeb4d6932d3963375b0f3f37d196a4b93eb80312af0e` | `AU-08` |
 
 ## Claims that are not conformance IDs
 
