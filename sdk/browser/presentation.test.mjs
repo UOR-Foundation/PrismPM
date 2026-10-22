@@ -5,9 +5,10 @@ import {verifyJourneys, verifyMutants, verifyMaximum} from '../../tests/browser-
 
 test('DK-23 actual generated closed presentation and private browser execution', {timeout: 3500000}, async t => {
   const build = await verifyWire(t);
-  await prerequisite(t, 'actual generated source-owned presentation and exact observed std/no_std native transcripts', async child => {
-    replayBrowser(build, await verifyJourneys(child, build));
-  });
+  for (const engine of ['chromium', 'firefox', 'webkit'])
+    await prerequisite(t, engine + ' actual generated presentation and exact observed std/no_std native transcripts', async child => {
+      replayBrowser(build, await verifyJourneys(child, build, engine), 'observed-' + engine);
+    });
   await prerequisite(t, 'real Chromium renders every exact generated 64 MiB combined shape observed independently in native execution', async child => {
     const observed = await verifyMaximum(child, build);
     assert.deepEqual(observed.map(row => row.id), build.maximumFrames.map(row => row.id));
