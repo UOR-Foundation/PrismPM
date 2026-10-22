@@ -183,6 +183,21 @@ fn constructor<'a>(fields: &'a BTreeMap<&str, &Value>, name: &str) -> Result<&'a
         .ok_or_else(|| PrismError::new("PP2001", format!("field {name} is not a constructor")))
 }
 
+/// The declaration kind a `Foundation.Arch` `ClaimKind` constructor requires.
+fn claim_kind(fields: &BTreeMap<&str, &Value>) -> Result<&'static str, PrismError> {
+    let name = constructor(fields, "claimKind")?;
+    match name.rsplit("::").next().unwrap_or(name) {
+        "ClaimKind.theoremClaim" => Ok("theorem"),
+        "ClaimKind.definitionClaim" => Ok("definition"),
+        _ => Err(unresolved(format!("unknown claim kind {name}"))),
+    }
+}
+
+/// A refusal of the correspondence contract.
+fn unresolved(message: impl Into<String>) -> PrismError {
+    PrismError::new("PP2013", message)
+}
+
 fn catalog_id(table: &Table, module: &str, constructor: &str) -> Result<String, PrismError> {
     let owner = constructor
         .split_once('.')
@@ -473,9 +488,148 @@ fn application_from(
     assemble(table, scan.catalogs, application).map(Some)
 }
 
+/// Resolve every application-declared `Foundation.Arch` `Correspondence`
+/// against the snapshot, whatever facet packages the project imports.
+///
+/// The concern and view indexes must be the `index` of a `Concern` and a `View`
+/// the application declares, and the claim must name a declaration of the
+/// snapshot whose kind is the one `claimKind` states. The kernel cannot resolve
+/// a declaration named by a String; this check is where that name is resolved.
+///
+/// # Errors
+///
+/// `PP2013` when a correspondence names an unknown concern, view or claim, or a
+/// claim of the wrong kind.
+pub(crate) fn check_correspondences(snapshot: &SemanticSnapshot) -> Result<(), PrismError> {
+    resolve_correspondences(&table()?, &declared(snapshot))
+}
+
+fn resolve_correspondences(table: &Table, declared: &[Declared<'_>]) -> Result<(), PrismError> {
+    let mut correspondences = Vec::new();
+    let mut indexes: BTreeMap<&str, BTreeSet<u64>> = BTreeMap::new();
+    for item in declared.iter().filter(|item| item.kind == "definition") {
+        let Some((mapping, false)) = entity_mapping(table, item.module, item.linked) else {
+            continue;
+        };
+        let id = format!("{}::{}", item.module, item.logical_id);
+        match mapping.target.as_str() {
+            "correspondences" => {
+                let row = fields(item.linked).ok_or_else(|| {
+                    unresolved(format!("correspondence {id} is not a record literal"))
+                })?;
+                correspondences.push((id, row));
+            }
+            target @ ("concerns" | "views") => {
+                // A concern or view that is not a record literal names no index.
+                if let Some(row) = fields(item.linked) {
+                    indexes
+                        .entry(target)
+                        .or_default()
+                        .insert(nat(&row, "index")?);
+                }
+            }
+            _ => {}
+        }
+    }
+    let kinds: BTreeMap<(&str, &str), &str> = declared
+        .iter()
+        .map(|item| ((item.module, item.logical_id), item.kind))
+        .collect();
+    for (id, row) in &correspondences {
+        for (field, target, noun) in [
+            ("concernIndex", "concerns", "concern"),
+            ("viewIndex", "views", "view"),
+        ] {
+            let value = nat(row, field)?;
+            if !indexes.get(target).is_some_and(|set| set.contains(&value)) {
+                return Err(unresolved(format!(
+                    "correspondence {id} names {noun} index {value}, which no {noun} of the model declares"
+                )));
+            }
+        }
+        let module = text_field(row, "claimModule")?;
+        let name = text_field(row, "claimName")?;
+        let kind = claim_kind(row)?;
+        match kinds.get(&(module.as_str(), name.as_str())) {
+            Some(found) if *found == kind => {}
+            Some(found) => {
+                return Err(unresolved(format!(
+                    "correspondence {id} claims the {kind} {module}::{name}, which is a {found}"
+                )))
+            }
+            None => {
+                return Err(unresolved(format!(
+                    "correspondence {id} claims {module}::{name}, which the model does not declare"
+                )))
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Diagnostic probe: resolve one correspondence whose claim is the specimen's
+/// `claim` (`<module>::<name>`) against a model that declares the theorem
+/// `Probe::claim`, one concern and one view.
+///
+/// # Errors
+///
+/// `PP2013` when the specimen names any other claim.
+pub(crate) fn probe_correspondence(specimen: &Value) -> Result<(), PrismError> {
+    let (module, name) = specimen["claim"]
+        .as_str()
+        .and_then(|claim| claim.split_once("::"))
+        .ok_or_else(|| unresolved("correspondence specimen names no claim"))?;
+    let nat =
+        |field: &str| serde_json::json!({"field": field, "value": {"kind": "nat", "value": "0"}});
+    let text = |field: &str, value: &str| serde_json::json!({"field": field, "value": {"kind": "string", "value": value}});
+    let record = |type_name: &str, fields: Vec<Value>| {
+        serde_json::json!({
+            "result": {"member": {"name": type_name, "module": "Foundation.Arch"}},
+            "body": {"kind": "record", "fields": fields},
+        })
+    };
+    let concern = record("Concern", vec![nat("index")]);
+    let view = record(
+        "View",
+        vec![nat("index"), nat("viewpointIndex"), nat("modelKindIndex")],
+    );
+    let correspondence = record(
+        "Correspondence",
+        vec![
+            nat("index"),
+            nat("concernIndex"),
+            nat("viewIndex"),
+            text("claimModule", module),
+            text("claimName", name),
+            serde_json::json!({"field": "claimKind", "value": {"kind": "constructor", "constructor": {"name": "ClaimKind.theoremClaim"}}}),
+        ],
+    );
+    let opaque = Value::Null;
+    let declared = [
+        ("ProbeArchitecture", "concern", "definition", &concern),
+        ("ProbeArchitecture", "view", "definition", &view),
+        (
+            "ProbeArchitecture",
+            "correspondence",
+            "definition",
+            &correspondence,
+        ),
+        ("Probe", "claim", "theorem", &opaque),
+    ]
+    .map(|(module, logical_id, kind, linked)| Declared {
+        module,
+        logical_id,
+        kind,
+        linked,
+    });
+    resolve_correspondences(&table()?, &declared)
+}
+
 mod records;
 use records::assemble;
 
+#[cfg(test)]
+mod correspondence_tests;
 #[cfg(test)]
 mod named_tests;
 #[cfg(test)]

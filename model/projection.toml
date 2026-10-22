@@ -42,6 +42,11 @@ target = "concerns"
 
 [[entity]]
 module = "Foundation.Arch"
+type_name = "Correspondence"
+target = "correspondences"
+
+[[entity]]
+module = "Foundation.Arch"
 type_name = "Edge"
 target = "edges"
 

@@ -120,6 +120,7 @@
         "component_kinds": { "items": { "$ref": "#/$defs/catalog" }, "type": "array" },
         "components": { "items": { "$ref": "#/$defs/component" }, "type": "array" },
         "concerns": { "items": { "$ref": "#/$defs/described" }, "type": "array" },
+        "correspondences": { "items": { "$ref": "#/$defs/correspondence" }, "type": "array" },
         "edge_kinds": { "items": { "$ref": "#/$defs/catalog" }, "type": "array" },
         "edges": { "items": { "$ref": "#/$defs/edge" }, "type": "array" },
         "model_kinds": { "items": { "$ref": "#/$defs/catalog" }, "type": "array" },
@@ -169,6 +170,20 @@
         "risk_index": { "$ref": "#/$defs/index" }
       },
       "required": ["id", "index", "risk_index"],
+      "type": "object"
+    },
+    "correspondence": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_kind": { "enum": ["definition", "theorem"] },
+        "claim_module": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$" },
+        "claim_name": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$" },
+        "concern_index": { "$ref": "#/$defs/index" },
+        "id": { "$ref": "#/$defs/qualified_entity" },
+        "index": { "$ref": "#/$defs/index" },
+        "view_index": { "$ref": "#/$defs/index" }
+      },
+      "required": ["claim_kind", "claim_module", "claim_name", "concern_index", "id", "index", "view_index"],
       "type": "object"
     },
     "described": {

@@ -547,6 +547,10 @@ pub struct ArchitectureModel {
     pub viewpoints: Vec<ViewpointRecord>,
     /// Views.
     pub views: Vec<ViewRecord>,
+    /// Concern-to-view correspondences, each naming the claim that answers
+    /// the concern in that view. Omitted when the source declares none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub correspondences: Vec<CorrespondenceRecord>,
 }
 
 /// Security and risk section.
@@ -686,6 +690,27 @@ pub struct ViewRecord {
     pub viewpoint_index: u64,
     /// Model-kind index.
     pub model_kind_index: u64,
+}
+
+/// Architecture correspondence: a concern, the view that frames it, and the
+/// declaration that states the claim answering it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CorrespondenceRecord {
+    /// Qualified entity identifier.
+    pub id: String,
+    /// Canonical index.
+    pub index: u64,
+    /// Concern index.
+    pub concern_index: u64,
+    /// View index.
+    pub view_index: u64,
+    /// Module that declares the claim.
+    pub claim_module: String,
+    /// Declaration name of the claim inside .
+    pub claim_name: String,
+    ///  or : the declaration kind the claim must have.
+    pub claim_kind: String,
 }
 
 /// Security asset.

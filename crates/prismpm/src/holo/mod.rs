@@ -12,4 +12,5 @@ pub mod projector;
 pub mod text_cli;
 pub mod validate;
 
+pub(crate) use facets::{check_correspondences, probe_correspondence};
 pub use model_document::ModelDocument;

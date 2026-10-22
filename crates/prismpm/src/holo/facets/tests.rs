@@ -553,6 +553,84 @@ mod document {
     }
 
     #[test]
+    fn projected_correspondences_validate_and_unresolved_ones_are_refused() {
+        use crate::holo::model_document::{
+            CorrespondenceRecord, NamedRecord, ViewRecord, ViewpointRecord,
+        };
+        let mut doc = with_facets();
+        let named = |id: &str| NamedRecord {
+            id: id.to_owned(),
+            index: 0,
+            name: String::new(),
+            text: String::new(),
+        };
+        doc.architecture.stakeholders = vec![named("App.Architecture::author")];
+        doc.architecture.concerns = vec![named("App.Architecture::parity")];
+        doc.architecture.viewpoints = vec![ViewpointRecord {
+            id: "App.Architecture::viewpointParity".to_owned(),
+            index: 0,
+            stakeholder_index: 0,
+            concern_index: 0,
+            model_kind_index: 0,
+        }];
+        doc.architecture.views = vec![ViewRecord {
+            id: "App.Architecture::viewParity".to_owned(),
+            index: 0,
+            viewpoint_index: 0,
+            model_kind_index: 0,
+        }];
+        validate(&doc).unwrap();
+        let row = CorrespondenceRecord {
+            id: "App.Architecture::parityClaim".to_owned(),
+            index: 0,
+            concern_index: 0,
+            view_index: 0,
+            claim_module: "Engine".to_owned(),
+            claim_name: "parity".to_owned(),
+            claim_kind: "theorem".to_owned(),
+        };
+        doc.architecture.correspondences = vec![row.clone()];
+        validate(&doc).unwrap();
+        assert!(schema_accepts(&doc));
+        let bytes = crate::holo::canonical::encode_canonical(&doc).unwrap();
+        assert_eq!(
+            crate::holo::canonical::decode_canonical(&bytes).unwrap(),
+            doc
+        );
+        for broken in [
+            CorrespondenceRecord {
+                concern_index: 99,
+                ..row.clone()
+            },
+            CorrespondenceRecord {
+                view_index: 99,
+                ..row.clone()
+            },
+            CorrespondenceRecord {
+                claim_kind: "lemma".to_owned(),
+                ..row.clone()
+            },
+            CorrespondenceRecord {
+                claim_name: String::new(),
+                ..row.clone()
+            },
+        ] {
+            let mut bad = doc.clone();
+            bad.architecture.correspondences = vec![broken];
+            assert_eq!(validate(&bad).unwrap_err().code, "PP2013");
+        }
+        for (kind, name) in [("lemma", "parity"), ("theorem", "")] {
+            let mut bad = doc.clone();
+            bad.architecture.correspondences = vec![CorrespondenceRecord {
+                claim_kind: kind.to_owned(),
+                claim_name: name.to_owned(),
+                ..row.clone()
+            }];
+            assert!(!schema_accepts(&bad), "{kind} {name:?}");
+        }
+    }
+
+    #[test]
     fn facet_records_without_the_facet_closure_are_refused() {
         let mut doc = with_facets();
         doc.provenance.facet_packages.clear();

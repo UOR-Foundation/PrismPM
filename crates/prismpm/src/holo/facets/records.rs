@@ -1,14 +1,15 @@
 //! Assembly of the typed facet sections from collected catalog and entity rows.
 
 use super::{
-    bool_field, catalog_id, constructor, index, indexed, named, nat, take_raw, text_field, Buckets,
-    FacetRecords, Table,
+    bool_field, catalog_id, claim_kind, constructor, index, indexed, named, nat, take_raw,
+    text_field, Buckets, FacetRecords, Table,
 };
 use crate::error::PrismError;
 use crate::holo::model_document::{
     ActivityRecord, ArchitectureModel, AssetRecord, CatalogRecord, ComponentRecord, ControlRecord,
-    EdgeRecord, MeasureRecord, MeasurementRecord, QualityModel, RequirementRecord, RiskRecord,
-    SecurityModel, SubcharacteristicRecord, ViewRecord, ViewpointRecord,
+    CorrespondenceRecord, EdgeRecord, MeasureRecord, MeasurementRecord, QualityModel,
+    RequirementRecord, RiskRecord, SecurityModel, SubcharacteristicRecord, ViewRecord,
+    ViewpointRecord,
 };
 use std::collections::BTreeMap;
 
@@ -81,6 +82,21 @@ pub(super) fn assemble(
                 index: index as u64,
                 viewpoint_index: nat(&row.fields, "viewpointIndex")?,
                 model_kind_index: nat(&row.fields, "modelKindIndex")?,
+            })
+        })
+        .collect::<Result<Vec<_>, PrismError>>()?;
+    let correspondences = take_raw(&mut entities, "correspondences")
+        .into_iter()
+        .enumerate()
+        .map(|(index, row)| {
+            Ok(CorrespondenceRecord {
+                id: row.id,
+                index: index as u64,
+                concern_index: nat(&row.fields, "concernIndex")?,
+                view_index: nat(&row.fields, "viewIndex")?,
+                claim_module: text_field(&row.fields, "claimModule")?,
+                claim_name: text_field(&row.fields, "claimName")?,
+                claim_kind: claim_kind(&row.fields)?.to_owned(),
             })
         })
         .collect::<Result<Vec<_>, PrismError>>()?;
@@ -201,6 +217,7 @@ pub(super) fn assemble(
             concerns,
             viewpoints,
             views,
+            correspondences,
         },
         security: SecurityModel {
             likelihoods: take_catalog(&mut catalogs, "likelihoods"),

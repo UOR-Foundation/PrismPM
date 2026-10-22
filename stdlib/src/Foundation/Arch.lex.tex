@@ -109,6 +109,27 @@ structure{
   ]
 }
 
+inductive{
+  name: ClaimKind,
+  type_parameters: [],
+  parameters: [],
+  constructors: [{name: theoremClaim, fields: []}, {name: definitionClaim, fields: []}]
+}
+
+structure{
+  name: Correspondence,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: index, type: Nat},
+    {name: concernIndex, type: Nat},
+    {name: viewIndex, type: Nat},
+    {name: claimModule, type: String},
+    {name: claimName, type: String},
+    {name: claimKind, type: ClaimKind}
+  ]
+}
+
 class{
   name: ViewpointClass,
   type_parameters: [],

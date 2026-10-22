@@ -115,6 +115,20 @@ together with the delivery kinds `cliAdapter`, `staticSite` and `releaseBinary`.
 position of `standardId` in the exact standards profile, and `editionIndex`
 the position of `edition` among the editions the document cites for it.
 
+A `Correspondence` relates a concern to the view that frames it and to the
+claim that answers it: `concernIndex` and `viewIndex` are the `index` of a
+`Concern` and a `View`, and `claimModule`, `claimName` and `claimKind`
+(`theoremClaim` or `definitionClaim`) name one declaration of the model. The
+kernel cannot resolve a declaration named by a String, so check and build
+resolve every correspondence an application module declares against the
+semantic snapshot of all entrypoints, whether or not the project imports the
+other facet packages: an index that no application concern or view declares,
+an undeclared claim, or a claim whose declaration kind differs from
+`claimKind` is refused with `PP2013`. Projected correspondences carry
+`concern_index`, `view_index`, `claim_module`, `claim_name` and `claim_kind`
+(`theorem` or `definition`) and are omitted from the document when none is
+declared, so documents without correspondences are unchanged.
+
 The fixed runtime root set and sorted Lean names are in
 `model/runtime-roots.toml`. Runtime validity is separate from any erased `Prop`
 field. Generated validators operate on monomorphic `Nat`, Boolean, enum,
@@ -249,11 +263,14 @@ every V2 range rule. V3 also adds one required closed `cli` record, so
 the command-line surface is source-owned data and not generator input. HO-17
 owns this profile. The record holds the subcommand `command` (a lowercase token
 other than `examples`), a purpose paragraph `description`, `usageCode` and
-`ioCode`, the ordered exit-code map `outcomes`, optional help `sections` and
-named `examples`. Each outcome has a unique lowercase `name`, a nonempty
-`prefix` and a unique `exitCode`; prefixes must not begin one another, every
-code is at most 125, usage and I/O codes differ from each other and from every
-outcome, and an outcome named `error` is required. Every acceptance response
+`ioCode`, the optional `limitCode`, the ordered exit-code map `outcomes`,
+optional help `sections` and named `examples`. Each outcome has a unique
+lowercase `name`, a nonempty `prefix` and a unique `exitCode`; prefixes must not
+begin one another, every code is at most 125, usage and I/O codes differ from
+each other and from every outcome, and an outcome named `error` is required.
+`limitCode` is `(Option UInt8)`: `Option.none` (absent `limit_code` in the
+document) gives an oversized request the code of the `error` outcome, and
+`Option.some` gives it its own code, which must differ from every other code. Every acceptance response
 must begin with exactly one declared prefix. Missing, null, mistyped or
 undeclared fields, a `cli` under another profile or schema and a foreign type
 owner are rejected with PP2009 or PP2001.
@@ -271,8 +288,8 @@ whose prefix begins it. `--help` is rendered from the model: purpose, usage,
 the request bound, modeled sections, examples and the complete exit-code table.
 `--version` prints `{cargo_name} {cargo_version}`. Failures are the closed
 `TextCliFailure` vocabulary registered in `model/text-cli-diagnostics.toml`;
-each exits with `usageCode`, `ioCode` or the code of the `error` outcome by its
-class and prints `{binary}: {Failure}[: detail]` on standard error. A closed or
+each exits with `usageCode`, `ioCode`, the limit code (`InputLimit` only) or
+the code of the `error` outcome by its class and prints `{binary}: {Failure}[: detail]` on standard error. A closed or
 full standard output is `OutputWrite`; a standard stream closed before exec is
 reopened by the standard library on `/dev/null` and cannot be observed as a
 write failure.
@@ -291,7 +308,7 @@ entry and through the program for the host architecture over standard input, a
 file and `-`. A vector within the request maximum must produce the identical
 report bytes, the modeled exit code and an empty standard error. A vector over
 the modeled maximum cannot reach the guest through the program; it must exit
-with the fault code, empty standard output and `InputLimit`, and its guest
+with the limit code, empty standard output and `InputLimit`, and its guest
 response is compared only with the model. The retained
 `application-acceptance.json` carries the `command_line` record with program
 digests, and source-free verification replays it exactly. The program for a

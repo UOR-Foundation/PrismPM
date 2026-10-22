@@ -321,6 +321,12 @@
           "minimum": 0,
           "maximum": 125
         },
+        "limit_code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 125,
+          "description": "Exit code of a request refused over the request maximum. Absent means the code of the error outcome."
+        },
         "outcomes": {
           "type": "array",
           "minItems": 1,
@@ -462,6 +468,13 @@
             "$ref": "#/$defs/described"
           },
           "type": "array"
+        },
+        "correspondences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/correspondence"
+          },
+          "description": "Absent when the model declares no correspondence."
         },
         "edge_kinds": {
           "items": {
@@ -977,6 +990,51 @@
         "stakeholder_index"
       ],
       "type": "object"
+    },
+    "correspondence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/qualified_entity"
+        },
+        "index": {
+          "$ref": "#/$defs/index"
+        },
+        "concern_index": {
+          "$ref": "#/$defs/index"
+        },
+        "view_index": {
+          "$ref": "#/$defs/index"
+        },
+        "claim_module": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+        },
+        "claim_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
+        },
+        "claim_kind": {
+          "enum": [
+            "definition",
+            "theorem"
+          ]
+        }
+      },
+      "required": [
+        "claim_kind",
+        "claim_module",
+        "claim_name",
+        "concern_index",
+        "id",
+        "index",
+        "view_index"
+      ]
     }
   }
 }

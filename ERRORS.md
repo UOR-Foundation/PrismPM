@@ -95,6 +95,12 @@ An OPM or UML design view names a component, edge, process, state or viewpoint t
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2013` --- Unresolved architecture correspondence
+
+A Foundation.Arch correspondence names a concern or view the model does not declare, or a claim that is not a declaration of the model with the stated theorem or definition kind.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

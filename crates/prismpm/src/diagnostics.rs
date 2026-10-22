@@ -39,6 +39,7 @@ enum Rule {
     BrowserApplication,
     BrowserRuntime,
     DesignView,
+    Correspondence,
 }
 
 impl Rule {
@@ -54,6 +55,10 @@ impl Rule {
             Self::DesignView => (
                 json!({"component": "Probe::component"}),
                 json!({"component": "Probe::unknown"}),
+            ),
+            Self::Correspondence => (
+                json!({"claim": "Probe::claim"}),
+                json!({"claim": "Probe::unknown"}),
             ),
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
@@ -130,6 +135,7 @@ impl Rule {
             Self::BrowserApplication => validate_browser_specimen(value).is_ok(),
             Self::BrowserRuntime => validate_browser_runtime(value).is_ok(),
             Self::DesignView => crate::design::probe(value).is_ok(),
+            Self::Correspondence => crate::holo::probe_correspondence(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
@@ -239,6 +245,11 @@ probes!(
         BrowserRuntime
     ),
     ("PP2012", "unknown-design-view-name", DesignView),
+    (
+        "PP2013",
+        "unresolved-architecture-correspondence",
+        Correspondence
+    ),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -386,6 +397,9 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::DesignView) {
         return crate::design::probe(value);
+    }
+    if matches!(spec.rule, Rule::Correspondence) {
+        return crate::holo::probe_correspondence(value);
     }
     if spec.rule.accepts(value) {
         Ok(())

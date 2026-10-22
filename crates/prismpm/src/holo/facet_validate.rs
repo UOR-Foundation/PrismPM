@@ -208,6 +208,28 @@ pub(super) fn validate(doc: &ModelDocument) -> Result<(), PrismError> {
             return Err(PrismError::new("PP2001", "view link is unresolved"));
         }
     }
+    ordered(
+        "correspondence",
+        doc.architecture
+            .correspondences
+            .iter()
+            .map(|row| (row.id.as_str(), row.index)),
+    )?;
+    for row in &doc.architecture.correspondences {
+        described("correspondence claim", &row.claim_module, "")?;
+        described("correspondence claim", &row.claim_name, "")?;
+        if row.claim_module.is_empty()
+            || row.claim_name.is_empty()
+            || !matches!(row.claim_kind.as_str(), "theorem" | "definition")
+            || !contains_index(&doc.architecture.concerns, row.concern_index)
+            || !contains_index(&doc.architecture.views, row.view_index)
+        {
+            return Err(PrismError::new(
+                "PP2013",
+                format!("correspondence {} is unresolved", row.id),
+            ));
+        }
+    }
 
     let likelihoods = ordered(
         "likelihood",

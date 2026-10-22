@@ -592,6 +592,7 @@ impl Controller {
         };
         let model_bytes = encode_canonical(&model)?;
         let design_views = crate::design::render_snapshot(model_snapshot, &model)?;
+        crate::holo::check_correspondences(&snapshot)?;
         if let Some(system) = &system {
             let expected = format!("sha256:{}", content_id(&model_bytes));
             if system.value()["application_profile"]["application_model_digest"] != expected {

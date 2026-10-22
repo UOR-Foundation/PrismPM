@@ -1,0 +1,17 @@
+spec = "lexlean/entry/1"
+id = "arch-correspondence"
+category = "label-word"
+surface_arity = 0
+frame = "atom"
+
+[denotation]
+kind = "document"
+module = "Foundation.Arch"
+component = "Correspondence"
+
+[[form]]
+id = "arch-correspondence"
+channel = "text"
+surface = "Architecture correspondence"
+canonical_source = true
+features = ["sentence-case", "singular"]
