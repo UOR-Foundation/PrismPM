@@ -520,7 +520,9 @@ pub fn run_at(root: &Path, id: &str) {
             verify_security(root, id);
         }
 
-        "AU-01" | "AU-02" | "AU-03" | "AU-04" | "AU-05" | "AU-06" => verify_authorities(root, id),
+        "AU-01" | "AU-02" | "AU-03" | "AU-04" | "AU-05" | "AU-06" | "AU-08" | "AU-09" => {
+            verify_authorities(root, id)
+        }
         "AU-07" => verify_node_suite(
             root,
             id,
@@ -938,6 +940,69 @@ fn verify_authorities(root: &Path, id: &str) {
             assert!(evidence.unicode.positive > 0);
             assert!(evidence.unicode.negative > 0);
             assert!(evidence.unicode.planted_rejections > 0);
+        }
+        "AU-08" => {
+            let lock = prismpm::authority::inspect(root).expect("standards lock parses");
+            let authorities = lock["authorities"].as_array().expect("authority bindings");
+            let oracles = lock["oracles"].as_array().expect("oracle bindings");
+            for authority in [
+                "MCP-2026-07-28",
+                "MCP-TASKS-SEP-2663",
+                "MCP-CONFORMANCE-232A9014",
+                "MCP-APPS-2026-01-26",
+            ] {
+                assert!(
+                    authorities.iter().any(|row| row["id"] == authority),
+                    "{authority} is bound by standards.lock"
+                );
+            }
+            let schema = oracles
+                .iter()
+                .find(|row| row["id"] == "mcp-schema-2026-07-28")
+                .expect("the MCP schema oracle is bound");
+            let conformance = oracles
+                .iter()
+                .find(|row| row["id"] == "mcp-conformance-server-2026-07-28")
+                .expect("the MCP server conformance oracle is bound");
+            assert_ne!(schema["executable"], conformance["executable"]);
+            assert_ne!(schema["output_schema"], Value::Null);
+        }
+        "AU-09" => {
+            let temp = tempfile::tempdir().unwrap();
+            let standards = prismpm::authority::resolve(temp.path(), false).unwrap();
+            let mut sdk_lock = sdk_lock_value();
+            sdk_lock["sdk_image"] = Value::String(
+                std::env::var("PRISMPM_TEST_SDK_IMAGE")
+                    .expect("the no-skip authority gate requires an immutable SDK image"),
+            );
+            sdk_lock["standards_lock"] = Value::String(standards.lock_digest);
+            bind_execution_sdk_fixture(&mut sdk_lock);
+            let sdk_lock =
+                prismpm::contracts::CanonicalDocument::from_value("prismpm/sdk-lock/1", sdk_lock)
+                    .unwrap();
+            std::fs::write(temp.path().join("prismpm.lock"), sdk_lock.bytes()).unwrap();
+            let transcript = tempfile::NamedTempFile::new().unwrap();
+            std::fs::write(
+                transcript.path(),
+                serde_json::to_vec(&serde_json::json!({
+                    "version": "prismpm/mcp-transcript/1",
+                    "spec": "2026-07-28",
+                    "messages": [{
+                        "direction": "client-to-server",
+                        "message": {"jsonrpc": "2.0", "id": 1, "method": "ping"}
+                    }]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            let result = prismpm::authority::run_oracle_with_bindings_in_project(
+                temp.path(),
+                "mcp-schema",
+                transcript.path(),
+                &BTreeMap::new(),
+            )
+            .unwrap();
+            assert!(result.valid && !result.covered.is_empty());
         }
         _ => unreachable!(),
     }

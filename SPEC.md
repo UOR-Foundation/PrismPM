@@ -3519,6 +3519,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
 | `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
 | `AU-07` | `authorities` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. | §10 |
+| `AU-08` | `authorities` | MCP 2026-07-28 is bound as an interface kind to its specification, schema, tasks extension, conformance suite and MCP Apps authorities, with the schema oracle and the server conformance oracle as separate evidence kinds, and a locked suite whose requirements file differs from the frozen one is refused. | §10 |
+| `AU-09` | `authorities` | The MCP schema oracle and the MCP server conformance oracle execute in the networkless sandbox against positive and planted subjects, and a conformance build with one required scenario failing is rejected with the oracle's diagnostic. | §10 |
 | `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
 | `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
 | `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |
