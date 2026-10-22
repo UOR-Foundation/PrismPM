@@ -207,6 +207,47 @@ pub(super) fn unsigned(
     representation: &str,
 ) -> Result<u64, PrismError> {
     let (_, value) = field(fields, name)?;
+    unsigned_value(value, name, representation)
+}
+
+/// An `Option` of a fixed-width unsigned field: `Option.none` is absent and
+/// `Option.some` carries exactly one canonical integer of the representation.
+pub(super) fn optional_unsigned(
+    fields: &BTreeMap<&str, (&str, &Value)>,
+    name: &str,
+    representation: &str,
+) -> Result<Option<u64>, PrismError> {
+    let (_, value) = field(fields, name)?;
+    let constructor = value
+        .pointer("/constructor/name")
+        .and_then(Value::as_str)
+        .filter(|_| value.get("kind").and_then(Value::as_str) == Some("constructor"))
+        .ok_or_else(|| {
+            PrismError::new(
+                "PP2001",
+                format!("application field {name} is not Option {representation}"),
+            )
+        })?;
+    let arguments = value
+        .get("arguments")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    match (
+        constructor.ends_with("Option.none"),
+        constructor.ends_with("Option.some"),
+    ) {
+        (true, false) if arguments.is_empty() => Ok(None),
+        (false, true) if arguments.len() == 1 => {
+            unsigned_value(&arguments[0], name, representation).map(Some)
+        }
+        _ => Err(PrismError::new(
+            "PP2001",
+            format!("application field {name} is not Option {representation}"),
+        )),
+    }
+}
+
+fn unsigned_value(value: &Value, name: &str, representation: &str) -> Result<u64, PrismError> {
     if value.get("kind").and_then(Value::as_str) != Some("integer")
         || value.get("representation").and_then(Value::as_str) != Some(representation)
     {
@@ -656,22 +697,20 @@ pub fn project_application(
             request_maximum,
             response_maximum,
             guest_allocation_maximum,
-            core_memory_pages: if resource_profile {
-                Some(
-                    u32::try_from(unsigned(&fields, "coreMemoryPages", "uint32")?)
-                        .map_err(|_| PrismError::new("PP2001", "coreMemoryPages exceeds UInt32"))?,
-                )
-            } else {
-                None
-            },
-            core_stack_bytes: if resource_profile {
-                Some(
-                    u32::try_from(unsigned(&fields, "coreStackBytes", "uint32")?)
-                        .map_err(|_| PrismError::new("PP2001", "coreStackBytes exceeds UInt32"))?,
-                )
-            } else {
-                None
-            },
+            core_memory_pages: core_budget(
+                &fields,
+                "coreMemoryPages",
+                resource_profile,
+                command_profile,
+                V1_CORE_MEMORY_PAGES,
+            )?,
+            core_stack_bytes: core_budget(
+                &fields,
+                "coreStackBytes",
+                resource_profile,
+                command_profile,
+                V1_CORE_STACK_BYTES,
+            )?,
             capabilities_empty: boolean(&fields, "capabilitiesEmpty")?,
             fat_archive: boolean(&fields, "fatArchive")?,
             primary_layer,
@@ -716,6 +755,36 @@ pub fn project_application(
         }))
     };
     projected_document(snapshot, application)
+}
+
+/// The implicit Core-Wasm memory budget of text/1, in 64 KiB pages.
+pub const V1_CORE_MEMORY_PAGES: u32 = 32;
+/// The implicit Core-Wasm linear-memory stack budget of text/1, in bytes.
+pub const V1_CORE_STACK_BYTES: u32 = 65_536;
+
+/// A Core-Wasm resource bound: absent for text/1, an explicit `UInt32` for
+/// text/2, and an `Option UInt32` for text/3 whose `none` selects the text/1
+/// budget so the projected document always carries the resolved value.
+fn core_budget(
+    fields: &BTreeMap<&str, (&str, &Value)>,
+    name: &str,
+    resource_profile: bool,
+    command_profile: bool,
+    v1_budget: u32,
+) -> Result<Option<u32>, PrismError> {
+    let value = if command_profile {
+        match optional_unsigned(fields, name, "uint32")? {
+            Some(value) => value,
+            None => return Ok(Some(v1_budget)),
+        }
+    } else if resource_profile {
+        unsigned(fields, name, "uint32")?
+    } else {
+        return Ok(None);
+    };
+    u32::try_from(value)
+        .map(Some)
+        .map_err(|_| PrismError::new("PP2001", format!("{name} exceeds UInt32")))
 }
 
 fn projected_document(

@@ -192,7 +192,12 @@ the Holo/1 physical archive or the legacy numeric View representation.
 
 The separate `Foundation.View.Text.V3.Model.TextApplication` declares
 `prismpm/text-application/3` in closed `prismpm/model-document/6`. It retains
-every V2 field and resource rule and adds one required closed `cli` record, so
+every V2 field and resource rule, states `coreMemoryPages` and
+`coreStackBytes` as `Option UInt32` where `none` selects the text/1 budget of
+32 pages and 65536 stack bytes and `some` is an explicit value under the V2
+rules (the projected document always carries the resolved numbers, so an
+omitted budget and an explicit text/1 budget project the same application
+section), and adds one required closed `cli` record, so
 the command-line surface is source-owned data and not generator input. HO-17
 owns this profile. The record holds the subcommand `command` (a lowercase token
 other than `examples`), a purpose paragraph `description`, `usageCode` and
@@ -1307,8 +1312,13 @@ only production code-export path.
 `prismpm/system-model/2` is an explicit closed projection of
 `Production.BrowserSystem.SystemModel`, not an extension or reinterpretation
 of the transactional `system-model/1` profile. It contains one independently
-selected generated application, one generated-artifact role, one browser
-component and one pinned `github-pages-browser` target. Product ownership,
+selected generated application, its `selected-application` artifact, one
+`browser` component and one pinned `github-pages-browser` target. A text/3
+application may additionally declare, always second, one `cli` component whose
+`command-line-program` artifact is the generated static program set of the
+same application at the same version; no other component, artifact, role or
+target cardinality is admitted, and a `cli` component on an application that
+models no command line is refused with PP2101. Product ownership,
 source policy and distinct graph identities are mandatory. The selected
 application retains every existing model, facet, source, kernel and acceptance
 check. Supported application resources are exactly DOM and WebAssembly in a
@@ -1317,8 +1327,11 @@ other requirements are rejected, not recorded as unused metadata.
 
 An authored `SystemManifest` and its empty-axiom, generated
 `validateManifest model manifest = true` theorem bind the exact selected
-model, manifest, product/release, application digest, component, artifact,
-target and mandatory control list. The mandatory controls are
+model, manifest, product/release, application digest, browser component,
+selected-application artifact, target and mandatory control list; the
+optional command-line pair is bound by the system digest and the release
+binding's artifact rows, so a single-component system and its generated
+documents are unchanged by the admission. The mandatory controls are
 `application-acceptance`, `artifact-closure`, `source-proof` and `spdx`;
 they cannot be omitted or replaced by submitted optional claims.
 Presence of ownership text does not authenticate an owner.
@@ -1329,7 +1342,9 @@ application digest and exact ordered artifact path/size/SHA-256 rows.
 Rows cover all generated build artifacts except the containing system,
 system projections and the self-identifying build manifest. The generated
 Holo/1 application and exact supported six-file browser projection are
-required. This profile accepts only the existing Legacy and Text application
+required, and a declared `cli` component additionally requires both static
+programs and `cli/sbom.spdx.json` in the closure; the SPDX projection then
+describes both packages. This profile accepts only the existing Legacy and Text application
 variants; empty Holo capabilities do not admit browser-effect requirements.
 `build-inputs/2` separately binds the complete final artifact
 table, including both system projections. This avoids a circular source

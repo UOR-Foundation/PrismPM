@@ -338,7 +338,7 @@ fn source() -> String {
         ),
         (
             "guestAllocationMaximum := (128 : UInt32),".to_owned(),
-            "guestAllocationMaximum := (128 : UInt32), coreMemoryPages := (64 : UInt32), coreStackBytes := (131072 : UInt32),".to_owned(),
+            "guestAllocationMaximum := (128 : UInt32), coreMemoryPages := (ctor Option.some [UInt32] (64 : UInt32)), coreStackBytes := (ctor Option.some [UInt32] (131072 : UInt32)),".to_owned(),
         ),
         (
             "responseError := \"Invalid response\"})})".to_owned(),
@@ -448,4 +448,47 @@ fn text_cli_projects_only_from_the_exact_source_owned_type() {
     );
     let no_error = source.replace("\"error\"", "\"fault\"");
     assert_eq!(project(&no_error, V3).unwrap_err().code, "PP2009");
+}
+
+/// text/3 states its Core-Wasm budget as `Option UInt32`: `none` selects the
+/// text/1 budget of 32 pages and 65536 stack bytes, `some` is explicit, and the
+/// projected document carries the resolved numbers either way.
+#[test]
+fn text_cli_absent_budgets_resolve_to_the_text_v1_budget() {
+    const EXPLICIT: &str = "coreMemoryPages := (ctor Option.some [UInt32] (64 : UInt32)), coreStackBytes := (ctor Option.some [UInt32] (131072 : UInt32)),";
+    const ABSENT: &str =
+        "coreMemoryPages := (ctor Option.none [UInt32]), coreStackBytes := (ctor Option.none [UInt32]),";
+    const V1_EXPLICIT: &str = "coreMemoryPages := (ctor Option.some [UInt32] (32 : UInt32)), coreStackBytes := (ctor Option.some [UInt32] (65536 : UInt32)),";
+    let explicit = source();
+    assert_eq!(explicit.matches(EXPLICIT).count(), 1);
+    let doc = project(&explicit.replace(EXPLICIT, ABSENT), V3).unwrap();
+    let application = doc.application.as_ref().unwrap();
+    assert_eq!(doc.schema, "prismpm/model-document/6");
+    assert_eq!(application.core_memory_pages(), 32);
+    assert_eq!(application.core_stack_bytes(), Some(65536));
+    assert!(schema().is_valid(&serde_json::to_value(&doc).unwrap()));
+    // A model that omits its budget and one that states the text/1 budget
+    // project the same application; only the source provenance differs.
+    let stated_v1 = project(&explicit.replace(EXPLICIT, V1_EXPLICIT), V3).unwrap();
+    assert_eq!(stated_v1.application, doc.application);
+    assert_ne!(stated_v1.provenance, doc.provenance);
+    // Explicit values keep working.
+    let stated = project(&explicit, V3).unwrap();
+    assert_eq!(stated.application.as_ref().unwrap().core_memory_pages(), 64);
+    assert_eq!(
+        stated.application.as_ref().unwrap().core_stack_bytes(),
+        Some(131072)
+    );
+    assert_ne!(stated.application, doc.application);
+    // One absent bound does not default the other.
+    let pages_only = explicit.replace(
+        EXPLICIT,
+        "coreMemoryPages := (ctor Option.none [UInt32]), coreStackBytes := (ctor Option.some [UInt32] (131072 : UInt32)),",
+    );
+    let mixed = project(&pages_only, V3).unwrap();
+    assert_eq!(mixed.application.as_ref().unwrap().core_memory_pages(), 32);
+    assert_eq!(
+        mixed.application.as_ref().unwrap().core_stack_bytes(),
+        Some(131072)
+    );
 }
