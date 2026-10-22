@@ -1182,3 +1182,126 @@ retrieval_date = "2026-09-06"
 supersession_policy = "explicit-lock-update-only"
 statement = "The exact official CloudEvents Go SDK supplies the executable CloudEvents event-validation behavior and its upstream tests."
 realized_by = ["AU-06", "SY-04"]
+
+# MCP 2026-07-28 as an interface kind. The specification, its schema, the tasks
+# extension and the conformance suite are separate immutable bindings; the two
+# executable oracles that consume them are separate evidence kinds below.
+
+[[authority]]
+id = "MCP-2026-07-28"
+name = "Model Context Protocol 2026-07-28"
+issuer = "Model Context Protocol project (Agentic AI Foundation)"
+canonical_identifier = "modelcontextprotocol/modelcontextprotocol"
+edition = "2026-07-28"
+source_role = "normative"
+immutable_url = "https://codeload.github.com/modelcontextprotocol/modelcontextprotocol/tar.gz/80041ab0a139a8f4fb3adbc99f7ae9113ea59671"
+revision = "80041ab0a139a8f4fb3adbc99f7ae9113ea59671"
+acquired_sha256 = "b0a70543278c720097f3b579e6a6eb864e4502b00d45d31504712789e647772e"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/gzip"
+license = "Apache-2.0 AND MIT AND CC-BY-4.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-22"
+supersession_policy = "explicit-lock-update-only"
+statement = "The 2026-07-28 specification, including schema/2026-07-28/schema.ts and schema.json, owns the wire contract of the MCP interface kind: stateless requests carrying per-request metadata, resultType-discriminated results, and typed errors."
+realized_by = ["AU-08", "AU-09"]
+
+[[authority]]
+id = "MCP-TASKS-SEP-2663"
+name = "MCP tasks extension SEP-2663"
+issuer = "Model Context Protocol project (Agentic AI Foundation)"
+canonical_identifier = "modelcontextprotocol/modelcontextprotocol/seps/2663-tasks-extension.md"
+edition = "SEP-2663@80041ab0"
+source_role = "normative"
+immutable_url = "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/80041ab0a139a8f4fb3adbc99f7ae9113ea59671/seps/2663-tasks-extension.md"
+revision = "80041ab0a139a8f4fb3adbc99f7ae9113ea59671"
+acquired_sha256 = "2bd75e527a0796ffbc07ed34c47307a43c78de1e3001eada52e601051c09a385"
+signature = "not-published-or-not-relied-upon"
+media_type = "text/markdown"
+license = "Apache-2.0 AND MIT AND CC-BY-4.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-22"
+supersession_policy = "explicit-lock-update-only"
+statement = "SEP-2663, Final, defines the io.modelcontextprotocol/tasks extension (tasks/get, tasks/update, tasks/cancel and the resultType task discriminator); it is outside schema/2026-07-28 and its scenarios are run but never scored by the locked suite."
+realized_by = ["AU-08"]
+
+[[authority]]
+id = "MCP-CONFORMANCE-232A9014"
+name = "MCP conformance suite 232a9014"
+issuer = "Model Context Protocol project (Agentic AI Foundation)"
+canonical_identifier = "modelcontextprotocol/conformance"
+edition = "0.2.0-alpha.10+232a9014"
+source_role = "normative"
+immutable_url = "https://codeload.github.com/modelcontextprotocol/conformance/tar.gz/232a9014457eaf4c59559916e3d616d2f7f28f05"
+revision = "232a9014457eaf4c59559916e3d616d2f7f28f05"
+acquired_sha256 = "23f39518f67861dc2a82ecb542c578e20b713ae09661486b69a78cd49cb0e71e"
+signature = "not-published-or-not-relied-upon"
+media_type = "application/gzip"
+license = "MIT"
+redistribution = "redistributable"
+retrieval_date = "2026-10-22"
+supersession_policy = "explicit-lock-update-only"
+statement = "The suite supplies executable MCP 2026-07-28 server conformance scenarios; requirements/2026-07-28.yaml is frozen at the locked commit and names the 37 required and 13 run-but-unscored server scenarios."
+realized_by = ["AU-08", "AU-09"]
+frozen_members = [{ path = "requirements/2026-07-28.yaml", sha256 = "ae2f4f6210fd729e2e318edd5bbfa31a43cee0bc608e48052fa26dbf1d939b57" }]
+
+[[authority]]
+id = "MCP-APPS-2026-01-26"
+name = "MCP Apps specification 2026-01-26"
+issuer = "Model Context Protocol project (Agentic AI Foundation)"
+canonical_identifier = "modelcontextprotocol/ext-apps/specification/2026-01-26/apps.mdx"
+edition = "2026-01-26"
+source_role = "normative"
+immutable_url = "https://raw.githubusercontent.com/modelcontextprotocol/ext-apps/298e884ec3f02daba085acdb02042d73bd00b355/specification/2026-01-26/apps.mdx"
+revision = "298e884ec3f02daba085acdb02042d73bd00b355"
+acquired_sha256 = "ee452a7d1b9b7fb900acfeb4d6932d3963375b0f3f37d196a4b93eb80312af0e"
+signature = "not-published-or-not-relied-upon"
+media_type = "text/markdown"
+license = "Apache-2.0 AND MIT AND CC-BY-4.0"
+redistribution = "redistributable"
+retrieval_date = "2026-10-22"
+supersession_policy = "explicit-lock-update-only"
+statement = "The MCP Apps extension specification is bound as normative text only: no executable oracle exists for it, so its coverage is not-executable and no evidence is claimed."
+realized_by = ["AU-08"]
+
+[[oracle]]
+id = "mcp-schema-2026-07-28"
+authority_ids = ["MCP-2026-07-28"]
+edition = "2026-07-28@80041ab0"
+executable = "mcp-schema-validator"
+supported_platforms = ["linux/amd64", "linux/arm64"]
+input_media_types = ["application/vnd.prismpm.mcp-transcript.v1+json"]
+output_schema = "prismpm/validation-result/1"
+arguments = ["/opt/prismpm/share/standards/oracles/mcp-schema-2026-07-28/schema.json", "{input}"]
+timeout_ms = 60000
+memory_bytes = 268435456
+output_bytes = 1048576
+network = "deny"
+normalization = "prismpm/oracle-diagnostics/1"
+covers = ["every JSON-RPC message of a recorded transcript against the pinned schema/2026-07-28/schema.json with Ajv 8.20.0: requests and notifications against the definition their method names, responses against the definition of the request they answer, typed errors by code, with the official positive examples published beside the schema and planted-defect rejections as regression evidence"]
+does_not_cover = ["server behavior beyond the recorded messages, the format keywords the schema annotates (uri, byte), the tasks extension methods that schema/2026-07-28 does not define, stdio and HTTP framing, and MCP Apps"]
+expected_exits = ["0=pass", "1=invalid"]
+upstream_payload_sha256 = "b0a70543278c720097f3b579e6a6eb864e4502b00d45d31504712789e647772e"
+corpus = { path = "standards/oracles/mcp-schema-2026-07-28", sha256 = "f4cb036c1264ab0109c09ff3595b319005a3684cda811b53a1733600565f91f6" }
+wrapper_source = "sdk/oracles/mcp-schema-validator.mjs"
+
+[[oracle]]
+id = "mcp-conformance-server-2026-07-28"
+authority_ids = ["MCP-2026-07-28", "MCP-CONFORMANCE-232A9014", "MCP-TASKS-SEP-2663"]
+edition = "2026-07-28+conformance-232a9014"
+executable = "mcp-conformance-server"
+supported_platforms = ["linux/amd64", "linux/arm64"]
+input_media_types = ["application/vnd.prismpm.mcp-server-subject.v1"]
+output_schema = "prismpm/validation-result/1"
+arguments = ["{input}"]
+timeout_ms = 300000
+memory_bytes = 1073741824
+output_bytes = 4194304
+network = "deny"
+normalization = "prismpm/oracle-diagnostics/1"
+covers = ["the locked suite's server --url runner at requirements 2026-07-28 against the submitted HTTP server on loopback: all 37 required scenarios scored from per-scenario check files, and the 13 unscored scenarios (10 tasks-extension, 3 pending) run and reported without affecting the verdict; the unchanged upstream sources are built in the SDK image and the frozen requirements file is digest-checked before and during the run"]
+does_not_cover = ["stdio servers, resource-server authorization scenarios, MCP Apps, the client leg of the suite, any scenario outside the frozen requirements, and servers that need a network beyond loopback"]
+expected_exits = ["0=pass", "1=invalid"]
+upstream_payload_sha256 = "23f39518f67861dc2a82ecb542c578e20b713ae09661486b69a78cd49cb0e71e"
+corpus = { path = "standards/oracles/mcp-conformance-232a9014", sha256 = "a42431a4ca04c69f1b977789a4b5bf8f772d028248e1cd8b78468e4e12002f42" }
+wrapper_source = "sdk/oracles/mcp-conformance-server.mjs"
