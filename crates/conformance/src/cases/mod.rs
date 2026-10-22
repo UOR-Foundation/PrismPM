@@ -17,6 +17,7 @@ mod organization_lifecycle;
 mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
+mod server_host;
 mod text_cli;
 
 use node_suite::verify as verify_node_suite;
@@ -477,6 +478,8 @@ pub fn run_at(root: &Path, id: &str) {
         }
 
         "HO-17" => text_cli::verify(root),
+        "HO-18" => server_host::verify_declaration(root),
+        "HO-19" => server_host::verify_adapter(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {

@@ -3004,6 +3004,115 @@ ABI is enabled by this typed prerequisite. The owning generated native,
 no_std and Wasm tests cover all resource families, actual maxima, malformed
 binding/coverage and planted source guards; public `PP2011` remains unchanged.
 
+### 12.15 Server applications and host effects
+
+HO-18 owns the closed source declaration
+`Foundation.Server.V1.Model.ServerApplication`, profile
+`prismpm/server-application/1`, projected as `prismpm/model-document/7`. HO-19
+owns the host adapter generated from it. A server application is a native-only
+application: its core is a LexLean production package that stays pure. It has
+no View, Core-Wasm guest or Holo archive, and its request and response are
+opaque frames whose meaning the core alone defines. The record holds the package
+metadata of a native library, the `core`, the finite exchange `acceptanceVectors`,
+the exchange maximums `requestMaximum` and `responseMaximum` (each 1 to 64 MiB),
+the `bindings` and one `host` record. Missing, null, mistyped or undeclared
+fields, a server record under another profile or schema and a foreign type owner
+are rejected with PP2012 or PP2001.
+
+The `core` names the LexLean production root, the snake-case crate name of its
+exported package and the package version. The package is built through the
+`production` API of the `lexlean` crate at the pinned release, and its export is
+`run(Bytes) -> Result<List<u64>, Overflow>`: the turn goes in as `Bytes`, the
+step comes back as a list of numbers each of which is one octet, and `Overflow`,
+the one failure of a certified core, is the internal-error outcome
+`ComputeFailure`. The `bindings` are empty exactly when no effect is declared,
+else one: the locked crates.io crate, its exact version and the Rust path of the
+type in that crate that implements the generated `Host` trait. A binding is
+declared and validated in the model; the host never discovers it.
+
+`host` declares the effect protocol `prismpm/host-effects/1`: a purpose
+paragraph, the distinct `usageCode`, `ioCode` and `faultCode` of the generated
+program (1 to 125), the `effectBudget`, the closed `effects` and the acceptance
+`transcripts`. An effect has a unique dotted lowercase `name`, a `request` and
+a `result` record of at most 32 named fields of kind `U32`, `U64`, `Flag`,
+`Bytes` or `Text`, at most 32 closed `failures` and the maximum encoded size of
+its request payload and of its outcome. At most 64 effects and 256 effects per
+exchange are admitted. The budget is zero exactly when no effect is declared.
+The declared bounds must admit the smallest request and outcome, and the turn
+and replay script of the largest budget must fit a 32-bit length. Every bound
+is model data; no limit of an exchange is a constant of the generator.
+
+An effect's wire tag is its position in `effects`. Integers are big-endian,
+`Bytes` and `Text` carry a 32-bit length, `Flag` is one byte that is zero or
+one and `Text` is UTF-8. An outcome is the word 0 and the result fields, or the
+word 1 and the position of one declared failure. Because the root is pure, the
+protocol is **effects by replay**: the host calls the root with a *turn*, the
+request and the effects completed so far (`u32` length, request, `u32` count and
+per effect `u32` tag, `u32` length, outcome), and the root answers with a
+*step*, either `done` and the response or `perform`, a tag and the request
+payload. The host performs the requested effect and calls the root again, at
+most `effectBudget` times. No continuation state exists for a host to hold or
+forge. With no effect declared the root is the plain frame function: the request
+in, the response out.
+
+Each `transcript` binds an acceptance vector to the effects the root must
+request for it, in order, with the host's encoded outcome for each. Validation
+decodes every request and outcome with the reference codec, and refuses a
+declaration in which some declared effect is requested by no transcript step.
+
+The build of a server application is refused with PP2013. What exists is the
+declaration and `prismpm::server_host::generate`, which renders one Cargo
+package, `{cargo_name}-host`: a fixed template composed with code rendered only
+from the declaration. The library holds the closed `Request` sum with one
+variant per declared effect, the typed request, result and failure of each
+effect with its codec, the `Host` trait with one method per effect, the
+`Failure` vocabulary, the replay driver and the scripted host. An effect that is
+not declared has no constructor, no decoder arm and no host method: the decoder
+refuses its tag with `EffectUndeclared`, a payload that is not that effect's
+request with `EffectMalformed`, a payload over its maximum with
+`EffectRequestLimit`, a longer outcome with `EffectResultLimit`, more effects
+than the budget with `EffectBudget`, a step of neither form, a step element that is not one octet or a step over its bound with
+`StepMalformed` and a longer response with `ResponseLimit`. No dispatch is
+handwritten. Failures are the closed `ServerFailure` vocabulary registered in
+`model/host-effects-diagnostics.toml`.
+
+The program `{cargo_name}-host` accepts `exchange SCRIPT [FILE]`, `--help` and
+`--version`. FILE or `-` is the request, read as raw bytes by the bounded
+adapter of `crate::binary_cli`, with the symlink and special-file rules of
+text/3. SCRIPT is read by the same adapter with the replay-script maximum the
+model implies. Each scripted step is the effect tag and the encoded request the
+root must produce, then the encoded outcome; the scripted host replays one step
+per requested effect and refuses an exhausted, mismatched, unused or malformed
+script. The program exits with `usageCode`, `ioCode` or `faultCode` by the class
+of the failure and prints `{binary}: {Failure}[: detail]` on standard error;
+nothing is written to standard output on failure. Acceptance executes every
+vector with its transcript as the script, once over a request file and once over
+standard input, requires the modeled response byte for byte, and records for
+each declared effect the steps that exercised it
+(`prismpm/server-host-acceptance/1`). The generated crate carries the same
+corpus and its own tests and depends on the exported core package at its exact
+version. The record is not yet part of `application-acceptance.json`. Linking the
+binding crate (it cannot name a trait of the crate that depends on it, so the
+`Host` trait must first be split into a crate of its own), the build of the core
+through `production`, the serving effect, `prismpm verify` and source-free
+release verification are outside this slice.
+
+#### 12.15.1 Where HTTP/1.1 framing lives
+
+The serving effect, for conformance builds that expose a core over loopback
+HTTP, is not implemented here; its placement is decided as follows. RFC 9112
+message framing, the request line, field lines, `Content-Length` delimiting and
+response serialization, is transport mechanics: it maps bytes to a frame without
+reading the meaning of any field. It lives in the generated host adapter as a
+fixed template fragment, like the bounded raw-file adapter, and not in the
+model. Semantics stay source-owned. The adapter forwards the method, target,
+fields and body to the root as an exchange frame, and the root alone decides
+every status, header and body. Every parameter the adapter acts on is model
+data: the most header fields and header bytes, the largest body, the allowed
+`Origin` values and the required `Accept` and `Content-Type` fields. Exceeding
+the first refuses with 431, the second with 413, and neither is a constant of the
+generator.
+
 ## 13. OCI product-release graph
 
 Distribution uses OCI Image and Distribution 1.1. The root product release is
@@ -3503,6 +3612,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-15` | `holo` | The modeled primary-only component profile emits exact source-bound physical-v4 archives and verifies binary native, Wasm and pinned Live execution without accepting a public Browser application. | §3 |
 | `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. | §3 |
+| `HO-18` | `holo` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. | §12.15 |
+| `HO-19` | `holo` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. | §12.15 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

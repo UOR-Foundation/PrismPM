@@ -1,5 +1,19 @@
 Feature: holo
 
+  @HO-19 @build
+  Scenario: The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline.
+    Given a source-owned server application whose host effects are declared with typed requests, results, failures and bounds
+    When the generated host adapter is built against the application core and its acceptance suite and program run every vector with its transcript
+    Then every response equals the modeled response, every declared effect is performed by some vector and an undeclared, malformed, over-bound or over-budget effect request is refused with its registered failure
+    And scripts that are exhausted, mismatched, unused or malformed exit with the registered fault code and publish nothing
+
+  @HO-18 @build
+  Scenario: The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect.
+    Given the Foundation.Server.V1.Model declaration of a server application with effects, vectors and transcripts
+    When it is projected from source, validated and canonically encoded as a model-document/7
+    Then the document round-trips exactly and each invalid profile, bound, name, exit code, transcript or unexercised effect is refused with PP2012
+    And building or verifying a server application is refused with PP2013 until the core export and verification pipeline exist
+
   @HO-17 @build
   Scenario: The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed.
     Given a source-owned text/3 application with a modeled command, help, examples and exit-code map
