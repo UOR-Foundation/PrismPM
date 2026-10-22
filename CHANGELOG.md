@@ -5,6 +5,12 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Pinned LexLean `release/v0.4` at commit `cee0fbade479891479e0b748aaa8b60e0a1aaf07` in the SDK image and compiler locks (#203). The v0.4.0 release binding replaces this commit pin. The upstream Lean authority closure is the four `LexLeanTarget` modules; the extraction adapter and preservation library are notation sources in the vendored package.
+- `prismpm check`, `build` and `verify` accept language 1.2 projects (`lexlean/lock/2`, `lexlean/semantic-snapshot/2`, `lexlean/attestation/2`) beside language 1.1 projects, which build unchanged apart from the relocked `compiler_semantics`.
+
 ## [0.3.0] - 2026-09-21
 
 ### Added

@@ -69,7 +69,10 @@ dependencies.
 
 PrismPM operates through a verification-oriented multi-stage pipeline:
 1. Systems, applications, proofs, packaging intent, and typed Views are
-   authored in `.lex.tex` using LexLean language 1.1.
+   authored in `.lex.tex` using LexLean language 1.1 (`lexlean/lock/1`) or
+   the language 1.2 authoring notation (`lexlean/lock/2`); `prismpm check`,
+   `build` and `verify` accept both and surface LexLean's own diagnostic,
+   unchanged, for a source the selected language refuses.
 2. LexLean emits the canonical semantic snapshot, Lean, LaTeX, maps, and
    coverage. Generated Lean elaborates and replays through `leanchecker`; its
    observed axioms must exactly match the declared policy.
