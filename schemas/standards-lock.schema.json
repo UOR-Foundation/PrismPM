@@ -16,6 +16,7 @@
       "properties": {
         "canonical_id": {"maxLength": 256, "minLength": 1, "type": "string"},
         "edition": {"maxLength": 128, "minLength": 1, "type": "string"},
+        "frozen_members": {"items": {"$ref": "#/$defs/frozenMember"}, "maxItems": 16, "minItems": 1, "type": "array"},
         "id": {"pattern": "^[A-Z0-9][A-Z0-9._/-]{0,127}$", "type": "string"},
         "issuer": {"maxLength": 256, "minLength": 1, "type": "string"},
         "name": {"maxLength": 256, "minLength": 1, "type": "string"},
@@ -73,6 +74,15 @@
         "wrapper_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
       },
       "required": ["arguments", "authority_ids", "corpus", "covers", "does_not_cover", "edition", "executable", "expected_exits", "failure_mapping", "id", "input_media_types", "memory_bytes", "network", "normalization", "output_bytes", "output_schema", "subject", "supported_platforms", "timeout_ms", "trusted_root", "upstream_payload_sha256", "wrapper_sha256"],
+      "type": "object"
+    },
+    "frozenMember": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {"maxLength": 512, "minLength": 1, "pattern": "^[A-Za-z0-9._-][A-Za-z0-9._/-]*$", "type": "string"},
+        "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["path", "sha256"],
       "type": "object"
     },
     "signatureTrustRoot": {

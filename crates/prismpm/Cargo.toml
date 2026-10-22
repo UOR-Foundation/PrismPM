@@ -25,6 +25,8 @@ include = [
     "sdk/asyncapi-runtime/launcher.sh",
     "sdk/asyncapi-runtime/launcher.test.mjs",
     "sdk/oracles/asyncapi-parser.mjs",
+    "sdk/oracles/mcp-conformance-server.mjs",
+    "sdk/oracles/mcp-schema-validator.mjs",
     "sdk/oracles/kubernetes-validator.mjs",
     "sdk/oracles/go/intoto-statement-validator/main.go",
     "sdk/stdlib-sources.tar",
@@ -113,6 +115,7 @@ sha1 = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 tar = { workspace = true }
+flate2 = { workspace = true }
 toml = { workspace = true }
 unicode-normalization = { workspace = true }
 walkdir = { workspace = true }

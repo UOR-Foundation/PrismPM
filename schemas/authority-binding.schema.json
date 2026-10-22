@@ -5,6 +5,7 @@
   "properties": {
     "canonical_id": {"maxLength": 256, "minLength": 1, "type": "string"},
     "edition": {"maxLength": 128, "minLength": 1, "type": "string"},
+    "frozen_members": {"items": {"$ref": "#/$defs/frozenMember"}, "maxItems": 16, "minItems": 1, "type": "array"},
     "id": {"pattern": "^[A-Z0-9][A-Z0-9._/-]{0,127}$", "type": "string"},
     "issuer": {"maxLength": 256, "minLength": 1, "type": "string"},
     "name": {"maxLength": 256, "minLength": 1, "type": "string"},
@@ -21,6 +22,15 @@
   "required": ["canonical_id", "edition", "id", "issuer", "name", "oracle_ids", "realized_by", "retrieval_date", "schema", "source", "source_role", "signature_trust_root", "statement", "supersession"],
   "type": "object",
   "$defs": {
+    "frozenMember": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {"maxLength": 512, "minLength": 1, "pattern": "^[A-Za-z0-9._-][A-Za-z0-9._/-]*$", "type": "string"},
+        "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["path", "sha256"],
+      "type": "object"
+    },
     "signatureTrustRoot": {
       "additionalProperties": false,
       "properties": {

@@ -22,6 +22,9 @@ const ASYNCAPI_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/asyncapi-p
 const KUBERNETES_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/kubernetes-validator.mjs");
 const INTOTO_WRAPPER_SOURCE: &[u8] =
     include_bytes!("../sdk/oracles/go/intoto-statement-validator/main.go");
+const MCP_SCHEMA_WRAPPER_SOURCE: &[u8] = include_bytes!("../sdk/oracles/mcp-schema-validator.mjs");
+const MCP_CONFORMANCE_WRAPPER_SOURCE: &[u8] =
+    include_bytes!("../sdk/oracles/mcp-conformance-server.mjs");
 const OPENAPI_SCHEMA: &[u8] =
     include_bytes!("../standards/oracles/openapi-3.2-schema-2025-11-23.json");
 const OSV_SCHEMA: &[u8] = include_bytes!("../standards/oracles/osv-b388-schema.json");
@@ -67,6 +70,16 @@ struct AuthorityRow {
     supersession_policy: String,
     statement: String,
     realized_by: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    frozen_members: Vec<FrozenMember>,
+}
+
+/// A member of an acquired archive whose exact bytes the binding freezes.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenMember {
+    path: String,
+    sha256: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -276,7 +289,7 @@ fn oracle_ids<'a>(catalog: &'a Authorities, authority: &str) -> Vec<&'a str> {
 
 fn authority_value(row: &AuthorityRow, catalog: &Authorities) -> Value {
     let fetched = row.source_role != "binding-only";
-    json!({
+    let mut value = json!({
         "canonical_id": row.canonical_identifier,
         "edition": row.edition,
         "id": row.id,
@@ -299,7 +312,11 @@ fn authority_value(row: &AuthorityRow, catalog: &Authorities) -> Value {
         "signature_trust_root": row.signature_trust_root,
         "statement": row.statement,
         "supersession": row.supersession_policy
-    })
+    });
+    if !row.frozen_members.is_empty() {
+        value["frozen_members"] = json!(row.frozen_members);
+    }
+    value
 }
 
 fn oracle_value(row: &OracleRow, wrapper_sha256: &str) -> Value {
@@ -336,6 +353,8 @@ fn wrapper_sha256(row: &OracleRow) -> Result<String, PrismError> {
         "sdk/oracles/asyncapi-parser.mjs" => ASYNCAPI_WRAPPER_SOURCE,
         "sdk/oracles/kubernetes-validator.mjs" => KUBERNETES_WRAPPER_SOURCE,
         "sdk/oracles/go/intoto-statement-validator/main.go" => INTOTO_WRAPPER_SOURCE,
+        "sdk/oracles/mcp-schema-validator.mjs" => MCP_SCHEMA_WRAPPER_SOURCE,
+        "sdk/oracles/mcp-conformance-server.mjs" => MCP_CONFORMANCE_WRAPPER_SOURCE,
         _ => {
             return Err(PrismError::new(
                 "PP5402",
@@ -974,6 +993,146 @@ fn cache_object(root: &Path, digest: &str) -> PathBuf {
     root.join(".prism/cache/authorities/sha256").join(digest)
 }
 
+/// Largest frozen archive member the check will hash.
+const FROZEN_MEMBER_LIMIT: u64 = 16 * 1024 * 1024;
+
+/// Compare the frozen members of one acquired gzip tar archive with their
+/// locked digests. Hosting services wrap a revision in one top-level directory,
+/// which is stripped before the member path is compared.
+fn check_frozen_members(
+    archive: &Path,
+    authority: &str,
+    members: &[(String, String)],
+) -> Result<(), PrismError> {
+    let refuse = |message: String| PrismError::new("PP5402", format!("{authority}: {message}"));
+    let file = File::open(archive).map_err(|error| refuse(format!("archive: {error}")))?;
+    let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(file));
+    let mut pending = members
+        .iter()
+        .map(|(path, digest)| (path.as_str(), digest.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let mut seen = std::collections::BTreeSet::new();
+    let entries = tar
+        .entries()
+        .map_err(|error| refuse(format!("archive: {error}")))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| refuse(format!("archive: {error}")))?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+        let path = entry
+            .path()
+            .map_err(|error| refuse(format!("archive path: {error}")))?
+            .to_string_lossy()
+            .into_owned();
+        let Some((_, relative)) = path.split_once('/') else {
+            continue;
+        };
+        if !members.iter().any(|(member, _)| member == relative) {
+            continue;
+        }
+        if !seen.insert(relative.to_owned()) {
+            return Err(refuse(format!("frozen member {relative} appears twice")));
+        }
+        let expected = pending.remove(relative).unwrap_or_default();
+        let mut hasher = Sha256::new();
+        let mut total = 0_u64;
+        let mut limited = entry.take(FROZEN_MEMBER_LIMIT + 1);
+        let mut buffer = [0_u8; 8192];
+        loop {
+            let count = limited
+                .read(&mut buffer)
+                .map_err(|error| refuse(format!("archive member: {error}")))?;
+            if count == 0 {
+                break;
+            }
+            total += count as u64;
+            hasher.update(&buffer[..count]);
+        }
+        if total > FROZEN_MEMBER_LIMIT {
+            return Err(refuse(format!(
+                "frozen member {relative} exceeds its bound"
+            )));
+        }
+        let observed = format!("{:x}", hasher.finalize());
+        if observed != expected {
+            return Err(refuse(format!(
+                "frozen member {relative} differs from the frozen file: expected {expected}, observed {observed}"
+            )));
+        }
+    }
+    if let Some(path) = pending.keys().next() {
+        return Err(refuse(format!(
+            "frozen member {path} is absent from the archive"
+        )));
+    }
+    Ok(())
+}
+
+/// Frozen members the lock records for the archive with this digest, by authority.
+fn frozen_members_for(lock: &Value, digest: &str) -> Vec<(String, Vec<(String, String)>)> {
+    lock["authorities"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|row| row["source"]["sha256"].as_str() == Some(digest))
+        .filter_map(|row| {
+            let members = row["frozen_members"]
+                .as_array()?
+                .iter()
+                .filter_map(|member| {
+                    Some((
+                        member["path"].as_str()?.to_owned(),
+                        member["sha256"].as_str()?.to_owned(),
+                    ))
+                })
+                .collect::<Vec<_>>();
+            Some((row["id"].as_str()?.to_owned(), members))
+        })
+        .collect()
+}
+
+/// Check one acquired archive against the frozen members of the reviewed
+/// catalog's authority, so that a suite whose frozen files differ is refused
+/// even when its archive digest was locked.
+pub fn verify_frozen_archive(authority_id: &str, archive: &Path) -> Result<(), PrismError> {
+    let catalog = catalog()?;
+    let row = catalog
+        .authority
+        .iter()
+        .find(|row| row.id == authority_id && !row.frozen_members.is_empty())
+        .ok_or_else(|| {
+            PrismError::new(
+                "PP5402",
+                format!("{authority_id} binds no frozen archive members"),
+            )
+        })?;
+    let members = row
+        .frozen_members
+        .iter()
+        .map(|member| (member.path.clone(), member.sha256.clone()))
+        .collect::<Vec<_>>();
+    check_frozen_members(archive, authority_id, &members)
+}
+
+fn verify_cached_frozen_members(root: &Path, lock: &Value) -> Result<(), PrismError> {
+    for authority in lock["authorities"].as_array().into_iter().flatten() {
+        let (Some(digest), Some(id)) = (
+            authority["source"]["sha256"].as_str(),
+            authority["id"].as_str(),
+        ) else {
+            continue;
+        };
+        for (_, members) in frozen_members_for(lock, digest)
+            .into_iter()
+            .filter(|(candidate, _)| candidate == id)
+        {
+            check_frozen_members(&cache_object(root, digest), id, &members)?;
+        }
+    }
+    Ok(())
+}
+
 /// Fetch every acquired authority object, checking bytes before atomic publication.
 pub fn fetch(root: &Path) -> Result<FetchResult, PrismError> {
     let lock = parse_lock(root)?;
@@ -1021,6 +1180,9 @@ pub fn fetch(root: &Path) -> Result<FetchResult, PrismError> {
                 format!("authority bytes disagree with locked digest {digest}"),
             ));
         }
+        for (id, members) in frozen_members_for(lock.value(), &digest) {
+            check_frozen_members(&staging_path, &id, &members)?;
+        }
         let (_file, persisted) = staging
             .keep()
             .map_err(|error| PrismError::new("PP5401", format!("cache staging: {error}")))?;
@@ -1065,6 +1227,7 @@ pub fn verify(root: &Path) -> Result<AuthorityVerifyResult, PrismError> {
             ));
         }
     }
+    verify_cached_frozen_members(root, lock.value())?;
     let (_, _, signature_evidence) = verify_signature_evidence_set(root, &lock, false)?;
     let acquired_objects = acquired.len() + signature_evidence.len();
     let binding_only = lock.value()["authorities"].as_array().map_or(0, |rows| {
@@ -2227,6 +2390,8 @@ fn run_oracle_inner(
         "devcontainer" => "devcontainer-c95ffeed",
         "compose" => "compose-fee041b3",
         "kubernetes" => "kubernetes-1.36.4",
+        "mcp-schema" => "mcp-schema-2026-07-28",
+        "mcp-conformance-server" => "mcp-conformance-server-2026-07-28",
         _ => {
             return Err(PrismError::new(
                 "PP5403",
@@ -2396,11 +2561,13 @@ pub fn run_oracle_in_project(
 mod tests {
     use super::{
         acquired_rows, cache_object, catalog, emit_oracle_attestation, external_invocation, fetch,
-        git_tag_sha1, intoto_policy_accepts, oracle_input_archive, replay_tag_signature,
-        resolved_lock, run_oracle, run_oracle_in_project, run_oracle_with_bindings_in_project,
-        sandbox_arguments, validate_signature_evidence, verify_project_oracle_binding,
-        verify_signature_evidence_set, SandboxInvocation, SandboxMount, AKIHIROSUDA_OPENPGP_ROOT,
-        HAYDEN_IO_SSH_ROOT, OPENAPI_SCHEMA, OSV_SCHEMA, SIGSTORE_TRUSTED_ROOT, SONGY23_SSH_ROOT,
+        frozen_members_for, git_tag_sha1, intoto_policy_accepts, oracle_input_archive,
+        replay_tag_signature, resolved_lock, run_oracle, run_oracle_in_project,
+        run_oracle_with_bindings_in_project, sandbox_arguments, sha256_file,
+        validate_signature_evidence, verify_cached_frozen_members, verify_frozen_archive,
+        verify_project_oracle_binding, verify_signature_evidence_set, SandboxInvocation,
+        SandboxMount, AKIHIROSUDA_OPENPGP_ROOT, HAYDEN_IO_SSH_ROOT, MCP_CONFORMANCE_WRAPPER_SOURCE,
+        OPENAPI_SCHEMA, OSV_SCHEMA, SIGSTORE_TRUSTED_ROOT, SONGY23_SSH_ROOT,
         SUDO_BMITCH_OPENPGP_ROOT,
     };
     use crate::contracts::CanonicalDocument;
@@ -2411,6 +2578,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::fs::File;
     use std::io::{Read, Write};
+    use std::path::{Path, PathBuf};
 
     fn write_sdk_lock(root: &std::path::Path, standards_lock: String, sdk_image: String) {
         let mut value = json!({
@@ -3477,5 +3645,303 @@ mod tests {
                 .code,
             "PP5402"
         );
+    }
+    fn repository_root() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("repository root")
+            .to_path_buf()
+    }
+
+    /// The tree identity the catalog records for a vendored oracle corpus:
+    /// length-prefixed relative path and bytes, in directory-sorted order.
+    fn corpus_tree_sha256(root: &Path) -> String {
+        fn visit(root: &Path, directory: &Path, digest: &mut Sha256) {
+            let mut entries = std::fs::read_dir(directory)
+                .unwrap()
+                .map(|entry| entry.unwrap())
+                .collect::<Vec<_>>();
+            entries.sort_by_key(std::fs::DirEntry::file_name);
+            for entry in entries {
+                let path = entry.path();
+                let kind = std::fs::symlink_metadata(&path).unwrap().file_type();
+                assert!(!kind.is_symlink(), "corpus contains a symlink");
+                if kind.is_dir() {
+                    visit(root, &path, digest);
+                } else {
+                    let relative = path
+                        .strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned();
+                    let bytes = std::fs::read(&path).unwrap();
+                    digest.update((relative.len() as u64).to_be_bytes());
+                    digest.update(relative.as_bytes());
+                    digest.update((bytes.len() as u64).to_be_bytes());
+                    digest.update(bytes);
+                }
+            }
+        }
+        let mut digest = Sha256::new();
+        visit(root, root, &mut digest);
+        format!("{:x}", digest.finalize())
+    }
+
+    #[test]
+    fn mcp_authorities_and_oracles_are_bound_as_separate_evidence_kinds() {
+        let catalog = catalog().unwrap();
+        let authority = |id: &str| {
+            catalog
+                .authority
+                .iter()
+                .find(|row| row.id == id)
+                .unwrap_or_else(|| panic!("{id} is bound"))
+        };
+        assert_eq!(
+            authority("MCP-2026-07-28").revision,
+            "80041ab0a139a8f4fb3adbc99f7ae9113ea59671"
+        );
+        assert_eq!(
+            authority("MCP-TASKS-SEP-2663").revision,
+            "80041ab0a139a8f4fb3adbc99f7ae9113ea59671"
+        );
+        assert_eq!(
+            authority("MCP-CONFORMANCE-232A9014").revision,
+            "232a9014457eaf4c59559916e3d616d2f7f28f05"
+        );
+        assert_eq!(
+            authority("MCP-APPS-2026-01-26").revision,
+            "298e884ec3f02daba085acdb02042d73bd00b355"
+        );
+        // MCP Apps has no executable oracle, so its coverage is not-executable.
+        let lock = resolved_lock().unwrap();
+        let apps = lock.value()["authorities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "MCP-APPS-2026-01-26")
+            .unwrap();
+        assert_eq!(apps["oracle_ids"], json!([]));
+        for id in ["mcp-schema-2026-07-28", "mcp-conformance-server-2026-07-28"] {
+            let oracle = catalog.oracle.iter().find(|row| row.id == id).unwrap();
+            assert!(!oracle
+                .authority_ids
+                .iter()
+                .any(|a| a == "MCP-APPS-2026-01-26"));
+            let corpus = oracle.corpus.as_ref().expect("a vendored corpus");
+            assert_eq!(
+                corpus_tree_sha256(&repository_root().join(&corpus.path)),
+                corpus.sha256,
+                "{id} corpus drifted from its locked tree"
+            );
+        }
+        let schema = catalog
+            .oracle
+            .iter()
+            .find(|row| row.id == "mcp-schema-2026-07-28")
+            .unwrap();
+        let server = catalog
+            .oracle
+            .iter()
+            .find(|row| row.id == "mcp-conformance-server-2026-07-28")
+            .unwrap();
+        assert_ne!(schema.executable, server.executable);
+        assert_ne!(schema.wrapper_source, server.wrapper_source);
+        assert_eq!(
+            schema.input_media_types,
+            ["application/vnd.prismpm.mcp-transcript.v1+json"]
+        );
+        assert!(server
+            .does_not_cover
+            .iter()
+            .any(|text| text.contains("stdio")
+                && text.contains("authorization")
+                && text.contains("MCP Apps")));
+        // Only the suite carries frozen members, and the oracle wrapper repeats
+        // the very digest the catalog freezes.
+        let frozen = &authority("MCP-CONFORMANCE-232A9014").frozen_members;
+        assert_eq!(frozen.len(), 1);
+        assert_eq!(frozen[0].path, "requirements/2026-07-28.yaml");
+        assert!(std::str::from_utf8(MCP_CONFORMANCE_WRAPPER_SOURCE)
+            .unwrap()
+            .contains(&frozen[0].sha256));
+        assert_eq!(
+            format!(
+                "{:x}",
+                Sha256::digest(
+                    std::fs::read(repository_root().join(
+                        "standards/oracles/mcp-conformance-232a9014/requirements/2026-07-28.yaml"
+                    ))
+                    .unwrap()
+                )
+            ),
+            frozen[0].sha256
+        );
+        assert!(catalog
+            .authority
+            .iter()
+            .filter(|row| row.id != "MCP-CONFORMANCE-232A9014")
+            .all(|row| row.frozen_members.is_empty()));
+    }
+
+    fn suite_archive(directory: &Path, members: &[(&str, &[u8])]) -> PathBuf {
+        let path = directory.join("suite.tar.gz");
+        let encoder = flate2::write::GzEncoder::new(
+            File::create(&path).unwrap(),
+            flate2::Compression::default(),
+        );
+        let mut archive = tar::Builder::new(encoder);
+        for (name, bytes) in members {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, format!("conformance-232a9014/{name}"), *bytes)
+                .unwrap();
+        }
+        archive.into_inner().unwrap().finish().unwrap();
+        path
+    }
+
+    #[test]
+    fn a_suite_whose_requirements_differ_from_the_frozen_file_is_refused() {
+        let frozen = std::fs::read(
+            repository_root()
+                .join("standards/oracles/mcp-conformance-232a9014/requirements/2026-07-28.yaml"),
+        )
+        .unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let other = b"server:\n  - tools-list\n";
+        let authority = "MCP-CONFORMANCE-232A9014";
+
+        let good = suite_archive(
+            temp.path(),
+            &[
+                ("README.md", b"x"),
+                ("requirements/2026-07-28.yaml", &frozen),
+            ],
+        );
+        verify_frozen_archive(authority, &good).expect("the frozen file is accepted");
+
+        let changed = suite_archive(temp.path(), &[("requirements/2026-07-28.yaml", other)]);
+        let error = verify_frozen_archive(authority, &changed).unwrap_err();
+        assert_eq!(error.code, "PP5402");
+        assert!(
+            error.message.contains("differs from the frozen file"),
+            "{}",
+            error.message
+        );
+
+        let mut tail_edit = frozen.clone();
+        tail_edit.extend_from_slice(b"\n");
+        let appended = suite_archive(temp.path(), &[("requirements/2026-07-28.yaml", &tail_edit)]);
+        assert_eq!(
+            verify_frozen_archive(authority, &appended)
+                .unwrap_err()
+                .code,
+            "PP5402"
+        );
+
+        let absent = suite_archive(temp.path(), &[("requirements/2025-11-25.yaml", &frozen)]);
+        let error = verify_frozen_archive(authority, &absent).unwrap_err();
+        assert_eq!(error.code, "PP5402");
+        assert!(error.message.contains("absent"), "{}", error.message);
+
+        let twice = suite_archive(
+            temp.path(),
+            &[
+                ("requirements/2026-07-28.yaml", &frozen),
+                ("requirements/2026-07-28.yaml", other),
+            ],
+        );
+        let error = verify_frozen_archive(authority, &twice).unwrap_err();
+        assert!(error.message.contains("appears twice"), "{}", error.message);
+
+        let not_an_archive = temp.path().join("plain.tar.gz");
+        std::fs::write(&not_an_archive, b"not gzip").unwrap();
+        assert_eq!(
+            verify_frozen_archive(authority, &not_an_archive)
+                .unwrap_err()
+                .code,
+            "PP5402"
+        );
+        assert_eq!(
+            verify_frozen_archive("MCP-2026-07-28", &good)
+                .unwrap_err()
+                .code,
+            "PP5402"
+        );
+        assert_eq!(
+            verify_frozen_archive("NOT-BOUND", &good).unwrap_err().code,
+            "PP5402"
+        );
+    }
+
+    #[test]
+    fn locked_verification_checks_frozen_members_in_the_cached_archive() {
+        let frozen = std::fs::read(
+            repository_root()
+                .join("standards/oracles/mcp-conformance-232a9014/requirements/2026-07-28.yaml"),
+        )
+        .unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let staging = tempfile::tempdir().unwrap();
+        let altered = suite_archive(
+            staging.path(),
+            &[("requirements/2026-07-28.yaml", b"server: []\n")],
+        );
+        let digest = sha256_file(&altered).unwrap();
+        let cached = cache_object(root.path(), &digest);
+        std::fs::create_dir_all(cached.parent().unwrap()).unwrap();
+        std::fs::copy(&altered, &cached).unwrap();
+        let lock = json!({"authorities": [{
+            "id": "MCP-CONFORMANCE-232A9014",
+            "source": {"sha256": digest},
+            "frozen_members": [{
+                "path": "requirements/2026-07-28.yaml",
+                "sha256": format!("{:x}", Sha256::digest(&frozen))
+            }]
+        }]});
+        assert_eq!(
+            verify_cached_frozen_members(root.path(), &lock)
+                .unwrap_err()
+                .code,
+            "PP5402"
+        );
+        std::fs::remove_file(&cached).unwrap();
+        let genuine = suite_archive(staging.path(), &[("requirements/2026-07-28.yaml", &frozen)]);
+        let genuine_digest = sha256_file(&genuine).unwrap();
+        let cached = cache_object(root.path(), &genuine_digest);
+        std::fs::copy(&genuine, &cached).unwrap();
+        let mut accepted = lock.clone();
+        accepted["authorities"][0]["source"]["sha256"] = json!(genuine_digest);
+        verify_cached_frozen_members(root.path(), &accepted).expect("the frozen file verifies");
+        assert_eq!(frozen_members_for(&accepted, &genuine_digest).len(), 1);
+        assert!(frozen_members_for(&accepted, &digest).is_empty());
+    }
+
+    #[test]
+    fn mcp_oracle_profiles_resolve_only_through_the_closed_profile_map() {
+        for profile in ["mcp", "mcp-conformance", "mcp-schema-2026-07-28", ""] {
+            assert_eq!(
+                run_oracle(profile, Path::new("/nonexistent"))
+                    .unwrap_err()
+                    .code,
+                "PP5403",
+                "{profile}"
+            );
+        }
+        // Both profiles name registered oracles; without a locked project they
+        // fail closed before any subject is read.
+        for profile in ["mcp-schema", "mcp-conformance-server"] {
+            let error = run_oracle(profile, Path::new("/nonexistent")).unwrap_err();
+            assert_eq!(error.code, "PP5403");
+            assert!(
+                !error.message.contains("unknown oracle profile"),
+                "{profile}"
+            );
+        }
     }
 }
