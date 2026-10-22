@@ -38,6 +38,8 @@ enum Rule {
     TextApplication,
     BrowserApplication,
     BrowserRuntime,
+    ServerApplication,
+    ServerBuild,
 }
 
 impl Rule {
@@ -50,6 +52,13 @@ impl Rule {
                 (valid, invalid)
             }
             Self::BrowserRuntime => (Self::TextApplication.specimens().0, browser_specimen()),
+            Self::ServerBuild => (Self::TextApplication.specimens().0, server_specimen()),
+            Self::ServerApplication => {
+                let valid = server_specimen();
+                let mut invalid = valid.clone();
+                invalid["host"]["effect_budget"] = json!(0);
+                (valid, invalid)
+            }
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
             Self::ImmutableLock => filesystem::specimens("PP1101"),
@@ -124,6 +133,8 @@ impl Rule {
         match self {
             Self::BrowserApplication => validate_browser_specimen(value).is_ok(),
             Self::BrowserRuntime => validate_browser_runtime(value).is_ok(),
+            Self::ServerApplication => validate_server_specimen(value).is_ok(),
+            Self::ServerBuild => validate_server_build(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
@@ -231,6 +242,16 @@ probes!(
         "PP2011",
         "browser-application-runtime-unavailable",
         BrowserRuntime
+    ),
+    (
+        "PP2012",
+        "invalid-server-application-declaration",
+        ServerApplication
+    ),
+    (
+        "PP2013",
+        "server-application-build-unavailable",
+        ServerBuild
     ),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
@@ -343,6 +364,54 @@ fn validate_browser_specimen(value: &Value) -> Result<(), PrismError> {
     crate::holo::browser_application::validate(&declaration)
 }
 
+fn server_specimen() -> Value {
+    json!({
+        "profile":"prismpm/server-application/1",
+        "name":"Server Contract",
+        "cargo_name":"prism-server-contract",
+        "cargo_version":"0.1.0",
+        "cargo_description":"Source projection fixture, not an executable application.",
+        "cargo_repository":"https://github.com/UOR-Foundation/PrismPM",
+        "cargo_homepage":"https://github.com/UOR-Foundation/PrismPM",
+        "acceptance_vectors":[{"request":[97],"response":[98]}],
+        "core":{"root":"ServerContract.Probe.dispatch","package":"server_contract_core","version":"0.1.0"},
+        "bindings":[{"crate_name":"server-contract-binding","version":"0.1.0","host":"server_contract_binding::Native"}],
+        "request_maximum":8,
+        "response_maximum":8,
+        "host":{
+            "protocol":"prismpm/host-effects/1",
+            "description":"Diagnostic fixture for the server application declaration.",
+            "usage_code":2,"io_code":3,"fault_code":4,
+            "effect_budget":1,
+            "effects":[{
+                "name":"store.get",
+                "request":[{"name":"key","kind":"bytes"}],
+                "result":[{"name":"found","kind":"flag"}],
+                "failures":["unavailable"],
+                "request_maximum":64,
+                "result_maximum":16
+            }],
+            "transcripts":[{"vector":0,"steps":[{
+                "effect":"store.get",
+                "request":[0,0,0,1,97],
+                "outcome":[0,0,0,0,1]
+            }]}]
+        }
+    })
+}
+
+fn validate_server_specimen(value: &Value) -> Result<(), PrismError> {
+    let declaration = serde_json::from_value(value.clone())
+        .map_err(|_| PrismError::new("PP2012", "invalid server declaration specimen"))?;
+    crate::holo::server_application::validate(&declaration)
+}
+
+fn validate_server_build(value: &Value) -> Result<(), PrismError> {
+    let declaration = serde_json::from_value(value.clone())
+        .map_err(|_| PrismError::new("PP2012", "invalid server build specimen"))?;
+    crate::holo::server_application::require_build(&declaration)
+}
+
 fn validate_browser_runtime(value: &Value) -> Result<(), PrismError> {
     let declaration = serde_json::from_value(value.clone())
         .map_err(|_| PrismError::new("PP2010", "invalid application runtime specimen"))?;
@@ -355,6 +424,12 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::BrowserRuntime) {
         return validate_browser_runtime(value);
+    }
+    if matches!(spec.rule, Rule::ServerApplication) {
+        return validate_server_specimen(value);
+    }
+    if matches!(spec.rule, Rule::ServerBuild) {
+        return validate_server_build(value);
     }
     if matches!(
         spec.rule,

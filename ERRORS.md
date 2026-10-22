@@ -89,6 +89,18 @@ The browser application profile cannot build or publish before its generated run
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2012` --- Invalid server application declaration
+
+A server application violates its closed source-owned profile, host effect declaration, effect bounds, exit codes or acceptance transcripts.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2013` --- Server application build unavailable
+
+The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export, host binding linkage and source-free verification are available.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

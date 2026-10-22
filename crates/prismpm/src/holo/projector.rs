@@ -60,7 +60,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 23] = [
+    const INPUTS: [(&str, &[u8]); 28] = [
         (
             "crates/prismpm/src/holo/application.rs",
             include_bytes!("application.rs"),
@@ -111,6 +111,38 @@ pub fn compute_emitter_semantics_id() -> String {
             include_bytes!("projector.rs"),
         ),
         (
+            "crates/prismpm/src/holo/server_application.rs",
+            include_bytes!("server_application.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/model.rs",
+            include_bytes!("server_application/model.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/source.rs",
+            include_bytes!("server_application/source.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/wire.rs",
+            include_bytes!("server_application/wire.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application.rs",
+            include_bytes!("server_application.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/model.rs",
+            include_bytes!("server_application/model.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/source.rs",
+            include_bytes!("server_application/source.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/wire.rs",
+            include_bytes!("server_application/wire.rs"),
+        ),
+        (
             "crates/prismpm/src/holo/text_cli.rs",
             include_bytes!("text_cli.rs"),
         ),
@@ -145,6 +177,14 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "schemas/model-document-v6.schema.json",
             include_bytes!("../../schemas/model-document-v6.schema.json"),
+        ),
+        (
+            "schemas/model-document-v7.schema.json",
+            include_bytes!("../../schemas/model-document-v7.schema.json"),
+        ),
+        (
+            "schemas/model-document-v7.schema.json",
+            include_bytes!("../../schemas/model-document-v7.schema.json"),
         ),
         (
             "schemas/model-document.schema.json",

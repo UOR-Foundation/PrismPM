@@ -798,6 +798,9 @@ pub(crate) fn validate_hologram_oracle_report(
             Application::Browser(_) => {
                 return crate::holo::browser_application::require_runtime(application)
             }
+            Application::Server(_) => {
+                return crate::holo::server_application::require_build(application)
+            }
             Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
             Application::Legacy(value) => {
                 let fields = request.split('\t').collect::<Vec<_>>();
@@ -835,6 +838,7 @@ pub(crate) fn validate_hologram_oracle_report(
         Application::Browser(_) => {
             return crate::holo::browser_application::require_runtime(application)
         }
+        Application::Server(_) => return crate::holo::server_application::require_build(application),
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
             "utf8-text"
@@ -2311,8 +2315,8 @@ fn application_harness(
     module: &prod_ir::Module,
 ) -> Result<String, PrismError> {
     let crate_name = application.cargo_name().replace('-', "_");
-    let entry = application
-        .entry_root()
+    let entry_root = application.entry_root();
+    let entry = entry_root
         .rsplit('.')
         .next()
         .ok_or_else(|| PrismError::new("PP2001", "application entry root is malformed"))?;

@@ -556,6 +556,11 @@ pub fn project_application(
         super::browser_application::validate_roots(&browser, snapshot)?;
         return projected_document(snapshot, Application::Browser(Box::new(browser)));
     }
+    if member_name(declaration) == Some("ServerApplication") {
+        let server = super::server_application::project(&definitions, module, declaration)?;
+        super::server_application::validate_roots(&server, snapshot)?;
+        return projected_document(snapshot, Application::Server(Box::new(server)));
+    }
     let fields = record_with_unevaluated_fields(
         &definitions,
         module,
@@ -746,6 +751,7 @@ fn projected_document(
             }
             Application::Text(_) => "prismpm/model-document/2",
             Application::Browser(_) => "prismpm/model-document/4",
+            Application::Server(_) => "prismpm/model-document/7",
         }
         .to_owned(),
         provenance: ProjectionProvenance {

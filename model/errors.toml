@@ -99,6 +99,20 @@ exit = 1
 statement = "The browser application profile cannot build or publish before its generated runtime, effective-grant admission, credential custody and durable recovery implementation are available."
 
 [[error]]
+code = "PP2012"
+title = "Invalid server application declaration"
+class = "semantic"
+exit = 1
+statement = "A server application violates its closed source-owned profile, host effect declaration, effect bounds, exit codes or acceptance transcripts."
+
+[[error]]
+code = "PP2013"
+title = "Server application build unavailable"
+class = "semantic"
+exit = 1
+statement = "The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export, host binding linkage and source-free verification are available."
+
+[[error]]
 code = "PP3001"
 title = "Malformed Hologram archive header or version"
 class = "holo"

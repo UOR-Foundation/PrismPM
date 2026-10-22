@@ -103,6 +103,9 @@ browser closure. Registry publication remains deferred as recorded in release st
 it is not a substitute for current complete SDK, downstream and live acceptance.
 The `Browser` application profile remains refused with `PP2011` until its generated runtime,
 authenticated effects, durable recovery and full owning verification are complete.
+The `Server` application profile declares and validates its host effects and generates a host adapter
+with a scripted-host acceptance suite; building or verifying a server application is refused with `PP2013`
+until its core export, host binding and source-free verification are complete.
 
 ## Development and acceptance
 
