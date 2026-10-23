@@ -89,13 +89,19 @@ The browser application profile cannot build or publish before its generated run
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2012` --- Invalid server application declaration
+## `PP2012` --- Invalid design view
+
+An OPM or UML design view names a component, edge, process, state or viewpoint the system model does not declare, or violates the structure its notation allows.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2013` --- Invalid server application declaration
 
 A server application violates its closed source-owned profile, host effect declaration, effect bounds, exit codes or acceptance transcripts.
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2013` --- Server application build unavailable
+## `PP2014` --- Server application build unavailable
 
 The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export through production and source-free verification are available.
 

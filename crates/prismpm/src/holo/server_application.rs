@@ -57,7 +57,7 @@ const KEYWORDS: &[&str] = &[
 const RESERVED: &[&str] = &["failure", "std", "core", "alloc"];
 
 fn invalid(message: &str) -> PrismError {
-    PrismError::new("PP2012", message)
+    PrismError::new("PP2013", message)
 }
 
 fn segment(value: &str, lead: fn(u8) -> bool) -> bool {
@@ -433,7 +433,7 @@ fn transcripts(value: &ServerApplication) -> Result<(), PrismError> {
 pub fn require_build(application: &super::model_document::Application) -> Result<(), PrismError> {
     if matches!(application, super::model_document::Application::Server(_)) {
         return Err(PrismError::new(
-            "PP2013",
+            "PP2014",
             "server application build and verification are not implemented; only the declaration and its generated host package are",
         ));
     }

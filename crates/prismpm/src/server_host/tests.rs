@@ -716,7 +716,7 @@ fn the_linked_binding_serves_every_vector_without_a_script() {
         acceptance::execute(&plain, &built.program, work.path(), true)
             .unwrap_err()
             .code,
-        "PP2012"
+        "PP2013"
     );
 }
 
@@ -757,7 +757,7 @@ fn the_workspace_holds_the_declared_binding_or_the_declaration_is_refused() {
     workspace::verify(&application, scratch(&application).path()).unwrap();
     let refused = |directory: &tempfile::TempDir| {
         let error = workspace::verify(&application, directory.path()).unwrap_err();
-        assert_eq!(error.code, "PP2012");
+        assert_eq!(error.code, "PP2013");
         error.message
     };
 
@@ -846,7 +846,7 @@ fn a_binding_directory_cannot_resolve_outside_the_workspace() {
     )
     .unwrap();
     let error = workspace::verify(&application, directory.path()).unwrap_err();
-    assert_eq!(error.code, "PP2012");
+    assert_eq!(error.code, "PP2013");
     assert!(
         error.message.contains("outside the workspace"),
         "{}",

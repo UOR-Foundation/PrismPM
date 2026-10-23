@@ -847,18 +847,18 @@ fn server_application_projects_only_from_the_exact_source_owned_type() {
         "prismpm/server-application/1",
         "prismpm/server-application/2",
     );
-    assert_eq!(project(&wrong_profile, MODEL).unwrap_err().code, "PP2012");
+    assert_eq!(project(&wrong_profile, MODEL).unwrap_err().code, "PP2013");
     let foreign = source.replace(MODEL, "Foreign.Server.Model");
     assert_eq!(
         project(&foreign, "Foreign.Server.Model").unwrap_err().code,
-        "PP2012"
+        "PP2013"
     );
     // A transcript step that names an undeclared effect is refused when the source is projected.
     let undeclared = source.replace(
         "\"clock.now\", request := 0x",
         "\"clock.tick\", request := 0x",
     );
-    assert_eq!(project(&undeclared, MODEL).unwrap_err().code, "PP2012");
+    assert_eq!(project(&undeclared, MODEL).unwrap_err().code, "PP2013");
     // The entry root must be a definition of the sources.
     let missing = source.replace("name: dispatch,", "name: other,");
     assert_eq!(project(&missing, MODEL).unwrap_err().code, "PP2001");

@@ -1,5 +1,5 @@
 spec = "prismpm/emitter-inputs/1"
-digest = "912e94351ccde55ba61882888a9be43cc7403c5be1e6619a0b3bd0f25d484267"
+digest = "c8235e48c062d58e68d940f2a4679f2f287203edd2cfd0e6af0f370d9b7e7381"
 inputs = [
     "crates/prismpm/src/holo/application.rs",
     "crates/prismpm/src/holo/browser_application.rs",
@@ -9,6 +9,7 @@ inputs = [
     "crates/prismpm/src/holo/facet_validate.rs",
     "crates/prismpm/src/holo/facets.rs",
     "crates/prismpm/src/holo/facets/records.rs",
+    "crates/prismpm/src/holo/facets/standards.rs",
     "crates/prismpm/src/holo/library.rs",
     "crates/prismpm/src/holo/library/roots.rs",
     "crates/prismpm/src/holo/model_document.rs",

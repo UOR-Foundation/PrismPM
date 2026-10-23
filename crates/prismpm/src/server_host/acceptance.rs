@@ -35,7 +35,7 @@ fn disagreement(message: impl Into<String>) -> PrismError {
 /// entry performs no effect for it.
 ///
 /// # Errors
-/// Returns `PP2012` when a step names an undeclared effect.
+/// Returns `PP2013` when a step names an undeclared effect.
 pub fn script_bytes(application: &ServerApplication, vector: usize) -> Result<Vec<u8>, PrismError> {
     let mut script = Vec::new();
     for transcript in &application.host.transcripts {
@@ -50,13 +50,13 @@ pub fn script_bytes(application: &ServerApplication, vector: usize) -> Result<Ve
                 .position(|effect| effect.name == step.effect)
                 .ok_or_else(|| {
                     PrismError::new(
-                        "PP2012",
+                        "PP2013",
                         "a transcript step names an undeclared host effect",
                     )
                 })?;
             for chunk in [&step.request, &step.outcome] {
                 if chunk.len() > u32::MAX as usize {
-                    return Err(PrismError::new("PP2012", "a transcript step is too long"));
+                    return Err(PrismError::new("PP2013", "a transcript step is too long"));
                 }
             }
             script.extend_from_slice(
@@ -129,7 +129,7 @@ fn run(
 /// # Errors
 /// Returns `PP6003` when the program disagrees with the model for any vector
 /// or transport, `PP4002` when the work directory cannot be written and
-/// `PP2012` when `binding` is asked for and none is declared.
+/// `PP2013` when `binding` is asked for and none is declared.
 pub fn execute(
     application: &ServerApplication,
     program: &Path,
@@ -138,7 +138,7 @@ pub fn execute(
 ) -> Result<Value, PrismError> {
     if binding && application.bindings.is_empty() {
         return Err(PrismError::new(
-            "PP2012",
+            "PP2013",
             "the acceptance asks for a host binding and none is declared",
         ));
     }

@@ -804,7 +804,7 @@ fn library(application: &ServerApplication) -> String {
 /// declared workspace path; the binding depends on the API package.
 ///
 /// # Errors
-/// Returns `PP2012` when the declaration is invalid.
+/// Returns `PP2013` when the declaration is invalid.
 pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, PrismError> {
     validate(application)?;
     let api = api_name(application);

@@ -14,7 +14,7 @@ use crate::holo::server_application::ServerApplication;
 use std::path::{Path, PathBuf};
 
 fn mismatch(message: impl Into<String>) -> PrismError {
-    PrismError::new("PP2012", message)
+    PrismError::new("PP2013", message)
 }
 
 fn manifest(path: &Path) -> Result<toml::Table, PrismError> {
@@ -41,7 +41,7 @@ fn inside(root: &Path, path: &Path) -> Result<PathBuf, PrismError> {
 /// Check the workspace at `workspace` against the declared binding.
 ///
 /// # Errors
-/// Returns `PP2012` when the workspace does not hold the declared binding as
+/// Returns `PP2013` when the workspace does not hold the declared binding as
 /// described above.
 pub fn verify(application: &ServerApplication, workspace: &Path) -> Result<(), PrismError> {
     let root = workspace

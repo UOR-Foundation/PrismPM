@@ -38,6 +38,7 @@ enum Rule {
     TextApplication,
     BrowserApplication,
     BrowserRuntime,
+    DesignView,
     ServerApplication,
     ServerBuild,
 }
@@ -52,6 +53,10 @@ impl Rule {
                 (valid, invalid)
             }
             Self::BrowserRuntime => (Self::TextApplication.specimens().0, browser_specimen()),
+            Self::DesignView => (
+                json!({"component": "Probe::component"}),
+                json!({"component": "Probe::unknown"}),
+            ),
             Self::ServerBuild => (Self::TextApplication.specimens().0, server_specimen()),
             Self::ServerApplication => {
                 let valid = server_specimen();
@@ -133,6 +138,7 @@ impl Rule {
         match self {
             Self::BrowserApplication => validate_browser_specimen(value).is_ok(),
             Self::BrowserRuntime => validate_browser_runtime(value).is_ok(),
+            Self::DesignView => crate::design::probe(value).is_ok(),
             Self::ServerApplication => validate_server_specimen(value).is_ok(),
             Self::ServerBuild => validate_server_build(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
@@ -243,13 +249,14 @@ probes!(
         "browser-application-runtime-unavailable",
         BrowserRuntime
     ),
+    ("PP2012", "unknown-design-view-name", DesignView),
     (
-        "PP2012",
+        "PP2013",
         "invalid-server-application-declaration",
         ServerApplication
     ),
     (
-        "PP2013",
+        "PP2014",
         "server-application-build-unavailable",
         ServerBuild
     ),
@@ -402,13 +409,13 @@ fn server_specimen() -> Value {
 
 fn validate_server_specimen(value: &Value) -> Result<(), PrismError> {
     let declaration = serde_json::from_value(value.clone())
-        .map_err(|_| PrismError::new("PP2012", "invalid server declaration specimen"))?;
+        .map_err(|_| PrismError::new("PP2013", "invalid server declaration specimen"))?;
     crate::holo::server_application::validate(&declaration)
 }
 
 fn validate_server_build(value: &Value) -> Result<(), PrismError> {
     let declaration = serde_json::from_value(value.clone())
-        .map_err(|_| PrismError::new("PP2012", "invalid server build specimen"))?;
+        .map_err(|_| PrismError::new("PP2013", "invalid server build specimen"))?;
     crate::holo::server_application::require_build(&declaration)
 }
 
@@ -451,6 +458,9 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::TextApplication) {
         return validate_text_specimen(value);
+    }
+    if matches!(spec.rule, Rule::DesignView) {
+        return crate::design::probe(value);
     }
     if spec.rule.accepts(value) {
         Ok(())

@@ -554,7 +554,7 @@ fn validate_semantic_order(id: &str, value: &Value) -> Result<(), PrismError> {
                 if id == "prismpm/model-document/4" {
                     "PP2010"
                 } else if id == "prismpm/model-document/7" {
-                    "PP2012"
+                    "PP2013"
                 } else if matches!(
                     id,
                     "prismpm/model-document/2"

@@ -100,13 +100,20 @@ statement = "The browser application profile cannot build or publish before its 
 
 [[error]]
 code = "PP2012"
+title = "Invalid design view"
+class = "semantic"
+exit = 1
+statement = "An OPM or UML design view names a component, edge, process, state or viewpoint the system model does not declare, or violates the structure its notation allows."
+
+[[error]]
+code = "PP2013"
 title = "Invalid server application declaration"
 class = "semantic"
 exit = 1
 statement = "A server application violates its closed source-owned profile, host effect declaration, effect bounds, exit codes or acceptance transcripts."
 
 [[error]]
-code = "PP2013"
+code = "PP2014"
 title = "Server application build unavailable"
 class = "semantic"
 exit = 1

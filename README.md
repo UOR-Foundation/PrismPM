@@ -105,7 +105,7 @@ The `Browser` application profile remains refused with `PP2011` until its genera
 authenticated effects, durable recovery and full owning verification are complete.
 The `Server` application profile declares and validates its host effects and generates a host adapter
 (an API package and a driver package that links a workspace binding) with a scripted-host acceptance suite;
-building or verifying a server application is refused with `PP2013` until its core export through
+building or verifying a server application is refused with `PP2014` until its core export through
 `production` and source-free verification are complete.
 
 ## Development and acceptance
