@@ -1,5 +1,19 @@
 Feature: holo
 
+  @HO-18 @build
+  Scenario: The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts.
+    Given a model whose Foundation.Arch design records state OPM and UML views over its components, edges and processes
+    When the controller checks and builds the model
+    Then every view name is resolved against the system model and each view is emitted deterministically under design/
+    And a view naming a component, edge, process, state or viewpoint the system model does not declare is refused with PP2012 before any artifact is written
+
+  @HO-17 @build
+  Scenario: The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed.
+    Given a source-owned text/3 application with a modeled command, help, examples and exit-code map
+    When the generated x86_64 and aarch64 musl programs are built, inspected and the host program runs every acceptance vector over stdin, a file and the explicit dash
+    Then every within-limit report equals the Core-Wasm report byte for byte with the modeled exit code and every oversized, unreadable, malformed or unwritable invocation exits with its registered usage, I/O or fault code
+    And the build manifest and bill of materials bind each program by SHA-256 and source-free verification replays the retained command-line evidence
+
   @HO-16 @build
   Scenario: The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults.
     Given a source-owned text/2 application with explicit Core-Wasm memory and stack bounds

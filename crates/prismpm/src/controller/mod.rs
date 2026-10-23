@@ -246,6 +246,8 @@ struct Prepared {
     application_selection: Option<Selection>,
     model: ModelDocument,
     model_bytes: Vec<u8>,
+    /// Rendered 42010 design views, as build-relative `(path, bytes)` artifacts.
+    design_views: Vec<(String, Vec<u8>)>,
     system: Option<crate::contracts::CanonicalDocument>,
     // Linked terms must be constructed, consumed and dropped on their worker.
     // Neither Prepared nor a borrowed Prepared can cross a scoped thread join.
@@ -352,6 +354,10 @@ fn kind(path: &str) -> &'static str {
         "lexlean-manifest"
     } else if path.ends_with("snapshot.json") {
         "semantic-snapshot"
+    } else if path.starts_with("cli/bin/") {
+        "executable"
+    } else if path == "cli/sbom.spdx.json" {
+        "sbom"
     } else {
         "artifact"
     }
@@ -381,9 +387,14 @@ fn write_file(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), PrismErro
         .ok_or_else(|| PrismError::new("PP4002", "artifact has no parent"))?;
     std::fs::create_dir_all(parent)
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", parent.display())))?;
-    let mut file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    if relative.starts_with("cli/bin/") {
+        // Built command-line programs are published runnable.
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o755);
+    }
+    let mut file = options
         .open(&path)
         .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", path.display())))?;
     file.write_all(bytes)
@@ -561,7 +572,10 @@ impl Controller {
         };
         plan.observe()?;
         let model_snapshot = application_snapshot.as_ref().unwrap_or(&snapshot);
-        let application_model = crate::holo::application::project_application(model_snapshot)?;
+        // Facet records come from every entrypoint of the checked snapshot, not
+        // only the application roots.
+        let application_model =
+            crate::holo::application::project_application_with_facets(model_snapshot, &snapshot)?;
         let library_model = crate::holo::library::project_library(&snapshot)?;
         let model = match (application_model, library_model) {
             (Some(_), Some(_)) => {
@@ -580,6 +594,7 @@ impl Controller {
             (None, None) => project_snapshot(model_snapshot)?,
         };
         let model_bytes = encode_canonical(&model)?;
+        let design_views = crate::design::render_snapshot(model_snapshot, &model)?;
         if let Some(system) = &system {
             let expected = format!("sha256:{}", content_id(&model_bytes));
             if system.value()["application_profile"]["application_model_digest"] != expected {
@@ -608,6 +623,7 @@ impl Controller {
             application_selection,
             model,
             model_bytes,
+            design_views,
             system,
             _worker_bound: PhantomData,
         })
@@ -924,6 +940,7 @@ impl Controller {
                 )?,
             });
         }
+        artifacts.extend(prepared.design_views.iter().cloned());
         if let Some(system) = &prepared.system {
             artifacts.push(("system.prism.json".to_owned(), system.bytes().to_vec()));
             for projection in crate::system::projections(system, &artifacts)? {

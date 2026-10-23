@@ -8,6 +8,7 @@ mod browser_effect;
 mod browser_publication;
 mod browser_system;
 mod cbor_primitive;
+mod design_views;
 mod holo_browser;
 mod mailbox_admission;
 mod native_lease;
@@ -17,6 +18,7 @@ mod organization_lifecycle;
 mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
+mod text_cli;
 
 use node_suite::verify as verify_node_suite;
 use repo_model::repo_root;
@@ -380,6 +382,7 @@ pub fn run_at(root: &Path, id: &str) {
         | "FT-10" => {
             verify_facets(root, id);
         }
+        "FT-11" => design_views::verify_entries(root),
 
         "HO-01" | "HO-02" | "HO-03" | "HO-04" | "HO-05" | "HO-06" | "HO-07" | "HO-08" | "HO-09"
         | "HO-10" | "HO-11" | "HO-12" => {
@@ -475,6 +478,9 @@ pub fn run_at(root: &Path, id: &str) {
             }
         }
 
+        "HO-17" => text_cli::verify(root),
+        "HO-18" => design_views::verify_views(root),
+
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
             verify_controller(root, id);
@@ -490,6 +496,7 @@ pub fn run_at(root: &Path, id: &str) {
         "ST-14" => browser_bootstrap::verify(root),
         "ST-15" => organization_lifecycle::verify(root),
         "ST-16" => cbor_primitive::verify(root),
+        "ST-18" => design_views::verify_primitives(root),
         "ST-17" => verify_node_suite(
             root,
             id,

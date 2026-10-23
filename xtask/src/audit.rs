@@ -1540,17 +1540,22 @@ pub fn audit_errors(root: &Path, model: &Model) -> Result<(), Fail> {
 
 /// Audit the exact Holo emitter input closure and its stored semantics digest.
 pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
-    const EXPECTED: [&str; 18] = [
+    const EXPECTED: [&str; 24] = [
         "crates/prismpm/src/holo/application.rs",
         "crates/prismpm/src/holo/browser_application.rs",
         "crates/prismpm/src/holo/browser_application/model.rs",
         "crates/prismpm/src/holo/browser_application/source.rs",
         "crates/prismpm/src/holo/canonical.rs",
+        "crates/prismpm/src/holo/facet_validate.rs",
+        "crates/prismpm/src/holo/facets.rs",
+        "crates/prismpm/src/holo/facets/records.rs",
+        "crates/prismpm/src/holo/facets/standards.rs",
         "crates/prismpm/src/holo/library.rs",
         "crates/prismpm/src/holo/library/roots.rs",
         "crates/prismpm/src/holo/model_document.rs",
         "crates/prismpm/src/holo/mod.rs",
         "crates/prismpm/src/holo/projector.rs",
+        "crates/prismpm/src/holo/text_cli.rs",
         "crates/prismpm/src/holo/validate.rs",
         "model/projection.toml",
         "model/standards.toml",
@@ -1558,6 +1563,7 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "schemas/model-document-v3.schema.json",
         "schemas/model-document-v4.schema.json",
         "schemas/model-document-v5.schema.json",
+        "schemas/model-document-v6.schema.json",
         "schemas/model-document.schema.json",
     ];
     if model.emitter_inputs.spec != "prismpm/emitter-inputs/1"

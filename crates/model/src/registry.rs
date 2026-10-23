@@ -357,7 +357,7 @@ pub struct StandardRow {
     pub name: String,
     /// Standard edition.
     pub edition: String,
-    /// Exact public catalog reference.
+    /// Exact public ISO or OMG catalog reference.
     pub reference: String,
     /// Evidence basis (`public-catalog` or `authorized-clause-review`).
     pub basis: String,
@@ -402,9 +402,11 @@ impl Standards {
                     s.id
                 )));
             }
-            if !s.reference.starts_with("https://www.iso.org/standard/") {
+            if !(s.reference.starts_with("https://www.iso.org/standard/")
+                || s.reference.starts_with("https://www.omg.org/spec/"))
+            {
                 return Err(ModelError::Inconsistent(format!(
-                    "{}: reference is not an exact ISO catalog URL",
+                    "{}: reference is not an exact ISO or OMG catalog URL",
                     s.id
                 )));
             }
@@ -478,7 +480,7 @@ pub struct ContractRow {
 impl Contracts {
     /// Validate public contract registry invariants.
     pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
-        if self.spec != "prismpm/contracts/1" || self.contract.len() != 59 {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 60 {
             return Err(ModelError::Inconsistent(
                 "public contract registry is incomplete".to_owned(),
             ));
@@ -499,6 +501,7 @@ impl Contracts {
                     || row.schema == "prismpm/model-document/3"
                     || row.schema == "prismpm/model-document/4"
                     || row.schema == "prismpm/model-document/5"
+                    || row.schema == "prismpm/model-document/6"
                     || row.schema == "prismpm/sdk-lock/2"
                     || row.schema == "prismpm/sdk-lock-update/2"
                     || row.schema == "prismpm/library-verification-manifest/2")
