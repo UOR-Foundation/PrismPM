@@ -171,13 +171,14 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*){0,7}$"
+        },
         "crate_name": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_-]{0,63}$"
-        },
-        "version": {
-          "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
         },
         "host": {
           "type": "string",
@@ -188,7 +189,7 @@
       "required": [
         "crate_name",
         "host",
-        "version"
+        "path"
       ]
     },
     "application_acceptance_vector": {

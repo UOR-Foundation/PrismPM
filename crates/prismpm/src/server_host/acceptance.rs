@@ -6,6 +6,10 @@
 //! modeled one, the program must exit zero, and every transcript step must be
 //! replayed. The record names each declared effect with the number of steps
 //! that exercised it, so an effect no vector reaches cannot be reported verified.
+//!
+//! When the caller links a deterministic binding, every vector is also run
+//! through the program's `run` command, which performs the effects through the
+//! declared binding with no script: the response must be the modeled one again.
 
 use super::program_name;
 use crate::error::PrismError;
@@ -20,6 +24,8 @@ use std::process::{Command, Stdio};
 pub const SCHEMA: &str = "prismpm/server-host-acceptance/1";
 /// Transports exercised for every vector, in the order they run.
 pub const TRANSPORTS: [&str; 2] = ["file", "stdin"];
+/// The transport added when the declared binding serves the effects.
+pub const BINDING_TRANSPORT: &str = "binding";
 
 fn disagreement(message: impl Into<String>) -> PrismError {
     PrismError::new("PP6003", message)
@@ -117,15 +123,25 @@ fn run(
 }
 
 /// Execute every vector against the built `program` and return the record.
+/// With `binding`, each vector also runs through the linked binding, which must
+/// be deterministic enough to reproduce the modeled response.
 ///
 /// # Errors
 /// Returns `PP6003` when the program disagrees with the model for any vector
-/// or transport, and `PP4002` when the work directory cannot be written.
+/// or transport, `PP4002` when the work directory cannot be written and
+/// `PP2012` when `binding` is asked for and none is declared.
 pub fn execute(
     application: &ServerApplication,
     program: &Path,
     work: &Path,
+    binding: bool,
 ) -> Result<Value, PrismError> {
+    if binding && application.bindings.is_empty() {
+        return Err(PrismError::new(
+            "PP2012",
+            "the acceptance asks for a host binding and none is declared",
+        ));
+    }
     let program_bytes = std::fs::read(program)
         .map_err(|error| PrismError::new("PP5008", format!("{}: {error}", program.display())))?;
     for (index, vector) in application.acceptance_vectors.iter().enumerate() {
@@ -161,6 +177,16 @@ pub fn execute(
                 )));
             }
         }
+        if binding {
+            let arguments = [Path::new("run"), request_path.as_path()];
+            let (code, stdout, stderr) = run(program, &arguments, None)?;
+            if code != 0 || stdout != vector.response {
+                return Err(disagreement(format!(
+                    "vector {index} over {BINDING_TRANSPORT}: exit {code}, {} response bytes, stderr {stderr:?}",
+                    stdout.len()
+                )));
+            }
+        }
     }
     let effects = exercised(application);
     if effects.iter().any(|(_, steps)| *steps == 0) {
@@ -179,7 +205,12 @@ pub fn execute(
         "schema": SCHEMA,
         "status": "verified",
         "steps": effects.iter().map(|(_, steps)| steps).sum::<usize>(),
-        "transports": TRANSPORTS,
+        "binding": application.bindings.first().filter(|_| binding).map(|linked| linked.crate_name.as_str()),
+        "transports": TRANSPORTS
+            .iter()
+            .copied()
+            .chain(binding.then_some(BINDING_TRANSPORT))
+            .collect::<Vec<_>>(),
         "vectors": application.acceptance_vectors.len(),
     }))
 }

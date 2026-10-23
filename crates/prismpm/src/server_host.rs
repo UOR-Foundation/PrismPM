@@ -1,12 +1,16 @@
 //! Generated host adapter of a server application.
 //!
-//! The package is rendered only from the application's closed host effect
-//! declaration, its exchange bounds and its core. A small fixed template
-//! owns the replay loop and the codec primitives; every effect type, its codec,
-//! the `Host` trait, the closed request sum and the scripted host are rendered
-//! from the declaration. Nothing here is handwritten per application, and an
-//! effect that is not declared has no constructor, no decoder arm and no host
-//! method. Process I/O is the raw adapter fragment of `crate::binary_cli`.
+//! Two Cargo packages are rendered only from the application's closed host
+//! effect declaration, its exchange bounds and its core. The API package,
+//! `{cargo_name}-host-api`, holds the wire primitives, every effect type with
+//! its codec, the closed request sum and the `Host` trait. The binding is a crate
+//! of the consumer's own workspace that depends on it and implements the trait,
+//! so the driver package, `{cargo_name}-host`, can depend on both without a
+//! cycle. The driver package holds the replay loop, the scripted host and the
+//! program; a small fixed template owns the loop and the codec primitives.
+//! Nothing here is handwritten per application, and an effect that is not
+//! declared has no constructor, no decoder arm and no host method. Process I/O
+//! is the raw adapter fragment of `crate::binary_cli`.
 
 use crate::binary_cli::INPUT_ADAPTER;
 use crate::error::PrismError;
@@ -19,6 +23,7 @@ use std::fmt::Write as _;
 pub mod acceptance;
 #[cfg(test)]
 mod tests;
+pub mod workspace;
 
 const WIRE: &str = include_str!("server_host/wire.rs.in");
 const FAILURE: &str = include_str!("server_host/failure.rs.in");
@@ -36,6 +41,18 @@ pub fn program_name(application: &ServerApplication) -> String {
 #[must_use]
 pub fn library_name(application: &ServerApplication) -> String {
     program_name(application).replace('-', "_")
+}
+
+/// Name of the generated API package, which a binding crate depends on.
+#[must_use]
+pub fn api_name(application: &ServerApplication) -> String {
+    format!("{}-api", program_name(application))
+}
+
+/// Rust identifier of the generated API crate.
+#[must_use]
+pub fn api_library_name(application: &ServerApplication) -> String {
+    api_name(application).replace('-', "_")
 }
 
 /// Rust identifier of the production core crate: the exported package name.
@@ -257,7 +274,7 @@ fn module(text: &mut String, effect: &HostEffect) {
 fn protocol(application: &ServerApplication) -> String {
     let effects = &application.host.effects;
     let mut text = String::from(
-        "// Generated from the closed host effect declaration. Do not edit.\n\nuse crate::failure::Failure;\nuse crate::wire::Refusal;\n\n",
+        "// Generated from the closed host effect declaration. Do not edit.\n\nuse crate::wire::Refusal;\n\n",
     );
     let _ = writeln!(
         text,
@@ -404,6 +421,16 @@ fn protocol(application: &ServerApplication) -> String {
         );
     }
     let _ = writeln!(text, "}}\n");
+    text
+}
+
+/// The perform module of the driver crate: the one place where a decoded effect
+/// request reaches the host method that runs it.
+fn perform(application: &ServerApplication) -> String {
+    let effects = &application.host.effects;
+    let mut text = String::from(
+        "// Generated from the closed host effect declaration. Do not edit.\n\n#[allow(unused_imports)]\nuse crate::failure::Failure;\n#[allow(unused_imports)]\nuse crate::protocol::{self, Host, HostError, Request};\n\n",
+    );
     let _ = writeln!(
         text,
         "/// Run a decoded effect through the host and encode its outcome.\n#[allow(unused_variables)]\npub fn perform<H: Host>(host: &mut H, request: Request) -> Result<Vec<u8>, Failure> {{\n    match request {{"
@@ -434,7 +461,7 @@ fn protocol(application: &ServerApplication) -> String {
             let _ = writeln!(text, "            }};");
             let _ = writeln!(
                 text,
-                "            {name}::encode_outcome(&outcome).map_err(|_| Failure::EffectResultLimit)"
+                "            protocol::{name}::encode_outcome(&outcome).map_err(|_| Failure::EffectResultLimit)"
             );
             let _ = writeln!(text, "        }}");
         }
@@ -606,8 +633,13 @@ fn paragraph(text: &str) -> &str {
 pub fn help(application: &ServerApplication) -> String {
     let binary = program_name(application);
     let host = &application.host;
+    let run = if application.bindings.is_empty() {
+        String::new()
+    } else {
+        format!("    {binary} run [FILE]\n")
+    };
     let mut text = format!(
-        "{} {}\n\n{}\n\nUSAGE\n    {binary} exchange SCRIPT [FILE]\n    {binary} --help\n    {binary} --version\n\nINPUT\n    FILE holds the request and is read as raw bytes, at most {} of them.\n    Without FILE, or when FILE is -, the request is read from standard input.\n    The response is written to standard output unchanged, at most {} bytes.\n    SCRIPT holds the host's outcomes, at most {} bytes. Each step is a 32-bit\n    big-endian effect tag, then the length and bytes of the encoded request the\n    entry must produce, then the length and bytes of the encoded outcome. The\n    program replays one step for every effect the entry requests, at most {}.\n",
+        "{} {}\n\n{}\n\nUSAGE\n    {binary} exchange SCRIPT [FILE]\n{run}    {binary} --help\n    {binary} --version\n\nINPUT\n    FILE holds the request and is read as raw bytes, at most {} of them.\n    Without FILE, or when FILE is -, the request is read from standard input.\n    The response is written to standard output unchanged, at most {} bytes.\n    SCRIPT holds the host's outcomes, at most {} bytes. Each step is a 32-bit\n    big-endian effect tag, then the length and bytes of the encoded request the\n    entry must produce, then the length and bytes of the encoded outcome. The\n    program replays one step for every effect the entry requests, at most {}.\n",
         application.name,
         application.cargo_version,
         paragraph(&host.description),
@@ -616,6 +648,13 @@ pub fn help(application: &ServerApplication) -> String {
         application.script_maximum(),
         host.effect_budget,
     );
+    if let Some(binding) = application.bindings.first() {
+        let _ = write!(
+            text,
+            "\nRUN\n    `run` reads the request as `exchange` does and performs each effect the entry\n    requests through the host binding {} ({}), with no script.\n",
+            binding.crate_name, binding.host
+        );
+    }
     if !host.effects.is_empty() {
         text.push_str("\nEFFECTS\n");
         for (index, effect) in host.effects.iter().enumerate() {
@@ -698,20 +737,6 @@ fn surface(application: &ServerApplication) -> String {
         "pub const SCRIPT_MAXIMUM: usize = {};",
         application.script_maximum()
     );
-    let _ = writeln!(
-        text,
-        "/// The declared host binding crates as (crate, version, host type); declared, never linked here.\npub const BINDINGS: &[(&str, &str, &str)] = &["
-    );
-    for binding in &application.bindings {
-        let _ = writeln!(
-            text,
-            "    ({}, {}, {}),",
-            literal(&binding.crate_name),
-            literal(&binding.version),
-            literal(&binding.host)
-        );
-    }
-    text.push_str("];\n");
     let _ = writeln!(text, "pub const USAGE_CODE: u8 = {};", host.usage_code);
     let _ = writeln!(text, "pub const IO_CODE: u8 = {};", host.io_code);
     let _ = writeln!(text, "pub const FAULT_CODE: u8 = {};", host.fault_code);
@@ -761,47 +786,113 @@ fn corpus(application: &ServerApplication) -> String {
     text
 }
 
-const LIBRARY: &str = "// Generated host adapter of a server application. Do not edit.\n#![forbid(unsafe_code)]\n\npub mod acceptance;\npub mod exchange;\npub mod failure;\npub mod protocol;\npub mod script;\npub mod surface;\npub mod wire;\n\npub use failure::{Failure, FailureClass};\n";
+const API_LIBRARY: &str = "// Generated host API of a server application. Do not edit.\n#![forbid(unsafe_code)]\n\npub mod protocol;\npub mod wire;\n";
 
-/// Render the Cargo package of the host adapter: manifest, library and program.
+fn library(application: &ServerApplication) -> String {
+    format!(
+        "// Generated host adapter of a server application. Do not edit.\n#![forbid(unsafe_code)]\n\npub mod acceptance;\npub mod exchange;\npub mod failure;\npub mod perform;\npub mod script;\npub mod surface;\n\npub use failure::{{Failure, FailureClass}};\npub use {api}::{{protocol, wire}};\n",
+        api = api_library_name(application),
+    )
+}
+
+/// Render the two Cargo packages of the host adapter, as files relative to the
+/// consumer's workspace root: the API package in `{cargo_name}-host-api/` and
+/// the driver package, library and program, in `{cargo_name}-host/`.
+///
+/// Both are members of the consumer's workspace, which owns the release profile.
+/// The driver depends on the API package and on the declared binding, at its
+/// declared workspace path; the binding depends on the API package.
 ///
 /// # Errors
 /// Returns `PP2012` when the declaration is invalid.
 pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, PrismError> {
     validate(application)?;
-    let manifest = format!(
-        "[package]\nname = \"{name}\"\nversion = \"{version}\"\nedition = \"2021\"\npublish = false\n\n[lib]\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"{name}\"\npath = \"src/main.rs\"\n\n[dependencies]\n{core} = {{ version = \"={core_version}\" }}\n\n[profile.release]\nopt-level = 3\nlto = true\ncodegen-units = 1\nstrip = true\npanic = \"abort\"\n",
-        name = program_name(application),
+    let api = api_name(application);
+    let name = program_name(application);
+    let package = |name: &str, dependencies: &str, program: bool| {
+        format!(
+            "[package]\nname = \"{name}\"\nversion = \"{version}\"\nedition = \"2021\"\npublish = false\n\n[lib]\npath = \"src/lib.rs\"\n\n{program}[dependencies]\n{dependencies}",
+            version = application.cargo_version,
+            program = if program {
+                format!("[[bin]]\nname = \"{name}\"\npath = \"src/main.rs\"\n\n")
+            } else {
+                String::new()
+            },
+        )
+    };
+    let mut dependencies = format!(
+        "{core} = {{ version = \"={core_version}\" }}\n{api} = {{ path = \"../{api}\" }}\n",
         core = core(application),
         core_version = application.core.version,
-        version = application.cargo_version,
     );
+    for binding in &application.bindings {
+        let _ = writeln!(
+            dependencies,
+            "{} = {{ path = \"../{}\" }}",
+            binding.crate_name, binding.path
+        );
+    }
     let host = library_name(application);
     let exchange = EXCHANGE.replace("@CORE@", core(application));
     let main = MAIN
         .replace("@INPUT_ADAPTER@", INPUT_ADAPTER)
-        .replace("@HOST@", &host);
-    let tests = TESTS.replace("@HOST@", &host);
+        .replace("@HOST@", &host)
+        .replace(
+            "@BINDING_HOST@",
+            application
+                .bindings
+                .first()
+                .map_or("", |binding| binding.host.as_str()),
+        );
+    let main = section(&main, !application.bindings.is_empty());
+    let tests = TESTS.replace("@HOST@", &host).replace(
+        "@BINDING_HOST@",
+        application
+            .bindings
+            .first()
+            .map_or("", |binding| binding.host.as_str()),
+    );
+    let tests = section(&tests, !application.bindings.is_empty());
     let files = [
-        ("Cargo.toml", manifest),
-        ("src/lib.rs", LIBRARY.to_owned()),
-        ("src/wire.rs", WIRE.to_owned()),
-        ("src/failure.rs", FAILURE.to_owned()),
-        ("src/exchange.rs", exchange),
-        ("src/surface.rs", surface(application)),
-        ("src/protocol.rs", protocol(application)),
-        ("src/script.rs", script(application)),
-        ("src/acceptance.rs", corpus(application)),
-        ("src/main.rs", main),
-        ("tests/acceptance.rs", tests),
+        (format!("{api}/Cargo.toml"), package(&api, "", false)),
+        (format!("{api}/src/lib.rs"), API_LIBRARY.to_owned()),
+        (format!("{api}/src/wire.rs"), WIRE.to_owned()),
+        (format!("{api}/src/protocol.rs"), protocol(application)),
+        (format!("{name}/Cargo.toml"), package(&name, &dependencies, true)),
+        (format!("{name}/src/lib.rs"), library(application)),
+        (format!("{name}/src/failure.rs"), FAILURE.to_owned()),
+        (format!("{name}/src/exchange.rs"), exchange),
+        (format!("{name}/src/perform.rs"), perform(application)),
+        (format!("{name}/src/surface.rs"), surface(application)),
+        (format!("{name}/src/script.rs"), script(application)),
+        (format!("{name}/src/acceptance.rs"), corpus(application)),
+        (format!("{name}/src/main.rs"), main),
+        (format!("{name}/tests/acceptance.rs"), tests),
     ];
     Ok(GeneratedPackage {
         files: files
             .into_iter()
             .map(|(path, text)| PackageFile {
-                path: path.into(),
+                path,
                 bytes: text.into_bytes(),
             })
             .collect(),
     })
+}
+
+/// Keep or drop the lines between `//@BINDING-BEGIN` and `//@BINDING-END`,
+/// which exist only for an application whose effects are served by a binding.
+/// The marker lines themselves never survive.
+fn section(template: &str, keep: bool) -> String {
+    let mut inside = false;
+    let mut out = String::new();
+    for line in template.split_inclusive('\n') {
+        match line.trim() {
+            "//@BINDING-BEGIN" => inside = true,
+            "//@BINDING-END" => inside = false,
+            _ if inside && !keep => {}
+            _ => out.push_str(line),
+        }
+    }
+    out
 }

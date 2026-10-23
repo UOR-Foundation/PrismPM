@@ -77,6 +77,9 @@ pub(super) fn verify_adapter(root: &Path) {
             "script_failures_exit_with_the_fault_code_and_publish_nothing",
             "a_core_that_requests_an_undeclared_effect_is_refused_by_the_program",
             "invalid_command_lines_exit_with_the_usage_code",
+            "the_linked_binding_serves_every_vector_without_a_script",
+            "the_workspace_holds_the_declared_binding_or_the_declaration_is_refused",
+            "a_binding_that_cannot_run_an_effect_exits_with_the_fault_code",
             "oversized_requests_and_scripts_are_refused_before_dispatch",
         ],
     );

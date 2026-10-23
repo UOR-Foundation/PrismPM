@@ -97,7 +97,7 @@ Class: `semantic`. Exit code: 1.
 
 ## `PP2013` --- Server application build unavailable
 
-The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export, host binding linkage and source-free verification are available.
+The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export through production and source-free verification are available.
 
 Class: `semantic`. Exit code: 1.
 

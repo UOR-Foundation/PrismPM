@@ -38,8 +38,8 @@ fn fields(kind: &str) -> Option<&'static [Row]> {
             ("version", "version", "String"),
         ],
         "ServerBinding" => &[
+            ("path", "path", "String"),
             ("crateName", "crate_name", "String"),
-            ("version", "version", "String"),
             ("host", "host", "String"),
         ],
         "AcceptanceVector" => &[

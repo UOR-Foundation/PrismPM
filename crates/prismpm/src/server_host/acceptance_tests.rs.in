@@ -173,3 +173,11 @@ fn a_turn_presents_the_request_then_the_completed_effects() {
     );
     assert_eq!(turn(b"", &[]).unwrap(), [0, 0, 0, 0, 0, 0, 0, 0]);
 }
+
+//@BINDING-BEGIN
+#[test]
+fn the_declared_binding_implements_the_host_trait() {
+    fn linked<H: protocol::Host + Default>() {}
+    linked::<@BINDING_HOST@>();
+}
+//@BINDING-END

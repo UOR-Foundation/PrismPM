@@ -110,7 +110,7 @@ code = "PP2013"
 title = "Server application build unavailable"
 class = "semantic"
 exit = 1
-statement = "The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export, host binding linkage and source-free verification are available."
+statement = "The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export through production and source-free verification are available."
 
 [[error]]
 code = "PP3001"

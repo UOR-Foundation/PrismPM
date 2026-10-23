@@ -1558,10 +1558,6 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "crates/prismpm/src/holo/server_application/model.rs",
         "crates/prismpm/src/holo/server_application/source.rs",
         "crates/prismpm/src/holo/server_application/wire.rs",
-        "crates/prismpm/src/holo/server_application.rs",
-        "crates/prismpm/src/holo/server_application/model.rs",
-        "crates/prismpm/src/holo/server_application/source.rs",
-        "crates/prismpm/src/holo/server_application/wire.rs",
         "crates/prismpm/src/holo/text_cli.rs",
         "crates/prismpm/src/holo/validate.rs",
         "model/projection.toml",
@@ -1571,7 +1567,6 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "schemas/model-document-v4.schema.json",
         "schemas/model-document-v5.schema.json",
         "schemas/model-document-v6.schema.json",
-        "schemas/model-document-v7.schema.json",
         "schemas/model-document-v7.schema.json",
         "schemas/model-document.schema.json",
     ];

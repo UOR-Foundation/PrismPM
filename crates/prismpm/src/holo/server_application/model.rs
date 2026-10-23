@@ -50,16 +50,18 @@ pub struct ServerCore {
     pub version: String,
 }
 
-/// The binding crate that implements the generated host trait: a locked
-/// crates.io dependency, named, never discovered.
+/// The binding crate that implements the generated host trait: a member of the
+/// consumer's own Cargo workspace, named by its path, never discovered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ServerBinding {
-    /// crates.io crate name.
+    /// Directory of the crate, relative to the workspace root, `/`-separated,
+    /// with no `.` or `..` component.
+    pub path: String,
+    /// Package name in the crate's own manifest.
     pub crate_name: String,
-    /// Exact locked version: three canonical decimals.
-    pub version: String,
-    /// Rust path of the type in that crate that implements the host trait.
+    /// Rust path of the type in that crate that implements the host trait and
+    /// `Default`; its first segment is the crate's library name.
     pub host: String,
 }
 

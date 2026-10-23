@@ -17,6 +17,7 @@
 //        | u32 1, u32 tag, request payload      (perform)
 
 use crate::failure::Failure;
+use crate::perform::perform;
 use crate::protocol::{self, Host, Request};
 use crate::surface;
 use crate::wire::{put_chunk, put_u32, Reader, Refusal};
@@ -94,7 +95,7 @@ where
                     Refusal::Undeclared => Failure::EffectUndeclared,
                     _ => Failure::EffectMalformed,
                 })?;
-                let outcome = protocol::perform(host, effect)?;
+                let outcome = perform(host, effect)?;
                 if outcome.len() > protocol::RESULT_MAXIMA[index] {
                     return Err(Failure::EffectResultLimit);
                 }

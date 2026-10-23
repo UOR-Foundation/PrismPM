@@ -37,7 +37,7 @@ fn declaration() -> Value {
             {"request": [99], "response": [100]}
         ],
         "core": {"root": "ServerProbe.ServerProbe.dispatch", "package": "server_probe_core", "version": "0.1.0"},
-        "bindings": [{"crate_name": "server-probe-binding", "version": "0.1.0", "host": "server_probe_binding::Native"}],
+        "bindings": [{"path": "bindings/server-probe-binding", "crate_name": "server-probe-binding", "host": "server_probe_binding::Native"}],
         "request_maximum": 8,
         "response_maximum": 8,
         "host": {
@@ -146,6 +146,8 @@ fn server_contract_roundtrips_and_requires_the_closed_declaration() {
         "/application/extra",
         "/application/core/extra",
         "/application/bindings/0/extra",
+        // The version of a workspace crate is its own manifest's, not the declaration's.
+        "/application/bindings/0/version",
         "/application/host/extra",
         "/application/host/effects/0/extra",
         "/application/host/effects/0/request/0/extra",
@@ -205,15 +207,28 @@ fn server_contract_rejects_every_invalid_declaration() {
         (
             "/application/bindings",
             json!([
-                {"crate_name": "a-binding", "version": "0.1.0", "host": "a_binding::Native"},
-                {"crate_name": "b-binding", "version": "0.1.0", "host": "b_binding::Native"}
+                {"path": "a", "crate_name": "a-binding", "host": "a_binding::Native"},
+                {"path": "b", "crate_name": "b-binding", "host": "b_binding::Native"}
             ]),
         ),
         ("/application/bindings/0/crate_name", json!("Binding")),
         ("/application/bindings/0/crate_name", json!("server-probe-host")),
         ("/application/bindings/0/crate_name", json!("server_probe_core")),
-        ("/application/bindings/0/version", json!("^0.1.0")),
-        ("/application/bindings/0/version", json!("0.1")),
+        ("/application/bindings/0/crate_name", json!("server-probe-host-api")),
+        ("/application/bindings/0/path", json!("")),
+        ("/application/bindings/0/path", json!("/abs/path")),
+        ("/application/bindings/0/path", json!("../outside")),
+        ("/application/bindings/0/path", json!("bindings/../../outside")),
+        ("/application/bindings/0/path", json!("bindings/./b")),
+        ("/application/bindings/0/path", json!("bindings//b")),
+        ("/application/bindings/0/path", json!("bindings/b/")),
+        ("/application/bindings/0/path", json!("bindings\\b")),
+        ("/application/bindings/0/path", json!(".hidden/b")),
+        ("/application/bindings/0/path", json!("target/debug/b")),
+        ("/application/bindings/0/path", json!("server-probe-host")),
+        ("/application/bindings/0/path", json!("server-probe-host-api/binding")),
+        ("/application/bindings/0/path", json!("a/b/c/d/e/f/g/h/i")),
+        ("/application/bindings/0/host", json!("other_binding::Native")),
         ("/application/bindings/0/host", json!("Native")),
         ("/application/bindings/0/host", json!("binding::fn")),
         ("/application/bindings/0/host", json!("binding::")),
@@ -609,8 +624,8 @@ fn notation(application: &Value) -> String {
                 record(
                     "ServerBinding",
                     vec![
+                        ("path", text(&binding["path"])),
                         ("crateName", text(&binding["crate_name"])),
-                        ("version", text(&binding["version"])),
                         ("host", text(&binding["host"])),
                     ],
                 )

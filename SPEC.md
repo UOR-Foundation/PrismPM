@@ -3026,9 +3026,22 @@ exported package and the package version. The package is built through the
 step comes back as a list of numbers each of which is one octet, and `Overflow`,
 the one failure of a certified core, is the internal-error outcome
 `ComputeFailure`. The `bindings` are empty exactly when no effect is declared,
-else one: the locked crates.io crate, its exact version and the Rust path of the
-type in that crate that implements the generated `Host` trait. A binding is
-declared and validated in the model; the host never discovers it.
+else one. A binding is a crate of the consumer's own Cargo workspace, because a
+crate cannot implement a trait of a crate that depends on it: it is declared by
+its workspace `path`, its `crateName` and the Rust path of its `host` type, which
+implements the generated `Host` trait and `Default` and starts with the crate's
+library name. The path is relative to the workspace root, `/`-separated, of at
+most 8 components, each of letters, digits, `_`, `-` and inner `.`, none empty,
+`.`, `..` or hidden, and neither a build directory nor a generated package. The
+crate name is neither the core's nor a generated crate's. A binding is declared
+and validated in the model; the host never discovers it. Whether the workspace
+holds it is checked against the workspace itself (`server_host::workspace::verify`):
+the generated packages and the binding are exactly listed members, the binding
+directory resolves inside the workspace, its manifest names the declared crate
+and depends on the generated API package, and every other dependency it has is a
+crates.io dependency or another workspace member. The binding holds effect
+implementations only; which effect runs is decided by the generated driver from
+the core's step.
 
 `host` declares the effect protocol `prismpm/host-effects/1`: a purpose
 paragraph, the distinct `usageCode`, `ioCode` and `faultCode` of the generated
@@ -3061,12 +3074,16 @@ decodes every request and outcome with the reference codec, and refuses a
 declaration in which some declared effect is requested by no transcript step.
 
 The build of a server application is refused with PP2013. What exists is the
-declaration and `prismpm::server_host::generate`, which renders one Cargo
-package, `{cargo_name}-host`: a fixed template composed with code rendered only
-from the declaration. The library holds the closed `Request` sum with one
-variant per declared effect, the typed request, result and failure of each
-effect with its codec, the `Host` trait with one method per effect, the
-`Failure` vocabulary, the replay driver and the scripted host. An effect that is
+declaration and `prismpm::server_host::generate`, which renders two Cargo
+packages as members of the consumer's workspace, a fixed template composed with
+code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
+primitives, the closed `Request` sum with one variant per declared effect, the
+typed request, result and failure of each effect with its codec, and the `Host`
+trait with one method per effect. `{cargo_name}-host` holds the `Failure`
+vocabulary, the replay driver, the scripted host and the program, and depends on
+the API package, on the core and on the binding at its declared workspace path;
+the binding depends on the API package. The workspace root owns the release
+profile. An effect that is
 not declared has no constructor, no decoder arm and no host method: the decoder
 refuses its tag with `EffectUndeclared`, a payload that is not that effect's
 request with `EffectMalformed`, a payload over its maximum with
@@ -3076,8 +3093,10 @@ than the budget with `EffectBudget`, a step of neither form, a step element that
 handwritten. Failures are the closed `ServerFailure` vocabulary registered in
 `model/host-effects-diagnostics.toml`.
 
-The program `{cargo_name}-host` accepts `exchange SCRIPT [FILE]`, `--help` and
-`--version`. FILE or `-` is the request, read as raw bytes by the bounded
+The program `{cargo_name}-host` accepts `exchange SCRIPT [FILE]`,
+`run [FILE]` when a binding is declared, `--help` and `--version`. `run` reads
+its request as `exchange` does and performs each effect through a `Default`
+instance of the binding's host type, with no script. FILE or `-` is the request, read as raw bytes by the bounded
 adapter of `crate::binary_cli`, with the symlink and special-file rules of
 text/3. SCRIPT is read by the same adapter with the replay-script maximum the
 model implies. Each scripted step is the effect tag and the encoded request the
@@ -3089,13 +3108,15 @@ nothing is written to standard output on failure. Acceptance executes every
 vector with its transcript as the script, once over a request file and once over
 standard input, requires the modeled response byte for byte, and records for
 each declared effect the steps that exercised it
-(`prismpm/server-host-acceptance/1`). The generated crate carries the same
-corpus and its own tests and depends on the exported core package at its exact
-version. The record is not yet part of `application-acceptance.json`. Linking the
-binding crate (it cannot name a trait of the crate that depends on it, so the
-`Host` trait must first be split into a crate of its own), the build of the core
-through `production`, the serving effect, `prismpm verify` and source-free
-release verification are outside this slice.
+(`prismpm/server-host-acceptance/1`). When the caller links a deterministic
+binding, each vector also runs through `run`, the record names the binding and
+its transports gain `binding`; the scripted host stays the transcript's host. The
+generated driver package carries the same corpus and its own tests, including a
+check that the binding type implements `Host` and `Default`, and depends on the
+exported core package at its exact version. The record is not yet part of
+`application-acceptance.json`. The build of the core through `production`, the
+serving effect, `prismpm verify` and source-free release verification are
+outside this slice.
 
 #### 12.15.1 Where HTTP/1.1 framing lives
 

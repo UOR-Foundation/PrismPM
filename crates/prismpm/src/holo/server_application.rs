@@ -268,6 +268,7 @@ fn core(value: &ServerApplication) -> Result<(), PrismError> {
     if !package_name(&core.package)
         || !triple(&core.version)
         || core.package == host_name
+        || core.package == format!("{host_name}_api")
         || ["std", "core", "alloc"].contains(&core.package.as_str())
     {
         return Err(invalid(
@@ -291,6 +292,29 @@ fn rust_path(value: &str) -> bool {
         })
 }
 
+/// Directories of the generated packages inside the consumer's workspace.
+fn generated_directories(value: &ServerApplication) -> [String; 2] {
+    let host = format!("{}-host", value.cargo_name);
+    [format!("{host}-api"), host]
+}
+
+/// A workspace-relative directory: `/`-separated normal components, none empty,
+/// `.`, `..` or hidden, and none of the build output or generated directories.
+fn workspace_path(value: &str, reserved: &[String]) -> bool {
+    let parts = value.split('/').collect::<Vec<_>>();
+    value.len() <= 128
+        && parts.len() <= 8
+        && parts.iter().all(|part| {
+            !part.is_empty()
+                && part.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
+                })
+                && !part.starts_with('.')
+        })
+        && !["target", "node_modules"].contains(&parts[0])
+        && !reserved.iter().any(|name| name == parts[0])
+}
+
 fn bindings(value: &ServerApplication) -> Result<(), PrismError> {
     if value.bindings.len() != usize::from(!value.host.effects.is_empty()) {
         return Err(invalid(
@@ -298,6 +322,7 @@ fn bindings(value: &ServerApplication) -> Result<(), PrismError> {
         ));
     }
     let host_name = format!("{}_host", value.cargo_name.replace('-', "_"));
+    let reserved = generated_directories(value);
     for binding in &value.bindings {
         let name = binding.crate_name.replace('-', "_");
         if binding.crate_name.len() > 64
@@ -311,14 +336,20 @@ fn bindings(value: &ServerApplication) -> Result<(), PrismError> {
                     || byte.is_ascii_digit()
                     || matches!(byte, b'-' | b'_')
             })
-            || !triple(&binding.version)
             || !rust_path(&binding.host)
+            || binding.host.split("::").next() != Some(name.as_str())
             || name == host_name
+            || name == format!("{host_name}_api")
             || name == value.core.package
             || ["std", "core", "alloc"].contains(&name.as_str())
         {
             return Err(invalid(
-                "the host binding needs a crates.io crate name, an exact locked version of three decimals and the Rust path of its host type",
+                "the host binding needs a crate name other than the core's and the generated host's, and the Rust path of its host type, which starts with that crate",
+            ));
+        }
+        if !workspace_path(&binding.path, &reserved) {
+            return Err(invalid(
+                "the host binding path is a directory inside the workspace: normal components, no empty, dot or hidden component, and not a generated or build directory",
             ));
         }
     }
@@ -399,7 +430,7 @@ fn transcripts(value: &ServerApplication) -> Result<(), PrismError> {
     Ok(())
 }
 
-/// Fail closed until the core export, host binding linkage and source-free
+/// Fail closed until the core export through `production` and source-free
 /// verification of server applications are available.
 pub fn require_build(application: &super::model_document::Application) -> Result<(), PrismError> {
     if matches!(application, super::model_document::Application::Server(_)) {

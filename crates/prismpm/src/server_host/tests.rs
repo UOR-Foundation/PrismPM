@@ -6,7 +6,7 @@
 //! registered failure. A second, rogue core requests an effect the declaration
 //! does not contain: the program must refuse it.
 
-use super::{acceptance, generate, help, library_name, program_name};
+use super::{acceptance, api_library_name, api_name, generate, help, library_name, program_name, workspace};
 use crate::holo::server_application::wire::{
     encode_fields, encode_outcome, Outcome, Value as Wire,
 };
@@ -247,7 +247,7 @@ fn model_value() -> Value {
             {"request": b"t".to_vec(), "response": b"time:42".to_vec()}
         ],
         "core": {"root": "Echo.Host.run", "package": "echo_core", "version": "0.1.0"},
-        "bindings": [{"crate_name": "echo-binding", "version": "0.1.0", "host": "echo_binding::Native"}],
+        "bindings": [{"path": "bindings/echo-binding", "crate_name": "echo-binding", "host": "echo_binding::Native"}],
         "request_maximum": 16,
         "response_maximum": 64,
         "host": {
@@ -307,6 +307,14 @@ fn file<'a>(package: &'a prod_codegen::GeneratedPackage, path: &str) -> &'a str 
     std::str::from_utf8(&file.bytes).unwrap()
 }
 
+fn api_file<'a>(package: &'a prod_codegen::GeneratedPackage, path: &str) -> &'a str {
+    file(package, &format!("{}/{path}", api_name(&model())))
+}
+
+fn host_file<'a>(package: &'a prod_codegen::GeneratedPackage, path: &str) -> &'a str {
+    file(package, &format!("{}/{path}", program_name(&model())))
+}
+
 struct Built {
     _directory: tempfile::TempDir,
     program: PathBuf,
@@ -323,9 +331,86 @@ fn cargo(arguments: &[&str], directory: &Path, target: &Path) -> Output {
         .expect("cargo runs")
 }
 
+/// The consumer's side of the binding: a workspace crate that depends on the
+/// generated API package and implements its `Host` trait. It answers exactly
+/// as the transcripts record, so a vector replayed through it gives the
+/// modeled response; the key `z` is a host that cannot run the effect at all.
+const BINDING: &str = r#"
+use echo_core_host_api::protocol::{clock_now, log_write, store_get, Host, HostError};
+
+#[derive(Default)]
+pub struct Native {
+    pub lines: Vec<String>,
+}
+
+impl Host for Native {
+    fn store_get(
+        &mut self,
+        request: store_get::Request,
+    ) -> Result<store_get::Completed, HostError<store_get::Failure>> {
+        match request.key.as_slice() {
+            b"k" => Ok(store_get::Completed { found: true, version: 3, value: "v".to_owned() }),
+            b"x" => Err(HostError::Failed(store_get::Failure::Denied)),
+            b"y" => Err(HostError::Failed(store_get::Failure::Unavailable)),
+            b"z" => Err(HostError::Fault),
+            _ => Ok(store_get::Completed { found: false, version: 0, value: String::new() }),
+        }
+    }
+
+    fn clock_now(
+        &mut self,
+        _request: clock_now::Request,
+    ) -> Result<clock_now::Completed, HostError<clock_now::Failure>> {
+        Ok(clock_now::Completed { millis: 42 })
+    }
+
+    fn log_write(
+        &mut self,
+        request: log_write::Request,
+    ) -> Result<log_write::Completed, HostError<log_write::Failure>> {
+        self.lines.push(request.line);
+        Ok(log_write::Completed {})
+    }
+}
+"#;
+
+fn write_binding(workspace: &Path, application: &ServerApplication) {
+    for binding in &application.bindings {
+        let directory = workspace.join(&binding.path);
+        std::fs::create_dir_all(directory.join("src")).unwrap();
+        std::fs::write(
+            directory.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n{api} = {{ path = \"{up}{api}\" }}\n",
+                binding.crate_name,
+                api = api_name(application),
+                up = "../".repeat(binding.path.split('/').count()),
+            ),
+        )
+        .unwrap();
+        std::fs::write(directory.join("src/lib.rs"), BINDING).unwrap();
+    }
+}
+
+fn members(application: &ServerApplication) -> String {
+    let mut members = vec![api_name(application), program_name(application)];
+    members.extend(application.bindings.iter().map(|binding| binding.path.clone()));
+    format!(
+        "[workspace]\nresolver = \"2\"\nmembers = [{}]\n",
+        members
+            .iter()
+            .map(|member| format!("{member:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// Write the generated packages, the stand-in core and the test binding into one
+/// workspace, as a consumer would hold them, and build the program.
 fn build(application: &ServerApplication, core_source: &str) -> Built {
     let directory = tempfile::tempdir().unwrap();
-    let core = directory.path().join("core");
+    let workspace = directory.path().join("workspace");
+    let core = workspace.join("core");
     std::fs::create_dir_all(core.join("src")).unwrap();
     std::fs::write(
         core.join("Cargo.toml"),
@@ -336,29 +421,38 @@ fn build(application: &ServerApplication, core_source: &str) -> Built {
     )
     .unwrap();
     std::fs::write(core.join("src/lib.rs"), format!("{PRELUDE}{core_source}")).unwrap();
-    let package = directory.path().join("host");
+    std::fs::write(
+        workspace.join("Cargo.toml"),
+        format!("{}\n[profile.dev]\ndebug = 0\n", members(application)),
+    )
+    .unwrap();
     let generated = generate(application).unwrap();
     for item in &generated.files {
-        let path = package.join(&item.path);
+        let path = workspace.join(&item.path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let bytes = if item.path == "Cargo.toml" {
+        let bytes = if item.path.ends_with(&format!("{}/Cargo.toml", program_name(application))) {
             // The generated dependency is a locked registry version; the stand-in
             // core is a path dependency.
             let manifest = String::from_utf8(item.bytes.clone()).unwrap();
-            let (head, _) = manifest.split_once("[dependencies]").unwrap();
-            let (_, tail) = manifest.split_once("[profile.release]").unwrap();
-            format!(
-                "{head}[dependencies]\n{} = {{ path = \"../core\" }}\n\n[profile.release]{tail}",
-                application.core.package
-            )
-            .into_bytes()
+            let registry = format!(
+                "{} = {{ version = \"={}\" }}",
+                application.core.package, application.core.version
+            );
+            assert!(manifest.contains(&registry));
+            manifest
+                .replace(
+                    &registry,
+                    &format!("{} = {{ path = \"../core\" }}", application.core.package),
+                )
+                .into_bytes()
         } else {
             item.bytes.clone()
         };
         std::fs::write(path, bytes).unwrap();
     }
+    write_binding(&workspace, application);
     let target = directory.path().join("target");
-    let output = cargo(&["build", "--offline"], &package, &target);
+    let output = cargo(&["build", "--offline"], &workspace, &target);
     assert!(
         output.status.success(),
         "{}",
@@ -366,7 +460,7 @@ fn build(application: &ServerApplication, core_source: &str) -> Built {
     );
     Built {
         program: target.join("debug").join(program_name(application)),
-        package,
+        package: workspace,
         target,
         _directory: directory,
     }
@@ -425,32 +519,52 @@ fn generated_package_has_the_closed_file_set() {
     assert_eq!(
         paths,
         [
-            "Cargo.toml",
-            "src/acceptance.rs",
-            "src/exchange.rs",
-            "src/failure.rs",
-            "src/lib.rs",
-            "src/main.rs",
-            "src/protocol.rs",
-            "src/script.rs",
-            "src/surface.rs",
-            "src/wire.rs",
-            "tests/acceptance.rs",
+            "echo-core-host-api/Cargo.toml",
+            "echo-core-host-api/src/lib.rs",
+            "echo-core-host-api/src/protocol.rs",
+            "echo-core-host-api/src/wire.rs",
+            "echo-core-host/Cargo.toml",
+            "echo-core-host/src/acceptance.rs",
+            "echo-core-host/src/exchange.rs",
+            "echo-core-host/src/failure.rs",
+            "echo-core-host/src/lib.rs",
+            "echo-core-host/src/main.rs",
+            "echo-core-host/src/perform.rs",
+            "echo-core-host/src/script.rs",
+            "echo-core-host/src/surface.rs",
+            "echo-core-host/tests/acceptance.rs",
         ]
     );
-    let manifest = file(&package, "Cargo.toml");
+    let api = api_file(&package, "Cargo.toml");
+    assert!(api.contains("name = \"echo-core-host-api\""));
+    assert!(!api.contains("echo_core") && !api.contains("[[bin]]"));
+    assert_eq!(api_library_name(&model()), "echo_core_host_api");
+    assert_eq!(api_file(&package, "src/lib.rs").matches("pub mod ").count(), 2);
+    let manifest = host_file(&package, "Cargo.toml");
     assert!(manifest.contains("name = \"echo-core-host\""));
     assert!(manifest.contains("echo_core = { version = \"=0.1.0\" }"));
+    assert!(manifest.contains("echo-core-host-api = { path = \"../echo-core-host-api\" }"));
+    assert!(manifest.contains("echo-binding = { path = \"../bindings/echo-binding\" }"));
+    assert!(!manifest.contains("[profile"));
     assert_eq!(library_name(&model()), "echo_core_host");
-    assert!(file(&package, "src/exchange.rs").contains("echo_core::run(echo_core::Bytes::lit(&input))"));
-    assert!(file(&package, "src/main.rs").contains("use echo_core_host::"));
-    assert!(!file(&package, "src/main.rs").contains('@'));
+    assert!(host_file(&package, "src/exchange.rs").contains("echo_core::run(echo_core::Bytes::lit(&input))"));
+    let library = host_file(&package, "src/lib.rs");
+    assert!(library.contains("pub use echo_core_host_api::{protocol, wire};"));
+    // The driver package owns no effect type: it reaches them only through the API package.
+    assert!(!paths.iter().any(|path| path.starts_with("echo-core-host/") && path.ends_with("protocol.rs")));
+    let main = host_file(&package, "src/main.rs");
+    assert!(main.contains("use echo_core_host::"));
+    assert!(main.contains("<echo_binding::Native as Default>::default()"));
+    assert!(main.contains("Invocation::Run"));
+    assert!(!main.contains('@') && !main.contains("//@"));
+    assert!(host_file(&package, "src/surface.rs").find("BINDINGS").is_none());
+    assert!(host_file(&package, "tests/acceptance.rs").contains("linked::<echo_binding::Native>();"));
 }
 
 #[test]
 fn the_request_sum_and_host_trait_contain_exactly_the_declared_effects() {
     let package = generate(&model()).unwrap();
-    let protocol = file(&package, "src/protocol.rs");
+    let protocol = api_file(&package, "src/protocol.rs");
     let (_, sum) = protocol.split_once("pub enum Request {").unwrap();
     let (sum, _) = sum.split_once('}').unwrap();
     let variants = sum
@@ -485,10 +599,16 @@ fn an_application_without_effects_renders_the_plain_frame_function() {
     let plain: ServerApplication = serde_json::from_value(value).unwrap();
     validate(&plain).unwrap();
     let package = generate(&plain).unwrap();
-    let protocol = file(&package, "src/protocol.rs");
+    let protocol = api_file(&package, "src/protocol.rs");
     assert!(protocol.contains("pub enum Request {\n}"));
     assert!(protocol.contains("pub const EFFECTS: &[&str] = &[\n];"));
-    assert!(file(&package, "src/surface.rs").contains("pub const EFFECT_BUDGET: usize = 0;"));
+    assert!(host_file(&package, "src/surface.rs").contains("pub const EFFECT_BUDGET: usize = 0;"));
+    // No effect, no binding: the program has no `run` command and links nothing.
+    let main = host_file(&package, "src/main.rs");
+    assert!(!main.contains("Invocation::Run") && !main.contains("Default>::default"));
+    assert!(!host_file(&package, "Cargo.toml").contains("binding"));
+    assert!(!host_file(&package, "tests/acceptance.rs").contains("linked"));
+    assert!(!help(&plain).contains("run [FILE]"));
 }
 
 #[test]
@@ -506,7 +626,7 @@ fn help_is_derived_only_from_the_declaration() {
 #[test]
 fn the_generated_suite_and_program_tests_pass_against_the_core() {
     let built = built();
-    let output = cargo(&["test", "--offline"], &built.package, &built.target);
+    let output = cargo(&["test", "--offline", "--workspace"], &built.package, &built.target);
     let text = String::from_utf8_lossy(&output.stdout).into_owned();
     assert!(output.status.success(), "{text}\n{}", stderr(&output));
     for name in [
@@ -516,6 +636,7 @@ fn the_generated_suite_and_program_tests_pass_against_the_core() {
         "a_root_cannot_step_outside_the_protocol",
         "the_effect_budget_bounds_every_exchange",
         "the_scripted_host_refuses_a_script_that_does_not_match",
+        "the_declared_binding_implements_the_host_trait",
     ] {
         assert!(text.contains(&format!("{name} ... ok")), "{name}\n{text}");
     }
@@ -525,11 +646,13 @@ fn the_generated_suite_and_program_tests_pass_against_the_core() {
 fn the_program_accepts_every_vector_over_a_file_and_standard_input() {
     let built = built();
     let work = tempfile::tempdir().unwrap();
-    let record = acceptance::execute(&model(), &built.program, work.path()).unwrap();
+    let record = acceptance::execute(&model(), &built.program, work.path(), false).unwrap();
     assert_eq!(record["schema"], acceptance::SCHEMA);
     assert_eq!(record["status"], "verified");
     assert_eq!(record["vectors"], 5);
     assert_eq!(record["steps"], 6);
+    assert_eq!(record["binding"], Value::Null);
+    assert_eq!(record["transports"], json!(["file", "stdin"]));
     assert_eq!(
         record["effects"],
         json!([
@@ -542,6 +665,161 @@ fn the_program_accepts_every_vector_over_a_file_and_standard_input() {
 }
 
 #[test]
+fn the_linked_binding_serves_every_vector_without_a_script() {
+    let built = built();
+    let work = tempfile::tempdir().unwrap();
+    let record = acceptance::execute(&model(), &built.program, work.path(), true).unwrap();
+    assert_eq!(record["status"], "verified");
+    assert_eq!(record["binding"], "echo-binding");
+    assert_eq!(record["transports"], json!(["file", "stdin", "binding"]));
+    // The binding refuses nothing the modeled vectors ask for, and the scripted
+    // transports of the same record agree with it.
+    assert_eq!(record["vectors"], 5);
+    let request = script_file(work.path(), "binding.request", b"t");
+    let output = run(&built.program, &["run", request.to_str().unwrap()], b"");
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert_eq!(output.stdout, b"time:42");
+    let output = run(&built.program, &["run"], b"gk");
+    assert_eq!(output.stdout, b"found:v");
+    // Without a binding there is nothing to ask for.
+    let mut value = model_value();
+    value["host"]["effect_budget"] = json!(0);
+    value["host"]["effects"] = json!([]);
+    value["host"]["transcripts"] = json!([]);
+    value["bindings"] = json!([]);
+    let plain: ServerApplication = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        acceptance::execute(&plain, &built.program, work.path(), true)
+            .unwrap_err()
+            .code,
+        "PP2012"
+    );
+}
+
+#[test]
+fn a_binding_that_cannot_run_an_effect_exits_with_the_fault_code() {
+    let built = built();
+    let output = run(&built.program, &["run"], b"gz");
+    assert_eq!(code(&output), FAULT);
+    assert!(output.stdout.is_empty());
+    assert!(stderr(&output).contains("HostFault"), "{}", stderr(&output));
+    let output = run(&built.program, &["run", "a", "b"], b"");
+    assert_eq!(code(&output), USAGE);
+    assert!(stderr(&output).contains("ExtraArgument"));
+    let output = run(&built.program, &["run", "/nonexistent/request"], b"");
+    assert_eq!(code(&output), IO);
+    assert!(stderr(&output).contains("InputMissing"));
+}
+
+/// A workspace with the generated members listed and the test binding written,
+/// without building anything.
+fn scratch(application: &ServerApplication) -> tempfile::TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("Cargo.toml"), members(application)).unwrap();
+    for generated in [api_name(application), program_name(application)] {
+        std::fs::create_dir_all(directory.path().join(generated)).unwrap();
+    }
+    write_binding(directory.path(), application);
+    directory
+}
+
+fn binding_manifest(directory: &tempfile::TempDir) -> PathBuf {
+    directory.path().join("bindings/echo-binding/Cargo.toml")
+}
+
+#[test]
+fn the_workspace_holds_the_declared_binding_or_the_declaration_is_refused() {
+    let application = model();
+    workspace::verify(&application, scratch(&application).path()).unwrap();
+    let refused = |directory: &tempfile::TempDir| {
+        let error = workspace::verify(&application, directory.path()).unwrap_err();
+        assert_eq!(error.code, "PP2012");
+        error.message
+    };
+
+    // The generated packages and the binding are listed exactly.
+    for omitted in ["echo-core-host-api", "echo-core-host", "bindings/echo-binding"] {
+        let directory = scratch(&application);
+        let manifest = std::fs::read_to_string(directory.path().join("Cargo.toml")).unwrap();
+        let listed = manifest.replace(&format!("{omitted:?}"), "\"elsewhere\"");
+        std::fs::write(directory.path().join("Cargo.toml"), listed).unwrap();
+        assert!(refused(&directory).contains(omitted));
+    }
+    let directory = scratch(&application);
+    std::fs::write(
+        directory.path().join("Cargo.toml"),
+        "[workspace]\nmembers = [\"echo-core-host-api\", \"echo-core-host\", \"bindings/*\"]\n",
+    )
+    .unwrap();
+    assert!(refused(&directory).contains("bindings/echo-binding"));
+
+    // The crate at the path is the declared one.
+    let directory = scratch(&application);
+    let manifest = std::fs::read_to_string(binding_manifest(&directory)).unwrap();
+    std::fs::write(
+        binding_manifest(&directory),
+        manifest.replace("name = \"echo-binding\"", "name = \"other-binding\""),
+    )
+    .unwrap();
+    assert!(refused(&directory).contains("is not named echo-binding"));
+    let directory = scratch(&application);
+    std::fs::write(
+        binding_manifest(&directory),
+        manifest.replace("[dependencies]", "[lib]\nname = \"other\"\n\n[dependencies]"),
+    )
+    .unwrap();
+    assert!(refused(&directory).contains("library"));
+    let directory = scratch(&application);
+    std::fs::remove_file(binding_manifest(&directory)).unwrap();
+    refused(&directory);
+
+    // It depends on the generated API package, and on nothing but crates.io and the workspace.
+    let directory = scratch(&application);
+    std::fs::write(
+        binding_manifest(&directory),
+        "[package]\nname = \"echo-binding\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = \"1\"\n",
+    )
+    .unwrap();
+    assert!(refused(&directory).contains("does not depend on the generated echo-core-host-api"));
+    for foreign in [
+        "other = { git = \"https://example.invalid/other\" }",
+        "other = { version = \"1\", registry = \"private\" }",
+        "other = { path = \"../../../outside\" }",
+    ] {
+        let directory = scratch(&application);
+        let mut changed = manifest.clone();
+        changed.push_str(foreign);
+        changed.push('\n');
+        std::fs::write(binding_manifest(&directory), changed).unwrap();
+        refused(&directory);
+    }
+    let directory = scratch(&application);
+    let mut changed = manifest.clone();
+    changed.push_str("serde = { version = \"1\", features = [\"derive\"] }\nsibling = { path = \"../sibling\" }\n");
+    std::fs::create_dir_all(directory.path().join("bindings/sibling")).unwrap();
+    std::fs::write(binding_manifest(&directory), changed).unwrap();
+    workspace::verify(&application, directory.path()).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_binding_directory_cannot_resolve_outside_the_workspace() {
+    let application = model();
+    let outside = scratch(&application);
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("Cargo.toml"), members(&application)).unwrap();
+    std::fs::create_dir_all(directory.path().join("bindings")).unwrap();
+    std::os::unix::fs::symlink(
+        outside.path().join("bindings/echo-binding"),
+        directory.path().join("bindings/echo-binding"),
+    )
+    .unwrap();
+    let error = workspace::verify(&application, directory.path()).unwrap_err();
+    assert_eq!(error.code, "PP2012");
+    assert!(error.message.contains("outside the workspace"), "{}", error.message);
+}
+
+#[test]
 fn acceptance_refuses_a_response_that_differs_from_the_model() {
     let built = built();
     let work = tempfile::tempdir().unwrap();
@@ -549,7 +827,7 @@ fn acceptance_refuses_a_response_that_differs_from_the_model() {
     value["acceptance_vectors"][0]["response"] = json!(b"other".to_vec());
     let changed: ServerApplication = serde_json::from_value(value).unwrap();
     assert_eq!(
-        acceptance::execute(&changed, &built.program, work.path())
+        acceptance::execute(&changed, &built.program, work.path(), false)
             .unwrap_err()
             .code,
         "PP6003"
