@@ -858,7 +858,10 @@ pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, Pri
         (format!("{api}/src/lib.rs"), API_LIBRARY.to_owned()),
         (format!("{api}/src/wire.rs"), WIRE.to_owned()),
         (format!("{api}/src/protocol.rs"), protocol(application)),
-        (format!("{name}/Cargo.toml"), package(&name, &dependencies, true)),
+        (
+            format!("{name}/Cargo.toml"),
+            package(&name, &dependencies, true),
+        ),
         (format!("{name}/src/lib.rs"), library(application)),
         (format!("{name}/src/failure.rs"), FAILURE.to_owned()),
         (format!("{name}/src/exchange.rs"), exchange),

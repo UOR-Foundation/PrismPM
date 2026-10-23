@@ -59,7 +59,12 @@ pub fn verify(application: &ServerApplication, workspace: &Path) -> Result<(), P
         })
         .ok_or_else(|| mismatch("the workspace manifest lists no members"))?;
     let mut required = vec![api_name(application), program_name(application)];
-    required.extend(application.bindings.iter().map(|binding| binding.path.clone()));
+    required.extend(
+        application
+            .bindings
+            .iter()
+            .map(|binding| binding.path.clone()),
+    );
     for path in required {
         // Members are listed exactly: a glob could admit a directory nobody declared.
         if !members.contains(&path) {
@@ -87,9 +92,7 @@ pub fn verify(application: &ServerApplication, workspace: &Path) -> Result<(), P
             .and_then(toml::Value::as_str)
         {
             if name != binding.crate_name.replace('-', "_") {
-                return Err(mismatch(
-                    "the binding library is not named after its crate",
-                ));
+                return Err(mismatch("the binding library is not named after its crate"));
             }
         }
         let api = api_name(application);

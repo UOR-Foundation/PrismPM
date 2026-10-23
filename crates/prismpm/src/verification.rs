@@ -838,7 +838,9 @@ pub(crate) fn validate_hologram_oracle_report(
         Application::Browser(_) => {
             return crate::holo::browser_application::require_runtime(application)
         }
-        Application::Server(_) => return crate::holo::server_application::require_build(application),
+        Application::Server(_) => {
+            return crate::holo::server_application::require_build(application)
+        }
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
             "utf8-text"

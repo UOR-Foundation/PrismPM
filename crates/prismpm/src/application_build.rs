@@ -423,7 +423,10 @@ fn application_view(
             }
             Application::Server(_) => {
                 crate::holo::server_application::require_build(application)?;
-                return Err(PrismError::new("PP9001", "server applications have no view"));
+                return Err(PrismError::new(
+                    "PP9001",
+                    "server applications have no view",
+                ));
             }
             Application::Legacy(application) => {
                 let evaluated = view_value(model, application, core_sha);

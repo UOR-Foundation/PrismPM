@@ -306,9 +306,9 @@ fn workspace_path(value: &str, reserved: &[String]) -> bool {
         && parts.len() <= 8
         && parts.iter().all(|part| {
             !part.is_empty()
-                && part.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
-                })
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
                 && !part.starts_with('.')
         })
         && !["target", "node_modules"].contains(&parts[0])
@@ -332,9 +332,7 @@ fn bindings(value: &ServerApplication) -> Result<(), PrismError> {
                 .first()
                 .is_some_and(u8::is_ascii_lowercase)
             || !binding.crate_name.bytes().all(|byte| {
-                byte.is_ascii_lowercase()
-                    || byte.is_ascii_digit()
-                    || matches!(byte, b'-' | b'_')
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
             })
             || !rust_path(&binding.host)
             || binding.host.split("::").next() != Some(name.as_str())

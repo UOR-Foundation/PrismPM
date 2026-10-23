@@ -12,7 +12,10 @@ fn run(root: &Path, id: &str, arguments: &[&str]) -> String {
         .args(["--", "--nocapture", "--test-threads=1"])
         // The outer conformance Cargo owner may retain its target lock; use a
         // disjoint target for the owning suites.
-        .env("CARGO_TARGET_DIR", root.join("target/conformance-server-host"))
+        .env(
+            "CARGO_TARGET_DIR",
+            root.join("target/conformance-server-host"),
+        )
         .output()
         .expect("the owning suites execute");
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 owning stdout");

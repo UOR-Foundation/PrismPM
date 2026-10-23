@@ -6,7 +6,9 @@
 //! registered failure. A second, rogue core requests an effect the declaration
 //! does not contain: the program must refuse it.
 
-use super::{acceptance, api_library_name, api_name, generate, help, library_name, program_name, workspace};
+use super::{
+    acceptance, api_library_name, api_name, generate, help, library_name, program_name, workspace,
+};
 use crate::holo::server_application::wire::{
     encode_fields, encode_outcome, Outcome, Value as Wire,
 };
@@ -394,7 +396,12 @@ fn write_binding(workspace: &Path, application: &ServerApplication) {
 
 fn members(application: &ServerApplication) -> String {
     let mut members = vec![api_name(application), program_name(application)];
-    members.extend(application.bindings.iter().map(|binding| binding.path.clone()));
+    members.extend(
+        application
+            .bindings
+            .iter()
+            .map(|binding| binding.path.clone()),
+    );
     format!(
         "[workspace]\nresolver = \"2\"\nmembers = [{}]\n",
         members
@@ -430,7 +437,10 @@ fn build(application: &ServerApplication, core_source: &str) -> Built {
     for item in &generated.files {
         let path = workspace.join(&item.path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let bytes = if item.path.ends_with(&format!("{}/Cargo.toml", program_name(application))) {
+        let bytes = if item
+            .path
+            .ends_with(&format!("{}/Cargo.toml", program_name(application)))
+        {
             // The generated dependency is a locked registry version; the stand-in
             // core is a path dependency.
             let manifest = String::from_utf8(item.bytes.clone()).unwrap();
@@ -539,7 +549,10 @@ fn generated_package_has_the_closed_file_set() {
     assert!(api.contains("name = \"echo-core-host-api\""));
     assert!(!api.contains("echo_core") && !api.contains("[[bin]]"));
     assert_eq!(api_library_name(&model()), "echo_core_host_api");
-    assert_eq!(api_file(&package, "src/lib.rs").matches("pub mod ").count(), 2);
+    assert_eq!(
+        api_file(&package, "src/lib.rs").matches("pub mod ").count(),
+        2
+    );
     let manifest = host_file(&package, "Cargo.toml");
     assert!(manifest.contains("name = \"echo-core-host\""));
     assert!(manifest.contains("echo_core = { version = \"=0.1.0\" }"));
@@ -547,18 +560,25 @@ fn generated_package_has_the_closed_file_set() {
     assert!(manifest.contains("echo-binding = { path = \"../bindings/echo-binding\" }"));
     assert!(!manifest.contains("[profile"));
     assert_eq!(library_name(&model()), "echo_core_host");
-    assert!(host_file(&package, "src/exchange.rs").contains("echo_core::run(echo_core::Bytes::lit(&input))"));
+    assert!(host_file(&package, "src/exchange.rs")
+        .contains("echo_core::run(echo_core::Bytes::lit(&input))"));
     let library = host_file(&package, "src/lib.rs");
     assert!(library.contains("pub use echo_core_host_api::{protocol, wire};"));
     // The driver package owns no effect type: it reaches them only through the API package.
-    assert!(!paths.iter().any(|path| path.starts_with("echo-core-host/") && path.ends_with("protocol.rs")));
+    assert!(!paths
+        .iter()
+        .any(|path| path.starts_with("echo-core-host/") && path.ends_with("protocol.rs")));
     let main = host_file(&package, "src/main.rs");
     assert!(main.contains("use echo_core_host::"));
     assert!(main.contains("<echo_binding::Native as Default>::default()"));
     assert!(main.contains("Invocation::Run"));
     assert!(!main.contains('@') && !main.contains("//@"));
-    assert!(host_file(&package, "src/surface.rs").find("BINDINGS").is_none());
-    assert!(host_file(&package, "tests/acceptance.rs").contains("linked::<echo_binding::Native>();"));
+    assert!(host_file(&package, "src/surface.rs")
+        .find("BINDINGS")
+        .is_none());
+    assert!(
+        host_file(&package, "tests/acceptance.rs").contains("linked::<echo_binding::Native>();")
+    );
 }
 
 #[test]
@@ -626,7 +646,11 @@ fn help_is_derived_only_from_the_declaration() {
 #[test]
 fn the_generated_suite_and_program_tests_pass_against_the_core() {
     let built = built();
-    let output = cargo(&["test", "--offline", "--workspace"], &built.package, &built.target);
+    let output = cargo(
+        &["test", "--offline", "--workspace"],
+        &built.package,
+        &built.target,
+    );
     let text = String::from_utf8_lossy(&output.stdout).into_owned();
     assert!(output.status.success(), "{text}\n{}", stderr(&output));
     for name in [
@@ -738,7 +762,11 @@ fn the_workspace_holds_the_declared_binding_or_the_declaration_is_refused() {
     };
 
     // The generated packages and the binding are listed exactly.
-    for omitted in ["echo-core-host-api", "echo-core-host", "bindings/echo-binding"] {
+    for omitted in [
+        "echo-core-host-api",
+        "echo-core-host",
+        "bindings/echo-binding",
+    ] {
         let directory = scratch(&application);
         let manifest = std::fs::read_to_string(directory.path().join("Cargo.toml")).unwrap();
         let listed = manifest.replace(&format!("{omitted:?}"), "\"elsewhere\"");
@@ -765,7 +793,10 @@ fn the_workspace_holds_the_declared_binding_or_the_declaration_is_refused() {
     let directory = scratch(&application);
     std::fs::write(
         binding_manifest(&directory),
-        manifest.replace("[dependencies]", "[lib]\nname = \"other\"\n\n[dependencies]"),
+        manifest.replace(
+            "[dependencies]",
+            "[lib]\nname = \"other\"\n\n[dependencies]",
+        ),
     )
     .unwrap();
     assert!(refused(&directory).contains("library"));
@@ -816,7 +847,11 @@ fn a_binding_directory_cannot_resolve_outside_the_workspace() {
     .unwrap();
     let error = workspace::verify(&application, directory.path()).unwrap_err();
     assert_eq!(error.code, "PP2012");
-    assert!(error.message.contains("outside the workspace"), "{}", error.message);
+    assert!(
+        error.message.contains("outside the workspace"),
+        "{}",
+        error.message
+    );
 }
 
 #[test]

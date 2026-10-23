@@ -159,17 +159,58 @@ fn server_contract_roundtrips_and_requires_the_closed_declaration() {
         unknown.pointer_mut(parent).unwrap()[name] = json!(1);
         assert!(!schema().is_valid(&unknown), "{pointer}");
         assert!(
-            prismpm::contracts::CanonicalDocument::from_value(
-                "prismpm/model-document/7",
-                unknown
-            )
-            .is_err(),
+            prismpm::contracts::CanonicalDocument::from_value("prismpm/model-document/7", unknown)
+                .is_err(),
             "{pointer}"
         );
     }
     let mut kind = value;
     kind["application"]["host"]["effects"][0]["request"][0]["kind"] = json!("u128");
     assert!(!schema().is_valid(&kind));
+}
+
+/// Facet records of the shared stdlib document: a real, cross-referenced set of
+/// `Foundation.Arch`, `Foundation.Sec` and `Foundation.Qual` rows with their closure.
+fn with_facets(mut value: Value) -> Value {
+    let facets: Value = serde_json::from_slice(
+        &std::fs::read(root().join("tests/golden/stdlib/build/model.prism.json")).unwrap(),
+    )
+    .unwrap();
+    for key in ["architecture", "security", "quality", "standards_profile"] {
+        value[key] = facets[key].clone();
+    }
+    value["provenance"]["facet_packages"] = facets["provenance"]["facet_packages"].clone();
+    value
+}
+
+fn refusal(value: Value) -> String {
+    prismpm::holo::validate::validate(&typed(value))
+        .unwrap_err()
+        .code
+        .to_string()
+}
+
+#[test]
+fn server_document_carries_application_owned_facet_records_like_the_other_profiles() {
+    let value = with_facets(fixture());
+    assert!(!value["security"]["assets"].as_array().unwrap().is_empty());
+    assert!(schema().is_valid(&value));
+    let doc = typed(value.clone());
+    prismpm::holo::validate::validate(&doc).unwrap();
+    let bytes = encode_canonical(&doc).unwrap();
+    assert_eq!(decode_canonical(&bytes).unwrap(), doc);
+
+    // Records without the exact facet closure are refused, as for every application.
+    let mut open = value.clone();
+    open["provenance"]["facet_packages"] = json!([]);
+    assert_eq!(refusal(open), "PP2001");
+    let mut short = value.clone();
+    short["standards_profile"].as_array_mut().unwrap().pop();
+    assert_eq!(refusal(short), "PP2001");
+    // A record that the schema does not describe is refused by the schema.
+    let mut unknown = value;
+    unknown["security"]["assets"][0]["unlisted"] = json!(1);
+    assert!(!schema().is_valid(&unknown));
 }
 
 #[test]
@@ -187,9 +228,15 @@ fn server_contract_rejects_every_invalid_declaration() {
         })
         .collect::<Vec<_>>();
     let mutations: Vec<(&str, Value)> = vec![
-        ("/application/profile", json!("prismpm/server-application/2")),
+        (
+            "/application/profile",
+            json!("prismpm/server-application/2"),
+        ),
         ("/application/profile", json!("prismpm/text-application/3")),
-        ("/application/host/protocol", json!("prismpm/host-effects/2")),
+        (
+            "/application/host/protocol",
+            json!("prismpm/host-effects/2"),
+        ),
         ("/application/request_maximum", json!(0)),
         ("/application/request_maximum", json!(64 * 1024 * 1024 + 1)),
         ("/application/response_maximum", json!(0)),
@@ -212,13 +259,25 @@ fn server_contract_rejects_every_invalid_declaration() {
             ]),
         ),
         ("/application/bindings/0/crate_name", json!("Binding")),
-        ("/application/bindings/0/crate_name", json!("server-probe-host")),
-        ("/application/bindings/0/crate_name", json!("server_probe_core")),
-        ("/application/bindings/0/crate_name", json!("server-probe-host-api")),
+        (
+            "/application/bindings/0/crate_name",
+            json!("server-probe-host"),
+        ),
+        (
+            "/application/bindings/0/crate_name",
+            json!("server_probe_core"),
+        ),
+        (
+            "/application/bindings/0/crate_name",
+            json!("server-probe-host-api"),
+        ),
         ("/application/bindings/0/path", json!("")),
         ("/application/bindings/0/path", json!("/abs/path")),
         ("/application/bindings/0/path", json!("../outside")),
-        ("/application/bindings/0/path", json!("bindings/../../outside")),
+        (
+            "/application/bindings/0/path",
+            json!("bindings/../../outside"),
+        ),
         ("/application/bindings/0/path", json!("bindings/./b")),
         ("/application/bindings/0/path", json!("bindings//b")),
         ("/application/bindings/0/path", json!("bindings/b/")),
@@ -226,13 +285,22 @@ fn server_contract_rejects_every_invalid_declaration() {
         ("/application/bindings/0/path", json!(".hidden/b")),
         ("/application/bindings/0/path", json!("target/debug/b")),
         ("/application/bindings/0/path", json!("server-probe-host")),
-        ("/application/bindings/0/path", json!("server-probe-host-api/binding")),
+        (
+            "/application/bindings/0/path",
+            json!("server-probe-host-api/binding"),
+        ),
         ("/application/bindings/0/path", json!("a/b/c/d/e/f/g/h/i")),
-        ("/application/bindings/0/host", json!("other_binding::Native")),
+        (
+            "/application/bindings/0/host",
+            json!("other_binding::Native"),
+        ),
         ("/application/bindings/0/host", json!("Native")),
         ("/application/bindings/0/host", json!("binding::fn")),
         ("/application/bindings/0/host", json!("binding::")),
-        ("/application/bindings/0/host", json!("binding::Native; evil")),
+        (
+            "/application/bindings/0/host",
+            json!("binding::Native; evil"),
+        ),
         ("/application/host/description", json!("  \n")),
         ("/application/host/description", json!("bell\u{7}")),
         ("/application/host/usage_code", json!(74)),
@@ -256,22 +324,34 @@ fn server_contract_rejects_every_invalid_declaration() {
         ("/application/host/effects/0/request/0/name", json!("Key")),
         ("/application/host/effects/0/request/0/name", json!("self")),
         ("/application/host/effects/0/request/0/name", json!("limit")),
-        ("/application/host/effects/0/request/0/name", json!("trailing_")),
-        ("/application/host/effects/0/request/0/name", json!("double__score")),
+        (
+            "/application/host/effects/0/request/0/name",
+            json!("trailing_"),
+        ),
+        (
+            "/application/host/effects/0/request/0/name",
+            json!("double__score"),
+        ),
         ("/application/host/effects/0/result/0/name", json!("note")),
         ("/application/host/effects/0/failures/0", json!("Denied")),
         ("/application/host/effects/0/failures/0", json!("self")),
-        ("/application/host/effects/0/failures/0", json!("unavailable")),
+        (
+            "/application/host/effects/0/failures/0",
+            json!("unavailable"),
+        ),
         ("/application/host/effects/0/request_maximum", json!(0)),
         ("/application/host/effects/0/request_maximum", json!(7)),
-        ("/application/host/effects/0/request_maximum", json!(16 * 1024 * 1024 + 1)),
-        ("/application/host/effects/0/result_maximum", json!(7)),
-        ("/application/host/effects/0/result_maximum", json!(16 * 1024 * 1024 + 1)),
-        ("/application/host/effects/1/result_maximum", json!(11)),
         (
-            "/application/host/effects/1/request_maximum",
-            json!(0),
+            "/application/host/effects/0/request_maximum",
+            json!(16 * 1024 * 1024 + 1),
         ),
+        ("/application/host/effects/0/result_maximum", json!(7)),
+        (
+            "/application/host/effects/0/result_maximum",
+            json!(16 * 1024 * 1024 + 1),
+        ),
+        ("/application/host/effects/1/result_maximum", json!(11)),
+        ("/application/host/effects/1/request_maximum", json!(0)),
         ("/application/host/transcripts/0/vector", json!(1)),
         ("/application/host/transcripts/0/vector", json!(2)),
         ("/application/host/transcripts/0/steps", json!([])),
@@ -283,13 +363,34 @@ fn server_contract_rejects_every_invalid_declaration() {
                 {"effect": "clock.now", "request": [], "outcome": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]}
             ]),
         ),
-        ("/application/host/transcripts/0/steps/0/effect", json!("store.put")),
-        ("/application/host/transcripts/0/steps/0/request", json!([0, 0, 0, 1, 107, 0, 0, 0])),
-        ("/application/host/transcripts/0/steps/0/request", json!([0, 0, 0, 1, 107, 0, 0, 0, 7, 0])),
-        ("/application/host/transcripts/0/steps/0/outcome", json!([0, 0, 0, 2])),
-        ("/application/host/transcripts/0/steps/0/outcome", json!([0, 0, 0, 0, 2, 0, 0, 0, 0])),
-        ("/application/host/transcripts/0/steps/0/outcome", json!([0, 0, 0, 1, 0, 0, 0, 2])),
-        ("/application/host/transcripts/0/steps/0/outcome", json!([0, 0, 0, 0, 1, 0, 0, 0, 1, 0xff])),
+        (
+            "/application/host/transcripts/0/steps/0/effect",
+            json!("store.put"),
+        ),
+        (
+            "/application/host/transcripts/0/steps/0/request",
+            json!([0, 0, 0, 1, 107, 0, 0, 0]),
+        ),
+        (
+            "/application/host/transcripts/0/steps/0/request",
+            json!([0, 0, 0, 1, 107, 0, 0, 0, 7, 0]),
+        ),
+        (
+            "/application/host/transcripts/0/steps/0/outcome",
+            json!([0, 0, 0, 2]),
+        ),
+        (
+            "/application/host/transcripts/0/steps/0/outcome",
+            json!([0, 0, 0, 0, 2, 0, 0, 0, 0]),
+        ),
+        (
+            "/application/host/transcripts/0/steps/0/outcome",
+            json!([0, 0, 0, 1, 0, 0, 0, 2]),
+        ),
+        (
+            "/application/host/transcripts/0/steps/0/outcome",
+            json!([0, 0, 0, 0, 1, 0, 0, 0, 1, 0xff]),
+        ),
         ("/application/acceptance_vectors", json!([])),
         (
             "/application/acceptance_vectors",
@@ -532,7 +633,10 @@ fn notation(application: &Value) -> String {
                         ("request", fields(&effect["request"])),
                         ("result", fields(&effect["result"])),
                         ("failures", texts(&effect["failures"])),
-                        ("requestMaximum", number(&effect["request_maximum"], "UInt32")),
+                        (
+                            "requestMaximum",
+                            number(&effect["request_maximum"], "UInt32"),
+                        ),
                         ("resultMaximum", number(&effect["result_maximum"], "UInt32")),
                     ],
                 )
@@ -644,8 +748,14 @@ fn notation(application: &Value) -> String {
             ("cargoHomepage", text(&application["cargo_homepage"])),
             ("core", core),
             ("acceptanceVectors", vectors),
-            ("requestMaximum", number(&application["request_maximum"], "UInt32")),
-            ("responseMaximum", number(&application["response_maximum"], "UInt32")),
+            (
+                "requestMaximum",
+                number(&application["request_maximum"], "UInt32"),
+            ),
+            (
+                "responseMaximum",
+                number(&application["response_maximum"], "UInt32"),
+            ),
             ("bindings", bindings),
             ("host", protocol),
         ],
@@ -733,7 +843,10 @@ fn server_application_projects_only_from_the_exact_source_owned_type() {
     assert!(schema().is_valid(&serde_json::to_value(&doc).unwrap()));
     assert_eq!(project(&source, MODEL).unwrap(), doc);
 
-    let wrong_profile = source.replace("prismpm/server-application/1", "prismpm/server-application/2");
+    let wrong_profile = source.replace(
+        "prismpm/server-application/1",
+        "prismpm/server-application/2",
+    );
     assert_eq!(project(&wrong_profile, MODEL).unwrap_err().code, "PP2012");
     let foreign = source.replace(MODEL, "Foreign.Server.Model");
     assert_eq!(
@@ -741,7 +854,10 @@ fn server_application_projects_only_from_the_exact_source_owned_type() {
         "PP2012"
     );
     // A transcript step that names an undeclared effect is refused when the source is projected.
-    let undeclared = source.replace("\"clock.now\", request := 0x", "\"clock.tick\", request := 0x");
+    let undeclared = source.replace(
+        "\"clock.now\", request := 0x",
+        "\"clock.tick\", request := 0x",
+    );
     assert_eq!(project(&undeclared, MODEL).unwrap_err().code, "PP2012");
     // The entry root must be a definition of the sources.
     let missing = source.replace("name: dispatch,", "name: other,");
