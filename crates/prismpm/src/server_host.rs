@@ -22,6 +22,8 @@ use std::fmt::Write as _;
 
 pub mod acceptance;
 #[cfg(test)]
+mod serving_tests;
+#[cfg(test)]
 mod tests;
 pub mod workspace;
 

@@ -5,6 +5,7 @@
 //! acceptance run (`crate::server_host`) are separate obligations.
 
 mod model;
+mod serving;
 mod source;
 pub mod wire;
 
