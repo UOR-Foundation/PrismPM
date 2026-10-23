@@ -3088,9 +3088,9 @@ binding/coverage and planted source guards; public `PP2011` remains unchanged.
 
 ### 12.15 Server applications and host effects
 
-HO-19 owns the closed source declaration
+HO-21 owns the closed source declaration
 `Foundation.Server.V1.Model.ServerApplication`, profile
-`prismpm/server-application/1`, projected as `prismpm/model-document/7`. HO-20
+`prismpm/server-application/1`, projected as `prismpm/model-document/7`. HO-22
 owns the host adapter generated from it. A server application is a native-only
 application: its core is a LexLean production package that stays pure. It has
 no View, Core-Wasm guest or Holo archive, and its request and response are
@@ -3717,8 +3717,9 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. | §3 |
 | `HO-18` | `holo` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. | §3 |
-| `HO-19` | `holo` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. | §3 |
-| `HO-20` | `holo` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. | §3 |
+| `HO-20` | `holo` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. | §3 |
+| `HO-21` | `holo` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. | §3 |
+| `HO-22` | `holo` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |

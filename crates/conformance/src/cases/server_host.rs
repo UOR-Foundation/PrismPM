@@ -1,4 +1,4 @@
-//! HO-19 and HO-20: the declared host effects of a server application, their
+//! HO-21 and HO-22: the declared host effects of a server application, their
 //! closed validation, and the generated host adapter that executes them.
 
 use std::path::Path;
@@ -42,20 +42,20 @@ fn require(id: &str, output: &str, names: &[&str]) {
     }
 }
 
-/// HO-19: declaration, projection, validation and canonical encoding.
+/// HO-21: declaration, projection, validation and canonical encoding.
 pub(super) fn verify_declaration(root: &Path) {
-    let library = run(root, "HO-19", &["--lib", "server_application"]);
+    let library = run(root, "HO-21", &["--lib", "server_application"]);
     require(
-        "HO-19",
+        "HO-21",
         &library,
         &[
             "values_round_trip_through_their_declared_kinds",
             "malformed_values_are_refused_with_their_reason",
         ],
     );
-    let contract = run(root, "HO-19", &["--test", "server_application_contract"]);
+    let contract = run(root, "HO-21", &["--test", "server_application_contract"]);
     require(
-        "HO-19",
+        "HO-21",
         &contract,
         &[
             "server_contract_roundtrips_and_requires_the_closed_declaration",
@@ -67,11 +67,11 @@ pub(super) fn verify_declaration(root: &Path) {
     );
 }
 
-/// HO-20: the generated adapter, its acceptance suite and its program.
+/// HO-22: the generated adapter, its acceptance suite and its program.
 pub(super) fn verify_adapter(root: &Path) {
-    let library = run(root, "HO-20", &["--lib", "server_host"]);
+    let library = run(root, "HO-22", &["--lib", "server_host"]);
     require(
-        "HO-20",
+        "HO-22",
         &library,
         &[
             "the_request_sum_and_host_trait_contain_exactly_the_declared_effects",
