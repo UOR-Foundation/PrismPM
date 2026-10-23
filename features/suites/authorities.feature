@@ -41,3 +41,15 @@ Feature: authorities
     Given the locked PrismPM production fixture
     When the AU-07 contract is exercised
     Then its positive evidence passes and its planted defect is rejected
+
+  @AU-08 @build
+  Scenario: MCP 2026-07-28 is bound as an interface kind to its specification, schema, tasks extension, conformance suite and MCP Apps authorities, with the schema oracle and the server conformance oracle as separate evidence kinds, and a locked suite whose requirements file differs from the frozen one is refused.
+    Given the locked PrismPM production fixture
+    When the AU-08 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected
+
+  @AU-09 @build
+  Scenario: The MCP schema oracle and the MCP server conformance oracle execute in the networkless sandbox against positive and planted subjects, and a conformance build with one required scenario failing is rejected with the oracle's diagnostic.
+    Given the locked PrismPM production fixture
+    When the AU-09 contract is exercised
+    Then its positive evidence passes and its planted defect is rejected

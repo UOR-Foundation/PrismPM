@@ -322,6 +322,22 @@ impl Model {
                     a.id
                 )));
             }
+            if a.frozen_members.iter().any(|member| {
+                member.path.is_empty()
+                    || member.path.starts_with('/')
+                    || member
+                        .path
+                        .split('/')
+                        .any(|part| part.is_empty() || part == "..")
+                    || member.sha256.len() != 64
+                    || !member
+                        .sha256
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            }) || (!fetched && !a.frozen_members.is_empty())
+            {
+                return Err(bad(format!("{}: invalid frozen archive member", a.id)));
+            }
             let signed_tag = a.signature.starts_with("signed-tag-object:");
             let trust_root_valid = a.signature_trust_root.as_ref().is_some_and(|root| {
                 matches!(root.algorithm.as_str(), "openpgp" | "ssh")

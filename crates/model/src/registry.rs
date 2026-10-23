@@ -173,6 +173,19 @@ pub struct AuthorityRow {
     pub statement: String,
     /// Realized capability IDs.
     pub realized_by: Vec<String>,
+    /// Archive members whose exact bytes are frozen by the binding.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frozen_members: Vec<FrozenMember>,
+}
+
+/// A file inside an acquired archive whose bytes must equal a frozen digest.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FrozenMember {
+    /// Archive-relative path, without the archive's single top-level directory.
+    pub path: String,
+    /// SHA-256 of the frozen member bytes.
+    pub sha256: String,
 }
 
 /// An upstream-maintained public key selected for independent offline tag verification.

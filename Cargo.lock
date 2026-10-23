@@ -1095,6 +1095,7 @@ dependencies = [
  "camino",
  "clap",
  "ctrlc",
+ "flate2",
  "fs4",
  "jsonschema",
  "lexlean",

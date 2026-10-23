@@ -1341,6 +1341,67 @@ compiled defects for invalid acceptance, wrong editions and unstable capture.
 Changed compiled schema bytes must produce an unavailable-oracle refusal.
 Source-only registration or a locally overridden engine cannot accept it.
 
+### 10.2 MCP 2026-07-28 interface kind
+
+AU-08 owns the authority bindings and AU-09 the oracle executions of the `Mcp`
+interface kind (`Production.Interface.InterfaceKind`, system-model interface
+kind `mcp`, protocol `mcp-http-2026-07-28`; a kind without that protocol, or the
+protocol on another kind, is `PP2101`).
+
+Four authorities are bound, each at an exact revision. `MCP-2026-07-28` is the
+specification repository at commit `80041ab0a139a8f4fb3adbc99f7ae9113ea59671`,
+whose `schema/2026-07-28/schema.ts` and `schema.json` are its normative schema.
+`MCP-TASKS-SEP-2663` is SEP-2663 (`seps/2663-tasks-extension.md`, Final) at the
+same commit; the tasks extension lies outside the core schema. `MCP-CONFORMANCE-232A9014`
+is the conformance suite at commit `232a9014457eaf4c59559916e3d616d2f7f28f05`,
+the oracle and corpus. `MCP-APPS-2026-01-26` is `specification/2026-01-26/apps.mdx`
+of ext-apps at commit `298e884ec3f02daba085acdb02042d73bd00b355`. MCP Apps has
+no executable oracle, so its coverage is `not-executable`; no conformance claim
+is made for it.
+
+The suite's `requirements/2026-07-28.yaml` is frozen by the authority binding
+itself: the row lists it as a frozen archive member with SHA-256
+`ae2f4f6210fd729e2e318edd5bbfa31a43cee0bc608e48052fa26dbf1d939b57`. `fetch`
+refuses an archive whose member differs before publishing it to the cache, and
+`authority verify` refuses a cached archive whose member differs, both with
+`PP5402`, even when the archive's own digest was locked. A locked suite whose
+requirements file was edited is therefore a different suite, not a newer
+revision of this one.
+
+Two oracles run in the sandbox of AU-05, network denied (loopback exists inside
+the sandbox only), each with its own evidence kind and attestation:
+
+- `mcp-schema-2026-07-28` (`mcp-schema-validator`) takes a
+  `prismpm/mcp-transcript/1` document, a list of JSON-RPC messages with their
+  direction, and validates every message with Ajv against the pinned
+  `schema.json`: the message as a JSON-RPC object, requests and notifications
+  against the definition their method names, a response against the definition
+  of the request it answers (`*ResultResponse`), and an error against the typed
+  error definition for its code. Exit 1 is a transcript the schema rejects, and
+  its diagnostic names the message index, the definition and the schema
+  location. It does not assert `format` keywords, does not cover the tasks
+  extension methods, and says nothing about server behavior beyond the recorded
+  messages.
+- `mcp-conformance-server-2026-07-28` (`mcp-conformance-server`) takes a
+  directory holding `prismpm-mcp-subject.json` and the server's Node program,
+  starts it on loopback with `PORT` set, and runs the suite's
+  `server --url ... --requirements 2026-07-28` runner built from the vendored
+  upstream sources. The verdict is read from the per-scenario check files, not
+  from the runner's exit status, because the runner also exits 1 for harness
+  errors: the 37 required scenarios must all pass, and the 13 unscored ones
+  (ten tasks-extension and three pending) must run and are reported. A failing
+  required scenario is exit 1 and the diagnostic is `scenario: check id:
+  message` for each failing check; a suite, requirements file or scenario set
+  that differs from the frozen one is exit 2, an unavailable oracle (`PP5403`).
+  It does not cover stdio servers, resource-server authorization scenarios or
+  MCP Apps.
+
+The two verdicts are never merged: each oracle emits its own attestation, named
+for its oracle, and neither implies the other. Requiring both attestations from
+`prismpm verify` for a model that declares an `mcp` interface is not yet wired
+into release assembly. That wiring needs an application build that produces a
+transcript and a server subject, and it is not part of AU-08 or AU-09.
+
 ## 11. Production system model and projections
 
 `prismpm/system-model/1` is a closed projection of one LexLean semantic graph.
@@ -3664,6 +3725,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
 | `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
 | `AU-07` | `authorities` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. | §10 |
+| `AU-08` | `authorities` | MCP 2026-07-28 is bound as an interface kind to its specification, schema, tasks extension, conformance suite and MCP Apps authorities, with the schema oracle and the server conformance oracle as separate evidence kinds, and a locked suite whose requirements file differs from the frozen one is refused. | §10 |
+| `AU-09` | `authorities` | The MCP schema oracle and the MCP server conformance oracle execute in the networkless sandbox against positive and planted subjects, and a conformance build with one required scenario failing is rejected with the oracle's diagnostic. | §10 |
 | `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
 | `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
 | `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |

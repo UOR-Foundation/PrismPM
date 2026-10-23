@@ -1189,6 +1189,16 @@ pub fn validate(value: &Value, manifest: &Value) -> Result<(), PrismError> {
         &schemas,
         "interface document",
     )?;
+    // MCP 2026-07-28 is one interface kind with one protocol binding. A model
+    // that names either without the other would be checked by neither oracle.
+    for interface in value["interfaces"].as_array().into_iter().flatten() {
+        if (interface["kind"] == "mcp") != (interface["protocol"] == "mcp-http-2026-07-28") {
+            return Err(PrismError::new(
+                "PP2101",
+                "an mcp interface must use the mcp-http-2026-07-28 protocol, and that protocol only an mcp interface",
+            ));
+        }
+    }
     require_refs(
         value["interfaces"].as_array().unwrap(),
         "acceptance",

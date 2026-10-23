@@ -10,6 +10,7 @@ public inductive InterfaceKind where
   | OpenApi
   | AsyncApi
   | CloudEvents
+  | Mcp
   | Internal
 
 public inductive Delivery where
