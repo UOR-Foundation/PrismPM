@@ -382,7 +382,7 @@ fn server_specimen() -> Value {
         "cargo_homepage":"https://github.com/UOR-Foundation/PrismPM",
         "acceptance_vectors":[{"request":[97],"response":[98]}],
         "core":{"root":"ServerContract.Probe.dispatch","package":"server_contract_core","version":"0.1.0"},
-        "bindings":[{"crate_name":"server-contract-binding","version":"0.1.0","host":"server_contract_binding::Native"}],
+        "bindings":[{"path":"bindings/server-contract-binding","crate_name":"server-contract-binding","host":"server_contract_binding::Native"}],
         "request_maximum":8,
         "response_maximum":8,
         "host":{
