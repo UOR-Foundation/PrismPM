@@ -470,7 +470,7 @@ pub(super) fn build_with(
     }
 }
 
-fn built() -> &'static Built {
+pub(super) fn built() -> &'static Built {
     static BUILT: OnceLock<Built> = OnceLock::new();
     BUILT.get_or_init(|| build(&model(), CORE))
 }
@@ -674,9 +674,9 @@ fn the_program_accepts_every_vector_over_a_file_and_standard_input() {
     assert_eq!(
         record["effects"],
         json!([
-            {"name": "store.get", "steps": 4},
-            {"name": "clock.now", "steps": 1},
-            {"name": "log.write", "steps": 1}
+            {"name": "store.get", "role": "core", "served": 0, "steps": 4},
+            {"name": "clock.now", "role": "core", "served": 0, "steps": 1},
+            {"name": "log.write", "role": "core", "served": 0, "steps": 1}
         ])
     );
     assert_eq!(record["program_sha256"].as_str().unwrap().len(), 64);

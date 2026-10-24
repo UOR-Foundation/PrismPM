@@ -119,6 +119,12 @@ The LexLean compiler refuses to export the declared core of a server application
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2021` --- Server effect not exercised
+
+The acceptance of a server application observes a declared host effect that no vector reaches: a core effect that no replayed transcript step requests, or an effect that fills the request frame and no served exchange reaches.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

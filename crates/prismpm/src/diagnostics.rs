@@ -43,6 +43,7 @@ enum Rule {
     ServedApplication,
     ServerCore,
     ServerBuild,
+    ServerEffects,
 }
 
 impl Rule {
@@ -69,6 +70,15 @@ impl Rule {
             Self::ServerCore => (
                 json!({"root": "Probe.Probe.run", "effects": ["allocation", "overflow"]}),
                 json!({"root": "Probe.Probe.run", "effects": ["allocation", "recursion"]}),
+            ),
+            Self::ServerEffects => (
+                json!({"effects": [
+                    {"name": "store.get", "role": "core", "steps": 1, "served": 0},
+                    {"name": "tool.calls", "role": "frame", "steps": 0, "served": 2}
+                ]}),
+                json!({"effects": [
+                    {"name": "store.get", "role": "core", "steps": 0, "served": 0}
+                ]}),
             ),
             Self::ServedApplication => {
                 let valid = served_specimen();
@@ -155,6 +165,7 @@ impl Rule {
                 validate_server_specimen(value).is_ok()
             }
             Self::ServerCore => validate_server_core(value).is_ok(),
+            Self::ServerEffects => validate_server_effects(value).is_ok(),
             Self::ServerBuild => validate_server_build(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
@@ -277,6 +288,7 @@ probes!(
     ),
     ("PP2019", "invalid-serving-declaration", ServedApplication),
     ("PP2020", "server-core-build-refused", ServerCore),
+    ("PP2021", "server-effect-not-exercised", ServerEffects),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -462,6 +474,35 @@ fn validate_server_core(value: &Value) -> Result<(), PrismError> {
     crate::server_build::admit_effects(root, &effects)
 }
 
+fn validate_server_effects(value: &Value) -> Result<(), PrismError> {
+    use crate::server_host::acceptance::{require_exercised, Exercise, Role};
+    let specimen = || PrismError::new("PP2021", "invalid server effects specimen");
+    let rows = value["effects"]
+        .as_array()
+        .ok_or_else(specimen)?
+        .iter()
+        .map(|row| {
+            let count = |key: &str| {
+                row[key]
+                    .as_u64()
+                    .and_then(|count| usize::try_from(count).ok())
+            };
+            Some(Exercise {
+                name: row["name"].as_str()?.to_owned(),
+                role: match row["role"].as_str()? {
+                    "core" => Role::Core,
+                    "frame" => Role::Frame,
+                    _ => return None,
+                },
+                steps: count("steps")?,
+                served: count("served")?,
+            })
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(specimen)?;
+    require_exercised(&rows)
+}
+
 fn validate_server_build(value: &Value) -> Result<(), PrismError> {
     let declaration = serde_json::from_value(value.clone())
         .map_err(|_| PrismError::new("PP2013", "invalid server build specimen"))?;
@@ -486,6 +527,9 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::ServerCore) {
         return validate_server_core(value);
+    }
+    if matches!(spec.rule, Rule::ServerEffects) {
+        return validate_server_effects(value);
     }
     if matches!(spec.rule, Rule::ServerBuild) {
         return validate_server_build(value);
