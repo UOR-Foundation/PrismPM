@@ -6,17 +6,24 @@ use std::path::Path;
 
 /// HO-26: `prismpm verify` of the example server, and its refusals.
 pub(super) fn verify_verify(root: &Path) {
+    let library = run(root, "HO-26", &["--lib", "server_host::verify_tests"]);
+    require(
+        "HO-26",
+        &library,
+        &[
+            "a_replayed_vector_with_a_wrong_effect_result_is_refused",
+            "a_served_exchange_whose_response_differs_is_refused",
+            "a_workspace_without_the_declared_binding_or_its_lock_is_refused",
+            "host_packages_equal_to_their_regeneration_are_accepted",
+            "host_packages_that_differ_from_their_regeneration_are_refused",
+            "staging_lays_the_consumers_files_beside_the_build_and_nothing_else",
+        ],
+    );
     let contract = run(root, "HO-26", &["--test", "server_verification"]);
     require(
         "HO-26",
         &contract,
-        &[
-            "verify_of_the_example_server_runs_the_application_acceptance",
-            "a_workspace_without_the_declared_binding_or_its_lock_is_refused",
-            "host_packages_that_differ_from_their_regeneration_are_refused",
-            "a_replayed_vector_with_a_wrong_effect_result_is_refused",
-            "a_served_exchange_whose_response_differs_is_refused",
-        ],
+        &["verify_of_the_example_server_runs_the_application_acceptance"],
     );
 }
 

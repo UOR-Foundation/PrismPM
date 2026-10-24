@@ -27,6 +27,8 @@ mod exercise_tests;
 pub(crate) mod serving_tests;
 #[cfg(test)]
 pub(crate) mod tests;
+#[cfg(test)]
+mod verify_tests;
 pub mod workspace;
 
 const WIRE: &str = include_str!("server_host/wire.rs.in");

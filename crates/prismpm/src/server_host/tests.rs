@@ -377,7 +377,7 @@ impl Host for Native {
 }
 "#;
 
-fn write_binding(workspace: &Path, application: &ServerApplication, source: &str) {
+pub(super) fn write_binding(workspace: &Path, application: &ServerApplication, source: &str) {
     for binding in &application.bindings {
         let directory = workspace.join(&binding.path);
         std::fs::create_dir_all(directory.join("src")).unwrap();
@@ -395,7 +395,7 @@ fn write_binding(workspace: &Path, application: &ServerApplication, source: &str
     }
 }
 
-fn members(application: &ServerApplication) -> String {
+pub(super) fn members(application: &ServerApplication) -> String {
     let mut members = vec![
         application.core.package.clone(),
         api_name(application),
@@ -731,7 +731,7 @@ fn a_binding_that_cannot_run_an_effect_exits_with_the_fault_code() {
 
 /// A workspace with the generated members listed and the test binding written,
 /// without building anything.
-fn scratch(application: &ServerApplication) -> tempfile::TempDir {
+pub(super) fn scratch(application: &ServerApplication) -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     std::fs::write(directory.path().join("Cargo.toml"), members(application)).unwrap();
     for generated in [

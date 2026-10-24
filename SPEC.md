@@ -3155,8 +3155,7 @@ request for it, in order, with the host's encoded outcome for each. Validation
 decodes every request and outcome with the reference codec, and refuses a
 declaration in which some declared effect is requested by no transcript step.
 
-The verification of a server application is refused with PP2014; its build is
-12.15.3. What exists is the declaration and `prismpm::server_host::generate`,
+The build of a server application is 12.15.3, and its verification is 12.15.4. What exists is the declaration and `prismpm::server_host::generate`,
 which renders two Cargo
 packages as members of the consumer's workspace, a fixed template composed with
 code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
@@ -3196,9 +3195,8 @@ binding, each vector also runs through `run`, the record names the binding and
 its transports gain `binding`; the scripted host stays the transcript's host. The
 generated driver package carries the same corpus and its own tests, including a
 check that the binding type implements `Host` and `Default`, and depends on the
-exported core package at its exact version. The record is not yet part of
-`application-acceptance.json`. `prismpm verify` and source-free release
-verification of a server application are outside this slice.
+exported core package at its exact version. `prismpm verify` publishes
+the record as part of `application-acceptance.json` (12.15.4).
 
 #### 12.15.1 Where HTTP/1.1 framing lives
 
@@ -3311,6 +3309,54 @@ project whose core echoes the body of a request and the count of counted
 requests the host reports, whose binding crate implements that one host effect,
 and whose served vectors are answered over a real loopback socket by the
 generated program.
+
+#### 12.15.4 The verification of a server application
+
+A server application has no View, no Core-Wasm guest and no archive, so
+`prismpm verify` does not run the projection oracle for it. It verifies the
+program that its published build produces (`prismpm::server_verification`),
+after the LexLean verification and the identity checks every application has, in
+this order, and refuses at the first check that fails:
+
+1. the build closure: every file of the build equals its manifest row and no
+   other file lies in the build;
+2. the core package: `server/production-result.json` is the canonical record its
+   identity names, it is about the verified source, semantic, compiler-semantics
+   and attestation identities, the package is the declared one and exhibits only
+   admitted effects (`PP2020` otherwise), and the files of the package equal the
+   compiler's rows with none missing and none added (`PP4001`);
+3. the host packages: `{cargo_name}-host-api` and `{cargo_name}-host` equal their
+   regeneration from the declaration byte for byte, and the build holds no file
+   that is neither generated nor the core package's or the compiler's record
+   (`PP4102`);
+4. the consumer's workspace: the project's `Cargo.toml`, its committed
+   `Cargo.lock`, an optional `rust-toolchain.toml` and every member the build
+   does not generate (the binding) are staged away from the project beside the
+   files of the build, nothing else of the working tree, and the staged workspace
+   is checked against the declared binding (`PP2013` for a missing manifest or
+   lock, a member that is a glob or leaves the project, a link or special file in
+   a member, or a workspace that does not hold the binding). The consumer's Cargo
+   workspace root is the Prism project root. It is built with
+   `cargo build --release --locked --offline --quiet` (`PP4103`), so the lock the
+   consumer committed is the lock that is built and nothing is acquired;
+5. the acceptance: every acceptance vector is replayed with its effect transcript
+   through the generated program over a request file and over standard input,
+   through the linked binding when one is declared, and every served vector is
+   sent over a loopback socket, each answered with the modeled bytes (`PP6003`);
+   a declared effect that no transcript step and no served exchange reaches is
+   refused with `PP2021`.
+
+The evidence is published under `verified/` as `application-acceptance.json`
+(`prismpm/application-acceptance/1`, with the record of 12.15 under `server` and
+the identities of the build, the core and the host packages), the LexLean
+attestation and a manifest that binds them to the build and records the
+workspace build. The digest of the program is not part of it: it depends on the
+host that built it.
+
+`PP2014` remains registered for the pipeline that verifies a server application
+from a release without its source; `prismpm verify` itself no longer raises it.
+The source-free release verification and the release assembly of a server
+application are outside this slice.
 
 ## 13. OCI product-release graph
 
