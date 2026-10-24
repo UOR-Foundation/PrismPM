@@ -421,6 +421,13 @@ fn application_view(
                 );
                 return Ok((generated?, model_id, view_model_id));
             }
+            Application::Server(_) => {
+                crate::holo::server_application::require_build(application)?;
+                return Err(PrismError::new(
+                    "PP9001",
+                    "server applications have no view",
+                ));
+            }
             Application::Legacy(application) => {
                 let evaluated = view_value(model, application, core_sha);
                 let generated = generate_view_v1(
@@ -507,8 +514,8 @@ fn package_readme(
     module: &prod_ir::Module,
     application: &Application,
 ) -> Result<String, PrismError> {
-    let entry = application
-        .entry_root()
+    let entry_root = application.entry_root();
+    let entry = entry_root
         .rsplit('.')
         .next()
         .expect("validated application entry root");
@@ -695,6 +702,7 @@ pub(crate) fn application_export_arguments(
             // Cargo identity, preserving the legacy Calculator's exact output.
             Application::Text(application) => application.cargo_name.replace('-', "_"),
             Application::Browser(application) => application.cargo_name.replace('-', "_"),
+            Application::Server(application) => application.cargo_name.replace('-', "_"),
         },
         "--out".to_owned(),
         export.to_string_lossy().into_owned(),
@@ -784,6 +792,7 @@ fn generate_in(
     if matches!(application, Application::Browser(_)) {
         crate::holo::browser_application::require_runtime(application)?;
     }
+    crate::holo::server_application::require_build(application)?;
     let stdlib: StdlibRelease = serde_json::from_str(STDLIB_RELEASE_SOURCE)
         .map_err(|error| PrismError::new("PP4101", format!("stdlib release: {error}")))?;
     if stdlib.schema != "prismpm/stdlib-release/1"
@@ -1071,8 +1080,8 @@ fn generate_in(
         ),
     );
 
-    let entry = application
-        .entry_root()
+    let entry_root = application.entry_root();
+    let entry = entry_root
         .rsplit('.')
         .next()
         .ok_or_else(|| PrismError::new("PP2001", "application entry root is malformed"))?;
