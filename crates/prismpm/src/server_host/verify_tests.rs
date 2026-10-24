@@ -99,7 +99,10 @@ fn host_packages_that_differ_from_their_regeneration_are_refused() {
 
     // A file the declaration does not generate.
     std::fs::write(&path, &original).unwrap();
-    let extra = directory.path().join(super::api_name(&application)).join("src/extra.rs");
+    let extra = directory
+        .path()
+        .join(super::api_name(&application))
+        .join("src/extra.rs");
     std::fs::write(&extra, b"pub fn backdoor() {}\n").unwrap();
     let error = check_generated(&application, directory.path(), &core).unwrap_err();
     assert_eq!(error.code, "PP4102", "{}", error.message);
@@ -108,7 +111,10 @@ fn host_packages_that_differ_from_their_regeneration_are_refused() {
     // A file in the core package that the compiler did not export.
     std::fs::remove_file(extra).unwrap();
     std::fs::write(
-        directory.path().join(&application.core.package).join("src/other.rs"),
+        directory
+            .path()
+            .join(&application.core.package)
+            .join("src/other.rs"),
         b"",
     )
     .unwrap();
@@ -121,7 +127,11 @@ fn host_packages_that_differ_from_their_regeneration_are_refused() {
 /// binding, with the generated packages not yet laid out.
 fn project(application: &ServerApplication) -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
-    std::fs::write(directory.path().join("Cargo.toml"), tests::members(application)).unwrap();
+    std::fs::write(
+        directory.path().join("Cargo.toml"),
+        tests::members(application),
+    )
+    .unwrap();
     std::fs::write(directory.path().join("Cargo.lock"), b"# lock\n").unwrap();
     tests::write_binding(directory.path(), application, "// binding\n");
     directory
@@ -140,7 +150,11 @@ fn staging_lays_the_consumers_files_beside_the_build_and_nothing_else() {
     // Files of the working tree that the build does not own are not the consumer's workspace.
     std::fs::write(project.path().join("notes.txt"), b"private").unwrap();
     std::fs::create_dir_all(project.path().join("bindings/echo-binding/target")).unwrap();
-    std::fs::write(project.path().join("bindings/echo-binding/target/stale"), b"").unwrap();
+    std::fs::write(
+        project.path().join("bindings/echo-binding/target/stale"),
+        b"",
+    )
+    .unwrap();
     let server = build_below(&application);
     // The compiler's record names the build; it is not a workspace file.
     std::fs::write(server.path().join("production-result.json"), b"{}").unwrap();
@@ -151,9 +165,17 @@ fn staging_lays_the_consumers_files_beside_the_build_and_nothing_else() {
         std::fs::read(destination.join("Cargo.lock")).unwrap(),
         b"# lock\n"
     );
-    assert!(destination.join("bindings/echo-binding/src/lib.rs").is_file());
-    assert!(destination.join(super::api_name(&application)).join("Cargo.toml").is_file());
-    assert!(destination.join(&application.core.package).join("src/lib.rs").is_file());
+    assert!(destination
+        .join("bindings/echo-binding/src/lib.rs")
+        .is_file());
+    assert!(destination
+        .join(super::api_name(&application))
+        .join("Cargo.toml")
+        .is_file());
+    assert!(destination
+        .join(&application.core.package)
+        .join("src/lib.rs")
+        .is_file());
     assert!(!destination.join("notes.txt").exists());
     assert!(!destination.join("production-result.json").exists());
     assert!(!destination.join("bindings/echo-binding/target").exists());
@@ -165,8 +187,13 @@ fn a_workspace_without_the_declared_binding_or_its_lock_is_refused() {
     let server = build_below(&application);
     let stage = |project: &Path| {
         let staged = tempfile::tempdir().unwrap();
-        workspace::stage(&application, project, server.path(), &staged.path().join("w"))
-            .expect_err("the workspace is refused")
+        workspace::stage(
+            &application,
+            project,
+            server.path(),
+            &staged.path().join("w"),
+        )
+        .expect_err("the workspace is refused")
     };
 
     // The consumer commits the lock; verification does not make one.
@@ -186,7 +213,11 @@ fn a_workspace_without_the_declared_binding_or_its_lock_is_refused() {
     let renamed = project(&application);
     let manifest = renamed.path().join("bindings/echo-binding/Cargo.toml");
     let text = std::fs::read_to_string(&manifest).unwrap();
-    std::fs::write(&manifest, text.replace("name = \"echo-binding\"", "name = \"other\"")).unwrap();
+    std::fs::write(
+        &manifest,
+        text.replace("name = \"echo-binding\"", "name = \"other\""),
+    )
+    .unwrap();
     let error = stage(renamed.path());
     assert_eq!(error.code, "PP2013", "{}", error.message);
     assert!(error.message.contains("echo-binding"), "{}", error.message);
@@ -196,7 +227,10 @@ fn a_workspace_without_the_declared_binding_or_its_lock_is_refused() {
     let text = std::fs::read_to_string(escaping.path().join("Cargo.toml")).unwrap();
     std::fs::write(
         escaping.path().join("Cargo.toml"),
-        text.replace("\"bindings/echo-binding\"", "\"../outside\", \"bindings/echo-binding\""),
+        text.replace(
+            "\"bindings/echo-binding\"",
+            "\"../outside\", \"bindings/echo-binding\"",
+        ),
     )
     .unwrap();
     let error = stage(escaping.path());
@@ -204,7 +238,11 @@ fn a_workspace_without_the_declared_binding_or_its_lock_is_refused() {
     assert!(error.message.contains("plain path"), "{}", error.message);
 
     let linked = project(&application);
-    std::os::unix::fs::symlink("/etc/hostname", linked.path().join("bindings/echo-binding/link")).unwrap();
+    std::os::unix::fs::symlink(
+        "/etc/hostname",
+        linked.path().join("bindings/echo-binding/link"),
+    )
+    .unwrap();
     let error = stage(linked.path());
     assert_eq!(error.code, "PP2013", "{}", error.message);
     assert!(error.message.contains("regular file"), "{}", error.message);

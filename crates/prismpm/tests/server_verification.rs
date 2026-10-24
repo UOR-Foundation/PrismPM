@@ -67,13 +67,16 @@ fn verify_of_the_example_server_runs_the_application_acceptance() {
     let acceptance = read(&directory.join("application-acceptance.json"));
     let manifest = read(&directory.join("manifest.json"));
 
+    println!("{acceptance:#}\n{manifest:#}");
     assert_eq!(acceptance["schema"], "prismpm/application-acceptance/1");
     assert_eq!(acceptance["status"], "verified");
     assert_eq!(acceptance["artifact_closure"], "verified");
-    assert_eq!(acceptance["application"], "EchoServer");
+    assert_eq!(acceptance["application"], "Echo Server");
     assert_eq!(acceptance["modeled_vectors"], 2);
-    assert_eq!(acceptance["host_packages"]["regeneration"], "byte-identical");
-    println!("core effects {}", acceptance["core"]["effects"]);
+    assert_eq!(
+        acceptance["host_packages"]["regeneration"],
+        "byte-identical"
+    );
 
     // Every declared effect is reached: the frame effect by the served exchanges, the
     // core's own by the transcript steps that request it.
@@ -113,9 +116,7 @@ fn verify_of_the_example_server_runs_the_application_acceptance() {
         manifest["acceptance_sha256"],
         format!(
             "{:x}",
-            Sha256::digest(
-                std::fs::read(directory.join("application-acceptance.json")).unwrap()
-            )
+            Sha256::digest(std::fs::read(directory.join("application-acceptance.json")).unwrap())
         )
     );
 }

@@ -69,7 +69,10 @@ fn files_below(directory: &Path) -> Result<BTreeMap<String, Vec<u8>>, PrismError
         if !entry.file_type().is_file() {
             return Err(PrismError::new(
                 "PP4001",
-                format!("{} is neither a regular file nor a directory", entry.path().display()),
+                format!(
+                    "{} is neither a regular file nor a directory",
+                    entry.path().display()
+                ),
             ));
         }
         let relative = entry
@@ -125,8 +128,16 @@ pub fn check_core(
         ));
     }
     for (what, recorded, verified) in [
-        ("source", result.source.source_id.to_string(), identities.source_id),
-        ("semantic", result.source.semantic_id.to_string(), identities.semantic_id),
+        (
+            "source",
+            result.source.source_id.to_string(),
+            identities.source_id,
+        ),
+        (
+            "semantic",
+            result.source.semantic_id.to_string(),
+            identities.semantic_id,
+        ),
         (
             "compiler semantics",
             result.compiler.semantics.to_string(),
@@ -141,7 +152,9 @@ pub fn check_core(
         if recorded != verified {
             return Err(PrismError::new(
                 "PP4001",
-                format!("the production result is about another {what} identity than the verified one"),
+                format!(
+                    "the production result is about another {what} identity than the verified one"
+                ),
             ));
         }
     }
@@ -154,12 +167,17 @@ pub fn check_core(
             .path
             .strip_prefix(&format!("{}/", package.directory))
             .ok_or_else(|| {
-                PrismError::new("PP2020", "a package file lies outside its package directory")
+                PrismError::new(
+                    "PP2020",
+                    "a package file lies outside its package directory",
+                )
             })?;
-        let bytes = found.remove(inside).ok_or_else(|| {
-            PrismError::new("PP4001", format!("the core package lacks {inside}"))
-        })?;
-        if bytes.len() as u64 != file.byte_length || sha256(&bytes) != file.sha256.to_string().as_str() {
+        let bytes = found
+            .remove(inside)
+            .ok_or_else(|| PrismError::new("PP4001", format!("the core package lacks {inside}")))?;
+        if bytes.len() as u64 != file.byte_length
+            || sha256(&bytes) != file.sha256.to_string().as_str()
+        {
             return Err(PrismError::new(
                 "PP4001",
                 format!("the core package file {inside} differs from the compiler's record"),
@@ -346,8 +364,14 @@ pub(crate) fn run(mut context: ServerVerification<'_>) -> Result<VerifyResult, P
         &context.config.output_root(context.project_root)?,
         &attestation_id,
         &[
-            ("application-acceptance.json".to_owned(), acceptance_document),
-            ("lexlean-attestation.json".to_owned(), context.lex_attestation),
+            (
+                "application-acceptance.json".to_owned(),
+                acceptance_document,
+            ),
+            (
+                "lexlean-attestation.json".to_owned(),
+                context.lex_attestation,
+            ),
             ("manifest.json".to_owned(), manifest),
         ],
     )?;
