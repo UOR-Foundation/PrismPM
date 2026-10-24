@@ -22,9 +22,13 @@ use std::fmt::Write as _;
 
 pub mod acceptance;
 #[cfg(test)]
+mod exercise_tests;
+#[cfg(test)]
 pub(crate) mod serving_tests;
 #[cfg(test)]
 pub(crate) mod tests;
+#[cfg(test)]
+mod verify_tests;
 pub mod workspace;
 
 const WIRE: &str = include_str!("server_host/wire.rs.in");

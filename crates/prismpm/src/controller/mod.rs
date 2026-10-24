@@ -259,6 +259,9 @@ pub struct CleanResult {
 struct Prepared {
     config: ProjectConfig,
     engine: Engine,
+    /// The LexLean project directory and its configured build root.
+    lexlean_root: PathBuf,
+    lexlean_build_root: PathBuf,
     snapshot: lexlean::SemanticSnapshot,
     application_snapshot: Option<lexlean::SemanticSnapshot>,
     application_selection: Option<Selection>,
@@ -636,6 +639,8 @@ impl Controller {
         Ok(Prepared {
             config,
             engine,
+            lexlean_root: plan.lexlean_root.clone().into_std_path_buf(),
+            lexlean_build_root: plan.lexlean_build_root.clone().into_std_path_buf(),
             snapshot,
             application_snapshot,
             application_selection,
@@ -819,7 +824,10 @@ impl Controller {
             .ok_or_else(|| PrismError::new("PP9001", "LexLean build omitted its identity"))?
             .to_string();
         let output_root = prepared.config.output_root(&self.root)?;
-        let lex_root = self.root.join(".lexlean/build").join(&lex_build_id);
+        let lex_root = prepared
+            .lexlean_build_root
+            .join("build")
+            .join(&lex_build_id);
         let lex_manifest_path = lex_root.join("manifest.json");
         let lex_manifest_bytes = std::fs::read(&lex_manifest_path).map_err(|error| {
             PrismError::new(
@@ -872,9 +880,16 @@ impl Controller {
             ));
         }
         if prepared.model.application.is_some() {
-            let application_build = prepared
-                .application_selection
-                .as_ref()
+            // The core of a server application is not imported by its declaration, so
+            // the files of the declaration are not its source graph: its model is
+            // projected from the whole of it, and so is its application build.
+            let selection = prepared.application_selection.as_ref().filter(|_| {
+                !matches!(
+                    prepared.model.application,
+                    Some(crate::holo::model_document::Application::Server(_))
+                )
+            });
+            let application_build = selection
                 .map(|selection| {
                     prepared
                         .engine
@@ -895,7 +910,10 @@ impl Controller {
                 .as_ref()
                 .and_then(|result| result.build_id)
                 .map_or_else(|| lex_build_id.clone(), |id| id.to_string());
-            let application_lex_root = self.root.join(".lexlean/build").join(&application_build_id);
+            let application_lex_root = prepared
+                .lexlean_build_root
+                .join("build")
+                .join(&application_build_id);
             let application_lex_manifest =
                 std::fs::read(application_lex_root.join("manifest.json")).map_err(|error| {
                     PrismError::new("PP4002", format!("application LexLean manifest: {error}"))
@@ -949,13 +967,18 @@ impl Controller {
             // core is a certified package, the host adapter is generated around it.
             let server_artifacts = match &prepared.model.application {
                 Some(crate::holo::model_document::Application::Server(server)) => {
-                    Some(crate::server_build::artifacts(&crate::server_build::build(
-                        &prepared.engine,
-                        &prepared.snapshot,
-                        server,
-                        &self.root,
-                        prepared.config.limits.max_diagnostics,
-                    )?))
+                    let mut artifacts =
+                        crate::server_build::artifacts(&crate::server_build::build(
+                            &prepared.engine,
+                            &prepared.snapshot,
+                            server,
+                            &prepared.lexlean_root,
+                            prepared.config.limits.max_diagnostics,
+                        )?);
+                    // The consumer's workspace is part of the build, so that the
+                    // release holds everything the program is built from.
+                    artifacts.extend(crate::server_build::consumer_artifacts(server, &self.root)?);
+                    Some(artifacts)
                 }
                 _ => None,
             };

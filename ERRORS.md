@@ -131,12 +131,6 @@ A feature or journey is not a closed literal record, a feature statement is out 
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2022` --- Server application verification unavailable
-
-The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available.
-
-Class: `semantic`. Exit code: 1.
-
 ## `PP2019` --- Invalid serving declaration
 
 A server application's serving declaration names an address other than 127.0.0.1, a bound outside its closed range, an origin or media type that is not a valid value, a frame section that does not come from exactly one declared source, or a request frame that can exceed the exchange request maximum.
@@ -146,6 +140,12 @@ Class: `semantic`. Exit code: 1.
 ## `PP2020` --- Server core build refused
 
 The LexLean compiler refuses to export the declared core of a server application: the root is not a production root of the project, the project does not verify or changed while it was exported, or the exported package exhibits an effect the host adapter gives no bound for.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2021` --- Server effect not exercised
+
+The acceptance of a server application observes a declared host effect that no vector reaches: a core effect that no replayed transcript step requests, or an effect that fills the request frame and no served exchange reaches.
 
 Class: `semantic`. Exit code: 1.
 

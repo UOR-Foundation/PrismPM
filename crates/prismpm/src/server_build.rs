@@ -12,13 +12,15 @@
 //! The result is a set of files relative to the consumer's Cargo workspace root:
 //! the core package under its crate name, and the two generated packages of the
 //! host adapter. The workspace manifest, the binding crate and the release
-//! profile stay the consumer's own (`server_host::workspace::verify`).
+//! profile stay the consumer's own (`server_host::workspace::verify`), and the
+//! build retains them beside the packages ([`consumer_artifacts`]), so that a
+//! release holds everything its program is built from.
 
 use crate::error::PrismError;
 use crate::holo::server_application::ServerApplication;
 use lexlean::api::production::{
-    self, Expectation, PackageName, ProductionRequest, ProductionResult, RootRequest, TargetRef,
-    REQUEST_SPEC,
+    self, Expectation, PackageName, ProductionRequest, ProductionResult, RootRequest, TargetOutput,
+    TargetRef, REQUEST_SPEC,
 };
 use lexlean::{Engine, SemanticSnapshot};
 use std::path::{Component, Path};
@@ -154,11 +156,16 @@ pub fn build(
     })
 }
 
-fn read_package(
+/// The output of the declared core in the one target, when the compiler's result
+/// holds the package the declaration names and it exhibits only admitted effects.
+///
+/// # Errors
+/// Returns `PP2020` for a result without that output, a package other than the
+/// declared one and an effect that is not admitted.
+pub fn core_output<'a>(
     application: &ServerApplication,
-    result: &ProductionResult,
-    bundle: &Path,
-) -> Result<Vec<(String, Vec<u8>)>, PrismError> {
+    result: &'a ProductionResult,
+) -> Result<&'a TargetOutput, PrismError> {
     let output = result
         .roots
         .iter()
@@ -176,6 +183,15 @@ fn read_package(
             "the exported package is not the one the declaration names",
         ));
     }
+    Ok(output)
+}
+
+fn read_package(
+    application: &ServerApplication,
+    result: &ProductionResult,
+    bundle: &Path,
+) -> Result<Vec<(String, Vec<u8>)>, PrismError> {
+    let package = &core_output(application, result)?.package;
     let mut files = Vec::new();
     for file in &package.files {
         let inside = file
@@ -201,6 +217,30 @@ pub fn artifacts(build: &ServerBuild) -> Vec<(String, Vec<u8>)> {
         .collect::<Vec<_>>();
     artifacts.push((format!("server/{RESULT_FILE}"), build.result.to_json()));
     artifacts
+}
+
+/// Where the build retains the consumer's own workspace files.
+pub const CONSUMER_DIRECTORY: &str = "consumer";
+
+/// The consumer's own workspace files of the project at `project`, as the build
+/// retains them under `consumer/`: its manifest, its committed lock, an optional
+/// toolchain pin and the members the build does not generate, the binding among
+/// them. A release carries them, so that the program can be built from the release
+/// alone.
+///
+/// # Errors
+/// Returns `PP2013` for a project that does not hold them as
+/// [`crate::server_host::workspace::consumer_files`] requires.
+pub fn consumer_artifacts(
+    application: &ServerApplication,
+    project: &Path,
+) -> Result<Vec<(String, Vec<u8>)>, PrismError> {
+    Ok(
+        crate::server_host::workspace::consumer_files(application, project)?
+            .into_iter()
+            .map(|(path, bytes)| (format!("{CONSUMER_DIRECTORY}/{path}"), bytes))
+            .collect(),
+    )
 }
 
 /// Write the files of a build under `workspace`, the consumer's workspace root.

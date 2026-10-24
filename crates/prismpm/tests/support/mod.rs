@@ -38,6 +38,7 @@ pub fn declaration() -> Value {
         "core": {"root": "ServerProbe.ServerProbe.dispatch", "package": "server_probe_core", "version": "0.1.0"},
         "bindings": [{"path": "bindings/server-probe-binding", "crate_name": "server-probe-binding", "host": "server_probe_binding::Native"}],
         "serving": [],
+        "verify_build_timeout_seconds": 1800,
         "request_maximum": 8,
         "response_maximum": 8,
         "host": {
@@ -328,6 +329,10 @@ pub fn notation(application: &Value) -> String {
             ),
             ("bindings", bindings),
             ("serving", serving),
+            (
+                "verifyBuildTimeoutSeconds",
+                number(&application["verify_build_timeout_seconds"], "UInt32"),
+            ),
             ("host", protocol),
         ],
     )

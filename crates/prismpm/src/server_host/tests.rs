@@ -253,6 +253,7 @@ pub(super) fn model_value() -> Value {
         "request_maximum": 16,
         "response_maximum": 64,
         "serving": [],
+        "verify_build_timeout_seconds": 1800,
         "host": {
             "protocol": "prismpm/host-effects/1",
             "description": "Replays a scripted host for one exchange.\n",
@@ -377,7 +378,7 @@ impl Host for Native {
 }
 "#;
 
-fn write_binding(workspace: &Path, application: &ServerApplication, source: &str) {
+pub(super) fn write_binding(workspace: &Path, application: &ServerApplication, source: &str) {
     for binding in &application.bindings {
         let directory = workspace.join(&binding.path);
         std::fs::create_dir_all(directory.join("src")).unwrap();
@@ -395,7 +396,7 @@ fn write_binding(workspace: &Path, application: &ServerApplication, source: &str
     }
 }
 
-fn members(application: &ServerApplication) -> String {
+pub(super) fn members(application: &ServerApplication) -> String {
     let mut members = vec![
         application.core.package.clone(),
         api_name(application),
@@ -470,7 +471,7 @@ pub(super) fn build_with(
     }
 }
 
-fn built() -> &'static Built {
+pub(super) fn built() -> &'static Built {
     static BUILT: OnceLock<Built> = OnceLock::new();
     BUILT.get_or_init(|| build(&model(), CORE))
 }
@@ -674,9 +675,9 @@ fn the_program_accepts_every_vector_over_a_file_and_standard_input() {
     assert_eq!(
         record["effects"],
         json!([
-            {"name": "store.get", "steps": 4},
-            {"name": "clock.now", "steps": 1},
-            {"name": "log.write", "steps": 1}
+            {"name": "store.get", "role": "core", "served": 0, "steps": 4},
+            {"name": "clock.now", "role": "core", "served": 0, "steps": 1},
+            {"name": "log.write", "role": "core", "served": 0, "steps": 1}
         ])
     );
     assert_eq!(record["program_sha256"].as_str().unwrap().len(), 64);
@@ -731,7 +732,7 @@ fn a_binding_that_cannot_run_an_effect_exits_with_the_fault_code() {
 
 /// A workspace with the generated members listed and the test binding written,
 /// without building anything.
-fn scratch(application: &ServerApplication) -> tempfile::TempDir {
+pub(super) fn scratch(application: &ServerApplication) -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     std::fs::write(directory.path().join("Cargo.toml"), members(application)).unwrap();
     for generated in [

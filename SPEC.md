@@ -3214,7 +3214,10 @@ no View, Core-Wasm guest or Holo archive, and its request and response are
 opaque frames whose meaning the core alone defines. The record holds the package
 metadata of a native library, the `core`, the finite exchange `acceptanceVectors`,
 the exchange maximums `requestMaximum` and `responseMaximum` (each 1 to 64 MiB),
-the `bindings` and one `host` record. Missing, null, mistyped or undeclared
+the `bindings`, the `serving` record when the application is served, the
+`verifyBuildTimeoutSeconds` that verification may give the build of the
+consumer's workspace (1 to 7200; a value outside it is refused with PP2013) and
+one `host` record. Missing, null, mistyped or undeclared
 fields, a server record under another profile or schema and a foreign type owner
 are rejected with PP2013 or PP2001.
 
@@ -3272,11 +3275,10 @@ request for it, in order, with the host's encoded outcome for each. Validation
 decodes every request and outcome with the reference codec, and refuses a
 declaration in which some declared effect is requested by no transcript step.
 
-The verification of a server application is refused with PP2022; its build is
-12.15.3. What exists is the declaration and `prismpm::server_host::generate`,
-which renders two Cargo
-packages as members of the consumer's workspace, a fixed template composed with
-code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
+The build of a server application is 12.15.3, its verification is 12.15.4 and its
+release is 12.15.5. `prismpm::server_host::generate` renders from the declaration
+two Cargo packages as members of the consumer's workspace, a fixed template
+composed with code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
 primitives, the closed `Request` sum with one variant per declared effect, the
 typed request, result and failure of each effect with its codec, and the `Host`
 trait with one method per effect. `{cargo_name}-host` holds the `Failure`
@@ -3313,9 +3315,8 @@ binding, each vector also runs through `run`, the record names the binding and
 its transports gain `binding`; the scripted host stays the transcript's host. The
 generated driver package carries the same corpus and its own tests, including a
 check that the binding type implements `Host` and `Default`, and depends on the
-exported core package at its exact version. The record is not yet part of
-`application-acceptance.json`. `prismpm verify` and source-free release
-verification of a server application are outside this slice.
+exported core package at its exact version. `prismpm verify` publishes
+the record as part of `application-acceptance.json` (12.15.4).
 
 #### 12.15.1 Where HTTP/1.1 framing lives
 
@@ -3414,7 +3415,13 @@ and lays it out, with the two generated host packages, under `server/` in the
 build artifacts together with the compiler's `production-result.json`. The
 generated driver depends on the core package by the path of its directory in the
 consumer's workspace. The workspace manifest, the binding crate and the release
-profile remain the consumer's, as in 12.15.
+profile remain the consumer's, as in 12.15, and the build retains them: the
+project's `Cargo.toml`, its committed `Cargo.lock`, an optional
+`rust-toolchain.toml` and every member the build does not generate (the binding)
+are artifacts of the build under `consumer/`, so that the build, and a release of
+it, hold everything the program is built from. A project without the manifest or
+the lock, a member that is a glob or leaves the project, or a link or special
+file in a member is refused with `PP2013`.
 
 The build is refused with `PP2020` when the compiler refuses the export: the
 root is not a production root of the project or does not declare the target, the
@@ -3428,6 +3435,106 @@ project whose core echoes the body of a request and the count of counted
 requests the host reports, whose binding crate implements that one host effect,
 and whose served vectors are answered over a real loopback socket by the
 generated program.
+
+#### 12.15.4 The verification of a server application
+
+A server application has no View, no Core-Wasm guest and no archive, so
+`prismpm verify` does not run the projection oracle for it. It verifies the
+program that its published build produces (`prismpm::server_verification`),
+after the LexLean verification and the identity checks every application has, in
+this order, and refuses at the first check that fails:
+
+1. the build closure: every file of the build equals its manifest row and no
+   other file lies in the build;
+2. the core package: `server/production-result.json` is the canonical record its
+   identity names, it is about the verified source, semantic, compiler-semantics
+   and attestation identities, the package is the declared one and exhibits only
+   admitted effects (`PP2020` otherwise), and the files of the package equal the
+   compiler's rows with none missing and none added (`PP4001`);
+3. the host packages: `{cargo_name}-host-api` and `{cargo_name}-host` equal their
+   regeneration from the declaration byte for byte, and the build holds no file
+   that is neither generated nor the core package's or the compiler's record
+   (`PP4102`);
+4. the consumer's workspace: the files that the build retains under `consumer/`
+   and the packages of the build under `server/` are laid out as one workspace,
+   from the build alone and from no file of the working tree, and the workspace
+   is checked against the declared binding (`PP2013` for a workspace that does
+   not list the generated packages and the binding as members or does not hold
+   the binding, and for a build that retains no consumer workspace). The
+   consumer's Cargo workspace root is the Prism project root. It is built with
+   `cargo build --release --locked --offline --quiet` (`PP4103`), so the lock the
+   consumer committed is the lock that is built and nothing is acquired. The
+   build runs under the `verifyBuildTimeoutSeconds` that the declaration states
+   and under no other bound, so that a core whose binding links a large crate
+   states the time it needs; a build that does not finish within it is refused
+   with `PP5007`, and the published evidence records the bound;
+5. the acceptance: every acceptance vector is replayed with its effect transcript
+   through the generated program over a request file and over standard input,
+   through the linked binding when one is declared, and every served vector is
+   sent over a loopback socket, each answered with the modeled bytes (`PP6003`);
+   a declared effect that no transcript step and no served exchange reaches is
+   refused with `PP2021`.
+
+The evidence is published under `verified/` as `application-acceptance.json`
+(`prismpm/application-acceptance/1`), the LexLean attestation and a manifest
+(`prismpm/server-verification-manifest/1`) that binds them to the build and
+records the toolchain and the workspace build. The acceptance document holds:
+
+- the identities of the build, of the verified source and of the LexLean
+  attestation;
+- `core`: the declared root, package name and version, the effects the package
+  exhibits, the identity of the compiler's record and `package_sha256`, the
+  digest of the files of the package;
+- `host_packages`: the names of the two generated packages and
+  `api_package_sha256` and `program_package_sha256`, the digests of their files,
+  with `regeneration` `byte-identical`;
+- `consumer`: the number of the consumer's files the build retains and
+  `sha256`, the digest of those files;
+- `bounds`: the exchange maxima, the effect budget, every bound of the listener
+  when the application is served, and `verify_build_timeout_seconds`;
+- `server`: the record of 12.15 of the acceptance.
+
+The digest of a set of files is the SHA-256 of the canonical, path-sorted rows of
+their relative path, byte length and SHA-256. The digest of the program is not
+part of the evidence: it depends on the host that built it.
+
+#### 12.15.5 The release of a server application
+
+The release of a server application is verified and replayed from its release
+files alone. The build files of the release hold `server/` (the core package, the
+two host packages and the compiler's record), `consumer/` (the consumer's
+workspace) and the LexLean files every application build holds; the retained
+verification directory holds the three files of 12.15.4.
+
+Release assembly (`prismpm build -t`) and every later source-free replay of the
+release graph (`prismpm::release_verification`) derive the acceptance document of
+12.15.4 from the model and the released files and require the retained document to
+be it, with no filesystem, subprocess or network. They refuse with `PP6101`:
+
+- a core package whose files differ from the compiler's record, a record that is
+  not the canonical one its identity names or that is about other identities than
+  the attested ones, and a package or an effect the declaration does not admit;
+- a host package that differs from its regeneration from the declaration, and a
+  file that no package generates;
+- a release that retains no consumer workspace, a consumer workspace that does not
+  hold the declared binding, and one whose digest differs from the recorded one;
+- recorded bounds that differ from the model;
+- an acceptance record that differs from the one the model determines (the
+  vectors, the transports, the served exchanges and what reached each declared
+  effect, `PP2021` when an effect is reached by none);
+- a release without the acceptance document, the attestation or the manifest,
+  and a manifest or toolchain record that is not the one `prismpm verify` writes.
+
+`prismpm replay-acceptance NAME@sha256:DIGEST` replays the acceptance against the
+released build. It verifies the release graph as every command that uses a
+release does, lays the workspace out from `consumer/` and `server/` in a
+temporary directory, builds it with `cargo build --release --locked --offline`
+under the recorded `verify_build_timeout_seconds` (`PP4103`, `PP5007`), answers
+every acceptance vector over a request file and over standard input, through the
+binding and every served vector over a loopback socket, and requires the record
+it observes to be the retained `server` record (`PP6003`). It writes nothing to the
+project or the release. A release of anything but a server application is
+refused with `PP6101`.
 
 ## 13. OCI product-release graph
 
@@ -3938,6 +4045,10 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-23` | `holo` | The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic. | §3 |
 | `HO-24` | `holo` | The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket. | §3 |
 | `HO-25` | `holo` | A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback. | §3 |
+| `HO-26` | `holo` | prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic. | §3 |
+| `HO-27` | `holo` | Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021. | §3 |
+| `HO-28` | `holo` | The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013. | §3 |
+| `HO-29` | `holo` | A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
@@ -3949,6 +4060,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `CT-09` | `controller` | Project configuration is strictly validated against schemas/project.schema.json. | §4 |
 | `CT-10` | `controller` | The Controller preserves cause chains for underlying LexLean diagnostics. | §4 |
 | `CT-11` | `controller` | Controller cleanup removes only the configured real output directory and rejects a symlink target. | §4 |
+| `CT-12` | `controller` | The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures. | §4 |
 | `ST-01` | `stdlib` | Prism-stdlib defines core ISO 42010 architectural primitives in Foundation.Arch. | §5 |
 | `ST-02` | `stdlib` | Prism-stdlib defines ISO 27034 security primitives in Foundation.Sec. | §5 |
 | `ST-03` | `stdlib` | Prism-stdlib defines ISO 27005 risk primitives in Foundation.Sec. | §5 |

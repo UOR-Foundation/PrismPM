@@ -107,8 +107,10 @@ The `Server` application profile declares and validates its host effects and gen
 (an API package and a driver package that links a workspace binding) with a scripted-host acceptance suite;
 the core of a server application is built through `production` (`PP2020` refuses an export the host
 adapter cannot bound), a served application listens on the loopback interface only and answers RFC 9112
-requests through the generated adapter, and verifying a server application is refused with `PP2022` until
-its source-free verification is complete.
+requests through the generated adapter, and `prismpm verify` of a server application builds the consumer's locked workspace
+around the production core and accepts the program (every vector with its effect transcript, the binding
+and the served exchanges); a release of one holds the consumer's workspace, assembly and every replay check its acceptance against the model and the released files,
+and `prismpm replay-acceptance` rebuilds the released program and answers every vector without the source.
 
 ## Development and acceptance
 

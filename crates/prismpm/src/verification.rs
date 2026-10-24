@@ -18,7 +18,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const CHILD_OUTPUT_LIMIT: usize = 16_777_216;
+pub(crate) const CHILD_OUTPUT_LIMIT: usize = 16_777_216;
 const CHILD_TIMEOUT_SECONDS: &str = "300";
 const GENERATED_NATIVE_BUILD_TIMEOUT_SECONDS: &str = "600";
 const ROOTS_SOURCE: &str = include_str!("../model/runtime-roots.toml");
@@ -799,7 +799,10 @@ pub(crate) fn validate_hologram_oracle_report(
                 return crate::holo::browser_application::require_runtime(application)
             }
             Application::Server(_) => {
-                return crate::holo::server_application::require_build(application)
+                return Err(PrismError::new(
+                    "PP9001",
+                    "a server application has no Hologram oracle",
+                ));
             }
             Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
             Application::Legacy(value) => {
@@ -839,7 +842,10 @@ pub(crate) fn validate_hologram_oracle_report(
             return crate::holo::browser_application::require_runtime(application)
         }
         Application::Server(_) => {
-            return crate::holo::server_application::require_build(application)
+            return Err(PrismError::new(
+                "PP9001",
+                "a server application has no Hologram oracle",
+            ));
         }
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
@@ -2906,6 +2912,25 @@ pub(crate) fn run(
                 exporter_owner,
             },
         );
+    }
+    if matches!(
+        model.application,
+        Some(crate::holo::model_document::Application::Server(_))
+    ) {
+        // A server application has no View, guest or archive: what is verified is the
+        // acceptance of the program that its published build produces.
+        return crate::server_verification::run(crate::server_verification::ServerVerification {
+            project_root: &controller.root,
+            config: &config,
+            build,
+            model,
+            model_bytes,
+            build_manifest,
+            build_root: &build_root,
+            lex_attestation,
+            lex_attestation_id,
+            processes: toolchain.records,
+        });
     }
     if model.application.is_some() {
         return run_application(

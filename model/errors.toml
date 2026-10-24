@@ -148,13 +148,6 @@ exit = 1
 statement = "A feature or journey is not a closed literal record, a feature statement is out of bounds, or a call or acceptance row of a feature names no declaration."
 
 [[error]]
-code = "PP2022"
-title = "Server application verification unavailable"
-class = "semantic"
-exit = 1
-statement = "The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available."
-
-[[error]]
 code = "PP2019"
 title = "Invalid serving declaration"
 class = "semantic"
@@ -167,6 +160,13 @@ title = "Server core build refused"
 class = "semantic"
 exit = 1
 statement = "The LexLean compiler refuses to export the declared core of a server application: the root is not a production root of the project, the project does not verify or changed while it was exported, or the exported package exhibits an effect the host adapter gives no bound for."
+
+[[error]]
+code = "PP2021"
+title = "Server effect not exercised"
+class = "semantic"
+exit = 1
+statement = "The acceptance of a server application observes a declared host effect that no vector reaches: a core effect that no replayed transcript step requests, or an effect that fills the request frame and no served exchange reaches."
 
 [[error]]
 code = "PP3001"

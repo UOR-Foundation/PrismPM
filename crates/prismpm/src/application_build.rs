@@ -422,7 +422,6 @@ fn application_view(
                 return Ok((generated?, model_id, view_model_id));
             }
             Application::Server(_) => {
-                crate::holo::server_application::require_build(application)?;
                 return Err(PrismError::new(
                     "PP9001",
                     "server applications have no view",
@@ -792,7 +791,12 @@ fn generate_in(
     if matches!(application, Application::Browser(_)) {
         crate::holo::browser_application::require_runtime(application)?;
     }
-    crate::holo::server_application::require_build(application)?;
+    if matches!(application, Application::Server(_)) {
+        return Err(PrismError::new(
+            "PP9001",
+            "a server application is built through the production API, not the application generator",
+        ));
+    }
     let stdlib: StdlibRelease = serde_json::from_str(STDLIB_RELEASE_SOURCE)
         .map_err(|error| PrismError::new("PP4101", format!("stdlib release: {error}")))?;
     if stdlib.schema != "prismpm/stdlib-release/1"
