@@ -118,46 +118,84 @@ definition{
 
 definition{
   name: answer,
-  parameters: [source : Bytes, body : Chunk],
+  parameters: [source : Bytes, body : Chunk, stamp : (List Nat)],
   result: (List Nat),
   body: (match (prim slice source (project body next) 8 : (Option Bytes))
     | Option.none => (respond 400 (nil Nat))
-    | Option.some calls => (if (((project body next) + 8) =? (prim length source : Nat)) then (respond 200 (prim append (bytesToList (project body bytes)) (bytesToList calls) : (List Nat))) else (respond 400 (nil Nat)))),
+    | Option.some calls => (if (((project body next) + 8) =? (prim length source : Nat)) then (respond 200 (prim append (bytesToList (project body bytes)) (prim append (bytesToList calls) stamp : (List Nat)) : (List Nat))) else (respond 400 (nil Nat)))),
   axioms: [Quot.sound, propext],
   executable: true
 }
 
 definition{
   name: afterFields,
-  parameters: [source : Bytes, position : (Option Nat)],
+  parameters: [source : Bytes, position : (Option Nat), stamp : (List Nat)],
   result: (List Nat),
   body: (match position
     | Option.none => (respond 400 (nil Nat))
     | Option.some at => (match (chunkAt source at)
       | Option.none => (respond 400 (nil Nat))
-      | Option.some body => (answer source body))),
+      | Option.some body => (answer source body stamp))),
   axioms: [Quot.sound, propext],
   executable: true
 }
 
 definition{
   name: afterTarget,
-  parameters: [source : Bytes, target : Chunk],
+  parameters: [source : Bytes, target : Chunk, stamp : (List Nat)],
   result: (List Nat),
   body: (match (u32At source (project target next))
     | Option.none => (respond 400 (nil Nat))
-    | Option.some count => (afterFields source (skipFields source ((project target next) + 4) count))),
+    | Option.some count => (afterFields source (skipFields source ((project target next) + 4) count) stamp)),
   axioms: [Quot.sound, propext],
   executable: true
 }
 
 definition{
   name: afterMethod,
-  parameters: [source : Bytes, method : Chunk],
+  parameters: [source : Bytes, method : Chunk, stamp : (List Nat)],
   result: (List Nat),
   body: (match (chunkAt source (project method next))
     | Option.none => (respond 400 (nil Nat))
-    | Option.some target => (afterTarget source target)),
+    | Option.some target => (afterTarget source target stamp)),
+  axioms: [Quot.sound, propext],
+  executable: true
+}
+
+definition{
+  name: handle,
+  parameters: [input : Bytes, stamp : (List Nat)],
+  result: (List Nat),
+  body: (match (chunkAt input 0)
+    | Option.none => (respond 400 (nil Nat))
+    | Option.some method => (afterMethod input method stamp)),
+  axioms: [Quot.sound, propext],
+  executable: true
+}
+
+definition{
+  name: done,
+  parameters: [response : (List Nat)],
+  result: (List Nat),
+  body: (prim append (u32List 0) response : (List Nat)),
+  executable: true
+}
+
+definition{
+  name: perform,
+  parameters: [],
+  result: (List Nat),
+  body: (prim append (u32List 1) (prim append (u32List 1) (nil Nat) : (List Nat)) : (List Nat)),
+  executable: true
+}
+
+definition{
+  name: finish,
+  parameters: [frame : Bytes, outcome : Bytes],
+  result: (List Nat),
+  body: (match (prim slice outcome 4 8 : (Option Bytes))
+    | Option.none => (done (respond 400 (nil Nat)))
+    | Option.some taken => (done (handle frame (bytesToList taken)))),
   axioms: [Quot.sound, propext],
   executable: true
 }
@@ -167,8 +205,12 @@ definition{
   parameters: [input : Bytes],
   result: (List Nat),
   body: (match (chunkAt input 0)
-    | Option.none => (respond 400 (nil Nat))
-    | Option.some method => (afterMethod input method)),
+    | Option.none => (done (respond 400 (nil Nat)))
+    | Option.some request => (match (u32At input (project request next))
+      | Option.none => (done (respond 400 (nil Nat)))
+      | Option.some count => (if (count =? 0) then (perform) else (if (count =? 1) then (match (chunkAt input ((project request next) + 8))
+        | Option.none => (done (respond 400 (nil Nat)))
+        | Option.some outcome => (finish (project request bytes) (project outcome bytes))) else (done (respond 400 (nil Nat))))))),
   axioms: [Quot.sound, propext],
   executable: true,
   production: {effects: [allocation, overflow], targets: [rust-std]}

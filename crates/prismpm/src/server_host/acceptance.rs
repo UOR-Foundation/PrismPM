@@ -11,6 +11,12 @@
 //! through the program's `run` command, which performs the effects through the
 //! declared binding with no script: the response must be the modeled one again.
 //!
+//! The record states what reached each declared effect, as the run observed it:
+//! a core effect is reached by the steps of the transcripts the program replayed
+//! to the end (a script with a step left over is refused by the program), a
+//! frame effect by the served exchanges, each of which builds the whole request
+//! frame. An effect nothing reached is `PP2021`, never a verified application.
+//!
 //! A served application is also run as a server: for every served vector the
 //! program is started with `serve` on its declared loopback listener, the
 //! vector's HTTP request is sent over a TCP connection, and the bytes read until
@@ -193,8 +199,56 @@ pub fn execute_served(
     Ok(serving.vectors.len())
 }
 
-/// Steps recorded per declared effect, in declaration order.
-fn exercised(application: &ServerApplication) -> Vec<(String, usize)> {
+/// What a declared effect is for: asked for by the core, or only filling the
+/// request frame of the listener.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// The core requests it, and a transcript step replays it.
+    Core,
+    /// It fills a section of the request frame, and a served exchange reaches it.
+    Frame,
+}
+
+impl Role {
+    fn name(self) -> &'static str {
+        match self {
+            Role::Core => "core",
+            Role::Frame => "frame",
+        }
+    }
+}
+
+/// What reached one declared effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exercise {
+    /// The effect's name.
+    pub name: String,
+    /// What the effect is for.
+    pub role: Role,
+    /// Transcript steps that requested it, all replayed.
+    pub steps: usize,
+    /// Served exchanges that built a frame with it.
+    pub served: usize,
+}
+
+impl Exercise {
+    /// Whether some vector reached the effect in the way its role calls for.
+    #[must_use]
+    pub fn reached(&self) -> bool {
+        match self.role {
+            Role::Core => self.steps > 0,
+            Role::Frame => self.served > 0,
+        }
+    }
+}
+
+/// What reached each declared effect, in declaration order, once `served`
+/// exchanges were answered as modeled. A served exchange reaches the core only
+/// after the whole frame is built, and the declaration admits no served vector
+/// whose response is not its frame vector's, so each one reaches every frame effect.
+#[must_use]
+pub fn exercises(application: &ServerApplication, served: usize) -> Vec<Exercise> {
+    let frame = application.frame_effects();
     application
         .host
         .effects
@@ -207,9 +261,42 @@ fn exercised(application: &ServerApplication) -> Vec<(String, usize)> {
                 .flat_map(|transcript| &transcript.steps)
                 .filter(|step| step.effect == effect.name)
                 .count();
-            (effect.name.clone(), steps)
+            let role = if frame.contains(effect.name.as_str()) {
+                Role::Frame
+            } else {
+                Role::Core
+            };
+            Exercise {
+                name: effect.name.clone(),
+                role,
+                steps,
+                served: if role == Role::Frame { served } else { 0 },
+            }
         })
         .collect()
+}
+
+/// Refuse a declared effect that no vector reached.
+///
+/// # Errors
+/// Returns `PP2021` naming the first effect nothing reached.
+pub fn require_exercised(exercises: &[Exercise]) -> Result<(), PrismError> {
+    match exercises.iter().find(|exercise| !exercise.reached()) {
+        None => Ok(()),
+        Some(exercise) => Err(PrismError::new(
+            "PP2021",
+            match exercise.role {
+                Role::Core => format!(
+                    "the host effect {} is exercised by no transcript step of any acceptance vector",
+                    exercise.name
+                ),
+                Role::Frame => format!(
+                    "the host effect {} fills the request frame and is exercised by no served exchange",
+                    exercise.name
+                ),
+            },
+        )),
+    }
 }
 
 fn run(
@@ -248,8 +335,9 @@ fn run(
 ///
 /// # Errors
 /// Returns `PP6003` when the program disagrees with the model for any vector
-/// or transport, `PP4002` when the work directory cannot be written and
-/// `PP2013` when `binding` is asked for and none is declared.
+/// or transport, `PP2021` when a declared effect is reached by no vector,
+/// `PP4002` when the work directory cannot be written and `PP2013` when
+/// `binding` is asked for and none is declared.
 pub fn execute(
     application: &ServerApplication,
     program: &Path,
@@ -308,29 +396,25 @@ pub fn execute(
             }
         }
     }
-    let effects = exercised(application);
-    // An effect that only fills the request frame is exercised by the served vectors.
-    let frame = application.frame_effects();
-    if effects
-        .iter()
-        .any(|(name, steps)| *steps == 0 && !frame.contains(name.as_str()))
-    {
-        return Err(disagreement(
-            "a declared host effect is exercised by no vector",
-        ));
-    }
     let served = execute_served(application, program)?;
+    let effects = exercises(application, served);
+    require_exercised(&effects)?;
     Ok(json!({
         "effects": effects
             .iter()
-            .map(|(name, steps)| json!({"name": name, "steps": steps}))
+            .map(|exercise| json!({
+                "name": exercise.name,
+                "role": exercise.role.name(),
+                "served": exercise.served,
+                "steps": exercise.steps,
+            }))
             .collect::<Vec<_>>(),
         "program": program_name(application),
         "program_sha256": format!("{:x}", Sha256::digest(&program_bytes)),
         "protocol": application.host.protocol,
         "schema": SCHEMA,
         "status": "verified",
-        "steps": effects.iter().map(|(_, steps)| steps).sum::<usize>(),
+        "steps": effects.iter().map(|exercise| exercise.steps).sum::<usize>(),
         "binding": application.bindings.first().filter(|_| binding).map(|linked| linked.crate_name.as_str()),
         "transports": TRANSPORTS
             .iter()

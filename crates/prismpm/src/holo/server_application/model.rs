@@ -35,6 +35,9 @@ pub struct ServerApplication {
     /// How the application is served over loopback HTTP: empty when it is not
     /// served, else one record.
     pub serving: Vec<ServerServing>,
+    /// Seconds that the build of the consumer's workspace may take when the
+    /// application is verified, from 1 to 7200.
+    pub verify_build_timeout_seconds: u32,
     /// The host effect protocol of the core.
     pub host: HostProtocol,
 }
