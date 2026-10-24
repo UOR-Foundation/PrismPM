@@ -172,7 +172,10 @@ fn a_core_that_is_not_a_production_root_is_refused() {
 
 #[test]
 fn the_example_holds_the_foundation_modules_it_imports_byte_for_byte() {
-    for module in ["Foundation/Bytes.lex.tex", "Foundation/Server/V1/Model.lex.tex"] {
+    for module in [
+        "Foundation/Bytes.lex.tex",
+        "Foundation/Server/V1/Model.lex.tex",
+    ] {
         assert_eq!(
             std::fs::read(example().join("src").join(module)).unwrap(),
             std::fs::read(repository().join("stdlib/src").join(module)).unwrap(),

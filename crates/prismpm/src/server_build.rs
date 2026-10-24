@@ -163,7 +163,11 @@ fn read_package(
         .roots
         .iter()
         .find(|root| root.root == application.core.root)
-        .and_then(|root| root.outputs.iter().find(|output| output.target.id == TARGET))
+        .and_then(|root| {
+            root.outputs
+                .iter()
+                .find(|output| output.target.id == TARGET)
+        })
         .ok_or_else(|| refused("the production result holds no package of the declared core"))?;
     admit_effects(&application.core.root, &output.effects)?;
     let package = &output.package;
@@ -210,8 +214,9 @@ pub fn publish(build: &ServerBuild, workspace: &Path) -> Result<(), PrismError> 
         relative(path)?;
         let target = workspace.join(path);
         if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", parent.display())))?;
+            std::fs::create_dir_all(parent).map_err(|error| {
+                PrismError::new("PP4002", format!("{}: {error}", parent.display()))
+            })?;
         }
         std::fs::write(&target, bytes)
             .map_err(|error| PrismError::new("PP4002", format!("{}: {error}", target.display())))?;

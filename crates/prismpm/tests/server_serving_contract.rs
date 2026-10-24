@@ -71,7 +71,11 @@ fn serving_declaration_roundtrips_and_requires_the_closed_record() {
     let mut unserved = value.clone();
     unserved["application"]["serving"] = json!([]);
     assert!(schema().is_valid(&unserved));
-    assert_eq!(verdict(unserved), "PP2013", "the frame effect now has no section and no transcript");
+    assert_eq!(
+        verdict(unserved),
+        "PP2013",
+        "the frame effect now has no section and no transcript"
+    );
     for pointer in [
         "/application/serving/0/extra",
         "/application/serving/0/origins/0/extra",
@@ -95,7 +99,10 @@ fn serving_declaration_roundtrips_and_requires_the_closed_record() {
         ("/application/serving/0/origins", json!("any")),
         ("/application/serving/0/vectors/0/request", json!("GET /")),
     ] {
-        assert!(!schema().is_valid(&edited(pointer, replacement)), "{pointer}");
+        assert!(
+            !schema().is_valid(&edited(pointer, replacement)),
+            "{pointer}"
+        );
     }
     assert!(
         schema().is_valid(&edited("/application/serving", json!([]))),
@@ -133,7 +140,10 @@ fn serving_rejects_every_invalid_declaration() {
         "10.1.2.3",
         "",
     ] {
-        cases.push((format!("address {address:?}"), serving("address", json!(address))));
+        cases.push((
+            format!("address {address:?}"),
+            serving("address", json!(address)),
+        ));
     }
     for (name, replacement) in [
         ("port", json!(65_536)),
@@ -201,28 +211,43 @@ fn serving_rejects_every_invalid_declaration() {
         ("frame", json!(many_sections)),
         ("vectors", json!([])),
     ] {
-        cases.push((format!("{name} = {replacement}"), serving(name, replacement)));
+        cases.push((
+            format!("{name} = {replacement}"),
+            serving(name, replacement),
+        ));
     }
-    cases.push((
-        "an accept requirement with no method".to_owned(),
-        {
-            let mut value = served_fixture();
-            value["application"]["serving"][0]["enforced_methods"] = json!([]);
-            value["application"]["serving"][0]["accept"] = json!([]);
-            value["application"]["serving"][0]["content_types"] = json!([]);
-            // Not a refusal: nothing is required, so no method is named.
-            value
-        },
-    ));
+    cases.push(("an accept requirement with no method".to_owned(), {
+        let mut value = served_fixture();
+        value["application"]["serving"][0]["enforced_methods"] = json!([]);
+        value["application"]["serving"][0]["accept"] = json!([]);
+        value["application"]["serving"][0]["content_types"] = json!([]);
+        // Not a refusal: nothing is required, so no method is named.
+        value
+    }));
     let accepted_case = cases.pop().unwrap();
     assert_eq!(verdict(accepted_case.1), "accepted", "{}", accepted_case.0);
     for (name, edit) in [
         ("an unnamed section", section(&|s| s["name"] = json!(""))),
-        ("an uppercase section name", section(&|s| s["name"] = json!("Calls"))),
-        ("a section of an undeclared effect", section(&|s| s["effect"] = json!("tool.nothing"))),
-        ("a section of an undeclared field", section(&|s| s["field"] = json!("nothing"))),
-        ("a section of the wrong kind", section(&|s| s["kind"] = json!("u32"))),
-        ("a section with two sources", section(&|s| s["values"] = json!(["1"]))),
+        (
+            "an uppercase section name",
+            section(&|s| s["name"] = json!("Calls")),
+        ),
+        (
+            "a section of an undeclared effect",
+            section(&|s| s["effect"] = json!("tool.nothing")),
+        ),
+        (
+            "a section of an undeclared field",
+            section(&|s| s["field"] = json!("nothing")),
+        ),
+        (
+            "a section of the wrong kind",
+            section(&|s| s["kind"] = json!("u32")),
+        ),
+        (
+            "a section with two sources",
+            section(&|s| s["values"] = json!(["1"])),
+        ),
         (
             "a section with no source",
             section(&|s| {
@@ -247,16 +272,13 @@ fn serving_rejects_every_invalid_declaration() {
                 s["values"] = json!(["007"]);
             }),
         ),
-        (
-            "an effect that asks for more than the connection knows",
-            {
-                let mut value = served_fixture();
-                value["application"]["host"]["effects"][2]["request"] =
-                    json!([{"name": "secret", "kind": "text"}]);
-                value["application"]["host"]["effects"][2]["request_maximum"] = json!(16);
-                value
-            },
-        ),
+        ("an effect that asks for more than the connection knows", {
+            let mut value = served_fixture();
+            value["application"]["host"]["effects"][2]["request"] =
+                json!([{"name": "secret", "kind": "text"}]);
+            value["application"]["host"]["effects"][2]["request_maximum"] = json!(16);
+            value
+        }),
         (
             "a frame that can be larger than the exchange allows",
             edited("/application/request_maximum", json!(4096)),
@@ -265,24 +287,18 @@ fn serving_rejects_every_invalid_declaration() {
             "a served vector of a frame vector that does not exist",
             edited("/application/serving/0/vectors/0/vector", json!(2)),
         ),
-        (
-            "two served vectors of the same request",
-            {
-                let mut value = served_fixture();
-                let vector = value["application"]["serving"][0]["vectors"][0].clone();
-                value["application"]["serving"][0]["vectors"] = json!([vector.clone(), vector]);
-                value
-            },
-        ),
-        (
-            "two serving records",
-            {
-                let mut value = served_fixture();
-                let record = value["application"]["serving"][0].clone();
-                value["application"]["serving"] = json!([record.clone(), record]);
-                value
-            },
-        ),
+        ("two served vectors of the same request", {
+            let mut value = served_fixture();
+            let vector = value["application"]["serving"][0]["vectors"][0].clone();
+            value["application"]["serving"][0]["vectors"] = json!([vector.clone(), vector]);
+            value
+        }),
+        ("two serving records", {
+            let mut value = served_fixture();
+            let record = value["application"]["serving"][0].clone();
+            value["application"]["serving"] = json!([record.clone(), record]);
+            value
+        }),
     ] {
         cases.push((name.to_owned(), edit));
     }
@@ -298,7 +314,8 @@ fn serving_rejects_every_invalid_declaration() {
     assert_eq!(verdict(transcript), "PP2013");
     // An application that is served and has no effect for the core is the plain frame function.
     let mut plain = served_fixture();
-    plain["application"]["host"]["effects"] = json!([plain["application"]["host"]["effects"][2].clone()]);
+    plain["application"]["host"]["effects"] =
+        json!([plain["application"]["host"]["effects"][2].clone()]);
     plain["application"]["host"]["transcripts"] = json!([]);
     plain["application"]["host"]["effect_budget"] = json!(0);
     assert_eq!(verdict(plain.clone()), "accepted");
@@ -359,12 +376,18 @@ fn serving_refusals_agree_across_lean_registry_and_generated_adapter() {
     let registered = registry();
     let (lean, statuses) = lean_refusals();
     assert_eq!(
-        registered.iter().map(|row| row.0.clone()).collect::<Vec<_>>(),
+        registered
+            .iter()
+            .map(|row| row.0.clone())
+            .collect::<Vec<_>>(),
         lean,
         "the registry follows the Lean constructors in order"
     );
     assert_eq!(lean.len(), lean.iter().collect::<BTreeSet<_>>().len());
-    assert_eq!(statuses, registered, "the Lean status table is the registry's");
+    assert_eq!(
+        statuses, registered,
+        "the Lean status table is the registry's"
+    );
     for (code, status) in &registered {
         assert!((400..=599).contains(status), "{code}");
     }
@@ -382,8 +405,14 @@ fn serving_refusals_agree_across_lean_registry_and_generated_adapter() {
         let (body, _) = body.split_once("\n    }\n").unwrap();
         body.lines()
             .filter_map(|line| {
-                let (name, value) = line.trim().strip_prefix("ServingRefusal::")?.split_once(" => ")?;
-                Some((name.to_owned(), value.trim_end_matches(',').trim_matches('"').to_owned()))
+                let (name, value) = line
+                    .trim()
+                    .strip_prefix("ServingRefusal::")?
+                    .split_once(" => ")?;
+                Some((
+                    name.to_owned(),
+                    value.trim_end_matches(',').trim_matches('"').to_owned(),
+                ))
             })
             .collect::<Vec<_>>()
     };

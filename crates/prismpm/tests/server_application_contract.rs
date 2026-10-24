@@ -8,9 +8,7 @@ use prismpm::holo::canonical::{decode_canonical, encode_canonical};
 use prismpm::holo::model_document::Application;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use support::{
-    declaration, fixture, project, rejected, root, schema, source, typed, MODEL,
-};
+use support::{declaration, fixture, project, rejected, root, schema, source, typed, MODEL};
 
 #[test]
 fn server_contract_roundtrips_and_requires_the_closed_declaration() {

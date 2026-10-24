@@ -103,8 +103,10 @@ pub fn typed(value: Value) -> ModelDocument {
 }
 
 pub fn schema() -> jsonschema::Validator {
-    let schema: Value =
-        serde_json::from_slice(include_bytes!("../../schemas/model-document-v7.schema.json")).unwrap();
+    let schema: Value = serde_json::from_slice(include_bytes!(
+        "../../schemas/model-document-v7.schema.json"
+    ))
+    .unwrap();
     jsonschema::validator_for(&schema).unwrap()
 }
 
@@ -507,14 +509,17 @@ fn octet_array(text: &str) -> Value {
 pub fn served_declaration() -> Value {
     let mut value = declaration();
     value["request_maximum"] = json!(8192);
-    value["host"]["effects"].as_array_mut().unwrap().push(json!({
-        "name": "tool.calls",
-        "request": [field("counted", "flag")],
-        "result": [field("calls", "u64")],
-        "failures": [],
-        "request_maximum": 8,
-        "result_maximum": 16
-    }));
+    value["host"]["effects"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "name": "tool.calls",
+            "request": [field("counted", "flag")],
+            "result": [field("calls", "u64")],
+            "failures": [],
+            "request_maximum": 8,
+            "result_maximum": 16
+        }));
     value["serving"] = json!([{
         "address": "127.0.0.1",
         "port": 8080,

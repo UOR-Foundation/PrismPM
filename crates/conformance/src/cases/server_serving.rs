@@ -96,6 +96,7 @@ pub(super) fn verify_build(root: &Path) {
         &[
             "the_example_server_serves_its_vectors_end_to_end",
             "a_core_that_is_not_a_production_root_is_refused",
+            "the_example_holds_the_foundation_modules_it_imports_byte_for_byte",
         ],
     );
 }

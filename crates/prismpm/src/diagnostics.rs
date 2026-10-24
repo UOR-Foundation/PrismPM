@@ -272,7 +272,7 @@ probes!(
     ),
     (
         "PP2014",
-        "server-application-build-unavailable",
+        "server-application-verification-unavailable",
         ServerBuild
     ),
     ("PP2019", "invalid-serving-declaration", ServedApplication),

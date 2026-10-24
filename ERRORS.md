@@ -101,7 +101,7 @@ A server application violates its closed source-owned profile, host effect decla
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2014` --- Server application build unavailable
+## `PP2014` --- Server application verification unavailable
 
 The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available.
 

@@ -237,10 +237,14 @@ fn post(target: &str, extra: &[(&str, &str)], framing: &str, body: &[u8]) -> Vec
     out
 }
 
+/// An HTTP request, the request frame it becomes, the response frame of the core
+/// and the HTTP response, in that order.
+type Exchange = (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
+
 /// The four exchanges of the acceptance: a counted call with a body, an event
 /// stream the core decides, a chunked body that is not counted, and repeated
 /// fields that must not be merged.
-fn exchanges() -> Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> {
+fn exchanges() -> Vec<Exchange> {
     let first = [
         ("Host", "127.0.0.1:8080"),
         ("Accept", MEDIA[0].1),
