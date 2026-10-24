@@ -17,6 +17,7 @@ inputs = [
     "crates/prismpm/src/holo/projector.rs",
     "crates/prismpm/src/holo/server_application.rs",
     "crates/prismpm/src/holo/server_application/model.rs",
+    "crates/prismpm/src/holo/server_application/serving.rs",
     "crates/prismpm/src/holo/server_application/source.rs",
     "crates/prismpm/src/holo/server_application/wire.rs",
     "crates/prismpm/src/holo/text_cli.rs",

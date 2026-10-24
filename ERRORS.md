@@ -107,6 +107,12 @@ The server application profile validates its declaration and generates its host 
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2019` --- Invalid serving declaration
+
+A server application's serving declaration names an address other than 127.0.0.1, a bound outside its closed range, an origin or media type that is not a valid value, a frame section that does not come from exactly one declared source, or a request frame that can exceed the exchange request maximum.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

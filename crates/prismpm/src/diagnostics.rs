@@ -40,6 +40,7 @@ enum Rule {
     BrowserRuntime,
     DesignView,
     ServerApplication,
+    ServedApplication,
     ServerBuild,
 }
 
@@ -62,6 +63,12 @@ impl Rule {
                 let valid = server_specimen();
                 let mut invalid = valid.clone();
                 invalid["host"]["effect_budget"] = json!(0);
+                (valid, invalid)
+            }
+            Self::ServedApplication => {
+                let valid = served_specimen();
+                let mut invalid = valid.clone();
+                invalid["serving"][0]["address"] = json!("0.0.0.0");
                 (valid, invalid)
             }
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
@@ -139,7 +146,9 @@ impl Rule {
             Self::BrowserApplication => validate_browser_specimen(value).is_ok(),
             Self::BrowserRuntime => validate_browser_runtime(value).is_ok(),
             Self::DesignView => crate::design::probe(value).is_ok(),
-            Self::ServerApplication => validate_server_specimen(value).is_ok(),
+            Self::ServerApplication | Self::ServedApplication => {
+                validate_server_specimen(value).is_ok()
+            }
             Self::ServerBuild => validate_server_build(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
@@ -260,6 +269,7 @@ probes!(
         "server-application-build-unavailable",
         ServerBuild
     ),
+    ("PP2019", "invalid-serving-declaration", ServedApplication),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -383,6 +393,7 @@ fn server_specimen() -> Value {
         "acceptance_vectors":[{"request":[97],"response":[98]}],
         "core":{"root":"ServerContract.Probe.dispatch","package":"server_contract_core","version":"0.1.0"},
         "bindings":[{"path":"bindings/server-contract-binding","crate_name":"server-contract-binding","host":"server_contract_binding::Native"}],
+        "serving":[],
         "request_maximum":8,
         "response_maximum":8,
         "host":{
@@ -405,6 +416,21 @@ fn server_specimen() -> Value {
             }]}]
         }
     })
+}
+
+/// The server specimen served over loopback: one HTTP exchange of the one frame
+/// vector, with the smallest bounds the declaration admits.
+fn served_specimen() -> Value {
+    let mut value = server_specimen();
+    value["request_maximum"] = json!(1024);
+    value["serving"] = json!([{
+        "address":"127.0.0.1","port":0,"connection_maximum":1,"read_timeout_millis":1000,
+        "root_stack_bytes":65536,"request_line_maximum":16,"header_count_maximum":1,
+        "header_bytes_maximum":64,"body_maximum":1,"origins":[],"accept":[],"content_types":[],
+        "enforced_methods":[],"counted_field":"","counted_value":"","frame":[],
+        "vectors":[{"vector":0,"request":[71,69,84,32,47,32,72,84,84,80,47,49,46,49],"response":[72,84,84,80]}]
+    }]);
+    value
 }
 
 fn validate_server_specimen(value: &Value) -> Result<(), PrismError> {
@@ -432,7 +458,7 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     if matches!(spec.rule, Rule::BrowserRuntime) {
         return validate_browser_runtime(value);
     }
-    if matches!(spec.rule, Rule::ServerApplication) {
+    if matches!(spec.rule, Rule::ServerApplication | Rule::ServedApplication) {
         return validate_server_specimen(value);
     }
     if matches!(spec.rule, Rule::ServerBuild) {

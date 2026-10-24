@@ -15,16 +15,16 @@
 use crate::binary_cli::INPUT_ADAPTER;
 use crate::error::PrismError;
 use crate::holo::server_application::{
-    camel, snake, validate, HostEffect, HostField, HostKind, ServerApplication,
+    camel, snake, validate, FrameKind, HostEffect, HostField, HostKind, ServerApplication,
 };
 use prod_codegen::{GeneratedPackage, PackageFile};
 use std::fmt::Write as _;
 
 pub mod acceptance;
 #[cfg(test)]
-mod serving_tests;
+pub(crate) mod serving_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 pub mod workspace;
 
 const WIRE: &str = include_str!("server_host/wire.rs.in");
@@ -32,6 +32,9 @@ const FAILURE: &str = include_str!("server_host/failure.rs.in");
 const EXCHANGE: &str = include_str!("server_host/exchange.rs.in");
 const MAIN: &str = include_str!("server_host/main.rs.in");
 const TESTS: &str = include_str!("server_host/acceptance_tests.rs.in");
+const REFUSAL: &str = include_str!("server_host/refusal.rs.in");
+const SERVE: &str = include_str!("server_host/serve.rs.in");
+const SERVING_TESTS: &str = include_str!("server_host/serving_tests.rs.in");
 
 /// Name of the generated program and package: the core's Cargo name plus `-host`.
 #[must_use]
@@ -287,6 +290,15 @@ fn protocol(application: &ServerApplication) -> String {
         let _ = writeln!(text, "    {},", literal(&effect.name));
     }
     let _ = writeln!(text, "];\n");
+    let frame = application.frame_effects();
+    let _ = writeln!(
+        text,
+        "/// Whether the core may request each effect, by tag. An effect that is not\n/// the core's only fills a section of the request frame.\npub const CORE: &[bool] = &["
+    );
+    for effect in effects {
+        let _ = writeln!(text, "    {},", !frame.contains(effect.name.as_str()));
+    }
+    let _ = writeln!(text, "];\n");
     for (name, pick) in [("REQUEST_MAXIMA", 0usize), ("RESULT_MAXIMA", 1usize)] {
         let _ = writeln!(
             text,
@@ -423,6 +435,12 @@ fn protocol(application: &ServerApplication) -> String {
         );
     }
     let _ = writeln!(text, "}}\n");
+    if effects.is_empty() {
+        let _ = writeln!(
+            text,
+            "/// The host of an application that declares no effect.\n#[derive(Debug, Default, Clone, Copy)]\npub struct Unbound;\n\nimpl Host for Unbound {{}}\n"
+        );
+    }
     text
 }
 
@@ -626,6 +644,260 @@ pub fn replay(script: &[u8], request: &[u8]) -> Result<Vec<u8>, Failure> {
     text
 }
 
+/// The shared host: one binding behind a lock, which every connection thread
+/// uses for the effects it performs. Rendered with one method per declared effect.
+fn shared(application: &ServerApplication) -> String {
+    let effects = &application.host.effects;
+    let mut text = String::from(
+        "// Generated from the closed host effect declaration. Do not edit.\n\n#[allow(unused_imports)]\nuse crate::protocol::{self, Host, HostError};\nuse std::sync::{Arc, Mutex};\n\n/// One host shared by the threads that serve connections. Each effect takes the lock\n/// for its own duration only, and a poisoned lock is a host fault.\npub struct Shared<H>(pub Arc<Mutex<H>>);\n\nimpl<H> Clone for Shared<H> {\n    fn clone(&self) -> Self {\n        Shared(self.0.clone())\n    }\n}\n\n",
+    );
+    let _ = writeln!(text, "impl<H: Host> Host for Shared<H> {{");
+    for effect in effects {
+        let name = snake(&effect.name);
+        let _ = writeln!(
+            text,
+            "    fn {name}(&mut self, request: protocol::{name}::Request) -> Result<protocol::{name}::Completed, HostError<protocol::{name}::Failure>> {{\n        match self.0.lock() {{\n            Ok(mut host) => host.{name}(request),\n            Err(_) => Err(HostError::Fault),\n        }}\n    }}"
+        );
+    }
+    let _ = writeln!(text, "}}");
+    text
+}
+
+/// The sections the host adds to the request frame, rendered in the declared
+/// order: one call per effect that supplies a section, then each section's
+/// encoding. Model-owned sections are encoded here, at generation.
+fn frame(application: &ServerApplication) -> String {
+    let mut text = String::from(
+        "// Generated from the serving declaration. Do not edit.\n\n#[allow(unused_imports)]\nuse crate::protocol::{self, Host};\nuse crate::refusal::ServingRefusal;\n#[allow(unused_imports)]\nuse crate::wire::{put_chunk, put_u32, put_u64};\n\n/// What the listener knows of the exchange when it asks the host for a section.\npub struct Context<'a> {\n    pub peer: &'a str,\n    pub counted: bool,\n}\n\n#[allow(dead_code)]\nfn unavailable<E>(_: E) -> ServingRefusal {\n    ServingRefusal::FrameUnavailable\n}\n\n",
+    );
+    let serving = application
+        .serving
+        .first()
+        .expect("the frame module is rendered for a served application");
+    let _ = writeln!(
+        text,
+        "/// The tail of the request frame. A declared effect that fails, or answers with more\n/// than its declared maximum, is `FrameUnavailable`.\n#[allow(unused_variables, unused_mut)]\npub fn sections<H: Host>(host: &mut H, context: &Context<'_>) -> Result<Vec<u8>, ServingRefusal> {{"
+    );
+    let mut called: Vec<&str> = Vec::new();
+    for section in &serving.frame {
+        if section.effect.is_empty() || called.contains(&section.effect.as_str()) {
+            continue;
+        }
+        called.push(&section.effect);
+        let effect = application
+            .host
+            .effects
+            .iter()
+            .find(|effect| effect.name == section.effect)
+            .expect("validated frame effect");
+        let name = snake(&effect.name);
+        let mut request = String::new();
+        for field in &effect.request {
+            let value = match field.name.as_str() {
+                "peer" => "context.peer.to_owned()",
+                _ => "context.counted",
+            };
+            let _ = write!(request, "{}: {value}, ", field.name);
+        }
+        let _ = writeln!(
+            text,
+            "    let {name} = host\n        .{name}(protocol::{name}::Request {{ {request}}})\n        .map_err(unavailable)?;"
+        );
+    }
+    let _ = writeln!(text, "    let mut out = Vec::new();");
+    for section in &serving.frame {
+        if section.effect.is_empty() {
+            let mut encoded = Vec::new();
+            match section.kind {
+                FrameKind::U32 => encoded.extend_from_slice(
+                    &section.values[0].parse::<u32>().unwrap_or(0).to_be_bytes(),
+                ),
+                FrameKind::U64 => encoded.extend_from_slice(
+                    &section.values[0].parse::<u64>().unwrap_or(0).to_be_bytes(),
+                ),
+                FrameKind::Text => {
+                    encoded.extend_from_slice(&(section.values[0].len() as u32).to_be_bytes());
+                    encoded.extend_from_slice(section.values[0].as_bytes());
+                }
+                FrameKind::TextList => {
+                    encoded.extend_from_slice(&(section.values.len() as u32).to_be_bytes());
+                    for value in &section.values {
+                        encoded.extend_from_slice(&(value.len() as u32).to_be_bytes());
+                        encoded.extend_from_slice(value.as_bytes());
+                    }
+                }
+                FrameKind::Bytes => {}
+            }
+            let _ = writeln!(
+                text,
+                "    // {}\n    out.extend_from_slice({});",
+                section.name,
+                bytes(&encoded)
+            );
+            continue;
+        }
+        let name = snake(&section.effect);
+        let tag = application
+            .host
+            .effects
+            .iter()
+            .position(|effect| effect.name == section.effect)
+            .expect("validated frame effect");
+        let _ = writeln!(text, "    // {}", section.name);
+        match section.kind {
+            FrameKind::U32 => {
+                let _ = writeln!(text, "    put_u32(&mut out, {name}.{});", section.field);
+            }
+            FrameKind::U64 => {
+                let _ = writeln!(text, "    put_u64(&mut out, {name}.{});", section.field);
+            }
+            FrameKind::Bytes | FrameKind::Text => {
+                let value = if section.kind == FrameKind::Bytes {
+                    format!("&{name}.{}", section.field)
+                } else {
+                    format!("{name}.{}.as_bytes()", section.field)
+                };
+                let length = format!("{name}.{}.len()", section.field);
+                let _ = writeln!(
+                    text,
+                    "    if {length} > protocol::RESULT_MAXIMA[{tag}] {{\n        return Err(ServingRefusal::FrameUnavailable);\n    }}\n    put_chunk(&mut out, {value}).map_err(unavailable)?;"
+                );
+            }
+            FrameKind::TextList => {}
+        }
+    }
+    let _ = writeln!(text, "    Ok(out)\n}}");
+    text
+}
+
+/// Rust spelling of a list of string literals.
+fn literals(values: &[String]) -> String {
+    format!(
+        "&[{}]",
+        values
+            .iter()
+            .map(|value| literal(value))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// The serving constants of the generated surface.
+fn serving_surface(application: &ServerApplication) -> String {
+    let Some(serving) = application.serving.first() else {
+        return String::new();
+    };
+    let octets = serving
+        .address
+        .split('.')
+        .map(|part| part.parse::<u8>().unwrap_or(0).to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let origins = serving
+        .origins
+        .iter()
+        .map(|origin| {
+            format!(
+                "({}, {}, {})",
+                literal(&origin.scheme),
+                literal(&origin.host),
+                origin.port
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut text = String::new();
+    let _ = writeln!(text, "\n// The serving declaration.");
+    let _ = writeln!(text, "pub const ADDRESS: [u8; 4] = [{octets}];");
+    let _ = writeln!(text, "pub const PORT: u16 = {};", serving.port);
+    let _ = writeln!(
+        text,
+        "pub const CONNECTION_MAXIMUM: usize = {};",
+        serving.connection_maximum
+    );
+    let _ = writeln!(
+        text,
+        "pub const READ_TIMEOUT_MILLIS: u32 = {};",
+        serving.read_timeout_millis
+    );
+    let _ = writeln!(
+        text,
+        "pub const ROOT_STACK_BYTES: usize = {};",
+        serving.root_stack_bytes
+    );
+    let _ = writeln!(
+        text,
+        "pub const REQUEST_LINE_MAXIMUM: usize = {};",
+        serving.request_line_maximum
+    );
+    let _ = writeln!(
+        text,
+        "pub const HEADER_COUNT_MAXIMUM: usize = {};",
+        serving.header_count_maximum
+    );
+    let _ = writeln!(
+        text,
+        "pub const HEADER_BYTES_MAXIMUM: usize = {};",
+        serving.header_bytes_maximum
+    );
+    let _ = writeln!(
+        text,
+        "pub const BODY_MAXIMUM: usize = {};",
+        serving.body_maximum
+    );
+    let _ = writeln!(
+        text,
+        "pub const ORIGINS: &[(&str, &str, u16)] = &[{origins}];"
+    );
+    let _ = writeln!(
+        text,
+        "pub const ACCEPT: &[&str] = {};",
+        literals(&serving.accept)
+    );
+    let _ = writeln!(
+        text,
+        "pub const CONTENT_TYPES: &[&str] = {};",
+        literals(&serving.content_types)
+    );
+    let _ = writeln!(
+        text,
+        "pub const ENFORCED_METHODS: &[&str] = {};",
+        literals(&serving.enforced_methods)
+    );
+    let _ = writeln!(
+        text,
+        "pub const COUNTED_FIELD: &str = {};",
+        literal(&serving.counted_field)
+    );
+    let _ = writeln!(
+        text,
+        "pub const COUNTED_VALUE: &str = {};",
+        literal(&serving.counted_value)
+    );
+    text
+}
+
+/// The raw HTTP exchanges of the acceptance.
+fn served_corpus(application: &ServerApplication) -> String {
+    let Some(serving) = application.serving.first() else {
+        return String::new();
+    };
+    let mut text = String::from(
+        "\n/// An HTTP exchange of the acceptance: the request bytes a client sends, the\n/// frame vector the core is given and answers, and the response bytes expected.\npub struct Served {\n    pub vector: usize,\n    pub request: &'static [u8],\n    pub response: &'static [u8],\n}\n\npub const SERVED: &[Served] = &[\n",
+    );
+    for vector in &serving.vectors {
+        let _ = writeln!(
+            text,
+            "    Served {{ vector: {}, request: {}, response: {} }},",
+            vector.vector,
+            bytes(&vector.request),
+            bytes(&vector.response)
+        );
+    }
+    text.push_str("];\n");
+    text
+}
+
 fn paragraph(text: &str) -> &str {
     text.trim_end_matches('\n')
 }
@@ -640,8 +912,13 @@ pub fn help(application: &ServerApplication) -> String {
     } else {
         format!("    {binary} run [FILE]\n")
     };
+    let serve = if application.serving.is_empty() {
+        String::new()
+    } else {
+        format!("    {binary} serve\n")
+    };
     let mut text = format!(
-        "{} {}\n\n{}\n\nUSAGE\n    {binary} exchange SCRIPT [FILE]\n{run}    {binary} --help\n    {binary} --version\n\nINPUT\n    FILE holds the request and is read as raw bytes, at most {} of them.\n    Without FILE, or when FILE is -, the request is read from standard input.\n    The response is written to standard output unchanged, at most {} bytes.\n    SCRIPT holds the host's outcomes, at most {} bytes. Each step is a 32-bit\n    big-endian effect tag, then the length and bytes of the encoded request the\n    entry must produce, then the length and bytes of the encoded outcome. The\n    program replays one step for every effect the entry requests, at most {}.\n",
+        "{} {}\n\n{}\n\nUSAGE\n    {binary} exchange SCRIPT [FILE]\n{run}{serve}    {binary} --help\n    {binary} --version\n\nINPUT\n    FILE holds the request and is read as raw bytes, at most {} of them.\n    Without FILE, or when FILE is -, the request is read from standard input.\n    The response is written to standard output unchanged, at most {} bytes.\n    SCRIPT holds the host's outcomes, at most {} bytes. Each step is a 32-bit\n    big-endian effect tag, then the length and bytes of the encoded request the\n    entry must produce, then the length and bytes of the encoded outcome. The\n    program replays one step for every effect the entry requests, at most {}.\n",
         application.name,
         application.cargo_version,
         paragraph(&host.description),
@@ -657,12 +934,31 @@ pub fn help(application: &ServerApplication) -> String {
             binding.crate_name, binding.host
         );
     }
+    if let Some(serving) = application.serving.first() {
+        let _ = write!(
+            text,
+            "\nSERVE\n    `serve` listens on {}:{} and answers one HTTP/1.1 request per connection\n    through the core. The first line on standard output says where it listens\n    (port 0: the system chooses). It runs until it is stopped.\n    At most {} connections, each served within {} ms; a request line of at most\n    {} bytes, at most {} field lines in at most {} bytes and a body of at most\n    {} bytes. Refusals made before the core is called are 400, 403, 406, 408,\n    413, 414, 415, 417, 431, 501, 503 and 505.\n",
+            serving.address,
+            serving.port,
+            serving.connection_maximum,
+            serving.read_timeout_millis,
+            serving.request_line_maximum,
+            serving.header_count_maximum,
+            serving.header_bytes_maximum,
+            serving.body_maximum,
+        );
+    }
     if !host.effects.is_empty() {
         text.push_str("\nEFFECTS\n");
         for (index, effect) in host.effects.iter().enumerate() {
+            let role = if application.frame_effects().contains(effect.name.as_str()) {
+                "  (fills the request frame)"
+            } else {
+                ""
+            };
             let _ = writeln!(
                 text,
-                "    {index:>3}  {}  request at most {} bytes, outcome at most {} bytes",
+                "    {index:>3}  {}  request at most {} bytes, outcome at most {} bytes{role}",
                 effect.name, effect.request_maximum, effect.result_maximum
             );
         }
@@ -742,6 +1038,7 @@ fn surface(application: &ServerApplication) -> String {
     let _ = writeln!(text, "pub const USAGE_CODE: u8 = {};", host.usage_code);
     let _ = writeln!(text, "pub const IO_CODE: u8 = {};", host.io_code);
     let _ = writeln!(text, "pub const FAULT_CODE: u8 = {};", host.fault_code);
+    text.push_str(&serving_surface(application));
     text
 }
 
@@ -785,14 +1082,21 @@ fn corpus(application: &ServerApplication) -> String {
     text.push_str(
         "];\n\n/// The script of a vector: its transcript, or nothing when the entry performs no effect.\npub fn steps(vector: usize) -> Vec<Step> {\n    TRANSCRIPTS\n        .iter()\n        .filter(|transcript| transcript.vector == vector)\n        .flat_map(|transcript| transcript.steps)\n        .map(|step| Step {\n            tag: step.tag,\n            request: step.request.to_vec(),\n            outcome: step.outcome.to_vec(),\n        })\n        .collect()\n}\n",
     );
+    text.push_str(&served_corpus(application));
     text
 }
 
 const API_LIBRARY: &str = "// Generated host API of a server application. Do not edit.\n#![forbid(unsafe_code)]\n\npub mod protocol;\npub mod wire;\n";
 
 fn library(application: &ServerApplication) -> String {
+    let served = !application.serving.is_empty();
+    let modules = if served {
+        "pub mod acceptance;\npub mod exchange;\npub mod failure;\npub mod frame;\npub mod perform;\npub mod refusal;\npub mod script;\npub mod serve;\npub mod shared;\npub mod surface;\n"
+    } else {
+        "pub mod acceptance;\npub mod exchange;\npub mod failure;\npub mod perform;\npub mod script;\npub mod surface;\n"
+    };
     format!(
-        "// Generated host adapter of a server application. Do not edit.\n#![forbid(unsafe_code)]\n\npub mod acceptance;\npub mod exchange;\npub mod failure;\npub mod perform;\npub mod script;\npub mod surface;\n\npub use failure::{{Failure, FailureClass}};\npub use {api}::{{protocol, wire}};\n",
+        "// Generated host adapter of a server application. Do not edit.\n#![forbid(unsafe_code)]\n\n{modules}\npub use failure::{{Failure, FailureClass}};\npub use {api}::{{protocol, wire}};\n",
         api = api_library_name(application),
     )
 }
@@ -822,10 +1126,11 @@ pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, Pri
             },
         )
     };
+    // The production package is laid out beside the generated ones, as a member of
+    // the same workspace, under the name of its crate.
     let mut dependencies = format!(
-        "{core} = {{ version = \"={core_version}\" }}\n{api} = {{ path = \"../{api}\" }}\n",
+        "{core} = {{ path = \"../{core}\" }}\n{api} = {{ path = \"../{api}\" }}\n",
         core = core(application),
-        core_version = application.core.version,
     );
     for binding in &application.bindings {
         let _ = writeln!(
@@ -846,7 +1151,10 @@ pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, Pri
                 .first()
                 .map_or("", |binding| binding.host.as_str()),
         );
-    let main = section(&main, !application.bindings.is_empty());
+    let served = !application.serving.is_empty();
+    let main = main.replace("@SERVE_HOST@", &serve_host(application));
+    let main = section(&main, "BINDING", !application.bindings.is_empty());
+    let main = section(&main, "SERVING", served);
     let tests = TESTS.replace("@HOST@", &host).replace(
         "@BINDING_HOST@",
         application
@@ -854,8 +1162,8 @@ pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, Pri
             .first()
             .map_or("", |binding| binding.host.as_str()),
     );
-    let tests = section(&tests, !application.bindings.is_empty());
-    let files = [
+    let tests = section(&tests, "BINDING", !application.bindings.is_empty());
+    let mut files = vec![
         (format!("{api}/Cargo.toml"), package(&api, "", false)),
         (format!("{api}/src/lib.rs"), API_LIBRARY.to_owned()),
         (format!("{api}/src/wire.rs"), WIRE.to_owned()),
@@ -874,6 +1182,22 @@ pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, Pri
         (format!("{name}/src/main.rs"), main),
         (format!("{name}/tests/acceptance.rs"), tests),
     ];
+    if served {
+        let serving_tests = SERVING_TESTS.replace("@HOST@", &host).replace(
+            "@BINDING_HOST@",
+            &application.bindings.first().map_or_else(
+                || format!("{host}::protocol::Unbound"),
+                |binding| binding.host.clone(),
+            ),
+        );
+        files.extend([
+            (format!("{name}/src/frame.rs"), frame(application)),
+            (format!("{name}/src/refusal.rs"), REFUSAL.to_owned()),
+            (format!("{name}/src/serve.rs"), SERVE.to_owned()),
+            (format!("{name}/src/shared.rs"), shared(application)),
+            (format!("{name}/tests/serving.rs"), serving_tests),
+        ]);
+    }
     Ok(GeneratedPackage {
         files: files
             .into_iter()
@@ -885,19 +1209,32 @@ pub fn generate(application: &ServerApplication) -> Result<GeneratedPackage, Pri
     })
 }
 
-/// Keep or drop the lines between `//@BINDING-BEGIN` and `//@BINDING-END`,
-/// which exist only for an application whose effects are served by a binding.
-/// The marker lines themselves never survive.
-fn section(template: &str, keep: bool) -> String {
+/// Keep or drop the lines between `//@MARKER-BEGIN` and `//@MARKER-END`: the
+/// `BINDING` lines exist only for an application whose effects are served by a
+/// binding, the `SERVING` lines only for a served application. The marker lines
+/// themselves never survive.
+fn section(template: &str, marker: &str, keep: bool) -> String {
+    let (begin, end) = (format!("//@{marker}-BEGIN"), format!("//@{marker}-END"));
     let mut inside = false;
     let mut out = String::new();
     for line in template.split_inclusive('\n') {
-        match line.trim() {
-            "//@BINDING-BEGIN" => inside = true,
-            "//@BINDING-END" => inside = false,
-            _ if inside && !keep => {}
-            _ => out.push_str(line),
+        let trimmed = line.trim();
+        if trimmed == begin {
+            inside = true;
+        } else if trimmed == end {
+            inside = false;
+        } else if !(inside && !keep) {
+            out.push_str(line);
         }
     }
     out
+}
+
+/// The expression that makes the host `serve` runs the core with: the declared
+/// binding, or the host of an application that declares no effect.
+fn serve_host(application: &ServerApplication) -> String {
+    application.bindings.first().map_or_else(
+        || format!("{}::protocol::Unbound", library_name(application)),
+        |binding| format!("<{} as Default>::default()", binding.host),
+    )
 }

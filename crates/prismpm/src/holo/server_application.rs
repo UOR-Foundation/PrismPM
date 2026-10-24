@@ -5,13 +5,14 @@
 //! acceptance run (`crate::server_host`) are separate obligations.
 
 mod model;
-mod serving;
+pub mod serving;
 mod source;
 pub mod wire;
 
 pub use model::{
-    HostEffect, HostField, HostKind, HostProtocol, HostStep, HostTranscript, ServerApplication,
-    ServerBinding, ServerCore,
+    FrameKind, FrameSection, HostEffect, HostField, HostKind, HostProtocol, HostStep,
+    HostTranscript, ServedVector, ServerApplication, ServerBinding, ServerCore, ServerServing,
+    ServingOrigin,
 };
 
 use crate::error::PrismError;
@@ -222,9 +223,10 @@ pub fn validate(value: &ServerApplication) -> Result<(), PrismError> {
     if host.effects.len() > MAXIMUM_EFFECTS {
         return Err(invalid("server application declares too many host effects"));
     }
-    if host.effects.is_empty() != (host.effect_budget == 0) || host.effect_budget > MAXIMUM_BUDGET {
+    if value.performs_effects() != (host.effect_budget != 0) || host.effect_budget > MAXIMUM_BUDGET
+    {
         return Err(invalid(
-            "the effect budget is zero exactly when no effect is declared, and at most 256",
+            "the effect budget is zero exactly when the core may request no effect, and at most 256",
         ));
     }
     let mut names = BTreeSet::new();
@@ -241,6 +243,7 @@ pub fn validate(value: &ServerApplication) -> Result<(), PrismError> {
         ));
     }
     exchanges(value)?;
+    serving::validate(value)?;
     transcripts(value)
 }
 
@@ -379,6 +382,7 @@ fn exchanges(value: &ServerApplication) -> Result<(), PrismError> {
 
 fn transcripts(value: &ServerApplication) -> Result<(), PrismError> {
     let host = &value.host;
+    let frame = value.frame_effects();
     let mut vectors = BTreeSet::new();
     let mut exercised = BTreeSet::new();
     let mut total: usize = value
@@ -404,6 +408,11 @@ fn transcripts(value: &ServerApplication) -> Result<(), PrismError> {
                 .iter()
                 .find(|declared| declared.name == step.effect)
                 .ok_or_else(|| invalid("a transcript step names an undeclared host effect"))?;
+            if frame.contains(declared.name.as_str()) {
+                return Err(invalid(
+                    "a transcript step names an effect that only fills the request frame, which the core cannot request",
+                ));
+            }
             if step.request.len() > declared.request_maximum as usize
                 || step.outcome.len() > declared.result_maximum as usize
                 || wire::decode_fields(&declared.request, &step.request).is_err()
@@ -417,13 +426,12 @@ fn transcripts(value: &ServerApplication) -> Result<(), PrismError> {
             exercised.insert(declared.name.as_str());
         }
     }
-    if host
-        .effects
-        .iter()
+    if value
+        .core_effects()
         .any(|declared| !exercised.contains(declared.name.as_str()))
     {
         return Err(invalid(
-            "every declared host effect must be requested by a step of some acceptance transcript",
+            "every host effect the core may request must be requested by a step of some acceptance transcript",
         ));
     }
     Ok(())
