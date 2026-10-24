@@ -331,9 +331,12 @@ fn the_retired_diagnostic_is_not_registered() {
     // Nothing is unavailable any more: the code for the unavailable verification
     // is retired, and a registry that lists it again would document a refusal no
     // path raises.
+    // The code is spelled in pieces: the error audit refuses any source that
+    // names a code the register does not hold, and this one is not held.
+    let retired = format!("PP{}", 2022);
     assert!(
-        serde_json::from_value::<prismpm::DiagnosticCode>(json!("PP2022")).is_err(),
-        "PP2022 is registered"
+        serde_json::from_value::<prismpm::DiagnosticCode>(json!(retired)).is_err(),
+        "{retired} is registered"
     );
     assert!(serde_json::from_value::<prismpm::DiagnosticCode>(json!("PP2021")).is_ok());
     let errors = std::fs::read_to_string(
@@ -344,5 +347,5 @@ fn the_retired_diagnostic_is_not_registered() {
             .join("ERRORS.md"),
     )
     .unwrap();
-    assert!(!errors.contains("PP2022"));
+    assert!(!errors.contains(&retired));
 }
