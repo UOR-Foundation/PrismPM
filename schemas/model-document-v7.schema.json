@@ -113,6 +113,13 @@
             "$ref": "#/$defs/server_binding"
           }
         },
+        "serving": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/server_serving"
+          }
+        },
         "host": {
           "$ref": "#/$defs/host_protocol"
         }
@@ -130,7 +137,8 @@
         "name",
         "profile",
         "request_maximum",
-        "response_maximum"
+        "response_maximum",
+        "serving"
       ]
     },
     "server_core": {
@@ -179,6 +187,236 @@
         "crate_name",
         "host",
         "path"
+      ]
+    },
+    "server_serving": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "const": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "connection_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "read_timeout_millis": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600000
+        },
+        "root_stack_bytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 1073741824
+        },
+        "request_line_maximum": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 1048576
+        },
+        "header_count_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "header_bytes_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "body_maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "origins": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/serving_origin"
+          }
+        },
+        "accept": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 127,
+            "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+          }
+        },
+        "content_types": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 127,
+            "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+          }
+        },
+        "enforced_methods": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 16,
+            "pattern": "^[A-Z]+$"
+          }
+        },
+        "counted_field": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "counted_value": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "frame": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/frame_section"
+          }
+        },
+        "vectors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/served_vector"
+          }
+        }
+      },
+      "required": [
+        "accept",
+        "address",
+        "body_maximum",
+        "connection_maximum",
+        "content_types",
+        "counted_field",
+        "counted_value",
+        "enforced_methods",
+        "frame",
+        "header_bytes_maximum",
+        "header_count_maximum",
+        "origins",
+        "port",
+        "read_timeout_millis",
+        "request_line_maximum",
+        "root_stack_bytes",
+        "vectors"
+      ]
+    },
+    "serving_origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scheme": {
+          "enum": [
+            "http",
+            "https"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "scheme"
+      ]
+    },
+    "frame_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 32,
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "kind": {
+          "enum": [
+            "u32",
+            "u64",
+            "bytes",
+            "text",
+            "text-list"
+          ]
+        },
+        "effect": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "field": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "values": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "required": [
+        "effect",
+        "field",
+        "kind",
+        "name",
+        "values"
+      ]
+    },
+    "served_vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vector": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "request": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "response": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "required": [
+        "request",
+        "response",
+        "vector"
       ]
     },
     "application_acceptance_vector": {

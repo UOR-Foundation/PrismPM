@@ -32,6 +32,9 @@ pub struct ServerApplication {
     pub response_maximum: u32,
     /// The host binding crate: empty exactly when no effect is declared, else one.
     pub bindings: Vec<ServerBinding>,
+    /// How the application is served over loopback HTTP: empty when it is not
+    /// served, else one record.
+    pub serving: Vec<ServerServing>,
     /// The host effect protocol of the core.
     pub host: HostProtocol,
 }
@@ -85,6 +88,107 @@ pub struct HostProtocol {
     pub effects: Vec<HostEffect>,
     /// Effect scripts of acceptance vectors, by vector index.
     pub transcripts: Vec<HostTranscript>,
+}
+
+/// The loopback HTTP/1.1 surface of a served application. Every bound the
+/// generated listener acts on is a field here, never a constant of the generator.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServerServing {
+    /// Listener address: exactly `127.0.0.1`.
+    pub address: String,
+    /// Listener port, 0 to 65535; 0 lets the system choose one.
+    pub port: u32,
+    /// Most connections served at the same time; the next is refused with 503.
+    pub connection_maximum: u32,
+    /// Milliseconds a request may take to arrive in full.
+    pub read_timeout_millis: u32,
+    /// Stack bytes of the thread that serves one connection and runs the core.
+    pub root_stack_bytes: u32,
+    /// Most bytes of the request line.
+    pub request_line_maximum: u32,
+    /// Most field lines of a request, trailers included.
+    pub header_count_maximum: u32,
+    /// Most bytes of the field lines of a request, trailers included.
+    pub header_bytes_maximum: u32,
+    /// Most bytes of the decoded request body.
+    pub body_maximum: u32,
+    /// The `Origin` values a request may carry; a request without one is not judged.
+    pub origins: Vec<ServingOrigin>,
+    /// Media types the `Accept` fields of a checked request must list.
+    pub accept: Vec<String>,
+    /// Media types of which the `Content-Type` of a checked request is one.
+    pub content_types: Vec<String>,
+    /// Request methods the `Accept` and `Content-Type` requirements apply to.
+    pub enforced_methods: Vec<String>,
+    /// Name of the request field whose exact value marks a counted request, or empty.
+    pub counted_field: String,
+    /// The value of that field that marks a counted request, or empty.
+    pub counted_value: String,
+    /// The host-provided sections that follow the body in the request frame, in order.
+    pub frame: Vec<FrameSection>,
+    /// Raw HTTP exchanges of the acceptance over a socket.
+    pub vectors: Vec<ServedVector>,
+}
+
+/// One allowed `Origin`: scheme, host and port (0 for any port).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServingOrigin {
+    /// `http` or `https`.
+    pub scheme: String,
+    /// Lowercase host name or bracketed IPv6 literal.
+    pub host: String,
+    /// Port, 1 to 65535, or 0 for any port.
+    pub port: u32,
+}
+
+/// Value kinds of a frame section.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FrameKind {
+    /// Unsigned 32-bit big-endian integer.
+    U32,
+    /// Unsigned 64-bit big-endian integer.
+    U64,
+    /// Opaque bytes with a 32-bit length prefix.
+    Bytes,
+    /// UTF-8 text with a 32-bit length prefix.
+    Text,
+    /// A 32-bit count, then each text with a 32-bit length prefix.
+    TextList,
+}
+
+/// A host-provided section of the request frame. It comes either from a result
+/// field of a declared host effect (`effect` and `field`) or from model data
+/// (`values`), never both.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FrameSection {
+    /// Lowercase snake-case name of the section.
+    pub name: String,
+    /// Encoding of the section.
+    pub kind: FrameKind,
+    /// Declared host effect whose result supplies the section, or empty.
+    pub effect: String,
+    /// Result field of that effect, or empty.
+    pub field: String,
+    /// Model-owned values: one for a scalar or text, any number for a list.
+    pub values: Vec<String>,
+}
+
+/// A raw HTTP exchange of the acceptance: the request bytes a client sends, the
+/// response bytes the program must return, and the frame vector the core must be
+/// given and answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServedVector {
+    /// Index into `acceptance_vectors`: the frame the adapter must give the core.
+    pub vector: u32,
+    /// The HTTP request bytes.
+    pub request: Vec<u8>,
+    /// The HTTP response bytes.
+    pub response: Vec<u8>,
 }
 
 /// Value kinds of effect requests and results.
@@ -168,13 +272,37 @@ impl HostEffect {
 }
 
 impl ServerApplication {
-    /// Longest step the entry may return: the done or perform word, a tag, and
-    /// the larger of the response and any effect request.
-    pub fn step_maximum(&self) -> u64 {
-        let request = self
-            .host
+    /// Effects the host performs to fill a section of the request frame. The core
+    /// cannot request them, and they do not make the application speak the turn
+    /// protocol.
+    pub fn frame_effects(&self) -> std::collections::BTreeSet<&str> {
+        self.serving
+            .iter()
+            .flat_map(|serving| &serving.frame)
+            .filter(|section| !section.effect.is_empty())
+            .map(|section| section.effect.as_str())
+            .collect()
+    }
+
+    /// Effects the core may request, in declaration order.
+    pub fn core_effects(&self) -> impl Iterator<Item = &HostEffect> {
+        let frame = self.frame_effects();
+        self.host
             .effects
             .iter()
+            .filter(move |effect| !frame.contains(effect.name.as_str()))
+    }
+
+    /// Whether the core speaks the turn and step protocol: it may request an effect.
+    pub fn performs_effects(&self) -> bool {
+        self.core_effects().next().is_some()
+    }
+
+    /// Longest step the entry may return: the done or perform word, a tag, and
+    /// the larger of the response and any effect request the core may make.
+    pub fn step_maximum(&self) -> u64 {
+        let request = self
+            .core_effects()
             .map(|effect| u64::from(effect.request_maximum))
             .max()
             .unwrap_or(0);
@@ -184,20 +312,18 @@ impl ServerApplication {
     /// Largest input the core can be given: the request alone without
     /// effects, otherwise the largest turn.
     pub fn input_maximum(&self) -> u64 {
-        if self.host.effects.is_empty() {
-            u64::from(self.request_maximum)
-        } else {
+        if self.performs_effects() {
             self.turn_maximum()
+        } else {
+            u64::from(self.request_maximum)
         }
     }
 
     /// Largest turn the core can be given: the request, the effect count
-    /// and the most results the budget allows. Meaningful only with effects.
+    /// and the most results the budget allows. Meaningful only with core effects.
     pub fn turn_maximum(&self) -> u64 {
         let result = self
-            .host
-            .effects
-            .iter()
+            .core_effects()
             .map(|effect| u64::from(effect.result_maximum))
             .max()
             .unwrap_or(0);
@@ -205,12 +331,10 @@ impl ServerApplication {
     }
 
     /// Largest replay script of the effect budget: per step, the effect tag, two
-    /// lengths, the request and the outcome. Meaningful only with effects.
+    /// lengths, the request and the outcome. Meaningful only with core effects.
     pub fn script_maximum(&self) -> u64 {
         let step = self
-            .host
-            .effects
-            .iter()
+            .core_effects()
             .map(|effect| 12 + u64::from(effect.request_maximum) + u64::from(effect.result_maximum))
             .max()
             .unwrap_or(0);

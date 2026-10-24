@@ -30,6 +30,8 @@ pub enum Failure {
     ScriptExhausted,
     ScriptMismatch,
     ScriptUnused,
+    ListenAddress,
+    ListenIo,
 }
 
 /// Selects the modeled exit status of a failure.
@@ -52,7 +54,8 @@ impl Failure {
             | Failure::InputOpen
             | Failure::InputType
             | Failure::InputRead
-            | Failure::OutputWrite => FailureClass::Io,
+            | Failure::OutputWrite
+            | Failure::ListenIo => FailureClass::Io,
             Failure::InputLimit
             | Failure::AdapterAllocation
             | Failure::ComputeFailure
@@ -67,7 +70,8 @@ impl Failure {
             | Failure::ScriptMalformed
             | Failure::ScriptExhausted
             | Failure::ScriptMismatch
-            | Failure::ScriptUnused => FailureClass::Fault,
+            | Failure::ScriptUnused
+            | Failure::ListenAddress => FailureClass::Fault,
         }
     }
 }

@@ -110,7 +110,7 @@ pub fn dispatch(turn: Vec<u8>) -> Vec<u8> {
 /// `Bytes` and returns the step as a list of numbers or fails with `Overflow`.
 /// An empty step stands for `Overflow`, a step of `256` for an element that is
 /// not one octet.
-const PRELUDE: &str = r#"
+pub(super) const PRELUDE: &str = r#"
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Overflow;
 
@@ -158,7 +158,7 @@ pub fn dispatch(turn: Vec<u8>) -> Vec<u8> {
 }
 "#;
 
-fn field(name: &str, kind: &str) -> Value {
+pub(super) fn field(name: &str, kind: &str) -> Value {
     json!({"name": name, "kind": kind})
 }
 
@@ -232,7 +232,7 @@ fn found(version: u64, value: &str) -> Vec<u8> {
     )
 }
 
-fn model_value() -> Value {
+pub(super) fn model_value() -> Value {
     json!({
         "profile": "prismpm/server-application/1",
         "name": "Echo Host",
@@ -252,6 +252,7 @@ fn model_value() -> Value {
         "bindings": [{"path": "bindings/echo-binding", "crate_name": "echo-binding", "host": "echo_binding::Native"}],
         "request_maximum": 16,
         "response_maximum": 64,
+        "serving": [],
         "host": {
             "protocol": "prismpm/host-effects/1",
             "description": "Replays a scripted host for one exchange.\n",
@@ -296,7 +297,7 @@ fn model_value() -> Value {
     })
 }
 
-pub(super) fn model() -> ServerApplication {
+pub(crate) fn model() -> ServerApplication {
     serde_json::from_value(model_value()).expect("fixture deserializes")
 }
 
@@ -317,14 +318,14 @@ fn host_file<'a>(package: &'a prod_codegen::GeneratedPackage, path: &str) -> &'a
     file(package, &format!("{}/{path}", program_name(&model())))
 }
 
-struct Built {
+pub(super) struct Built {
     _directory: tempfile::TempDir,
-    program: PathBuf,
-    package: PathBuf,
-    target: PathBuf,
+    pub(super) program: PathBuf,
+    pub(super) package: PathBuf,
+    pub(super) target: PathBuf,
 }
 
-fn cargo(arguments: &[&str], directory: &Path, target: &Path) -> Output {
+pub(super) fn cargo(arguments: &[&str], directory: &Path, target: &Path) -> Output {
     Command::new("cargo")
         .args(arguments)
         .current_dir(directory)
@@ -376,7 +377,7 @@ impl Host for Native {
 }
 "#;
 
-fn write_binding(workspace: &Path, application: &ServerApplication) {
+fn write_binding(workspace: &Path, application: &ServerApplication, source: &str) {
     for binding in &application.bindings {
         let directory = workspace.join(&binding.path);
         std::fs::create_dir_all(directory.join("src")).unwrap();
@@ -390,12 +391,16 @@ fn write_binding(workspace: &Path, application: &ServerApplication) {
             ),
         )
         .unwrap();
-        std::fs::write(directory.join("src/lib.rs"), BINDING).unwrap();
+        std::fs::write(directory.join("src/lib.rs"), source).unwrap();
     }
 }
 
 fn members(application: &ServerApplication) -> String {
-    let mut members = vec![api_name(application), program_name(application)];
+    let mut members = vec![
+        application.core.package.clone(),
+        api_name(application),
+        program_name(application),
+    ];
     members.extend(
         application
             .bindings
@@ -415,9 +420,18 @@ fn members(application: &ServerApplication) -> String {
 /// Write the generated packages, the stand-in core and the test binding into one
 /// workspace, as a consumer would hold them, and build the program.
 fn build(application: &ServerApplication, core_source: &str) -> Built {
+    build_with(application, core_source, BINDING)
+}
+
+/// As `build`, with the source of the binding crate given.
+pub(super) fn build_with(
+    application: &ServerApplication,
+    core_source: &str,
+    binding: &str,
+) -> Built {
     let directory = tempfile::tempdir().unwrap();
     let workspace = directory.path().join("workspace");
-    let core = workspace.join("core");
+    let core = workspace.join(&application.core.package);
     std::fs::create_dir_all(core.join("src")).unwrap();
     std::fs::write(
         core.join("Cargo.toml"),
@@ -437,30 +451,10 @@ fn build(application: &ServerApplication, core_source: &str) -> Built {
     for item in &generated.files {
         let path = workspace.join(&item.path);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let bytes = if item
-            .path
-            .ends_with(&format!("{}/Cargo.toml", program_name(application)))
-        {
-            // The generated dependency is a locked registry version; the stand-in
-            // core is a path dependency.
-            let manifest = String::from_utf8(item.bytes.clone()).unwrap();
-            let registry = format!(
-                "{} = {{ version = \"={}\" }}",
-                application.core.package, application.core.version
-            );
-            assert!(manifest.contains(&registry));
-            manifest
-                .replace(
-                    &registry,
-                    &format!("{} = {{ path = \"../core\" }}", application.core.package),
-                )
-                .into_bytes()
-        } else {
-            item.bytes.clone()
-        };
+        let bytes = item.bytes.clone();
         std::fs::write(path, bytes).unwrap();
     }
-    write_binding(&workspace, application);
+    write_binding(&workspace, application, binding);
     let target = directory.path().join("target");
     let output = cargo(&["build", "--offline"], &workspace, &target);
     assert!(
@@ -486,7 +480,7 @@ fn rogue() -> &'static Built {
     BUILT.get_or_init(|| build(&model(), ROGUE))
 }
 
-fn run(program: &Path, arguments: &[&str], stdin: &[u8]) -> Output {
+pub(super) fn run(program: &Path, arguments: &[&str], stdin: &[u8]) -> Output {
     let mut child = Command::new(program)
         .args(arguments)
         .stdin(Stdio::piped())
@@ -498,11 +492,11 @@ fn run(program: &Path, arguments: &[&str], stdin: &[u8]) -> Output {
     child.wait_with_output().unwrap()
 }
 
-fn code(output: &Output) -> i32 {
+pub(super) fn code(output: &Output) -> i32 {
     output.status.code().expect("exit code")
 }
 
-fn stderr(output: &Output) -> String {
+pub(super) fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
@@ -555,7 +549,7 @@ fn generated_package_has_the_closed_file_set() {
     );
     let manifest = host_file(&package, "Cargo.toml");
     assert!(manifest.contains("name = \"echo-core-host\""));
-    assert!(manifest.contains("echo_core = { version = \"=0.1.0\" }"));
+    assert!(manifest.contains("echo_core = { path = \"../echo_core\" }"));
     assert!(manifest.contains("echo-core-host-api = { path = \"../echo-core-host-api\" }"));
     assert!(manifest.contains("echo-binding = { path = \"../bindings/echo-binding\" }"));
     assert!(!manifest.contains("[profile"));
@@ -740,10 +734,14 @@ fn a_binding_that_cannot_run_an_effect_exits_with_the_fault_code() {
 fn scratch(application: &ServerApplication) -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     std::fs::write(directory.path().join("Cargo.toml"), members(application)).unwrap();
-    for generated in [api_name(application), program_name(application)] {
+    for generated in [
+        application.core.package.clone(),
+        api_name(application),
+        program_name(application),
+    ] {
         std::fs::create_dir_all(directory.path().join(generated)).unwrap();
     }
-    write_binding(directory.path(), application);
+    write_binding(directory.path(), application, BINDING);
     directory
 }
 
@@ -763,6 +761,7 @@ fn the_workspace_holds_the_declared_binding_or_the_declaration_is_refused() {
 
     // The generated packages and the binding are listed exactly.
     for omitted in [
+        "echo_core",
         "echo-core-host-api",
         "echo-core-host",
         "bindings/echo-binding",
@@ -776,7 +775,7 @@ fn the_workspace_holds_the_declared_binding_or_the_declaration_is_refused() {
     let directory = scratch(&application);
     std::fs::write(
         directory.path().join("Cargo.toml"),
-        "[workspace]\nmembers = [\"echo-core-host-api\", \"echo-core-host\", \"bindings/*\"]\n",
+        "[workspace]\nmembers = [\"echo_core\", \"echo-core-host-api\", \"echo-core-host\", \"bindings/*\"]\n",
     )
     .unwrap();
     assert!(refused(&directory).contains("bindings/echo-binding"));

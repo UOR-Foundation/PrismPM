@@ -3272,8 +3272,9 @@ request for it, in order, with the host's encoded outcome for each. Validation
 decodes every request and outcome with the reference codec, and refuses a
 declaration in which some declared effect is requested by no transcript step.
 
-The build of a server application is refused with PP2022. What exists is the
-declaration and `prismpm::server_host::generate`, which renders two Cargo
+The verification of a server application is refused with PP2022; its build is
+12.15.3. What exists is the declaration and `prismpm::server_host::generate`,
+which renders two Cargo
 packages as members of the consumer's workspace, a fixed template composed with
 code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
 primitives, the closed `Request` sum with one variant per declared effect, the
@@ -3313,25 +3314,120 @@ its transports gain `binding`; the scripted host stays the transcript's host. Th
 generated driver package carries the same corpus and its own tests, including a
 check that the binding type implements `Host` and `Default`, and depends on the
 exported core package at its exact version. The record is not yet part of
-`application-acceptance.json`. The build of the core through `production`, the
-serving effect, `prismpm verify` and source-free release verification are
-outside this slice.
+`application-acceptance.json`. `prismpm verify` and source-free release
+verification of a server application are outside this slice.
 
 #### 12.15.1 Where HTTP/1.1 framing lives
 
-The serving effect, for conformance builds that expose a core over loopback
-HTTP, is not implemented here; its placement is decided as follows. RFC 9112
-message framing, the request line, field lines, `Content-Length` delimiting and
-response serialization, is transport mechanics: it maps bytes to a frame without
-reading the meaning of any field. It lives in the generated host adapter as a
-fixed template fragment, like the bounded raw-file adapter, and not in the
-model. Semantics stay source-owned. The adapter forwards the method, target,
-fields and body to the root as an exchange frame, and the root alone decides
-every status, header and body. Every parameter the adapter acts on is model
-data: the most header fields and header bytes, the largest body, the allowed
-`Origin` values and the required `Accept` and `Content-Type` fields. Exceeding
-the first refuses with 431, the second with 413, and neither is a constant of the
-generator.
+RFC 9112 message framing, the request line, field lines, `Content-Length`
+and chunked delimiting and response serialization, is transport mechanics: it
+maps bytes to a frame without reading the meaning of any field. It lives in the
+generated host adapter as a fixed template fragment, like the bounded raw-file
+adapter, and not in the model. Semantics stay source-owned. The adapter forwards
+the method, target, fields and body to the root as an exchange frame, and the
+root alone decides every status, header and body, including the bytes of an
+event stream and its `Content-Type`: the adapter serializes exactly the response
+frame the root returns and has no stream logic of its own. Every parameter the
+adapter acts on is model data (12.15.2); none is a constant of the generator.
+
+#### 12.15.2 The serving effect
+
+A server application may declare `serving`, a list of zero or one `ServerServing`
+record in `Foundation.Server.V1.Model`, in the `serving` field of
+`ServerApplication` (`model-document/7`). The record is the closed declaration of
+the listener of the generated program and of everything it acts on:
+
+- `address` and `port`. The only admitted address is `127.0.0.1`. Any other
+  address, a name, `0.0.0.0` or an IPv6 address, is refused with `PP2019` when
+  the declaration is validated, and the generated listener refuses it again
+  (`ListenAddress`) when it is asked to bind, so the program cannot be made to
+  listen on another interface by editing generated source. Port 0 asks the
+  system for a port; the program prints `listening ADDRESS:PORT` on standard
+  output once it listens.
+- `connectionMaximum`, `readTimeoutMillis` and `rootStackBytes`. The adapter
+  serves at most that many connections at once on threads whose stack is that
+  size, so the root runs in a stack the model bounds; a connection over the
+  maximum is answered `Busy` (503). A request that does not arrive in full
+  within the read time is answered `ReadTimeout` (408).
+- `requestLineMaximum`, `headerCountMaximum`, `headerBytesMaximum` and
+  `bodyMaximum`. Trailers count as field lines. The bounds are inclusive: a
+  request exactly at a bound is served and one byte or one line over is
+  refused.
+- `origins`, the allowed `Origin` values as scheme, host and port, 0 for any
+  port. A request with an `Origin` that is repeated, unparsable or not listed is
+  refused with 403; a request without one is not.
+- `accept`, `contentTypes` and `enforcedMethods`. For a request of an enforced
+  method the `Accept` fields must list every required media type (406) and
+  exactly one `Content-Type` must be an allowed media type (415). They are
+  declared together or not at all.
+- `countedField` and `countedValue`. A request carrying that field with that
+  value is a counted request; the adapter tells the declared host effects
+  whether the request they are asked about is counted.
+- `frame`, the ordered host-provided sections that follow the body in the
+  request frame. A section has a unique name and a kind (`U32`, `U64`, `Bytes`,
+  `Text` or `TextList`) and is either the field of the result of a declared host
+  effect or model values. A host effect named by a section is a *frame effect*:
+  the adapter, not the core, requests it, once for every request that reaches
+  the core; it is excluded from the effects the core may request, so a core with
+  no other effect remains the plain frame function. A section that names no
+  declared effect and field, or whose kind disagrees with the field's, is
+  refused with `PP2019`, as is a declaration whose largest request frame under
+  the declared bounds exceeds the exchange `requestMaximum`. A frame effect whose
+  result is larger than declared or that fails answers the request
+  `FrameUnavailable` (503) without calling the core.
+- `vectors`, the served HTTP vectors: each is a request message and the exact
+  response message, and names the frame vector it corresponds to.
+
+The request frame is `u32` length and method, `u32` length and target, a `u32`
+count of fields and for each the `u32` length and name and the `u32` length and
+value in the order received and without merging, the `u32` length and body, and
+the frame sections in order; integers are big-endian. The response frame is the
+`u32` status (200 to 599), the `u32` count of fields and for each a name and
+value as chunks, the `u32` count of notifications, which must be 0, and the body
+as a chunk. The adapter owns `Content-Length`, `Transfer-Encoding` and
+`Connection`: a response frame that sets one, carries a notification, has a
+malformed field, has a body on a 204 or 304 or leaves bytes after the body is
+answered `ResponseMalformed` (500). Every response carries `Connection: close`
+and one request is served per connection.
+
+The refusals the adapter makes itself, before the root is called or instead of
+its answer, are the closed vocabulary `ServingRefusal`, registered with their
+statuses in `model/serving-diagnostics.toml` and generated identically as a Lean
+inductive, an enum of the host library and the body of the refusal response.
+Checks run in a fixed order: request line (400, 414, 505), field lines (400,
+431), `Host` (400), `Origin` (403), `Accept` and `Content-Type` (406, 415),
+message framing (400, 413, 417, 501) and the body (400, 408, 413). The root is
+called for a request that passed all of them and for no other: a refusal leaves
+the counters of the host effects unchanged. A body larger than the maximum is
+refused from its `Content-Length` or its chunk sizes, not by reading it.
+
+#### 12.15.3 The build of the core
+
+`prismpm build` of a server application builds the declared core through the
+`production` API of the pinned `lexlean` crate (`prismpm::server_build`). The
+core root is a LexLean definition `Bytes -> List Nat` that declares
+`production: {effects: [allocation, overflow], targets: [rust-std]}`; the
+compiler verifies the project (the certificates of the export are replayed by
+Lean's kernel), exports the `rust-std` package under the name and version of
+`core`, and the build reads the package out of the bundle, removes the bundle
+and lays it out, with the two generated host packages, under `server/` in the
+build artifacts together with the compiler's `production-result.json`. The
+generated driver depends on the core package by the path of its directory in the
+consumer's workspace. The workspace manifest, the binding crate and the release
+profile remain the consumer's, as in 12.15.
+
+The build is refused with `PP2020` when the compiler refuses the export: the
+root is not a production root of the project or does not declare the target, the
+project does not verify, or the project changed while it was exported. It is
+refused with `PP2020` as well when the exported package exhibits an effect other
+than `allocation` and `overflow`; `recursion` in particular is not admitted,
+because the stack of the root is a model bound. A declaration that cannot be
+generated is refused with `PP2013` or `PP2019` before the compiler is invoked.
+The example server of the register is `examples/EchoServer`, a LexLean 1.2
+project whose core echoes the body of a request and the count of counted
+requests the host reports, whose binding crate implements that one host effect,
+and whose served vectors are answered over a real loopback socket by the
+generated program.
 
 ## 13. OCI product-release graph
 
@@ -3839,6 +3935,9 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-20` | `holo` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. | §3 |
 | `HO-21` | `holo` | The explicit server/1 profile declares a closed set of typed host effects in source, with their bounds, closed failures and acceptance transcripts, and projects, validates and canonically encodes it as a closed model document whose every violation is refused with a registered diagnostic, without executing the application or granting any effect. | §3 |
 | `HO-22` | `holo` | The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline. | §3 |
+| `HO-23` | `holo` | The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic. | §3 |
+| `HO-24` | `holo` | The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket. | §3 |
+| `HO-25` | `holo` | A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
