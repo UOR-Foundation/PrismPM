@@ -8,11 +8,23 @@
 //! binding directory resolves inside the workspace, its manifest names the
 //! declared crate and depends on the generated API package, and every other
 //! dependency it has is a crates.io dependency or another workspace member.
+//!
+//! Verification builds that workspace away from the project: [`stage`] lays the
+//! consumer's own files, the root manifest, its committed lock, a pinned
+//! toolchain and every member the build does not generate, beside the files of
+//! the build, so that what is built is what the project holds and the build
+//! produced, and nothing the project's working tree happens to contain.
 
 use super::{api_library_name, api_name, program_name};
 use crate::error::PrismError;
 use crate::holo::server_application::ServerApplication;
-use std::path::{Path, PathBuf};
+use std::collections::BTreeSet;
+use std::path::{Component, Path, PathBuf};
+
+/// Most bytes of the consumer's own files a verification stages.
+pub const STAGED_MAXIMUM: u64 = 64 * 1024 * 1024;
+/// The file the build records its compiler result in; it is not a workspace file.
+const RESULT: &str = "production-result.json";
 
 fn mismatch(message: impl Into<String>) -> PrismError {
     PrismError::new("PP2013", message)
@@ -135,4 +147,128 @@ pub fn verify(application: &ServerApplication, workspace: &Path) -> Result<(), P
         }
     }
     Ok(())
+}
+
+fn confined(member: &str) -> bool {
+    !member.is_empty()
+        && !member.contains(['*', '?', '[', '\\'])
+        && Path::new(member)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+}
+
+/// Copy one regular file or a tree of them; a symlink or a special file is refused.
+fn copy(from: &Path, to: &Path, total: &mut u64) -> Result<(), PrismError> {
+    let metadata = std::fs::symlink_metadata(from)
+        .map_err(|error| mismatch(format!("{}: {error}", from.display())))?;
+    if metadata.is_dir() {
+        std::fs::create_dir_all(to)
+            .map_err(|error| mismatch(format!("{}: {error}", to.display())))?;
+        let mut entries = std::fs::read_dir(from)
+            .map_err(|error| mismatch(format!("{}: {error}", from.display())))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| mismatch(format!("{}: {error}", from.display())))?;
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
+            // Cargo's own output is not the consumer's file.
+            if entry.file_name() == "target" {
+                continue;
+            }
+            copy(&entry.path(), &to.join(entry.file_name()), total)?;
+        }
+        return Ok(());
+    }
+    if !metadata.is_file() {
+        return Err(mismatch(format!(
+            "{} is neither a regular file nor a directory",
+            from.display()
+        )));
+    }
+    *total = total.saturating_add(metadata.len());
+    if *total > STAGED_MAXIMUM {
+        return Err(mismatch(
+            "the consumer's workspace files exceed the staging bound",
+        ));
+    }
+    std::fs::copy(from, to)
+        .map(|_| ())
+        .map_err(|error| mismatch(format!("{}: {error}", from.display())))
+}
+
+/// Lay the consumer's workspace out below `destination` for verification: the
+/// project's `Cargo.toml`, its committed `Cargo.lock`, an optional
+/// `rust-toolchain.toml`, every member the build does not generate, and the files
+/// of the build under `server` (all but the compiler's record), then check the
+/// result with [`verify`].
+///
+/// # Errors
+/// Returns `PP2013` when the project holds no workspace manifest or no committed
+/// lock, lists a member that is a glob or leaves the project, holds a symlink or a
+/// special file in a member, exceeds [`STAGED_MAXIMUM`], or does not hold the
+/// declared binding.
+pub fn stage(
+    application: &ServerApplication,
+    project: &Path,
+    server: &Path,
+    destination: &Path,
+) -> Result<(), PrismError> {
+    let mut total = 0;
+    for file in ["Cargo.toml", "Cargo.lock"] {
+        if !project.join(file).is_file() {
+            return Err(mismatch(format!(
+                "the project holds no {file}: the consumer commits the workspace manifest and its lock"
+            )));
+        }
+    }
+    let members = manifest(&project.join("Cargo.toml"))?
+        .get("workspace")
+        .and_then(|table| table.get("members"))
+        .and_then(toml::Value::as_array)
+        .map(|members| {
+            members
+                .iter()
+                .filter_map(|member| member.as_str().map(str::to_owned))
+                .collect::<Vec<_>>()
+        })
+        .ok_or_else(|| mismatch("the workspace manifest lists no members"))?;
+    let generated = BTreeSet::from([
+        application.core.package.clone(),
+        api_name(application),
+        program_name(application),
+    ]);
+    std::fs::create_dir_all(destination)
+        .map_err(|error| mismatch(format!("{}: {error}", destination.display())))?;
+    for file in ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"] {
+        if project.join(file).exists() {
+            copy(&project.join(file), &destination.join(file), &mut total)?;
+        }
+    }
+    for member in members.iter().filter(|member| !generated.contains(*member)) {
+        if !confined(member) {
+            return Err(mismatch(format!(
+                "the member {member} is not a plain path inside the workspace"
+            )));
+        }
+        copy(&project.join(member), &destination.join(member), &mut total)?;
+    }
+    for entry in walkdir::WalkDir::new(server).follow_links(false) {
+        let entry = entry.map_err(|error| mismatch(error.to_string()))?;
+        if entry.file_type().is_dir() {
+            continue;
+        }
+        let relative = entry
+            .path()
+            .strip_prefix(server)
+            .map_err(|error| mismatch(error.to_string()))?;
+        if relative == Path::new(RESULT) {
+            continue;
+        }
+        let target = destination.join(relative);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| mismatch(format!("{}: {error}", parent.display())))?;
+        }
+        copy(entry.path(), &target, &mut total)?;
+    }
+    verify(application, destination)
 }

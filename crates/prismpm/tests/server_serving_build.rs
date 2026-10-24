@@ -31,7 +31,7 @@ fn example() -> PathBuf {
 }
 
 /// What `prismpm build` and cargo leave in an example directory.
-const GENERATED: [&str; 8] = [
+const GENERATED: [&str; 7] = [
     ".lexlean",
     ".prism",
     "target",
@@ -39,7 +39,6 @@ const GENERATED: [&str; 8] = [
     "echo_server_core",
     "echo-server-host-api",
     "echo-server-host",
-    "Cargo.lock",
 ];
 
 fn copy(from: &Path, to: &Path) {

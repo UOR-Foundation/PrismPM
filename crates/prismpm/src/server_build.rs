@@ -17,8 +17,8 @@
 use crate::error::PrismError;
 use crate::holo::server_application::ServerApplication;
 use lexlean::api::production::{
-    self, Expectation, PackageName, ProductionRequest, ProductionResult, RootRequest, TargetRef,
-    REQUEST_SPEC,
+    self, Expectation, PackageName, ProductionRequest, ProductionResult, RootRequest, TargetOutput,
+    TargetRef, REQUEST_SPEC,
 };
 use lexlean::{Engine, SemanticSnapshot};
 use std::path::{Component, Path};
@@ -154,11 +154,16 @@ pub fn build(
     })
 }
 
-fn read_package(
+/// The output of the declared core in the one target, when the compiler's result
+/// holds the package the declaration names and it exhibits only admitted effects.
+///
+/// # Errors
+/// Returns `PP2020` for a result without that output, a package other than the
+/// declared one and an effect that is not admitted.
+pub fn core_output<'a>(
     application: &ServerApplication,
-    result: &ProductionResult,
-    bundle: &Path,
-) -> Result<Vec<(String, Vec<u8>)>, PrismError> {
+    result: &'a ProductionResult,
+) -> Result<&'a TargetOutput, PrismError> {
     let output = result
         .roots
         .iter()
@@ -176,6 +181,15 @@ fn read_package(
             "the exported package is not the one the declaration names",
         ));
     }
+    Ok(output)
+}
+
+fn read_package(
+    application: &ServerApplication,
+    result: &ProductionResult,
+    bundle: &Path,
+) -> Result<Vec<(String, Vec<u8>)>, PrismError> {
+    let package = &core_output(application, result)?.package;
     let mut files = Vec::new();
     for file in &package.files {
         let inside = file

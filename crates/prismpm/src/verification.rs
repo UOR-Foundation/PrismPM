@@ -2907,6 +2907,27 @@ pub(crate) fn run(
             },
         );
     }
+    if matches!(
+        model.application,
+        Some(crate::holo::model_document::Application::Server(_))
+    ) {
+        // A server application has no View, guest or archive: what is verified is the
+        // acceptance of the program that its published build produces.
+        return crate::server_verification::run(
+            crate::server_verification::ServerVerification {
+                project_root: &controller.root,
+                config: &config,
+                build,
+                model,
+                model_bytes,
+                build_manifest,
+                build_root: &build_root,
+                lex_attestation,
+                lex_attestation_id,
+                processes: toolchain.records,
+            },
+        );
+    }
     if model.application.is_some() {
         return run_application(
             controller,
