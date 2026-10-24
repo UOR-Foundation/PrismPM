@@ -478,6 +478,7 @@ fn server_application_projects_only_from_the_exact_source_owned_type() {
 }
 
 #[test]
+#[allow(clippy::result_large_err)]
 fn a_verification_build_bound_outside_its_range_is_refused() {
     let validate = |seconds: Value| {
         let mut value = fixture();

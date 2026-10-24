@@ -258,7 +258,7 @@ pub fn check_generated(
 /// # Errors
 /// Returns `PP4103` when the build fails and `PP5007` when it does not finish within
 /// the declared bound.
-pub fn build_workspace(
+pub(crate) fn build_workspace(
     application: &ServerApplication,
     staged: &Path,
     target: &Path,
