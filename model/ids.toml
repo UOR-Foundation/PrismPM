@@ -307,6 +307,12 @@ level = "build"
 statement = "Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021."
 
 [[id]]
+id = "HO-28"
+suite = "holo"
+level = "build"
+statement = "The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

@@ -476,3 +476,8 @@ fn server_application_projects_only_from_the_exact_source_owned_type() {
     let missing = source.replace("name: dispatch,", "name: other,");
     assert_eq!(project(&missing, MODEL).unwrap_err().code, "PP2001");
 }
+
+#[test]
+fn a_verification_build_bound_outside_its_range_is_refused() {
+    panic!("R3 skeleton: the declaration does not carry a verification build bound yet");
+}

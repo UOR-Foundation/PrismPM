@@ -167,3 +167,10 @@ Feature: holo
     When its acceptance runs and one declared effect has no transcript step or no served exchange
     Then the record names every effect with the steps and served exchanges that reached it
     And the effect that no vector reaches is refused with PP2021
+
+  @HO-28 @build
+  Scenario: The build bound of the verification of a server application is model data: the declaration states the seconds that the build of the consumer's workspace may take, verification builds under exactly that bound and records it in the published evidence, and a bound that is zero or over 7200 seconds is refused with PP2013.
+    Given a server application that declares how many seconds the build of its workspace may take
+    When prismpm verify stages and builds the consumer's workspace
+    Then the build runs under exactly the declared bound and the published acceptance records it
+    And a declared bound of zero or over 7200 seconds is refused with PP2013

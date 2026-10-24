@@ -64,6 +64,7 @@ test_case!(conformance_ho_24, "HO-24");
 test_case!(conformance_ho_25, "HO-25");
 test_case!(conformance_ho_26, "HO-26");
 test_case!(conformance_ho_27, "HO-27");
+test_case!(conformance_ho_28, "HO-28");
 
 test_case!(conformance_ct_01, "CT-01");
 test_case!(conformance_ct_02, "CT-02");

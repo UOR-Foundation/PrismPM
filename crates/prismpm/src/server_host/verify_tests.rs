@@ -247,3 +247,8 @@ fn a_workspace_without_the_declared_binding_or_its_lock_is_refused() {
     assert_eq!(error.code, "PP2013", "{}", error.message);
     assert!(error.message.contains("regular file"), "{}", error.message);
 }
+
+#[test]
+fn the_workspace_build_runs_under_the_declared_bound() {
+    panic!("R3 skeleton: the workspace build still runs under the SDK's default child timeout");
+}

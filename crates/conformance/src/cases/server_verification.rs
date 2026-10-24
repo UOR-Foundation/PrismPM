@@ -41,6 +41,22 @@ pub(super) fn verify_exercise(root: &Path) {
     );
 }
 
+/// HO-28: the build bound of the verification is model data.
+pub(super) fn verify_build_bound(root: &Path) {
+    let contract = run(root, "HO-28", &["--test", "server_application_contract"]);
+    require(
+        "HO-28",
+        &contract,
+        &["a_verification_build_bound_outside_its_range_is_refused"],
+    );
+    let library = run(root, "HO-28", &["--lib", "server_host::verify_tests"]);
+    require(
+        "HO-28",
+        &library,
+        &["the_workspace_build_runs_under_the_declared_bound"],
+    );
+}
+
 /// CT-12: the controller reads the build root from `lexlean.toml`.
 pub(super) fn verify_build_root(root: &Path) {
     let library = run(root, "CT-12", &["--lib", "controller::model_worker"]);
