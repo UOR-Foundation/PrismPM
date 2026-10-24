@@ -9,6 +9,7 @@ mod facets;
 pub mod library;
 pub mod model_document;
 pub mod projector;
+pub mod server_application;
 pub mod text_cli;
 pub mod validate;
 

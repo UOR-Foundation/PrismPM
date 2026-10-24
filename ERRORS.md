@@ -95,6 +95,12 @@ An OPM or UML design view names a component, edge, process, state or viewpoint t
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2013` --- Invalid server application declaration
+
+A server application violates its closed source-owned profile, host effect declaration, effect bounds, exit codes or acceptance transcripts.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP2014` --- Feature without a call
 
 A feature is realized by no interface call.
@@ -122,6 +128,12 @@ Class: `semantic`. Exit code: 1.
 ## `PP2018` --- Invalid feature or journey declaration
 
 A feature or journey is not a closed literal record, a feature statement is out of bounds, or a call or acceptance row of a feature names no declaration.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2022` --- Server application build unavailable
+
+The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export through production and source-free verification are available.
 
 Class: `semantic`. Exit code: 1.
 
