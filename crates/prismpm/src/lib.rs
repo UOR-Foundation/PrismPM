@@ -36,6 +36,7 @@ mod release_verification;
 pub mod sdk;
 pub mod server_build;
 pub mod server_host;
+pub mod server_release;
 pub mod server_verification;
 pub mod supply_chain;
 pub mod system;

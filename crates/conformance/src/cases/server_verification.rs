@@ -1,5 +1,6 @@
-//! HO-26 and HO-27: the verification of a server application and the exercise of
-//! every declared effect; CT-12: the LexLean build root of the controller.
+//! HO-26 to HO-29: the verification of a server application, the exercise of
+//! every declared effect, its build bound and its source-free release replay;
+//! CT-12: the LexLean build root of the controller.
 
 use super::server_serving::{require, run};
 use std::path::Path;
@@ -54,6 +55,25 @@ pub(super) fn verify_build_bound(root: &Path) {
         "HO-28",
         &library,
         &["the_workspace_build_runs_under_the_declared_bound"],
+    );
+}
+
+/// HO-29: a server application is released and replayed without its source.
+pub(super) fn verify_release_replay(root: &Path) {
+    let contract = run(root, "HO-29", &["--test", "server_release"]);
+    require(
+        "HO-29",
+        &contract,
+        &[
+            "a_released_server_application_is_checked_and_replayed_without_its_source",
+            "a_tampered_released_core_package_is_refused",
+            "a_tampered_released_host_package_is_refused",
+            "a_tampered_released_consumer_workspace_is_refused",
+            "recorded_bounds_that_differ_from_the_model_are_refused",
+            "a_release_without_the_acceptance_evidence_is_refused",
+            "a_replay_of_a_release_that_is_not_a_server_application_is_refused",
+            "the_retired_diagnostic_is_not_registered",
+        ],
     );
 }
 

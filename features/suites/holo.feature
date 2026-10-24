@@ -174,3 +174,11 @@ Feature: holo
     When prismpm verify stages and builds the consumer's workspace
     Then the build runs under exactly the declared bound and the published acceptance records it
     And a declared bound of zero or over 7200 seconds is refused with PP2013
+
+  @HO-29 @build
+  Scenario: A server application is released and verified from its release artifacts without the source tree: the build retains the consumer's workspace, release assembly and every source-free replay re-derive the application acceptance from the model and the released files, the evidence binds the core package, the two generated host packages, the consumer's workspace and the declared bounds, and replaying the acceptance rebuilds the released program under the recorded build bound and answers every acceptance and served vector as modeled; a tampered package or workspace, recorded bounds that differ from the model and a release without the acceptance evidence are refused with PP6101.
+    Given the release of a verified server application and no source tree
+    When the release is replayed
+    Then the acceptance document is the one derived from the model and the released files
+    And the released program is rebuilt under the recorded build bound and answers every acceptance and served vector as modeled
+    And a tampered core package, a tampered host package, a tampered consumer workspace, recorded bounds that differ from the model and a release without the acceptance evidence are each refused with PP6101
