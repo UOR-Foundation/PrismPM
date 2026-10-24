@@ -101,7 +101,37 @@ A server application violates its closed source-owned profile, host effect decla
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2014` --- Server application build unavailable
+## `PP2014` --- Feature without a call
+
+A feature is realized by no interface call.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2015` --- Feature without acceptance
+
+A feature is accepted by no acceptance row.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2016` --- Journey step names an undeclared feature
+
+A step of a user journey names a declaration that is not a declared feature.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2017` --- Journey actor is not a stakeholder
+
+The actor of a user journey is not a declared stakeholder.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2018` --- Invalid feature or journey declaration
+
+A feature or journey is not a closed literal record, a feature statement is out of bounds, or a call or acceptance row of a feature names no declaration.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2022` --- Server application build unavailable
 
 The server application profile validates its declaration and generates its host package, but cannot build or verify an application before the core export through production and source-free verification are available.
 

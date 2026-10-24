@@ -19,7 +19,7 @@ Feature: holo
     Given the Foundation.Server.V1.Model declaration of a server application with effects, vectors and transcripts
     When it is projected from source, validated and canonically encoded as a model-document/7
     Then the document round-trips exactly and each invalid profile, bound, name, exit code, transcript or unexercised effect is refused with PP2013
-    And building or verifying a server application is refused with PP2014 until the core export and verification pipeline exist
+    And building or verifying a server application is refused with PP2022 until the core export and verification pipeline exist
 
   @HO-22 @build
   Scenario: The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline.

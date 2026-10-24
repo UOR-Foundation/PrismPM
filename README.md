@@ -105,7 +105,7 @@ The `Browser` application profile remains refused with `PP2011` until its genera
 authenticated effects, durable recovery and full owning verification are complete.
 The `Server` application profile declares and validates its host effects and generates a host adapter
 (an API package and a driver package that links a workspace binding) with a scripted-host acceptance suite;
-building or verifying a server application is refused with `PP2014` until its core export through
+building or verifying a server application is refused with `PP2022` until its core export through
 `production` and source-free verification are complete.
 
 ## Development and acceptance
@@ -153,5 +153,7 @@ integrity against the release's own evidence, not deployment acceptance.
 - [RELEASE-STATUS.md](RELEASE-STATUS.md) — Current release status and required acceptance
 - [VERIFICATION.md](VERIFICATION.md) — Detailed verification evidence, digests, and test descriptions
 - [SPEC.md](SPEC.md) — Atomic release contract specification
+- [docs/vocabulary.md](docs/vocabulary.md) — Prism nouns and verbs mapped to Docker's
 - [CONFORMANCE.md](CONFORMANCE.md) — Conformance requirements
 - [ERRORS.md](ERRORS.md) — Error code registry
+- [STABILITY.md](STABILITY.md) — Stability tiers and pre-1.0 versioning policy
