@@ -462,6 +462,7 @@ fn server_specimen() -> Value {
         "core":{"root":"ServerContract.Probe.dispatch","package":"server_contract_core","version":"0.1.0"},
         "bindings":[{"path":"bindings/server-contract-binding","crate_name":"server-contract-binding","host":"server_contract_binding::Native"}],
         "serving":[],
+        "verify_build_timeout_seconds":1800,
         "request_maximum":8,
         "response_maximum":8,
         "host":{

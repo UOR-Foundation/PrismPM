@@ -18,7 +18,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const CHILD_OUTPUT_LIMIT: usize = 16_777_216;
+pub(crate) const CHILD_OUTPUT_LIMIT: usize = 16_777_216;
 const CHILD_TIMEOUT_SECONDS: &str = "300";
 const GENERATED_NATIVE_BUILD_TIMEOUT_SECONDS: &str = "600";
 const ROOTS_SOURCE: &str = include_str!("../model/runtime-roots.toml");

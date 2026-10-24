@@ -479,5 +479,58 @@ fn server_application_projects_only_from_the_exact_source_owned_type() {
 
 #[test]
 fn a_verification_build_bound_outside_its_range_is_refused() {
-    panic!("R3 skeleton: the declaration does not carry a verification build bound yet");
+    let validate = |seconds: Value| {
+        let mut value = fixture();
+        value["application"]["verify_build_timeout_seconds"] = seconds;
+        let schema_accepts = schema().is_valid(&value);
+        let document =
+            serde_json::from_value::<prismpm::holo::model_document::ModelDocument>(value);
+        (
+            schema_accepts,
+            document.map(|doc| prismpm::holo::validate::validate(&doc)),
+        )
+    };
+    // The bound is model data from 1 to 7200 seconds; the ends are admitted.
+    for seconds in [1, 1800, 7200] {
+        let (schema_accepts, outcome) = validate(json!(seconds));
+        assert!(schema_accepts, "{seconds}");
+        outcome.unwrap().unwrap();
+    }
+    // Outside it the declaration is refused by the schema and by validation, with the
+    // declaration code.
+    for seconds in [0u64, 7201, u64::from(u32::MAX)] {
+        let (schema_accepts, outcome) = validate(json!(seconds));
+        assert!(!schema_accepts, "{seconds}");
+        let error = outcome
+            .unwrap()
+            .expect_err("a bound outside its range is refused");
+        assert_eq!(error.code, "PP2013", "{seconds}: {}", error.message);
+        assert!(error.message.contains("7200"), "{}", error.message);
+    }
+    // A negative or fractional bound is not a number of seconds at all.
+    for seconds in [json!(-1), json!(1.5), json!("1800"), json!(null)] {
+        let (schema_accepts, outcome) = validate(seconds.clone());
+        assert!(!schema_accepts, "{seconds}");
+        assert!(outcome.is_err(), "{seconds}");
+    }
+    // The bound is required: a declaration without it is not a server application.
+    let mut missing = fixture();
+    missing["application"]
+        .as_object_mut()
+        .unwrap()
+        .remove("verify_build_timeout_seconds");
+    assert!(!schema().is_valid(&missing));
+    assert!(rejected(missing));
+
+    // From source: the same range is enforced where the declaration is written.
+    let declared = declaration();
+    for seconds in [0, 7201] {
+        let mut value = declared.clone();
+        value["verify_build_timeout_seconds"] = json!(seconds);
+        let error = project(&source(&value, MODEL), MODEL)
+            .and_then(|doc| prismpm::holo::validate::validate(&doc))
+            .expect_err("a source bound outside its range is refused");
+        assert_eq!(error.code, "PP2013", "{seconds}: {}", error.message);
+    }
+    project(&source(&declared, MODEL), MODEL).unwrap();
 }

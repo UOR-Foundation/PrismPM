@@ -29,7 +29,9 @@ use crate::holo::model_document::{Application, ModelDocument};
 use crate::holo::server_application::ServerApplication;
 use crate::server_build::{core_output, RESULT_FILE};
 use crate::server_host::{self, acceptance, workspace};
-use crate::verification::{executable, publish, run_process, ProcessRecord};
+use crate::verification::{
+    executable, publish, run_process_limited, ProcessRecord, CHILD_OUTPUT_LIMIT,
+};
 use lexlean::api::production::ProductionResult;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -249,6 +251,39 @@ pub fn check_generated(
     Ok(checked)
 }
 
+/// Build the staged workspace of `application` in release mode, locked and offline,
+/// into `target`, under the bound that the declaration states
+/// (`verify_build_timeout_seconds`) and no other.
+///
+/// # Errors
+/// Returns `PP4103` when the build fails and `PP5007` when it does not finish within
+/// the declared bound.
+pub fn build_workspace(
+    application: &ServerApplication,
+    staged: &Path,
+    target: &Path,
+    replacements: &[(&Path, &str)],
+) -> Result<ProcessRecord, PrismError> {
+    let environment = BTreeMap::from([
+        (
+            "CARGO_TARGET_DIR".to_owned(),
+            target.to_string_lossy().into_owned(),
+        ),
+        ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
+    ]);
+    run_process_limited(
+        "server-workspace-build",
+        &executable("cargo")?,
+        &["build", "--release", "--locked", "--offline", "--quiet"].map(str::to_owned),
+        staged,
+        &environment,
+        replacements,
+        "PP4103",
+        &application.verify_build_timeout_seconds.to_string(),
+        CHILD_OUTPUT_LIMIT,
+    )
+}
+
 /// Verify the server application of a build and publish the evidence.
 ///
 /// # Errors
@@ -289,26 +324,16 @@ pub(crate) fn run(mut context: ServerVerification<'_>) -> Result<VerifyResult, P
     let staged = work.path().join("workspace");
     workspace::stage(application, context.project_root, &server, &staged)?;
     let target = work.path().join("target");
-    let environment = BTreeMap::from([
-        (
-            "CARGO_TARGET_DIR".to_owned(),
-            target.to_string_lossy().into_owned(),
-        ),
-        ("CARGO_NET_OFFLINE".to_owned(), "true".to_owned()),
-    ]);
     let replacements = [
         (work.path(), "$VERIFY_WORK"),
         (context.project_root, "$PROJECT"),
         (context.build_root, "$BUILD"),
     ];
-    context.processes.push(run_process(
-        "server-workspace-build",
-        &executable("cargo")?,
-        &["build", "--release", "--locked", "--offline", "--quiet"].map(str::to_owned),
+    context.processes.push(build_workspace(
+        application,
         &staged,
-        &environment,
+        &target,
         &replacements,
-        "PP4103",
     )?);
 
     let trials = work.path().join("trials");
@@ -338,6 +363,9 @@ pub(crate) fn run(mut context: ServerVerification<'_>) -> Result<VerifyResult, P
             "package": {"name": application.core.package, "version": application.core.version},
             "result_id": core.result_id,
             "root": application.core.root,
+        },
+        "workspace_build": {
+            "timeout_seconds": application.verify_build_timeout_seconds,
         },
         "host_packages": {
             "api": server_host::api_name(application),

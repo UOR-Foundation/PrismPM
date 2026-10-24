@@ -120,6 +120,11 @@
             "$ref": "#/$defs/server_serving"
           }
         },
+        "verify_build_timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7200
+        },
         "host": {
           "$ref": "#/$defs/host_protocol"
         }
@@ -138,7 +143,8 @@
         "profile",
         "request_maximum",
         "response_maximum",
-        "serving"
+        "serving",
+        "verify_build_timeout_seconds"
       ]
     },
     "server_core": {

@@ -27,6 +27,11 @@ const APPLICATION: &[Row] = &[
     ("responseMaximum", "response_maximum", "UInt32"),
     ("bindings", "bindings", "ListServerBinding"),
     ("serving", "serving", "ListServerServing"),
+    (
+        "verifyBuildTimeoutSeconds",
+        "verify_build_timeout_seconds",
+        "UInt32",
+    ),
     ("host", "host", "HostProtocol"),
 ];
 

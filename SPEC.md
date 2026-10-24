@@ -3214,7 +3214,10 @@ no View, Core-Wasm guest or Holo archive, and its request and response are
 opaque frames whose meaning the core alone defines. The record holds the package
 metadata of a native library, the `core`, the finite exchange `acceptanceVectors`,
 the exchange maximums `requestMaximum` and `responseMaximum` (each 1 to 64 MiB),
-the `bindings` and one `host` record. Missing, null, mistyped or undeclared
+the `bindings`, the `serving` record when the application is served, the
+`verifyBuildTimeoutSeconds` that verification may give the build of the
+consumer's workspace (1 to 7200; a value outside it is refused with PP2013) and
+one `host` record. Missing, null, mistyped or undeclared
 fields, a server record under another profile or schema and a foreign type owner
 are rejected with PP2013 or PP2001.
 
@@ -3455,7 +3458,11 @@ this order, and refuses at the first check that fails:
    a member, or a workspace that does not hold the binding). The consumer's Cargo
    workspace root is the Prism project root. It is built with
    `cargo build --release --locked --offline --quiet` (`PP4103`), so the lock the
-   consumer committed is the lock that is built and nothing is acquired;
+   consumer committed is the lock that is built and nothing is acquired. The
+   build runs under the `verifyBuildTimeoutSeconds` that the declaration states
+   and under no other bound, so that a core whose binding links a large crate
+   states the time it needs; a build that does not finish within it is refused
+   with `PP5007`, and the published evidence records the bound;
 5. the acceptance: every acceptance vector is replayed with its effect transcript
    through the generated program over a request file and over standard input,
    through the linked binding when one is declared, and every served vector is

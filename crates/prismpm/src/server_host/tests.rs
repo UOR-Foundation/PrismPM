@@ -253,6 +253,7 @@ pub(super) fn model_value() -> Value {
         "request_maximum": 16,
         "response_maximum": 64,
         "serving": [],
+        "verify_build_timeout_seconds": 1800,
         "host": {
             "protocol": "prismpm/host-effects/1",
             "description": "Replays a scripted host for one exchange.\n",

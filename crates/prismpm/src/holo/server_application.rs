@@ -44,6 +44,8 @@ pub const MAXIMUM_EXCHANGE_BYTES: u32 = 64 * 1024 * 1024;
 pub const MAXIMUM_EXIT_CODE: u8 = 125;
 /// Most acceptance vectors.
 pub const MAXIMUM_VECTORS: usize = 256;
+/// Most seconds the verification may give the build of the consumer's workspace.
+pub const MAXIMUM_BUILD_TIMEOUT_SECONDS: u32 = 7200;
 /// Most bytes of vectors and transcripts together.
 pub const MAXIMUM_CORPUS_BYTES: usize = 256 * 1024;
 
@@ -203,6 +205,13 @@ pub fn validate(value: &ServerApplication) -> Result<(), PrismError> {
     {
         return Err(invalid(
             "server application profile, protocol or exchange bounds are invalid",
+        ));
+    }
+    if value.verify_build_timeout_seconds == 0
+        || value.verify_build_timeout_seconds > MAXIMUM_BUILD_TIMEOUT_SECONDS
+    {
+        return Err(invalid(
+            "server application verification build bound must be from 1 to 7200 seconds",
         ));
     }
     if !block(&host.description, 4096) {
