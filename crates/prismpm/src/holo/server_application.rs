@@ -442,7 +442,7 @@ fn transcripts(value: &ServerApplication) -> Result<(), PrismError> {
 pub fn require_build(application: &super::model_document::Application) -> Result<(), PrismError> {
     if matches!(application, super::model_document::Application::Server(_)) {
         return Err(PrismError::new(
-            "PP2014",
+            "PP2022",
             "server application verification is not implemented; the declaration, the core export through production and the generated host package are",
         ));
     }

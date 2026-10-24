@@ -107,7 +107,7 @@ The `Server` application profile declares and validates its host effects and gen
 (an API package and a driver package that links a workspace binding) with a scripted-host acceptance suite;
 the core of a server application is built through `production` (`PP2020` refuses an export the host
 adapter cannot bound), a served application listens on the loopback interface only and answers RFC 9112
-requests through the generated adapter, and verifying a server application is refused with `PP2014` until
+requests through the generated adapter, and verifying a server application is refused with `PP2022` until
 its source-free verification is complete.
 
 ## Development and acceptance
@@ -155,5 +155,7 @@ integrity against the release's own evidence, not deployment acceptance.
 - [RELEASE-STATUS.md](RELEASE-STATUS.md) — Current release status and required acceptance
 - [VERIFICATION.md](VERIFICATION.md) — Detailed verification evidence, digests, and test descriptions
 - [SPEC.md](SPEC.md) — Atomic release contract specification
+- [docs/vocabulary.md](docs/vocabulary.md) — Prism nouns and verbs mapped to Docker's
 - [CONFORMANCE.md](CONFORMANCE.md) — Conformance requirements
 - [ERRORS.md](ERRORS.md) — Error code registry
+- [STABILITY.md](STABILITY.md) — Stability tiers and pre-1.0 versioning policy
