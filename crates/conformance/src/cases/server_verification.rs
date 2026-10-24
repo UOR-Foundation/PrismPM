@@ -36,13 +36,19 @@ pub(super) fn verify_exercise(root: &Path) {
 
 /// CT-12: the controller reads the build root from `lexlean.toml`.
 pub(super) fn verify_build_root(root: &Path) {
+    let library = run(root, "CT-12", &["--lib", "controller::model_worker"]);
+    require(
+        "CT-12",
+        &library,
+        &["the_build_root_is_read_from_lexlean_toml"],
+    );
     let contract = run(root, "CT-12", &["--test", "controller_build_root"]);
     require(
         "CT-12",
         &contract,
         &[
-            "the_build_root_is_read_from_lexlean_toml",
             "a_project_with_another_build_root_builds_through_it",
+            "a_lexlean_toml_without_a_build_root_is_refused",
         ],
     );
 }

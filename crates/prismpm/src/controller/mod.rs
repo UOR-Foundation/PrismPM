@@ -241,6 +241,9 @@ pub struct CleanResult {
 struct Prepared {
     config: ProjectConfig,
     engine: Engine,
+    /// The LexLean project directory and its configured build root.
+    lexlean_root: PathBuf,
+    lexlean_build_root: PathBuf,
     snapshot: lexlean::SemanticSnapshot,
     application_snapshot: Option<lexlean::SemanticSnapshot>,
     application_selection: Option<Selection>,
@@ -618,6 +621,8 @@ impl Controller {
         Ok(Prepared {
             config,
             engine,
+            lexlean_root: plan.lexlean_root.clone().into_std_path_buf(),
+            lexlean_build_root: plan.lexlean_build_root.clone().into_std_path_buf(),
             snapshot,
             application_snapshot,
             application_selection,
@@ -763,7 +768,10 @@ impl Controller {
             .ok_or_else(|| PrismError::new("PP9001", "LexLean build omitted its identity"))?
             .to_string();
         let output_root = prepared.config.output_root(&self.root)?;
-        let lex_root = self.root.join(".lexlean/build").join(&lex_build_id);
+        let lex_root = prepared
+            .lexlean_build_root
+            .join("build")
+            .join(&lex_build_id);
         let lex_manifest_path = lex_root.join("manifest.json");
         let lex_manifest_bytes = std::fs::read(&lex_manifest_path).map_err(|error| {
             PrismError::new(
@@ -839,7 +847,10 @@ impl Controller {
                 .as_ref()
                 .and_then(|result| result.build_id)
                 .map_or_else(|| lex_build_id.clone(), |id| id.to_string());
-            let application_lex_root = self.root.join(".lexlean/build").join(&application_build_id);
+            let application_lex_root = prepared
+                .lexlean_build_root
+                .join("build")
+                .join(&application_build_id);
             let application_lex_manifest =
                 std::fs::read(application_lex_root.join("manifest.json")).map_err(|error| {
                     PrismError::new("PP4002", format!("application LexLean manifest: {error}"))
@@ -897,7 +908,7 @@ impl Controller {
                         &prepared.engine,
                         &prepared.snapshot,
                         server,
-                        &self.root,
+                        &prepared.lexlean_root,
                         prepared.config.limits.max_diagnostics,
                     )?))
                 }
