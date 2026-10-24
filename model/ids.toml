@@ -283,6 +283,18 @@ level = "build"
 statement = "A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback."
 
 [[id]]
+id = "HO-26"
+suite = "holo"
+level = "build"
+statement = "prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic."
+
+[[id]]
+id = "HO-27"
+suite = "holo"
+level = "build"
+statement = "Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"
@@ -347,6 +359,12 @@ id = "CT-11"
 suite = "controller"
 level = "build"
 statement = "Controller cleanup removes only the configured real output directory and rejects a symlink target."
+
+[[id]]
+id = "CT-12"
+suite = "controller"
+level = "build"
+statement = "The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures."
 
 [[id]]
 id = "ST-01"

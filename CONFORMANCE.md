@@ -57,6 +57,7 @@ The three honesty levels:
 | `CT-09` | `build` | Project configuration is strictly validated against schemas/project.schema.json. |
 | `CT-10` | `build` | The Controller preserves cause chains for underlying LexLean diagnostics. |
 | `CT-11` | `build` | Controller cleanup removes only the configured real output directory and rejects a symlink target. |
+| `CT-12` | `build` | The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures. |
 
 ## deployment
 
@@ -128,6 +129,8 @@ The three honesty levels:
 | `HO-23` | `build` | The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic. |
 | `HO-24` | `build` | The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket. |
 | `HO-25` | `build` | A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback. |
+| `HO-26` | `build` | prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic. |
+| `HO-27` | `build` | Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021. |
 
 ## lifecycle
 

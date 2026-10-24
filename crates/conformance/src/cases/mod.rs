@@ -20,6 +20,7 @@ mod saved_recovery;
 mod scoped_administration;
 mod server_host;
 mod server_serving;
+mod server_verification;
 mod text_cli;
 
 use node_suite::verify as verify_node_suite;
@@ -503,11 +504,14 @@ pub fn run_at(root: &Path, id: &str) {
         "HO-23" => server_serving::verify_declaration(root),
         "HO-24" => server_serving::verify_framing(root),
         "HO-25" => server_serving::verify_build(root),
+        "HO-26" => server_verification::verify_verify(root),
+        "HO-27" => server_verification::verify_exercise(root),
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
             verify_controller(root, id);
         }
+        "CT-12" => server_verification::verify_build_root(root),
 
         "ST-01" | "ST-02" | "ST-03" | "ST-04" | "ST-05" | "ST-06" | "ST-07" | "ST-08" | "ST-09"
         | "ST-10" => {

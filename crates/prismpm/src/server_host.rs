@@ -22,6 +22,8 @@ use std::fmt::Write as _;
 
 pub mod acceptance;
 #[cfg(test)]
+mod exercise_tests;
+#[cfg(test)]
 pub(crate) mod serving_tests;
 #[cfg(test)]
 pub(crate) mod tests;

@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::process::Command;
 
-fn run(root: &Path, id: &str, arguments: &[&str]) -> String {
+pub(super) fn run(root: &Path, id: &str, arguments: &[&str]) -> String {
     let output = Command::new("cargo")
         .current_dir(root)
         .args(["test", "--locked", "--offline", "-p", "prismpm"])
@@ -32,7 +32,7 @@ fn run(root: &Path, id: &str, arguments: &[&str]) -> String {
     stdout
 }
 
-fn require(id: &str, output: &str, names: &[&str]) {
+pub(super) fn require(id: &str, output: &str, names: &[&str]) {
     for name in names {
         assert!(
             output

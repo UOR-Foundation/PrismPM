@@ -65,3 +65,9 @@ Feature: controller
     Given a Prism project with a configured output directory
     When Controller cleanup is called
     Then only that real directory is removed and a symlink in its place is rejected
+
+  @CT-12 @build
+  Scenario: The Controller reads the LexLean build root from the project's lexlean.toml instead of assuming .lexlean, so a project that configures another build root builds and publishes through the root it configures.
+    Given a Prism project whose lexlean.toml configures a build root other than .lexlean
+    When the Controller builds it
+    Then the LexLean artifacts are read from and published through that root and nothing is written under .lexlean

@@ -154,3 +154,17 @@ Feature: holo
     When prismpm builds it and the generated program serves the example vectors over loopback
     Then the build artifacts hold the production package, the generated packages and the binding as workspace members and every vector is answered as modeled
     And a core root that is not a production root is refused before anything is published
+
+  @HO-26 @build
+  Scenario: prismpm verify of a server application is the application acceptance of its build: it checks the build closure and regenerates the host packages from the declaration, stages the consumer's workspace beside the production core, builds it, replays every acceptance vector with its effect transcript through the generated program, runs the linked binding and the served exchanges over loopback, and publishes the evidence bound to the build under verified/; a workspace without the declared binding or its lock, a host package that differs from its regeneration, a replayed vector with a wrong effect result and a served exchange whose response differs are each refused with a registered diagnostic.
+    Given the example server built from LexLean language 1.2 source, with a binding crate in the consumer's workspace
+    When prismpm verify runs on it
+    Then the build closure is checked, the host packages equal their regeneration from the declaration, the consumer's workspace builds, every acceptance vector is replayed with its effect transcript, the linked binding and the served exchanges answer as modeled, and the verified directory holds the acceptance evidence bound to the build
+    And a workspace without the declared binding, a host package that differs from its regeneration, a vector with a wrong effect result and a served exchange with a different response are each refused
+
+  @HO-27 @build
+  Scenario: Every declared host effect of a server application is exercised by an acceptance vector as the acceptance observes it, a core effect by a step of an effect transcript replayed through the generated Host trait and a frame effect by a served exchange over loopback; the acceptance record names each effect with what reached it, and a declared effect that no vector reaches is refused with PP2021.
+    Given a server application that declares a core effect and a frame effect
+    When its acceptance runs and one declared effect has no transcript step or no served exchange
+    Then the record names every effect with the steps and served exchanges that reached it
+    And the effect that no vector reaches is refused with PP2021
