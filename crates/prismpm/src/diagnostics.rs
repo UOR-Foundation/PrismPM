@@ -43,6 +43,11 @@ enum Rule {
     ServedApplication,
     ServerCore,
     ServerBuild,
+    FeatureCall,
+    FeatureAcceptance,
+    FeatureStep,
+    JourneyActor,
+    FeatureDeclaration,
     ServerEffects,
 }
 
@@ -86,6 +91,11 @@ impl Rule {
                 invalid["serving"][0]["address"] = json!("0.0.0.0");
                 (valid, invalid)
             }
+            Self::FeatureCall
+            | Self::FeatureAcceptance
+            | Self::FeatureStep
+            | Self::JourneyActor
+            | Self::FeatureDeclaration => feature_specimens(self),
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
             Self::ImmutableLock => filesystem::specimens("PP1101"),
@@ -167,6 +177,11 @@ impl Rule {
             Self::ServerCore => validate_server_core(value).is_ok(),
             Self::ServerEffects => validate_server_effects(value).is_ok(),
             Self::ServerBuild => validate_server_build(value).is_ok(),
+            Self::FeatureCall
+            | Self::FeatureAcceptance
+            | Self::FeatureStep
+            | Self::JourneyActor
+            | Self::FeatureDeclaration => crate::features::probe(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
@@ -281,8 +296,17 @@ probes!(
         "invalid-server-application-declaration",
         ServerApplication
     ),
+    ("PP2014", "feature-without-call", FeatureCall),
+    ("PP2015", "feature-without-acceptance", FeatureAcceptance),
+    ("PP2016", "journey-step-undeclared-feature", FeatureStep),
+    ("PP2017", "journey-actor-not-stakeholder", JourneyActor),
     (
-        "PP2014",
+        "PP2018",
+        "invalid-feature-or-journey-declaration",
+        FeatureDeclaration
+    ),
+    (
+        "PP2022",
         "server-application-verification-unavailable",
         ServerBuild
     ),
@@ -388,6 +412,31 @@ fn validate_text_specimen(value: &Value) -> Result<(), PrismError> {
         PrismError::new("PP2009", format!("text application specimen: {error}"))
     })?;
     crate::holo::validate::validate_text_application(&application)
+}
+
+/// The control and malformed specimens of the feature and journey rules: a
+/// stakeholder, a call and an acceptance row that exist, one feature and one
+/// journey, with the single defect each rule names.
+fn feature_specimens(rule: Rule) -> (Value, Value) {
+    let valid = json!({
+        "stakeholders": ["Probe::stakeholder"],
+        "definitions": ["Probe::call", "Probe::acceptance"],
+        "features": {"Probe::feature": {"calls": ["Probe::call"], "acceptance": ["Probe::acceptance"]}},
+        "journeys": {"Probe::journey": {"actor": "Probe::stakeholder", "steps": ["Probe::feature"]}},
+    });
+    let mut invalid = valid.clone();
+    match rule {
+        Rule::FeatureCall => invalid["features"]["Probe::feature"]["calls"] = json!([]),
+        Rule::FeatureAcceptance => invalid["features"]["Probe::feature"]["acceptance"] = json!([]),
+        Rule::FeatureStep => {
+            invalid["journeys"]["Probe::journey"]["steps"] = json!(["Probe::unknown"])
+        }
+        Rule::JourneyActor => {
+            invalid["journeys"]["Probe::journey"]["actor"] = json!("Probe::unknown")
+        }
+        _ => invalid["definitions"] = json!(["Probe::acceptance"]),
+    }
+    (valid, invalid)
 }
 
 fn browser_specimen() -> Value {
@@ -557,6 +606,16 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::DesignView) {
         return crate::design::probe(value);
+    }
+    if matches!(
+        spec.rule,
+        Rule::FeatureCall
+            | Rule::FeatureAcceptance
+            | Rule::FeatureStep
+            | Rule::JourneyActor
+            | Rule::FeatureDeclaration
+    ) {
+        return crate::features::probe(value);
     }
     if spec.rule.accepts(value) {
         Ok(())

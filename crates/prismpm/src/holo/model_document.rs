@@ -167,12 +167,15 @@ impl Application {
     }
 
     /// Hologram guest contract.
-    pub fn core_contract(&self) -> &str {
+    pub fn core_contract(&self) -> &String {
+        // A server application's contract is the host effect protocol, not a field of the model.
+        static SERVER: std::sync::LazyLock<String> =
+            std::sync::LazyLock::new(|| super::server_application::PROTOCOL.to_owned());
         match self {
             Self::Legacy(value) => &value.core_contract,
             Self::Text(value) => &value.core_contract,
             Self::Browser(value) => &value.core_contract,
-            Self::Server(_) => super::server_application::PROTOCOL,
+            Self::Server(_) => &SERVER,
         }
     }
 
