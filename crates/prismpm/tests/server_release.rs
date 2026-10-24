@@ -281,7 +281,6 @@ fn a_tampered_released_consumer_workspace_is_refused() {
 fn recorded_bounds_that_differ_from_the_model_are_refused() {
     let (manifest, build, verification) = with_acceptance(|acceptance| {
         acceptance["bounds"]["verify_build_timeout_seconds"] = json!(7200);
-        acceptance["workspace_build"]["timeout_seconds"] = json!(7200);
     });
     refused(
         check(&manifest, &build, &verification),
@@ -332,12 +331,10 @@ fn the_retired_diagnostic_is_not_registered() {
     // Nothing is unavailable any more: the code for the unavailable verification
     // is retired, and a registry that lists it again would document a refusal no
     // path raises.
-    for code in ["PP2022"] {
-        assert!(
-            serde_json::from_value::<prismpm::DiagnosticCode>(json!(code)).is_err(),
-            "{code} is registered"
-        );
-    }
+    assert!(
+        serde_json::from_value::<prismpm::DiagnosticCode>(json!("PP2022")).is_err(),
+        "PP2022 is registered"
+    );
     assert!(serde_json::from_value::<prismpm::DiagnosticCode>(json!("PP2021")).is_ok());
     let errors = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))

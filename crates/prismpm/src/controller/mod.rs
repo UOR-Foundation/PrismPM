@@ -880,9 +880,16 @@ impl Controller {
             ));
         }
         if prepared.model.application.is_some() {
-            let application_build = prepared
-                .application_selection
-                .as_ref()
+            // The core of a server application is not imported by its declaration, so
+            // the files of the declaration are not its source graph: its model is
+            // projected from the whole of it, and so is its application build.
+            let selection = prepared.application_selection.as_ref().filter(|_| {
+                !matches!(
+                    prepared.model.application,
+                    Some(crate::holo::model_document::Application::Server(_))
+                )
+            });
+            let application_build = selection
                 .map(|selection| {
                     prepared
                         .engine
@@ -960,13 +967,18 @@ impl Controller {
             // core is a certified package, the host adapter is generated around it.
             let server_artifacts = match &prepared.model.application {
                 Some(crate::holo::model_document::Application::Server(server)) => {
-                    Some(crate::server_build::artifacts(&crate::server_build::build(
-                        &prepared.engine,
-                        &prepared.snapshot,
-                        server,
-                        &prepared.lexlean_root,
-                        prepared.config.limits.max_diagnostics,
-                    )?))
+                    let mut artifacts =
+                        crate::server_build::artifacts(&crate::server_build::build(
+                            &prepared.engine,
+                            &prepared.snapshot,
+                            server,
+                            &prepared.lexlean_root,
+                            prepared.config.limits.max_diagnostics,
+                        )?);
+                    // The consumer's workspace is part of the build, so that the
+                    // release holds everything the program is built from.
+                    artifacts.extend(crate::server_build::consumer_artifacts(server, &self.root)?);
+                    Some(artifacts)
                 }
                 _ => None,
             };

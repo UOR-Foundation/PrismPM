@@ -72,6 +72,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `prismpm/verify-result/1` | `schemas/verify-result.schema.json` | `application/vnd.prismpm.verify-result.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major-additive-minor` |
 | `uor/template-contract/1` | `schemas/template-contract.schema.json` | `application/vnd.uor.template.contract.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 | `uor/template-lock/1` | `schemas/template-lock.schema.json` | `application/vnd.uor.template.lock.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
+| `prismpm/server-release-replay/1` | `schemas/server-release-replay.schema.json` | `application/vnd.prismpm.server-release-replay.v1+json` | 1048576 bytes / 4096 items | `closed`; `exact-major` |
 
 ## Command state and mutation boundaries
 
@@ -99,6 +100,7 @@ All JSON content uses UTF-8, sorted object keys, shortest canonical integers, no
 | `promote` | `signed-local-evidence` | `true` | `prismpm/promotion-result/1` |
 | `pull` | `immutable-cache` | `true` | `prismpm/pull-result/1` |
 | `push` | `registry-content` | `true` | `prismpm/push-result/1` |
+| `replay-acceptance` | `ephemeral-runtime` | `true` | `prismpm/server-release-replay/1` |
 | `rollback` | `authorized-target` | `true` | `prismpm/deployment-evidence/1` |
 | `restore` | `authorized-clean-target` | `true` | `prismpm/restore-result/1` |
 | `run` | `ephemeral-runtime` | `true` | `prismpm/run-result/1` |

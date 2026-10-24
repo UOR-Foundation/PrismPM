@@ -78,7 +78,7 @@ fn verify_of_the_example_server_runs_the_application_acceptance() {
         "byte-identical"
     );
     // The build ran under the bound the declaration states, and the evidence says so.
-    assert_eq!(acceptance["workspace_build"]["timeout_seconds"], 1800);
+    assert_eq!(acceptance["bounds"]["verify_build_timeout_seconds"], 1800);
 
     // Every declared effect is reached: the frame effect by the served exchanges, the
     // core's own by the transcript steps that request it.

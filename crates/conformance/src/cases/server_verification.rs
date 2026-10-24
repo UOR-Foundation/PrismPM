@@ -75,6 +75,12 @@ pub(super) fn verify_release_replay(root: &Path) {
             "the_retired_diagnostic_is_not_registered",
         ],
     );
+    let library = run(root, "HO-29", &["--lib", "server_release::tests"]);
+    require(
+        "HO-29",
+        &library,
+        &["a_release_in_a_receiver_without_the_source_is_replayed_by_reference"],
+    );
 }
 
 /// CT-12: the controller reads the build root from `lexlean.toml`.

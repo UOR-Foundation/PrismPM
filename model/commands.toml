@@ -119,6 +119,12 @@ requires_digest = true
 result_schema = "prismpm/push-result/1"
 
 [[command]]
+name = "replay-acceptance"
+mutates = "ephemeral-runtime"
+requires_digest = true
+result_schema = "prismpm/server-release-replay/1"
+
+[[command]]
 name = "rollback"
 mutates = "authorized-target"
 requires_digest = true

@@ -799,7 +799,10 @@ pub(crate) fn validate_hologram_oracle_report(
                 return crate::holo::browser_application::require_runtime(application)
             }
             Application::Server(_) => {
-                return crate::holo::server_application::require_build(application)
+                return Err(PrismError::new(
+                    "PP9001",
+                    "a server application has no Hologram oracle",
+                ));
             }
             Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
             Application::Legacy(value) => {
@@ -839,7 +842,10 @@ pub(crate) fn validate_hologram_oracle_report(
             return crate::holo::browser_application::require_runtime(application)
         }
         Application::Server(_) => {
-            return crate::holo::server_application::require_build(application)
+            return Err(PrismError::new(
+                "PP9001",
+                "a server application has no Hologram oracle",
+            ));
         }
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);

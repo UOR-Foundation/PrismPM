@@ -397,6 +397,23 @@ pub fn execute(
         }
     }
     let served = execute_served(application, program)?;
+    let mut record = record(application, binding, served)?;
+    record["program_sha256"] = json!(format!("{:x}", Sha256::digest(&program_bytes)));
+    Ok(record)
+}
+
+/// The record of an acceptance in which every vector is answered as modeled and
+/// `served` served exchanges were: what the run observed, as far as the model
+/// determines it. It holds no digest of the program, which depends on the host that
+/// built it. The record that [`execute`] returns is this one and that digest.
+///
+/// # Errors
+/// Returns `PP2021` when a declared effect is reached by no vector.
+pub fn record(
+    application: &ServerApplication,
+    binding: bool,
+    served: usize,
+) -> Result<Value, PrismError> {
     let effects = exercises(application, served);
     require_exercised(&effects)?;
     Ok(json!({
@@ -410,7 +427,6 @@ pub fn execute(
             }))
             .collect::<Vec<_>>(),
         "program": program_name(application),
-        "program_sha256": format!("{:x}", Sha256::digest(&program_bytes)),
         "protocol": application.host.protocol,
         "schema": SCHEMA,
         "status": "verified",
@@ -425,4 +441,20 @@ pub fn execute(
         "vectors": application.acceptance_vectors.len(),
         "served": served,
     }))
+}
+
+/// The record of the acceptance of `application` as the model determines it, with
+/// the binding linked when one is declared and every served vector answered.
+///
+/// # Errors
+/// Returns `PP2021` when a declared effect is reached by no vector.
+pub fn modeled_record(application: &ServerApplication) -> Result<Value, PrismError> {
+    record(
+        application,
+        !application.bindings.is_empty(),
+        application
+            .serving
+            .first()
+            .map_or(0, |serving| serving.vectors.len()),
+    )
 }

@@ -131,12 +131,6 @@ A feature or journey is not a closed literal record, a feature statement is out 
 
 Class: `semantic`. Exit code: 1.
 
-## `PP2022` --- Server application verification unavailable
-
-The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available.
-
-Class: `semantic`. Exit code: 1.
-
 ## `PP2019` --- Invalid serving declaration
 
 A server application's serving declaration names an address other than 127.0.0.1, a bound outside its closed range, an origin or media type that is not a valid value, a frame section that does not come from exactly one declared source, or a request frame that can exceed the exchange request maximum.

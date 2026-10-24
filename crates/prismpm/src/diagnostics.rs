@@ -42,7 +42,6 @@ enum Rule {
     ServerApplication,
     ServedApplication,
     ServerCore,
-    ServerBuild,
     FeatureCall,
     FeatureAcceptance,
     FeatureStep,
@@ -65,7 +64,6 @@ impl Rule {
                 json!({"component": "Probe::component"}),
                 json!({"component": "Probe::unknown"}),
             ),
-            Self::ServerBuild => (Self::TextApplication.specimens().0, server_specimen()),
             Self::ServerApplication => {
                 let valid = server_specimen();
                 let mut invalid = valid.clone();
@@ -176,7 +174,6 @@ impl Rule {
             }
             Self::ServerCore => validate_server_core(value).is_ok(),
             Self::ServerEffects => validate_server_effects(value).is_ok(),
-            Self::ServerBuild => validate_server_build(value).is_ok(),
             Self::FeatureCall
             | Self::FeatureAcceptance
             | Self::FeatureStep
@@ -304,11 +301,6 @@ probes!(
         "PP2018",
         "invalid-feature-or-journey-declaration",
         FeatureDeclaration
-    ),
-    (
-        "PP2022",
-        "server-application-verification-unavailable",
-        ServerBuild
     ),
     ("PP2019", "invalid-serving-declaration", ServedApplication),
     ("PP2020", "server-core-build-refused", ServerCore),
@@ -553,12 +545,6 @@ fn validate_server_effects(value: &Value) -> Result<(), PrismError> {
     require_exercised(&rows)
 }
 
-fn validate_server_build(value: &Value) -> Result<(), PrismError> {
-    let declaration = serde_json::from_value(value.clone())
-        .map_err(|_| PrismError::new("PP2013", "invalid server build specimen"))?;
-    crate::holo::server_application::require_build(&declaration)
-}
-
 fn validate_browser_runtime(value: &Value) -> Result<(), PrismError> {
     let declaration = serde_json::from_value(value.clone())
         .map_err(|_| PrismError::new("PP2010", "invalid application runtime specimen"))?;
@@ -580,9 +566,6 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::ServerEffects) {
         return validate_server_effects(value);
-    }
-    if matches!(spec.rule, Rule::ServerBuild) {
-        return validate_server_build(value);
     }
     if matches!(
         spec.rule,

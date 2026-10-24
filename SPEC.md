@@ -3275,10 +3275,10 @@ request for it, in order, with the host's encoded outcome for each. Validation
 decodes every request and outcome with the reference codec, and refuses a
 declaration in which some declared effect is requested by no transcript step.
 
-The build of a server application is 12.15.3, and its verification is 12.15.4. What exists is the declaration and `prismpm::server_host::generate`,
-which renders two Cargo
-packages as members of the consumer's workspace, a fixed template composed with
-code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
+The build of a server application is 12.15.3, its verification is 12.15.4 and its
+release is 12.15.5. `prismpm::server_host::generate` renders from the declaration
+two Cargo packages as members of the consumer's workspace, a fixed template
+composed with code rendered only from the declaration. `{cargo_name}-host-api` holds the wire
 primitives, the closed `Request` sum with one variant per declared effect, the
 typed request, result and failure of each effect with its codec, and the `Host`
 trait with one method per effect. `{cargo_name}-host` holds the `Failure`
@@ -3415,7 +3415,13 @@ and lays it out, with the two generated host packages, under `server/` in the
 build artifacts together with the compiler's `production-result.json`. The
 generated driver depends on the core package by the path of its directory in the
 consumer's workspace. The workspace manifest, the binding crate and the release
-profile remain the consumer's, as in 12.15.
+profile remain the consumer's, as in 12.15, and the build retains them: the
+project's `Cargo.toml`, its committed `Cargo.lock`, an optional
+`rust-toolchain.toml` and every member the build does not generate (the binding)
+are artifacts of the build under `consumer/`, so that the build, and a release of
+it, hold everything the program is built from. A project without the manifest or
+the lock, a member that is a glob or leaves the project, or a link or special
+file in a member is refused with `PP2013`.
 
 The build is refused with `PP2020` when the compiler refuses the export: the
 root is not a production root of the project or does not declare the target, the
@@ -3449,14 +3455,13 @@ this order, and refuses at the first check that fails:
    regeneration from the declaration byte for byte, and the build holds no file
    that is neither generated nor the core package's or the compiler's record
    (`PP4102`);
-4. the consumer's workspace: the project's `Cargo.toml`, its committed
-   `Cargo.lock`, an optional `rust-toolchain.toml` and every member the build
-   does not generate (the binding) are staged away from the project beside the
-   files of the build, nothing else of the working tree, and the staged workspace
-   is checked against the declared binding (`PP2013` for a missing manifest or
-   lock, a member that is a glob or leaves the project, a link or special file in
-   a member, or a workspace that does not hold the binding). The consumer's Cargo
-   workspace root is the Prism project root. It is built with
+4. the consumer's workspace: the files that the build retains under `consumer/`
+   and the packages of the build under `server/` are laid out as one workspace,
+   from the build alone and from no file of the working tree, and the workspace
+   is checked against the declared binding (`PP2013` for a workspace that does
+   not list the generated packages and the binding as members or does not hold
+   the binding, and for a build that retains no consumer workspace). The
+   consumer's Cargo workspace root is the Prism project root. It is built with
    `cargo build --release --locked --offline --quiet` (`PP4103`), so the lock the
    consumer committed is the lock that is built and nothing is acquired. The
    build runs under the `verifyBuildTimeoutSeconds` that the declaration states
@@ -3471,16 +3476,65 @@ this order, and refuses at the first check that fails:
    refused with `PP2021`.
 
 The evidence is published under `verified/` as `application-acceptance.json`
-(`prismpm/application-acceptance/1`, with the record of 12.15 under `server` and
-the identities of the build, the core and the host packages), the LexLean
-attestation and a manifest that binds them to the build and records the
-workspace build. The digest of the program is not part of it: it depends on the
-host that built it.
+(`prismpm/application-acceptance/1`), the LexLean attestation and a manifest
+(`prismpm/server-verification-manifest/1`) that binds them to the build and
+records the toolchain and the workspace build. The acceptance document holds:
 
-`PP2022` remains registered for the pipeline that verifies a server application
-from a release without its source; `prismpm verify` itself no longer raises it.
-The source-free release verification and the release assembly of a server
-application are outside this slice.
+- the identities of the build, of the verified source and of the LexLean
+  attestation;
+- `core`: the declared root, package name and version, the effects the package
+  exhibits, the identity of the compiler's record and `package_sha256`, the
+  digest of the files of the package;
+- `host_packages`: the names of the two generated packages and
+  `api_package_sha256` and `program_package_sha256`, the digests of their files,
+  with `regeneration` `byte-identical`;
+- `consumer`: the number of the consumer's files the build retains and
+  `sha256`, the digest of those files;
+- `bounds`: the exchange maxima, the effect budget, every bound of the listener
+  when the application is served, and `verify_build_timeout_seconds`;
+- `server`: the record of 12.15 of the acceptance.
+
+The digest of a set of files is the SHA-256 of the canonical, path-sorted rows of
+their relative path, byte length and SHA-256. The digest of the program is not
+part of the evidence: it depends on the host that built it.
+
+#### 12.15.5 The release of a server application
+
+The release of a server application is verified and replayed from its release
+files alone. The build files of the release hold `server/` (the core package, the
+two host packages and the compiler's record), `consumer/` (the consumer's
+workspace) and the LexLean files every application build holds; the retained
+verification directory holds the three files of 12.15.4.
+
+Release assembly (`prismpm build -t`) and every later source-free replay of the
+release graph (`prismpm::release_verification`) derive the acceptance document of
+12.15.4 from the model and the released files and require the retained document to
+be it, with no filesystem, subprocess or network. They refuse with `PP6101`:
+
+- a core package whose files differ from the compiler's record, a record that is
+  not the canonical one its identity names or that is about other identities than
+  the attested ones, and a package or an effect the declaration does not admit;
+- a host package that differs from its regeneration from the declaration, and a
+  file that no package generates;
+- a release that retains no consumer workspace, a consumer workspace that does not
+  hold the declared binding, and one whose digest differs from the recorded one;
+- recorded bounds that differ from the model;
+- an acceptance record that differs from the one the model determines (the
+  vectors, the transports, the served exchanges and what reached each declared
+  effect, `PP2021` when an effect is reached by none);
+- a release without the acceptance document, the attestation or the manifest,
+  and a manifest or toolchain record that is not the one `prismpm verify` writes.
+
+`prismpm replay-acceptance NAME@sha256:DIGEST` replays the acceptance against the
+released build. It verifies the release graph as every command that uses a
+release does, lays the workspace out from `consumer/` and `server/` in a
+temporary directory, builds it with `cargo build --release --locked --offline`
+under the recorded `verify_build_timeout_seconds` (`PP4103`, `PP5007`), answers
+every acceptance vector over a request file and over standard input, through the
+binding and every served vector over a loopback socket, and requires the record
+it observes to be the retained `server` record (`PP6003`). It writes nothing to the
+project or the release. A release of anything but a server application is
+refused with `PP6101`.
 
 ## 13. OCI product-release graph
 

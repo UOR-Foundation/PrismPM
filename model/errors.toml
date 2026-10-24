@@ -148,13 +148,6 @@ exit = 1
 statement = "A feature or journey is not a closed literal record, a feature statement is out of bounds, or a call or acceptance row of a feature names no declaration."
 
 [[error]]
-code = "PP2022"
-title = "Server application verification unavailable"
-class = "semantic"
-exit = 1
-statement = "The server application profile validates its declaration, builds its core through production and generates its host package, but cannot verify an application source-free before the verification pipeline for server applications is available."
-
-[[error]]
 code = "PP2019"
 title = "Invalid serving declaration"
 class = "semantic"
