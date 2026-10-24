@@ -41,6 +41,7 @@ enum Rule {
     DesignView,
     ServerApplication,
     ServedApplication,
+    ServerCore,
     ServerBuild,
 }
 
@@ -65,6 +66,10 @@ impl Rule {
                 invalid["host"]["effect_budget"] = json!(0);
                 (valid, invalid)
             }
+            Self::ServerCore => (
+                json!({"root": "Probe.Probe.run", "effects": ["allocation", "overflow"]}),
+                json!({"root": "Probe.Probe.run", "effects": ["allocation", "recursion"]}),
+            ),
             Self::ServedApplication => {
                 let valid = served_specimen();
                 let mut invalid = valid.clone();
@@ -149,6 +154,7 @@ impl Rule {
             Self::ServerApplication | Self::ServedApplication => {
                 validate_server_specimen(value).is_ok()
             }
+            Self::ServerCore => validate_server_core(value).is_ok(),
             Self::ServerBuild => validate_server_build(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
@@ -270,6 +276,7 @@ probes!(
         ServerBuild
     ),
     ("PP2019", "invalid-serving-declaration", ServedApplication),
+    ("PP2020", "server-core-build-refused", ServerCore),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
     ("PP3004", "holo-footer-mismatch", Digest),
@@ -439,6 +446,22 @@ fn validate_server_specimen(value: &Value) -> Result<(), PrismError> {
     crate::holo::server_application::validate(&declaration)
 }
 
+fn validate_server_core(value: &Value) -> Result<(), PrismError> {
+    let root = value["root"]
+        .as_str()
+        .ok_or_else(|| PrismError::new("PP2020", "invalid server core specimen"))?;
+    let effects = value["effects"]
+        .as_array()
+        .map(|effects| {
+            effects
+                .iter()
+                .filter_map(|effect| effect.as_str().map(str::to_owned))
+                .collect::<Vec<_>>()
+        })
+        .ok_or_else(|| PrismError::new("PP2020", "invalid server core specimen"))?;
+    crate::server_build::admit_effects(root, &effects)
+}
+
 fn validate_server_build(value: &Value) -> Result<(), PrismError> {
     let declaration = serde_json::from_value(value.clone())
         .map_err(|_| PrismError::new("PP2013", "invalid server build specimen"))?;
@@ -460,6 +483,9 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
     }
     if matches!(spec.rule, Rule::ServerApplication | Rule::ServedApplication) {
         return validate_server_specimen(value);
+    }
+    if matches!(spec.rule, Rule::ServerCore) {
+        return validate_server_core(value);
     }
     if matches!(spec.rule, Rule::ServerBuild) {
         return validate_server_build(value);

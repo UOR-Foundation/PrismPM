@@ -32,6 +32,7 @@ pub mod operations;
 mod process_resources;
 mod release_verification;
 pub mod sdk;
+pub mod server_build;
 pub mod server_host;
 pub mod supply_chain;
 pub mod system;
