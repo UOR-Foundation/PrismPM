@@ -7,11 +7,11 @@ use std::fmt;
 pub struct DiagnosticCode(String);
 
 impl DiagnosticCode {
-    const REGISTERED: [&'static str; 92] = [
+    const REGISTERED: [&'static str; 94] = [
         "PP2010", "PP2011", "PP2012", "PP2014", "PP2015", "PP2016", "PP2017", "PP2018", "PP1001",
         "PP1002", "PP1003", "PP2001", "PP2002", "PP2003", "PP2004", "PP2005", "PP2006", "PP2007",
         "PP2008", "PP2009", "PP3001", "PP3002", "PP3003", "PP3004", "PP3005", "PP3006", "PP3007",
-        "PP3008", "PP3009", "PP3010", "PP3011", "PP3012", "PP3013", "PP3014", "PP3015", "PP4001",
+        "PP3008", "PP3009", "PP3010", "PP3011", "PP3012", "PP3013", "PP3014", "PP3015", "PP3016", "PP3017", "PP4001",
         "PP4002", "PP4003", "PP4004", "PP4101", "PP4102", "PP4103", "PP4104", "PP4105", "PP5001",
         "PP5002", "PP5003", "PP5004", "PP5005", "PP5006", "PP5007", "PP5008", "PP5101", "PP5102",
         "PP5103", "PP5104", "PP5201", "PP5202", "PP5203", "PP5204", "PP5205", "PP5301", "PP6001",
