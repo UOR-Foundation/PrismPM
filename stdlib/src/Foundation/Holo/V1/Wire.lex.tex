@@ -486,7 +486,7 @@ definition{
   name: archiveStripAttestation,
   parameters: [value : Bytes],
   result: (Option Bytes),
-  body: (if ((validArchiveFrame value) && (((wireRowCount value) =? 9) && true)) then (ctor Option.some [Bytes] (prim append (prim append (prim append (prim append (prim append (prim append (prim append (prim append (prim append 0x 0x484f4c4f040000000800 : Bytes) (wireTableRowUnshifted value 0 24) : Bytes) (wireTableRowUnshifted value 1 24) : Bytes) (wireTableRowUnshifted value 2 24) : Bytes) (wireTableRowUnshifted value 3 24) : Bytes) (wireTableRowUnshifted value 4 24) : Bytes) (wireTableRowUnshifted value 5 24) : Bytes) (wireTableRowUnshifted value 6 24) : Bytes) (wireTableRowUnshifted value 7 24) : Bytes) (wireSlice value 226 (prim subtract (wireRowOffset value 8) 226 : Nat)) : Bytes)) else (ctor Option.none [Bytes])),
+  body: (if ((validArchiveFrame value) && (((wireRowCount value) =? 9) && true)) then (ctor Option.some [Bytes] (prim append (prim append (prim append (prim append (prim append (prim append (prim append (prim append (prim append (prim append 0x 0x484f4c4f040000000800 : Bytes) (wireTableRowUnshifted value 0 24) : Bytes) (wireTableRowUnshifted value 1 24) : Bytes) (wireTableRowUnshifted value 2 24) : Bytes) (wireTableRowUnshifted value 3 24) : Bytes) (wireTableRowUnshifted value 4 24) : Bytes) (wireTableRowUnshifted value 5 24) : Bytes) (wireTableRowUnshifted value 6 24) : Bytes) (wireTableRowUnshifted value 7 24) : Bytes) (wireSlice value 226 (prim subtract (wireRowOffset value 8) 226 : Nat)) : Bytes)) else (ctor Option.none [Bytes])),
   axioms: [propext]
 }
 
