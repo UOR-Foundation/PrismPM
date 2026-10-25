@@ -111,6 +111,7 @@ They are additive; no existing member changes.
 ```
 
 For a contract the reader does not know, `package`, `name`, `file`, `digest`, `imports`, `exports` and `conforms` are null.
+Today the document schemas fix the contract to `@1`, so a holo of another contract fails `holo.documents` and prints no world at all; the null members are for the day a second schema admits another contract.
 `conforms` is read from the guest module's import and export sections alone.
 The text output gains the same facts in its World block.
 `prism-code` and `@prism-code/verify` print equal inspections, as the agreement test requires today.
@@ -139,6 +140,10 @@ The pin fails on a different contract, a different digest, or `null`.
 The reason's message names the pinned and the actual value.
 `WorldMismatchError` has the code `world_mismatch`, carries `check`, and carries the whole verdict, like the other typed errors.
 With `throw: true` it is thrown; without it the verdict lists the reason.
+Which error a failed verdict throws changes in one place.
+Today it is the reason that kept the level down, and every holo is P0, so a pin mismatch would always be hidden behind `provenance.statement`.
+A rule the caller pinned and the holo broke, a digest or the world, now comes first: the caller asked for that fact by name.
+A level shortfall alone still throws the reason that withholds the level.
 `prism check` (#270) will call the same function and map the reason to exit 1, as for every verdict reason.
 
 ### Check ids and diagnostics
@@ -167,9 +172,9 @@ In `sdk/npm/verify/test/world.test.mjs` and `sdk/npm/prism-code/test/world.test.
 - The reference archive conforms, reports `world.conforms: true`, and passes a pin of `lock.inputs.world`.
 - A guest with an extra import, a missing export, an extra export, a changed signature and an export of another kind each fail `world.contract`. These archives are built by rewriting the guest and recomputing every fingerprint, so the only failure is the world.
 - A pin with another digest, another contract or `null` fails `world.hash` and leaves the level unchanged.
-- `throw: true` throws `WorldMismatchError` with the check id and the verdict.
+- `throw: true` throws `WorldMismatchError` with the check id and the verdict, for a pin mismatch even when the level also fails.
 - The two packages return equal inspections and equal verdicts for every case.
-- A holo of an unknown contract has a null world in `inspect`.
+- A holo of an unknown contract prints no world and fails `holo.documents`; the registry returns null members for it.
 
 Conformance scenarios are registered once #270 exists, in the `AL` family next to AL-04.
 
