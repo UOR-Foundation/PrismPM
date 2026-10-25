@@ -1,0 +1,3 @@
+# Fixtures whose exact bytes are hashed by a test: never convert line endings (#268).
+sdk/npm/prism-code/test/fixtures/Calculator.provenance-min.bundle.jsonl text eol=lf
+sdk/npm/spec/test/fixtures/documents/sdk-lock-v3/calculator.json text eol=lf
