@@ -13,7 +13,7 @@
 
 `prism-code attest <holo> --predicate <file> --type <uri>` signs an in-toto Statement v1 about a holo and appends it, as a Sigstore bundle v0.3, to the attestation section (#267).
 `prism-code verify-attestation <holo>` checks every such bundle against a signer policy and says which part failed.
-Signing is keyless by default: an OIDC token (GitHub Actions in CI) is exchanged for a ten-minute Fulcio certificate, and the Rekor v2 entry and RFC 3161 timestamp go into the bundle.
+Signing is keyless by default: an OIDC token (GitHub Actions in CI) is exchanged for a ten-minute Fulcio certificate, and a Rekor entry with its inclusion proof and an RFC 3161 timestamp go into the bundle.
 `--key` signs with a local key and uses no network.
 Every refusal is a typed error.
 
@@ -36,7 +36,6 @@ A bundle that verifies proves only that some key signed; the policy, the identit
 - Producing the predicates. Provenance is #268, the proof predicate is #266.
 - `holo.verify()` reading the section and raising a level. That is #269 and #276's follow-up; this change returns its own result.
 - Choosing the production trusted root. `--trusted-root` pins one; without it the public instance's is fetched over TUF.
-- Rekor v1 entries. cosign v3 and the public signing configuration write Rekor v2, and #275 checks only that.
 - OCI referrer signing at push (`oci-manifest` subjects). That is the push path, not the holo.
 
 ## Proposal
@@ -69,7 +68,7 @@ Keyed: node:crypto signs the DSSE pre-authentication encoding (Ed25519 over the 
 The bundle carries `publicKey.hint`, the SHA-256 of the key's SPKI in hex, and no log entry or timestamp.
 
 Keyless: `bundleBuilderFromSigningConfig` of `@sigstore/sign`, with the public instance's signing configuration (`signing_config.v0.2.json`, fetched over TUF) or `--signing-config`.
-The builder takes the highest log API the package supports, so the entry is Rekor v2, and adds the timestamp authority of the configuration.
+The builder takes the newest log of the configuration that the package supports and adds its timestamp authority. Today the public configuration lists only Rekor v1, so the entry is `dsse` 0.0.1; a Rekor v2 log in the configuration is used as soon as it is listed.
 The identity token is `SIGSTORE_ID_TOKEN` or GitHub Actions' (`permissions: id-token: write`).
 There is no `--identity-token` flag, so a token never appears in a process list.
 
@@ -82,7 +81,7 @@ For each bundle of the requested type:
 1. Every subject is a content blob of this holo and both digests equal the blob's, recomputed here. `SubjectMismatchError`.
 2. `@sigstore/verify`: the DSSE signature, the certificate chain or the key, the Rekor entry and the timestamps against the pinned root. `SignatureInvalidError` or `TransparencyError`.
 3. The signer: the certificate's identity equals `--certificate-identity` exactly, or matches the regular expression, and its issuer equals `--certificate-oidc-issuer`. `IdentityMismatchError`.
-4. #275's `verifyTransparency`, offline, over the same bundle and root: the inclusion proof, the signed checkpoint, and the signed time that the result reports. `TransparencyError`, with every reason listed.
+4. #275's `verifyTransparency`, offline, over the same bundle and root: the entry's body against the envelope, the inclusion proof, the signed checkpoint, and the signed time that the result reports. It reads `hashedrekord` 0.0.2, `dsse` 0.0.2 and `dsse` 0.0.1 entries; this change added the two `dsse` kinds to it. `TransparencyError`, with every reason listed.
 
 The result passes when at least one bundle passes everything, as `cosign verify-attestation` does.
 The holo itself must verify first (`holo.integrity`), and a holo with no matching bundle is `AttestationNotFoundError`.
@@ -128,7 +127,7 @@ CLI exit codes: 0 verified, 1 not verified, 2 an operand cannot be read, 3 signi
 - The Rust half. `prism attest` and the Rust verifier need #267's wire change (the Rust reader refuses the ninth row), a command-contract entry in `model/commands.toml`, and a decision on the verb name below. The JavaScript implementation and its tests are the oracle for it.
 - The keyless path of `verify-attestation` is exercised end to end only by the CI job; the offline tests cover each check of it separately, because a local Fulcio is not available.
 - `prism-code inspect` still lists no attestations, and `holo.verify()` does not read the section, so a holo's level does not change.
-- A bundle whose log entry is Rekor v1 fails `tlog.kind` (#275). A private instance with Rekor v1 must raise `--entries 0` or wait for v2.
+- The public instance's signing configuration still lists only Rekor v1, so keyless bundles carry a `dsse` 0.0.1 entry. #275's verifier accepts it (see its "Entry kinds"); the CI job found this, because the first version of #275 read only Rekor v2.
 - No interactive OIDC flow. A developer outside CI passes `SIGSTORE_ID_TOKEN`.
 - No encrypted keys. `--key` reads an unencrypted PEM.
 
