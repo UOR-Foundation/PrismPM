@@ -138,11 +138,12 @@ jobs:
           IDENTITY: https://github.com/${{ github.workflow_ref }}
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
+          # GitHub runs `bash -e`, so a command that is meant to fail must be guarded.
           expect_failure() {
             local want="$1"; shift
-            local out code
-            out=$(node bin/prism-code.mjs verify-attestation "$RUNNER_TEMP/attested.holo" "$@" --json); code=$?
+            local out code=0
+            out=$(node bin/prism-code.mjs verify-attestation "$RUNNER_TEMP/attested.holo" "$@" --json) || code=$?
             echo "$out"
             test "$code" -eq 1
             echo "$out" | grep -q "\"code\":\"$want\""
