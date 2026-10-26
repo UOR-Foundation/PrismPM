@@ -17,6 +17,7 @@
  * - `SignatureInvalidError`, `IdentityMismatchError`, `TransparencyError`,
  *   `SubjectMismatchError`, `AttestationNotFoundError`, `TrustRootError`: the
  *   reasons `verify-attestation` can refuse a bundle (#272).
+ * - `MiddlewareError`: a middleware on the stack threw something that is not a `PrismError` (#295).
  *
  * The last five map one-to-one to the check ids of a `prism/verdict/1`
  * reason (docs/proposals/269-assurance-levels.md); `errorForReason` is the map.
@@ -110,6 +111,15 @@ AttestationNotFoundError.code = 'attestation_not_found';
 export class TrustRootError extends PrismError {}
 TrustRootError.code = 'trust_root_invalid';
 
+/**
+ * A middleware threw something that is not a `PrismError` (#295). `details`
+ * names it (`name`, `step`, `tags`) and `cause` is what it threw. A
+ * `PrismError` a middleware throws, such as `CapabilityDeniedError`, passes
+ * through as it is.
+ */
+export class MiddlewareError extends PrismError {}
+MiddlewareError.code = 'middleware_failed';
+
 /** Every class with a code of its own, by code. */
 export const ERROR_CLASSES = Object.freeze({
   [VerificationError.code]: VerificationError,
@@ -125,6 +135,7 @@ export const ERROR_CLASSES = Object.freeze({
   [SubjectMismatchError.code]: SubjectMismatchError,
   [AttestationNotFoundError.code]: AttestationNotFoundError,
   [TrustRootError.code]: TrustRootError,
+  [MiddlewareError.code]: MiddlewareError,
 });
 
 /**

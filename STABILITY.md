@@ -75,6 +75,7 @@ Nothing is Stable today.
 | `@prism-code/verify` 0.1.0 API: `verify`, `inspect`, `verifyTransparency`, `FORMAT_REVISION` | `sdk/npm/verify` | Experimental |
 | `prism-code` `inspect`, `Application.inspect`, `prism-code inspect` and the `prismpm/holo-inspection/1` shape | `sdk/npm/prism-code` | Experimental |
 | `prism-code` `experimental_verify`, `experimental_createClient`, `Application.experimental_verify` and the `PrismError` hierarchy with its stable codes | `sdk/npm/prism-code` | Experimental |
+| `prism-code` middleware: `Application.experimental_middleware` (the stack, its four steps and the `Pluggable` shape), `MIDDLEWARE_STEPS`, `experimental_tracing`, `MiddlewareError` and the `middleware.*` codes | `sdk/npm/prism-code` | Experimental |
 | SDK image contract: the digest-pinned OCI index for `linux/amd64` and `linux/arm64` | [SPEC.md](SPEC.md) section 1 | Experimental |
 
 The CLI binary will be renamed `prism`.

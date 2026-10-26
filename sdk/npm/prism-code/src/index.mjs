@@ -10,11 +10,12 @@
 import { parseArchive, resolveArchive, asBytes } from './archive.mjs';
 import { attestationSection, readAttestations } from './attestations.mjs';
 import { decodeHoloview } from './view.mjs';
-import { compileGuest, runGuest, runAcceptance } from './core.mjs';
+import { compileGuest, checkRequest, instantiateGuest, runInstance, runAcceptance } from './core.mjs';
 import { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
 import { PrismCodeError, fail } from './errors.mjs';
 import { inspect } from './inspect.mjs';
 import { experimental_verify } from './verify.mjs';
+import { createMiddlewareStack } from './middleware.mjs';
 import * as canonical from './canonical/index.js';
 
 export {
@@ -33,6 +34,7 @@ export {
   SubjectMismatchError,
   AttestationNotFoundError,
   TrustRootError,
+  MiddlewareError,
   ERROR_CLASSES,
   classForCheck,
   errorForReason,
@@ -42,6 +44,8 @@ export { experimental_verify, experimental_createClient, MINIMUM_LEVEL_ENV } fro
 export { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
 export { decodeHoloview, encodeHoloview } from './view.mjs';
 export { compileGuest, runGuest, runAcceptance } from './core.mjs';
+export { MIDDLEWARE_STEPS } from './middleware.mjs';
+export { experimental_tracing } from './tracing.mjs';
 export { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
 export { blake3, blake3Hex, kappa } from './blake3.mjs';
 export { inspect, formatInspection, INSPECTION_SCHEMA } from './inspect.mjs';
@@ -93,6 +97,11 @@ function evidenceOf(provenance) {
   };
 }
 
+/** Run one step of `app` through its middleware stack, around the runtime's own `terminal`. */
+function stepper(stack, application) {
+  return (step, terminal, args) => stack.resolve(step, terminal, { application: application() })(args);
+}
+
 /** Open a `.holo` archive from bytes. */
 export async function loadArchive(source) {
   const parsed = parseArchive(asBytes(source));
@@ -113,9 +122,18 @@ export async function loadArchive(source) {
       metadata = parsed.metadata.text;
     }
   }
-  const dispatch = async (request) => runGuest(module, asBytes(request), limits);
+  const middleware = createMiddlewareStack();
+  let app = null;
+  const step = stepper(middleware, () => app);
+  const dispatch = async (input) => {
+    const request = asBytes(input);
+    checkRequest(request, limits);
+    const instance = await step('instantiate', (args) => instantiateGuest(args.module, args.imports), { module, imports: {} });
+    const response = await step('dispatch', (args) => runInstance(args.instance, args.request), { request, instance });
+    return step('record', (args) => args.response, { request, response });
+  };
   let inspection = null;
-  return Object.freeze({
+  app = Object.freeze({
     kind: 'holo',
     name: application.name ?? provenance.cargo_name ?? null,
     model: modelDocument,
@@ -135,8 +153,11 @@ export async function loadArchive(source) {
     /** What the holo says about itself, read from the section table; the guest is not run. */
     inspect: () => (inspection ??= inspect(parsed.bytes)),
     /** The verdict `prism check` returns for this holo; see `experimental_verify`. */
-    experimental_verify: (options) => experimental_verify(parsed.bytes, options),
+    experimental_verify: (options) => step('verify', (args) => experimental_verify(parsed.bytes, args.options), { options }),
+    /** The middleware stack around verify, instantiate, dispatch and record (#295). */
+    experimental_middleware: middleware,
   });
+  return app;
 }
 
 /**
@@ -155,7 +176,15 @@ export async function loadClosure(files, importGlue, { model = null } = {}) {
   const profile = modelDocument ? profileOf(modelDocument) : typeof glue.invoke_bytes === 'function' ? 'text' : 'numeric';
   const dispatch = closureDispatch(glue, { profile, model: modelDocument, limits });
   const view = { entry: 'index.html', files };
-  return Object.freeze({
+  // The glue instantiated its module once, above; a closure runs the verify, dispatch and record steps.
+  const middleware = createMiddlewareStack();
+  let app = null;
+  const step = stepper(middleware, () => app);
+  const dispatchThrough = async (request) => {
+    const response = await step('dispatch', (args) => dispatch(args.request), { request });
+    return step('record', (args) => args.response, { request, response });
+  };
+  app = Object.freeze({
     kind: 'closure',
     name: stem,
     model: modelDocument,
@@ -172,12 +201,14 @@ export async function loadClosure(files, importGlue, { model = null } = {}) {
       generatedCoreSha256: provenance.generated_core_sha256 ?? null,
     },
     view,
-    dispatch: async (request) => dispatch(asBytes(request)),
+    dispatch: async (request) => dispatchThrough(asBytes(request)),
     attestations: () => [],
-    acceptance: () => runAcceptance(vectors, (r) => dispatch(r)),
+    acceptance: () => runAcceptance(vectors, (r) => dispatchThrough(r)),
     inspect: async () => fail('inspect.kind', 'inspect reads a .holo archive; a closure has no section table'),
-    experimental_verify: (options) => experimental_verify({ kind: 'closure' }, options),
+    experimental_verify: (options) => step('verify', (args) => experimental_verify({ kind: 'closure' }, args.options), { options }),
+    experimental_middleware: middleware,
   });
+  return app;
 }
 
 /**
