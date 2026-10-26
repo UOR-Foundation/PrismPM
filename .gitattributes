@@ -6,3 +6,4 @@ sdk/npm/**/*.js text eol=lf
 sdk/npm/**/*.mjs text eol=lf
 sdk/npm/**/*.d.ts text eol=lf
 sdk/npm/**/*.json text eol=lf
+schemas/**/*.json text eol=lf
