@@ -33,6 +33,7 @@ export {
   SubjectMismatchError,
   AttestationNotFoundError,
   TrustRootError,
+  ExportMismatchError,
   ERROR_CLASSES,
   classForCheck,
   errorForReason,

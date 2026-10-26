@@ -17,6 +17,8 @@
  * - `SignatureInvalidError`, `IdentityMismatchError`, `TransparencyError`,
  *   `SubjectMismatchError`, `AttestationNotFoundError`, `TrustRootError`: the
  *   reasons `verify-attestation` can refuse a bundle (#272).
+ * - `ExportMismatchError`: a browser export's bytes differ from the release's
+ *   build manifest, its layers or the files written (#290).
  *
  * The last five map one-to-one to the check ids of a `prism/verdict/1`
  * reason (docs/proposals/269-assurance-levels.md); `errorForReason` is the map.
@@ -110,6 +112,15 @@ AttestationNotFoundError.code = 'attestation_not_found';
 export class TrustRootError extends PrismError {}
 TrustRootError.code = 'trust_root_invalid';
 
+/**
+ * A browser export does not byte-match its release: a file differs from its
+ * build manifest row (`export.manifest`) or its release layer (`export.layer`),
+ * the written set of files differs (`export.files`), or the tree digest does
+ * (`export.tree`). `check` says which; `details` names the file.
+ */
+export class ExportMismatchError extends PrismError {}
+ExportMismatchError.code = 'export_mismatch';
+
 /** Every class with a code of its own, by code. */
 export const ERROR_CLASSES = Object.freeze({
   [VerificationError.code]: VerificationError,
@@ -125,6 +136,7 @@ export const ERROR_CLASSES = Object.freeze({
   [SubjectMismatchError.code]: SubjectMismatchError,
   [AttestationNotFoundError.code]: AttestationNotFoundError,
   [TrustRootError.code]: TrustRootError,
+  [ExportMismatchError.code]: ExportMismatchError,
 });
 
 /**

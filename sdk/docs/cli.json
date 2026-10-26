@@ -25,7 +25,7 @@
     "exitCodes": [
       { "code": 0, "name": "ok", "meaning": "The verb did what you asked." },
       { "code": 1, "name": "vectors failed", "meaning": "At least one acceptance vector did not replay or the holo carries none, or `verify-attestation` did not verify." },
-      { "code": 2, "name": "refused", "meaning": "The holo failed an identity check or cannot be read." },
+      { "code": 2, "name": "refused", "meaning": "The holo failed an identity check or cannot be read, or an export's bytes differ from the build manifest." },
       { "code": 3, "name": "signing failed", "meaning": "`attest` could not sign, or the optional sigstore packages are not installed." },
       { "code": 64, "name": "usage", "meaning": "The arguments were wrong, or `prismpm.lock` is missing." },
       { "code": 69, "name": "no Docker", "meaning": "Docker is not installed or not on the PATH." }
@@ -36,6 +36,7 @@
       { "name": "inspect", "usage": "prism-code inspect <app.holo>", "summary": "Print what the holo says about itself, without running it." },
       { "name": "attest", "usage": "prism-code attest <app.holo> --predicate <file> --type <uri>", "summary": "Sign an in-toto statement about the holo into its attestation section: keyless with an OIDC token, or with `--key`." },
       { "name": "verify-attestation", "usage": "prism-code verify-attestation <app.holo> --certificate-identity <id> --certificate-oidc-issuer <url>", "summary": "Check the holo's attestations against the signer you expect, or against `--key`." },
+      { "name": "export", "usage": "prism-code export <name@sha256:digest> [--out <dir>] [--tar <file>] [--project <dir>] [--json]", "summary": "Write a release's six-file browser export or tarball, byte-checked against the build manifest, attestations beside." },
       { "name": "check", "usage": "prism-code check", "summary": "Run check in the toolchain image the lockfile pins." },
       { "name": "build", "usage": "prism-code build", "summary": "Build the project into a holo inside the toolchain image the lockfile pins." },
       { "name": "verify", "usage": "prism-code verify", "summary": "Run verify in the toolchain image the lockfile pins." },

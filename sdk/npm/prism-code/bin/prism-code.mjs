@@ -9,10 +9,12 @@
  *   prism-code attest <app.holo> --predicate <file> --type <uri> [--key <private.pem>]
  *                                                     sign a statement into the holo's attestation section
  *   prism-code verify-attestation <app.holo> ...      check the signatures of those statements
+ *   prism-code export <NAME@sha256:DIGEST> [--out <dir> | --tar <file>]
+ *                                                     write a verified release's six-file browser export
  *   prism-code check|build|verify|conformance ...     run prismpm in the locked SDK image
  *
  * Exit codes: 0 ok, 1 vectors failed or an attestation did not verify,
- * 2 artifact refused, 3 signing failed or the sigstore packages are missing,
+ * 2 artifact refused or an export differs from its build manifest, 3 signing failed or the sigstore packages are missing,
  * 64 usage, 69 Docker unavailable, otherwise the delegated command's code.
  */
 import { readFile, stat } from 'node:fs/promises';
@@ -23,7 +25,7 @@ import { userInfo } from 'node:os';
 import { createRequire } from 'node:module';
 import { fromFile, serve } from '../src/node.mjs';
 import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs';
-import { PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
+import { ExportMismatchError, PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { canonicalJson } from '../src/archive.mjs';
 
@@ -45,6 +47,11 @@ Usage:
                                                     check the holo's attestations against a signer policy;
                                                     --certificate-identity-regexp <re> in place of the exact id,
                                                     --type <uri> to check one predicate type, --json for the result
+  prism-code export <NAME@sha256:DIGEST> [--out <dir> | --tar <file>] [--project <dir>] [--json]
+                                                    write the six-file browser export of a verified release in
+                                                    <project>/.prism/oci, or one tarball, with the holo's
+                                                    attestations beside it; every byte is checked against
+                                                    the build manifest
   prism-code check [args]                           prismpm check in the SDK image named by ./prismpm.lock
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
@@ -61,6 +68,10 @@ Options for verify-attestation:
                       --trusted-root <file>        pin a trusted_root.json; default is the public instance's, fetched over TUF
                       --entries <n>, --timestamps <n>
                                                    least verified log entries and timestamps: 1 and 1 keyless, 0 and 0 with --key
+Options for export:   --out <dir>                  a new directory name in the project, default export
+                      --tar <file>                 a new <name>.tar in the project instead of a directory
+                      --project <dir>              the project holding .prism/oci, default the current directory
+                      --json                       print the prismpm/browser-export/1 receipt
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -81,6 +92,9 @@ const VALUE_OPTIONS = [
   'subject',
   'key',
   'output',
+  'out',
+  'tar',
+  'project',
   'signing-config',
   'trusted-root',
   'certificate-identity',
@@ -196,6 +210,28 @@ async function commandAttestation(verb, positional, options) {
   return verb === 'attest' ? cli.runAttest(positional, options, usage) : cli.runVerifyAttestation(positional, options, usage);
 }
 
+async function commandExport(positional, options) {
+  if (positional.length !== 1) return usage('export takes one release reference, NAME@sha256:DIGEST');
+  const bad = missingValue(options);
+  if (bad) return usage(`--${bad} takes a value`);
+  if (options.out !== undefined && options.tar !== undefined) return usage('give --out or --tar, not both');
+  const { exportBrowser } = await import('../src/export.mjs');
+  const { receipt, path, attestations } = exportBrowser({
+    project: options.project ?? '.',
+    reference: positional[0],
+    out: options.tar === undefined ? (options.out ?? 'export') : undefined,
+    tar: options.tar,
+  });
+  if (options.json) {
+    process.stdout.write(`${canonicalJson(receipt)}\n`);
+    return 0;
+  }
+  process.stdout.write(`exported ${receipt.files.length} files of ${receipt.release_digest} to ${path} (integrity only)\n`);
+  process.stdout.write(`tree ${receipt.tree_digest}\n`);
+  process.stdout.write(attestations ? `${attestations.bundles} attestation bundle(s) in ${attestations.path}\n` : 'the holo carries no attestations\n');
+  return 0;
+}
+
 async function commandRun(positional, options) {
   if (positional.length !== 1) return usage('run takes one artifact');
   const app = await open(positional[0], options);
@@ -264,6 +300,8 @@ async function main(argv) {
       return commandInspect(positional, options);
     case 'run':
       return commandRun(positional, options);
+    case 'export':
+      return commandExport(positional, options);
     case 'attest':
     case 'verify-attestation':
       return commandAttestation(command, positional, options);
@@ -281,6 +319,9 @@ main(process.argv.slice(2)).then(
     if (error instanceof PrismCodeError) {
       process.stderr.write(`${error.code}: ${error.message}\n`);
       process.exitCode = error.code.startsWith('lock.') ? 64 : 2;
+    } else if (error instanceof ExportMismatchError) {
+      process.stderr.write(`${error.code}: ${error.message}\ncheck: ${error.check}\n`);
+      process.exitCode = 2;
     } else if (error instanceof PrismError) {
       process.stderr.write(`${error.code}: ${error.message}\n`);
       if (error.check) process.stderr.write(`check: ${error.check}\n`);
