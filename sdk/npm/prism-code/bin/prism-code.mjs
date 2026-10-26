@@ -2,7 +2,8 @@
 /**
  * prism-code — command line.
  *
- *   prism-code run <app.holo> [--port N] [--host H]   serve the view and the intent endpoint
+ *   prism-code run <app.holo> [--port N] [--host H] [--capabilities <file>] [--capability-set <name>]
+ *                                                     serve the view and the intent endpoint
  *   prism-code vectors <app.holo | closure-dir>       replay the acceptance vectors
  *   prism-code inspect <app.holo> [--json] [--format <path>]
  *                                                     print what the holo says about itself, without running it
@@ -14,9 +15,10 @@
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
  *
  * Exit codes: 0 ok or the policy passed, 1 vectors failed, an attestation did
- * not verify or the policy failed, 2 artifact refused or no verdict, 3 signing
- * failed or the sigstore packages are missing, 64 usage, 69 Docker
- * unavailable, otherwise the delegated command's code.
+ * not verify or the policy failed, 2 artifact refused (a guest import no
+ * capability set grants included) or no verdict, 3 signing failed or the
+ * sigstore packages are missing, 64 usage, 69 Docker unavailable, otherwise
+ * the delegated command's code.
  *
  * `check` without a holo is the 0.2.0 spelling of `build --check`. It still
  * runs, with a warning, and is removed in 0.4.0 (STABILITY.md, Deprecated).
@@ -29,7 +31,7 @@ import { userInfo } from 'node:os';
 import { createRequire } from 'node:module';
 import { fromFile, serve } from '../src/node.mjs';
 import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs';
-import { PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
+import { CapabilityDeniedError, PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { canonicalJson } from '../src/archive.mjs';
 import { check, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
@@ -40,7 +42,8 @@ const { version } = require('../package.json');
 const USAGE = `prism-code ${version}
 
 Usage:
-  prism-code run <app.holo> [--port N] [--host H]   serve the application's view; POST /_hologram/intent dispatches
+  prism-code run <app.holo> [--port N] [--host H] [--capabilities <file>] [--capability-set <name>]
+                                                    serve the application's view; POST /_hologram/intent dispatches
   prism-code vectors <app.holo | closure-dir>       replay every acceptance vector through the guest
   prism-code inspect <app.holo> [--json] [--format <path>]
                                                     print sections, digests, manifest, model, world and
@@ -72,6 +75,8 @@ Options for verify-attestation:
                       --trusted-root <file>        pin a trusted_root.json; default is the public instance's, fetched over TUF
                       --entries <n>, --timestamps <n>
                                                    least verified log entries and timestamps: 1 and 1 keyless, 0 and 0 with --key
+Options for run:      --capabilities <file>        a prism/capabilities/1 file; without one the holo is granted nothing
+                      --capability-set <name>      the set to apply, default "default"
 Options for check:    --policy <file>              a JSON policy: name, minimum (P0 to P3), digests, world;
                                                    default: P2 or above, or PRISM_MINIMUM_LEVEL
                       --json                       the verdict as one canonical JSON object
@@ -106,6 +111,8 @@ const VALUE_OPTIONS = [
   'tuf-mirror-url',
   'tuf-root',
   'tuf-cache',
+  'capabilities',
+  'capability-set',
   'policy',
 ];
 
@@ -146,7 +153,11 @@ const text = (bytes) => {
 };
 
 async function open(path, options) {
-  return fromFile(resolve(path), { model: options.model ? resolve(options.model) : null });
+  return fromFile(resolve(path), {
+    model: options.model ? resolve(options.model) : null,
+    capabilities: options.capabilities ? resolve(options.capabilities) : null,
+    capabilitySet: options['capability-set'],
+  });
 }
 
 async function commandVectors(positional, options) {
@@ -245,11 +256,15 @@ async function commandCheck(positional, options) {
 
 async function commandRun(positional, options) {
   if (positional.length !== 1) return usage('run takes one artifact');
+  for (const name of ['capabilities', 'capability-set']) {
+    if (Object.hasOwn(options, name) && (typeof options[name] !== 'string' || options[name] === '')) return usage(`--${name} takes a value`);
+  }
   const app = await open(positional[0], options);
   const port = options.port === undefined ? 0 : Number(options.port);
   if (!Number.isInteger(port) || port < 0 || port > 65535) return usage('--port must be 0..65535');
   const { url, close } = await serve(app, { port, host: options.host ?? '127.0.0.1' });
   process.stdout.write(`${app.name ?? 'application'} (${app.kind}) at ${url}\n`);
+  process.stdout.write(app.capabilities.set === null ? 'capabilities: none granted\n' : `capabilities: set ${app.capabilities.set} of ${options.capabilities}\n`);
   await new Promise((done) => {
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => close().then(done));
   });
@@ -339,6 +354,7 @@ main(process.argv.slice(2)).then(
       process.stderr.write(`${error.code}: ${error.message}\n`);
       if (error.check) process.stderr.write(`check: ${error.check}\n`);
       if (error instanceof VerificationError && error.check === 'policy.invalid') process.exitCode = 64;
+      else if (error instanceof CapabilityDeniedError) process.exitCode = 2;
       else if (error instanceof SigningError || error.code === 'attest.unavailable') process.exitCode = 3;
       else process.exitCode = 1;
     } else {
