@@ -11,7 +11,8 @@ const original = read('../fixtures/Calculator.holo');
 const signed = read('./fixtures/attestation/Calculator.signed.holo');
 const lines = Buffer.from(read('./fixtures/attestation/calculator.bundles.jsonl'))
   .toString('utf8')
-  .split('\n')
+  // A text checkout may convert line endings; the lines themselves carry none.
+  .split(/\r?\n/)
   .filter(Boolean);
 
 test('the committed signed calculator is appendAttestations of the committed lines', () => {
