@@ -103,6 +103,8 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `build --provenance=<min\|max>`, `build --no-provenance` | [#268](https://github.com/UOR-Foundation/PrismPM/issues/268) | Planned |
 | `prism-code attest <holo> --predicate <file> --type <uri>`, `--subject`, `--key`, `--output`, `--signing-config` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `prism-code verify-attestation <holo>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--key`, `--type`, `--trusted-root`, `--entries`, `--timestamps`, `--json` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
+| `prism-code generate <holo> --out <dir>`, `--lang js`, the generated files and the `prismpm/generate-record/1` record in `prism-generate.json` | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
+| `generate --lang rust`, `--lang python`, and `generate` in the Rust CLI | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | Planned |
 | `attest --predicate <file> --type <uri>` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 | `verify --certificate-identity`, `--certificate-oidc-issuer`, `--key` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 

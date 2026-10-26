@@ -9,6 +9,7 @@
  *   prism-code attest <app.holo> --predicate <file> --type <uri> [--key <private.pem>]
  *                                                     sign a statement into the holo's attestation section
  *   prism-code verify-attestation <app.holo> ...      check the signatures of those statements
+ *   prism-code generate <app.holo> --out <dir>        write bindings and a typed client from the world
  *   prism-code check|build|verify|conformance ...     run prismpm in the locked SDK image
  *
  * Exit codes: 0 ok, 1 vectors failed or an attestation did not verify,
@@ -26,6 +27,7 @@ import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs'
 import { PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { canonicalJson } from '../src/archive.mjs';
+import { generate, WRITERS } from '../src/generate/index.mjs';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
@@ -45,6 +47,9 @@ Usage:
                                                     check the holo's attestations against a signer policy;
                                                     --certificate-identity-regexp <re> in place of the exact id,
                                                     --type <uri> to check one predicate type, --json for the result
+  prism-code generate <app.holo> --out <dir> [--lang js]
+                                                    write bindings and a typed client from the holo's WIT world
+                                                    and model into <dir>; writes nothing when nothing changed
   prism-code check [args]                           prismpm check in the SDK image named by ./prismpm.lock
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
@@ -81,6 +86,8 @@ const VALUE_OPTIONS = [
   'subject',
   'key',
   'output',
+  'out',
+  'lang',
   'signing-config',
   'trusted-root',
   'certificate-identity',
@@ -196,6 +203,22 @@ async function commandAttestation(verb, positional, options) {
   return verb === 'attest' ? cli.runAttest(positional, options, usage) : cli.runVerifyAttestation(positional, options, usage);
 }
 
+async function commandGenerate(positional, options) {
+  if (positional.length !== 1) return usage('generate takes one artifact');
+  if (typeof options.out !== 'string' || options.out === '') return usage('generate needs --out <dir>; it never writes to a default place');
+  const language = options.lang ?? 'js';
+  if (typeof language !== 'string' || !Object.hasOwn(WRITERS, language)) {
+    return usage(`--lang takes ${Object.keys(WRITERS).join(', ')}; rust and python are not written yet (#289)`);
+  }
+  const holo = new Uint8Array(await readFile(resolve(positional[0])));
+  const { status, out, files, record } = await generate({ holo, out: options.out, language });
+  const what = `${language}, ${record.world.contract}, model blake3:${record.model.blake3.slice(0, 12)}`;
+  process.stdout.write(status === 'unchanged' ? `${out} is up to date (${what})
+` : `wrote ${files.length} of ${Object.keys(record.files).length} files to ${out} (${what})
+`);
+  return 0;
+}
+
 async function commandRun(positional, options) {
   if (positional.length !== 1) return usage('run takes one artifact');
   const app = await open(positional[0], options);
@@ -264,6 +287,8 @@ async function main(argv) {
       return commandInspect(positional, options);
     case 'run':
       return commandRun(positional, options);
+    case 'generate':
+      return commandGenerate(positional, options);
     case 'attest':
     case 'verify-attestation':
       return commandAttestation(command, positional, options);
