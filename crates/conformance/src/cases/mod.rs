@@ -3505,7 +3505,11 @@ fn verify_attestation(root: &Path, id: &str) {
         .lines()
         .filter(|line| line.starts_with("test result: ok. "))
         .collect::<Vec<_>>();
-    assert_eq!(summaries.len(), 1, "{id} requires one complete summary: {stdout}");
+    assert_eq!(
+        summaries.len(),
+        1,
+        "{id} requires one complete summary: {stdout}"
+    );
     assert!(
         summaries[0].starts_with(&format!(
             "test result: ok. {expected} passed; 0 failed; 0 ignored; 0 measured; "

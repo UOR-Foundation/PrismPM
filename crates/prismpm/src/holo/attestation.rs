@@ -114,9 +114,9 @@ fn base64_bytes(value: &Value, what: &str) -> Result<Vec<u8>, PrismError> {
         .filter(|text| {
             let body = text.trim_end_matches('=');
             text.len() - body.len() <= 2
-                && body
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'_' | b'-'))
+                && body.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'_' | b'-')
+                })
         })
         .ok_or_else(|| bundle_error(format!("{what} is not base64")))?;
     let normal = text
@@ -135,9 +135,12 @@ fn base64_bytes(value: &Value, what: &str) -> Result<Vec<u8>, PrismError> {
 }
 
 fn lowercase_hex64(value: &Value) -> Option<&str> {
-    value
-        .as_str()
-        .filter(|text| text.len() == 64 && text.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
+    value.as_str().filter(|text| {
+        text.len() == 64
+            && text
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    })
 }
 
 fn subject_of(
@@ -168,7 +171,9 @@ fn subject_of(
     let hex = |key: &str| {
         lowercase_hex64(&digest[key])
             .map(str::to_owned)
-            .ok_or_else(|| bundle_error(format!("{where_} {key} is not 64 lowercase hex characters")))
+            .ok_or_else(|| {
+                bundle_error(format!("{where_} {key} is not 64 lowercase hex characters"))
+            })
     };
     let (blake3, sha256) = (hex("blake3")?, hex("sha256")?);
     let label = format!("blake3:{blake3}");
@@ -201,7 +206,10 @@ pub(crate) fn decode_bundle(
             "bundle mediaType must be {BUNDLE_MEDIA_TYPE}"
         )));
     }
-    if !bundle.get("verificationMaterial").is_some_and(Value::is_object) {
+    if !bundle
+        .get("verificationMaterial")
+        .is_some_and(Value::is_object)
+    {
         return Err(bundle_error("bundle has no verificationMaterial"));
     }
     if bundle.get("messageSignature").is_some() {
@@ -237,7 +245,9 @@ pub(crate) fn decode_bundle(
     let statement: Value = serde_json::from_slice(&payload)
         .map_err(|error| bundle_error(format!("DSSE payload is not UTF-8 JSON: {error}")))?;
     if statement.get("_type").and_then(Value::as_str) != Some(STATEMENT_TYPE) {
-        return Err(bundle_error(format!("statement _type is not {STATEMENT_TYPE}")));
+        return Err(bundle_error(format!(
+            "statement _type is not {STATEMENT_TYPE}"
+        )));
     }
     let predicate_type = statement
         .get("predicateType")
@@ -273,7 +283,6 @@ pub(crate) fn decode_section(
         .map(|(index, line)| decode_bundle(index, line, blobs))
         .collect()
 }
-
 
 #[cfg(test)]
 #[path = "attestation_tests.rs"]

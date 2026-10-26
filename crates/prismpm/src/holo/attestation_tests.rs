@@ -259,7 +259,10 @@ fn ho_24_appending_to_a_signed_archive_extends_the_same_section_in_order() {
 #[test]
 fn ho_25_stripping_the_section_returns_the_unsigned_archive_byte_for_byte() {
     assert_eq!(strip_attestations(&signed()).unwrap(), CALCULATOR);
-    assert_eq!(strip_attestations(SIGNED_BY_JAVASCRIPT).unwrap(), CALCULATOR);
+    assert_eq!(
+        strip_attestations(SIGNED_BY_JAVASCRIPT).unwrap(),
+        CALCULATOR
+    );
     let one = attach_attestations(CALCULATOR, &lines()[..1]).unwrap();
     assert_eq!(strip_attestations(&one).unwrap(), CALCULATOR);
 }
@@ -335,7 +338,11 @@ fn ho_26_a_subject_naming_no_blob_or_a_wrong_sha256_is_reported_not_resolved() {
         "name": "model.json",
         "digest": {"blake3": "0".repeat(64), "sha256": "1".repeat(64)}
     }]));
-    let mut wrong = subject("core-wasm/prism_calculator_core_wasm.wasm", &label, &content);
+    let mut wrong = subject(
+        "core-wasm/prism_calculator_core_wasm.wasm",
+        &label,
+        &content,
+    );
     wrong["digest"]["sha256"] = json!("2".repeat(64));
     let bundles = [
         serde_json::to_vec(&bundle(&absent)).unwrap(),
