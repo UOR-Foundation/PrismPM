@@ -41,7 +41,7 @@ Run `npx prism-code --help` for the list your installed version has. The command
 <!-- generated:commands:begin -->
 | Command                                                                                                | What it does                                                                                                        |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `prism-code run <app.holo> [--port <n>] [--host <h>]`                                                  | Serve the holo's view on a local port. A POST to `/_hologram/intent` dispatches one request to the holo.            |
+| `prism-code run <app.holo> [--port <n>] [--capabilities <file>]`                                       | Serve the holo's view on a local port. A POST to `/_hologram/intent` dispatches one request to the holo.            |
 | `prism-code vectors <app.holo>`                                                                        | Replay every acceptance vector the holo carries and exit 1 on a failure.                                            |
 | `prism-code inspect <app.holo>`                                                                        | Print what the holo says about itself, without running it.                                                          |
 | `prism-code attest <app.holo> --predicate <file> --type <uri>`                                         | Sign an in-toto statement about the holo into its attestation section: keyless with an OIDC token, or with `--key`. |
@@ -52,14 +52,14 @@ Run `npx prism-code --help` for the list your installed version has. The command
 | `prism-code verify`                                                                                    | Run verify in the toolchain image the lockfile pins.                                                                |
 | `prism-code conformance`                                                                               | Run the conformance suite in the toolchain image the lockfile pins.                                                 |
 
-| Exit code | Name           | Meaning                                                                                                         |
-| --------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
-| 0         | ok             | The verb did what you asked.                                                                                    |
-| 1         | vectors failed | At least one acceptance vector did not replay or the holo carries none, or `verify-attestation` did not verify. |
-| 2         | refused        | The holo failed an identity check or cannot be read, or an export's bytes differ from the build manifest.       |
-| 3         | signing failed | `attest` could not sign, or the optional sigstore packages are not installed.                                   |
-| 64        | usage          | The arguments were wrong, or `prismpm.lock` is missing.                                                         |
-| 69        | no Docker      | Docker is not installed or not on the PATH.                                                                     |
+| Exit code | Name           | Meaning                                                                                                                                                   |
+| --------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0         | ok             | The verb did what you asked.                                                                                                                              |
+| 1         | vectors failed | At least one acceptance vector did not replay or the holo carries none, or `verify-attestation` did not verify.                                           |
+| 2         | refused        | The holo or capability file cannot be read, an identity check failed, a guest import is not granted, or an export's bytes differ from the build manifest. |
+| 3         | signing failed | `attest` could not sign, or the optional sigstore packages are not installed.                                                                             |
+| 64        | usage          | The arguments were wrong, or `prismpm.lock` is missing.                                                                                                   |
+| 69        | no Docker      | Docker is not installed or not on the PATH.                                                                                                               |
 
 Node.js 22 or later. check, build, verify and conformance also need Docker and a `prismpm.lock` in the current directory.
 <!-- generated:commands:end -->
