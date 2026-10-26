@@ -19,7 +19,7 @@ Feature: holo
     Given the Foundation.Server.V1.Model declaration of a server application with effects, vectors and transcripts
     When it is projected from source, validated and canonically encoded as a model-document/7
     Then the document round-trips exactly and each invalid profile, bound, name, exit code, transcript or unexercised effect is refused with PP2013
-    And building or verifying a server application is refused with PP2022 until the core export and verification pipeline exist
+    And verifying a server application is refused with PP2022 until its source-free verification exists
 
   @HO-22 @build
   Scenario: The generated host adapter of a server application executes each declared effect only through a typed host binding: its request sum, codecs, host trait and scripted host are rendered from the declaration, an undeclared, malformed or over-bound effect request cannot be encoded or run, and every declared effect is exercised by an acceptance vector through the generated program, without handwritten dispatch or any claim about a real host binding, build or verification pipeline.
@@ -133,3 +133,24 @@ Feature: holo
     Given a valid archive and one-field-at-a-time mutations
     When Holo/1 validation executes
     Then every disagreement is rejected before acceptance
+
+  @HO-23 @build
+  Scenario: The server application declares in source, as closed model data, the loopback listener it serves on and every bound of its HTTP/1.1 exchange (request line, header count and bytes, body, connections, read time, root stack), the Origin values it allows, the Accept and Content-Type it requires and the ordered host-provided sections of the request frame with the declared host effect that supplies each; a non-loopback address, a bound the frame cannot hold and a section without a source are refused with a registered diagnostic.
+    Given the Foundation.Server.V1.Model declaration of a served application with a listener, bounds, allowed origins, required media types, frame sections and served vectors
+    When it is projected from source, validated and canonically encoded as a model-document/7
+    Then the document round-trips exactly and a listener address other than 127.0.0.1, a bound that is zero or that the request frame cannot hold, a frame section without a declared source and a served vector that disagrees with its frame vector are refused with PP2019
+    And a frame effect is never an effect the core may request
+
+  @HO-24 @build
+  Scenario: The generated adapter of a served application listens on the loopback interface only and moves bytes between RFC 9112 messages and the core's boundary frames as a fixed template fragment: request line, field lines in received order without merging, Content-Length and chunked body delimiting and response serialization; every refusal it makes before the core runs (400, 403, 406, 413, 414, 415, 431) is a typed refusal whose bound or value comes from the declaration, and the acceptance vectors are answered over a real socket.
+    Given a served application built with its core and a deterministic binding
+    When a test client sends each served vector, and each malformed, oversized, forbidden or unacceptable request, over TCP to the generated program
+    Then every vector is answered with the modeled response bytes, a non-loopback bind is refused, an oversized header section is a 431, an oversized body a 413, a bad Origin a 403 and a malformed request line a 400, and the core is not called for any refusal
+    And the fields reach the core in the order received, unmerged, and the host-provided frame sections come from the declared host effects
+
+  @HO-25 @build
+  Scenario: A server application's core is built through the production API of the pinned lexlean crate and its exported package is the one the generated host links: prismpm build lays the produced package, the generated host packages and the declared binding out as one Cargo workspace, and a small server written in LexLean language 1.2 is accepted end to end over loopback.
+    Given the example server whose core is LexLean language 1.2 source
+    When prismpm builds it and the generated program serves the example vectors over loopback
+    Then the build artifacts hold the production package, the generated packages and the binding as workspace members and every vector is answered as modeled
+    And a core root that is not a production root is refused before anything is published

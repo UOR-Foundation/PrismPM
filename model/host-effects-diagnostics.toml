@@ -129,3 +129,13 @@ statement = "The entry requested an effect or a request payload that differs fro
 code = "ScriptUnused"
 class = "fault"
 statement = "The exchange finished with scripted steps that the entry never requested."
+
+[[failure]]
+code = "ListenAddress"
+class = "fault"
+statement = "The listener address is not 127.0.0.1. A served application listens on the loopback interface only, and no other address is ever bound."
+
+[[failure]]
+code = "ListenIo"
+class = "io"
+statement = "The listener could not be bound or an accepted connection could not be set up, for example because the port is in use."

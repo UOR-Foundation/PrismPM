@@ -10,15 +10,25 @@
 //! When the caller links a deterministic binding, every vector is also run
 //! through the program's `run` command, which performs the effects through the
 //! declared binding with no script: the response must be the modeled one again.
+//!
+//! A served application is also run as a server: for every served vector the
+//! program is started with `serve` on its declared loopback listener, the
+//! vector's HTTP request is sent over a TCP connection, and the bytes read until
+//! the connection closes must be the vector's response exactly. A fresh program
+//! serves each vector, so the host state a vector sees does not depend on the
+//! vectors before it.
 
 use super::program_name;
 use crate::error::PrismError;
 use crate::holo::server_application::ServerApplication;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
 
 /// Schema of the acceptance record.
 pub const SCHEMA: &str = "prismpm/server-host-acceptance/1";
@@ -26,6 +36,11 @@ pub const SCHEMA: &str = "prismpm/server-host-acceptance/1";
 pub const TRANSPORTS: [&str; 2] = ["file", "stdin"];
 /// The transport added when the declared binding serves the effects.
 pub const BINDING_TRANSPORT: &str = "binding";
+/// The transport added when the application is served over a loopback socket.
+pub const SOCKET_TRANSPORT: &str = "socket";
+/// How long a started server may take to say where it listens, and a served
+/// exchange to complete, whatever the declared read time.
+const PATIENCE: Duration = Duration::from_secs(20);
 
 fn disagreement(message: impl Into<String>) -> PrismError {
     PrismError::new("PP6003", message)
@@ -71,6 +86,111 @@ pub fn script_bytes(application: &ServerApplication, vector: usize) -> Result<Ve
         }
     }
     Ok(script)
+}
+
+/// A started `serve` program, stopped when dropped.
+pub struct Server {
+    child: Child,
+    /// Where it listens.
+    pub address: SocketAddr,
+}
+
+impl Server {
+    /// Start `program serve` and wait for the line that says where it listens.
+    ///
+    /// # Errors
+    /// Returns `PP6003` when the program cannot be started or does not listen.
+    pub fn start(program: &Path) -> Result<Server, PrismError> {
+        let mut child = Command::new(program)
+            .arg("serve")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| disagreement(format!("{}: {error}", program.display())))?;
+        let stdout = child.stdout.take().expect("the output is piped");
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            let _ = BufReader::new(stdout).read_line(&mut line);
+            let _ = sender.send(line);
+        });
+        let line = receiver.recv_timeout(PATIENCE).unwrap_or_default();
+        let address = line
+            .strip_prefix("listening ")
+            .and_then(|rest| rest.trim_end().parse::<SocketAddr>().ok());
+        match address {
+            Some(address) => Ok(Server { child, address }),
+            None => {
+                let _ = child.kill();
+                let mut stderr = String::new();
+                if let Some(mut pipe) = child.stderr.take() {
+                    let _ = pipe.read_to_string(&mut stderr);
+                }
+                let _ = child.wait();
+                Err(disagreement(format!(
+                    "serve did not say where it listens: {line:?}, stderr {stderr:?}"
+                )))
+            }
+        }
+    }
+
+    /// Send `request` over one connection and read the answer until the server closes it.
+    ///
+    /// # Errors
+    /// Returns `PP6003` when the connection cannot be made.
+    pub fn exchange(&self, request: &[u8]) -> Result<Vec<u8>, PrismError> {
+        let mut stream = TcpStream::connect_timeout(&self.address, PATIENCE)
+            .map_err(|error| disagreement(format!("{}: {error}", self.address)))?;
+        stream
+            .set_read_timeout(Some(PATIENCE))
+            .and_then(|()| stream.set_write_timeout(Some(PATIENCE)))
+            .map_err(|error| disagreement(error.to_string()))?;
+        // The server may answer and close before it has read everything sent.
+        let _ = stream.write_all(request);
+        let mut response = Vec::new();
+        let _ = stream.read_to_end(&mut response);
+        Ok(response)
+    }
+}
+
+impl Drop for Server {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// Run every served vector against the built `program` as a loopback server.
+///
+/// # Errors
+/// Returns `PP6003` when the program does not listen or answers any vector with
+/// other bytes than the modeled ones.
+pub fn execute_served(
+    application: &ServerApplication,
+    program: &Path,
+) -> Result<usize, PrismError> {
+    let Some(serving) = application.serving.first() else {
+        return Ok(0);
+    };
+    for (index, vector) in serving.vectors.iter().enumerate() {
+        let server = Server::start(program)?;
+        if !server.address.ip().is_loopback() {
+            return Err(disagreement(format!(
+                "the program listens on {}, which is not the loopback interface",
+                server.address
+            )));
+        }
+        let response = server.exchange(&vector.request)?;
+        if response != vector.response {
+            return Err(disagreement(format!(
+                "served vector {index}: {} response bytes differ from the {} modeled ones",
+                response.len(),
+                vector.response.len()
+            )));
+        }
+    }
+    Ok(serving.vectors.len())
 }
 
 /// Steps recorded per declared effect, in declaration order.
@@ -189,11 +309,17 @@ pub fn execute(
         }
     }
     let effects = exercised(application);
-    if effects.iter().any(|(_, steps)| *steps == 0) {
+    // An effect that only fills the request frame is exercised by the served vectors.
+    let frame = application.frame_effects();
+    if effects
+        .iter()
+        .any(|(name, steps)| *steps == 0 && !frame.contains(name.as_str()))
+    {
         return Err(disagreement(
             "a declared host effect is exercised by no vector",
         ));
     }
+    let served = execute_served(application, program)?;
     Ok(json!({
         "effects": effects
             .iter()
@@ -210,7 +336,9 @@ pub fn execute(
             .iter()
             .copied()
             .chain(binding.then_some(BINDING_TRANSPORT))
+            .chain((served > 0).then_some(SOCKET_TRANSPORT))
             .collect::<Vec<_>>(),
         "vectors": application.acceptance_vectors.len(),
+        "served": served,
     }))
 }

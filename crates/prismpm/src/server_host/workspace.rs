@@ -3,7 +3,8 @@
 //! The binding crate is a member of the consumer's own Cargo workspace, at the
 //! path the model declares. The declaration alone cannot say whether that
 //! directory holds the declared crate, so this check reads the workspace:
-//! the generated packages and the binding are exactly listed members, the
+//! the production core package, the generated packages and the binding are
+//! exactly listed members, the
 //! binding directory resolves inside the workspace, its manifest names the
 //! declared crate and depends on the generated API package, and every other
 //! dependency it has is a crates.io dependency or another workspace member.
@@ -58,7 +59,11 @@ pub fn verify(application: &ServerApplication, workspace: &Path) -> Result<(), P
                 .collect::<Vec<_>>()
         })
         .ok_or_else(|| mismatch("the workspace manifest lists no members"))?;
-    let mut required = vec![api_name(application), program_name(application)];
+    let mut required = vec![
+        application.core.package.clone(),
+        api_name(application),
+        program_name(application),
+    ];
     required.extend(
         application
             .bindings

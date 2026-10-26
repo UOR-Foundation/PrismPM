@@ -60,7 +60,7 @@ pub fn project_snapshot(snapshot: &SemanticSnapshot) -> Result<ModelDocument, Pr
 /// Compute the canonical tree digest of the exact declared emitter inputs.
 #[must_use]
 pub fn compute_emitter_semantics_id() -> String {
-    const INPUTS: [(&str, &[u8]); 29] = [
+    const INPUTS: [(&str, &[u8]); 30] = [
         (
             "crates/prismpm/src/holo/application.rs",
             include_bytes!("application.rs"),
@@ -121,6 +121,10 @@ pub fn compute_emitter_semantics_id() -> String {
         (
             "crates/prismpm/src/holo/server_application/model.rs",
             include_bytes!("server_application/model.rs"),
+        ),
+        (
+            "crates/prismpm/src/holo/server_application/serving.rs",
+            include_bytes!("server_application/serving.rs"),
         ),
         (
             "crates/prismpm/src/holo/server_application/source.rs",
