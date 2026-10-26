@@ -1054,8 +1054,8 @@ no absolute checkout path, hostname, locale text, random identifier, timestamp,
 or traversal-order dependence.
 
 The only imported Lean-source exception is the registered LexLean 0.4.0 package
-at revision `aa6593e026d92f4696fe970715c81528ad2c37da`, the commit of the
-annotated `v0.4.0` tag (the release binding, LexLean #34, keeps this commit).
+at revision `e0b74b81e6f49c83596a957d232c8383a5db1a25`, the commit of the
+annotated `v0.4.0` tag, from which the LexLean v0.4.0 release was cut.
 Its exact 4-file compiler-authority closure is the following paths under
 `vendor/lexlean/language/preservation-1.2/`:
 `modules/LexLeanTarget/{RustSemantics,RustSyntax,TargetSemantics,TargetSyntax}.lean`.

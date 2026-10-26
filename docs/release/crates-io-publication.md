@@ -19,7 +19,7 @@ None of `prism-stdlib`, `prismpm`, `lexlean`, `prod-ir`, `prod-codegen` or
 | --- | --- | --- | --- | --- |
 | 1 | `prod-ir` | 0.1.0 | this repository, `vendor/lean4-prod/rust/prod-ir` | `vendor/lean4-prod/crates/prod-ir-0.1.0.crate`, sha256 `7cffc025…cdc21` |
 | 2 | `prod-codegen` | 0.1.0 | this repository, `vendor/lean4-prod/rust/prod-codegen` | `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`, sha256 `29270825…09148` |
-| 3 | `lexlean` | 0.4.0 | the LexLean repository ([LexLean#260](https://github.com/UOR-Foundation/LexLean/issues/260)) | `vendor/lexlean/lexlean-0.4.0.crate`, sha256 `92d66ec6…42df7`, cut from LexLean `aa6593e02` (the `v0.4.0` tag) |
+| 3 | `lexlean` | 0.4.0 | the LexLean repository ([LexLean#260](https://github.com/UOR-Foundation/LexLean/issues/260)) | `vendor/lexlean/lexlean-0.4.0.crate`, sha256 `f2d57928…a0a18`, cut from LexLean `e0b74b81e` (the `v0.4.0` tag); already public on crates.io with these bytes |
 | 4 | `prism-stdlib` | 0.2.0 | this repository, `stdlib/generated/package` | `stdlib/generated/prism-stdlib-0.2.0.crate`, sha256 `58f398f5…52bca` |
 | 5 | `prismpm` | 0.3.0 | this repository, `crates/prismpm` | none: nothing embeds it; it is packaged again once 1 to 4 are public |
 
@@ -89,11 +89,11 @@ the vendored copy, and then packages and uploads `prismpm`. A version that is
 already public with the same bytes is skipped; with other bytes the run stops.
 
 `lexlean` comes first from the LexLean repository. PrismPM embeds the crate cut
-from LexLean `aa6593e02`, the commit of the annotated `v0.4.0` tag, which is
-version 0.4.0. Uploading from that tag (`git checkout v0.4.0`, then
-`cargo publish -p lexlean` in the LexLean repository) gives crates.io the bytes
-this SDK embeds; uploading from any other commit claims `0.4.0` for other bytes,
-and `--publish` refuses.
+from LexLean `e0b74b81e`, the commit of the annotated `v0.4.0` tag, which is
+version 0.4.0. LexLean's release workflow uploaded it to crates.io on
+2026-10-26 (GitHub release `v0.4.0`, `release-identity.json` `crate_sha256`
+`f2d57928…a0a18`). The crates.io checksum equals the vendored copy, so
+`--publish` finds it public with the same bytes and continues.
 
 After the uploads, configure trusted publishing for the five names, set
 `CRATES_IO_TRUSTED_PUBLISHING`, and delete the token.
