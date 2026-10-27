@@ -6,6 +6,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateCapturedLock} from '../scripts/library-sdk-check.mjs';
 import {decodeExporterSeed} from './inventory-metadata.mjs';
+import {validateInventory} from './platform-lock.mjs';
 import {readSmall, snapshotTree} from './exporter-seed.mjs';
 import {constructSeeds} from './exporter-seed.integration.mjs';
 import {measureRelocation} from './exporter-relocation.integration.mjs';
@@ -17,7 +18,11 @@ const installed = '/opt/prismpm/share/conformance-root';
 const installedSeed = '/opt/prismpm/share/exporter-seed';
 const artifactNames = ['coverage.json', 'kernel.ir', 'roots.json'];
 
-export function validateQualification(value, binding, authority) {
+export function validateQualification(value, binding, authority, nativeInventory) {
+  assert(Buffer.isBuffer(nativeInventory), 'captured native SDK inventory bytes required');
+  assert.equal(sha(nativeInventory), binding.inventory_sha256, 'extraction authority differs from captured SDK inventory');
+  const tar = validateInventory(nativeInventory).commands.find(row => row.command === 'tar');
+  assert(tar && tar.executable === '/usr/bin/tar', 'qualification requires the inventoried native extraction tool');
   keys(value, ['schema', 'scope', 'binding', 'manifests', 'construction', 'relocation']);
   assert.equal(value.schema, 'prismpm/exporter-qualification/1');
   assert.equal(value.scope, 'installed-native-compiler-only');
@@ -42,7 +47,9 @@ export function validateQualification(value, binding, authority) {
     assert.deepEqual(record.environment, {...manifest.configuration.environment, TMPDIR: temporary});
     assert.equal(record.exit_code, 0);
     hex(record.executable_sha256);
-    if (argv[0] === lake) assert.equal(record.executable_sha256, lakeHash);
+    assert([lake, tar.executable].includes(argv[0]), 'unknown qualification executable');
+    assert.equal(record.executable_sha256, argv[0] === lake ? lakeHash : tar.sha256,
+      'qualification executable differs from independent native authority');
     for (const stream of ['stdout', 'stderr']) {
       assert.equal(typeof record[stream], 'string');
       assert(Buffer.byteLength(record[stream]) <= 16 * 1024 ** 2);
@@ -141,12 +148,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const bytes = Buffer.alloc(64 * 1024 ** 2 + 1); let offset = 0;
     while (offset < bytes.length) { const count = readSync(0, bytes, offset, bytes.length - offset, null); if (!count) break; offset += count; }
     assert(offset > 0 && offset < bytes.length);
-    const binding = capturedBinding(bytes.subarray(0, offset), args[0], installed, readFileSync('/opt/prismpm/share/inventory.json'));
-    const result = qualify(binding); validateQualification(result, binding, authority(installed));
+    const inventory = readFileSync('/opt/prismpm/share/inventory.json');
+    const binding = capturedBinding(bytes.subarray(0, offset), args[0], installed, inventory);
+    const result = qualify(binding); validateQualification(result, binding, authority(installed), inventory);
     process.stdout.write(JSON.stringify(result) + '\n');
   } else if (operation === 'result' && args.length === 5) {
     const [result, lock, image, root, inventory] = args;
+    const inventoryBytes = readFileSync(inventory);
     validateQualification(JSON.parse(readSmall(result, 64 * 1024 ** 2)),
-      capturedBinding(Buffer.from(readSmall(lock, 64 * 1024 ** 2)), image, root, readFileSync(inventory)), authority(root));
+      capturedBinding(Buffer.from(readSmall(lock, 64 * 1024 ** 2)), image, root, inventoryBytes), authority(root), inventoryBytes);
   } else throw Error('closed exporter qualification operation');
 }

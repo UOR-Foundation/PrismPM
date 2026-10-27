@@ -224,6 +224,7 @@ RUN mkdir -p /opt/prismpm/share/standards/oracles \
     && cp standards/oracles/kubernetes-1.36.4-swagger.json \
       /opt/prismpm/share/standards/oracles/kubernetes-1.36.4-swagger.json
 RUN cargo build --locked --release --package prismpm \
+    && target/release/prismpm --json --project . authority resolve --locked \
     && cargo build --locked --release --package repo-conformance --bins \
     && cargo build --locked --release --manifest-path vendor/lexlean/Cargo.toml --bin lexlean \
     && cargo fetch --locked \
@@ -303,6 +304,11 @@ COPY --from=cli-archive-package /out/ /
 
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS runtime_base
 RUN chmod -R a-w /ms-playwright
+
+ARG TARGETARCH
+COPY --from=source_inputs --chmod=0444 /prepared/source/sdk/browser-engine/ /opt/prismpm/browser-engine/
+RUN python3 -B /opt/prismpm/browser-engine/install_test.py \
+    && python3 -B /opt/prismpm/browser-engine/install.py --architecture "$TARGETARCH"
 
 ARG SOURCE_DATE_EPOCH=0
 COPY --from=source_inputs /prepared/source/sdk/runtime-os.lock /tmp/prismpm-runtime-os.lock

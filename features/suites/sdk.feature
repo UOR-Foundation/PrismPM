@@ -1,5 +1,12 @@
 Feature: sdk
 
+  @DK-26 @build
+  Scenario: The private generated session kernel binds visible ordinary intents, admitted authority facts and exact effect continuations while separating durable application state from volatile presentation and retaining uncertain or closed pending work without claiming host durability or public runtime acceptance.
+    Given source-owned session wrappers and the complete bounded session protocol
+    When actual kernel, native, no_std and Wasm execution checks every transition and aggregate bound
+    Then substituted authority, intents, state, requests and continuations reject without losing custody of unresolved operations
+    And actual source guard mutations fail while durable orchestration and public acceptance remain separate requirements
+
   @DK-30 @build
   Scenario: The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std/no_std execution and import-free Wasm corpus probes without granting OS authority or claiming native application acceptance.
     Given the complete explicit native lease corpus and host-only cleanup preconditions
@@ -54,6 +61,7 @@ Feature: sdk
     Given source-owned semantic presentation fixtures and the exact bounded wire grammar
     When fresh kernel, native, no_std, Core-Wasm and real browser journeys execute every declared maximum
     Then actual generated frames and browser transcripts agree without HTML injection or control authority
+    And Chromium, Firefox and WebKit preserve one connected atomic status region without duplicate announcements or implicit focus changes
     And actual model and adapter mutations fail their owning assertions
 
   @DK-21 @build

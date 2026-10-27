@@ -11,6 +11,7 @@ if test "${1:-}" = --with-sdk; then
   exec {sdk_command_input}<&0
   exec </dev/null
 fi
+bash scripts/browser-environment-preflight.sh
 node --test scripts/devcontainer-init.test.mjs
 bash scripts/bootstrap-verify.sh --check-source
 

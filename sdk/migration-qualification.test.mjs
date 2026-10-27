@@ -1,7 +1,7 @@
 // Parser falsification only; real installed execution belongs to the native gate.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {historicalLock,migrationChecks,verifyMigration,expectedMigrationProcesses,inventoryMutants} from './migration-qualification.mjs';
+import {historicalLock,verifyHistoricalFixture,migrationChecks,verifyMigration,expectedMigrationProcesses,inventoryMutants} from './migration-qualification.mjs';
 import {lockFixture} from '../scripts/library-sdk-fixture.mjs';
 import * as migration from './migration-qualification.mjs';
 import {readFileSync} from 'node:fs';
@@ -43,6 +43,16 @@ function fixture() {
       patch:[{op:'test',path:'',value:JSON.parse(historical.document)},{op:'replace',path:'',value:target.lock}]}}};
 }
 test('migration reader binds original historical bytes and complete independent target',()=>{
+  const historical=historicalLock();
+  const original=JSON.parse(readFileSync(new URL('./fixtures/hologram-live-historical-lock.json',import.meta.url)));
+  assert.deepEqual(verifyHistoricalFixture(original),historical);
+  for(const change of [v=>delete v.objects,v=>v.objects.extra='unclaimed',v=>v.objects.commit_base64='',
+    v=>v.objects.tree_base64+='\n',v=>v.objects.tree_base64=Buffer.from('foreign tree').toString('base64'),
+    v=>v.objects.commit_base64=Buffer.from(Buffer.from(v.objects.commit_base64,'base64').toString()+'changed').toString('base64'),
+    v=>v.objects.tree_base64=Buffer.alloc(65537).toString('base64'),
+    v=>v.source.git_blob='0'.repeat(40),v=>v.source.revision='0'.repeat(40),v=>v.document+='\n']){
+    const changed=structuredClone(original);change(changed);assert.throws(()=>verifyHistoricalFixture(changed));
+  }
   const {target,value}=fixture();verifyMigration(value,target.bytes);
   const legacy=structuredClone(value);delete legacy.historical_source;legacy.schema='prismpm/installed-lock-migration/1';
   verifyMigration(legacy,target.bytes); // Historical reader only; installed gate rejects /1.

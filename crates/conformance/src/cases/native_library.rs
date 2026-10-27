@@ -9,6 +9,57 @@ use std::path::Path;
 const ACCEPTANCE: &str = "LibraryProbe.Probe.acceptance";
 const IDENTITY: &str = "LibraryProbe.Probe.identity";
 
+pub(super) fn runtime_rejection(error: &prismpm::PrismError, root: &str) -> bool {
+    let main_panic = || {
+        let Some((_, suffix)) = error.message.split_once("\\nthread 'main' ") else {
+            return false;
+        };
+        let suffix = if let Some(pid) = suffix.strip_prefix('(') {
+            let Some((pid, rest)) = pid.split_once(") ") else {
+                return false;
+            };
+            if pid.is_empty() || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
+                return false;
+            }
+            rest
+        } else {
+            suffix
+        };
+        let Some((location, body)) = suffix
+            .strip_prefix("panicked at src/main.rs:")
+            .and_then(|rest| rest.split_once("\\n"))
+        else {
+            return false;
+        };
+        let Some((row, column)) = location
+            .strip_suffix(':')
+            .and_then(|position| position.split_once(':'))
+        else {
+            return false;
+        };
+        let positive = |value: &str| {
+            value.starts_with(|first: char| ('1'..='9').contains(&first))
+                && value.bytes().all(|byte| byte.is_ascii_digit())
+        };
+        positive(row) && positive(column) && body.split("\\n").next() == Some(root)
+    };
+    !root.is_empty()
+        && error.code == "PP5006"
+        && error.primary.is_none()
+        && error.labels.is_empty()
+        && error.notes.is_empty()
+        && error.help.is_empty()
+        && error.causes.is_empty()
+        && error
+            .message
+            .starts_with("native-library-std-acceptance exited 101: stdout=\"\"; stderr=\"")
+        && error.message.ends_with('"')
+        && error.message.matches("\\nthread 'main' ").count() == 1
+        && main_panic()
+        && !error.message.contains("could not compile")
+        && !error.message.contains("error[E")
+}
+
 fn fixture(root: &Path) -> tempfile::TempDir {
     let project = tempfile::Builder::new()
         .prefix("prismpm-native-conformance-")
@@ -440,9 +491,8 @@ pub(super) fn verify(root: &Path) {
     let error = controller
         .verify(VerifyRequest { config_path: None })
         .unwrap_err();
-    assert_eq!(
-        error.code.as_str(),
-        "PP5006",
+    assert!(
+        runtime_rejection(&error, ACCEPTANCE),
         "the generated oracle must reject identity(42) = 43: {error:#?}"
     );
     no_verification(mutant.path());

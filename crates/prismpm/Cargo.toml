@@ -29,6 +29,7 @@ include = [
     "sdk/oracles/go/intoto-statement-validator/main.go",
     "sdk/stdlib-sources.tar",
     "sdk/platform-lock.mjs",
+    "sdk/sdk-index-extensions.json",
     "sdk/exporter-seed.mjs",
     "sdk/exporter-seed-admission.mjs",
     "sdk/inventory-metadata.mjs",

@@ -8,7 +8,9 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {verifyImage,verifyTap} from './browser-api-sdk-check.mjs';
 import {compilerRevision} from '../sdk/inventory-metadata.mjs';
 import {parseSdkIndex,validateInventory} from '../sdk/platform-lock.mjs';
-import {captureSdkMetadata,verifiedCommands} from '../sdk/metadata-cli.mjs';
+import {verifiedCommands} from '../sdk/metadata-cli.mjs';
+import {captureSdkMetadataEvidence} from '../sdk/metadata-evidence-cli.mjs';
+import {verifyMetadataEvidence} from '../sdk/metadata-evidence.mjs';
 import {qualifyMigration,verifyMigration} from '../sdk/migration-qualification.mjs';
 import {captureInstalledCustody,runConcurrentInstalled,verifyCustody,installedEnvironment} from './installed-exporter-concurrency.mjs';
 export {verifyImage};
@@ -26,6 +28,7 @@ export const sourceRoots=Object.freeze([
  'scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/library-sdk-fixture.mjs','scripts/library-owner-reader-replay.mjs','.github/workflows/release.yml',
  'scripts/installed-exporter-concurrency.mjs','scripts/installed-exporter-concurrency.test.mjs','scripts/portable-oracle-process-owner.py',
  'scripts/hologram-source-pins.mjs','scripts/hologram-source-pins.test.mjs','crates/prismpm/tests/hologram_interop.rs',
+ 'scripts/library-sdk-metadata-evidence.mjs',
  'tests/holo-codec-oracle/Cargo.toml','tests/holo-codec-oracle/Cargo.lock',
 ]);
 // Tracked compiler include aliases only. Their complete target roots are bound
@@ -71,6 +74,16 @@ function regularBytes(path,maximum=64*1024*1024){
 
 // Only independently acquired metadata is admitted. The native bytes below
 // come from the selected immutable image, never the lock being checked.
+export function validateAcquisitionBytes(bytes){
+ assert(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=288*1024*1024,'bounded original acquisition record required');
+ const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes),value=JSON.parse(text);
+ // Compare original bytes before projecting the nested lock. JSON.parse alone
+ // discards duplicate keys; any such normalization must refuse this record.
+ assert.equal(canonical(value),text,'original canonical acquisition record required');
+ keys(value,['lock','migration','metadata']);
+ return value;
+}
+
 export function validateCapturedLock(bytes,image,architecture,standards,nativeInventory){
  assert(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=64*1024*1024,'bounded captured SDK lock required');
  assert(['amd64','arm64'].includes(architecture));
@@ -112,9 +125,10 @@ function stdinLock(){
 async function acquireLock(root,image){
  const inventory='/opt/prismpm/share/inventory.json',standards=regularBytes(join(root,'standards.lock'));
  assert(standards.equals(regularBytes('/opt/prismpm/share/standards.lock')),'installed standards differ from captured source');
- const bytes=await captureSdkMetadata(image,'sha256:'+hash(standards),verifiedCommands(inventory));
+ const captured=await captureSdkMetadataEvidence(image,'sha256:'+hash(standards),verifiedCommands(inventory));
+ const bytes=Buffer.from(canonical(captured.lock));
  validateCapturedLock(bytes,image,{x64:'amd64',arm64:'arm64'}[process.arch],standards,regularBytes(inventory));
- return {lock:JSON.parse(bytes),migration:qualifyMigration(bytes)};
+ return {lock:JSON.parse(bytes),migration:qualifyMigration(bytes),metadata:captured.evidence};
 }
 
 export function tree(root,selected=[''],aliases={}){
@@ -157,7 +171,8 @@ export function cliOutput(output,expected){
  if(expected.code)assert.ok(Object.hasOwn(exits,expected.code),'declared diagnostic exit class');
  assert.equal(output.status,expected.code ? exits[expected.code] : 0, "CLI exit class");
  let value;try{value=JSON.parse(output.stdout);}catch{throw new Error('CLI did not emit exactly one JSON result');}
- if(expected.code){assert.equal(value.schema,'prismpm/error-result/1');assert.equal(value.diagnostic?.code,expected.code);if(expected.message)assert.equal(value.diagnostic.message,expected.message);}
+ if(expected.code){assert.equal(value.schema,'prismpm/error-result/1');assert.equal(value.diagnostic?.code,expected.code);if(expected.message)assert.equal(value.diagnostic.message,expected.message);
+  if(expected.assertion!==undefined){assert.equal(expected.code,'PP5006');requireModeledAssertionFailure(value,expected.assertion);}}
  else{
   assert.equal(value.schema,expected.schema,'CLI success schema');
   const fields={
@@ -172,6 +187,22 @@ export function cliOutput(output,expected){
   if(value.schema==='prismpm/verify-result/1')assert.equal(value.verified_root,'.prism/verified/'+value.attestation_id);
  }
  return value;
+}
+// Code alone cannot distinguish an assertion from Cargo/compiler/transcript
+// failure. This private oracle requires the actual generated main assertion.
+export function requireModeledAssertionFailure(value,root){
+ keys(value,['schema','diagnostic']);assert.equal(value.schema,'prismpm/error-result/1');
+ const diagnostic=value.diagnostic;keys(diagnostic,['code','message','primary','labels','notes','help','causes']);
+ assert.equal(diagnostic.code,'PP5006');assert.equal(diagnostic.primary,null);
+ for(const field of ['labels','notes','help','causes'])same(diagnostic[field],[]);
+ assert.equal(typeof root,'string');assert.match(root,/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/);
+ const message=diagnostic.message;assert.equal(typeof message,'string');assert(Buffer.byteLength(message)<=16*1024*1024);
+ assert(message.startsWith('native-library-std-acceptance exited 101: stdout=""; stderr="')&&message.endsWith('"'));
+ assert(!message.includes('could not compile')&&!message.includes('error[E'));
+ const parts=message.split("\\nthread 'main' ");assert.equal(parts.length,2,'one actual main panic required');
+ const lines=parts[1].split('\\n');
+ assert.match(lines[0],/^(?:\([0-9]+\) )?panicked at src\/main\.rs:[1-9][0-9]*:[1-9][0-9]*:$/);
+ assert.equal(lines[1],root,'the first generated main panic must name the exact modeled assertion');
 }
 function document(path){const bytes=regularBytes(path),value=JSON.parse(bytes);assert.ok(bytes.equals(Buffer.from(canonical(value))),'canonical artifact bytes: '+path);return value;}
 function noVerification(project){const path=join(project,'.prism/verified');assert.ok(!existsSync(path)||readdirSync(path).length===0,'unaccepted source published verification');}
@@ -335,7 +366,9 @@ export async function run(root,image,lockBytes){
   ];
   for(const [change,message] of mutations){const invalid=fixture();mutateModule(invalid,change);const before=tree(invalid);cli(invalid,['check'],{code:'PP2001',message});same(tree(invalid),before,'invalid check wrote outputs');noVerification(invalid);}
   const mutant=fixture(),original=mutateModule(mutant,module=>{declaration(module,'identity').body={kind:'add',left:{kind:'var',name:'value'},right:{kind:'nat',value:'1'}};});
-  const changed=positive(mutant,['check']);assert.notEqual(changed.semantic_id,checked.semantic_id);cli(mutant,['verify'],{code:'PP5006'});noVerification(mutant);
+  const changed=positive(mutant,['check']);assert.notEqual(changed.semantic_id,checked.semantic_id);
+  const rejection=cli(mutant,['verify'],{code:'PP5006',assertion:acceptanceRoot});noVerification(mutant);
+  const acceptance_rejection={schema:'prismpm/generated-acceptance-rejection/1',root:acceptanceRoot,result:rejection};
   writeFileSync(join(mutant,'src/Probe.lex.tex'),original);const restored=positive(mutant,['verify']);assert.equal(restored.build_id,accepted.build_id);checkAccepted(mutant,restored,exporterArchiveSha256,compilerIdentity,'cold',binding);
   for(let index=0;index<2;index++){
    const warm=fixture();assert(!existsSync(join(warm,'prismpm.lock')),'warm fixture must not replace a source lock');
@@ -368,7 +401,7 @@ export async function run(root,image,lockBytes){
   const afterCustody=captureInstalledCustody(binding,identity);same(afterCustody,beforeCustody,'original immutable SDK custody changed during concurrent execution');
   const concurrency={scope:'installed-exporter-concurrency-only',runs:concurrentRuns,overlap:concurrent.overlap,
    retirements:concurrent.outcomes.map(row=>row.retirement),environments:concurrent.outcomes.map(row=>row.environment),custody:{before:beforeCustody,after:afterCustody}};
-  return {scope:'installed-native-library-only',build_id:accepted.build_id,binding,runs,concurrency,checks:completedChecks,unclaimed};
+  return {scope:'installed-native-library-only',build_id:accepted.build_id,binding,runs,concurrency,acceptance_rejection,checks:completedChecks,unclaimed};
  }finally{rmSync(work,{recursive:true,force:true});}
 }
 
@@ -448,7 +481,11 @@ export function verifyResult(value,binding,sourceAuthority){
  hex(value.build_id);assert(binding,'independent captured SDK binding required');
  keys(sourceAuthority,['archive_sha256','toolchain']);hex(sourceAuthority.archive_sha256);
  assert.match(sourceAuthority.toolchain,/^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/);
- same(value,{scope:'installed-native-library-only',build_id:value.build_id,binding,runs:value.runs,concurrency:value.concurrency,checks:completedChecks,unclaimed},'complete installed native-library result');
+ same(value,{scope:'installed-native-library-only',build_id:value.build_id,binding,runs:value.runs,concurrency:value.concurrency,acceptance_rejection:value.acceptance_rejection,checks:completedChecks,unclaimed},'complete installed native-library result');
+ keys(value.acceptance_rejection,['schema','root','result']);
+ assert.equal(value.acceptance_rejection.schema,'prismpm/generated-acceptance-rejection/1');
+ assert.equal(value.acceptance_rejection.root,acceptanceRoot);
+ requireModeledAssertionFailure(value.acceptance_rejection.result,acceptanceRoot);
  assert(Array.isArray(value.runs)&&value.runs.length===4,'complete cold/warm records required');
  assert.equal(new Set(value.runs.map(row=>row.root)).size,4,'four fresh absolute roots required');
  const concurrency=value.concurrency;keys(concurrency,['scope','runs','overlap','retirements','environments','custody']);
@@ -495,7 +532,7 @@ export function verifyResult(value,binding,sourceAuthority){
   validateVerificationOwner(manifest,'library',row.acquisition,binding,sourceAuthority);
  }
 }
-export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,24),24,'complete owning gate test count');}
+export function testOutput(output){assert.equal(output.error,undefined);assert.equal(output.signal,null);assert.equal(output.status,0);assert.equal(verifyTap(output.stdout,29),29,'complete owning gate test count');}
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [mode,...args]=process.argv.slice(2);
@@ -508,9 +545,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   {archive_sha256:hash(regularBytes(new URL('../vendor/lean4-prod/lean.tar',import.meta.url))),toolchain:regularBytes(new URL('../lean-toolchain',import.meta.url)).toString().trim()});
  else if(mode==='binding'&&args.length===5)console.log(JSON.stringify(validateCapturedLock(
   regularBytes(args[0]),args[1],args[2],regularBytes(args[3]),regularBytes(args[4]))));
- else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/installed-exporter-concurrency.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
- else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(JSON.stringify(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
- else if(mode==='acquired-lock'&&args.length===1){const value=JSON.parse(regularBytes(args[0],192*1024*1024));keys(value,['lock','migration']);const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);assert.equal(value.migration.schema,'prismpm/installed-lock-migration/2');verifyMigration(value.migration,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
+ else if(mode==='tests'&&args.length===0){const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),env={...process.env};delete env.NODE_TEST_CONTEXT;const output=spawnSync(process.execPath,['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=120000','scripts/library-sdk-check.test.mjs','scripts/library-sdk-check-shell.test.mjs','scripts/installed-exporter-concurrency.test.mjs','sdk/exporter-qualification.test.mjs','sdk/migration-qualification.test.mjs','sdk/metadata-evidence.test.mjs'],{cwd:root,env,encoding:'utf8',timeout:150000,maxBuffer:16*1024*1024});process.stdout.write(output.stdout??'');process.stderr.write(output.stderr??'');testOutput(output);}
+ else if(mode==='acquire-lock'&&args.length===1)process.stdout.write(canonical(await acquireLock(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0])));
+ else if(mode==='acquired-lock'&&args.length===1){const value=validateAcquisitionBytes(regularBytes(args[0],288*1024*1024));const lock=Buffer.from(canonical(value.lock));assert(lock.length<=64*1024*1024);assert.equal(value.migration.schema,'prismpm/installed-lock-migration/2');verifyMigration(value.migration,lock);await verifyMetadataEvidence(value.metadata,lock);assert.equal(value.migration.platform,'linux/'+{x64:'amd64',arm64:'arm64'}[process.arch]);process.stdout.write(lock);}
  else if(mode==='run'&&args.length===1)console.log(JSON.stringify(await run(resolve(dirname(fileURLToPath(import.meta.url)),'..'),args[0],stdinLock())));
  else throw Error('closed installed native-library gate command');
 }

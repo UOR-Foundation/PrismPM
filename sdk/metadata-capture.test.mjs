@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
 import {captureMetadataLock} from './metadata-capture.mjs';
 import {sha} from './metadata-layer.mjs';
 import {fixture, encode} from './metadata-test-fixture.mjs';
@@ -14,6 +15,18 @@ test('bounded capture returns the ordinary complete lock from exact raw graph by
     const inventory = f.inventories.get(row.platform.split('/')[1]);
     assert.equal(row.inventory_document, inventory.toString()); assert.equal(row.inventory_digest, sha(inventory));
     assert.deepEqual(row.inventory, JSON.parse(inventory).artifacts);
+  }
+  for (const row of JSON.parse(readFileSync(new URL('./sdk-index-extensions.json', import.meta.url), 'utf8'))) {
+    const original = f.index.toString();
+    const raw = row.location === 'root' ? '{' + row.member + ',' + original.slice(1)
+      : row.location === 'descriptor' ? original.replace('"manifests":[{', '"manifests":[{' + row.member + ',')
+      : original.replace('"platform":{', '"platform":{' + row.member + ',');
+    assert.notEqual(raw, original, row.id);
+    const bytes = Buffer.from(raw), reference = f.reference.split('@')[0] + '@' + sha(bytes);
+    const capture = () => captureMetadataLock(reference, sha(f.standards), request =>
+      request.reference === reference ? Promise.resolve(bytes) : f.transport(request));
+    if (row.accepted) assert.equal((await capture()).sdk_index, raw, row.id);
+    else await assert.rejects(capture(), undefined, row.id);
   }
 });
 

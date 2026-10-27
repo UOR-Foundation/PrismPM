@@ -192,8 +192,8 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
       if (fault === 'publication-signal') return {...ok(''),status:null,signal:'SIGTERM'};
       if (fault === 'publication-cancel') process.emit('SIGTERM');
       publicationQualified = true;
-      const count = fault === 'publication-forged-summary' ? 1 : fault === 'publication-omission' ? 34 : 35;
-      const reported = fault === 'publication-forged-summary' ? 35 : count;
+      const count = fault === 'publication-forged-summary' ? 1 : fault === 'publication-omission' ? 37 : 38;
+      const reported = fault === 'publication-forged-summary' ? 38 : count;
       const skipped = fault === 'publication-skip' ? 1 : 0;
       return ok('TAP version 13\n'+Array.from({length:count},(_,i)=>`ok ${i+1} - unit-only transport inventory${skipped && i===0?' # SKIP':''}\n`).join('')
         +`1..${count}\n# tests ${reported}\n# suites 0\n# pass ${reported-skipped}\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo 0\n`);
@@ -410,13 +410,13 @@ test('executed source-baseline and second-run omission mutants fail owning behav
   await assert.rejects(async () => { const f = fixture(t, 'stale-base'); await assert.rejects(f.run(noBaseline.runReview), /golden source bytes are stale/); }, /Missing expected rejection/);
   const noSeed = await load(source.replace("await run(['exec', name, 'node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);", ''));
   await assert.rejects(fixture(t).run(noSeed.runReview), /unseeded cache/);
-  const publication = "    const publicationTests = await run(['exec', name, 'node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);\n    const publicationTap = publicationTests.toString();\n    assert.equal(verifyTap(publicationTap, 35), 35);\n    assert.match(publicationTap, /^1\\.\\.35\\r?$/m);\n";
+  const publication = "    const publicationTests = await run(['exec', name, 'node', '--test', '--test-reporter=tap', '--test-timeout=120000', '/workspace/sdk/exporter-seed.test.mjs']);\n    const publicationTap = publicationTests.toString();\n    assert.equal(verifyTap(publicationTap, 38), 38);\n    assert.match(publicationTap, /^1\\.\\.38\\r?$/m);\n";
   assert(source.includes(publication));
   const noPublication = await load(source.replace(publication, ''));
   await assert.rejects(fixture(t).run(noPublication.runReview), /native publication suite must execute/);
-  const noPublicationCount = await load(source.replace('    assert.equal(verifyTap(publicationTap, 35), 35);\n', ''));
+  const noPublicationCount = await load(source.replace('    assert.equal(verifyTap(publicationTap, 38), 38);\n', ''));
   await assert.rejects(async () => {await assert.rejects(fixture(t,'publication-skip').run(noPublicationCount.runReview));}, /Missing expected rejection/);
-  const noPublicationPlan = await load(source.replace('    assert.match(publicationTap, /^1\\.\\.35\\r?$/m);\n', ''));
+  const noPublicationPlan = await load(source.replace('    assert.match(publicationTap, /^1\\.\\.38\\r?$/m);\n', ''));
   await assert.rejects(async () => {await assert.rejects(fixture(t,'publication-forged-summary').run(noPublicationPlan.runReview));}, /Missing expected rejection/);
   const noRunnerBinding = await load(source.replace('assert.equal(environment.RUNNER_ARCH, platformPolicy.runner);', ''));
   for (const architecture of ['amd64', 'arm64']) {

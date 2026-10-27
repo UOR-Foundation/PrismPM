@@ -503,19 +503,71 @@ export function runtimePaths(stdout) {
   return paths;
 }
 
-function runtimeClosure(programs, toolchain, cwd, environment) {
+// Private native construction classifier. gABI ELF64 header/program-header
+// layouts: https://gabi.xinuos.com/elf/02-eheader.html and /07-pheader.html.
+// Never infer static linkage from a failed ldd command or its error text.
+export function elfRuntimeMode(fd, length, architecture = process.arch) {
+  assert(Number.isSafeInteger(length) && length >= 0 && length <= limit.file, 'bounded ELF input required');
+  const exact = (offset, size) => {
+    assert(Number.isSafeInteger(offset) && offset >= 0 && offset + size <= length, 'truncated ELF structure');
+    const bytes = Buffer.alloc(size); let count = 0;
+    while (count < size) {
+      const read = readSync(fd, bytes, count, size - count, offset + count);
+      assert(read > 0, 'ELF input shortened'); count += read;
+    }
+    return bytes;
+  };
+  if (length < 4) return null;
+  if (!exact(0, 4).equals(Buffer.from([127, 69, 76, 70]))) return null;
+  const header = exact(0, 64), machine = {x64: 62, arm64: 183}[architecture];
+  assert(machine, 'supported native ELF architecture required');
+  assert.equal(header[4], 2, 'native ELF64 required');
+  assert.equal(header[5], 1, 'native little-endian ELF required');
+  assert.equal(header[6], 1, 'ELF identification version');
+  assert([2, 3].includes(header.readUInt16LE(16)), 'executable ELF type required');
+  assert.equal(header.readUInt16LE(18), machine, 'foreign ELF machine');
+  assert.equal(header.readUInt32LE(20), 1, 'ELF header version');
+  assert.equal(header.readUInt16LE(52), 64, 'ELF header size');
+  assert.equal(header.readUInt16LE(54), 56, 'ELF program-header size');
+  const count = header.readUInt16LE(56), offset = header.readBigUInt64LE(32);
+  assert(count > 0 && count <= 4096, 'bounded explicit ELF program-header count required');
+  assert(offset >= 64n && offset + BigInt(count * 56) <= BigInt(length), 'bounded ELF program-header table required');
+  const table = exact(Number(offset), count * 56); let dynamic = false, load = false;
+  for (let index = 0; index < count; index++) {
+    const row = table.subarray(index * 56, (index + 1) * 56), type = row.readUInt32LE(0);
+    if (type === 0) continue; // PT_NULL has no defined remaining fields.
+    const start = row.readBigUInt64LE(8), size = row.readBigUInt64LE(32);
+    assert(start + size <= BigInt(length), 'ELF segment outside file');
+    assert.notEqual(type, 5, 'reserved ELF shared-library segment refused');
+    if (type === 1) { load = true; assert(size <= row.readBigUInt64LE(40), 'ELF load segment exceeds memory'); }
+    if (type === 2 || type === 3) dynamic = true;
+  }
+  assert(load, 'ELF executable requires a load segment');
+  return dynamic ? 'dynamic' : 'static';
+}
+
+export function runtimeClosure(programs, toolchain, cwd, environment, observe = runConstruction) {
   const paths = new Map();
   for (const program of programs) {
-    const fd = openSync(program, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const magic = Buffer.alloc(4);
-    try { readSync(fd, magic, 0, 4, 0); } finally { closeSync(fd); }
-    if (!magic.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) continue;
-    const observation = runConstruction('/usr/bin/ldd', [program], cwd, environment);
-    for (const selected of runtimePaths(observation.stdout)) {
-      const canonical = realpathSync(selected);
-      if (canonical.startsWith(toolchain + sep)) continue;
-      paths.set(selected, {selected, path: canonical, ...snapshotFile(canonical)});
-    }
+    assert.equal(realpathSync(program), program, 'runtime program alias refused');
+    const before = lstatSync(program, {bigint: true});
+    assert(before.isFile() && before.nlink === 1n && before.size <= BigInt(limit.file), 'bounded runtime executable required');
+    const fd = openSync(program, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      unchanged(before, fstatSync(fd, {bigint: true}));
+      const mode = elfRuntimeMode(fd, Number(before.size));
+      if (mode === 'dynamic') {
+        const observation = observe('/usr/bin/ldd', [program], cwd, environment);
+        for (const selected of runtimePaths(observation.stdout)) {
+          const canonical = realpathSync(selected);
+          if (canonical.startsWith(toolchain + sep)) continue;
+          paths.set(selected, {selected, path: canonical, ...snapshotFile(canonical)});
+        }
+      }
+      unchanged(before, fstatSync(fd, {bigint: true}));
+      unchanged(before, lstatSync(program, {bigint: true}));
+      assert.equal(realpathSync(program), program, 'runtime program ancestor changed');
+    } finally { closeSync(fd); }
   }
   return [...paths.values()].sort((a, b) => order(a.selected, b.selected));
 }
@@ -570,6 +622,7 @@ export function buildSeed(source, destination) {
     const programs = toolsBefore.filter(row => row.kind === 'file' && row.path.startsWith('bin/') && (row.mode & 0o111))
       .map(row => join(toolchain, row.path));
     const runtime = runtimeClosure([...programs, join(seedRoot, '.lake/build/bin/prod-export')], toolchain, source, childEnvironment);
+    assert.deepEqual(snapshotTree(toolchain, {toolchainAliases: true}), toolsBefore, 'toolchain changed during runtime inspection');
     const manifest = {schema: 'prismpm/exporter-seed/1', platform: `linux/${architecture}`,
       compiler_revision: revision, archive_sha256: archiveRow.sha256, toolchain: toolchainName,
       configuration: {argv: ['build', 'prod-export'], environment, construction_root: staging,
