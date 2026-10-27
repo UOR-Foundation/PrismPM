@@ -2130,6 +2130,7 @@ mod verify_examples_tests {
             name: example.name,
             project: example.project,
             command_line: None,
+            same_outputs_as: None,
         };
         assert!(check_command_line(&unexpected, build.path(), &acceptance).is_err());
         assert!(check_command_line(&unexpected, build.path(), &serde_json::json!({})).is_err());
@@ -2164,6 +2165,7 @@ mod verify_examples_tests {
                 oversized_vectors: 0,
                 examples: expected.examples,
             }),
+            same_outputs_as: None,
         };
         assert!(check_command_line(&one_sided, build.path(), &acceptance).is_err());
 
