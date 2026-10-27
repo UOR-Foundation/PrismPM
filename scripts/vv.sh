@@ -2,6 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+bash scripts/browser-environment-preflight.sh
 node --test scripts/devcontainer-init.test.mjs
 bash scripts/bootstrap-verify.sh --check-source
 
