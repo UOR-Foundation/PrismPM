@@ -26,13 +26,19 @@ function start(args) {
     const child = spawn(process.execPath, [bin, 'run', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
+    // Served means it printed its start lines and we stopped it. On POSIX run handles SIGTERM and exits 0;
+    // on Windows the kill is forced and reports a signal. Either way, it is the stop we asked for.
+    let served = false;
     child.stdout.on('data', (chunk) => {
       out += chunk;
-      if (/\ncheck: [^\n]*\n/.test(out)) child.kill();
+      if (!served && /\ncheck: [^\n]*\n/.test(out)) {
+        served = true;
+        child.kill();
+      }
     });
     child.stderr.on('data', (chunk) => (err += chunk));
     child.on('error', reject);
-    child.on('exit', (code, signal) => resolve({ code: signal ? 'served' : code, out, err }));
+    child.on('exit', (code) => resolve({ code: served ? 'served' : code, out, err }));
   });
 }
 
