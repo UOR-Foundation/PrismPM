@@ -301,7 +301,7 @@ test('explicit OCI-only dispatch is distinct from Cargo publication and rejects 
   assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null}).publishCrates, true);
   for (const change of [{publishCrates: 'false'}, {publishCrates: null}, {repository: 'other/PrismPM'},
     {ref: 'refs/heads/feature'}, {ref: 'refs/tags/v0.3.0'}, {event: 'pull_request'},
-    {version: '0.4.0'}, {revision: 'main'}, {extra: true}]) {
+    {version: '0.5.0'}, {revision: 'main'}, {extra: true}]) {
     assert.throws(() => publicationPolicy({...policy(), ...change}));
   }
 });
@@ -329,7 +329,7 @@ test('image-index signatures require the exact current source, ref, trigger, nam
     [image.replace(imageDigest, 'latest'), revision, 'refs/heads/main'],
     [`${image}@${imageDigest}`, revision, 'refs/heads/main'],
     [image, 'main', 'refs/heads/main'], [image, revision, 'refs/heads/feature'],
-    [image, revision, 'refs/tags/v0.4.0'],
+    [image, revision, 'refs/tags/v0.3.0'],
   ]) assert.throws(() => imageVerificationArguments(subject, source, ref, '/trusted-root'));
 });
 
