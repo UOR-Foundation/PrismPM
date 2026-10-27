@@ -10,14 +10,20 @@ const directory = dirname(fileURLToPath(import.meta.url));
 const original = readFileSync(join(directory, 'compiler-artifact.mjs'), 'utf8');
 const suite = readFileSync(join(directory, 'compiler-artifact.test.mjs'));
 const mutations = [
-  ['pre-execution-check', '      verify();\n      try {return run(', '      try {return run(',
+  ['pre-execution-check', '      compilerReadBarrier(verify);\n      try {return run(', '      try {return run(',
     'changed original/private executable refuses before execution'],
-  ['post-execution-check', '} finally {verify();}', '} finally {}',
+  ['post-execution-check', '} finally {compilerReadBarrier(verify);}', '} finally {}',
     'successful and failed actual executions both check compiler identity afterward'],
   ['opaque-handle', "assert.ok(owners.has(owner), 'actual captured compiler artifact required');",
     "assert.ok(owner, 'actual captured compiler artifact required');", 'fresh compiler capture retains original'],
   ['persistent-permissions', 'mode: Number(before.mode)', 'mode: 0',
     'unchanged compiler bytes and inode cannot conceal changed executable permissions'],
+  ['final-barrier-sweep', 'for (const [path, row] of rows) {', 'for (const [path, row] of []) {',
+    'final barrier sweep rejects late mutations'],
+  ['fresh-execution-barriers',
+    'compilerReadBarrier(verify);\n      try {return run(path, arguments_, cwd, environment);} finally {compilerReadBarrier(verify);}',
+    'verify();\n      try {return run(path, arguments_, cwd, environment);} finally {verify();}',
+    'nested actual executions never revive pre-child measurements'],
 ];
 
 for (const [id, before, after, witness] of mutations) test('actual compiler custody defect ' + id, t => {
@@ -37,8 +43,9 @@ for (const [id, before, after, witness] of mutations) test('actual compiler cust
   assert.ok(result.stdout.split('\n').some(line => line.startsWith('not ok ') && line.includes(witness)),
     'failure must name the intended behavioral witness, not import/tool failure');
   assert.match(result.stdout, id === 'pre-execution-check'
-    ? /substituted executable refused before planted sentinel/ : /Missing expected exception/);
-  assert.match(result.stdout, /# tests 8\n/);
+    ? /substituted executable refused before planted sentinel/ : id === 'fresh-execution-barriers'
+      ? /outer, pre, post and resumed reads are independent/ : /Missing expected exception/);
+  assert.match(result.stdout, /# tests 13\n/);
   assert.match(result.stdout, /# skipped 0\n/); assert.match(result.stdout, /# todo 0\n/);
   assert.doesNotMatch(result.stdout + result.stderr, /ERR_MODULE_NOT_FOUND|SyntaxError/);
 });

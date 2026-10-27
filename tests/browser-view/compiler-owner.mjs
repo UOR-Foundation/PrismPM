@@ -7,9 +7,10 @@ import {closeSync, constants, fstatSync, lstatSync, mkdirSync, mkdtempSync, open
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from './compile.mjs';
-import {captureCompilerArtifact} from './compiler-artifact.mjs';
+import {captureCompilerArtifact, compilerReadBarrier, observeCompilerRuntimeFile} from './compiler-artifact.mjs';
 
 const families = Object.freeze({
+  p256: Object.freeze({directory: 'browser-p256', executable: 'browser-p256-driver'}),
   view: Object.freeze({directory: 'browser-view', executable: 'browser-workspace-view-driver'}),
   effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),
   presentation: Object.freeze({directory: 'browser-presentation', executable: 'browser-presentation-driver'}),
@@ -82,8 +83,8 @@ function observeFile(path, retain = false) {
     return {bytes, sha256: hash.digest('hex'), stat: before};
   } finally {closeSync(fd);}
 }
-function file(path, expected) {
-  const captured = observeFile(path, true);
+function file(path, expected, retain = true) {
+  const captured = observeFile(path, retain);
   if (expected !== undefined) assert.equal(captured.sha256, expected, 'captured compiler source ' + path);
   return captured.bytes;
 }
@@ -118,7 +119,7 @@ export function captureCompilerRuntime(root) {
       entries.set(relative, Object.freeze({kind: 'directory', ...identity}));
     } else {
       assert.ok(stat.isFile() && stat.size <= 268435456n, 'bounded regular exporter runtime input');
-      const captured = observeFile(path);
+      const captured = observeCompilerRuntimeFile(path);
       unchanged(stat, captured.stat);
       entries.set(relative, Object.freeze({kind: 'file', ...identity, links: stat.nlink.toString(),
         size: Number(stat.size), sha256: captured.sha256}));
@@ -190,13 +191,15 @@ export function createCompilerOwner(name, selectedInputs = captureCompilerInputs
       exporterBuildMs, driverBuildMs, preparationMs: performance.now() - began});
     let closed = false, busy = false;
     function verify() {
-      assert.equal(closed, false, 'compiler owner closed');
-      assert.equal(realpathSync(work), work, 'unaliased private compiler owner');
-      assert.equal(lstatSync(work).mode & 0o077, 0, 'private compiler owner directory required');
-      for (const [path, digest] of Object.entries(inputs)) file(join(repository, path), digest);
-      for (const [path, digest] of staged) file(join(work, path), digest);
-      assert.deepEqual(captureCompilerRuntime(exporter.dir), runtime, 'immutable complete exporter runtime closure');
-      exportArtifact.verify(); driver.verify();
+      return compilerReadBarrier(() => {
+        assert.equal(closed, false, 'compiler owner closed');
+        assert.equal(realpathSync(work), work, 'unaliased private compiler owner');
+        assert.equal(lstatSync(work).mode & 0o077, 0, 'private compiler owner directory required');
+        for (const [path, digest] of Object.entries(inputs)) file(join(repository, path), digest, false);
+        for (const [path, digest] of staged) file(join(work, path), digest, false);
+        assert.deepEqual(captureCompilerRuntime(exporter.dir), runtime, 'immutable complete exporter runtime closure');
+        exportArtifact.verify(); driver.verify();
+      });
     }
     function execute(artifact, args, cwd, environment) {
       assert.equal(busy, false, 'serial compiler owner required'); verify(); busy = true;
