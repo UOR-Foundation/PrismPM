@@ -223,6 +223,7 @@ fn browser_system_source_selection_and_requirements_fail_closed() {
 
 #[test]
 fn browser_system_named_release_proves_artifacts_oracles_and_source_free_export() {
+    let _compiler = crate::test_compiler::acquire();
     let temporary = browser_system_project();
     let root = temporary.path();
     let controller = Controller::load(root).unwrap();
@@ -342,6 +343,7 @@ fn browser_system_named_release_proves_artifacts_oracles_and_source_free_export(
 
 #[test]
 fn application_build_identity_binds_closed_artifacts_and_rejects_tampering() {
+    let _compiler = crate::test_compiler::acquire();
     let temporary = calculator_project();
     let root = temporary.path();
     let controller = Controller::load(root).unwrap();
@@ -386,6 +388,7 @@ fn application_build_identity_binds_closed_artifacts_and_rejects_tampering() {
 
 #[test]
 fn physical_archive_limit_rejects_before_publishing_any_build() {
+    let _compiler = crate::test_compiler::acquire();
     let temporary = calculator_project();
     let root = temporary.path();
     let controller = Controller::load(root).unwrap();
@@ -1042,6 +1045,7 @@ fn explicit_release_requires_a_system_graph() {
 
 #[test]
 fn modeled_system_projections_pass_all_seven_locked_oracles() {
+    let _compiler = crate::test_compiler::acquire();
     let temporary = named_releases();
     let root = temporary.path();
     let controller = Controller::load(root).unwrap();
@@ -1077,6 +1081,7 @@ fn modeled_system_projections_pass_all_seven_locked_oracles() {
 
 #[test]
 fn alternate_release_verification_is_bound_to_the_selected_build() {
+    let _compiler = crate::test_compiler::acquire();
     let temporary = named_releases();
     let root = temporary.path();
     let controller = Controller::load(root).unwrap();
