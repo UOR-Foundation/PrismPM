@@ -959,5 +959,4 @@ pub fn select<'a>(value: &'a Value, selector: &str) -> Result<Option<&'a Value>,
 }
 
 #[cfg(test)]
-#[path = "inspect_tests.rs"]
 mod tests;

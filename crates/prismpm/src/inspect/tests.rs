@@ -221,7 +221,8 @@ fn the_guest_module_reads_and_carries_exactly_the_worlds_interface() {
         "the guest imports {} entries",
         interface.imports.len()
     );
-    let found: Vec<(String, String, Option<(Vec<String>, Vec<String>)>)> = interface
+    type ExportRow = (String, String, Option<(Vec<String>, Vec<String>)>);
+    let found: Vec<ExportRow> = interface
         .exports
         .iter()
         .map(|export| {

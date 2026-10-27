@@ -702,18 +702,18 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             }
         }
         Commands::Inspect { reference, format } => {
-            if is_holo_argument(&reference) {
-                let bytes = std::fs::read(&reference).map_err(|error| {
+            if is_holo_argument(reference) {
+                let bytes = std::fs::read(reference).map_err(|error| {
                     PrismError::new(
                         "PP3001",
                         format!("cannot read the .holo file {reference}: {error}"),
                     )
                 })?;
-                let inspection = crate::holo::inspect::inspect(&bytes)?;
+                let inspection = crate::inspect::inspect(&bytes)?;
                 match format {
                     Some(selector) => {
-                        let selected = crate::holo::inspect::select(&inspection, &selector)?
-                            .ok_or_else(|| {
+                        let selected =
+                            crate::inspect::select(&inspection, selector)?.ok_or_else(|| {
                                 PrismError::new(
                                     "PP1101",
                                     format!("no value at {selector} in {reference}"),

@@ -6,7 +6,6 @@ pub mod browser_application;
 pub mod canonical;
 mod facet_validate;
 mod facets;
-pub mod inspect;
 pub mod library;
 pub mod model_document;
 pub mod projector;
