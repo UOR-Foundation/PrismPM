@@ -51,7 +51,7 @@ function fixture(t){
  writeFileSync(join(work,'lock.json'),sdk.bytes);
  const historical=historicalLock();
  writeFileSync(join(work,'acquisition.json'),JSON.stringify({lock:sdk.lock,migration:{
-  schema:'prismpm/installed-lock-migration/1',platform:'linux/'+architecture,
+  schema:'prismpm/installed-lock-migration/2',platform:'linux/'+architecture,historical_source:historical.authority,
   historical_sha256:historical.source.sha256,target_sha256:sdk.hash(sdk.bytes),checks:migrationChecks,
   processes:expectedMigrationProcesses(sdk.lock,'linux/'+architecture).map(row=>({...row,stdout_sha256:'1'.repeat(64),stderr_sha256:'2'.repeat(64)})),
   proposal:{schema:'prismpm/sdk-lock-migration/1',compatibility_review:'required',generated_output_diff:'required',security_review:'required',
@@ -116,6 +116,15 @@ test('real shell invokes the confined Docker sequence and inspects actual termin
   ['RECORDED_OUTPUT',['', 'TAP version 13\n1..0 # SKIP\n','{}']],
   ['RECORDED_COMPILER_OUTPUT',['{}']],['RECORDED_CUSTODY_OUTPUT',['{}']],
  ])for(const output of outputs)tasks.push(async()=>{const context=fixture(t);context.env[field]=output;const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);});
+ for(const mutate of [value=>delete value.migration.historical_source,
+  value=>{value.migration.schema='prismpm/installed-lock-migration/1';delete value.migration.historical_source;},
+  value=>value.migration.historical_source.blob_oid='0'.repeat(40),
+  value=>value.migration.historical_source.tree_sha256='0'.repeat(64),
+  value=>value.migration.historical_source.source_document_sha256='0'.repeat(64)])tasks.push(async()=>{
+   const context=fixture(t),path=join(context.work,'acquisition.json');
+   const value=JSON.parse(readFileSync(path));mutate(value);writeFileSync(path,JSON.stringify(value));
+   const {result}=await execute(context);assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/closure passed/);
+  });
  await cases(tasks);
 });
 

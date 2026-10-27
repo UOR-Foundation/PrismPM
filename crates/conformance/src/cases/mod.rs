@@ -383,6 +383,19 @@ pub fn run_at(root: &Path, id: &str) {
             verify_holo(root, id);
         }
         "HO-13" => holo_browser::verify(root),
+        "HO-14" => {
+            let evidence = prismpm::upstream_conformance::verify_blake3_corpus(
+                &root.join("standards/corpora/blake3-1.5.5"),
+            )
+            .expect("complete pinned BLAKE3 oracle and real content-identity adapter");
+            assert_eq!(
+                evidence.corpus_sha256,
+                "sha256:f8ffc0176af3fed9ce66b92f60c424d96f413fa044d7b341fc63b896428037c9"
+            );
+            assert_eq!(evidence.positive, 35);
+            assert_eq!(evidence.negative, 0);
+            assert_eq!(evidence.planted_rejections, 5);
+        }
 
         "CT-01" | "CT-02" | "CT-03" | "CT-04" | "CT-05" | "CT-06" | "CT-07" | "CT-08" | "CT-09"
         | "CT-10" | "CT-11" => {
@@ -441,7 +454,7 @@ pub fn run_at(root: &Path, id: &str) {
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
-        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 16, "120000"),
+        "DK-29" => verify_node_suite(root, id, &["sdk/exporter-seed.test.mjs"], 35, "120000"),
         "DK-28" => verify_node_suite(
             root,
             id,
@@ -507,8 +520,10 @@ fn verify_browser_host(root: &Path, id: &str) {
                 "tests/browser-view/compiler-artifact.test.mjs",
                 "tests/browser-view/compiler-artifact-mutations.test.mjs",
                 "tests/browser-view/compiler-owner.test.mjs",
+                "tests/browser-view/compiler-runtime.test.mjs",
+                "tests/browser-view/compiler-runtime-mutations.test.mjs",
             ],
-            19,
+            34,
         ),
         "DK-16" => (&["sdk/browser/view-host-test.mjs"], 10),
         "DK-19" => (
@@ -3734,6 +3749,25 @@ fn verify_security(root: &Path, id: &str) {
 #[cfg(test)]
 mod node_suite_tests {
     use super::{required, verify_node_suite};
+
+    #[test]
+    fn exporter_seed_owning_gate_rejects_omitted_handoff_and_interruption_tests() {
+        let root = tempfile::tempdir().unwrap();
+        let suite = root.path().join("seed.mjs");
+        for count in [28, 29, 30, 31, 32, 33, 34, 35] {
+            std::fs::write(&suite, format!("import {{test}} from 'node:test'; for(let i=0;i<{count};i++)test('actual registered '+i,()=>{{}});")).unwrap();
+            let result = std::panic::catch_unwind(|| {
+                verify_node_suite(root.path(), "DK-29", &["seed.mjs"], 35, "5000")
+            });
+            assert_eq!(
+                result.is_ok(),
+                count == 35,
+                "incomplete owning gate accepted {count} tests"
+            );
+        }
+        let owning_source = include_str!("mod.rs");
+        assert!(owning_source.lines().any(|line| line.trim() == "\"DK-29\" => verify_node_suite(root, id, &[\"sdk/exporter-seed.test.mjs\"], 35, \"120000\"),"));
+    }
 
     #[test]
     fn owning_node_gate_rejects_a_partially_missing_selected_file() {

@@ -211,6 +211,12 @@ level = "build"
 statement = "The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority."
 
 [[id]]
+id = "HO-14"
+suite = "holo"
+level = "build"
+statement = "Pinned BLAKE3 vectors qualify every imported digest mode, streaming partition and content-identity result without claiming cryptographic proof or durable native storage."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

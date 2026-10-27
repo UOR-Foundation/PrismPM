@@ -797,7 +797,7 @@ fn strings(value: &Value) -> Result<Vec<&str>, PrismError> {
     array(value)?.iter().map(string).collect()
 }
 
-fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError> {
+pub(crate) fn process_records(value: &Value, lexlean: bool) -> Result<&[Value], PrismError> {
     let rows = array(value)?;
     ensure(!rows.is_empty(), "verification process evidence is empty")?;
     for row in rows {
@@ -891,20 +891,47 @@ fn validate_exporter_measurement(value: &Value) -> Result<(), PrismError> {
     )
 }
 
-/// OCI release admission supplies the independently retained SDK lock; the
-/// source-free structural replay above deliberately does not authenticate it.
-pub(crate) fn validate_exporter_authority(
-    _build_files: &BTreeMap<String, Vec<u8>>,
+/// OCI admission binds the original artifacts before authenticating every
+/// original exporter execution against the independently retained SDK lock.
+/// The authority-only helper is private: production callers cannot bypass the
+/// source-free semantic and artifact checks.
+pub(crate) fn validate_with_authority(
+    build_manifest_bytes: &[u8],
+    build_files: &BTreeMap<String, Vec<u8>>,
+    verification_files: &BTreeMap<String, Vec<u8>>,
+    sdk_lock: impl FnOnce() -> Result<Value, PrismError>,
+) -> Result<Binding, PrismError> {
+    let binding = validate(build_manifest_bytes, build_files, verification_files)?;
+    validate_exporter_authority(verification_files, &sdk_lock()?)?;
+    Ok(binding)
+}
+
+fn validate_exporter_authority(
     verification_files: &BTreeMap<String, Vec<u8>>,
     sdk_lock: &Value,
 ) -> Result<(), PrismError> {
     let manifest = canonical_json(file(verification_files, "manifest.json")?, false)?;
     let processes = process_records(&manifest["processes"], false)?;
     let platform = process_platform(processes)?;
-    let executions: Vec<Value> = processes
+    let mut executions: Vec<Value> = processes
         .iter()
         .filter_map(|row| row.get("exporter").cloned())
         .collect();
+    if manifest["schema"] == "prismpm/application-verification-manifest/2" {
+        crate::exporter::validate_owner_record(
+            &manifest["exporter_owner"],
+            string(&manifest["model_sha256"])?,
+            "application",
+        )
+        .map_err(|error| invalid(error.message))?;
+        for phase in array(&manifest["exporter_owner"]["phases"])? {
+            for row in process_records(&phase["processes"], false)? {
+                if let Some(execution) = row.get("exporter") {
+                    executions.push(execution.clone());
+                }
+            }
+        }
+    }
     for execution in executions {
         validate_exporter_execution(&execution)?;
         ensure(
@@ -1127,19 +1154,21 @@ fn application_binding(
     files: &BTreeMap<String, Vec<u8>>,
     processes: &[Value],
 ) -> Result<(), PrismError> {
-    keys(
-        manifest,
-        &[
-            "acceptance_sha256",
-            "build_id",
-            "lexlean_attestation_sha256",
-            "model_sha256",
-            "processes",
-            "schema",
-        ],
-    )?;
+    let owned = manifest["schema"] == "prismpm/application-verification-manifest/2";
+    let mut fields = vec![
+        "acceptance_sha256",
+        "build_id",
+        "lexlean_attestation_sha256",
+        "model_sha256",
+        "processes",
+        "schema",
+    ];
+    if owned {
+        fields.push("exporter_owner");
+    }
+    keys(manifest, &fields)?;
     ensure(
-        manifest["schema"] == "prismpm/application-verification-manifest/1",
+        owned || manifest["schema"] == "prismpm/application-verification-manifest/1",
         "application verification family differs",
     )?;
     for (key, bytes) in [
@@ -1213,6 +1242,47 @@ fn application_binding(
         application,
         std::path::Path::new("$APPLICATION_WORK/export"),
     );
+    if owned {
+        let projections = if let Some(bytes) = build_files.get("system.prism.json") {
+            let system = crate::system::parse(bytes)?;
+            let artifacts = build_files
+                .iter()
+                .map(|(path, bytes)| (path.clone(), bytes.clone()))
+                .collect::<Vec<_>>();
+            crate::system::projections(&system, &artifacts)?
+                .into_iter()
+                .map(|row| row.path)
+                .collect::<BTreeSet<_>>()
+        } else {
+            BTreeSet::new()
+        };
+        let artifacts = build_files
+            .iter()
+            .filter(|(path, _)| {
+                !(path.starts_with("lexlean/")
+                    || path.starts_with("application/lexlean-build/")
+                    || projections.contains(path.as_str())
+                    || matches!(
+                        path.as_str(),
+                        "model.prism.json"
+                            | "system.prism.json"
+                            | "application/lexlean-snapshot.json"
+                            | "application/lexlean-build-manifest.json"
+                    ))
+            })
+            .map(|(path, bytes)| json!({"path":path,"byte_length":bytes.len(),"sha256":hex(bytes)}))
+            .collect::<Vec<_>>();
+        crate::exporter::validate_owner_binding(
+            &manifest["exporter_owner"],
+            string(&manifest["model_sha256"])?,
+            "application",
+            file(build_files, "application/lexlean-build-manifest.json")?,
+            &json!(artifacts),
+            processes,
+            &arguments,
+        )
+        .map_err(|error| invalid(error.message))?;
+    }
     ensure(
         processes.last().unwrap()["argv"] == json!(arguments),
         "application regeneration export process arguments differ",

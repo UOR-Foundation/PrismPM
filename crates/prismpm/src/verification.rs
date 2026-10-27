@@ -2231,6 +2231,7 @@ fn run_application(
     lex_attestation: Vec<u8>,
     lex_attestation_id: String,
     mut processes: Vec<ProcessRecord>,
+    mut exporter_owner: crate::exporter::VerifyExporterOwner,
 ) -> Result<VerifyResult, PrismError> {
     let application = model.application.as_ref().ok_or_else(|| {
         PrismError::new(
@@ -2426,12 +2427,14 @@ fn run_application(
     let application_manifest =
         std::fs::read(build_root.join("application/lexlean-build-manifest.json"))
             .map_err(|error| PrismError::new("PP4002", error.to_string()))?;
-    let mut replay = crate::application_build::generate_recorded(
+    let mut replay = crate::application_build::generate_owned(
         &controller.root,
         &model,
         &model_bytes,
         &application_lex,
         &application_manifest,
+        &mut exporter_owner,
+        crate::exporter::Phase::Replay,
     )?;
     let expected_artifacts = build_manifest["files"]
         .as_array()
@@ -2500,10 +2503,11 @@ fn run_application(
     let manifest = json!({
         "acceptance_sha256": format!("{:x}", Sha256::digest(&acceptance_bytes)),
         "build_id": build.build_id,
+        "exporter_owner": exporter_owner.finish()?,
         "lexlean_attestation_sha256": format!("{:x}", Sha256::digest(&lex_attestation)),
         "model_sha256": format!("{:x}", Sha256::digest(&model_bytes)),
         "processes": process_value,
-        "schema": "prismpm/application-verification-manifest/1"
+        "schema": "prismpm/application-verification-manifest/2"
     });
     let manifest_bytes = encode_value(&manifest)?;
     let attestation_id = content_id(&manifest_bytes);
@@ -2527,11 +2531,13 @@ pub(crate) fn run(
     request: VerifyRequest,
     release: Option<&str>,
 ) -> Result<VerifyResult, PrismError> {
-    let build = controller.build_release(
+    let mut exporter_owner = crate::exporter::VerifyExporterOwner::default();
+    let build = controller.build_release_with_owner(
         BuildRequest {
             config_path: request.config_path.clone(),
         },
         release,
+        Some(&mut exporter_owner),
     )?;
     let (config, _) = ProjectConfig::load(&controller.root, request.config_path.as_deref())?;
     let project_path = config.lexlean_path(&controller.root)?;
@@ -2723,6 +2729,7 @@ pub(crate) fn run(
                 lex_attestation_id,
                 lex_snapshot,
                 processes: toolchain.records,
+                exporter_owner,
             },
         );
     }
@@ -2738,20 +2745,26 @@ pub(crate) fn run(
             lex_attestation,
             lex_attestation_id,
             toolchain.records,
+            exporter_owner,
         );
     }
 
     let staging_parent = output_root.join(".verify-work");
     std::fs::create_dir_all(&staging_parent)
         .map_err(|error| PrismError::new("PP4002", format!("verification work: {error}")))?;
-    let work = tempfile::Builder::new()
-        .prefix("chain-")
-        .tempdir_in(&staging_parent)
-        .map_err(|error| PrismError::new("PP4002", format!("verification work: {error}")))?;
-    let workspace = work.path();
+    let mut work = crate::exporter::directory::Directory::temporary(
+        "chain-",
+        Some(&staging_parent),
+        Default::default(),
+    )?;
+    let workspace_path = work.path().to_owned();
+    let workspace = workspace_path.as_path();
     crate::exporter::verify_source(&controller.root)?;
     let lean_package = workspace.join("lean4-prod");
-    let exporter_acquisition = crate::exporter::acquire_for(&controller.root, &lean_package)?;
+    let admitted =
+        crate::exporter::acquire_for_owned(&controller.root, &lean_package, work.scope())?;
+    work.protect_package(&lean_package, &admitted.snapshot)?;
+    let exporter_acquisition = admitted.receipt;
     let replacements = [
         (workspace, "$STAGING"),
         (controller.root.as_path(), "$PROJECT"),
@@ -2826,6 +2839,12 @@ pub(crate) fn run(
             "PP5002",
         )?);
     }
+    crate::exporter::before_first_build(
+        &controller.root,
+        &lean_package,
+        &exporter_acquisition,
+        &admitted.snapshot,
+    )?;
     processes.push(run_process(
         "lean4-prod-build",
         &lake,
@@ -2836,6 +2855,8 @@ pub(crate) fn run(
         "PP5004",
     )?);
     let lean_path = workspace.join(".lake/build/lib/lean");
+    let export_custody =
+        crate::exporter::after_build(&lean_package, &exporter_acquisition, &admitted.snapshot)?;
     let mut export_env = BTreeMap::new();
     export_env.insert(
         "LEAN_PATH".to_owned(),
@@ -2860,7 +2881,7 @@ pub(crate) fn run(
                 "--out".to_owned(),
                 out.to_string_lossy().into_owned(),
             ]);
-            processes.push(crate::exporter::run_export(
+            processes.push(crate::exporter::run_export_with_custody(
                 "prod-export",
                 &lake,
                 &args,
@@ -2869,6 +2890,7 @@ pub(crate) fn run(
                 &replacements,
                 "PP5004",
                 &exporter_acquisition,
+                &export_custody,
             )?);
             Ok(out)
         };
@@ -3091,6 +3113,8 @@ pub(crate) fn run(
                 .map_err(|error| PrismError::new("PP4002", error.to_string()))?,
         ),
     ];
+    work.protect_verified_package(&lean_package, &export_custody)?;
+    work.close()?;
     publish(&output_root, &attestation_id, &files)?;
     Ok(VerifyResult {
         schema: "prismpm/verify-result/1".to_owned(),

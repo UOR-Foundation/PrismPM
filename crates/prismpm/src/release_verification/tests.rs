@@ -80,38 +80,33 @@ fn seeded_exporter_authority_matches_the_retained_native_execution_platform() {
                 encode_value(&json!({"processes":rows})).unwrap(),
             )])
         };
-        validate_exporter_authority(&BTreeMap::new(), &retained(&processes), &lock).unwrap();
+        validate_exporter_authority(&retained(&processes), &lock).unwrap();
         let original = processes.clone();
         processes.last_mut().unwrap()["exporter"] = executions[1 - native].clone();
-        let error = validate_exporter_authority(&BTreeMap::new(), &retained(&processes), &lock)
+        let error = validate_exporter_authority(&retained(&processes), &lock)
             .expect_err("foreign locked exporter cannot replace the retained native execution");
         assert!(error.message.contains("platform"), "{}", error.message);
         let mut mixed = original.clone();
         mixed.push(processes.last().unwrap().clone());
-        assert!(validate_exporter_authority(&BTreeMap::new(), &retained(&mixed), &lock).is_err());
+        assert!(validate_exporter_authority(&retained(&mixed), &lock).is_err());
         for omitted in 0..PREFLIGHT.len() {
             let mut incomplete = original.clone();
             incomplete.remove(omitted);
-            assert!(
-                validate_exporter_authority(&BTreeMap::new(), &retained(&incomplete), &lock)
-                    .is_err()
-            );
+            assert!(validate_exporter_authority(&retained(&incomplete), &lock).is_err());
         }
         let mut swapped = original.clone();
         swapped.swap(0, 1);
-        assert!(validate_exporter_authority(&BTreeMap::new(), &retained(&swapped), &lock).is_err());
+        assert!(validate_exporter_authority(&retained(&swapped), &lock).is_err());
         let mut conflicting = original.clone();
         conflicting[3]["stdout"] =
             json!(format!(
             "commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\nhost: {}\nrelease: 1.97.1\n",
             if native == 0 { "aarch64-unknown-linux-gnu" } else { "x86_64-unknown-linux-gnu" }
         ));
-        assert!(
-            validate_exporter_authority(&BTreeMap::new(), &retained(&conflicting), &lock).is_err()
-        );
+        assert!(validate_exporter_authority(&retained(&conflicting), &lock).is_err());
         let mut cold = original;
         cold.last_mut().unwrap()["exporter"]["acquisition"] = crate::exporter::cold_acquisition();
-        validate_exporter_authority(&BTreeMap::new(), &retained(&cold), &lock).unwrap();
+        validate_exporter_authority(&retained(&cold), &lock).unwrap();
     }
 }
 
@@ -378,6 +373,65 @@ pub(crate) fn reject_mutations(
 
     let original = canonical_json(&verification_files["manifest.json"], false).unwrap();
     if binding.family == "application" {
+        if original["schema"] == "prismpm/application-verification-manifest/2" {
+            for (pointer, replacement) in [
+                (
+                    "/exporter_owner/schema",
+                    json!("prismpm/verification-exporter-owner/2"),
+                ),
+                ("/exporter_owner/phases/0/phase", json!("replay")),
+                (
+                    "/exporter_owner/phases/0/model_sha256",
+                    json!("0".repeat(64)),
+                ),
+                (
+                    "/exporter_owner/phases/0/lexlean_manifest_sha256",
+                    json!("0".repeat(64)),
+                ),
+                (
+                    "/exporter_owner/phases/0/artifacts/0/sha256",
+                    json!("0".repeat(64)),
+                ),
+                (
+                    "/exporter_owner/phases/0/processes/0/executable_sha256",
+                    json!("0".repeat(64)),
+                ),
+                (
+                    "/exporter_owner/phases/0/processes/2/argv",
+                    json!(["exe", "prod-export", "--undeclared"]),
+                ),
+                (
+                    "/exporter_owner/phases/0/processes/2/exporter/source_archive_sha256",
+                    json!("0".repeat(64)),
+                ),
+                (
+                    "/exporter_owner/phases/1/processes/2/argv",
+                    json!(["exe", "prod-export", "--undeclared"]),
+                ),
+            ] {
+                let mut manifest = original.clone();
+                *manifest.pointer_mut(pointer).unwrap() = replacement;
+                let mut changed = verification_files.clone();
+                changed.insert("manifest.json".into(), encode_value(&manifest).unwrap());
+                assert_eq!(
+                    validate(build_manifest, build_files, &changed)
+                        .unwrap_err()
+                        .code,
+                    "PP6101",
+                    "{pointer}"
+                );
+            }
+            let mut manifest = original.clone();
+            manifest.as_object_mut().unwrap().remove("exporter_owner");
+            let mut changed = verification_files.clone();
+            changed.insert("manifest.json".into(), encode_value(&manifest).unwrap());
+            assert_eq!(
+                validate(build_manifest, build_files, &changed)
+                    .unwrap_err()
+                    .code,
+                "PP6101"
+            );
+        }
         // Start from real regenerated evidence, not a fabricated success row.
         let last = original["processes"].as_array().unwrap().len() - 1;
         assert_eq!(original["processes"][last]["tool"], "application-export");

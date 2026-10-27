@@ -200,11 +200,13 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         "source/attestation.json".into(),
         attestation_bytes,
     )?;
-    let work = tempfile::Builder::new()
-        .prefix("prismpm-browser-compiler-")
-        .tempdir()
-        .map_err(|e| invalid(e.to_string()))?;
-    let workspace = work.path();
+    let mut work = crate::exporter::directory::Directory::temporary(
+        "prismpm-browser-compiler-",
+        None,
+        Default::default(),
+    )?;
+    let workspace_path = work.path().to_owned();
+    let workspace = workspace_path.as_path();
     let mut modules = BTreeSet::new();
     let mut paths = BTreeSet::new();
     for output in manifest["outputs"]
@@ -273,7 +275,9 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         &workspace.join("rust-toolchain.toml"),
         toolchain::RUST_TOOLCHAIN_FILE,
     )?;
-    let exporter_acquisition = crate::exporter::acquire_for(project, &exporter)?;
+    let admitted = crate::exporter::acquire_for_owned(project, &exporter, work.scope())?;
+    work.protect_package(&exporter, &admitted.snapshot)?;
+    let exporter_acquisition = admitted.receipt;
     let replacements = [(workspace, "$BROWSER_COMPILER"), (project, "$PROJECT")];
     let lake = executable("lake")?;
     let cargo = &tools.cargo;
@@ -291,6 +295,14 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
             vec!["build".into(), "prod-export".into()],
         ),
     ] {
+        if tool == "browser-pinned-exporter" {
+            crate::exporter::before_first_build(
+                project,
+                &exporter,
+                &exporter_acquisition,
+                &admitted.snapshot,
+            )?;
+        }
         processes.push(run_process(
             tool,
             &lake,
@@ -302,6 +314,8 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         )?);
     }
     let exported = workspace.join("export");
+    let export_custody =
+        crate::exporter::after_build(&exporter, &exporter_acquisition, &admitted.snapshot)?;
     let mut args = vec!["exe".into(), "prod-export".into()];
     for module in &modules {
         args.extend(["--module".into(), module.clone()]);
@@ -323,7 +337,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
             .to_string_lossy()
             .into_owned(),
     );
-    processes.push(crate::exporter::run_export(
+    processes.push(crate::exporter::run_export_with_custody(
         "browser-export",
         &lake,
         &args,
@@ -332,6 +346,7 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
         &replacements,
         "PP5004",
         &exporter_acquisition,
+        &export_custody,
     )?);
     let mut export = BTreeMap::new();
     for name in ["kernel.ir", "coverage.json", "roots.json"] {
@@ -437,6 +452,8 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
     let binding = plan.binding(&files)?;
     add(&mut files, "compiler/binding.json".into(), binding)?;
     plan.validate(&files)?;
+    work.protect_verified_package(&exporter, &export_custody)?;
+    work.close()?;
     Ok(Compilation {
         plan,
         files,

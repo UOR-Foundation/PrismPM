@@ -9,6 +9,9 @@ import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {snapshotTree} from '../sdk/exporter-seed.mjs';
 import {capture, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, reportChildFailure} from './portable-oracle-custody.mjs';
+import {PortableDiagnosticBundle,readDiagnosticFile,probeSummary,retainDiagnostic} from './portable-oracle-diagnostics.mjs';
+import {observationSummary,observationDriver} from './portable-oracle-observation.mjs';
+import {createHash} from 'node:crypto';
 
 const root = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 assert.equal(process.argv.length, 6, 'two artifacts and their live Controller bindings required');
@@ -35,10 +38,12 @@ const inputs = [
   'crates/prismpm/src/embedded/hologram-oracle.main.rs',
   'crates/prismpm/src/embedded/hologram-oracle.browser.mjs',
   'scripts/portable-oracle-matrix.mjs', 'scripts/portable-oracle-submission-probe.mjs',
+  'scripts/portable-oracle-observation.mjs',
   'scripts/portable-oracle-process-owner.py',
   'scripts/portable-oracle-source.py',
   'scripts/ci-observe.mjs',
   'scripts/portable-oracle-custody.mjs',
+  'scripts/portable-oracle-diagnostics.mjs',
   'tests/data/portable-oracle-matrix.json', 'sdk/exporter-seed.mjs',
   'sdk/inventory-metadata.mjs',
 ];
@@ -71,6 +76,19 @@ const toolchain = `/usr/local/rustup/toolchains/1.97.1-${process.arch === 'x64' 
 const cargo = capture(join(toolchain, 'bin/cargo'));
 const rustc = capture(join(toolchain, 'bin/rustc'));
 captured.push(cargo, rustc, capture('/usr/bin/cc'), capture('/usr/bin/ld'), capture('/usr/bin/git'), capture('/usr/bin/tar'));
+let diagnostics;
+try{diagnostics=new PortableDiagnosticBundle(root);}catch{
+ try{process.stderr.write('portable oracle diagnostic bundle unavailable\n');}catch{/* diagnostics cannot change matrix execution */}
+}
+retainDiagnostic(diagnostics,()=>{
+ diagnostics.json('source-witnesses.json',{schema:'prismpm/portable-oracle-diagnostic-source/1',scope:'diagnostics-only-not-acceptance',
+  inputs:captured.map((row,index)=>({input:index,measurement:row.measurement})),
+  profiles:matrix.profiles.map(row=>row.profile),expected_cases:78,expected_negative_controls:4});
+ for(const [index,profile] of matrix.profiles.entries())for(const [name,path] of Object.entries({
+  model:join(artifacts[index],'model.prism.json'),archive:join(artifacts[index],profile.name+'.holo'),
+  wasm:join(artifacts[index],'core-wasm',profile.cargo_name.replaceAll('-','_')+'_core_wasm.wasm'),verification:bindings[index].verification_manifest,
+ }))diagnostics.file('subjects/'+index+'-'+name,path,bindings[index][name+'_sha256']);
+});
 const environment = {PATH: `${toolchain}/bin:/usr/bin:/bin`, HOME: work,
   CARGO_HOME: join(work, 'cargo-home'), RUSTC: rustc.path,
   GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
@@ -78,6 +96,9 @@ const environment = {PATH: `${toolchain}/bin:/usr/bin:/bin`, HOME: work,
   CARGO_INCREMENTAL: '0', LANG: 'C', LC_ALL: 'C', TMPDIR: work};
 function run(name, program, args, directory, seconds, selectedEnvironment = environment, expectedStatus = 0) {
   const cleanupReceipt = join(evidence, `${name}.cleanup.json`);
+  const observation=name.match(/^[01]-observation-(click|keyboard)-(observed|unobserved)$/);
+  const expectedDriverHash=observation?createHash('sha256').update(observationDriver(
+    readFileSync(join(root,'crates/prismpm/src/embedded/hologram-oracle.browser.mjs'),'utf8'),observation[2],observation[1])).digest('hex'):null;
   const result = spawnSync('/usr/bin/python3', ['-I', '-B', join(root, 'scripts/portable-oracle-process-owner.py'),
     String(seconds), cleanupReceipt, program, ...args],
     {cwd: directory, env: selectedEnvironment, encoding: 'utf8', timeout: (seconds + 10) * 1000, maxBuffer: 16 * 1024 ** 2});
@@ -86,6 +107,28 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
     exit_code: result.status, signal: result.signal, execution_error: result.error ? String(result.error) : null}) + '\n', {flag: 'wx'});
   // The outer V&V observer retains this bounded, redacted failure in its uploaded log.
   reportChildFailure(name, result, expectedStatus);
+  if(/^[01]-(?:click|keyboard|probe-control)-[a-z-]+$/.test(name))retainDiagnostic(diagnostics,()=>{
+    const cleanupBytes=readDiagnosticFile(cleanupReceipt,65536),cleanup=JSON.parse(cleanupBytes);
+    assert.equal(cleanup.schema,'prismpm/portable-process-owner/1');
+    const receiptPath=join(evidence,name,'result.json');
+    const receiptBytes=readDiagnosticFile(receiptPath,65536),summary=probeSummary(JSON.parse(receiptBytes));
+    diagnostics.file('cases/'+name+'.driver.mjs',join(evidence,name,'driver.mjs'),summary.hashes.driver_sha256);
+    diagnostics.json('cases/'+name+'.json',{schema:'prismpm/portable-oracle-diagnostic-case/1',scope:'diagnostics-only-not-acceptance',
+      stage:name,expected_exit_code:expectedStatus,actual_exit_code:Number.isInteger(result.status)?result.status:null,
+      original_receipt_sha256:createHash('sha256').update(receiptBytes).digest('hex'),
+      original_cleanup_sha256:createHash('sha256').update(cleanupBytes).digest('hex'),
+      cleanup:{verified:cleanup.cleanup_verified===true,timed_out:cleanup.timed_out===true,interrupted:cleanup.interrupted===true},probe:summary});
+  });
+  if(/^[01]-observation-(?:click|keyboard)-(?:observed|unobserved)$/.test(name))retainDiagnostic(diagnostics,()=>{
+    const driverPath=join(evidence,name,'driver.mjs');
+    diagnostics.file('cases/'+name+'.driver.mjs',driverPath,expectedDriverHash);
+    const receiptPath=join(evidence,name,'result.json');
+    const receiptBytes=readDiagnosticFile(receiptPath,65536),summary=observationSummary(JSON.parse(receiptBytes));
+    assert.equal(expectedDriverHash,summary.driver_sha256);
+    diagnostics.json('cases/'+name+'.json',{...summary,stage:name,expected_exit_code:expectedStatus,
+      actual_exit_code:Number.isInteger(result.status)?result.status:null,
+      original_receipt_sha256:createHash('sha256').update(receiptBytes).digest('hex')});
+  });
   // Cleanup uncertainty aborts the matrix, including when the case also failed.
   const cleanup = JSON.parse(readFileSync(cleanupReceipt));
   assert.equal(cleanup.schema, 'prismpm/portable-process-owner/1');
@@ -97,6 +140,8 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
 }
 const outcomes = [];
 const negativeControls = [];
+const observationPairs = [];
+let matrixCompleted=false;
 try {
   mkdirSync(environment.CARGO_HOME);
   // Dependency downloads may be shared; caller Cargo configuration, wrappers,
@@ -207,14 +252,47 @@ try {
       for (const input of captured) input.verify();
     }
   }
+  // Additive qualification: never replace any original acceptance, case,
+  // negative control, correlated body read or application predicate.
+  for (const [index, profile] of matrix.profiles.entries()) for (const trigger of matrix.triggers) {
+    const pair = [];
+    for (const mode of ['observed', 'unobserved']) {
+      const id = `${index}-observation-${trigger}-${mode}`;
+      for (const input of captured) input.verify();
+      executable.verify();
+      const result = run(id, process.execPath, [join(root, 'scripts/portable-oracle-observation.mjs'),
+        executable.path, artifacts[index], browser, mode, trigger, join(evidence, id)], root, 130);
+      const receipt = JSON.parse(result.stdout.trim());
+      assert.equal(receipt.schema, 'prismpm/portable-observation-result/1');
+      assert.equal(receipt.status, 'passed');
+      assert.equal(receipt.mode, mode); assert.equal(receipt.trigger, trigger);
+      assert.equal(receipt.profile, profile.profile);
+      pair.push(receipt);
+      executable.verify();
+      for (const input of captured) input.verify();
+    }
+    assert.deepEqual(pair[0].report, pair[1].report, 'read-only observations must not change any real oracle acceptance');
+    assert.equal(pair[0].submissions, pair[1].submissions);
+    assert.equal(pair[0].keyboard_submissions, pair[1].keyboard_submissions);
+    observationPairs.push({profile: profile.profile, trigger, status: 'passed', runs: pair});
+  }
+  assert.equal(observationPairs.length, 4, 'both profiles and triggers require observed/unobserved real runs');
   assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
   assert.equal(negativeControls.length, 4);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);
+  matrixCompleted=true;
   console.log(JSON.stringify({schema: 'prismpm/portable-oracle-matrix-result/1', cases: outcomes.length,
     profiles: matrix.profiles.map(profile => profile.profile), negative_controls: negativeControls, status: 'passed', evidence}));
 } finally {
+  if(diagnostics)try{
+    diagnostics.finish({cases:outcomes.map(({id,status})=>({id,status})),negative_controls:negativeControls},matrixCompleted);
+  }catch{
+    try{diagnostics.incomplete();}catch{/* unavailable diagnostics cannot establish acceptance */}
+    try{process.stderr.write('portable oracle diagnostic bundle incomplete\n');}catch{/* preserve the original failure */}
+  }
   writeFileSync(join(evidence, 'outcomes.json'), JSON.stringify(outcomes) + '\n', {flag: 'wx'});
   writeFileSync(join(evidence, 'negative-controls.json'), JSON.stringify(negativeControls) + '\n', {flag: 'wx'});
+  writeFileSync(join(evidence, 'observation-pairs.json'), JSON.stringify(observationPairs) + '\n', {flag: 'wx'});
   const current = lstatSync(work);
   assert(current.isDirectory() && current.dev === owned.dev && current.ino === owned.ino
     && current.uid === owned.uid && (current.mode & 0o7777) === 0o700, 'private compiler owner replaced');

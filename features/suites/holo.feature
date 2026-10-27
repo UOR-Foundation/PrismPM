@@ -1,5 +1,12 @@
 Feature: holo
 
+  @HO-14 @build
+  Scenario: Pinned BLAKE3 vectors qualify every imported digest mode, streaming partition and content-identity result without claiming cryptographic proof or durable native storage.
+    Given all 35 immutable upstream vectors and their complete licensed source closure
+    When the pinned adapter executes every mode and declared input partition
+    Then full extended outputs and content identities match imported expectations
+    And changed expectations, lengths, pattern, key and context are rejected
+
   @HO-13 @build
   Scenario: The modeled browser-surface wire codec preserves legacy bytes, reproduces pinned upstream framing in generated std and no_std code, and rejects malformed or mixed profiles without granting browser authority.
     Given current verified modeled source and independently produced wire vectors

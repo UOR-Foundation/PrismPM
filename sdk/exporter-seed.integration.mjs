@@ -18,7 +18,7 @@ try {
     assert.equal(receipt.construction.build.exit_code, 0);
     assert.match(receipt.construction.build.stdout, /Build completed successfully/);
     assert.equal(receipt.construction.build.environment.TMPDIR, receipt.construction.extraction.environment.TMPDIR);
-    assert.equal(receipt.construction.build.environment.TMPDIR, join(tmpdir(), 'prismpm-exporter-construction'));
+    assert.equal(receipt.construction.build.environment.TMPDIR, '/proc/self/fd/4');
   }
   assert.notEqual(first.construction.extraction.argv[3], second.construction.extraction.argv[3]);
   const firstManifest = readFileSync(join(output, 'first/manifest.json'));

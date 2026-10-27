@@ -100,14 +100,14 @@ fn roots<'a>(module: &'a mut Value, name: &str) -> &'a mut Value {
         .expect("modeled root field")["value"]
 }
 
-fn accepted(project: &Path, verified: &prismpm::controller::VerifyResult) {
+fn accepted(root: &Path, project: &Path, verified: &prismpm::controller::VerifyResult) {
     let output = project.join(&verified.verified_root);
     let manifest = super::json(&output.join("manifest.json"));
     let acceptance_bytes = std::fs::read(output.join("library-acceptance.json")).unwrap();
     let acceptance: Value = serde_json::from_slice(&acceptance_bytes).unwrap();
     assert_eq!(
         manifest["schema"],
-        "prismpm/library-verification-manifest/1"
+        "prismpm/library-verification-manifest/2"
     );
     assert_eq!(manifest["scope"], "native-library-only");
     assert_eq!(manifest["build_id"], verified.build_id);
@@ -141,6 +141,69 @@ fn accepted(project: &Path, verified: &prismpm::controller::VerifyResult) {
         ])
     );
     let processes = manifest["processes"].as_array().unwrap();
+    let owner = &manifest["exporter_owner"];
+    assert_eq!(owner["schema"], "prismpm/verification-exporter-owner/1");
+    let phases = owner["phases"].as_array().unwrap();
+    assert_eq!(phases.len(), 2);
+    for (index, phase) in phases.iter().enumerate() {
+        assert_eq!(phase["phase"], ["controller-build", "replay"][index]);
+        assert_eq!(phase["role"], "library");
+        assert_eq!(phase["model_sha256"], manifest["model_sha256"]);
+        assert_eq!(phase["artifacts"], manifest["artifacts"]);
+        assert_eq!(phase["processes"].as_array().unwrap().len(), 4);
+        assert_eq!(
+            phase["processes"][0]["argv"],
+            json!(["build", "PrismGenerated"])
+        );
+        assert_eq!(
+            phase["processes"][1]["argv"],
+            json!(["build", "prod-export"])
+        );
+    }
+    assert_eq!(
+        phases[0]["processes"][2]["exporter"],
+        phases[1]["processes"][2]["exporter"]
+    );
+    assert_eq!(phases[1]["processes"], json!(&processes[5..9]));
+    prismpm::contracts::CanonicalDocument::from_value(
+        "prismpm/library-verification-manifest/2",
+        manifest.clone(),
+    )
+    .unwrap();
+    for (pointer, replacement) in [
+        ("/exporter_owner/phases/0/role", json!("application")),
+        (
+            "/exporter_owner/phases/0/model_sha256",
+            json!("f".repeat(64)),
+        ),
+        (
+            "/exporter_owner/phases/0/artifacts/0/sha256",
+            json!("f".repeat(64)),
+        ),
+        (
+            "/exporter_owner/phases/0/processes/2/exporter/source_archive_sha256",
+            json!("f".repeat(64)),
+        ),
+        (
+            "/exporter_owner/phases/0/processes/0/executable_sha256",
+            json!("f".repeat(64)),
+        ),
+        (
+            "/exporter_owner/phases/1/processes/2/argv",
+            json!(["exe", "prod-export", "--undeclared"]),
+        ),
+    ] {
+        let mut changed = manifest.clone();
+        *changed.pointer_mut(pointer).unwrap() = replacement;
+        assert!(
+            prismpm::contracts::CanonicalDocument::from_value(
+                "prismpm/library-verification-manifest/2",
+                changed,
+            )
+            .is_err(),
+            "accepted owner mutation {pointer}"
+        );
+    }
     assert!(!processes.is_empty());
     assert!(processes.iter().all(|row| row["exit_code"] == 0));
     for mode in ["std", "no_std"] {
@@ -163,6 +226,30 @@ fn accepted(project: &Path, verified: &prismpm::controller::VerifyResult) {
             "manifest.json".to_owned(),
         ])
     );
+    let reader = std::process::Command::new("timeout")
+        .args(["--kill-after=5s", "60s", "node"])
+        .arg(root.join("scripts/library-owner-reader-replay.mjs"))
+        .arg(project)
+        .arg(serde_json::to_string(verified).unwrap())
+        .arg(content_id(include_bytes!(
+            "../../../prismpm/vendor/lean4-prod/lean.tar"
+        )))
+        .arg(include_str!("../../../../lean-toolchain").trim())
+        .output()
+        .expect("actual shipped native-library reader execution");
+    assert!(
+        reader.status.success(),
+        "reader rejected actual compiler output: {}{}",
+        String::from_utf8_lossy(&reader.stdout),
+        String::from_utf8_lossy(&reader.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&reader.stdout).unwrap(),
+        json!({
+            "schema":"prismpm/native-library-reader-regression/1","real_baseline":"passed",
+            "mutations_rejected":7,"restored_baseline":"passed"
+        })
+    );
 }
 
 pub(super) fn verify(root: &Path) {
@@ -176,7 +263,7 @@ pub(super) fn verify(root: &Path) {
     let verified = controller
         .verify(VerifyRequest { config_path: None })
         .unwrap();
-    accepted(first.path(), &verified);
+    accepted(root, first.path(), &verified);
     let build = first.path().join(".prism/build").join(&verified.build_id);
     let document = super::json(&build.join("model.prism.json"));
     assert_eq!(document["schema"], "prismpm/model-document/3");
@@ -364,5 +451,5 @@ pub(super) fn verify(root: &Path) {
         .verify(VerifyRequest { config_path: None })
         .unwrap();
     assert_eq!(restored.build_id, verified.build_id);
-    accepted(mutant.path(), &restored);
+    accepted(root, mutant.path(), &restored);
 }
