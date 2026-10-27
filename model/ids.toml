@@ -379,6 +379,12 @@ level = "build"
 statement = "The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution."
 
 [[id]]
+id = "ST-17"
+suite = "stdlib"
+level = "build"
+statement = "The private PKCE S256 primitive generates and validates source-owned verifier bytes and encodes actual browser SHA-256 challenges against RFC 7636 vectors without authenticating an account or mailbox."
+
+[[id]]
 id = "AR-01"
 suite = "artifacts"
 level = "build"
