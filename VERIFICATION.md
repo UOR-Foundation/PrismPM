@@ -1,5 +1,16 @@
 # PrismPM falsifiability and verification record
 
+## Shared-octet native source records
+
+Hosted run `37214575335` at `5566e29ee6c66c5ea8ae8cce40a5ff40d18468fa`
+passes on AMD64 and ARM64. Independent review checked both artifact digests,
+complete source and generated inventories, all process outcomes, unchanged
+declaration policies and execution cases, and exact pinned native environments.
+Each genuine writer changes three platform records; each separate readback
+checks 357 files. Only these six reviewed records are imported byte-for-byte.
+The native executable identities remain unchanged. These source-review records
+do not qualify an SDK release, installed consumer or complete product.
+
 ## Portable request failure context
 
 Hosted V&V `37205262762` fails in the complete portable View matrix: a text
