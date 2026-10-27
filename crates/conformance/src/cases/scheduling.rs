@@ -54,6 +54,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-28"
             | "DK-29"
             | "DK-31"
+            | "DK-35"
             | "HO-13"
             | "HO-14"
             | "OC-07"
@@ -65,6 +66,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "ST-14"
             | "ST-15"
             | "ST-16"
+            | "ST-17"
             | "SY-08"
     )
     .then(compiler_slot)
@@ -102,6 +104,7 @@ mod tests {
                 "DK-28".to_owned(),
                 "DK-29".to_owned(),
                 "DK-31".to_owned(),
+                "DK-35".to_owned(),
                 "HO-13".to_owned(),
                 "HO-14".to_owned(),
                 "OC-07".to_owned(),
@@ -113,6 +116,7 @@ mod tests {
                 "ST-14".to_owned(),
                 "ST-15".to_owned(),
                 "ST-16".to_owned(),
+                "ST-17".to_owned(),
                 "SY-08".to_owned(),
             ])
             .collect::<Vec<_>>();

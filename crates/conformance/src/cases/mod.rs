@@ -408,6 +408,16 @@ pub fn run_at(root: &Path, id: &str) {
         "ST-14" => browser_bootstrap::verify(root),
         "ST-15" => organization_lifecycle::verify(root),
         "ST-16" => cbor_primitive::verify(root),
+        "ST-17" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-pkce/guards.test.mjs",
+                "tests/browser-pkce/owner.test.mjs",
+            ],
+            19,
+            "3600000",
+        ),
 
         "AR-01" | "AR-02" | "AR-03" | "AR-04" | "AR-05" | "AR-06" | "AR-07" | "AR-08" | "AR-09"
         | "AR-10" => {
@@ -466,6 +476,18 @@ pub fn run_at(root: &Path, id: &str) {
             ],
             8,
             "3600000",
+        ),
+        "DK-35" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/browser-session-operation/boundary.test.mjs",
+                "tests/browser-view/kernel-provenance.test.mjs",
+                "tests/browser-view/local-module-inputs.test.mjs",
+                "tests/browser-session-operation/owner.test.mjs",
+            ],
+            90,
+            "7200000",
         ),
         "OC-07" => verify_browser_export(root),
         "OC-08" => browser_publication::verify(root),

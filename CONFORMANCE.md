@@ -204,6 +204,7 @@ The three honesty levels:
 | `DK-28` | `build` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. |
 | `DK-29` | `build` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. |
 | `DK-31` | `build` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. |
+| `DK-35` | `build` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. |
 
 ## security
 
@@ -238,6 +239,7 @@ The three honesty levels:
 | `ST-14` | `build` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. |
 | `ST-15` | `build` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. |
 | `ST-16` | `build` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. |
+| `ST-17` | `build` | The private PKCE S256 primitive generates and validates source-owned verifier bytes and encodes actual browser SHA-256 challenges against RFC 7636 vectors without authenticating an account or mailbox. |
 
 ## supply-chain
 
@@ -295,6 +297,7 @@ The three honesty levels:
 
 | Authority | Edition | Immutable source | Acquired SHA-256 | Evidence here |
 | --- | --- | --- | --- | --- |
+| `IETF-RFC-7636` | `September 2015` | https://www.rfc-editor.org/rfc/rfc7636.txt | `1972e5d81cbaba7066cfd46374207bc2b4546b085ed5dd9b034e79e023e0ca31` | `ST-17` |
 | `LEAN-REL-4-32-1` | `4.32.1` | https://codeload.github.com/leanprover/lean4/tar.gz/f054605aea4b840552cca2e725580bffd1e1b704 | `6dec8667fbf57ba480a18a8b0c353b2ee157346b2630b211ccbefeedf20545f8` | `VR-01`, `VR-02` |
 | `LAKE-4-32-1` | `4.32.1` | https://codeload.github.com/leanprover/lean4/tar.gz/f054605aea4b840552cca2e725580bffd1e1b704 | `6dec8667fbf57ba480a18a8b0c353b2ee157346b2630b211ccbefeedf20545f8` | `VR-03` |
 | `LEANCHECKER-4-32-1` | `4.32.1` | https://codeload.github.com/leanprover/lean4/tar.gz/f054605aea4b840552cca2e725580bffd1e1b704 | `6dec8667fbf57ba480a18a8b0c353b2ee157346b2630b211ccbefeedf20545f8` | `VR-04` |

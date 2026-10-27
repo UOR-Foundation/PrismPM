@@ -78,6 +78,7 @@ test_case!(conformance_st_13, "ST-13");
 test_case!(conformance_st_14, "ST-14");
 test_case!(conformance_st_15, "ST-15");
 test_case!(conformance_st_16, "ST-16");
+test_case!(conformance_st_17, "ST-17");
 
 test_case!(conformance_ar_01, "AR-01");
 test_case!(conformance_ar_02, "AR-02");
@@ -167,6 +168,7 @@ test_case!(conformance_dk_27, "DK-27");
 test_case!(conformance_dk_28, "DK-28");
 test_case!(conformance_dk_29, "DK-29");
 test_case!(conformance_dk_31, "DK-31");
+test_case!(conformance_dk_35, "DK-35");
 test_case!(conformance_oc_01, "OC-01");
 test_case!(conformance_oc_02, "OC-02");
 test_case!(conformance_oc_03, "OC-03");

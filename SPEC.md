@@ -420,6 +420,21 @@ audits all selected declarations and rejects planted behavioral defects.
 Cryptographic verification, challenge issuance, atomic durable admission,
 provider integration and browser/deployment acceptance remain distinct gates.
 
+### 5.3a Private PKCE S256 prerequisite
+
+ST-17 owns the bounded RFC 7636 client primitive in
+`Foundation.Sec.V1.Pkce`, its private browser adapter and the exact imported
+Appendix B oracle. The source admits the complete 43–128 ASCII-unreserved
+verifier domain and encodes exact 32-byte entropy and SHA-256 values without
+padding. The adapter uses fresh browser randomness and actual SHA-256; it
+never falls back to plain. Native std/no_std, bounded Wasm, all three browsers,
+source/host defects and copied-input/revocation checks are mandatory.
+`stdlib/src/Foundation/Sec/V1/Pkce.md` defines the closed internal byte grammar.
+PKCE material is not an authenticated assertion or a transaction. Provider
+authority, client registration, state/nonce binding, token admission, mailbox
+control and durable account recovery remain separate requirements. ST-17 does
+not open PP2011 or authorize an application release.
+
 ### 5.4 Internal candidate browser-bootstrap prerequisite
 
 ST-14 owns `Foundation.Network.V1.BrowserBootstrap`, an internal finite
@@ -1747,6 +1762,26 @@ history, effect acknowledgments, safe checkpoint/segment rotation, rollback
 witnesses and private secret-to-nonsecret evidence composition remain separately
 required SessionJournal/runtime obligations. `PP2011` and Holo/1 are unchanged.
 
+#### 12.14.1 Private operation capture
+
+DK-35 captures one exact operation before any asynchronous work. The actual
+generated predecessor, session, observation, partition and descriptor kernels
+derive complete frames and ordered content hashes. A source error never mints
+a successful handle. Factory-only handles reject fabrication, cross-owner use
+and use after close; reads return defensive copies. Every existing frame and
+combined-domain bound remains mandatory.
+
+Matching captured artifact bytes to caller digests is not artifact authority.
+SDK assembly must supply independently accepted artifacts. Neither a derived
+predecessor nor a generated successor observation is authenticated current or
+committed state. This component signs nothing, releases no effects and does not
+complete the DK-30 session host or bypass `PP2011`.
+
+Acceptance requires fresh kernel/native/no_std/paired-Wasm verification,
+kernel-manifest/generated-Lean linkage, original/private artifact custody,
+complete independent operations and all 27 combined maxima in each pinned
+browser, actual source/host mutations and the unchanged full payload owner.
+
 ### Private contextual effect staging
 
 DK-28 extends only private SDK composition over DK-18's existing generated
@@ -2226,6 +2261,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `ST-14` | `stdlib` | The internal candidate browser-bootstrap kernel binds admitted peer sessions to explicit public-operator policy, consent, bounded reservations and fail-closed channel lifecycle in generated native execution. | §5 |
 | `ST-15` | `stdlib` | The internal organization lifecycle creates isolated provisional organizations without name privileges and composes scoped administration for revision-bound activation and founding-grant handover. | §5 |
 | `ST-16` | `stdlib` | The internal bounded CBOR primitive profile preserves deterministic encoding, typed cursor limits and strict UTF-8 through generated native and bounded Wasm execution. | §5 |
+| `ST-17` | `stdlib` | The private PKCE S256 primitive generates and validates source-owned verifier bytes and encodes actual browser SHA-256 challenges against RFC 7636 vectors without authenticating an account or mailbox. | §5 |
 | `AR-01` | `artifacts` | Build artifacts are published under content-addressed .prism/build/<id> paths. | §6 |
 | `AR-02` | `artifacts` | Every build directory contains a canonical manifest of file paths, sizes, and hashes. | §6 |
 | `AR-03` | `artifacts` | Artifact content IDs are derived from deterministic SHA-256 digests. | §6 |
@@ -2310,6 +2346,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-28` | `sdk` | Private contextual effect staging preserves exact source-generated requests, copied execution observations and one-shot actual completions without caller-selected execution identity, premature effects or public application acceptance. | §12 |
 | `DK-29` | `sdk` | Private source-owned semantic presentation binds exact input purposes, descriptions, errors, landmarks and bounded design catalogues to complete generated native/Wasm and rendered browser oracle checks without changing DK-23 bytes or granting application acceptance. | §12 |
 | `DK-31` | `sdk` | Private source-owned dynamic choice names preserve bounded plain text, unique stable option identifiers, source order and exact selection through generated native/Wasm and browser execution without changing catalogue-based choices or granting authority. | §12 |
+| `DK-35` | `sdk` | Private operation capture derives immutable predecessor, successor, observations and content descriptors from exact captured operation bytes through generated source kernels, with factory-owned revocable handles and complete native/Wasm/browser bounds, without authenticating current history, releasing effects or accepting a public application. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |
