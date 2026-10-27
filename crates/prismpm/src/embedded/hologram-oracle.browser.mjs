@@ -9,11 +9,21 @@ assert.equal(require('playwright/package.json').version, '1.62.1');
 const {chromium, errors} = require('playwright');
 const sanitizedFailures = new WeakSet();
 const unavailableBodies = new WeakSet();
+const failedBodies = new WeakSet();
 function failureKind(error) {
   if (unavailableBodies.has(error)) return 'response-body-unavailable';
   if (error instanceof errors.TimeoutError) return 'timeout';
+  if (failedBodies.has(error)) return 'response-body-failed';
   if (error instanceof assert.AssertionError) return 'assertion';
   return 'unexpected';
+}
+async function bounded(operation) {
+  let timer;
+  try {
+    return await Promise.race([operation, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new errors.TimeoutError('oracle operation deadline')), 10_000);
+    })]);
+  } finally { clearTimeout(timer); }
 }
 function sanitizedFailure(error, phase) {
   if (sanitizedFailures.has(error)) return error;
@@ -121,6 +131,11 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
   let invocationCount = 0;
   let navigated = false;
   let phase = 'initial-readiness';
+  let check = null;
+  let rejectNavigation;
+  const navigation = new Promise((_, reject) => { rejectNavigation = reject; });
+  // The observer is armed before readiness/fill, before the submission race.
+  void navigation.catch(() => {});
   const onRequest = request => {
     if (request.url() !== `${origin}/_hologram/intent`) return;
     invocationCount++;
@@ -137,6 +152,7 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     if (frame !== target.mainFrame()) return;
     navigated = true;
     record({event: 'main-frame-navigation'});
+    rejectNavigation(new assert.AssertionError({message: 'submission must not navigate the main frame'}));
   };
   const onFailure = request => record({event: 'request-failed', invocation: request === invocation});
   target.on('request', onRequest);
@@ -155,8 +171,9 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
       // Capture immediately when the correlated response arrives, without
       // waiting for the initiating keyboard/click operation to settle.
       let replyBody;
-      try { replyBody = await reply.body(); }
+      try { replyBody = await bounded(reply.body()); }
       catch (error) {
+        if (error instanceof Error) failedBodies.add(error);
         if (error instanceof Error && /Network\.getResponseBody.*No data found for resource/.test(error.message))
           unavailableBodies.add(error);
         throw error;
@@ -167,23 +184,31 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     const trigger = keyboard
       ? target.locator(text ? '#request' : '#right').press(text ? 'Control+Enter' : 'Enter')
       : target.locator('#submit').click();
-    const [{reply, replyBody}] = await Promise.all([response, trigger]);
+    const [{reply, replyBody}] = await Promise.race([Promise.all([response, trigger]), navigation]);
+    check = 'response-status';
     assert.equal(reply.status(), 200);
+    check = 'request-envelope';
     assert.deepEqual(reply.request().postDataJSON(), expectedRequest);
+    check = 'request-navigation';
     assert.equal(reply.request().isNavigationRequest(), false);
     // A missing body is a failed oracle execution. Preserve the first error;
     // never swallow it and retry the same vanished response.
+    check = 'response-json';
     const envelope = JSON.parse(replyBody.toString('utf-8'));
+    check = 'response-envelope';
     assert.deepEqual(envelope, {version: 1, outputs: [decode.decode(Uint8Array.from(vector.response))]});
+    check = null;
     phase = 'rendered-result';
     await shows(displayed(vector), target);
     phase = 'completed-readiness';
     await target.waitForFunction(ready);
+    check = 'single-invocation';
     assert.equal(invocationCount, 1, 'submission must issue exactly one invocation');
+    check = 'main-frame-navigation';
     assert.equal(navigated, false, 'submission must not navigate the main frame');
   } catch (error) {
     console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
-      phase, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
+      phase, check, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
     throw sanitizedFailure(error, phase);
   } finally {
     target.off('request', onRequest);
@@ -360,7 +385,7 @@ async function journey(name, work) {
       resource, failure: failureKind(error)}));
     cleanupFailure ??= sanitizedFailure(error, 'cleanup');
   };
-  try { if (browser) await browser.close(); }
+  try { if (browser) await bounded(browser.close()); }
   catch (error) { failedCleanup(error, 'browser'); }
   try { process.stdin.destroy(); }
   catch (error) { failedCleanup(error, 'stdin'); }
