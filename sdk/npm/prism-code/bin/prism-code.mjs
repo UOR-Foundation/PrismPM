@@ -5,6 +5,8 @@
  *   prism-code run <app.holo> [--port N] [--host H] [--capabilities <file>] [--capability-set <name>]
  *                                                     serve the view and the intent endpoint
  *   prism-code vectors <app.holo | closure-dir>       replay the acceptance vectors
+ *   prism-code manifest [<dir>] [--target browser|node] [--json]
+ *                                                     check and lint prism.toml, with its overlay merged
  *   prism-code inspect <app.holo> [--json] [--format <path>]
  *                                                     print what the holo says about itself, without running it
  *   prism-code attest <app.holo> --predicate <file> --type <uri> [--key <private.pem>]
@@ -16,9 +18,10 @@
  *
  * Exit codes: 0 ok or the policy passed, 1 vectors failed, an attestation did
  * not verify or the policy failed, 2 artifact refused (a guest import no
- * capability set grants included) or no verdict, 3 signing failed or the
- * sigstore packages are missing, 64 usage, 69 Docker unavailable, otherwise
- * the delegated command's code.
+ * capability set grants, a world outside the grant, or a manifest that fails
+ * its checks, included) or no verdict, 3 signing failed or the sigstore
+ * packages are missing, 64 usage, 69 Docker unavailable, otherwise the
+ * delegated command's code.
  *
  * `check` without a holo is the 0.2.0 spelling of `build --check`. It still
  * runs, with a warning, and is removed in 0.4.0 (STABILITY.md, Deprecated).
@@ -29,7 +32,7 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { userInfo } from 'node:os';
 import { createRequire } from 'node:module';
-import { fromFile, serve } from '../src/node.mjs';
+import { fromFile, serve, readManifest } from '../src/node.mjs';
 import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs';
 import { CapabilityDeniedError, PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
@@ -45,6 +48,9 @@ Usage:
   prism-code run <app.holo> [--port N] [--host H] [--capabilities <file>] [--capability-set <name>]
                                                     serve the application's view; POST /_hologram/intent dispatches
   prism-code vectors <app.holo | closure-dir>       replay every acceptance vector through the guest
+  prism-code manifest [<dir>] [--target <browser|node>] [--json]
+                                                    check and lint prism.toml, with prism.<target>.toml merged;
+                                                    a secret written as a literal is an error
   prism-code inspect <app.holo> [--json] [--format <path>]
                                                     print sections, digests, manifest, model, world and
                                                     attestations without running the guest
@@ -81,6 +87,8 @@ Options for check:    --policy <file>              a JSON policy: name, minimum 
                                                    default: P2 or above, or PRISM_MINIMUM_LEVEL
                       --json                       the verdict as one canonical JSON object
                       deprecated: check without a holo runs build --check; removed in 0.4.0
+Options for manifest: --target <browser|node>      merge prism.browser.toml or prism.node.toml over prism.toml
+                      --json                       the merged manifest and the warnings as canonical JSON
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -114,6 +122,7 @@ const VALUE_OPTIONS = [
   'capabilities',
   'capability-set',
   'policy',
+  'target',
 ];
 
 function parse(argv) {
@@ -265,9 +274,31 @@ async function commandRun(positional, options) {
   const { url, close } = await serve(app, { port, host: options.host ?? '127.0.0.1' });
   process.stdout.write(`${app.name ?? 'application'} (${app.kind}) at ${url}\n`);
   process.stdout.write(app.capabilities.set === null ? 'capabilities: none granted\n' : `capabilities: set ${app.capabilities.set} of ${options.capabilities}\n`);
+  if (app.world?.contract) process.stdout.write(`world: ${app.world.contract} within the grant, ${app.world.pure ? 'pure' : `impure (${app.world.effects.join(', ')})`}\n`);
   await new Promise((done) => {
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => close().then(done));
   });
+  return 0;
+}
+
+async function commandManifest(positional, options) {
+  if (positional.length > 1) return usage('manifest takes at most one project directory');
+  const bad = missingValue(options);
+  if (bad) return usage(`--${bad} takes a value`);
+  if (options.target !== undefined && !['browser', 'node'].includes(options.target)) return usage('--target is browser or node');
+  const result = await readManifest(resolve(positional[0] ?? '.'), { target: options.target ?? null });
+  const { manifest, warnings, files, grant } = result;
+  if (options.json) {
+    process.stdout.write(`${canonicalJson({ files, target: result.target, manifest, warnings })}\n`);
+    return 0;
+  }
+  const app = manifest.application;
+  const granted = grant.capabilities === null ? 'none granted' : `set ${grant.capabilitySet}${manifest.capabilities?.file ? ` of ${manifest.capabilities.file}` : ' (inline)'}`;
+  const variables = Object.entries(manifest.variables ?? {}).map(([name, entry]) => (typeof entry === 'object' && entry.secret ? `${name} (secret)` : name));
+  process.stdout.write(`${app.name} ${app.version} from ${files.join(' + ')}\n`);
+  process.stdout.write(`capabilities: ${granted}\n`);
+  process.stdout.write(`variables: ${variables.length ? variables.join(', ') : 'none'}\n`);
+  for (const w of warnings) process.stderr.write(`warning: ${w.rule}: ${w.message}\n`);
   return 0;
 }
 
@@ -326,6 +357,8 @@ async function main(argv) {
       return commandInspect(positional, options);
     case 'run':
       return commandRun(positional, options);
+    case 'manifest':
+      return commandManifest(positional, options);
     case 'attest':
     case 'verify-attestation':
       return commandAttestation(command, positional, options);
