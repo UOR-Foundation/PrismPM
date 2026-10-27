@@ -5,16 +5,28 @@
  *   prism-code run <app.holo> [--port N] [--host H] [--capabilities <file>] [--capability-set <name>]
  *                                                     serve the view and the intent endpoint
  *   prism-code vectors <app.holo | closure-dir>       replay the acceptance vectors
+ *   prism-code init [<dir>] [--name N] [--template T] [--sdk-image REF] [--force]
+ *                                                     scaffold a project; with --sdk-image, bind it (standards.lock, prismpm.lock)
+ *   prism-code manifest [<dir>] [--target browser|node] [--json]
+ *                                                     check and lint prism.toml, with its overlay merged
  *   prism-code inspect <app.holo> [--json] [--format <path>]
  *                                                     print what the holo says about itself, without running it
  *   prism-code attest <app.holo> --predicate <file> --type <uri> [--key <private.pem>]
  *                                                     sign a statement into the holo's attestation section
  *   prism-code verify-attestation <app.holo> ...      check the signatures of those statements
- *   prism-code check|build|verify|conformance ...     run prismpm in the locked SDK image
+ *   prism-code check <app.holo> [--policy <file>] [--json]
+ *                                                     judge the holo against a policy and print its verdict
+ *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
  *
- * Exit codes: 0 ok, 1 vectors failed or an attestation did not verify,
- * 2 artifact refused (a guest import no capability set grants included), 3 signing failed or the sigstore packages are missing,
- * 64 usage, 69 Docker unavailable, otherwise the delegated command's code.
+ * Exit codes: 0 ok or the policy passed, 1 vectors failed, an attestation did
+ * not verify or the policy failed, 2 artifact refused (a guest import no
+ * capability set grants, a world outside the grant, or a manifest that fails
+ * its checks, included) or no verdict, 3 signing failed or the sigstore
+ * packages are missing, 64 usage, 69 Docker unavailable, otherwise the
+ * delegated command's code.
+ *
+ * `check` without a holo is the 0.2.0 spelling of `build --check`. It still
+ * runs, with a warning, and is removed in 0.4.0 (STABILITY.md, Deprecated).
  */
 import { readFile, stat } from 'node:fs/promises';
 import { statSync } from 'node:fs';
@@ -22,11 +34,12 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { userInfo } from 'node:os';
 import { createRequire } from 'node:module';
-import { fromFile, serve } from '../src/node.mjs';
+import { fromFile, serve, readManifest } from '../src/node.mjs';
 import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs';
 import { CapabilityDeniedError, PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { canonicalJson } from '../src/archive.mjs';
+import { check, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
@@ -37,6 +50,13 @@ Usage:
   prism-code run <app.holo> [--port N] [--host H] [--capabilities <file>] [--capability-set <name>]
                                                     serve the application's view; POST /_hologram/intent dispatches
   prism-code vectors <app.holo | closure-dir>       replay every acceptance vector through the guest
+  prism-code init [<dir>] [--name <name>] [--template <name>] [--sdk-image <ref>] [--force]
+                                                    scaffold a project: prism.toml, a language-1.2 model and its
+                                                    Lean workspace; --sdk-image also writes standards.lock and
+                                                    prismpm.lock from that SDK image (needs Docker)
+  prism-code manifest [<dir>] [--target <browser|node>] [--json]
+                                                    check and lint prism.toml, with prism.<target>.toml merged;
+                                                    a secret written as a literal is an error
   prism-code inspect <app.holo> [--json] [--format <path>]
                                                     print sections, digests, manifest, model, world and
                                                     attestations without running the guest
@@ -47,7 +67,11 @@ Usage:
                                                     check the holo's attestations against a signer policy;
                                                     --certificate-identity-regexp <re> in place of the exact id,
                                                     --type <uri> to check one predicate type, --json for the result
-  prism-code check [args]                           prismpm check in the SDK image named by ./prismpm.lock
+  prism-code check <app.holo> [--policy <file>] [--json]
+                                                    judge the holo against a policy and print its verdict:
+                                                    exit 0 passed, 1 failed, 2 no verdict
+  prism-code build --check [args]                   prismpm check in the SDK image named by ./prismpm.lock:
+                                                    validate the model, write nothing
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
   prism-code conformance [args]                     prismpm conformance
@@ -65,6 +89,12 @@ Options for verify-attestation:
                                                    least verified log entries and timestamps: 1 and 1 keyless, 0 and 0 with --key
 Options for run:      --capabilities <file>        a prism/capabilities/1 file; without one the holo is granted nothing
                       --capability-set <name>      the set to apply, default "default"
+Options for check:    --policy <file>              a JSON policy: name, minimum (P0 to P3), digests, world;
+                                                   default: P2 or above, or PRISM_MINIMUM_LEVEL
+                      --json                       the verdict as one canonical JSON object
+                      deprecated: check without a holo runs build --check; removed in 0.4.0
+Options for manifest: --target <browser|node>      merge prism.browser.toml or prism.node.toml over prism.toml
+                      --json                       the merged manifest and the warnings as canonical JSON
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -97,6 +127,8 @@ const VALUE_OPTIONS = [
   'tuf-cache',
   'capabilities',
   'capability-set',
+  'policy',
+  'target',
 ];
 
 function parse(argv) {
@@ -206,6 +238,37 @@ async function commandAttestation(verb, positional, options) {
   return verb === 'attest' ? cli.runAttest(positional, options, usage) : cli.runVerifyAttestation(positional, options, usage);
 }
 
+const CHECK_OPTIONS = ['policy', 'json'];
+
+/** True when `check` was given a holo, a path ending in `.holo` or a file; otherwise it is the deprecated `build --check`. */
+function namesHolo(positional) {
+  const [first] = positional;
+  if (first === undefined) return false;
+  if (/\.holo$/i.test(first)) return true;
+  try {
+    return statSync(resolve(first)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function commandCheck(positional, options) {
+  const unknown = Object.keys(options).find((name) => !CHECK_OPTIONS.includes(name));
+  if (unknown) return usage(`check has no option --${unknown}`);
+  if (Object.hasOwn(options, 'policy') && (typeof options.policy !== 'string' || options.policy === '')) return usage('--policy takes a file');
+  if (positional.length !== 1) return usage('check takes one holo');
+  let verdict;
+  try {
+    verdict = await check(positional[0], { policy: options.policy });
+  } catch (error) {
+    if (!(error instanceof PrismError)) throw error;
+    process.stderr.write(`no verdict: ${error.check ?? error.code}: ${error.message}\n`);
+    return CHECK_EXIT.NO_VERDICT;
+  }
+  process.stdout.write(options.json ? verdictJson(verdict) : formatVerdict(verdict, positional[0]));
+  return exitCodeOf(verdict);
+}
+
 async function commandRun(positional, options) {
   if (positional.length !== 1) return usage('run takes one artifact');
   for (const name of ['capabilities', 'capability-set']) {
@@ -217,9 +280,31 @@ async function commandRun(positional, options) {
   const { url, close } = await serve(app, { port, host: options.host ?? '127.0.0.1' });
   process.stdout.write(`${app.name ?? 'application'} (${app.kind}) at ${url}\n`);
   process.stdout.write(app.capabilities.set === null ? 'capabilities: none granted\n' : `capabilities: set ${app.capabilities.set} of ${options.capabilities}\n`);
+  if (app.world?.contract) process.stdout.write(`world: ${app.world.contract} within the grant, ${app.world.pure ? 'pure' : `impure (${app.world.effects.join(', ')})`}\n`);
   await new Promise((done) => {
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => close().then(done));
   });
+  return 0;
+}
+
+async function commandManifest(positional, options) {
+  if (positional.length > 1) return usage('manifest takes at most one project directory');
+  const bad = missingValue(options);
+  if (bad) return usage(`--${bad} takes a value`);
+  if (options.target !== undefined && !['browser', 'node'].includes(options.target)) return usage('--target is browser or node');
+  const result = await readManifest(resolve(positional[0] ?? '.'), { target: options.target ?? null });
+  const { manifest, warnings, files, grant } = result;
+  if (options.json) {
+    process.stdout.write(`${canonicalJson({ files, target: result.target, manifest, warnings })}\n`);
+    return 0;
+  }
+  const app = manifest.application;
+  const granted = grant.capabilities === null ? 'none granted' : `set ${grant.capabilitySet}${manifest.capabilities?.file ? ` of ${manifest.capabilities.file}` : ' (inline)'}`;
+  const variables = Object.entries(manifest.variables ?? {}).map(([name, entry]) => (typeof entry === 'object' && entry.secret ? `${name} (secret)` : name));
+  process.stdout.write(`${app.name} ${app.version} from ${files.join(' + ')}\n`);
+  process.stdout.write(`capabilities: ${granted}\n`);
+  process.stdout.write(`variables: ${variables.length ? variables.join(', ') : 'none'}\n`);
+  for (const w of warnings) process.stderr.write(`warning: ${w.rule}: ${w.message}\n`);
   return 0;
 }
 
@@ -278,9 +363,22 @@ async function main(argv) {
       return commandInspect(positional, options);
     case 'run':
       return commandRun(positional, options);
+    case 'manifest':
+      return commandManifest(positional, options);
+    case 'init': {
+      const { runInit } = await import('../src/init-cli.mjs');
+      return runInit(rest);
+    }
     case 'attest':
     case 'verify-attestation':
       return commandAttestation(command, positional, options);
+    case 'check':
+      if (namesHolo(positional)) return commandCheck(positional, options);
+      process.stderr.write('prism-code check without a holo is deprecated and is removed in 0.4.0; use prism-code build --check, which runs the same prismpm check\n');
+      return commandDelegate('check', rest);
+    case 'build':
+      if (rest.includes('--check')) return commandDelegate('check', rest.filter((a) => a !== '--check'));
+      return commandDelegate('build', rest);
     default:
       if (Object.hasOwn(DELEGATED, command)) return commandDelegate(command, rest);
       return usage(`unknown command ${command}`);
