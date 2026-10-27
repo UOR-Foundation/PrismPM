@@ -25,7 +25,7 @@ const workflowProfiles=new Map([
  // Current source-reviewed candidate workflow.  Keep historical profiles
  // above immutable; a new workflow is admitted only by this exact digest.
  ['sha256:ed952dbab6305ff49d8d1a3c19376049567455b73b6e673a01d72c43904d1f96',7],
- ['sha256:06decda291ca6182d2d2107dafa4b93c0e13301a673bc28039992e2317a598b6',9]
+ ['sha256:8960dcc33ea5fc80047a1f98f058ad45f384ae939b92e254f2564e9d7d510821',9]
 ]);
 const authorities=new WeakMap(),metadata=new WeakMap();
 const sha=bytes=>'sha256:'+createHash('sha256').update(bytes).digest('hex');
