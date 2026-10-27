@@ -58,12 +58,39 @@ export function verifyInventory() {
   return {requests, replies};
 }
 
-function sourceClosure() {
-  const local = ['checks.mjs', 'compile.mjs', 'corpus.mjs', 'runner.rs', 'browser.mjs', 'browser-fixture.mjs',
+export function sourceClosure() {
+  const local = ['checks.mjs', 'compile.mjs', 'corpus.mjs', 'fallback-owner.test.mjs', 'runner.rs', 'browser.mjs', 'browser-fixture.mjs',
     'driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs', 'src/Fixture.lex.tex'];
   const shared = ['sdk/browser/operation-journal.mjs', 'sdk/browser/effects.mjs', 'sdk/browser/credential-custody.mjs',
     'sdk/browser/effects-wire.mjs', 'sdk/browser/effects-module.mjs', 'sdk/browser/identity.mjs', 'sdk/browser/store.mjs',
-    'tests/browser-view/compile.mjs', 'tests/browser-effects/checks.mjs', 'tests/browser-custody/compile.mjs'];
+    'sdk/browser/operation-journal.test.mjs', 'sdk/browser/browser-test-server.mjs',
+    'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
+    'tests/browser-view/compile.mjs', 'tests/browser-view/driver-cache.mjs', 'tests/browser-view/prerequisites.mjs',
+    'tests/browser-view/compiler-artifact.mjs', 'tests/browser-view/compiler-owner-checks.mjs', 'tests/browser-view/compiler-owner.mjs',
+    'tests/browser-effects/checks.mjs', 'tests/browser-effects/compile.mjs', 'tests/browser-effects/corpus.mjs',
+    'tests/browser-custody/compile.mjs', 'tests/browser-custody/checks.mjs', 'tests/browser-custody/corpus.mjs',
+    'tests/browser-custody/browser.mjs', 'tests/browser-custody/browser-fixture.mjs', 'LICENSE-MIT', 'LICENSE-APACHE',
+    'tests/browser-workspace/src/main.rs', 'tests/browser-journal/driver/src/main.rs',
+    'tests/fixtures/library/native-library/project/lexlean.toml',
+    'model/dependencies.toml', 'model/authorities.toml', 'model/browser-operation-journal-diagnostics.json',
+    'model/browser-custody-diagnostics.json', 'lean-toolchain', 'rust-toolchain.toml',
+    'vendor/lean4-prod/lean.tar', 'vendor/lean4-prod/rust/MANIFEST.sha256', 'vendor/lexlean/MANIFEST.sha256'];
+  for (const family of ['browser-custody', 'browser-effects']) {
+    for (const file of ['driver/Cargo.toml', 'driver/Cargo.lock', 'driver/src/main.rs', 'runner.rs', 'src/Fixture.lex.tex'])
+      shared.push('tests/' + family + '/' + file);
+  }
+  for (const name of ['OperationJournal', 'OperationJournalWire', 'Custody', 'CustodyWire', 'Effects', 'EffectsWire'])
+    shared.push('stdlib/src/Foundation/Browser/Application/V1/' + name + '.lex.tex');
+  for (const name of ['Bytes', 'Codec', 'Codec/Cbor/V1/Primitive']) shared.push('stdlib/src/Foundation/' + name + '.lex.tex');
+  for (const tree of ['vendor/lexlean', 'vendor/lean4-prod/rust']) {
+    for (const line of readFileSync(join(repository, tree, 'MANIFEST.sha256'), 'utf8').trimEnd().split('\n')) {
+      const row = /^([0-9a-f]{64})  ([A-Za-z0-9_./-]+)$/.exec(line); assert.ok(row);
+      assert.ok(row[2].split('/').every(part => part && part !== '.' && part !== '..'));
+      const path = tree + '/' + row[2];
+      assert.equal(sha(readFileSync(join(repository, path))), row[1], 'pinned journal compiler source');
+      shared.push(path);
+    }
+  }
   return Object.fromEntries([...local.map(file => [file, join(draft, file)]), ...shared.map(file => [file, join(repository, file)])]
     .map(([name, file]) => [name, sha(readFileSync(file))]));
 }
@@ -109,7 +136,11 @@ export function verifyModelMutation(kind, compilerOwner = null) {
     assert.throws(() => executeWasm(kind === 'partition' ? build.partitionBytes : build.journalBytes, [vector]),
       /generated Wasm output mismatch/, kind + ' actual Wasm mutant');
     passed = true;
-    return {kind, compilerOwner: build.compilerOwner, preparationMs: build.preparationMs};
+    return {kind, compilerOwner: build.compilerOwner, preparationMs: build.preparationMs,
+      cacheRetirement: build.cacheRetirement, source: build.verified.source_id,
+      attestation: build.verified.attestation_id, ir: build.generation.ir_sha256,
+      wasm: sha(kind === 'partition' ? build.partitionBytes : build.journalBytes),
+      vector: vector.id, request: sha(vector.request), response: sha(vector.response)};
   } finally { if (passed) rmSync(build.work, {recursive: true, force: true}); }
 }
 

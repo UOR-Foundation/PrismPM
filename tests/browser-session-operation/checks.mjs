@@ -47,17 +47,20 @@ export async function verifyComponents(compiler, inputs) {
   const library = join(build.work, 'generated/src/lib.rs'), manifest = join(build.work, 'generated/generation-manifest.json');
   const original = readFileSync(library), manifestBytes = readFileSync(manifest);
   for (const rewrite of [false, true]) {
+    const refusal = rewrite ? /immutable generated package captured immediately after code generation/
+      : /generated package manifest digest src\/lib\.rs/;
     try {
       writeFileSync(library, Buffer.concat([original, Buffer.from('\n// actual substituted generated source\n')]));
       if (rewrite) {
         const data = JSON.parse(manifestBytes); data.files.find(row => row.path === 'src/lib.rs').sha256 = sha(readFileSync(library));
-        writeFileSync(manifest, JSON.stringify(data));
+        writeFileSync(manifest, JSON.stringify(data, (_key, child) => child && !Array.isArray(child) && typeof child === 'object'
+          ? Object.fromEntries(Object.keys(child).sort().map(key => [key, child[key]])) : child) + '\n');
       }
       for (const standard of [true, false]) {
-        assert.throws(() => build.compileNative(standard), /generated package/);
+        assert.throws(() => build.compileNative(standard), refusal);
         assert.equal(lstatSync(join(build.work, 'runner-' + (standard ? 'std' : 'no-std')), {throwIfNoEntry: false}), undefined);
       }
-      assert.throws(() => build.unchanged(), /generated package/);
+      assert.throws(() => build.unchanged(), refusal);
     } finally {writeFileSync(library, original); writeFileSync(manifest, manifestBytes);}
     build.unchanged();
   }

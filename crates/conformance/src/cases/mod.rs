@@ -14,6 +14,7 @@ mod native_lease;
 mod native_library;
 mod node_suite;
 mod organization_lifecycle;
+mod owner_timing;
 mod saved_recovery;
 mod scoped_administration;
 
@@ -358,7 +359,9 @@ pub fn run_at(root: &Path, id: &str) {
         "{id} must be level build"
     );
 
+    let queued = std::time::Instant::now();
     let _compiler_slot = scheduling::for_owner(id);
+    let _owner_timing = owner_timing::OwnerTiming::after_admission(id, queued.elapsed());
     match id {
         "RP-01" => verify_rp_01(root),
         "RP-02" => verify_rp_02(root),
@@ -453,6 +456,16 @@ pub fn run_at(root: &Path, id: &str) {
         }
 
         "AU-01" | "AU-02" | "AU-03" | "AU-04" | "AU-05" | "AU-06" => verify_authorities(root, id),
+        "AU-07" => verify_node_suite(
+            root,
+            id,
+            &[
+                "tests/oscal-json/capture.test.mjs",
+                "tests/oscal-json/owner.test.mjs",
+            ],
+            9,
+            "1200000",
+        ),
         "SY-08" => browser_system::verify(root),
         "SY-01" | "SY-02" | "SY-03" | "SY-04" | "SY-05" | "SY-06" | "SY-07" => {
             verify_system(root, id)
@@ -557,7 +570,7 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-view/file-custody.test.mjs",
                 "tests/browser-session-operation/owner.test.mjs",
             ],
-            96,
+            97,
             "7200000",
         ),
         "OC-07" => verify_browser_export(root),
@@ -602,6 +615,25 @@ pub fn run_at(root: &Path, id: &str) {
         "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(root, id),
 
         _ => panic!("unhandled conformance id: {id}"),
+    }
+    // Qualify the independent construction as well as the original shared
+    // owner. Each complete file retains its separate unchanged deadline.
+    match id {
+        "DK-24" => verify_node_suite(
+            root,
+            id,
+            &["tests/browser-operation-journal/fallback-owner.test.mjs"],
+            28,
+            "3600000",
+        ),
+        "DK-27" => verify_node_suite(
+            root,
+            id,
+            &["tests/browser-budget/fallback-owner.test.mjs"],
+            12,
+            "3600000",
+        ),
+        _ => {}
     }
 }
 
@@ -2698,7 +2730,15 @@ fn verify_template(root: &Path, id: &str) {
             );
         }
         "TM-03" => {
-            verify_node_suite(root, id, &["action/entrypoint.test.mjs"], 19, "120000");
+            node_suite::verify_exact(
+                root,
+                id,
+                &[
+                    ("action/entrypoint.test.mjs", 19),
+                    ("scripts/ci-capacity.test.mjs", 10),
+                ],
+                "120000",
+            );
             assert!(prismpm::template::check(temp.path()).is_ok());
             std::fs::write(
                 temp.path().join(".github/workflows/bootstrap.yml"),
@@ -3080,7 +3120,7 @@ fn verify_portable_view_report(root: &Path) {
             "schema":"prismpm/portable-browser-oracle/1",
             "profile":"utf8-text",
             "engine":"chromium",
-            "browser_version":"151.0.7922.34",
+            "browser_version":"157.0.8099.0",
             "playwright":"1.62.1",
             "cases":cases,
             "vector_indexes":[0,2,3],

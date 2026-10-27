@@ -354,7 +354,18 @@ Before loading the browser driver, verification checks the real installed
 Playwright driver/core and Chromium headless-shell trees against the native
 SDK inventory, using the same length-prefixed SHA-256 tree encoding as SDK
 inventory production. Source-bootstrap verification instead uses independently
-reviewed digests from the locked npm packages and pinned x64 browser image.
+reviewed digests from the locked npm packages and complete immutable official
+Chrome for Testing 157.0.8099.0 x64 archive. `sdk/browser-engine/authority.json`
+binds both platform archives by object generation, compressed digest, complete
+member contents/modes, native architecture and installed-tree digest. Its
+Canary status is explicit; Playwright driver/core remain pinned to 1.62.1.
+Archive admission checks the bounded immutable compressed snapshot, complete
+classic-ZIP index and every member before creating an extraction stage; it
+does not continue after refused admission. The installer preserves complete
+upstream notices. Its no-clobber publication assumes the serialized trusted
+image-build namespace; it does not claim protection against another same-UID
+build writer. Both native compatibility and all original browser/SDK owners
+remain mandatory; an input declaration or version probe is not acceptance.
 Symlinks, special files, writable shared entries, oversized trees and digest
 changes fail with `PP5301`. Node is resolved through the existing tool inventory
 boundary; the verified absolute Node and browser executable paths are passed
@@ -848,6 +859,12 @@ its source fingerprints appear current. Cargo initializes the target and its
 cache tag; private compiler-driver builds use one job, no incremental state and
 no development debug symbols to bound temporary storage. Generated program
 builds, kernel checks, native/Wasm execution and oracle cases are unchanged.
+Budget and Operation Journal verification each execute their complete shared
+compiler owner and a separately registered independent-construction owner.
+Each independent owner retains the same per-file deadline and all native,
+Wasm, source-mutant and applicable browser/host checks; compiler-cache retirement
+receipts supplement, rather than replace, generated-artifact verification.
+Source conformance and installed-SDK verification require both constructions.
 
 Reviewed stdlib goldens retain the original verification records, including
 the exact caller executable digest. `prismpm/golden-manifest/2` selects the
@@ -912,6 +929,10 @@ level 3. Complete per-invocation SDK inventory and executable byte checks,
 native golden write/repeat commands and deadlines remain unchanged; caller
 compiler/profile environment overrides do not enter the native review container.
 
+Private browser compiler-driver builds use that same fixed SHA2-only setting.
+Locked/offline construction, fresh owned targets, source custody, all owning
+executions and their original resource/deadline bounds remain mandatory.
+
 The review container explicitly selects a private Cargo home, seeded only from
 the selected image's immutable cache before generation. Copying is bounded to
 250,000 regular files/directories, depth 32, 256 MiB per file, 2 GiB total and
@@ -959,6 +980,20 @@ excluding compiler-slot wait. It is emitted only after every original completion
 check passes, before libtest's summary, without dumping child output or private
 paths. Diagnostic write failure cannot alter acceptance. These timings are not
 acceptance receipts or evidence of a speedup without comparable measurements.
+Bounded compiler-phase diagnostics separately count actual calls, failures and
+elapsed milliseconds under closed phase labels. They preserve every command,
+argument, timeout, source/tool custody check and test outcome; absent, malformed
+or truncated diagnostics never qualify acceptance or supply missing timings.
+The existing workspace-model and journal process wrappers report the same
+closed phase observations without changing their process contracts. Successful
+Rust diagnostic records are formatted before transport and bounded to 4096
+UTF-8 bytes; diagnostic loss is never inferred to be a successful measurement.
+Rust conformance owners separately report compiler-slot admission wait and
+subsequent owner-body wall time, including unwinding. These closed numeric
+diagnostics are not CPU timings, acceptance receipts or final test outcomes.
+Later shared-initialization waits and nested owners remain within body time;
+optional diagnostic transport contention is excluded. Original assertions,
+panic payloads, scheduling, full-gate commands and qualification remain intact.
 
 Browser compiler fixtures never accept the existence of a cached executable as
 compiler evidence. The shared exporter helper captures and verifies the selected
@@ -1043,6 +1078,35 @@ reads the wrong subject, uses another edition, or has changed bytes fails with
 the authority/oracle diagnostics in the PP54xx range. If no executable oracle
 exists, coverage is `not-executable`; PrismPM cannot manufacture an external
 conformance claim from its own validator.
+
+### 10.1 OSCAL JSON structural validation
+
+AU-07 owns the imported OSCAL 1.1.0 JSON schema boundary: all seven model
+schemas and the complete schema, with their original release bytes. The
+published, checksum-locked JSON Schema engine runs without network retrieval.
+The complete selected draft-07 corpus includes all 37 mandatory files and the
+four format suites used by these schemas: 1,120 cases. All 44 pinned NIST
+content documents are structural probes; their original 1.1.1 edition is
+retained and refused by the 1.1.0 admission boundary. Seven local valid model
+documents and 57 local invalid mutations are not attributed to NIST.
+
+The adapter captures one regular, unaliased, singly linked subject through a
+bounded no-follow descriptor, checking held/path identity before and after
+reading. Strict UTF-8 JSON refuses duplicate decoded keys and preserves exact
+numbers. Resource ceilings are 64 MiB, depth 128, one million JSON nodes and
+numeric digits, and absolute decimal exponent/adjustment of one million.
+Exceeding a ceiling is resource refusal, never a schema-invalid verdict.
+Exit codes are success 0, invocation 2, rejected subject 4, resource refusal 5
+and unavailable oracle 6. Failure emits no accepted-subject record.
+
+Successful evidence binds exact subject bytes, model and edition and reports
+only JSON structural validation. It does not establish profile resolution,
+control implementation, assessment authenticity, inheritance, security or
+whole-standard conformance. The complete owning gate requires freshly built
+locked engine execution, exact upstream inventory, actual CLI boundaries and
+compiled defects for invalid acceptance, wrong editions and unstable capture.
+Changed compiled schema bytes must produce an unavailable-oracle refusal.
+Source-only registration or a locally overridden engine cannot accept it.
 
 ## 11. Production system model and projections
 
@@ -1658,13 +1722,30 @@ The fixed interpreter is admitted from each digest-pinned image: Bookworm
 Python 3.11.2 or Noble Python 3.12.3, using isolated execution with no host
 fallback. Source binding includes both private supervisor files. Original
 command, file, actor and two-run deadlines remain unchanged.
+Source full V&V and desktop/browser conformance additionally execute the six
+original standalone Session file pairs: Projection (7+1), Reservation (10+23),
+Payload (4+30), Recovery Frames (3+1), Journal Recovery (7+1), Retention (3+18).
+Installed browser qualification preserves all26 original owners and both
+fixed-null fallbacks, then executes these same108 additional cases. Each
+original selected file must report its exact count with no omitted, failed,
+skipped, cancelled or TODO tests. Five groups retain their3600000ms file and
+process bounds; Journal Recovery retains5500000ms with its5400000ms owner.
+Registered DK execution or inclusion of source bytes cannot replace these
+separate pairs. The original19 product boundary units also run in the source
+audit; synthetic unit inputs never qualify installed products or deployment.
+Standalone groups use the same pinned private subreaper: TERM then KILL within
+the original five-second retirement bound. A zero leader exit or passing TAP
+cannot repair timeout, overflow, abort, interruption or orphaned trailing work.
+Exact cwd, environment and argv remain intact; descendant exhaustion and clean
+supervisor completion are required before test results can qualify.
 The release's outer SDK owner executes in the existing source-independent thin
 tools stage, not host Python. Its current image ID, original Docker metadata,
 source readbacks, command output, terminal state and exact-ID cleanup are
 retained alongside—not substituted for—the original two full V&V records.
 The existing native registry CI reuses its immutable thin tools image for the
 complete original 71 process/construction cases, two new normal-exit cases,
-one complete outer-launcher lifecycle unit, twelve real supervisor controls and
+one complete outer-launcher lifecycle unit, the original twelve real supervisor
+controls plus two exact-cwd/interruption controls, and
 all 17 registry-process cases on both native platforms, with the
 original file deadline, source readbacks, raw results, cgroup observations and
 observed owned-container/network retirement. These unit results do not qualify
@@ -3030,6 +3111,25 @@ defects. Its devcontainer uses the exact SDK image digest and its workflows call
 a full-commit-pinned thin action/reusable workflow that executes the same CLI.
 There is no copied validation, generation, publication or deployment logic.
 
+The reusable SDK's optional `invocation-key` identifies one caller job/project
+within its workflow. Callers opting into read-only CI supersession MUST use a
+distinct, stable lowercase ASCII key for each independent invocation. Keys are
+1–64 characters, start with a letter or digit, and contain only lowercase
+letters, digits, dots, underscores and hyphens. This prevents case-insensitive
+GitHub concurrency aliases. Only `check`, `build`,
+`verify` and `test` with a nonempty key can supersede earlier work on the same
+repository, caller workflow file and ref. Existing callers without a key retain independent
+execution. Deployment, promotion, recovery and other operations never enter
+this cancellation group. All existing SDK inputs and outputs are preserved.
+The key is validated in a separate, non-concurrent job before the execution
+job can enter its group; invalid keys cannot cancel a valid invocation.
+The existing `TM-03` owner runs all 19 Action controls and all 10 CI-capacity
+controls together. The full source audit additionally owns all 26 diagnostic
+transport controls; its previous file inventory and compiler-phase controls
+remain selected. CI-capacity controls preserve all six current SDK-candidate
+lanes, including input policy, unpublished construction and archive integrity,
+without treating any diagnostic or construction lane as SDK acceptance.
+
 The shared Action exposes `export-browser` with `reference` and `output` inputs
 passed unchanged to the SDK's existing command. The SDK owns immutable-reference,
 release-evidence and new direct-child destination validation. Export executes
@@ -3193,6 +3293,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AU-04` | `authorities` | Authority and oracle verification reproduces from a populated cache with network access disabled. | §10 |
 | `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
 | `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
+| `AU-07` | `authorities` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. | §10 |
 | `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
 | `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
 | `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |
