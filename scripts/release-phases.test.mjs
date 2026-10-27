@@ -298,9 +298,9 @@ test('Cargo publication target selection binds the exact package and version arc
 test('explicit OCI-only dispatch is distinct from Cargo publication and rejects foreign refs', () => {
   assert.deepEqual(publicationPolicy(policy()), {version: '0.4.0', publishCrates: false});
   assert.equal(publicationPolicy({...policy(), publishCrates: true}).publishCrates, true);
-  assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.3.0', publishCrates: null}).publishCrates, true);
+  assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null}).publishCrates, true);
   for (const change of [{publishCrates: 'false'}, {publishCrates: null}, {repository: 'other/PrismPM'},
-    {ref: 'refs/heads/feature'}, {ref: 'refs/tags/v0.4.0'}, {event: 'pull_request'},
+    {ref: 'refs/heads/feature'}, {ref: 'refs/tags/v0.3.0'}, {event: 'pull_request'},
     {version: '0.4.0'}, {revision: 'main'}, {extra: true}]) {
     assert.throws(() => publicationPolicy({...policy(), ...change}));
   }
@@ -790,7 +790,7 @@ test('pinned Buildx pushes a genuine two-platform OCI index by digest without cr
       '--build-arg', 'SOURCE_DATE_EPOCH=0', '--label', 'org.opencontainers.image.created=1970-01-01T00:00:00Z',
       '--label', `org.opencontainers.image.revision=${revision}`, '--label',
       'org.opencontainers.image.source=https://github.com/UOR-Foundation/PrismPM',
-      '--label', 'org.opencontainers.image.version=0.3.0'];
+      '--label', 'org.opencontainers.image.version=0.4.0'];
     const metadata = join(directory, 'metadata.json');
     docker([...args, '--platform', 'linux/amd64,linux/arm64', '--metadata-file', metadata, '--output',
       `type=registry,name=${endpoint}/fixture/sdk,push-by-digest=true,name-canonical=true,rewrite-timestamp=true,oci-mediatypes=true,registry.insecure=true`, context]);
