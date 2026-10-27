@@ -10,6 +10,7 @@ import {createPrivateDriverTarget, ensureProdExport, repository, run, sha} from 
 import {captureCompilerArtifact} from './compiler-artifact.mjs';
 
 const families = Object.freeze({
+  'account-genesis': Object.freeze({directory: 'browser-account-genesis', executable: 'browser-account-genesis-driver'}),
   p256: Object.freeze({directory: 'browser-p256', executable: 'browser-p256-driver'}),
   view: Object.freeze({directory: 'browser-view', executable: 'browser-workspace-view-driver'}),
   effects: Object.freeze({directory: 'browser-effects', executable: 'browser-effects-driver'}),

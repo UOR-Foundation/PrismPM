@@ -6,6 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {dirname,join,parse,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {pathToFileURL} from 'node:url';
+import {verifyAccountGenesisConstruction} from '../sdk/account-genesis-artifact.mjs';
 
 export const sourceRoots=Object.freeze([
  '.cargo','Cargo.toml','Cargo.lock','rust-toolchain.toml','lean-toolchain','LICENSE-MIT','LICENSE-APACHE','SPEC.md','features/suites/sdk.feature','model','language',
@@ -13,7 +14,7 @@ export const sourceRoots=Object.freeze([
  'tests/browser-workspace','tests/browser-envelope','tests/browser-journal',
  'tests/browser-command','tests/browser-query','tests/browser-api','tests/browser-view',
  'tests/browser-effects','tests/browser-presentation','tests/browser-custody','tests/browser-operation-journal',
- 'tests/browser-session','tests/browser-p256',
+ 'tests/browser-session','tests/browser-account-genesis','tests/browser-p256',
  'tests/fixtures/library/native-library/project',
  'tests/support/browser_application.rs','tests/fixtures/holo/ho-11-text-application/project',
  'crates/prismpm/src/holo/browser_application.rs','crates/prismpm/src/holo/browser_application',
@@ -23,12 +24,14 @@ export const sourceRoots=Object.freeze([
  'vendor/lexlean','vendor/lean4-prod/lean.tar','vendor/lean4-prod/rust',
  'scripts/browser-api-sdk-check.mjs','scripts/browser-api-sdk-check.sh','scripts/owning-node-reporter.mjs',
  'scripts/fetch-oracle-cargo.sh','sdk/generate-inventory.mjs',
+ 'sdk/account-genesis-artifact.mjs','sdk/generate-account-genesis.mjs',
 ]);
 // These installed host primitives include private prerequisites, not a public
 // browser application runtime. DK-21/22 retain their full installed-V&V owners.
 export const hostModules=Object.freeze(['identity','store','peer','journal','commands','queries',
  'view-host','view-dom','view-error','rs256','effects','effects-wire','effects-module',
- 'presentation-wire','presentation-dom','credential-custody','operation-journal']);
+ 'presentation-wire','presentation-dom','credential-custody','operation-journal','account-genesis','account-genesis-binding']);
+export const hostArtifacts=Object.freeze(['account-genesis.wasm']);
 export const suites=Object.freeze([
  {id:'DK-07',minimum:15,files:['identity.test.mjs','identity.browser.test.mjs']},
  {id:'DK-08',minimum:14,files:['store.test.mjs','boundary.test.mjs']},
@@ -46,9 +49,10 @@ export const suites=Object.freeze([
  {id:'DK-24',minimum:28,files:['operation-journal.test.mjs']},
  {id:'DK-25',minimum:11,files:['credential-custody-test.mjs']},
  {id:'DK-26',minimum:39,files:['session-model-test.mjs','tests/browser-session/wire.test.mjs','tests/browser-session/provenance.test.mjs']},
+ {id:'DK-33',minimum:17,files:['tests/browser-account-genesis/corpus.test.mjs','tests/browser-account-genesis/bridge.test.mjs','tests/browser-account-genesis/owner.test.mjs']},
  {id:'DK-34',minimum:18,files:['tests/browser-p256/oracles.test.mjs','tests/browser-p256/corpus.test.mjs','tests/browser-p256/bridge.test.mjs','tests/browser-p256/owner.test.mjs','tests/browser-view/local-module-inputs.test.mjs']},
 ].map(row=>Object.freeze({...row,
- deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-34'].includes(row.id)?3600000:1500000,
+ deadline:['DK-15','DK-16','DK-20','DK-23','DK-24','DK-25','DK-26','DK-33','DK-34'].includes(row.id)?3600000:1500000,
  files:Object.freeze(row.files.map(file=>file.startsWith('tests/')?file:'sdk/browser/'+file))})));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const keys=(value,names)=>{assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),names.slice().sort());};
@@ -99,7 +103,7 @@ export function verifySource(root,expected){
 }
 
 export function verifyModules(root,installed){
- const names=hostModules.map(name=>name+'.mjs');
+ const names=[...hostModules.map(name=>name+'.mjs'),...hostArtifacts];
  const sources=selectedFiles(resolve(root),names.map(name=>'sdk/browser/'+name));
  const actual=selectedFiles(resolve(installed),names);
  assert.deepEqual(readdirSync(installed).sort(),names.slice().sort(),'exact installed host module closure');
@@ -214,6 +218,15 @@ export function runSuites(root,launch=spawnSync,emit=text=>process.stdout.write(
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const[mode,...args]=process.argv.slice(2);
  if(mode==='roots'&&args.length===0)console.log(sourceRoots.join('\n'));
+ else if(mode==='account-construction'&&args.length===2) {
+   const snapshot=JSON.parse(readFileSync(args[1],'utf8'));
+   keys(snapshot,['revision','files']);hex(snapshot.revision,40);
+   assert(Array.isArray(snapshot.files)&&snapshot.files.length>0);
+   for(const row of snapshot.files){keys(row,['path','size','sha256']);hex(row.sha256,64);}
+   const expected=Object.fromEntries(snapshot.files.map(row=>[row.path,row.sha256]));
+   assert.equal(Object.keys(expected).length,snapshot.files.length);
+   verifyAccountGenesisConstruction(args[0],expected);
+ }
  else if(mode==='modules'&&args.length===2)verifyModules(...args);
  else if(mode==='capture'&&args.length===2)console.log(JSON.stringify(capture(...args)));
  else if(mode==='verify'&&args.length===2)verifySource(args[0],JSON.parse(readFileSync(args[1])));

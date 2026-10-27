@@ -9,11 +9,12 @@ import * as browserGate from './browser-api-sdk-check.mjs';
 
 const hostModules = ['identity', 'store', 'peer', 'journal', 'commands', 'queries',
  'view-host', 'view-dom', 'view-error', 'rs256', 'effects', 'effects-wire',
- 'effects-module', 'presentation-wire', 'presentation-dom', 'credential-custody', 'operation-journal'];
+ 'effects-module', 'presentation-wire', 'presentation-dom', 'credential-custody', 'operation-journal','account-genesis','account-genesis-binding'];
 const sdkSource = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
 test('installed module inventory includes every accepted private browser prerequisite without opening the runtime', () => {
  assert.deepEqual(browserGate.hostModules, hostModules);
+ assert.deepEqual(browserGate.hostArtifacts, ['account-genesis.wasm']);
  const recipe = sdkSource('sdk/Dockerfile');
  const instruction = recipe.split('\n').find(line => line.startsWith('COPY ') && line.endsWith(' /opt/prismpm/browser/'));
  assert.ok(instruction);
@@ -21,23 +22,29 @@ test('installed module inventory includes every accepted private browser prerequ
  assert.match(instruction, /--from=source_inputs --chmod=0444/);
  const shell = sdkSource('scripts/browser-api-sdk-check.sh');
  assert.match(shell, /node "\$helper" modules "\$root" "\$sdk_work\/browser"/);
+ assert.match(shell, /node "\$helper" account-construction "\$sdk_work"/);
  for (const module of hostModules) assert.ok(sdkSource('sdk/browser/' + module + '.mjs').length);
  assert.ok(sdkSource('sdk/generate-inventory.mjs').includes("['browser-host-primitives', 'adapter', '1', '/opt/prismpm/browser', 'tree']"));
+ assert.ok(sdkSource('sdk/generate-inventory.mjs').includes("['browser-account-genesis-construction', 'adapter', '1', '/opt/prismpm/share/account-genesis', 'tree']"));
+ assert.equal(recipe.split('node sdk/generate-account-genesis.mjs install').length, 2);
+ assert.ok(recipe.indexOf('bash scripts/fetch-oracle-cargo.sh') < recipe.indexOf('node sdk/generate-account-genesis.mjs install'));
+ assert.ok(recipe.indexOf('node sdk/generate-account-genesis.mjs install') < recipe.indexOf('cp -a . /opt/prismpm/share/conformance-root/'));
  assert.equal(hostModules.filter(name => name === 'operation-journal').length, 1);
 });
 
 test('installed browser closure includes complete new owning fixtures and actual Rust refusal owners', () => {
- for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody', 'tests/browser-operation-journal', 'tests/browser-session',
+ for (const path of ['tests/browser-effects', 'tests/browser-presentation', 'tests/browser-custody', 'tests/browser-operation-journal', 'tests/browser-session','tests/browser-account-genesis',
   'sdk/oracles/package.json', 'sdk/oracles/package-lock.json',
   'tests/fixtures/library/native-library/project', 'tests/support/browser_application.rs',
   'crates/prismpm/src/browser_build.rs', 'crates/prismpm/src/browser_build',
   'crates/prismpm/src/holo/browser_application.rs', 'crates/prismpm/src/holo/browser_application',
   'crates/conformance/tests/conformance.rs', 'crates/conformance/src/cases/browser_compiler.rs',
-  'scripts/browser-api-sdk-check.sh', 'scripts/fetch-oracle-cargo.sh', 'sdk/generate-inventory.mjs']) {
+  'scripts/browser-api-sdk-check.sh', 'scripts/fetch-oracle-cargo.sh', 'sdk/generate-inventory.mjs',
+  'sdk/account-genesis-artifact.mjs', 'sdk/generate-account-genesis.mjs']) {
   assert.ok(sourceRoots.includes(path), 'required installed source: ' + path);
  }
  const source = sdkSource('crates/conformance/tests/conformance.rs');
- for (const id of [21, 22, 24, 25, 26]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
+ for (const id of [21, 22, 24, 25, 26, 33]) assert.ok(source.includes(`test_case!(conformance_dk_${id}, "DK-${id}");`));
  assert.match(sdkSource('crates/prismpm/src/holo/browser_application.rs'), /Err\(PrismError::new\("PP2011"/);
  assert.match(sdkSource('crates/prismpm/src/browser_build/tests.rs'), /assert_eq!\(result.code, "PP2011"\)/);
  const workflow = sdkSource('.github/workflows/release.yml');
@@ -74,12 +81,23 @@ test('new installed Node suites retain exact complete owning files and deadlines
 const revision='a'.repeat(40),image='ghcr.io/uor-foundation/prismpm-sdk@sha256:'+'b'.repeat(64);
 const temporary=t=>{const root=mkdtempSync(join(tmpdir(),'prismpm-sdk-binding-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 const put=(root,path,bytes)=>{mkdirSync(dirname(join(root,path)),{recursive:true});writeFileSync(join(root,path),bytes);};
+function stageGate(root,helper) {
+ put(root,'scripts/browser-api-sdk-check.mjs',helper);
+ for(const name of ['browser-api-sdk-check.test.mjs','owning-node-reporter.mjs'])
+  put(root,'scripts/'+name,readFileSync(new URL('./'+name,import.meta.url)));
+ put(root,'sdk/account-genesis-artifact.mjs',sdkSource('sdk/account-genesis-artifact.mjs'));
+ return join(root,'scripts/browser-api-sdk-check.test.mjs');
+}
 test('actual installed module trees reject missing extra changed and aliased module bytes', t => {
  assert.equal(typeof browserGate.verifyModules, 'function');
  const source = temporary(t), installed = temporary(t);
  for (const module of hostModules) {
   put(source, 'sdk/browser/' + module + '.mjs', module);
   put(installed, module + '.mjs', module);
+ }
+ for (const artifact of browserGate.hostArtifacts) {
+  put(source, 'sdk/browser/' + artifact, Uint8Array.of(0, 97, 115, 109));
+  put(installed, artifact, Uint8Array.of(0, 97, 115, 109));
  }
  browserGate.verifyModules(source, installed);
  const path = join(installed, 'effects.mjs');
@@ -96,6 +114,16 @@ test('actual installed module trees reject missing extra changed and aliased mod
  }
  const alias = join(temporary(t), 'alias'); symlinkSync(installed, alias);
  assert.throws(() => browserGate.verifyModules(source, alias));
+ const artifact = join(installed, 'account-genesis.wasm'), bytes = readFileSync(artifact);
+ for (const kind of ['missing', 'changed', 'alias', 'extra']) {
+  rmSync(artifact);
+  if (kind === 'changed') put(installed, 'account-genesis.wasm', Uint8Array.of(1, 2, 3));
+  if (kind === 'alias') symlinkSync('identity.mjs', artifact);
+  if (kind === 'extra') {put(installed, 'account-genesis.wasm', bytes); put(installed, 'foreign.wasm', bytes);}
+  assert.throws(() => browserGate.verifyModules(source, installed), undefined, 'generated artifact ' + kind);
+  rmSync(artifact, {force: true}); rmSync(join(installed, 'foreign.wasm'), {force: true});
+  put(installed, 'account-genesis.wasm', bytes); browserGate.verifyModules(source, installed);
+ }
 });
 function source(root){
  for(const path of sourceRoots){
@@ -186,6 +214,25 @@ test('installed DK26 gate requires every session kernel, canonical wire and cust
  assert.deepEqual(runSuites(root,spawnSync,()=>{}).find(row=>row.id==='DK-26'),{id:'DK-26',tests:39});
 });
 
+test('installed DK33 gate requires original account corpus, every construction check and the full generated owner',t=>{
+ const root=temporary(t);testFixtures(root);
+ const owner=suites.find(row=>row.id==='DK-33'),counts=[2,7,8];
+ assert.deepEqual(owner.files,['tests/browser-account-genesis/corpus.test.mjs',
+  'tests/browser-account-genesis/bridge.test.mjs','tests/browser-account-genesis/owner.test.mjs']);
+ assert.equal(owner.minimum,17);assert.equal(owner.deadline,3600000);
+ const sourceOwner=/"DK-33"\s*=>\s*verify_node_suite\(\s*root,\s*id,\s*&\[([^\]]+)\],\s*(\d+),\s*"([0-9]+)"/.exec(sdkSource('crates/conformance/src/cases/mod.rs'));
+ assert.ok(sourceOwner);
+ assert.deepEqual([...sourceOwner[1].matchAll(/"([^"]+)"/g)].map(row=>row[1]),owner.files);
+ assert.equal(Number(sourceOwner[2]),owner.minimum);assert.equal(Number(sourceOwner[3]),owner.deadline);
+ for(const [index,count] of counts.entries())put(root,owner.files[index],testSource(count));
+ for(const [index,count] of counts.entries()) {
+  put(root,owner.files[index],testSource(count-1));
+  assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,owner.files[index]);
+  put(root,owner.files[index],testSource(count));
+ }
+ assert.deepEqual(runSuites(root,spawnSync,()=>{}).find(row=>row.id==='DK-33'),{id:'DK-33',tests:17});
+});
+
 test('every selected file must exist even when its sibling supplies the total minimum',t=>{
  const root=temporary(t);testFixtures(root);
  const path=join(root,'sdk/browser/identity.browser.test.mjs');
@@ -232,12 +279,13 @@ test('a module printing invented completion text does not count as registered te
 test('release acceptance actually invokes every closed owning suite and rejects omission or skip',t=>{
  const root=temporary(t);testFixtures(root);const calls=[];
  const launch=(program,args,options)=>{calls.push(args);return spawnSync(program,args,options);};
- assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-34']);
- assert.equal(runSuites(root,launch,()=>{}).length,17);
+ assert.deepEqual(suites.map(row=>row.id),['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-33','DK-34']);
+ assert.equal(runSuites(root,launch,()=>{}).length,18);
  assert.deepEqual(calls.map(args=>args.slice(4)),suites.map(row=>row.files));
  assert.deepEqual(calls.map(args=>args[3]),suites.map(row=>'--test-timeout='+row.deadline));
  const view=suites.find(row=>row.id==='DK-15');assert.equal(view.minimum,37);
  assert.equal(suites.find(row=>row.id==='DK-34').minimum,18);
+ assert.equal(suites.find(row=>row.id==='DK-33').minimum,17);
  for(const [index,path] of view.files.entries())put(root,path,testSource(index===0?31:1));
  assert.throws(()=>runSuites(root,spawnSync,()=>{}),/incomplete test suite/,'omitting the bounded streaming regression must refuse36 tests');
  testFixtures(root);
@@ -294,13 +342,12 @@ test('owning release test kills a removed complete-TAP acceptance guard',t=>{
   ['const tests=verifyTap(output.stdout,suite.minimum)',"const tests=Number(/^# tests ([0-9]+)$/m.exec(output.stdout)[1])",/Missing expected exception/],
   ["{id:'DK-15',minimum:37","{id:'DK-15',minimum:36",/36 !== 37/],
   ["{id:'DK-34',minimum:18","{id:'DK-34',minimum:17",/17 !== 18/],
+  ["{id:'DK-33',minimum:17","{id:'DK-33',minimum:16",/16 !== 17/],
  ]){
  const root=temporary(t);
- assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,after));
- put(root,'browser-api-sdk-check.test.mjs',readFileSync(new URL('./browser-api-sdk-check.test.mjs',import.meta.url)));
- put(root,'owning-node-reporter.mjs',readFileSync(new URL('./owning-node-reporter.mjs',import.meta.url)));
+ assert.equal(source.split(before).length,2);const selected=stageGate(root,source.replace(before,after));
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
- const result=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=release acceptance actually',join(root,'browser-api-sdk-check.test.mjs')],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
+ const result=spawnSync(process.execPath,['--test','--test-reporter=tap','--test-name-pattern=release acceptance actually',selected],{encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,witness);
  }
 });
@@ -308,12 +355,10 @@ test('owning release test kills a removed complete-TAP acceptance guard',t=>{
 test('owning omission regression kills removal of actual per-file completion checks',t=>{
  const root=temporary(t),source=readFileSync(new URL('./browser-api-sdk-check.mjs',import.meta.url),'utf8');
  const before='verifyFileCompletions(output.stdout,selected.get(suite.id),tests);';
- assert.equal(source.split(before).length,2);put(root,'browser-api-sdk-check.mjs',source.replace(before,''));
- for(const file of ['browser-api-sdk-check.test.mjs','owning-node-reporter.mjs'])
-  put(root,file,readFileSync(new URL('./'+file,import.meta.url)));
+ assert.equal(source.split(before).length,2);const selected=stageGate(root,source.replace(before,''));
  const env={...process.env};delete env.NODE_TEST_CONTEXT;
  const result=spawnSync(process.execPath,['--test','--test-reporter=tap',
-  '--test-name-pattern=every selected file must register',join(root,'browser-api-sdk-check.test.mjs')],
+  '--test-name-pattern=every selected file must register',selected],
   {encoding:'utf8',env,timeout:15000,maxBuffer:1024*1024});
  assert.equal(result.error,undefined);assert.equal(result.status,1);assert.match(result.stdout,/Missing expected exception/);
 });
@@ -326,11 +371,10 @@ test('owning installed-module tests kill removed exact-tree and byte-equality gu
  ]) {
   assert.equal(original.split(omitted).length, 2);
   const root = temporary(t);
-  put(root, 'browser-api-sdk-check.mjs', original.replace(omitted, ''));
-  put(root, 'browser-api-sdk-check.test.mjs', sdkSource('scripts/browser-api-sdk-check.test.mjs'));
+  const selected=stageGate(root,original.replace(omitted,''));
   const env = {...process.env}; delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, ['--test', '--test-name-pattern=actual installed module trees',
-   join(root, 'browser-api-sdk-check.test.mjs')], {env, encoding: 'utf8', timeout: 15000, maxBuffer: 1024*1024});
+   selected], {env, encoding: 'utf8', timeout: 15000, maxBuffer: 1024*1024});
   assert.equal(result.error, undefined); assert.equal(result.status, 1);
   assert.match(result.stdout, /Missing expected exception/);
  }
