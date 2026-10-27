@@ -1585,6 +1585,23 @@ The remaining 80 synthetic probes are not counted as owner-boundary acceptance.
 
 ### Non-root oracle execution
 
+The portable View matrix originally failed before compiler construction in
+hosted run `37173071955`: archive comparison required root-owned metadata
+after non-root extraction. Running the original commands as UID 1000
+reproduced `Mode differs`, `Uid differs`, and `Gid differs`. The corrected
+comparison authenticates the pinned archive and all 454 non-root entries,
+including exact membership, types, modes, sizes and bytes; extraction assigns
+local ownership inside the private root. Descriptor-bound reads and traversal
+reject file/directory aliases and observed replacement.
+
+All 12 custody tests pass as UID 1000. Actual archive extraction under umasks
+0022 and 0077 passes; changed/missing/extra content, mode changes, source and
+archive aliases, hard links, changed archive identity and a non-private root
+fail their intended checks. Removing the actual comparison invocation makes
+the corruption test fail (`0 !== 1`); restoring it retains the complete checks.
+The fresh compiler, 78 browser cases and four
+negative controls remain mandatory; these source tests are not their acceptance.
+
 The OCI corruption fixture now makes only its disposable blob writable;
 OpenID makes only copied scratch directories writable. Distribution provisions
 six confined report directories before running every oracle as UID 1000 with
