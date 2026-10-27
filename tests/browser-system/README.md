@@ -18,6 +18,13 @@ models and both manifests in `Release.lex.tex` to the reported digest. Do not
 use the standalone Calculator project's digest: the owning test selects the
 application through this fixture's actual LexLean configuration.
 
+The shared-octet compiler import changes the reviewed binding to
+`sha256:1e9f66ae5672bdf3743f1b7b48e81564fea407e3f36f0a500d57f1272103f746`.
+Run `37218166204` rejected the previous binding in both actual browser-system
+owners with PP2101. The four source fields are refreshed explicitly; neither
+verification nor the stale-binding negative test repairs them at runtime.
+This correction still requires the owning tests and installed qualification.
+
 Run `conformance_sy_08` with the immutable oracle image and the installed-SDK
 product gate afterward. Source/proof/transport acceptance does not replace
 genuine installed-SDK, supply-chain or publication acceptance.

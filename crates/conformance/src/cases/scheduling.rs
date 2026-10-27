@@ -50,6 +50,7 @@ pub(super) fn for_owner(id: &str) -> Option<CompilerSlot> {
             | "DK-24"
             | "DK-25"
             | "DK-27"
+            | "DK-30"
             | "HO-13"
             | "OC-07"
             | "OC-08"
@@ -93,6 +94,7 @@ mod tests {
                 "DK-24".to_owned(),
                 "DK-25".to_owned(),
                 "DK-27".to_owned(),
+                "DK-30".to_owned(),
                 "HO-13".to_owned(),
                 "OC-07".to_owned(),
                 "OC-08".to_owned(),

@@ -638,6 +638,12 @@ runs that exact command in the pinned devcontainer. Acceptance evidence is
 canonical `prismpm/vv-evidence/1`, lists all 15 gates, records `passed`, and
 binds the exact full Git commit.
 
+The source audit first checks both retained native-record sets against the
+shared golden tree using the same closed composition rules as the later native
+consistency tests. Missing, stale, substituted or extra records fail before
+expensive suites run. This check performs no native execution and supplies no
+cached acceptance; all subsequent tests and fresh verification gates remain.
+
 Formatting checks a closed inventory of authored test manifests and Rust inputs.
 Generated stdlib packages are verified by regeneration, not rewritten by rustfmt.
 
@@ -952,6 +958,24 @@ inherited/residual validator call for allocations. Those finite witnesses do
 not assert a universal soundness theorem or imported standards conformance.
 
 ## 12. SDK and lock contract
+
+`DK-30` owns the internal conditional native-lane reducer in
+`Foundation.Native.Application.V1.Lease`. Its explicit corpus is mechanically
+bound to every generated LexLean probe and executes in standard and no_std Rust.
+Pending operations have exactly the predecessor of the next sequence; immutable
+request bindings do not change during cancellation or unknown cleanup. Host-only
+terminal transitions require independently captured worker termination and
+handle cleanup. Matching model bytes do not prove those facts. The private host
+owns the session-relative monotonic nanosecond clock and all OS authority.
+The nine pure declarations have closed generated stdlib signatures in
+`model/stdlib-exports.toml`. Calling them on constructed values grants no host
+authority. Host-effect APIs must not accept caller-produced lane state,
+bindings, clocks, cancellation flags or cleanup evidence. The private binding
+retains its own state and fails closed on an outer generated `ComputeError`,
+which is not a modeled `NativeLeaseError` or evidence of cleanup.
+See `stdlib/src/Foundation/Native/Application/V1/Lease.md` for the complete
+conditional protocol. This kernel is not a filesystem binding, an executable
+native application profile, durable-effect idempotency or release acceptance.
 
 `DK-29` uses one fresh exporter acquisition boundary for library, browser,
 application and verification pipelines. Only a validated native
@@ -2343,6 +2367,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `DK-27` | `sdk` | Private source-modeled effect budgets bind every admitted manifest resource and exact request to concrete per-resource maxima and immutable policy context without issuing grants or enabling public application builds. | §12 |
 | `DK-28` | `sdk` | SDK lock acquisition validates exact OCI metadata graphs and a closed terminal filesystem layer under explicit resource and credential bounds without full-image fallback or implying executable or release acceptance. | §12 |
 | `DK-29` | `sdk` | Native exporter acquisition binds bounded fresh compiler seeds to independent SDK inventory authority and actual child measurements without replacing cold construction, actual exports or application acceptance. | §12 |
+| `DK-30` | `sdk` | The internal native-lane reducer preserves exact operation identity, finite sequencing and conditional cleanup transitions in generated std and no_std execution without granting OS authority or claiming native application acceptance. | §12 |
 | `OC-01` | `oci` | Product releases use OCI 1.1 descriptors, manifests, indexes, subjects, annotations, and referrers with registered media types. | §13 |
 | `OC-02` | `oci` | A locked build atomically emits a verified root only after every declared source, proof, package, oracle, and release gate passes. | §13 |
 | `OC-03` | `oci` | The release graph closes over all artifacts and binds SBOM, provenance, validation, signature, policy, and deployment referrers to exact subjects. | §13 |

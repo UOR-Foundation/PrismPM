@@ -10,6 +10,7 @@ mod browser_system;
 mod cbor_primitive;
 mod holo_browser;
 mod mailbox_admission;
+mod native_lease;
 mod native_library;
 mod node_suite;
 mod organization_lifecycle;
@@ -429,6 +430,7 @@ pub fn run_at(root: &Path, id: &str) {
             verify_browser_host(root, id)
         }
         "DK-17" => native_library::verify(root),
+        "DK-30" => native_lease::verify(root),
         "DK-21" => browser_application::verify(root),
         "DK-22" => browser_compiler::verify(root),
         "DK-27" => verify_node_suite(
