@@ -28,7 +28,7 @@ public inductive ViewError where
   | UnsupportedSurface
   | IntentMismatch
 
-@[expose] public def magic : ByteArray := ByteArray.mk #[UInt8.ofNat (nat_lit 72), UInt8.ofNat (nat_lit 79), UInt8.ofNat (nat_lit 76), UInt8.ofNat (nat_lit 79), UInt8.ofNat (nat_lit 86), UInt8.ofNat (nat_lit 73), UInt8.ofNat (nat_lit 69), UInt8.ofNat (nat_lit 87)]
+@[expose] public def magic : ByteArray := _root_.ByteArray.mk #[_root_.UInt8.ofNat (nat_lit 72), _root_.UInt8.ofNat (nat_lit 79), _root_.UInt8.ofNat (nat_lit 76), _root_.UInt8.ofNat (nat_lit 79), _root_.UInt8.ofNat (nat_lit 86), _root_.UInt8.ofNat (nat_lit 73), _root_.UInt8.ofNat (nat_lit 69), _root_.UInt8.ofNat (nat_lit 87)]
 
 @[expose] public def bundleVersion : UInt16 := (1 : UInt16)
 

@@ -10,6 +10,13 @@ const {chromium, errors} = require('playwright');
 const sanitizedFailures = new WeakSet();
 const unavailableBodies = new WeakSet();
 const failedBodies = new WeakSet();
+function requestFailureReason(value) {
+  const known = ['net::ERR_ABORTED', 'net::ERR_FAILED', 'net::ERR_CONNECTION_RESET', 'net::ERR_CONNECTION_CLOSED',
+    'net::ERR_CONTENT_LENGTH_MISMATCH', 'net::ERR_INCOMPLETE_CHUNKED_ENCODING', 'net::ERR_INSUFFICIENT_RESOURCES',
+    'net::ERR_TIMED_OUT', 'net::ERR_BLOCKED_BY_CLIENT', 'net::ERR_BLOCKED_BY_RESPONSE'];
+  // Network diagnostics are not a channel for arbitrary browser/response text.
+  return known.includes(value) ? value.slice(5) : value === null ? 'unavailable' : 'other';
+}
 function failureKind(error) {
   if (unavailableBodies.has(error)) return 'response-body-unavailable';
   if (error instanceof errors.TimeoutError) return 'timeout';
@@ -60,6 +67,7 @@ const decode = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
 const view = app.view;
 const cases = [];
 const vectorIndexes = [];
+let activeJourney = 'setup';
 browser = await chromium.launch({headless: true, executablePath: browserExecutable});
 assert.equal(browser.browserType().name(), 'chromium');
 assert.equal(browser.version(), '151.0.7922.34');
@@ -154,10 +162,15 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     record({event: 'main-frame-navigation'});
     rejectNavigation(new assert.AssertionError({message: 'submission must not navigate the main frame'}));
   };
-  const onFailure = request => record({event: 'request-failed', invocation: request === invocation});
+  const onFailure = request => record({event: 'request-failed', invocation: request === invocation,
+    reason: requestFailureReason(request.failure()?.errorText ?? null)});
+  const onFinished = request => {
+    if (request === invocation) record({event: 'request-finished', invocation: true});
+  };
   target.on('request', onRequest);
   target.on('framenavigated', onNavigation);
   target.on('requestfailed', onFailure);
+  target.on('requestfinished', onFinished);
   try {
     await target.waitForFunction(ready);
     phase = 'fill';
@@ -208,17 +221,22 @@ async function submit(vector, target = page, keyboard = false, {fillInputs = tru
     assert.equal(navigated, false, 'submission must not navigate the main frame');
   } catch (error) {
     console.error(JSON.stringify({schema: 'prismpm/browser-submission-diagnostic/1',
+      journey: activeJourney, vectorIndex: app.acceptance_vectors.indexOf(vector),
       phase, check, keyboard, events, invocationCount, navigated, failure: failureKind(error)}));
     throw sanitizedFailure(error, phase);
   } finally {
     target.off('request', onRequest);
     target.off('framenavigated', onNavigation);
     target.off('requestfailed', onFailure);
+    target.off('requestfinished', onFinished);
   }
 }
 async function journey(name, work) {
+  const previousJourney = activeJourney;
+  activeJourney = name;
   try { await work(); }
   catch (error) { throw sanitizedFailure(error, name); }
+  finally { activeJourney = previousJourney; }
   cases.push({name, status: 'passed', attempts: 1});
 }
   await journey('attachment-assets', async () => {
