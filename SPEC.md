@@ -940,10 +940,13 @@ closed; it does not fall back to cold construction.
 The closed `prismpm/exporter-seed/1` manifest binds the registered compiler
 revision/archive, native platform, exact build configuration, complete source,
 toolchain and runtime closure, and every seed path, mode, length and hash.
-Seed construction and PrismPM verification children use the fixed Lean task
-pool setting `LEAN_NUM_THREADS=2`, including nested Lake compiler processes.
-Caller environment overrides cannot change it. This limits compiler contention;
-it is not a replacement for process memory limits or a hard thread-count bound.
+Seed construction and PrismPM verification children receive the fixed Lake
+task-pool setting `LEAN_NUM_THREADS=2`. This environment setting does not bound
+Lean CLI compiler children. Fresh generated-module projects additionally use
+traced `moreLeanArgs = ["-j2"]` for their actual compiler invocations. Caller
+environment overrides cannot change these generated-project settings. These
+controls are not a replacement for process memory limits and do not claim to
+cap every compiler or exporter subprocess's operating-system thread count.
 All generated-module builds, exports, kernel checks and deadlines are retained.
 Seed files are bounded to 4,096 entries, 256 MiB per file and 512 MiB total.
 Root-owned immutable SDK paths are checked before and after bounded copying;

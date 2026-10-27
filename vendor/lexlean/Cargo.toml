@@ -47,6 +47,10 @@ name = "lexlean"
 path = "src/main.rs"
 
 [[test]]
+name = "e2e"
+path = "tests/e2e.rs"
+
+[[test]]
 name = "property"
 path = "tests/property.rs"
 

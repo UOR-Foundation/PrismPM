@@ -717,13 +717,9 @@ pub(crate) fn generate_recorded(
             "application has no generated Lean module",
         ));
     }
-    let lakefile = format!(
-        "name = \"prismpm_application\"\nversion = \"0.1.0\"\n\n[[lean_lib]]\nname = \"PrismGenerated\"\nroots = [{}]\n",
-        modules
-            .iter()
-            .map(|module| serde_json::to_string(module).expect("module serializes"))
-            .collect::<Vec<_>>()
-            .join(", ")
+    let lakefile = crate::lean_project::configuration(
+        "prismpm_application",
+        &modules.iter().cloned().collect::<Vec<_>>(),
     );
     write(&workspace.join("lakefile.toml"), lakefile.as_bytes())?;
     write(

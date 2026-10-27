@@ -96,14 +96,14 @@ excluded by the current text-profile work.
 
 PrismPM 0.3.0 depends on generic Lean 4 compiler improvements authored in `afflom/lean4-prod`
 and tracked upstream in `auser/lean4-prod`. The authoritative dependency specification is
-committed in `model/dependencies.toml` at revision `6272da01ea2045906f5f844988b6265d6c867f39`
+committed in `model/dependencies.toml` at revision `991956fe427bb646498fd0912c89b71be71e7beb`
 for Lean 4.32.1.
 
 Vendored release artifacts and tree manifests are locked to immutable SHA-256 digests:
-- `vendor/lean4-prod/lean.tar`: `ce6c258440eda742df7162bdd4228b2ed4aae5416730cd770a98ecfc4185bf69`
-- `vendor/lean4-prod/rust/MANIFEST.sha256`: `5d10d5fd7a2298a6bcb7484c36f0f91f953a60b4784815227ae7c7cad32e7cf6`
+- `vendor/lean4-prod/lean.tar`: `7a1a716a57040ea2307f7a34e895a75ebdca7438cf9d5d0364007acb594366bf`
+- `vendor/lean4-prod/rust/MANIFEST.sha256`: `15675cbaf5df13a032f29eab947dd34b7fcf9c52f7d9f9f08bed8718d7a01d42`
 - `vendor/lean4-prod/crates/prod-alloc-counter-0.1.0.crate`: `3072374800280030ab1f03db059676f93d7f3d62df431895e32fe8c9eae8229e`
-- `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`: `48d1407dbb7ad7776dd8e2a61ca5620b60b948ace3276c52bf45493730d162e4`
+- `vendor/lean4-prod/crates/prod-codegen-0.1.0.crate`: `6bd6690fef4a453ad58ee8e8ea1378f53a151aeb2c3aa00b092b582fe89e07fc`
 - `vendor/lean4-prod/crates/prod-ir-0.1.0.crate`: `7cffc0251ee01ce97debe304a41a4e28f6be94ba41691fac1993c811919cdc21`
 
 Because `afflom/lean4-prod` has issues disabled, dependency tracking and closure evidence
@@ -203,4 +203,3 @@ The canonical `prismpm/calculator-baseline/1` record is committed at
 (`tests/calculator_baseline.rs`). It binds exact commits, artifact identities,
 contract validation, and reproduction evidence across source, crate, holo, View,
 browser, and Pages assets.
-

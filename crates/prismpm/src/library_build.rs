@@ -241,10 +241,11 @@ pub(crate) fn generate_recorded(
     }
     write(
         &workspace.join("lakefile.toml"),
-        format!(
-            "name = \"prismpm_native_library\"\nversion = \"0.1.0\"\n\n[[lean_lib]]\nname = \"PrismGenerated\"\nroots = [{}]\n",
-            modules.iter().map(|module| serde_json::to_string(module).expect("module string")).collect::<Vec<_>>().join(", ")
-        ).as_bytes(),
+        crate::lean_project::configuration(
+            "prismpm_native_library",
+            &modules.iter().cloned().collect::<Vec<_>>(),
+        )
+        .as_bytes(),
     )?;
     write(
         &workspace.join("lean-toolchain"),

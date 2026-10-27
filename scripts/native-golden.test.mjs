@@ -105,7 +105,7 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
   work.put(architecture === 'arm64' ? 'sdk/golden-development.lock.json' : 'sdk/golden-development-amd64.lock.json', canonical(lock) + '\n');
   const ok = value => ({status: 0, signal: null, stdout: Buffer.isBuffer(value) ? value : Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)), stderr: Buffer.alloc(0)});
   const bad = () => ({...ok(''), status: 1, stderr: Buffer.from('unit-only genuine command failure')});
-  let created, label, generations = 0, seeded = false;
+  let created, label, generations = 0, seeded = false, acquired = false, installed = false;
   const transport = async (command, args, options) => {
     calls.push([command, args]);
     for (const name of ['CARGO_PROFILE_DEV_OPT_LEVEL', 'CARGO_PROFILE_TEST_OPT_LEVEL',
@@ -132,10 +132,19 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
         Config: {Labels: {'org.opencontainers.image.revision': environmentRevision}, Volumes: null}}]);
     }
     if (args[0] === 'create') {
+      assert.equal(created, undefined, 'network acquisition must be destroyed before offline owner creation');
       created = args[args.indexOf('--name') + 1]; label = args[args.indexOf('--label') + 1];
-      assert.equal(args[args.indexOf('--network') + 1], 'none'); assert(args.includes('--pull=never'));
+      const acquisition = created.endsWith('-dependencies');
+      assert.equal(args[args.indexOf('--network') + 1], acquisition ? 'bridge' : 'none'); assert(args.includes('--pull=never'));
+      if (acquisition) {
+        assert(args.includes('--read-only'));
+        assert(args.includes(`type=bind,source=${work.source},target=/workspace,readonly`));
+        assert.equal(args[args.indexOf('--memory') + 1], '2g');
+        assert.equal(args[args.indexOf('--memory-swap') + 1], '2g');
+        assert(args[args.indexOf('--tmpfs') + 1].includes('size=3221225472'));
+      } else assert(acquired, 'acquisition must complete before offline owner');
       assert.equal(args[args.indexOf('--platform') + 1], `linux/${architecture}`);
-      assert(args.includes('CARGO_HOME=/tmp/prismpm-golden-cargo'), 'UID 1001 requires an explicit private Cargo home');
+      assert(args.includes(`CARGO_HOME=${acquisition ? '/tmp/prismpm-golden-fetch/cache' : '/tmp/prismpm-golden-cargo'}`), 'UID 1001 requires an explicit private Cargo home');
       assert.equal(args[args.indexOf('--user') + 1], '1001:1001');
       assert.equal(args.filter(arg => arg.startsWith('CARGO_HOME=')).length, 1);
       assert(!args.includes('--privileged')); assert(!args.some(arg => arg.includes('docker.sock')));
@@ -143,19 +152,42 @@ function fixture(t, fault, store = 'containerd', architecture = 'arm64') {
     }
     if (args[0] === 'start') return ok('started');
     if (args[0] === 'inspect') return ok([{Image: fault === 'wrong-container-image' ? 'sha256:' + 'f'.repeat(64) : store === 'classic' ? config : 'sha256:' + hash(index), Config: {Labels: Object.fromEntries([label.split('=')])}}]);
-    if (args[0] === 'rm') { if (fault === 'cleanup') return bad(); created = undefined; return ok('removed'); }
+    if (args[0] === 'rm') { if (fault === 'cleanup' && !created.endsWith('-dependencies') || fault === 'acquisition-cleanup' && created.endsWith('-dependencies')) return bad(); created = undefined; return ok('removed'); }
     assert.deepEqual(args.slice(0, 2), ['exec', created]);
     if (args[2] === 'node' && args[3] === '-e') return ok({architecture: fault === 'wrong-executable' ? 'riscv64' : nodeArchitecture, os: 'linux', release: 'ID=ubuntu\nVERSION_ID="24.04"\n'});
     if (args[2] === 'node') {
-      assert.deepEqual(args.slice(2), ['node', '/workspace/scripts/native-golden.mjs', 'seed-cache']);
+      const acquisition = created.endsWith('-dependencies');
+      assert.deepEqual(args.slice(2), ['node', '/workspace/scripts/native-golden.mjs', acquisition ? 'seed-download-cache' : 'seed-cache']);
       assert.equal(options.timeout, 120000); assert.equal(options.limit, 16 * 1024 ** 2);
       assert.equal(generations, 0, 'cache preparation precedes every golden command');
+      if (acquisition) return ok({bytes: 128, entries: 2});
       if (fault === 'cache-failure') return bad();
       if (fault === 'cache-signal') return {...ok(''), status: null, signal: 'SIGTERM'};
       if (fault === 'cache-cancel') process.emit('SIGTERM');
       seeded = true; return ok({bytes: 128, entries: 2});
     }
+    if (args[2] === '/usr/bin/python3') {
+      assert.deepEqual(args.slice(2, 5), ['/usr/bin/python3', '-I', '-B']);
+      if (args[5].endsWith('.test.py')) {
+        if (fault === 'python-suite-failure') return bad();
+        return ok({tests: fault === 'python-suite-omission' ? 17 : 18, status: 'passed'});
+      }
+      if (args[6] === 'prepare') {
+        assert(created.endsWith('-dependencies'));
+        assert.equal(options.timeout, 660000);
+        if (fault === 'acquisition-failure') return bad();
+        if (fault === 'acquisition-signal') return {...ok(''), status: null, signal: 'SIGTERM'};
+        if (fault === 'acquisition-cancel') process.emit('SIGTERM');
+        acquired = true; return ok('unit-only preparation');
+      }
+      assert.equal(args[6], 'install'); assert(seeded && acquired, 'unseeded cache cannot accept a supplement');
+      if (fault === 'supplement-corrupt') return bad();
+      installed = true;
+      const preparation = {scope: 'unit-only'};
+      return ok({preparation_sha256: hash(Buffer.from(canonical(preparation))), preparation});
+    }
     assert(seeded, 'golden generation cannot use an unseeded cache');
+    assert(installed, 'golden generation cannot use an unchecked handoff');
     assert.equal(options.timeout, 7200000, 'native generation keeps its two-hour bound');
     assert.deepEqual(args.slice(2), ['cargo', 'run', '--locked', '--offline', '-p', 'xtask', '--', 'check-golden', ...(generations === 0 ? ['--write'] : [])]);
     generations++;
@@ -190,10 +222,11 @@ test('source review executes exact image, both unchanged golden commands and byt
 
 test('failure and missing evidence never become a reviewed or accepted SDK baseline', async t => {
   for (const architecture of ['amd64', 'arm64']) for (const store of ['classic', 'containerd']) for (const fault of ['source-revision', 'dirty-source', 'stale-base', 'stale-artifact', 'wrong-platform', 'wrong-executable', 'wrong-container-image', 'write-failure', 'repeat-failure',
-    'missing-profile', 'repeat-mutation', 'source-changed', 'cleanup']) {
+    'missing-profile', 'repeat-mutation', 'source-changed', 'cleanup', 'acquisition-cleanup']) {
     const f = fixture(t, fault, store, architecture); await assert.rejects(f.run(), undefined, fault);
     assert(!existsSync(join(f.destination, 'review.json')), fault);
-    if (fault !== 'cleanup') assert.equal(f.remaining(), undefined, fault);
+    if (!['cleanup', 'acquisition-cleanup'].includes(fault)) assert.equal(f.remaining(), undefined, fault);
+    if (fault === 'acquisition-cleanup') assert.equal(f.generations(), 0);
     if (fault === 'write-failure') {
       assert.equal(f.generations(), 1); assert(existsSync(join(f.destination, 'generated/build/unit/build-artifact.json')));
     }
@@ -215,7 +248,7 @@ test('native source review rejects unsupported, mismatched and untrusted runner 
 });
 
 test('private cache initialization failure, signal and cancellation stop generation and clean owned resources', async t => {
-  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel']) {
+  for (const fault of ['cache-failure', 'cache-signal', 'cache-cancel', 'acquisition-failure', 'acquisition-signal', 'acquisition-cancel', 'supplement-corrupt', 'python-suite-failure', 'python-suite-omission']) {
     const f = fixture(t, fault); await assert.rejects(f.run());
     assert.equal(f.generations(), 0); assert.equal(f.remaining(), undefined);
     assert(!existsSync(join(f.destination, 'review.json')));

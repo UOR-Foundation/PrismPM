@@ -256,10 +256,14 @@ fn compile_inner(project: &Path) -> Result<Compilation, PrismError> {
             "browser generated Lean does not cover every checked module",
         ));
     }
-    write(&workspace.join("lakefile.toml"), format!(
-        "name = \"prismpm_browser_compiler\"\nversion = \"0.1.0\"\n[[lean_lib]]\nname = \"PrismGenerated\"\nroots = [{}]\n",
-        modules.iter().map(|m| serde_json::to_string(m).expect("module serializes")).collect::<Vec<_>>().join(",")
-    ).as_bytes())?;
+    write(
+        &workspace.join("lakefile.toml"),
+        crate::lean_project::configuration(
+            "prismpm_browser_compiler",
+            &modules.iter().cloned().collect::<Vec<_>>(),
+        )
+        .as_bytes(),
+    )?;
     write(
         &workspace.join("lean-toolchain"),
         b"leanprover/lean4:v4.32.1\n",
