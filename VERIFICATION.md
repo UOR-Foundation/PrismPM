@@ -1,6 +1,80 @@
 # PrismPM falsifiability and verification record
 
-## Conditional native operation lease qualification
+## Early retained-native consistency admission
+
+The source audit now rejects inconsistent retained AMD64/ARM64 records before
+expensive suites. It reuses the later golden composition rules; it neither
+executes native verification nor accepts coherently stale retained trees as
+current-source evidence. Both full V&V passes and all later gates remain.
+The actual removed-call mutant fails at the expected missing-record case.
+Genuine records pass; missing, extra, changed, platform-swapped and shared-byte
+mutants fail. All 32 xtask tests pass in 47.96 seconds; the complete source audit
+passes all 289 tests without skips in 271.27 seconds. Scoped formatting and
+all-target/all-feature Clippy pass. Independent adversarial review is clear.
+
+An earlier local run omitted the Git mount and failed four formatting tests.
+It also exposed copied ignored compiler state in the nested diagnostic fixture.
+That fixture now excludes only root scratch; a deterministic regression retains
+authored lock bytes and nested same-name directories. The actual compiler still
+produces the required PP4002/LLV7010 failure. Neither earlier failure is accepted.
+
+## Generated native lease package integration
+
+The generated package now exports nine pure lease functions, bringing its closed
+API register to 63 entries without changing the 51 validator roots or 597 + 54
+runtime cases. Independent review confirms that removing the nine new function
+and four type blocks leaves the old generated library byte-for-byte unchanged.
+All prior proof policies remain unchanged; the 13 new declarations have empty
+axiom policies. These functions confer no OS authority.
+
+The final expanded DK-30 owner passes in 521.55 seconds, attestation
+`a447fb838cfce1a6e841e7d46ddb8e4e902d7a4ec8b27a013ac53ddbc546b364`.
+It executes all 93 explicit cases against the generated public package in both
+std and no_std, checks all nine ABI signatures, rejects a deliberately wrong
+expected result at runtime, and retains all four actual model mutants. The
+consumer passes with a fixed SDK tool environment, temporary HOME
+and fresh Cargo directories; ambient compiler and loader overrides are excluded.
+Direct verifier tests reject signature and declaration substitutions for every
+one of the 63 exports, in addition to the exact source-register checks.
+
+The genuine package writer binds IR
+`319450103aa7624be1d2b16963204573f9a291f641ed16f278df74431aa15dc1`
+and semantic identity
+`fd0e491bae411108ccdc0225d7a99735695e439ec2ed7b730a09c76a98f0e7cb`.
+Two independently staged Cargo packaging/verification runs produce identical
+archives. The stdlib archive SHA-256 is
+`2ee7180bcfbffad8f1f3ac410d5a0268290414b0430c7f419098017a3b2cf887`;
+both compiler archives remain unchanged. The release seal binds the new archive
+and semantic identity. All 289 source-audit tests pass without skips; model/spec
+registration, scoped formatting and all-target/all-feature Clippy pass. The
+final-verifier golden writer produces 364 files. Its manifest SHA-256 is
+`4126c774b0df49d27e4036a83179a926f8df5b04121e7542b040407e0382c3d2`.
+The earlier writer passed, but its old-binary readback was stopped after the ABI
+fix and is not acceptance. A separate final-verifier golden readback matches all
+364 files; fresh package readback passes against verification manifest
+`cfdbdc2ce49713942918e4218dee3f3367c20fa507330e1746852a6b7247ae6a`.
+All three actual browser-system owners pass in 519.66 seconds, retaining the
+locked external oracle, source-free export and negative checks. Hosted native
+run `37233362723` at `cbbdecc7049e3d12b356cd18cea6b74115587b2e` passes on
+AMD64 and ARM64. Separate reviewers rehash both 364-file compositions, all
+114 roots, 6,815 declaration policies, 231 verification processes, exact source
+and image bindings, and all 28 driver commands per platform. Both genuine
+writer/readback sequences pass; only their six reviewed records are imported,
+without rewriting evidence. The complete 50-test conformance library then passes
+in 34.22 seconds with no skips, including native-profile consistency. Hosted
+V&V and installed-SDK qualification remain required. Component
+evidence does not qualify native effects or complete issue #62.
+
+Hosted V&V `37225580559` at earlier head `9ae4414` passes all 253 Prism library
+tests and all three interoperability tests (78 View cases and four negative
+controls; 1,519.63 seconds). It then rejects stale native records before their
+subsequent import: 49 conformance-library tests pass, one reports a non-exact
+golden tree. Neither full V&V pass is accepted. The current export integration
+likewise rejects its old native records at the exact descriptor/byte boundary;
+the first local diagnostic expected the earlier closure message and is not
+acceptance. Native consistency must pass before launching the next full run.
+
+## Prior conditional native operation lease qualification
 
 The DK-30 owner passes all 93 explicit cases in generated std and no_std Rust,
 with byte-identical regeneration and complete empty-axiom declaration audits.

@@ -33,7 +33,13 @@ completions cannot retire or replace the current lease.
 transitions: the private binding calls either only after it has captured actual
 worker termination and handle cleanup for that exact operation. An admission
 binding is not cleanup evidence. These pure functions cannot authenticate an OS
-fact; exporting them as a raw application API is forbidden. Cleanup uncertainty
+fact. Exporting these pure declarations as mathematical functions grants no
+authority. A host-effect API must not accept caller-produced lane state,
+bindings, timestamps, cancellation flags or cleanup evidence. Its private
+binding owns those inputs, its admitted capability and worker, and retains only
+the generated reducer's returned state. An outer generated `ComputeError` is
+distinct from a modeled `NativeLeaseError` and must fail closed without retiring
+outstanding authority. Cleanup uncertainty
 uses `retainUnknownNativeCleanup`, never an invented terminal receipt. Repeating
 the same read after retirement allocates a new sequence; durable-effect request
 idempotency requires its own modeled journal and is not supplied by this lane.

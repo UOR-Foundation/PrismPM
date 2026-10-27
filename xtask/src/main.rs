@@ -181,6 +181,7 @@ fn validate_all(root: &Path, write: bool) -> Result<(), Fail> {
 }
 
 fn audit_all(root: &Path) -> Result<(), Fail> {
+    audit::audit_retained_native_profiles(root)?;
     command(
         root,
         "node",
@@ -204,6 +205,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "tests/browser-view/compiler-owner.test.mjs",
             "scripts/portable-oracle-matrix.test.mjs",
             "tests/native-lease/corpus.test.mjs",
+            "tests/native-lease/rust-corpus.test.mjs",
             "sdk/exporter-seed.test.mjs",
             "sdk/exporter-qualification.test.mjs",
             "scripts/release-phases.test.mjs",

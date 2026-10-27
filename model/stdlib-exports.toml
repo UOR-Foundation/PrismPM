@@ -258,6 +258,51 @@ rust_name = "checkedSubtractInt64"
 rust_signature = "fn(i64, i64) -> Option<i64>"
 
 [[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.beginNativeLease"
+rust_name = "beginNativeLease"
+rust_signature = "fn(&NativeLane, Vec<u8>, u64, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.cancelNativeLease"
+rust_name = "cancelNativeLease"
+rust_signature = "fn(&NativeLane, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.closeNativeLane"
+rust_name = "closeNativeLane"
+rust_signature = "fn(&NativeLane, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.completeNativeLease"
+rust_name = "completeNativeLease"
+rust_signature = "fn(&NativeLane, &NativeLeaseBinding, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.nativeBindingEqual"
+rust_name = "nativeBindingEqual"
+rust_signature = "fn(&NativeLeaseBinding, &NativeLeaseBinding) -> bool"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.nativeLaneValid"
+rust_name = "nativeLaneValid"
+rust_signature = "fn(&NativeLane) -> Result<bool, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.openNativeLane"
+rust_name = "openNativeLane"
+rust_signature = "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<NativeLane, NativeLeaseError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.retainUnknownNativeCleanup"
+rust_name = "retainUnknownNativeCleanup"
+rust_signature = "fn(&NativeLane, &NativeLeaseBinding, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>"
+
+[[export]]
+lean_name = "PrismPM.Foundation.Native.Application.V1.Lease.retireCancelledNativeLease"
+rust_name = "retireCancelledNativeLease"
+rust_signature = "fn(&NativeLane, &NativeLeaseBinding, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>"
+
+[[export]]
 lean_name = "PrismPM.Foundation.Utf8.decode"
 rust_name = "decode"
 rust_signature = "fn(Vec<u8>) -> Option<String>"

@@ -38,7 +38,7 @@ impl StdlibExports {
         if self.spec != "prismpm/stdlib-exports/1"
             || self.lean_module != "PrismPM.Runtime"
             || self.ir_module != "PrismPM"
-            || self.export.len() != 54
+            || self.export.len() != 63
             || self
                 .export
                 .windows(2)
@@ -51,6 +51,30 @@ impl StdlibExports {
             // The complete export set is closed. Original signatures cannot be
             // waived by deleting or renaming a register row when adding APIs.
             let (module, signature) = match row.rust_name.as_str() {
+                "beginNativeLease" => (
+                    "Native.Application.V1.Lease",
+                    "fn(&NativeLane, Vec<u8>, u64, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>",
+                ),
+                "cancelNativeLease" | "closeNativeLane" => (
+                    "Native.Application.V1.Lease",
+                    "fn(&NativeLane, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>",
+                ),
+                "completeNativeLease" | "retainUnknownNativeCleanup" | "retireCancelledNativeLease" => (
+                    "Native.Application.V1.Lease",
+                    "fn(&NativeLane, &NativeLeaseBinding, u64) -> Result<Result<NativeLane, NativeLeaseError>, ComputeError>",
+                ),
+                "nativeBindingEqual" => (
+                    "Native.Application.V1.Lease",
+                    "fn(&NativeLeaseBinding, &NativeLeaseBinding) -> bool",
+                ),
+                "nativeLaneValid" => (
+                    "Native.Application.V1.Lease",
+                    "fn(&NativeLane) -> Result<bool, ComputeError>",
+                ),
+                "openNativeLane" => (
+                    "Native.Application.V1.Lease",
+                    "fn(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) -> Result<NativeLane, NativeLeaseError>",
+                ),
                 "reduceWorkspaceBytes" => (
                     "Browser.V1.Workspace",
                     "fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>",
@@ -160,6 +184,9 @@ mod tests {
                 missing.check().is_err(),
                 "accepted omitted legacy export {index}"
             );
+            let mut changed = exports.clone();
+            changed.export[index].rust_signature.push(' ');
+            assert!(changed.check().is_err(), "accepted changed ABI {index}");
         }
         for mutation in 0..5 {
             let mut changed = exports.clone();
@@ -182,7 +209,7 @@ mod tests {
         let exports: StdlibExports = toml::from_str(SOURCE).unwrap();
         let runtime = vec!["PrismPM.Foundation.Holo.validateComponentIndexes".to_owned()];
         let union = exports.union_with_runtime(&runtime).unwrap();
-        assert_eq!(union.len(), 55);
+        assert_eq!(union.len(), 64);
         assert_eq!(runtime.len(), 1);
         assert!(union.contains(&runtime[0]));
         let mut document: toml::Value = toml::from_str(SOURCE).unwrap();

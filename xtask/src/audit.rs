@@ -6,6 +6,21 @@ use sha2::Digest;
 use std::collections::BTreeSet;
 use std::path::Path;
 
+/// Reject inconsistent retained native records before expensive execution.
+/// This is source-review consistency, not fresh kernel or native execution.
+pub fn audit_retained_native_profiles(root: &Path) -> Result<(), Fail> {
+    use repo_conformance::golden::{self, platform::Platform};
+    let base = golden::read(&root.join(Platform::DevelopmentAmd64.directory()))?;
+    for platform in [Platform::SdkAmd64, Platform::SdkArm64] {
+        let directory = platform.directory();
+        let records = golden::read(&root.join(directory))
+            .map_err(|error| format!("retained native profile {directory}: {error}"))?;
+        golden::compose_native_records(&base, &records, platform)
+            .map_err(|error| format!("retained native profile {directory}: {error}"))?;
+    }
+    Ok(())
+}
+
 /// Audit that no handwritten .lean or lakefile.lean exists in source paths.
 pub fn audit_no_handwritten_lean(root: &Path) -> Result<(), Fail> {
     let golden_root = root.join("tests/golden/stdlib");
@@ -121,6 +136,89 @@ pub fn audit_no_handwritten_lean(root: &Path) -> Result<(), Fail> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod retained_native_tests {
+    use super::audit_retained_native_profiles;
+    use repo_conformance::golden::platform::Platform;
+
+    #[test]
+    fn retained_native_admission_is_first_and_rejects_each_platform_fault() {
+        let source = repo_model::repo_root();
+        let work = tempfile::tempdir().unwrap();
+        for platform in [
+            Platform::DevelopmentAmd64,
+            Platform::SdkAmd64,
+            Platform::SdkArm64,
+        ] {
+            for (relative, bytes) in crate::tree_files(&source.join(platform.directory())).unwrap()
+            {
+                let path = work.path().join(platform.directory()).join(relative);
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(path, bytes).unwrap();
+            }
+        }
+        audit_retained_native_profiles(work.path()).unwrap();
+        for (platform, other) in [
+            (Platform::SdkAmd64, Platform::SdkArm64),
+            (Platform::SdkArm64, Platform::SdkAmd64),
+        ] {
+            let directory = work.path().join(platform.directory());
+            let original = crate::tree_files(&directory).unwrap();
+            for mutation in ["missing", "extra", "changed", "other-platform"] {
+                let manifest = directory.join("golden-manifest.json");
+                let extra = directory.join("unreviewed.json");
+                match mutation {
+                    "missing" => std::fs::remove_file(&manifest).unwrap(),
+                    "extra" => std::fs::write(&extra, b"{}\n").unwrap(),
+                    "changed" => {
+                        let mut value: serde_json::Value =
+                            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+                        value["schema"] = "unreviewed".into();
+                        std::fs::write(&manifest, serde_json::to_vec(&value).unwrap()).unwrap();
+                    }
+                    "other-platform" => {
+                        for (relative, bytes) in
+                            crate::tree_files(&source.join(other.directory())).unwrap()
+                        {
+                            std::fs::write(directory.join(relative), bytes).unwrap();
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+                // This fixture has no Node suites: if ordering regresses,
+                // their missing-input failure must not masquerade as this audit.
+                let error = crate::audit_all(work.path()).unwrap_err().to_string();
+                assert!(
+                    error.starts_with(&format!(
+                        "retained native profile {}:",
+                        platform.directory()
+                    )),
+                    "{mutation}: {error}"
+                );
+                if extra.exists() {
+                    std::fs::remove_file(extra).unwrap();
+                }
+                for (relative, bytes) in &original {
+                    std::fs::write(directory.join(relative), bytes).unwrap();
+                }
+                audit_retained_native_profiles(work.path()).unwrap();
+            }
+        }
+        let artifact = work
+            .path()
+            .join(Platform::DevelopmentAmd64.directory())
+            .join("build/model.prism.json");
+        let original = std::fs::read(&artifact).unwrap();
+        std::fs::write(&artifact, b"{}\n").unwrap();
+        assert!(crate::audit_all(work.path())
+            .unwrap_err()
+            .to_string()
+            .contains("golden file descriptor differs from its bytes"));
+        std::fs::write(artifact, original).unwrap();
+        audit_retained_native_profiles(work.path()).unwrap();
+    }
 }
 
 /// Audit the generated-Lean-only formal contract at its LexLean source.
