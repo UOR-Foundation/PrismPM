@@ -132,7 +132,7 @@ export function prepare(mutation = null, sourceOnly = false, compilerOwner = nul
     else {
       const driverTarget = createPrivateDriverTarget(work);
       compiler = stageCompiler(work);
-      run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
+      run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3', '--manifest-path', compiler.manifest], work, {CARGO_TARGET_DIR: driverTarget});
       const driver = join(driverTarget, 'debug/browser-operation-journal-driver');
       invokeDriver = args => run(driver, args, repository);
     }

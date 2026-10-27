@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           mkdir -p target/rust-oracle-tools
           git rev-parse HEAD > target/rust-oracle-tools/source.txt
-          docker buildx build --load --progress plain --target rust_oracle_tools \
+          docker buildx build --load --progress plain --target rust_oracle_tools --no-cache-filter rust_oracle_tools \
             --file .devcontainer/Dockerfile --tag prismpm-rust-tools:development . \
             2>&1 | tee target/rust-oracle-tools/development.log
           docker buildx build --load --progress plain --target rust_oracle_tools \
@@ -84,10 +84,16 @@ jobs:
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
           import {readFileSync} from 'node:fs';
-          const lines = readFileSync('target/rust-oracle-tools/sdk.log', 'utf8').split('\n');
-          const steps = lines.map(line => /^(#\d+) \[rust_oracle_tools \d+\/\d+\] RUN cargo install --locked --root \/opt\/prismpm\/rust-oracle-tools /.exec(line)).filter(Boolean);
-          assert.equal(steps.length, 4, 'all four actual tool construction steps required');
-          for (const [_, id] of steps) assert(lines.includes(`${id} CACHED`), `${id} must reuse the preceding exact construction`);
+          for (const [image, cached] of [['development', false], ['sdk', true]]) {
+            const lines = readFileSync(`target/rust-oracle-tools/${image}.log`, 'utf8').split('\n');
+            const steps = lines.map(line => /^(#\d+) \[rust_oracle_tools \d+\/\d+\] RUN cargo install --locked --root \/opt\/prismpm\/rust-oracle-tools /.exec(line)).filter(Boolean);
+            assert.equal(steps.length, 4, 'all four actual tool construction steps required');
+            assert.equal(new Set(steps.map(([, id]) => id)).size, 4, 'construction step identities must be distinct');
+            for (const [_, id] of steps) {
+              assert.equal(lines.includes(`${id} CACHED`), cached, `${image}: ${id} cache state must match fresh construction or within-job reuse`);
+              if (!cached) assert(lines.some(line => line.startsWith(`${id} DONE `)), `${id} must finish fresh construction`);
+            }
+          }
           JS
           docker image inspect prismpm-rust-tools:development prismpm-rust-tools:sdk \
             > target/rust-oracle-tools/images.json

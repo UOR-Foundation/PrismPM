@@ -14,6 +14,8 @@ public import PrismPM.Foundation.View.Text.V1.Model
 public import PrismPM.Foundation.View.Workspace.V1.Corpus
 public import PrismPM.Production.ControlCoverage
 public import PrismPM.Production.ControlCoverageCorpus
+public import PrismPM.Production.PublicationAdmission.LinkageV1Wire
+public import PrismPM.Production.PublicationAdmission.V1Wire
 public import PrismPM.Production.System
 public import PrismPM.Production.SystemValidation
 public import PrismPM.Production.SystemValidationCorpus

@@ -17,10 +17,21 @@ fn error(message: impl Into<String>) -> PrismError {
 }
 
 fn confined_file(root: &Path, path: &str) -> Result<Vec<u8>, PrismError> {
+    confined_file_bounded(root, path, 10_737_418_240)
+}
+
+pub(super) fn confined_file_bounded(
+    root: &Path,
+    path: &str,
+    maximum: u64,
+) -> Result<Vec<u8>, PrismError> {
     use std::io::Read;
     #[cfg(unix)]
     use std::os::unix::fs::MetadataExt;
 
+    if maximum > 10_737_418_240 {
+        return Err(error("verification byte bound cannot be increased"));
+    }
     let same_identity = |left: &std::fs::Metadata, right: &std::fs::Metadata| {
         #[cfg(unix)]
         {
@@ -41,8 +52,7 @@ fn confined_file(root: &Path, path: &str) -> Result<Vec<u8>, PrismError> {
             .map_err(|reason| error(format!("verification file {path}: {reason}")))?;
         if metadata.file_type().is_symlink()
             || (index + 1 < parts.len() && !metadata.is_dir())
-            || (index + 1 == parts.len()
-                && (!metadata.is_file() || metadata.len() > 10_737_418_240))
+            || (index + 1 == parts.len() && (!metadata.is_file() || metadata.len() > maximum))
         {
             return Err(error("verification files must be confined regular files"));
         }
@@ -66,7 +76,7 @@ fn confined_file(root: &Path, path: &str) -> Result<Vec<u8>, PrismError> {
         .metadata()
         .map_err(|reason| error(reason.to_string()))?;
     if !before.is_file()
-        || before.len() > 10_737_418_240
+        || before.len() > maximum
         || !same_identity(&before, &observed.last().expect("nonempty confined path").1)
         || before.len() != observed.last().expect("nonempty confined path").1.len()
     {
@@ -255,6 +265,22 @@ pub(super) struct Retained {
     oracles: BTreeMap<String, Vec<u8>>,
 }
 
+/// Integrity-replayed records, retained from the same reads that were checked.
+/// This private value is not evidence of producer authentication or readiness.
+#[derive(Debug)]
+pub(super) struct Replayed {
+    #[cfg(test)]
+    pub(super) runtime: BTreeMap<String, Vec<u8>>,
+    #[cfg(test)]
+    pub(super) oracles: BTreeMap<String, Vec<u8>>,
+    #[cfg(test)]
+    pub(super) provenance: Value,
+    #[cfg(test)]
+    pub(super) provenance_bytes: Vec<u8>,
+    #[cfg(test)]
+    pub(super) validation_bytes: Vec<u8>,
+}
+
 pub(super) fn read(store: &Store, descriptor: &Descriptor) -> Result<Retained, PrismError> {
     let value = manifest(store, descriptor)?;
     let config: Descriptor = serde_json::from_value(value["config"].clone())
@@ -346,7 +372,7 @@ pub(super) fn validate(
     referrers: &[Descriptor],
     standards_lock: &Value,
     sdk_lock: &Value,
-) -> Result<(), PrismError> {
+) -> Result<Replayed, PrismError> {
     let descriptor = single(referrers, PRISM_VERIFICATION)?;
     let retained = read(store, descriptor)?;
     // Reject inconsistent metadata before replaying the retained proof. The
@@ -357,7 +383,10 @@ pub(super) fn validate(
             "verification configuration does not match the retained build and proof",
         ));
     }
-    let validation = referrer_evidence(store, single(referrers, PRISM_VALIDATION)?)?;
+    let (validation, _validation_bytes) = captured_referrer_evidence(
+        store,
+        &manifest(store, single(referrers, PRISM_VALIDATION)?)?,
+    )?;
     CanonicalDocument::from_value("prismpm/release-validation/1", validation.clone())
         .map_err(|reason| error(reason.to_string()))?;
     if validation["subject"] != root.digest
@@ -375,7 +404,8 @@ pub(super) fn validate(
         standards_lock,
         sdk_lock,
     )?;
-    let provenance = referrer_evidence(store, single(referrers, INTOTO)?)?;
+    let (provenance, _provenance_bytes) =
+        captured_referrer_evidence(store, &manifest(store, single(referrers, INTOTO)?)?)?;
     let subjects = provenance["subject"]
         .as_array()
         .ok_or_else(|| error("provenance subject absent"))?;
@@ -468,7 +498,18 @@ pub(super) fn validate(
             "verification configuration does not match the retained build and proof",
         ));
     }
-    Ok(())
+    Ok(Replayed {
+        #[cfg(test)]
+        runtime: retained.runtime,
+        #[cfg(test)]
+        oracles: retained.oracles,
+        #[cfg(test)]
+        provenance,
+        #[cfg(test)]
+        provenance_bytes: _provenance_bytes,
+        #[cfg(test)]
+        validation_bytes: _validation_bytes,
+    })
 }
 
 fn validate_oracles(

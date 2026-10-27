@@ -13,7 +13,9 @@ mod audit;
 mod codegen;
 mod formatting;
 mod gate_driver;
+mod gate_root;
 mod golden_preflight;
+mod source_copy;
 mod spec_links;
 mod stdlib;
 
@@ -31,12 +33,31 @@ fn diagnostic_failure(error: &prismpm::PrismError) -> Fail {
         .into()
 }
 
+// A source build returns only owned identifiers. Join its temporary worker
+// before verification so the allocator can reuse its arenas for verification,
+// rather than retaining a separate main-thread arena for decoded build graphs.
+fn join_build_worker<T: Send>(build: impl FnOnce() -> T + Send) -> T {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("prismpm-gate-build".to_owned())
+            .stack_size(16 * 1024 * 1024)
+            .spawn_scoped(scope, build)
+            .expect("start private gate build worker")
+            .join()
+            .expect("private gate build worker terminated unexpectedly")
+    })
+}
+
+fn build_on_worker(
+    controller: &prismpm::Controller,
+) -> Result<prismpm::controller::BuildResult, prismpm::PrismError> {
+    join_build_worker(|| controller.build(prismpm::controller::BuildRequest { config_path: None }))
+}
+
 fn build_once(root: &Path) -> Result<&'static prismpm::controller::BuildResult, Fail> {
     BUILD
         .get_or_init(|| {
-            prismpm::Controller::load(root).and_then(|controller| {
-                controller.build(prismpm::controller::BuildRequest { config_path: None })
-            })
+            prismpm::Controller::load(root).and_then(|controller| build_on_worker(&controller))
         })
         .as_ref()
         .map_err(diagnostic_failure)
@@ -53,10 +74,67 @@ fn verify_once(root: &Path) -> Result<&'static prismpm::controller::VerifyResult
         .map_err(diagnostic_failure)
 }
 
+#[cfg(test)]
+mod build_worker_tests {
+    #[test]
+    fn owned_build_worker_finishes_before_results_escape() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        struct Finished<'a>(&'a AtomicBool);
+        impl Drop for Finished<'_> {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let finished = AtomicBool::new(false);
+        let caller = std::thread::current().id();
+        let borrowed = String::from("owned build identifiers");
+        let result = super::join_build_worker(|| {
+            assert_ne!(std::thread::current().id(), caller);
+            let _finished = Finished(&finished);
+            borrowed.clone()
+        });
+        assert!(finished.load(Ordering::SeqCst));
+        assert_eq!(result, borrowed);
+    }
+
+    #[test]
+    fn owned_build_worker_preserves_structured_failures() {
+        let error = prismpm::PrismError::new("PP5007", "original build refusal");
+        let result = super::join_build_worker(|| Err::<(), _>(error.clone()));
+        assert_eq!(result.unwrap_err(), error);
+    }
+
+    #[test]
+    fn owned_build_worker_panics_cannot_initialize_success_cache() {
+        let cache = std::sync::OnceLock::<Result<(), prismpm::PrismError>>::new();
+        assert!(std::panic::catch_unwind(|| {
+            cache.get_or_init(|| super::join_build_worker(|| panic!("infrastructure failure")));
+        })
+        .is_err());
+        assert!(cache.get().is_none());
+    }
+}
+
 fn main() -> ExitCode {
     let task = std::env::args().nth(1).unwrap_or_else(|| "help".to_owned());
     let write = std::env::args().any(|arg| arg == "--write");
-    let root = repo_model::repo_root();
+    let root = match std::env::current_dir()
+        .map_err(|error| error.to_string())
+        .and_then(|invocation| {
+            gate_root::checked_root(
+                &repo_model::repo_root(),
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .expect("xtask is directly beneath the repository root"),
+                &invocation,
+            )
+        }) {
+        Ok(root) => root,
+        Err(error) => {
+            eprintln!("gate failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     let result = match task.as_str() {
         "validate-model" => codegen::check_model(&root, write),
@@ -151,7 +229,18 @@ fn run_conformance(root: &Path, args: &[String]) -> Result<(), Fail> {
 
     println!("Running conformance suite: {category}");
     command(root, "cargo", &cargo_args)?;
+    if matches!(category, "all" | "desktop-browser") {
+        verify_standalone_browser_owners(root)?;
+    }
     Ok(())
+}
+
+fn verify_standalone_browser_owners(root: &Path) -> Result<(), Fail> {
+    command(
+        root,
+        "node",
+        &["scripts/browser-api-sdk-check.mjs", "standalone"],
+    )
 }
 
 fn run_unit_tests(root: &Path) -> Result<(), Fail> {
@@ -193,6 +282,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/hologram-source-pins.test.mjs",
             "scripts/fetch-oracle-cargo.test.mjs",
             "scripts/browser-api-sdk-check.test.mjs",
+            "scripts/product-sdk-check.test.mjs",
             "scripts/library-sdk-check.test.mjs",
             "scripts/library-sdk-check-shell.test.mjs",
             "scripts/installed-exporter-concurrency.test.mjs",
@@ -202,22 +292,39 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/sdk-image-inputs.test.mjs",
             "scripts/sdk-construction-workflow.test.mjs",
             "scripts/sdk-construction-record.test.mjs",
+            "scripts/sdk-construction-handoff.test.mjs",
+            "scripts/sdk-construction-archive.test.mjs",
+            "scripts/sdk-construction-stage.test.mjs",
+            "scripts/sdk-construction-metadata.test.mjs",
+            "scripts/sdk-construction-provider.test.mjs",
+            "scripts/sdk-construction-acquire.test.mjs",
+            "scripts/sdk-construction-observe.test.mjs",
+            "scripts/sdk-construction-acquisition-workflow.test.mjs",
             "scripts/sdk-vv-check.test.mjs",
+            "scripts/sdk-command-owner.test.mjs",
+            "scripts/sdk-registry-reader.test.mjs",
+            "scripts/sdk-registry-qualification.test.mjs",
             "scripts/native-golden.test.mjs",
             "scripts/browser-prerequisites.test.mjs",
             "scripts/browser-environment-preflight.test.mjs",
+            "scripts/browser-engine-input.test.mjs",
+            "scripts/chromium-interop-reader.test.mjs",
             "scripts/rust-oracle-tools-inputs.test.mjs",
             "scripts/qualify-debian-browser-inputs.test.mjs",
             "scripts/compiler-driver-cache.test.mjs",
             "scripts/compiler-phase-observation.test.mjs",
+            "scripts/compiler-phase-transport.test.mjs",
             "tests/browser-view/compiler-artifact.test.mjs",
             "tests/browser-view/generated-package.test.mjs",
             "tests/browser-view/file-custody.test.mjs",
+            "tests/browser-view/workspace-products.test.mjs",
+            "tests/browser-session-payloads/transcript-retention.test.mjs",
             "tests/browser-view/generated-wasm.test.mjs",
             "tests/browser-presentation/provenance.test.mjs",
             "tests/browser-presentation/replay.test.mjs",
             "tests/browser-view/compiler-artifact-mutations.test.mjs",
             "tests/browser-view/compiler-owner.test.mjs",
+            "tests/browser-view/compiler-component-binding.test.mjs",
             "tests/browser-view/compiler-runtime.test.mjs",
             "tests/browser-view/compiler-runtime-mutations.test.mjs",
             "scripts/portable-oracle-matrix.test.mjs",
@@ -225,12 +332,15 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "tests/native-lease/rust-corpus.test.mjs",
             "sdk/exporter-seed.test.mjs",
             "sdk/exporter-qualification.test.mjs",
+            "tests/browser-view/generated-wasm-mutations.test.mjs",
+            "tests/browser-session-journal/wasm-artifact-checks.test.mjs",
             "scripts/release-phases.test.mjs",
             "scripts/sdk-release-evidence.test.mjs",
             "scripts/release-gate-evidence.test.mjs",
             "scripts/refresh-osv.test.mjs",
             "scripts/qualify-osv.test.mjs",
             "scripts/ci-observe.test.mjs",
+            "scripts/ci-capacity.test.mjs",
             "scripts/vv-sdk-session.test.mjs",
             "sdk/bootstrap/runner.test.mjs",
         ],
@@ -620,6 +730,10 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
             "--offline",
         ],
     )?;
+
+    // Separate original standalone pairs are not implied by registered DK
+    // execution or by including their source files in an SDK inventory.
+    verify_standalone_browser_owners(root)?;
 
     println!("VV gate 7/15: feature, conformance, and negative fixtures");
     check_fixtures(root, false)?;
@@ -1613,22 +1727,7 @@ fn release_check(root: &Path) -> Result<(), Fail> {
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<(), std::io::Error> {
-    if !from.exists() {
-        return Ok(());
-    }
-    for entry in walkdir::WalkDir::new(from).into_iter().flatten() {
-        let rel = entry.path().strip_prefix(from).unwrap();
-        let target = to.join(rel);
-        if entry.file_type().is_dir() {
-            std::fs::create_dir_all(&target)?;
-        } else if entry.file_type().is_file() {
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
+    source_copy::copy_tree(from, to)
 }
 
 #[cfg(test)]

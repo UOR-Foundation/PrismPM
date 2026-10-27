@@ -89,11 +89,11 @@ async function loadArtifact(binding, expectedDigest) {
     controller = new Controller();
     timer = setTimeout(() => controller.abort(), ARTIFACT_DEADLINE);
     const response = await apply(fetchArtifact, globalThis, [artifactURL, {
-      method: 'GET', credentials: 'omit', mode: 'same-origin', redirect: 'error',
+      method: 'GET', credentials: 'omit', mode: 'same-origin', redirect: 'manual',
       cache: 'no-store', signal: controller.signal,
     }]);
     reader = response.body?.getReader();
-    if (response.status !== 200 || response.redirected || response.url !== artifactURL
+    if (response.status !== 200 || response.type !== 'basic' || response.redirected || response.url !== artifactURL
       || !reader) throw fail('artifact-mismatch');
     const wire = new Uint8Array(binding.wasm_bytes);
     let offset = 0;

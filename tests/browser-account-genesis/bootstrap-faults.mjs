@@ -62,10 +62,21 @@ export async function verifyBootstrapFaults(build, engine, foreignArtifact) {
             'binding-size', 'binding-digest', 'binding-extra', 'cancel-reject', 'cancel-pending']) {
             mode = selected;
             pending = new Promise(resolve => {resolvePending = resolve;});
-            const page = await context.newPage(), errors = [];
-            page.on('pageerror', error => errors.push(error.name));
+            const page = await context.newPage(), errors = [], events = [];
+            let phase = 'navigation';
+            const event = value => {
+              assert(events.length < 64, 'bounded complete bootstrap event ledger');
+              events.push({phase, ...value});
+            };
+            page.on('pageerror', error => {
+              const value = {kind: 'pageerror', name: error.name, message: error.message};
+              errors.push(value); event(value);
+            });
+            page.on('response', response => event({kind: 'response', path: new URL(response.url()).pathname, status: response.status()}));
+            page.on('requestfailed', request => event({kind: 'requestfailed', path: new URL(request.url()).pathname, error: request.failure()?.errorText}));
             try {
               await page.goto(baseURL);
+              phase = 'bootstrap-setup';
               const started = performance.now();
               await page.evaluate(selected => {
                 const compile = WebAssembly.compile, actual = [];
@@ -92,6 +103,7 @@ export async function verifyBootstrapFaults(build, engine, foreignArtifact) {
               await page.addScriptTag({type: 'module', content:
                 "import {openAccountGenesis} from './account-genesis.mjs'; globalThis.accountArtifactFactory=openAccountGenesis;"});
               await page.waitForFunction(() => globalThis.accountArtifactFactory !== undefined);
+              phase = 'artifact-acquisition';
               const observed = await page.evaluate(async () => {
                 const actual = globalThis.accountArtifactCompilations;
                 try {
@@ -120,7 +132,10 @@ export async function verifyBootstrapFaults(build, engine, foreignArtifact) {
                   'unsettled cancellation cannot keep a refusal pending indefinitely');
               }
               results.push({mode: selected, ...observed, elapsed_ms: Math.round(elapsed)});
-            } finally {await page.close();}
+            } finally {
+              console.log(JSON.stringify({scope: 'bootstrap-transport-diagnostic-not-acceptance', engine, mode: selected, phase, events}));
+              await page.close();
+            }
           }
           assert.deepEqual(requests, results.filter(row => !row.mode.startsWith('binding-')).map(row => row.mode),
             'one actual fixed-URL request per acquisition; malformed bindings refuse before fetching and redirects never follow');

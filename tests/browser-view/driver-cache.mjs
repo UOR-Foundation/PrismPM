@@ -7,13 +7,21 @@ import {basename, dirname, join} from 'node:path';
 import {repository, run, sha} from './compile.mjs';
 
 const owners = Object.freeze({
+  'holo-primary-component': {directory:'holo-primary-component', executable:'holo-primary-component-driver'},
+  'session-retention': {directory:'browser-session-journal-retention', executable:'browser-session-journal-retention-driver'},
+  'session-payloads': {directory:'browser-session-payloads', executable:'browser-session-payloads-driver'},
   publication: {directory:'publication-admission', executable:'publication-admission-driver'},
   budget: {directory:'browser-budget', executable:'browser-budget-driver'},
   session: {directory:'browser-session', executable:'browser-session-driver'},
+  'session-journal': {directory:'browser-session-journal', executable:'browser-session-journal-driver'},
+  'session-recovery-frames': {directory:'browser-session-recovery-frames', executable:'browser-session-recovery-frames-driver'},
+  'session-journal-recovery': {directory:'browser-session-journal-recovery', executable:'browser-session-journal-recovery-driver'},
   effects: {directory:'browser-effects', executable:'browser-effects-driver'},
   custody: {directory:'browser-custody', executable:'browser-custody-driver'},
   'operation-journal': {directory:'browser-operation-journal', executable:'browser-operation-journal-driver'},
   presentation: {directory:'browser-presentation', executable:'browser-presentation-driver'},
+  'semantic-presentation': {directory:'browser-semantic-presentation', executable:'browser-semantic-presentation-driver'},
+  'dynamic-choice': {directory:'browser-dynamic-choice', executable:'browser-dynamic-choice-driver'},
   view: {repositoryManifest:'tests/browser-view/driver/Cargo.toml', executable:'browser-workspace-view-driver'},
   journal: {repositoryManifest:'tests/browser-journal/driver/Cargo.toml', executable:'browser-workspace-journal-driver'},
   query: {repositoryManifest:'tests/browser-query/driver/Cargo.toml', executable:'browser-workspace-query-driver'},

@@ -62,6 +62,17 @@ on failure. Cleanup checks the owned workspace identity and moves it into a
 fresh private retirement directory. It is trusted-host housekeeping, not a
 security guarantee against a hostile process with the same host UID.
 
+Completed builds now retain a bounded, independent copy of the entire actual
+workspace before genuine deletion, including kernel outputs, native/Wasm
+artifacts, packages and build products. Copies never authorize execution.
+Fresh descriptor/hash checks follow compiler cleanup and actual deletion;
+the owner requires the baseline plus all21 mutant snapshots and joins their
+manifest, provenance, IR, package and executable identities to live evidence.
+Limits are512MiB/file,8GiB/owner,200,000 entries,32 snapshots,64 levels,
+32MiB metadata and96MiB/manifest, with a one-GiB filesystem reserve.
+Directory-FD anchored writes refuse substituted ancestors. Full current-head
+DK-26 execution remains mandatory; helper unit tests are not owner acceptance.
+
 ## Complete generated-owner checkpoint — 6 October 2026
 
 Both complete owners executed at frozen revision

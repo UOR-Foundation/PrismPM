@@ -70,6 +70,16 @@ fn phase_summary(stdout: &[u8]) -> Option<PhaseSummary> {
     Some(summary)
 }
 
+fn write_diagnostic(writer: &mut impl std::io::Write, prefix: &str, record: &serde_json::Value) {
+    // Formatting JSON directly into stderr performs many tiny writes. Build
+    // each bounded line first so the transport receives one complete record.
+    // A short write is completed by write_all; failure remains diagnostic loss.
+    let line = format!("{prefix}{record}\n");
+    if line.len() <= 4096 {
+        let _ = writer.write_all(line.as_bytes());
+    }
+}
+
 fn failure_diagnostics(id: &str, reason: &str, stdout: &[u8], stderr: &[u8]) -> Vec<u8> {
     use std::io::Write;
     let mut bytes = Vec::new();
@@ -223,6 +233,28 @@ fn file_completions(stdout: &str, files: &[PathBuf], total: usize) {
 }
 
 pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize, timeout: &str) {
+    verify_inner(root, id, files, minimum_tests, timeout, None);
+}
+
+pub(super) fn verify_exact(root: &Path, id: &str, files: &[(&str, usize)], timeout: &str) {
+    let paths = files.iter().map(|(path, _)| *path).collect::<Vec<_>>();
+    let counts = files.iter().map(|(_, count)| *count).collect::<Vec<_>>();
+    assert!(counts.iter().all(|count| *count > 0));
+    let total = counts
+        .iter()
+        .try_fold(0usize, |sum, count| sum.checked_add(*count))
+        .expect("bounded exact owning test inventory");
+    verify_inner(root, id, &paths, total, timeout, Some(&counts));
+}
+
+fn verify_inner(
+    root: &Path,
+    id: &str,
+    files: &[&str],
+    minimum_tests: usize,
+    timeout: &str,
+    exact: Option<&[usize]>,
+) {
     // Validate all selected paths before dispatch. The installed SDK separately
     // binds immutable source bytes; this preflight is not a filesystem race lock.
     let selected = selected_files(root, files);
@@ -274,6 +306,29 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
         }
         let tests = count("tests");
         file_completions(stdout, &selected, tests);
+        if let Some(expected) = exact {
+            assert_eq!(
+                tests, minimum_tests,
+                "{id}: exact complete owning test inventory"
+            );
+            let rows = stdout
+                .lines()
+                .filter_map(|line| line.strip_prefix(FILE_PREFIX))
+                .map(|line| serde_json::from_str::<FileCompletion>(line).unwrap())
+                .collect::<Vec<_>>();
+            for (path, expected) in selected.iter().zip(expected) {
+                let row = rows
+                    .iter()
+                    .find(|row| Path::new(&row.file) == path)
+                    .unwrap();
+                assert_eq!(
+                    row.tests,
+                    *expected as u64,
+                    "{id}: exact tests in {}",
+                    path.display()
+                );
+            }
+        }
         tests
     });
     let tests = match validation {
@@ -311,17 +366,161 @@ pub(super) fn verify(root: &Path, id: &str, files: &[&str], minimum_tests: usize
     let mut stderr = std::io::stderr().lock();
     if let Some(phases) = phase_summary(&output.stdout) {
         let record = serde_json::json!({"scope":phases.scope,"owner":id,"phases":phases.phases});
-        let _ = writeln!(stderr, "# prismpm-compiler-phase-diagnostic {record}");
+        write_diagnostic(&mut stderr, "# prismpm-compiler-phase-diagnostic ", &record);
     }
     // A broken diagnostic pipe cannot replace a successful owning result.
-    let _ = writeln!(stderr, "# prismpm-node-owner-diagnostic {diagnostic}");
+    write_diagnostic(&mut stderr, "# prismpm-node-owner-diagnostic ", &diagnostic);
     let _ = stderr.flush();
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{file_completions, selected_files, verify, FileCompletion, FILE_PREFIX};
+    use super::{
+        file_completions, selected_files, verify, verify_exact, FileCompletion, FILE_PREFIX,
+    };
     use std::path::PathBuf;
+
+    #[test]
+    fn complete_diagnostics_are_formatted_before_the_transport_write() {
+        #[derive(Default)]
+        struct Transport {
+            writes: Vec<Vec<u8>>,
+            maximum: Option<usize>,
+        }
+        impl std::io::Write for Transport {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                let count = self.maximum.unwrap_or(bytes.len()).min(bytes.len());
+                self.writes.push(bytes[..count].to_vec());
+                Ok(count)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let record = serde_json::json!({"owner":"DK-16",
+            "scope":"compiler-phase-diagnostic-not-acceptance",
+            "phases":[{"calls":3,"elapsed_ms":123456,"failures":0,"phase":"rust-compilation"}]});
+        let prefix = "# prismpm-compiler-phase-diagnostic ";
+        let expected = format!("{prefix}{record}\n").into_bytes();
+        let mut transport = Transport::default();
+        super::write_diagnostic(&mut transport, prefix, &record);
+        assert_eq!(transport.writes, std::slice::from_ref(&expected));
+        let mut short = Transport {
+            maximum: Some(7),
+            ..Transport::default()
+        };
+        super::write_diagnostic(&mut short, prefix, &record);
+        assert_eq!(short.writes.concat(), expected);
+    }
+
+    #[test]
+    fn unavailable_or_oversized_diagnostics_do_not_become_acceptance_failures() {
+        struct Unavailable;
+        impl std::io::Write for Unavailable {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        super::write_diagnostic(
+            &mut Unavailable,
+            "# diagnostic ",
+            &serde_json::json!({"tests":1}),
+        );
+        let mut captured = Vec::new();
+        super::write_diagnostic(
+            &mut captured,
+            "# diagnostic ",
+            &serde_json::json!("x".repeat(4096)),
+        );
+        assert!(
+            captured.is_empty(),
+            "oversized diagnostic is omitted, never truncated"
+        );
+        super::write_diagnostic(
+            &mut captured,
+            "# diagnostic ",
+            &serde_json::json!("😀".repeat(1024)),
+        );
+        assert!(captured.is_empty(), "the bound counts UTF-8 bytes");
+    }
+
+    #[test]
+    fn complete_json_records_survive_competing_stdout_and_stderr_writers() {
+        use std::io::{Read, Seek, SeekFrom, Write};
+        const CHILD: &str = "PRISMPM_DIAGNOSTIC_TRANSPORT_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            // Finish libtest's unterminated progress prefix before the fixture.
+            std::io::stdout().lock().write_all(b"\n").unwrap();
+            std::thread::scope(|scope| {
+                for owner in ["DK-16", "DK-23"] {
+                    scope.spawn(move || {
+                        for index in 0..128 {
+                            let phases = [
+                                "archive-extraction", "artifact-cleanup", "exporter-construction",
+                                "generated-module-build", "kernel-export", "lake-update",
+                                "lexlean-verification", "native-code-generation", "rust-compilation",
+                                "toolchain-check", "unclassified-execution", "wasm-code-generation",
+                            ].map(|phase| serde_json::json!({"phase":phase,"calls":100,
+                                "failures":0,"elapsed_ms":123456}));
+                            let record = serde_json::json!({"owner":owner,"index":index,
+                                "scope":"compiler-phase-diagnostic-not-acceptance","phases":phases});
+                            super::write_diagnostic(
+                                &mut std::io::stderr().lock(),
+                                "# prismpm-compiler-phase-diagnostic ",
+                                &record,
+                            );
+                        }
+                    });
+                }
+                scope.spawn(|| {
+                    for index in 0..256 {
+                        let line = format!("competing stdout {index}\n");
+                        std::io::stdout().lock().write_all(line.as_bytes()).unwrap();
+                    }
+                });
+            });
+            return;
+        }
+        let mut combined = tempfile::tempfile().unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "cases::node_suite::tests::complete_json_records_survive_competing_stdout_and_stderr_writers",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1")
+            // Both descriptors share one open-file offset. This exercises
+            // genuinely combined transport, not separately captured pipes.
+            .stdout(combined.try_clone().unwrap())
+            .stderr(combined.try_clone().unwrap())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        combined.seek(SeekFrom::Start(0)).unwrap();
+        let mut transcript = String::new();
+        combined.read_to_string(&mut transcript).unwrap();
+        let mut seen = std::collections::BTreeSet::new();
+        for line in transcript
+            .lines()
+            .filter(|line| line.starts_with("# prismpm-compiler-phase-diagnostic "))
+        {
+            assert!(line.len() < 4096);
+            let json = line
+                .strip_prefix("# prismpm-compiler-phase-diagnostic ")
+                .unwrap();
+            let value: serde_json::Value = serde_json::from_str(json).unwrap();
+            assert_eq!(value["phases"].as_array().unwrap().len(), 12);
+            assert!(seen.insert((
+                value["owner"].as_str().unwrap().to_owned(),
+                value["index"].as_u64().unwrap()
+            )));
+        }
+        assert_eq!(seen.len(), 256);
+        assert_eq!(transcript.matches("competing stdout ").count(), 256);
+    }
 
     #[test]
     fn compiler_phase_diagnostics_are_closed_bounded_and_not_acceptance() {
@@ -649,5 +848,45 @@ mod tests {
             std::panic::catch_unwind(|| verify(root.path(), "test", &["test.mjs"], 1, "5000"))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn exact_owner_inventory_rejects_an_actual_removed_capture_test() {
+        let root = tempfile::tempdir().unwrap();
+        let capture = "await t.test('actual capture',()=>{});";
+        let witnesses = "await t.test('semantic witnesses',()=>{});";
+        let owner = format!("import{{test}}from'node:test';test('owner',async t=>{{await t.test('component',()=>{{}});{witnesses}{capture}}});");
+        let path = root.path().join("owner.mjs");
+        std::fs::write(&path, &owner).unwrap();
+        std::fs::write(
+            root.path().join("guards.mjs"),
+            "import{test}from'node:test';test('guard one',()=>{});test('guard two',()=>{});",
+        )
+        .unwrap();
+        let files = [("owner.mjs", 4), ("guards.mjs", 2)];
+        verify_exact(root.path(), "exact-owner-fixture", &files, "5000");
+        for changed in [
+            owner.replace(capture, ""),
+            owner.replace(witnesses, ""),
+            format!("{owner}\ntest('extra test',()=>{{}});"),
+        ] {
+            std::fs::write(&path, changed).unwrap();
+            let refusal = std::panic::catch_unwind(|| {
+                verify_exact(root.path(), "exact-owner-fixture", &files, "5000")
+            });
+            std::fs::write(&path, &owner).unwrap();
+            let error = refusal.expect_err("removed/extra actual test must fail exact owning gate");
+            let text = error
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| error.downcast_ref::<&str>().copied())
+                .unwrap_or("");
+            assert!(
+                text.contains("incomplete test suite")
+                    || text.contains("exact complete owning test inventory"),
+                "{text}"
+            );
+            verify_exact(root.path(), "exact-owner-fixture", &files, "5000");
+        }
     }
 }

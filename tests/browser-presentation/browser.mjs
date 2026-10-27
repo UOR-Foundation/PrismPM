@@ -7,7 +7,8 @@ import {withBrowser} from '../../sdk/browser/browser-test-server.mjs';
 import {maximumCases} from './maximum-fixtures.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '../..');
-const names = ['presentation-dom.mjs', 'presentation-wire.mjs', 'browser-fixture.mjs', 'maximum-fixtures.mjs'];
+const names = ['presentation-dom.mjs', 'presentation-wire.mjs', 'semantic-presentation-wire.mjs',
+  'semantic-presentation-style.mjs', 'browser-fixture.mjs', 'maximum-fixtures.mjs'];
 const path = name => join(['browser-fixture.mjs', 'maximum-fixtures.mjs'].includes(name) ? here : join(root, 'sdk/browser'), name);
 const sha = value => createHash('sha256').update(value).digest('hex');
 const closure = () => Object.fromEntries([...names.map(name => [name, path(name)]),

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
-import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync,writeSync} from 'node:fs';
+import {copyFileSync,lstatSync,mkdirSync,mkdtempSync,readdirSync,readFileSync,realpathSync,writeFileSync,writeSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {retireCompletedCompilerCaches} from './driver-cache.mjs';
 import {requireCompilerOwner} from './compiler-owner.mjs';
+import {isCapturedCompilerDriver} from './compiler-artifact.mjs';
 export const draft=dirname(fileURLToPath(import.meta.url));
 export const repository=resolve(draft,'../..');
 export const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -91,7 +92,20 @@ function terminateOwnedGroup(pid) {
   signal('SIGKILL');
 }
 // Diagnostics only: no command, argument, path, payload or environment is logged.
-export function compilerPhase(program,args) {
+const compilerDriverNames = new Set([
+  'browser-account-genesis-driver', 'browser-budget-driver', 'browser-custody-driver',
+  'browser-dynamic-choice-driver', 'browser-effects-driver', 'browser-operation-journal-driver',
+  'browser-p256-driver', 'browser-pkce-driver', 'browser-presentation-driver',
+  'browser-semantic-presentation-driver', 'browser-session-driver', 'browser-session-journal-driver',
+  'browser-session-journal-recovery-driver', 'browser-session-journal-retention-driver',
+  'browser-session-operation-driver', 'browser-session-payloads-driver',
+  'browser-session-recovery-frames-driver', 'browser-signed-context-driver',
+  'browser-workspace-command-driver', 'browser-workspace-envelope-driver',
+  'browser-workspace-journal-driver', 'browser-workspace-model-driver',
+  'browser-workspace-query-driver', 'browser-workspace-view-driver',
+  'holo-primary-component-driver', 'publication-admission-driver', 'publication-context-linkage-driver',
+]);
+export function compilerPhase(program,args,artifact) {
   if (['cargo','rustc','lean','lake'].includes(program) && args[0]?.startsWith('--version')) return 'toolchain-check';
   if (program === 'tar') return 'archive-extraction';
   if (['cargo','lake'].includes(program) && args[0] === 'clean') return 'artifact-cleanup';
@@ -102,17 +116,50 @@ export function compilerPhase(program,args) {
     return 'unclassified-execution';
   }
   if (program.endsWith('/prod-export')) return 'kernel-export';
-  // The actual compiler artifact has this owner-created private basename.
-  // Never interpret arbitrary generated applications' payload as a tool mode.
-  if (program.endsWith('/driver-execution')) {
+  // Raw registered compiler paths and actual privately captured driver owners
+  // are diagnostic sources. A generic basename alone is not an owner receipt.
+  const raw = /\/driver-target\/debug\/([^/]+)$/.exec(program);
+  if ((raw && compilerDriverNames.has(raw[1])) || isCapturedCompilerDriver(artifact,program)) {
     if (['verify','check'].includes(args[0])) return 'lexlean-verification';
     if (['native','generate'].includes(args[0])) return 'native-code-generation';
     if (['wasm','generate-wasm','fixture','size','p256','point','pkce','labels','intent','secret','route','sink',
-      'maxroute','maxsink','maxfield','maxsecret','progress','maxprogress'].includes(args[0])) return 'wasm-code-generation';
+      'maxroute','maxsink','maxfield','maxsecret','progress','maxprogress','guest','journal','partition',
+      'generate-journal-wasm','generate-probe-wasm','predecessor','session','observation','descriptor',
+      'reservation','retention','layout','tail','parity','context','recovery','metadata','signed-context',
+      'account-genesis','context-fields-wasm','admission-wasm','wire','semantic','designs','predicates',
+      'catalogue'].includes(args[0])) return 'wasm-code-generation';
   }
   return 'unclassified-execution';
 }
-function execute(program,args,cwd,env={}) {
+export function observeCompilerPhase(program,args,started,success,artifact) {
+  // Diagnostic loss cannot change the actual compiler or test outcome.
+  try {
+    const record=Buffer.from('# prismpm-compiler-phase ' + JSON.stringify({
+      phase:compilerPhase(program,args,artifact),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n');
+    if(record.length>256)return;
+    // Pipes may briefly reject a write even while their reader is active.
+    // Account for byte progress and yield on transient backpressure, with
+    // fixed attempt/time bounds; never wait indefinitely for diagnostics.
+    const deadline=performance.now()+100;
+    let offset=0,wait=null;
+    for(let attempt=0;attempt<64&&offset<record.length;attempt++) {
+      if(performance.now()>=deadline)return;
+      try {
+        const written=writeSync(2,record,offset,record.length-offset);
+        if(!Number.isSafeInteger(written)||written<=0||written>record.length-offset)return;
+        offset+=written;
+      } catch(error) {
+        if(!['EINTR','EAGAIN','EWOULDBLOCK'].includes(error?.code))return;
+        if(error.code!=='EINTR') {
+          wait??=new Int32Array(new SharedArrayBuffer(4));
+          Atomics.wait(wait,0,0,1);
+        }
+      }
+    }
+  }
+  catch { /* No acceptance depends on this optional observation. */ }
+}
+function execute(program,args,cwd,env={},artifact) {
   const childEnvironment = compilerEnvironment(env);
   const tools = {cargo:'/usr/local/cargo/bin/cargo',rustc:'/usr/local/cargo/bin/rustc',
     lean:'/usr/local/elan/bin/lean',lake:'/usr/local/elan/bin/lake',node:process.execPath,tar:'/usr/bin/tar'};
@@ -132,10 +179,7 @@ function execute(program,args,cwd,env={}) {
     assert.equal(result.status,0,program+' '+args.join(' ')+'\n'+result.stdout+'\n'+result.stderr);
     success = true; return result.stdout;
   } finally {
-    // A closed diagnostic stream cannot change the actual compiler outcome.
-    try { writeSync(2,'# prismpm-compiler-phase ' + JSON.stringify({
-      phase:compilerPhase(program,args),elapsed_ms:Math.ceil(performance.now()-started),success}) + '\n'); }
-    catch { /* Diagnostic loss is not acceptance or a replacement failure. */ }
+    observeCompilerPhase(program,args,started,success,artifact);
   }
 }
 export function verifyCompilerTools() {
@@ -162,11 +206,42 @@ export function verifyCompilerTools() {
 }
 
 let compilerToolsVerified = false;
-export function run(program,args,cwd,env={}) {
+export function run(program,args,cwd,env={},artifact) {
   // Refuse overrides before even the tool-version subprocesses are executed.
   compilerEnvironment(env);
   if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
-  return execute(program,args,cwd,env);
+  return execute(program,args,cwd,env,artifact);
+}
+
+// Closed long-running owner: a fresh source-built Rust test performs actual
+// application compilation, external oracle execution and source-free OCI replay.
+// This is not a general timeout or environment override for compiler commands.
+export function runPublicationCapture(executable, cwd, output) {
+  const environment = compilerEnvironment({});
+  if (!compilerToolsVerified) { verifyCompilerTools(); compilerToolsVerified = true; }
+  assert.equal(realpathSync(cwd), cwd, 'unaliased private capture owner');
+  const owner = lstatSync(cwd);
+  assert.ok(owner.isDirectory() && owner.uid === process.getuid() && (owner.mode & 0o077) === 0);
+  assert.equal(executable, join(cwd, 'publication-capture-execution'), 'exact private capture executable');
+  assert.equal(output, join(cwd, 'capture'), 'exact private capture output');
+  assert.equal(realpathSync(output), output, 'unaliased capture output');
+  const target = lstatSync(output);
+  assert.ok(target.isDirectory() && target.uid === process.getuid() && (target.mode & 0o077) === 0);
+  assert.deepEqual(readdirSync(output), [], 'fresh empty capture output required');
+  assert.equal(process.env.PRISMPM_OC10_CAPTURE_OUTPUT, undefined, 'ambient capture output refused');
+  const arguments_ = ['--exact', 'oci::publication_context::capture_tests::actual_source_free_capture_constructs_complete_conditional_context', '--nocapture'];
+  const result = spawnSync('/usr/bin/timeout',
+    ['--signal=TERM', '--kill-after=5s', '2400s', executable, ...arguments_],
+    {cwd, detached:true, encoding:'utf8', timeout:2410000, killSignal:'SIGKILL',
+      maxBuffer:32*1024*1024, env:{...environment, PRISMPM_OC10_CAPTURE_OUTPUT:output}});
+  terminateOwnedGroup(result.pid);
+  for (const [name, text] of [['stdout', result.stdout], ['stderr', result.stderr]])
+    writeFileSync(join(cwd, 'capture.' + name), text ?? '', {flag:'wx', mode:0o444});
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, 'actual publication capture failed\n' + result.stdout + '\n' + result.stderr);
+  assert.match(result.stdout, /test result: ok\. 1 passed; 0 failed; 0 ignored;/);
+  assert.ok(result.stdout.includes('PASS complete actual conditional publication capture: ' + output));
+  return result.stdout;
 }
 export function createPrivateDriverTarget(work) {
   assert.equal(realpathSync(work), resolve(work), 'aliased driver parent refused');
@@ -240,7 +315,7 @@ export function prepare(mutation=null,compilerOwner=null){
     if(shared)invokeDriver=args=>shared.runDriver(args,repository);
     else{
       const driverTarget=createPrivateDriverTarget(work);
-      run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
+      run('cargo',['build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0','--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3','--manifest-path',join(draft,'driver/Cargo.toml')],repository,{CARGO_TARGET_DIR:driverTarget});
       const driver=join(driverTarget,'debug/browser-workspace-view-driver');
       invokeDriver=args=>run(driver,args,repository);
     }

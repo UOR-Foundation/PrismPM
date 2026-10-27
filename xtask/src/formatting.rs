@@ -12,6 +12,10 @@ const COMPILERS: &[&str] = &[
 ];
 const HARNESSES: &[(&str, &str)] = &[
     (
+        "tests/holo-primary-component/driver/Cargo.toml",
+        "tests/holo-primary-component/driver/src/main.rs",
+    ),
+    (
         "tests/browser-workspace/Cargo.toml",
         "tests/browser-workspace/src/main.rs",
     ),
@@ -52,12 +56,60 @@ const HARNESSES: &[(&str, &str)] = &[
         "tests/browser-account-genesis/driver/src/main.rs",
     ),
     (
+        "tests/browser-semantic-presentation/driver/Cargo.toml",
+        "tests/browser-semantic-presentation/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-dynamic-choice/driver/Cargo.toml",
+        "tests/browser-dynamic-choice/driver/src/main.rs",
+    ),
+    (
         "tests/browser-custody/driver/Cargo.toml",
         "tests/browser-custody/driver/src/main.rs",
     ),
     (
         "tests/browser-operation-journal/driver/Cargo.toml",
         "tests/browser-operation-journal/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session/driver/Cargo.toml",
+        "tests/browser-session/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-journal/driver/Cargo.toml",
+        "tests/browser-session-journal/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-journal/reservation-driver/Cargo.toml",
+        "tests/browser-session-journal/reservation-driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-journal-retention/driver/Cargo.toml",
+        "tests/browser-session-journal-retention/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-journal-recovery/driver/Cargo.toml",
+        "tests/browser-session-journal-recovery/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-payloads/driver/Cargo.toml",
+        "tests/browser-session-payloads/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-operation/driver/Cargo.toml",
+        "tests/browser-session-operation/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-session-recovery-frames/driver/Cargo.toml",
+        "tests/browser-session-recovery-frames/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-signed-context/driver/Cargo.toml",
+        "tests/browser-signed-context/driver/src/main.rs",
+    ),
+    (
+        "tests/browser-pkce/driver/Cargo.toml",
+        "tests/browser-pkce/driver/src/main.rs",
     ),
     (
         "tests/publication-admission/driver/Cargo.toml",
@@ -68,8 +120,8 @@ const HARNESSES: &[(&str, &str)] = &[
         "tests/browser-budget/driver/src/main.rs",
     ),
     (
-        "tests/browser-session/driver/Cargo.toml",
-        "tests/browser-session/driver/src/main.rs",
+        "tests/publication-context-linkage/driver/Cargo.toml",
+        "tests/publication-context-linkage/driver/src/main.rs",
     ),
     (
         "tests/holo-codec-oracle/Cargo.toml",
@@ -81,6 +133,8 @@ const HARNESSES: &[(&str, &str)] = &[
     ),
 ];
 const SOURCES: &[&str] = &[
+    "tests/holo-primary-component/runner.rs",
+    "tests/holo-primary-component/oracle.rs",
     "tests/browser-workspace/runner.rs",
     "tests/support/browser_application.rs",
     "tests/browser-envelope/runner.rs",
@@ -92,11 +146,28 @@ const SOURCES: &[&str] = &[
     "tests/browser-presentation/runner.rs",
     "tests/browser-p256/runner.rs",
     "tests/browser-account-genesis/runner.rs",
+    "tests/browser-semantic-presentation/runner.rs",
+    "tests/browser-dynamic-choice/runner.rs",
     "tests/browser-custody/runner.rs",
     "tests/browser-operation-journal/runner.rs",
-    "tests/publication-admission/runner.rs",
-    "tests/browser-budget/runner.rs",
     "tests/browser-session/runner.rs",
+    "tests/browser-session-journal/runner.rs",
+    "tests/browser-session-journal/reservation-runner.rs",
+    "tests/browser-session-journal-retention/runner.rs",
+    "tests/browser-session-journal-recovery/runner.rs",
+    "tests/browser-session-payloads/runner.rs",
+    "tests/browser-session-operation/runner.rs",
+    "tests/browser-pkce/runner.rs",
+    "tests/browser-session-recovery-frames/runner.rs",
+    "tests/browser-signed-context/runner.rs",
+    "tests/publication-admission/runner.rs",
+    "tests/publication-context-linkage/runner.rs",
+    "tests/publication-context-linkage/context-fields-runner.rs",
+    "tests/publication-context-linkage/collector_witnesses.rs",
+    "tests/publication-context-linkage/partition_witnesses.rs",
+    "tests/publication-context-linkage/payload_witnesses.rs",
+    "tests/publication-context-linkage/bitset_witnesses.rs",
+    "tests/browser-budget/runner.rs",
     "tests/hologram-oracle/src/main.rs",
     "tests/hologram-oracle/tests/browser_surface.rs",
 ];

@@ -3,8 +3,10 @@
 Current integration uses merged compiler `991956fe` and LexLean `ff92e75e`.
 Its normal private lock refresh includes wasmparser; the complete owner retains
 all 1,505 vectors, 22 source mutants and three engines. Two real static-closure
-tests and a coherent-manifest regression extend the original 15-test owner to
-18. Native original/private custody
+tests and a coherent-manifest regression extended the original 15-test owner to
+18. Restoring all six shared parser checks raises the complete owner to 22;
+both source and installed-SDK registrations and their negative controls require
+that complete inventory. Native original/private custody
 and post-retirement source/product checks are mandatory. Fresh complete owner,
 installed SDK and consumer acceptance remain unaccepted until verified.
 

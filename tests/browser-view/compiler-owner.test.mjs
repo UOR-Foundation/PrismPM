@@ -9,7 +9,7 @@ import {captureCompilerInputs, createCompilerOwner, requireCompilerOwner} from '
 import {compilerDriverDirectory} from './compiler-owner-checks.mjs';
 
 test('driver substitution lookup includes P256 and rejects missing or ambiguous source inventory', () => {
-  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'publication-admission']) {
+  for (const directory of ['browser-view', 'browser-session', 'browser-p256', 'browser-signed-context', 'browser-session-operation', 'browser-pkce', 'holo-primary-component', 'publication-admission', 'publication-context-linkage', 'browser-session-journal-retention']) {
     const path = 'tests/' + directory + '/driver/src/main.rs';
     assert.equal(compilerDriverDirectory({[path]: 'not-authority'}), 'tests/' + directory + '/driver');
   }
@@ -55,6 +55,88 @@ test('compiler owner refuses forged handles and unregistered tool families', () 
     assert.throws(() => createCompilerOwner(name, {}), /registered compiler family/);
 });
 
+test('fresh independent drivers pin hash optimization without changing construction or acceptance',()=>{
+  // Construction-argument unit only. Full owning executions remain required.
+  const source=fs.readFileSync(new URL('./compiler-owner.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf("    run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0',");
+  const end=source.indexOf('\n    const driverBuildMs',begin);
+  assert(begin>=0&&end>begin);const calls=[];
+  runInNewContext(source.slice(begin,end),{run(...args){calls.push(args);},join,
+    work:'/actual-private-owner',manifest:'driver/Cargo.toml',target:'/actual-fresh-target'});
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['cargo',[
+    'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+    '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+    '--manifest-path','/actual-private-owner/driver/Cargo.toml'],
+    '/actual-private-owner',{CARGO_TARGET_DIR:'/actual-fresh-target'}]]);
+  for(const family of ['view','command','query']){
+    const source=fs.readFileSync(new URL('../browser-'+family+'/compile.mjs',import.meta.url),'utf8');
+    const begin=source.indexOf("run('cargo',['build','--locked','--offline','--jobs','1',");
+    const suffix="],repository,{CARGO_TARGET_DIR:driverTarget});";
+    const end=source.indexOf(suffix,begin);
+    assert(begin>=0&&end>begin,'actual fallback construction '+family);
+    const calls=[];
+    runInNewContext(source.slice(begin,end+suffix.length),{run(...args){calls.push(args);},join,
+      draft:'/actual-source/tests/browser-'+family,repository:'/actual-source',driverTarget:'/actual-fresh-'+family});
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['cargo',[
+      'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+      '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+      '--manifest-path','/actual-source/tests/browser-'+family+'/driver/Cargo.toml'],
+      '/actual-source',{CARGO_TARGET_DIR:'/actual-fresh-'+family}]]);
+  }
+  const remaining = [
+    ...['budget','custody','dynamic-choice','effects','operation-journal','semantic-presentation']
+      .map(family=>({path:'tests/browser-'+family+'/compile.mjs',manifest:'/captured-compiler/Cargo.toml',cwd:'/actual-work'})),
+    {path:'tests/browser-journal/compile.mjs',manifest:'/actual-draft/driver/Cargo.toml',cwd:'/actual-source'},
+    ...['session-journal','session-payloads','session-recovery-frames']
+      .map(family=>({path:'tests/browser-'+family+'/compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work'})),
+    {path:'tests/browser-session-journal/reservation-compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work'},
+    {path:'tests/browser-session-journal-recovery/compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work',program:'/pinned-cargo',target:'/actual-owned-target'},
+    {path:'sdk/browser/workspace-model-test.mjs',manifest:'/actual-source/tests/browser-workspace/Cargo.toml',cwd:'/actual-source'},
+    {path:'sdk/browser/envelope-model-test.mjs',manifest:'/actual-fixture/driver/Cargo.toml',cwd:'/actual-source'},
+  ];
+  assert.equal(remaining.length,14);assert.equal(new Set(remaining.map(row=>row.path)).size,14);
+  for(const row of remaining){
+    const source=fs.readFileSync(new URL('../../'+row.path,import.meta.url),'utf8');
+    const check = text => {
+      const fresh=row.path==='tests/browser-budget/compile.mjs'
+        ? /const driverTarget\s*=\s*join\(work,\s*'driver-target'\)/
+        : row.program ? /const target\s*=\s*createPrivateDriverTarget\(work\)/
+        : /const driverTarget\s*=\s*createPrivateDriverTarget\(work\)/;
+      assert.match(text,fresh,'original fresh owned target '+row.path);
+      const calls=[];
+      const selected=[...text.matchAll(/run\((?:'cargo'|toolchain\.programs\.cargo\.path),\s*\['build',\s*'--locked',\s*'--offline',\s*'--jobs',\s*'1',[\s\S]*?\],\s*(?:repository|work),\s*\{CARGO_TARGET_DIR:\s*(?:driverTarget|target)\}\)/g)];
+      assert.equal(selected.length,1,'one actual private driver construction '+row.path);
+      runInNewContext(selected[0][0],{run(...args){calls.push(args);},join,
+        compiler:{manifest:'/captured-compiler/Cargo.toml'},manifest:'/captured-manifest/Cargo.toml',
+        draft:'/actual-draft',fixture:'/actual-fixture',repository:'/actual-source',work:'/actual-work',
+        driverTarget:'/actual-fresh-target',target:'/actual-owned-target',toolchain:{programs:{cargo:{path:'/pinned-cargo'}}}});
+      assert.deepEqual(JSON.parse(JSON.stringify(calls)),[[row.program??'cargo',[
+        'build','--locked','--offline','--jobs','1','--config','profile.dev.debug=0',
+        '--config','build.incremental=false','--config','profile.dev.package.sha2.opt-level=3',
+        '--manifest-path',row.manifest],row.cwd,{CARGO_TARGET_DIR:row.target??'/actual-fresh-target'}]]);
+    };
+    check(source);
+    const setting=/'--config',\s*'profile\.dev\.package\.sha2\.opt-level=3'/;
+    assert.equal([...source.matchAll(new RegExp(setting.source,'g'))].length,1);
+    for(const replacement of ['',"'--config', 'profile.dev.package.sha2.opt-level=2'",
+      "'--config', 'profile.dev.opt-level=3'","'--config', 'profile.test.package.sha2.opt-level=3'",
+      "$&,$&","$&,'--config','profile.dev.package.sha2.opt-level=0'"]){
+      const changed=source.replace(setting,replacement);assert.notEqual(changed,source);
+      assert.throws(()=>check(changed),row.path+': '+replacement);
+    }
+    for(const [from,to]of [["'--locked'","'REMOVED'"],["'--offline'","'REMOVED'"],
+      ["'--jobs', '1'","'--jobs', '2'"],["'profile.dev.debug=0'","'profile.dev.debug=2'"],
+      ["'build.incremental=false'","'build.incremental=true'"]]){
+      const expression=new RegExp(from.replaceAll('.', '\\.').replaceAll(', ', ',\\s*'));
+      const changed=source.replace(expression,to);assert.notEqual(changed,source);
+      assert.throws(()=>check(changed),row.path+': '+from);
+    }
+    const changed=source.replace(row.path==='tests/browser-budget/compile.mjs'
+      ? "join(work, 'driver-target')" : 'createPrivateDriverTarget(work)', "'/unproved-shared-target'");
+    assert.notEqual(changed,source);assert.throws(()=>check(changed),row.path+': fresh target substitution');
+  }
+});
+
 test('compiler owner refuses malformed or incomplete input closures before building', () => {
   let called = false;
   const accessor = {get malicious() {called = true; return '0'.repeat(64);}};
@@ -63,7 +145,7 @@ test('compiler owner refuses malformed or incomplete input closures before build
     assert.throws(() => createCompilerOwner('view', inputs),
       /compiler input (map|path|digest|closure)/);
   assert.equal(called, false, 'input accessors cannot run before immutable capture');
-  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256']) {
+  for (const name of ['view', 'effects', 'presentation', 'session', 'operation-journal', 'budget', 'custody', 'p256', 'signed-context', 'session-operation', 'pkce', 'holo-primary-component', 'session-retention', 'publication-linkage']) {
     const inputs = captureCompilerInputs(name);
     for (const missing of ['tests/browser-view/compile.mjs', 'tests/browser-view/compiler-artifact.mjs', 'vendor/lean4-prod/lean.tar']) {
       const changed = {...inputs}; delete changed[missing];
