@@ -8,7 +8,7 @@ import {join, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {snapshotTree} from '../sdk/exporter-seed.mjs';
-import {capture, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads} from './portable-oracle-custody.mjs';
+import {capture, refuseCargoAncestorConfiguration, snapshotSourceTree, privateGitObjects, privateRegistryDownloads, reportChildFailure} from './portable-oracle-custody.mjs';
 
 const root = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 assert.equal(process.argv.length, 6, 'two artifacts and their live Controller bindings required');
@@ -37,6 +37,7 @@ const inputs = [
   'scripts/portable-oracle-matrix.mjs', 'scripts/portable-oracle-submission-probe.mjs',
   'scripts/portable-oracle-process-owner.py',
   'scripts/portable-oracle-source.py',
+  'scripts/ci-observe.mjs',
   'scripts/portable-oracle-custody.mjs',
   'tests/data/portable-oracle-matrix.json', 'sdk/exporter-seed.mjs',
   'sdk/inventory-metadata.mjs',
@@ -83,6 +84,8 @@ function run(name, program, args, directory, seconds, selectedEnvironment = envi
   for (const stream of ['stdout', 'stderr']) writeFileSync(join(evidence, `${name}.${stream}`), result[stream] ?? '', {flag: 'wx'});
   writeFileSync(join(evidence, `${name}.process.json`), JSON.stringify({program, args, cwd: directory,
     exit_code: result.status, signal: result.signal, execution_error: result.error ? String(result.error) : null}) + '\n', {flag: 'wx'});
+  // The outer V&V observer retains this bounded, redacted failure in its uploaded log.
+  reportChildFailure(name, result, expectedStatus);
   // Cleanup uncertainty aborts the matrix, including when the case also failed.
   const cleanup = JSON.parse(readFileSync(cleanupReceipt));
   assert.equal(cleanup.schema, 'prismpm/portable-process-owner/1');
@@ -177,6 +180,30 @@ try {
       for (const input of captured) input.verify();
       negativeControls.push({id, status: 'refused-as-required'});
     }
+    // Execute actual upstream sessions with only the diagnostic listener
+    // removed/malformed. These must fail the completion predicate itself.
+    for (const trigger of matrix.triggers) for (const control of ['omit-finished', 'malformed-finished']) {
+      const id = `${index}-probe-control-${control}-${trigger}`;
+      for (const input of captured) input.verify();
+      executable.verify();
+      const result = run(id, process.execPath, [join(root, 'scripts/portable-oracle-submission-probe.mjs'),
+        executable.path, artifacts[index], browser, 'wrong-response', join(evidence, id), trigger, control],
+      root, 130, environment, 1);
+      const receipt = JSON.parse(result.stdout.trim());
+      assert.equal(receipt.control, control);
+      assert.equal(receipt.probe_passed, false);
+      assert.equal(receipt.failure_code, 'PORTABLE_REQUEST_COMPLETION');
+      assert.equal(receipt.oracle_sha256, executable.measurement.sha256);
+      for (const key of ['model_sha256', 'archive_sha256', 'wasm_sha256'])
+        assert.equal(receipt[key], bindings[index][key]);
+      assert.equal(receipt.diagnostics.length, 1);
+      assert.equal(receipt.diagnostics[0].check, 'response-envelope');
+      assert.equal(receipt.diagnostics[0].invocationCount, 1);
+      assert.equal(receipt.diagnostics[0].keyboard, trigger === 'keyboard');
+      executable.verify();
+      for (const input of captured) input.verify();
+      negativeControls.push({id, status: 'refused-as-required'});
+    }
     const rows = [...matrix.triggers.flatMap(trigger => matrix.interaction_cases.map(name => ({trigger, name}))),
       ...matrix.infrastructure_cases.map(name => ({trigger: 'click', name}))];
     for (const {trigger, name} of rows) {
@@ -205,7 +232,7 @@ try {
     }
   }
   assert.equal(outcomes.length, 78, 'the complete two-profile matrix must execute');
-  assert.equal(negativeControls.length, 4);
+  assert.equal(negativeControls.length, 12);
   assert(outcomes.every(row => row.status === 'passed'), `portable View matrix failed; retained ${evidence}`);
   console.log(JSON.stringify({schema: 'prismpm/portable-oracle-matrix-result/1', cases: outcomes.length,
     profiles: matrix.profiles.map(profile => profile.profile), negative_controls: negativeControls, status: 'passed', evidence}));
