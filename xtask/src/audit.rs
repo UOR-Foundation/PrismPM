@@ -123,9 +123,9 @@ pub fn audit_retained_native_profiles(root: &Path) -> Result<(), Fail> {
     Ok(())
 }
 
-/// The LexLean `release/v0.4` commit the vendored package is built from. The
-/// release binding replaces this commit with the v0.4.0 release revision.
-const LEXLEAN_AUTHORITY_REVISION: &str = "cee0fbade479891479e0b748aaa8b60e0a1aaf07";
+/// The LexLean commit the vendored package is built from: the commit of the
+/// annotated `v0.4.0` tag, from which the LexLean v0.4.0 release was cut.
+const LEXLEAN_AUTHORITY_REVISION: &str = "e0b74b81e6f49c83596a957d232c8383a5db1a25";
 /// Handwritten Lean admitted from the vendored LexLean package. The v0.4
 /// package carries its extraction adapter (`language/lcnf-1.2/tooling/src`)
 /// and the preservation library (`language/preservation-1.2/library/src`) as
@@ -426,7 +426,7 @@ fn audit_lexlean_adapter_provenance(root: &Path) -> Result<(), Fail> {
         != dependency.get("revision").and_then(toml::Value::as_str)
         || dependency.get("revision").and_then(toml::Value::as_str)
             != Some(LEXLEAN_AUTHORITY_REVISION)
-        || version != "0.3.0"
+        || version != "0.4.0"
         || provenance["path_in_vcs"] != "crates/lexlean"
         || provenance["git"]
             .get("dirty")
@@ -1540,8 +1540,10 @@ pub fn audit_errors(root: &Path, model: &Model) -> Result<(), Fail> {
 
 /// Audit the exact Holo emitter input closure and its stored semantics digest.
 pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
-    const EXPECTED: [&str; 24] = [
+    const EXPECTED: [&str; 31] = [
+        "crates/prismpm/src/application_build.rs",
         "crates/prismpm/src/holo/application.rs",
+        "crates/prismpm/src/holo/application/workbench.rs",
         "crates/prismpm/src/holo/browser_application.rs",
         "crates/prismpm/src/holo/browser_application/model.rs",
         "crates/prismpm/src/holo/browser_application/source.rs",
@@ -1552,11 +1554,15 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "crates/prismpm/src/holo/facets/standards.rs",
         "crates/prismpm/src/holo/library.rs",
         "crates/prismpm/src/holo/library/roots.rs",
-        "crates/prismpm/src/holo/model_document.rs",
         "crates/prismpm/src/holo/mod.rs",
+        "crates/prismpm/src/holo/model_document.rs",
         "crates/prismpm/src/holo/projector.rs",
         "crates/prismpm/src/holo/text_cli.rs",
         "crates/prismpm/src/holo/validate.rs",
+        "crates/prismpm/src/holo/workbench.rs",
+        "crates/prismpm/src/workbench.rs",
+        "crates/prismpm/src/workbench/runtime.js",
+        "crates/prismpm/src/workbench/style.css",
         "model/projection.toml",
         "model/standards.toml",
         "schemas/model-document-v2.schema.json",
@@ -1565,6 +1571,7 @@ pub fn audit_emitter_inputs(root: &Path, model: &Model) -> Result<(), Fail> {
         "schemas/model-document-v5.schema.json",
         "schemas/model-document-v6.schema.json",
         "schemas/model-document.schema.json",
+        "schemas/workbench-view-projection.schema.json",
     ];
     if model.emitter_inputs.spec != "prismpm/emitter-inputs/1"
         || model.emitter_inputs.inputs != EXPECTED
@@ -1654,11 +1661,16 @@ mod oracle_separation_tests {
         )
         .unwrap();
         for row in [
-            "name = 'hologram'", "name = 'uor-hologram'", "name = 'hologram-archive'",
+            "name = 'hologram'",
+            "name = 'uor-hologram'",
+            "name = 'hologram-archive'",
             "name = 'renamed-codec'\nsource = 'git+https://github.com/Hologram-Technologies/hologram?rev=abc#abc'",
             "name = 'invalid'\nsource = false",
         ] {
-            assert!(check_runtime_oracle_separation(&format!("version = 4\n[[package]]\n{row}\n")).is_err());
+            assert!(
+                check_runtime_oracle_separation(&format!("version = 4\n[[package]]\n{row}\n"))
+                    .is_err()
+            );
         }
         assert!(check_runtime_oracle_separation("version = 4").is_err());
     }
@@ -1689,7 +1701,7 @@ mod lean_source_audit_tests {
             if !entry.file_type().is_file()
                 || matches!(
                     entry.file_name().to_str(),
-                    Some("MANIFEST.sha256" | "lexlean-0.3.0.crate")
+                    Some("MANIFEST.sha256" | "lexlean-0.4.0.crate")
                 )
             {
                 continue;
@@ -1702,13 +1714,13 @@ mod lean_source_audit_tests {
             archive
                 .append_data(
                     &mut header,
-                    Path::new("lexlean-0.3.0").join(entry.path().strip_prefix(&vendor).unwrap()),
+                    Path::new("lexlean-0.4.0").join(entry.path().strip_prefix(&vendor).unwrap()),
                     bytes.as_slice(),
                 )
                 .unwrap();
         }
         let bytes = archive.into_inner().unwrap().finish().unwrap();
-        std::fs::write(vendor.join("lexlean-0.3.0.crate"), bytes).unwrap();
+        std::fs::write(vendor.join("lexlean-0.4.0.crate"), bytes).unwrap();
         seal_tree(root);
     }
 
@@ -1732,15 +1744,15 @@ mod lean_source_audit_tests {
         std::fs::write(vendor.join("MANIFEST.sha256"), manifest).unwrap();
         let manifest_digest = hash_file(&vendor.join("MANIFEST.sha256")).unwrap();
         let other_digest = hash_file(&root.join("vendor/fixture.bin")).unwrap();
-        let archive_digest = hash_file(&vendor.join("lexlean-0.3.0.crate")).unwrap();
+        let archive_digest = hash_file(&vendor.join("lexlean-0.4.0.crate")).unwrap();
         let revision = LEXLEAN_AUTHORITY_REVISION;
         let source = format!(
             "spec = 'prismpm/dependencies/1'\n\n\
              [[dependency]]\nid = 'lean4-prod'\nrevision = '{revision}'\nsource = 'vendored'\n\
              [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/fixture.bin'\nsha256 = '{other_digest}'\n\n\
-             [[dependency]]\nid = 'lexlean'\nversion = '0.3.0'\nrevision = '{revision}'\nsource = 'vendored'\n\
+             [[dependency]]\nid = 'lexlean'\nversion = '0.4.0'\nrevision = '{revision}'\nsource = 'vendored'\n\
              [[dependency.artifact]]\nkind = 'tree-manifest'\npath = 'vendor/lexlean/MANIFEST.sha256'\nsha256 = '{manifest_digest}'\ntree_root = 'vendor/lexlean'\n\
-             [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/lexlean/lexlean-0.3.0.crate'\nsha256 = '{archive_digest}'\n\n\
+             [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/lexlean/lexlean-0.4.0.crate'\nsha256 = '{archive_digest}'\n\n\
              [[dependency]]\nid = 'hologram-live'\nrevision = '{revision}'\nsource = 'vendored'\nrole = 'validation-oracle'\n\
              [[dependency.artifact]]\nkind = 'file'\npath = 'vendor/fixture.bin'\nsha256 = '{other_digest}'\n\n\
              [[dependency]]\nid = 'uor-hologram'\nrevision = '{revision}'\nsource = 'git'\nrole = 'validation-oracle'\n"
@@ -1764,7 +1776,7 @@ mod lean_source_audit_tests {
         )
         .unwrap();
         std::fs::write(
-            root.path().join("vendor/lexlean/lexlean-0.3.0.crate"),
+            root.path().join("vendor/lexlean/lexlean-0.4.0.crate"),
             "synthetic archive for dependency-gate testing\n",
         )
         .unwrap();
@@ -1927,9 +1939,9 @@ mod lean_source_audit_tests {
             // resealed, rather than accepting a generic dependency-hash error.
             let error = audit_lexlean_authority_archive(
                 root.path(),
-                "vendor/lexlean/lexlean-0.3.0.crate",
-                &hash_file(&vendor.join("lexlean-0.3.0.crate")).unwrap(),
-                "0.3.0",
+                "vendor/lexlean/lexlean-0.4.0.crate",
+                &hash_file(&vendor.join("lexlean-0.4.0.crate")).unwrap(),
+                "0.4.0",
             )
             .unwrap_err()
             .to_string();
@@ -1960,7 +1972,7 @@ mod lean_source_audit_tests {
         ] {
             let root = preservation_fixture();
             audit_no_handwritten_lean(root.path()).unwrap();
-            let path = root.path().join("vendor/lexlean/lexlean-0.3.0.crate");
+            let path = root.path().join("vendor/lexlean/lexlean-0.4.0.crate");
             let original = std::fs::read(&path).unwrap();
             let mut tar_bytes = Vec::new();
             flate2::read::GzDecoder::new(original.as_slice())
@@ -1975,7 +1987,7 @@ mod lean_source_audit_tests {
                 }
                 "traversal" => {
                     header.as_mut_bytes()[..100].fill(0);
-                    let name = b"lexlean-0.3.0/../foreign.lean";
+                    let name = b"lexlean-0.4.0/../foreign.lean";
                     header.as_mut_bytes()[..name.len()].copy_from_slice(name);
                     header.set_cksum();
                     tar_bytes[..512].copy_from_slice(header.as_bytes());
@@ -2010,9 +2022,9 @@ mod lean_source_audit_tests {
             // into a vacuous rejection by the outer dependency checksum gate.
             let error = audit_lexlean_authority_archive(
                 root.path(),
-                "vendor/lexlean/lexlean-0.3.0.crate",
+                "vendor/lexlean/lexlean-0.4.0.crate",
                 &hash_file(&path).unwrap(),
-                "0.3.0",
+                "0.4.0",
             )
             .unwrap_err()
             .to_string();
