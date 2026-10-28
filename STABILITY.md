@@ -100,19 +100,34 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `update`, `update --toolchain`, `update --standards-lock`, `update --dry-run` | [#265](https://github.com/UOR-Foundation/PrismPM/issues/265) | On main |
 | `build --update` | [#264](https://github.com/UOR-Foundation/PrismPM/issues/264) | On main |
 | `prism-code inspect <holo>`, `--json`, `--format <path>` | [#271](https://github.com/UOR-Foundation/PrismPM/issues/271) | On main |
-| `inspect` on a `.holo` in the Rust CLI | [#271](https://github.com/UOR-Foundation/PrismPM/issues/271) | Planned |
-| `check` as a typed verdict, with `--json`, `--policy <file>` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | Planned |
+| `inspect <path.holo>`, `--json`, `--format <path>` in the Rust CLI | [#271](https://github.com/UOR-Foundation/PrismPM/issues/271) | On main |
+| `prism-code check <holo>`, `--policy <file>`, `--json` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
+| `prism-code build --check` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
+| `check` as a typed verdict in the Rust CLI, with `--json`, `--policy <file>` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | Planned |
 | `build --provenance=<min\|max>`, `build --no-provenance` | [#268](https://github.com/UOR-Foundation/PrismPM/issues/268) | Planned |
 | `prism-code attest <holo> --predicate <file> --type <uri>`, `--subject`, `--key`, `--output`, `--signing-config` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `prism-code verify-attestation <holo>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--key`, `--type`, `--trusted-root`, `--entries`, `--timestamps`, `--json` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `prism-code run --capabilities <file>`, `--capability-set <name>` | [#279](https://github.com/UOR-Foundation/PrismPM/issues/279) | On main |
+| `prism-code run <holo>` gated on `check`, `--policy <file>`, `--allow-unverified`; the policy member `effects` and the `policy.effects` reason | [#282](https://github.com/UOR-Foundation/PrismPM/issues/282) | On main |
+| `prism-code init [<dir>]`, `--name`, `--template`, `--sdk-image`, `--force`; `npm create prism-code` | [#281](https://github.com/UOR-Foundation/PrismPM/issues/281) | On main |
+| `prism-code manifest [<dir>]`, `--target <browser\|node>`, `--json` | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | On main |
+| The `prism.toml` manifest and its `prism.browser.toml` and `prism.node.toml` overlays, read by the Rust CLI | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | Planned |
 | `attest --predicate <file> --type <uri>` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 | `verify --certificate-identity`, `--certificate-oidc-issuer`, `--key` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 
 Today `prismpm check` validates the model and `prismpm verify` checks the Lean proofs.
+In the JavaScript CLI `check` already judges a holo and returns a verdict (#270), and the model check is `prism-code build --check`; the Rust CLI follows when it reads the attestation section (#267).
 The JavaScript CLI names the attestation verb `verify-attestation`, because `prism-code verify` already runs `prismpm verify`; the Rust name is open (`docs/proposals/272-attest-verify.md`).
-When #270 and #272 ship, both verbs judge a holo and return a verdict.
+When #270 and #272 ship in the Rust CLI, both verbs judge a holo and return a verdict.
 That change is breaking and gets its changelog line.
+
+### 6.1.1 Deprecated
+
+| Surface | Replacement | Removed in |
+| --- | --- | --- |
+| `prism-code check [args]` with no holo, which runs `prismpm check` in the SDK image | `prism-code build --check [args]`, the same command | `prism-code` 0.4.0 |
+
+Until then the old spelling runs as before and prints a warning naming the replacement.
 
 ### 6.2 SDK exports
 
@@ -125,8 +140,11 @@ That change is breaking and gets its changelog line.
 | `prism-code` | `inspect`, `formatInspection`, `INSPECTION_SCHEMA`, `Application.inspect` | [#271](https://github.com/UOR-Foundation/PrismPM/issues/271) |
 | `prism-code` | `readAttestations`, `attestationSection`, `decodeBundle`, `appendAttestations`, `stripAttestations`, `encodeArchive`, `ATTESTATION_EXTENSION`, `BUNDLE_MEDIA_TYPE` | [#267](https://github.com/UOR-Foundation/PrismPM/issues/267) |
 | `prism-code` | `parseCapabilities`, `grantOf`, `CAPABILITIES_SCHEMA`, `CAPABILITY_KINDS`, `DEFAULT_SET`, `Application.capabilities`, the `capabilities` and `capabilitySet` load options, and the `capabilities.*` check ids of `CapabilityDeniedError` | [#279](https://github.com/UOR-Foundation/PrismPM/issues/279) |
+| `prism-code` | `Application.world` (`contract`, `within`, `pure`, `effects`), `CapabilityGrant.members`, the `capabilities` option of `experimental_verify`, and `CapabilityDeniedError` with check `world.capabilities` at load | [#283](https://github.com/UOR-Foundation/PrismPM/issues/283) |
+| `prism-code` | `parseManifest`, `validateManifest`, `lintManifest`, `mergeOverlay`, `manifestCapabilities`, `resolveVariables`, `parseToml`, `MANIFEST_FILE`, `MANIFEST_TARGETS`, `MANIFEST_VERSION`, and the `manifest.*` error codes; `readManifest` in `prism-code/node` | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) |
+| `@prism-code/verify` | `worldPolicy`, `policy.capabilities`, the `world.capabilities` reason (`PP5602`), and the inspection's `world.pure` and `world.effects` | [#283](https://github.com/UOR-Foundation/PrismPM/issues/283) |
 | `@prism-code/verify` | `verify`, `inspect`, `verifyTransparency`, `ASSURANCE`, `VerifyError`, `FORMAT_REVISION`, `INSPECTION_SCHEMA` | [#273](https://github.com/UOR-Foundation/PrismPM/issues/273), [#275](https://github.com/UOR-Foundation/PrismPM/issues/275) |
-| `@prism-code/spec` | The `prism/proof/v1` types and schema, the `prism/verdict/1` schema, assurance levels, the attestation and Sigstore bundle schemas, the trusted-root schema, the lock schemas and the `prism/capabilities/1` schema and types | [#266](https://github.com/UOR-Foundation/PrismPM/issues/266), [#269](https://github.com/UOR-Foundation/PrismPM/issues/269), [#267](https://github.com/UOR-Foundation/PrismPM/issues/267), [#264](https://github.com/UOR-Foundation/PrismPM/issues/264), [#279](https://github.com/UOR-Foundation/PrismPM/issues/279) |
+| `@prism-code/spec` | The `prism/proof/v1` types and schema, the `prism/verdict/1` schema, assurance levels, the attestation and Sigstore bundle schemas, the trusted-root schema, the lock schemas, the `prism/capabilities/1` schema and types, and the `prism/manifest/1` schema and types | [#266](https://github.com/UOR-Foundation/PrismPM/issues/266), [#269](https://github.com/UOR-Foundation/PrismPM/issues/269), [#267](https://github.com/UOR-Foundation/PrismPM/issues/267), [#264](https://github.com/UOR-Foundation/PrismPM/issues/264), [#279](https://github.com/UOR-Foundation/PrismPM/issues/279), [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) |
 
 `prism-code` entries land in the first release after 0.2.0.
 `@prism-code/verify` and `@prism-code/spec` are not published yet.
