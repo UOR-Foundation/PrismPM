@@ -378,7 +378,7 @@ pub(crate) fn preflight_toolchain(
             return Err(PrismError::new(
                 "PP5008",
                 format!("unsupported verification architecture {architecture}"),
-            ))
+            ));
         }
     };
     let [lake, lean, rustfmt, rustc, timeout] =
@@ -709,7 +709,10 @@ fn validate_portable_target_bounds(
     response_maximum: u32,
 ) -> Result<(), PrismError> {
     if request_maximum > 64 * 1024 || response_maximum > 1024 * 1024 {
-        return Err(PrismError::new("PP5301", "application bounds exceed pinned portable View transport limits (request: 65536 bytes; response: 1048576 bytes)"));
+        return Err(PrismError::new(
+            "PP5301",
+            "application bounds exceed pinned portable View transport limits (request: 65536 bytes; response: 1048576 bytes)",
+        ));
     }
     Ok(())
 }
@@ -789,6 +792,7 @@ pub(crate) fn validate_hologram_oracle_report(
     {
         return Err(invalid());
     }
+    let workbench = application.workbench();
     let mut indexes = Vec::new();
     for (index, vector) in vectors.iter().enumerate() {
         let Ok(request) = std::str::from_utf8(&vector.request) else {
@@ -796,7 +800,12 @@ pub(crate) fn validate_hologram_oracle_report(
         };
         let applicable = match application {
             Application::Browser(_) => {
-                return crate::holo::browser_application::require_runtime(application)
+                return crate::holo::browser_application::require_runtime(application);
+            }
+            Application::Text(_) if workbench.is_some() => {
+                crate::holo::workbench::oracle_vectors(workbench.as_ref().expect("checked"))
+                    .ui
+                    .contains(&index)
             }
             Application::Text(value) => vector.request.len() <= value.request_maximum as usize,
             Application::Legacy(value) => {
@@ -822,22 +831,35 @@ pub(crate) fn validate_hologram_oracle_report(
     if indexes.is_empty() {
         return Err(invalid());
     }
-    let mut names = vec![
-        "attachment-assets",
-        "modeled-vectors",
+    let mut names = vec!["attachment-assets", "modeled-vectors"];
+    if workbench.is_some() {
+        names.extend(["workbench-direct-vectors", "workbench-ui-input-boundaries"]);
+    }
+    names.extend([
         "input-validation-recovery",
         "transport-failure-recovery",
         "pre-init-privacy",
         "delayed-init",
         "intent-boundaries",
-    ];
+    ]);
     let profile = match application {
         Application::Browser(_) => {
-            return crate::holo::browser_application::require_runtime(application)
+            return crate::holo::browser_application::require_runtime(application);
         }
         Application::Text(_) => {
             names.extend(["text-response-bounds", "text-safe-rendering"]);
-            "utf8-text"
+            if workbench.is_some() {
+                names.extend([
+                    "workbench-guided-edit",
+                    "workbench-typed-error-recovery",
+                    "workbench-cancel-retirement",
+                    "workbench-timeout-retry",
+                    "workbench-result-validation",
+                ]);
+                "utf8-workbench"
+            } else {
+                "utf8-text"
+            }
         }
         Application::Legacy(_) => "legacy-numeric",
     };
@@ -846,10 +868,24 @@ pub(crate) fn validate_hologram_oracle_report(
         .into_iter()
         .map(|name| json!({"name":name,"status":"passed","attempts":1}))
         .collect::<Vec<_>>();
-    let expected = json!({"schema":"prismpm/portable-browser-oracle/1", "profile":profile,
+    let mut expected = json!({"schema":"prismpm/portable-browser-oracle/1", "profile":profile,
         "engine":"chromium", "browser_version":"157.0.8099.0", "playwright":"1.62.1",
         "cases":cases, "vector_indexes":indexes, "skipped":0, "retries":0, "status":"passed"});
-    if report["portable_browser"] != expected {
+    if let Some(value) = &workbench {
+        let selected = crate::holo::workbench::oracle_vectors(value);
+        expected["direct_vector_indexes"] = json!(selected.direct);
+        expected["ui_transport_rejected_indexes"] = json!(selected.transport_rejected);
+        expected["textarea_normalized_vector_indexes"] = json!(selected.normalized);
+        expected["unrepresentable_frame_vector_indexes"] = json!(selected.unrepresentable);
+    }
+    // `browser_timing` is a measurement: it varies per run and must not
+    // participate in the identity comparison. Remove it from a clone before
+    // comparing the deterministic subset to the expected report.
+    let mut portable_browser = report["portable_browser"].clone();
+    if let Some(object) = portable_browser.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    if portable_browser != expected {
         return Err(invalid());
     }
     Ok(())
@@ -1803,7 +1839,10 @@ fn validate_control_coverage_corpus(
     corpus: &ExecutionCorpus,
 ) -> Result<(), PrismError> {
     let invalid = || {
-        PrismError::new("PP5006", "control coverage execution counts do not match the exact modeled cases and expectations")
+        PrismError::new(
+            "PP5006",
+            "control coverage execution counts do not match the exact modeled cases and expectations",
+        )
     };
     let declarations = snapshot
         .get("modules")
@@ -2028,6 +2067,60 @@ pub(crate) fn validate_release_native_evidence(
     validate_control_coverage_corpus(snapshot, &corpus)
 }
 
+// Summarize raw dispatch-to-render samples per vector as the issue requests:
+// median and maximum over repetitions, plus the engine and its version. The
+// summary is a measurement and never participates in an identity comparison.
+fn summarize_browser_timing(report: &Value) -> Option<Value> {
+    let entries = report
+        .get("portable_browser")
+        .and_then(|browser| browser.get("browser_timing"))
+        .and_then(Value::as_array)?;
+    let engine = report["portable_browser"]["engine"]
+        .as_str()
+        .unwrap_or("chromium");
+    let engine_version = report["portable_browser"]["browser_version"]
+        .as_str()
+        .unwrap_or("");
+    let mut groups: BTreeMap<u64, Vec<f64>> = BTreeMap::new();
+    for entry in entries {
+        let index = entry.get("vector_index").and_then(Value::as_u64);
+        let duration = entry.get("duration_milliseconds").and_then(Value::as_f64);
+        if let (Some(index), Some(duration)) = (index, duration) {
+            groups.entry(index).or_default().push(duration);
+        }
+    }
+    let mut summary = Vec::with_capacity(groups.len());
+    for (index, mut durations) in groups {
+        durations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let repetitions = durations.len();
+        let median = if repetitions % 2 == 0 {
+            (durations[repetitions / 2 - 1] + durations[repetitions / 2]) / 2.0
+        } else {
+            durations[repetitions / 2]
+        };
+        summary.push(json!({
+            "vector_index": index,
+            "median_milliseconds": median,
+            "maximum_milliseconds": durations[repetitions - 1],
+            "repetitions": repetitions,
+            "engine": engine,
+            "engine_version": engine_version,
+        }));
+    }
+    Some(json!(summary))
+}
+
+// `browser_timing` is a measurement: it varies per run. Compare the
+// deterministic projection of `application-acceptance.json` so a repeated
+// verification that reuses its attestation id accepts the differing timing.
+fn comparable_acceptance(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut value: Value = serde_json::from_slice(bytes).ok()?;
+    if let Some(object) = value.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    encode_value(&value).ok()
+}
+
 pub(crate) fn publish(
     output_root: &Path,
     attestation_id: &str,
@@ -2123,7 +2216,12 @@ pub(crate) fn publish(
             }
             let observed = std::fs::read(path)
                 .map_err(|_| PrismError::new("PP4002", "verified artifact is missing"))?;
-            if &observed != expected {
+            let identical = if relative == "application-acceptance.json" {
+                comparable_acceptance(&observed) == comparable_acceptance(expected)
+            } else {
+                &observed == expected
+            };
+            if !identical {
                 return Err(PrismError::new("PP4001", "verified artifact was modified"));
             }
         }
@@ -2660,9 +2758,29 @@ fn run_application(
     if let Some(evidence) = command_line {
         acceptance["command_line"] = evidence;
     }
+    // `browser_timing` is a measurement: it varies per run. Extract the raw
+    // dispatch-to-render samples from the oracle report, summarize them per
+    // vector as the issue requests (median and maximum over repetitions, with
+    // the engine and version), and keep the summary out of the deterministic
+    // acceptance hash that seeds the manifest and attestation id.
+    if let Some(oracle) = processes
+        .iter()
+        .find(|process| process.tool == "hologram-oracle")
+    {
+        if let Ok(report) = serde_json::from_str::<Value>(oracle.stdout.trim()) {
+            if let Some(summary) = summarize_browser_timing(&report) {
+                acceptance["browser_timing"] = summary;
+            }
+        }
+    }
     let acceptance_bytes = encode_value(&acceptance)?;
+    let mut acceptance_for_hash = acceptance.clone();
+    if let Some(object) = acceptance_for_hash.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    let acceptance_sha256 = format!("{:x}", Sha256::digest(&encode_value(&acceptance_for_hash)?));
     let manifest = json!({
-        "acceptance_sha256": format!("{:x}", Sha256::digest(&acceptance_bytes)),
+        "acceptance_sha256": acceptance_sha256,
         "build_id": build.build_id,
         "exporter_owner": exporter_owner.finish()?,
         "lexlean_attestation_sha256": format!("{:x}", Sha256::digest(&lex_attestation)),
@@ -3398,7 +3516,10 @@ mod tests {
             write(&root.join("lib.rs"), library).unwrap();
             let harness = application_harness(application, &module).unwrap();
             if name == "unrelated-checked-definition" {
-                assert_eq!(harness, "fn main() {\n    assert_eq!(harness_effect::dispatch(vec![7]), vec![7], \"acceptance vector 0\");\n}\n");
+                assert_eq!(
+                    harness,
+                    "fn main() {\n    assert_eq!(harness_effect::dispatch(vec![7]), vec![7], \"acceptance vector 0\");\n}\n"
+                );
             }
             write(&root.join("consumer.rs"), harness.as_bytes()).unwrap();
             let rustc = executable("rustc").unwrap();
@@ -3713,7 +3834,10 @@ mod tests {
     fn child_timeout_preserves_both_actual_progress_streams() {
         let error = limited(
             "sh",
-            &["-c", "printf 'first stdout\\nlast stdout\\n'; printf 'first stderr\\nlast stderr\\n' >&2; sleep 2"],
+            &[
+                "-c",
+                "printf 'first stdout\\nlast stdout\\n'; printf 'first stderr\\nlast stderr\\n' >&2; sleep 2",
+            ],
             "1",
             128,
         );
@@ -4082,6 +4206,60 @@ mod tests {
         assert_eq!(
             error.message,
             "verified artifact set differs from its manifest"
+        );
+    }
+
+    #[test]
+    fn browser_timing_summarizes_to_median_and_maximum() {
+        let report = json!({
+            "portable_browser": {
+                "engine": "chromium",
+                "browser_version": "157.0.8099.0",
+                "browser_timing": [
+                    {"vector_index": 0, "duration_milliseconds": 10.0},
+                    {"vector_index": 0, "duration_milliseconds": 20.0},
+                    {"vector_index": 0, "duration_milliseconds": 30.0},
+                    {"vector_index": 1, "duration_milliseconds": 5.0}
+                ]
+            }
+        });
+        let summary = summarize_browser_timing(&report).unwrap();
+        assert_eq!(
+            summary,
+            json!([
+                {"vector_index": 0, "median_milliseconds": 20.0, "maximum_milliseconds": 30.0,
+                 "repetitions": 3, "engine": "chromium", "engine_version": "157.0.8099.0"},
+                {"vector_index": 1, "median_milliseconds": 5.0, "maximum_milliseconds": 5.0,
+                 "repetitions": 1, "engine": "chromium", "engine_version": "157.0.8099.0"}
+            ])
+        );
+    }
+
+    #[test]
+    fn browser_timing_summarizes_even_repetitions_with_the_midpoint() {
+        let report = json!({
+            "portable_browser": {
+                "engine": "chromium",
+                "browser_version": "157.0.8099.0",
+                "browser_timing": [
+                    {"vector_index": 0, "duration_milliseconds": 10.0},
+                    {"vector_index": 0, "duration_milliseconds": 20.0}
+                ]
+            }
+        });
+        let summary = summarize_browser_timing(&report).unwrap();
+        assert_eq!(summary[0]["median_milliseconds"], json!(15.0));
+        assert_eq!(summary[0]["maximum_milliseconds"], json!(20.0));
+        assert_eq!(summary[0]["repetitions"], json!(2));
+    }
+
+    #[test]
+    fn comparable_acceptance_ignores_browser_timing() {
+        let with_timing = br#"{"browser_timing":[{"vector_index":0,"duration_milliseconds":10.0}],"status":"verified"}"#;
+        let without_timing = br#"{"status":"verified"}"#;
+        assert_eq!(
+            comparable_acceptance(with_timing),
+            comparable_acceptance(without_timing)
         );
     }
 }
