@@ -174,9 +174,10 @@ test('prism-doctor is a valid plugin and its hook explains a missing lockfile or
   assert.equal(hook({ command: 'build', exitCode: 69 }).length, 1);
   assert.deepEqual(hook({ command: 'check', exitCode: 1 }), []);
   assert.deepEqual(hook({ command: 'vectors', exitCode: 64 }), []);
+  assert.deepEqual(hook({ command: 'check', args: ['app.holo', '--policy', 'p.json'], exitCode: 64 }), []);
 
   const empty = mkdtempSync(join(tmpdir(), 'prism-doctor-'));
-  const check = run(['check'], env, { cwd: empty });
+  const check = run(['build', '--check'], env, { cwd: empty });
   assert.equal(check.code, 64);
   assert.match(check.err, /prismpm\.lock not found[\s\S]*What's next:\n {2}Run `prism-code doctor`/);
   const report = run(['doctor'], env, { cwd: empty });

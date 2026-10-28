@@ -35,7 +35,7 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
     'org.opencontainers.image.revision': revision,
     'org.opencontainers.image.source': 'https://github.com/UOR-Foundation/PrismPM',
-    'org.opencontainers.image.version': '0.3.0'}}});
+    'org.opencontainers.image.version': '0.4.0'}}});
   const child = encode({schemaVersion: 2, mediaType: manifestType,
     config: {mediaType: 'application/vnd.oci.image.config.v1+json', digest: digest(config), size: config.length}, layers: []});
   const subject = {mediaType: manifestType, digest: digest(child), size: child.length};
@@ -49,7 +49,7 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
 }
 
 test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
-  for (const ref of ['refs/heads/main', 'refs/tags/v0.3.0']) {
+  for (const ref of ['refs/heads/main', 'refs/tags/v0.4.0']) {
     for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
       for (const architecture of ['amd64', 'arm64']) {
         const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref);
@@ -74,7 +74,7 @@ test('release transport has exact repository/ref/signer policies without pretend
   }
   const {record, manifest, options, sbom} = releaseFixture();
   for (const bad of [{...options, repository: 'registry.attacker.test/sdk'}, {...options, ref: 'refs/heads/feature'},
-    {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.4.0'}]) {
+    {...options, kind: 'candidate'}, {...options, skipTransparency: true}, {...options, ref: 'refs/tags/v0.3.0'}]) {
     assert.throws(() => artifactManifest(record, bad));
     assert.throws(() => verificationArguments(record, digest(manifest), '/root', bad));
     assert.throws(() => signingArguments(digest(manifest), '/root', '/bundle', bad));
@@ -114,7 +114,7 @@ test('release OCI artifact preserves every byte of a >16 MiB SPDX payload throug
     const wrongSubject = encode(bad);
     assert.throws(() => validateArtifact(wrongSubject, digest(wrongSubject), record, received, options));
     assert.throws(() => validateArtifact(manifest, digest(manifest), record, received,
-      releaseTransportPolicy(options.repository, 'refs/tags/v0.3.0')));
+      releaseTransportPolicy(options.repository, 'refs/tags/v0.4.0')));
   } finally { rmSync(directory, {recursive: true, force: true}); }
 });
 

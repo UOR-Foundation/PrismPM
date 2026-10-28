@@ -17,7 +17,7 @@ reproduce a standard, grant certification, or prove facts asserted by a
 standard. ISO/IEC 25019, ISO/IEC 27034 parts other than 1 and 5, quality-in-use
 outcomes, and organizational certification are outside the Holo/1 baseline.
 
-The normative PrismPM 0.3.0 interface is the digest-pinned Linux SDK OCI index
+The normative PrismPM 0.4.0 interface is the digest-pinned Linux SDK OCI index
 for `linux/amd64` and `linux/arm64`. Native archives support
 `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`; other hosts use the
 SDK through Docker and the Development Container Specification. Rust 1.97.1
@@ -259,6 +259,103 @@ allocation bound so the core can receive them.
 At least one vector must have request length exactly equal to that guest
 allocation bound, so independent runtime verification checks its modeled
 response without assuming that it equals an empty-request response.
+
+The closed `Foundation.View.Text.V3.Model.TextApplication` (text/3, below) also
+declares one optional field, `workbench : Option WorkbenchView` (HO-19). `none`
+keeps the Text/1 six-file page and the generated command line exactly as without
+the field. `some` replaces only the browser and Hologram page with the generated
+workbench; the `view`, `cli`, byte-guest, package, empty-capability, layer and
+independent input-allocation/output-response resource contracts are unchanged,
+so a text/3 application keeps one model, one profile and one
+`prismpm/model-document/6` for its command line and its workbench. The
+closed `WorkbenchView` adds typed source-owned operations, ordered field descriptors, per-operation
+examples, purpose/audience/guidance, documentation, absolute credential-free
+HTTPS links, error hints, lifecycle copy and a finite design choice. It grants
+no BrowserApplication effects, arbitrary markup/style/script or host callbacks;
+that distinct profile still rejects with PP2011. Existing Text/1 and Text/2
+canonical shapes and generator bytes remain unchanged.
+
+Every operation has 1–32 fields and 1–64 examples; at most 32 operations,
+32 guide sections, 32 links, 128 error hints and eight guidance steps are admitted.
+ASCII letter-led IDs contain only letters, digits, hyphens or underscores and
+have at most 64 bytes. Operation, field-within-operation, example-within-operation,
+section and error-code IDs are unique; prefixes are globally unique and cannot
+collide with the modeled raw prefix. Initial operation/example and error-field
+references must resolve. Choice fields have unique, nonempty values; other
+field kinds have no choices. Natural is a keyboard hint: original string values
+reach LexLean without JavaScript numeric coercion or domain normalization.
+Every example has exactly one value per ordered field and binds its exact framed
+request and exact expected UI JSON response to an explicit acceptance vector.
+Example descriptions/explanations are guidance, and exact expected JSON is under
+a collapsed, labeled disclosure. Neither populates actual computed results.
+
+Guided framing is the modeled operation prefix, U+001F, then ordered values
+joined by U+001F. Raw framing is its separate modeled prefix, U+001F, then the
+exact protocol draft. Literal U+001F in an individual field and lone UTF-16
+surrogates are refused before allocation/encoding; tabs and newlines are not
+normalized by SDK application code. Source-required empty inputs and unknown
+closed Choice values receive the modeled input error. HTML input and textarea
+normalization is an explicit portable-oracle category; original source bytes
+remain exercised by actual direct native invocations. UTF-8 length is checked
+before framed transport allocation. Domain parsing, canonicalization, arithmetic,
+protocol responses and all human result explanations remain LexLean-owned.
+
+The UI result is an exact JSON object with all eleven required keys:
+`version:1`, `status:"ok"|"error"`, `operation`, `message`, `rows`, `columns`,
+`cells`, `details`, `request`, `response`, `error`. Other than version and natural
+dimensions, scalars and array items are strings. Duplicate/missing/unknown keys,
+malformed UTF-8 or Unicode scalars, wrong operation, unknown status/error,
+unsafe/bounded dimensions, extra cells/details or inconsistent row-major shape
+are rejected. Guided operation equals its source ID; raw operation equals `raw`.
+Success has empty error and `rows*columns=cells.length`, including zero-sized
+matrices. Errors have a modeled code and zero rows/columns/cells. Source display
+bounds admit at most 4096 cells and 128 details. Rendering uses plain DOM text,
+a real captioned table with row/column headers, contained matrix scrolling and
+separate exact request/response inspection; `#result` mirrors only the actual
+underlying protocol response. Error hints name current-operation fields for
+aria-invalid/describedby and focus; raw errors focus the raw editor. Empty hint
+field lists provide global assistance without inventing a field error.
+
+The generated SDK workbench owns responsive two-pane/one-column layout, a
+visible-on-focus skip link, named navigation, keyboard-native controls, explicit
+labels/help and live polite lifecycle copy. Every UI and accessibility label,
+including JavaScript-required fallback copy, is modeled. Static HTML includes
+purpose, guidance, documentation, disabled raw compute, form-action:none,
+metadata description and canonical homepage before modules initialize. No
+external fonts, images, scripts or extra assets are loaded. Indigo/Ocean,
+Comfortable/Compact, Balanced/Wide and System/Light/Dark are finite token choices;
+finite automated/keyboard/layout checks are not a universal accessibility claim.
+
+Browser computation runs in a module Worker loaded from the same `app.js` URL,
+without blob URLs or a seventh asset. Its required source-owned
+`Execution.wasmCachePolicy` has the single closed `WasmCachePolicy.NoStore`
+constructor, projected as `execution.wasm_cache_policy: "no-store"`. The worker
+explicitly fetches its same-origin generated Wasm with that HTTP cache policy,
+refuses redirects and unsuccessful responses, and passes the response to the
+unchanged byte binding initializer. It cannot silently reuse a previous
+deployment's cached Wasm; there is no omitted-field default or cache opt-out.
+The Hologram intent projection does not fetch standalone browser Wasm.
+Initialization and execution have modeled
+100–120000 ms deadlines. Busy state paints independently of computation. Cancel
+and timeout terminate the worker; retry recreates it and recomputes an actual
+captured request. Input edits, operation/example changes and reset invalidate
+pending generations and clear old output. Reset restores current source field
+initial values and clears example selection. Replies require the exact active
+worker epoch and request generation; late replies cannot replace edited drafts.
+The Hologram View uses its existing asynchronous intent transport and aborts/
+invalidates cancelled work; this is logical UI cancellation, not a claim of host
+computation quiescence. Both targets retain the exact six-asset export closure.
+`prismpm/workbench-view-projection/1` binds both projections, the unchanged byte
+adapter, bundle, exact model/View/core identities and transport bounds.
+
+HO-19 requires at least one successful guided vector, one successful raw wrapper
+and one framed typed error. Its portable oracle preserves all UTF-8 source
+vectors up to the request cap as real direct invocations and partitions the UI
+corpus explicitly into representable frames, reserved-separator/required-input
+refusals, HTML-normalized inputs and unrepresentable arity/Choice frames. Missing,
+extra, reordered or forged journey/index evidence cannot satisfy verification.
+Actual HTTP-cache return-visitor and worker lifecycle tests, bounded result negatives and native compiled
+source-fixture verification supplement model/projection/schema mutation checks.
 
 The separate `Foundation.View.Text.V2.Model.TextApplication` declares
 `prismpm/text-application/2` in closed `prismpm/model-document/5`. It retains
@@ -1053,9 +1150,9 @@ and verification are offline. Canonical platform-independent artifacts contain
 no absolute checkout path, hostname, locale text, random identifier, timestamp,
 or traversal-order dependence.
 
-The only imported Lean-source exception is the registered LexLean 0.3.0 package
-at pinned `release/v0.4` revision `cee0fbade479891479e0b748aaa8b60e0a1aaf07`
-(the v0.4.0 release binding replaces this commit pin when that release exists).
+The only imported Lean-source exception is the registered LexLean 0.4.0 package
+at revision `e0b74b81e6f49c83596a957d232c8383a5db1a25`, the commit of the
+annotated `v0.4.0` tag, from which the LexLean v0.4.0 release was cut.
 Its exact 4-file compiler-authority closure is the following paths under
 `vendor/lexlean/language/preservation-1.2/`:
 `modules/LexLeanTarget/{RustSemantics,RustSyntax,TargetSemantics,TargetSyntax}.lean`.
@@ -1070,7 +1167,7 @@ revision and crate path, and clean package VCS provenance. It then independently
 decodes the registered archive and requires the exact 4-member Lean set and
 complete archive-member/tree-manifest membership and byte equality, including
 the package VCS file and every non-Lean file. Only the extracted tree's root
-`MANIFEST.sha256` and `lexlean-0.3.0.crate`, added by the normal package importer,
+`MANIFEST.sha256` and `lexlean-0.4.0.crate`, added by the normal package importer,
 are excluded from archive membership; no nested path or `target/` is excluded.
 Duplicate, traversing, aliased, nonregular, missing, substituted or additional
 Lean members are refused, including a separately resealed tree. Archive admission
@@ -2630,6 +2727,16 @@ Cycles, missing definitions, open calls and budget exhaustion fail with
 `PP2001`, never a stack overflow or a silent module fallback. Independent fields
 may reuse an alias. Root-list expansion retains its separate bounds above.
 
+Acceptance-vector byte metadata admits exact literal Bytes, closed zero-argument
+Bytes aliases and the binary `append` primitive with an exact Bytes result.
+Only this finite constant form is evaluated; named parameterized function calls
+and other primitives are refused. Source owners and result types are checked,
+aliases are path-cycle checked, work is bounded to 65,536 nodes/calls, depth to
+128 and decoded bytes to 16 MiB per field before application request/response
+limits are enforced. Literal chunks preserve the exact source-owned large
+responses without increasing compiler recursion/proof limits. Existing literal
+byte vectors retain identical projected bytes.
+
 Application acceptance-vector lists also admit closed zero-argument aliases
 at every list tail, including imported chunks. Iterative expansion preserves
 each vector and its order and resolves unqualified head aliases in the list
@@ -3653,9 +3760,10 @@ model output so PrismPM cannot author the sole policy that authorizes itself.
 
 ## 18. Version and compatibility policy
 
-Holo/1 is frozen. PrismPM 0.3.0 adds the production-system SDK and lifecycle;
-prism-stdlib 0.2.0 adds compatible system profiles while preserving every
-0.1.x application API and Calculator artifact contract. Public JSON schemas and
+Holo/1 is frozen. PrismPM 0.4.0 is the current production-system SDK release and
+carries the SDK and lifecycle added by 0.3.0; prism-stdlib 0.2.0 adds compatible
+system profiles while preserving every 0.1.x application API and Calculator
+artifact contract. Public JSON schemas and
 media types have exact major compatibility; only contracts explicitly marked
 `exact-major-additive-minor` may add optional minor-version fields. Unknown
 fields in a `/1` value remain errors. An incompatible Holo change requires
@@ -3722,6 +3830,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-16` | `holo` | The explicit text/2 profile binds modeled Core-Wasm memory and stack limits through generated artifacts and source-free verification while retaining the text/1 profile and legacy guest resource defaults. | §3 |
 | `HO-17` | `holo` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. | §3 |
 | `HO-18` | `holo` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. | §3 |
+| `HO-19` | `holo` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. | §3 |
 | `HO-20` | `holo` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. | §3 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |

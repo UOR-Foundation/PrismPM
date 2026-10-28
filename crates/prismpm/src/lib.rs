@@ -25,6 +25,7 @@ mod exporter;
 mod features;
 pub mod holo;
 mod input_lock;
+pub mod inspect;
 mod lean_project;
 mod library_build;
 mod library_verification;
@@ -43,6 +44,7 @@ mod test_compiler;
 mod text_cli;
 pub mod upstream_conformance;
 mod verification;
+mod workbench;
 
 pub use controller::Controller;
 pub use error::{DiagnosticCode, PrismError};

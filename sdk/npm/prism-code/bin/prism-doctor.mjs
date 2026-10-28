@@ -43,7 +43,9 @@ function hook(input) {
   } catch {
     call = null;
   }
-  const messages = HOOKED.includes(call?.command) && EXPLAINED.has(call?.exitCode) ? ['Run `prism-code doctor` to check Node.js, Docker and prismpm.lock.'] : [];
+  // `check <app.holo>` judges a holo without Docker; only the lockfile spelling is doctor's.
+  const judged = call?.command === 'check' && Array.isArray(call.args) && call.args.some((a) => typeof a === 'string' && a.endsWith('.holo'));
+  const messages = HOOKED.includes(call?.command) && EXPLAINED.has(call?.exitCode) && !judged ? ['Run `prism-code doctor` to check Node.js, Docker and prismpm.lock.'] : [];
   return { messages };
 }
 
