@@ -57,6 +57,21 @@ test('before 1.0 breaking changes need a minor bump and everything else a patch 
   assert.match(messages(skipped)[0], /must be a minor bump over 0\.4\.0/);
 });
 
+test('release-please entries are read: link heading, dated in parentheses, BREAKING CHANGES named', () => {
+  const written = '## [0.5.0](https://github.com/UOR-Foundation/PrismPM/compare/v0.4.0...v0.5.0) (2026-11-20)\n\n### ⚠ BREAKING CHANGES\n\n* a break\n\n### Features Added\n\n* new\n\n' + LEGACY;
+  assert.deepEqual(parseChangelog(written).map((e) => [e.version, e.date]), [['0.5.0', '2026-11-20'], ['0.4.0', '2026-10-27']]);
+  const found = messages(written);
+  assert.ok(found.some((m) => /### ⚠ BREAKING CHANGES is not one of .*rename it to ### Breaking Changes and move it after ### Features Added/.test(m)));
+  const fixed = '## [0.5.0](https://github.com/UOR-Foundation/PrismPM/compare/v0.4.0...v0.5.0) (2026-11-20)\n\n### Features Added\n\n* new\n\n### Breaking Changes\n\n* a break\n\n' + LEGACY;
+  assert.deepEqual(releaseEntryProblems(fixed), []);
+});
+
+test('a package changelog has no legacy entries', () => {
+  const text = '# Changelog\n\n## [0.3.0](https://example.test) (2026-11-20)\n\n### Added\n\n* old header\n\n';
+  assert.deepEqual(releaseEntryProblems(text), []);
+  assert.match(releaseEntryProblems(text, '0.0.0').map((p) => p.message)[0], /### Added is not one of/);
+});
+
 test('a released entry needs a date', () => {
   assert.match(messages('## [0.4.1]\n\n### Breaking Changes\nNone.\n\n' + LEGACY)[0], /0\.4\.1 has no date/);
 });

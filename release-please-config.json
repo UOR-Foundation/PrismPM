@@ -25,10 +25,7 @@
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.repo-model.version" },
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.repo-conformance.version" },
-        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.prismpm.version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name=='prismpm')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name=='repo-model')].version" },
-        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name=='repo-conformance')].version" }
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.prismpm.version" }
       ]
     },
     "sdk/npm/prism-code": { "release-type": "node", "component": "prism-code" },

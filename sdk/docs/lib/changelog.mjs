@@ -9,15 +9,21 @@
  *   - bump: below 1.0 an entry with breaking changes is a minor bump over the
  *     entry before it, and an entry without any is a patch bump.
  *
- * Entries up to and including LEGACY_THROUGH were written before the rule and
- * keep the Keep a Changelog headers they were published with. They are never
- * rewritten: `release-check` reads the 0.4.0 entry and the release notes cite it.
+ * Entries up to and including LEGACY_THROUGH (the root CHANGELOG.md only) were
+ * written before the rule and keep the Keep a Changelog headers they were
+ * published with. They are never rewritten: `release-check` reads the 0.4.0
+ * entry and the release notes cite it. The per-package changelogs that
+ * release-please writes under sdk/npm/ have no legacy entries.
  */
 
 export const HEADERS = ['Features Added', 'Breaking Changes', 'Bugs Fixed', 'Other Changes'];
 export const LEGACY_THROUGH = '0.4.0';
 
-const ENTRY = /^## \[(Unreleased|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\](?: - (\d{4}-\d{2}-\d{2}))?\s*$/;
+/**
+ * `## [1.2.3] - 2026-01-02`, as written by hand, and
+ * `## [1.2.3](https://…) (2026-01-02)`, as release-please writes it.
+ */
+const ENTRY = /^## \[(Unreleased|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\](?:\([^)]*\))?(?:(?: - | \()(\d{4}-\d{2}-\d{2})\)?)?\s*$/;
 
 /** @returns {number[]} major, minor, patch; a pre-release suffix is ignored. */
 export function parseVersion(version) {
@@ -60,16 +66,18 @@ export function parseChangelog(text) {
 }
 
 /** @returns {{ line: number, message: string }[]} */
-export function releaseEntryProblems(text) {
+export function releaseEntryProblems(text, legacyThrough = LEGACY_THROUGH) {
   const problems = [];
   const entries = parseChangelog(text);
   entries.forEach((entry, index) => {
     const released = entry.version !== 'Unreleased';
     if (released && !entry.date) problems.push({ line: entry.line, message: `${entry.version} has no date: write ## [${entry.version}] - YYYY-MM-DD` });
-    if (released && !newerThan(entry.version, LEGACY_THROUGH)) return;
+    if (released && !newerThan(entry.version, legacyThrough)) return;
 
     for (const section of entry.sections) {
-      if (!HEADERS.includes(section.name)) problems.push({ line: section.line, message: `${entry.version}: ### ${section.name} is not one of ${HEADERS.map((h) => `### ${h}`).join(', ')}` });
+      if (HEADERS.includes(section.name)) continue;
+      const hint = /breaking/i.test(section.name) ? ': rename it to ### Breaking Changes and move it after ### Features Added' : '';
+      problems.push({ line: section.line, message: `${entry.version}: ### ${section.name} is not one of ${HEADERS.map((h) => `### ${h}`).join(', ')}${hint}` });
     }
     const known = entry.sections.filter((s) => HEADERS.includes(s.name));
     known.forEach((section, i) => {

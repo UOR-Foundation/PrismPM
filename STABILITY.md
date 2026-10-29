@@ -40,9 +40,9 @@ It is always present; if it is empty it says `None.` and the release breaks noth
 The other three headers appear only when they have lines.
 Entries up to 0.4.0 predate this rule and keep the headers they were published with.
 
-`node sdk/docs/changelog.mjs` enforces the headers and the bump: a version with breaking changes is a minor bump, any other version is a patch bump.
-The `docs generate` workflow runs it on every pull request.
-No bot tags or publishes; [docs/release/versioning.md](docs/release/versioning.md) says how a version is cut and why.
+release-please is configured for this rule (`bump-minor-pre-major`, in `release-please-config.json`): it proposes the next version in a pull request, and a person tags.
+`node sdk/docs/changelog.mjs` enforces the headers and the bump on every pull request: a version with breaking changes is a minor bump, any other version is a patch bump.
+[docs/release/versioning.md](docs/release/versioning.md) says how a version is cut.
 
 ## 3. Format versions
 
