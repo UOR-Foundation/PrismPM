@@ -78,6 +78,7 @@ Nothing is Stable today.
 | `prism-code` `experimental_verify`, `experimental_createClient`, `Application.experimental_verify` and the `PrismError` hierarchy with its stable codes | `sdk/npm/prism-code` | Experimental |
 | `prism-code` middleware: `Application.experimental_middleware` (the stack, its four steps and the `Pluggable` shape), `MIDDLEWARE_STEPS`, `experimental_tracing`, `MiddlewareError` and the `middleware.*` codes | `sdk/npm/prism-code` | Experimental |
 | SDK image contract: the digest-pinned OCI index for `linux/amd64` and `linux/arm64` | [SPEC.md](SPEC.md) section 1 | Experimental |
+| `prism-code` CLI plugins ([#293](https://github.com/UOR-Foundation/PrismPM/issues/293)): `prism-<name>` on the PATH runs as `prism-code <name>`, the `prism-cli-plugin-metadata` and `prism-cli-plugin-hooks` calls (schema version 1), `errorHooks`, `PRISM_CODE_NO_HOOKS`, and the first-party `prism-doctor` | `sdk/npm/prism-code` | Experimental |
 
 The CLI binary will be renamed `prism`.
 `prismpm` stays as an alias through every 1.x release.
