@@ -476,6 +476,22 @@ directory and Prism provenance), four content blobs, and one footer. Unknown,
 duplicate, missing, reordered, overlapping, truncated, trailing, over-limit,
 or cross-reference-invalid content is rejected.
 
+`Foundation.Holo.V1.Format` numbers every section kind by its physical
+discriminant, KernelCalls 1 through ContentBlob 16, and
+`Foundation.Holo.V1.Manifest` numbers every layer kind, Wasm code module 0
+through inference model 4. A closed theorem fixes each code table. Wire also
+defines the general canonical physical-v4 frame of ADR-016: any section count;
+AppManifest first, then ascending kind; only Extension and ContentBlob repeat,
+strictly ordered by extension key bytes or κ label, so a duplicate is rejected;
+no zero-length section; valid UTF-8 extension keys and valid κ labels; zero
+flags and padding; contiguous payloads and no trailing bytes. Its encoder
+sorts an unordered section list into that order, so its output depends only
+on the section set. The portable and browser profiles are constraints on this
+frame: a profile archive must first be canonical, so the profile encoders
+reject an empty Metadata section. Ordering inside a section's payload and the
+footer value are outside the frame; the footer remains 32 bytes checked by the
+host BLAKE3 adapter.
+
 Portable View bytes start with `HOLOVIEW`, use big-endian bundle version 1,
 have entry `index.html`, and encode lexically ordered portable paths with u32
 path/count fields and u64 content lengths. The fixed limits are 4,096 files,

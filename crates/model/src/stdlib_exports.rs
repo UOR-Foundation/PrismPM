@@ -38,7 +38,7 @@ impl StdlibExports {
         if self.spec != "prismpm/stdlib-exports/1"
             || self.lean_module != "PrismPM.Runtime"
             || self.ir_module != "PrismPM"
-            || self.export.len() != 66
+            || self.export.len() != 74
             || self
                 .export
                 .windows(2)
@@ -147,6 +147,11 @@ impl StdlibExports {
                 "validAppManifest" => ("Holo.V1.Wire", "fn(&[u8]) -> bool"),
                 "validArchiveBody" => ("Holo.V1.Wire", "fn(&[u8]) -> Result<bool, ComputeError>"),
                 "validArchiveFrame" => ("Holo.V1.Wire", "fn(&[u8]) -> Result<bool, ComputeError>"),
+                "canonicalArchiveBody" => ("Holo.V1.Wire", "fn(&[CanonicalSection]) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "canonicalArchiveBodyBytes" | "canonicalArchiveFooter" => ("Holo.V1.Wire", "fn(Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "canonicalArchiveSection" | "canonicalArchiveSectionKind" => ("Holo.V1.Wire", "fn(Vec<u8>, u64) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "canonicalFrameArchive" => ("Holo.V1.Wire", "fn(Vec<u8>, Vec<u8>) -> Result<Option<Vec<u8>>, ComputeError>"),
+                "validCanonicalArchiveBody" | "validCanonicalArchiveFrame" => ("Holo.V1.Wire", "fn(&[u8]) -> Result<bool, ComputeError>"),
                 "checkedAddInt64"
                 | "checkedDivideInt64"
                 | "checkedMultiplyInt64"
