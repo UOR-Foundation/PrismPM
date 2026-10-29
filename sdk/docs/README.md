@@ -17,6 +17,7 @@ node sdk/docs/publish.mjs <site> --commit <sha> [--previous <dir>]
                                            stage a built site as the docs-site tree; print changed=true|false
 node sdk/docs/lint.mjs [path...]           vocabulary lint; default: docs/ minus the engineering records
 node --test "sdk/docs/test/*.test.mjs"     the generator's own tests
+node sdk/docs/changelog.mjs [path]         check CHANGELOG.md against STABILITY.md section 2: the four headers and the pre-1.0 bump rule
 node sdk/docs/skill.mjs                    rebuild the generated blocks of skills/prism/SKILL.md
 node sdk/docs/skill.mjs --check            fail when a block is stale or the skill names a command that does not ship
 node sdk/docs/skill.mjs smoke              install prism-code from npm and run every command the skill tells an agent to try

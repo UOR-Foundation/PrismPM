@@ -36,7 +36,13 @@ Each version entry uses these four headers, in this order:
 ```
 
 The Breaking Changes list is the per-version breaking log.
-If it is empty, the release breaks nothing.
+It is always present; if it is empty it says `None.` and the release breaks nothing.
+The other three headers appear only when they have lines.
+Entries up to 0.4.0 predate this rule and keep the headers they were published with.
+
+`node sdk/docs/changelog.mjs` enforces the headers and the bump: a version with breaking changes is a minor bump, any other version is a patch bump.
+The `docs generate` workflow runs it on every pull request.
+No bot tags or publishes; [docs/release/versioning.md](docs/release/versioning.md) says how a version is cut and why.
 
 ## 3. Format versions
 
