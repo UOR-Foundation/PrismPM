@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "include-v-in-tag": true,
+  "separate-pull-requests": true,
+  "changelog-sections": [
+    { "type": "feat", "section": "Features Added" },
+    { "type": "fix", "section": "Bugs Fixed" },
+    { "type": "perf", "section": "Other Changes" },
+    { "type": "refactor", "section": "Other Changes" },
+    { "type": "docs", "section": "Other Changes" },
+    { "type": "test", "section": "Other Changes" },
+    { "type": "build", "section": "Other Changes" },
+    { "type": "ci", "section": "Other Changes" },
+    { "type": "chore", "section": "Other Changes" }
+  ],
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "component": "prismpm",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.repo-model.version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.repo-conformance.version" },
+        { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.dependencies.prismpm.version" },
+        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name=='prismpm')].version" },
+        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name=='repo-model')].version" },
+        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name=='repo-conformance')].version" }
+      ]
+    },
+    "sdk/npm/prism-code": { "release-type": "node", "component": "prism-code" },
+    "sdk/npm/spec": { "release-type": "node", "component": "prism-code-spec" },
+    "sdk/npm/verify": { "release-type": "node", "component": "prism-code-verify" },
+    "sdk/npm/create-prism-code": { "release-type": "node", "component": "create-prism-code" }
+  }
+}
