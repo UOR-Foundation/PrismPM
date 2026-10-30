@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readSemantic, writeSemantic} from '../../scripts/semantic-source.mjs';
 import {createHash} from 'node:crypto';
 import {run} from '../../tests/browser-journal/compile.mjs';
 import {createPrivateDriverTarget, ensureProdExport, stageLeanRuntime} from '../../tests/browser-view/compile.mjs';
@@ -64,11 +65,8 @@ function verifyPins() {
 }
 
 function corpus(source) {
-  const match = /\\semanticdata\{([^\n]+)\}\n/.exec(source);
-  assert.ok(match, 'one canonical semantic module');
-  assert.equal(source.match(/\\semanticdata\{/g)?.length, 1);
-  const data = JSON.parse(match[1]);
-  assert.equal(JSON.stringify(canonical(data)), match[1]);
+  // LexLean reads exactly one module from either source surface.
+  const data = readSemantic(source);
   assert.equal(data.spec, 'lexlean/semantic-module/1');
   const declarations = new Map(data.declarations.map(declaration => [declaration.name, declaration]));
   assert.equal(declarations.size, data.declarations.length);
@@ -140,11 +138,10 @@ function corpus(source) {
 
 test('envelope corpus binds generated codec and closed literal data', () => {
   const source = readRegular(join(repository, 'stdlib/src/Foundation/Browser/V1/WorkspaceEnvelopeCorpus.lex.tex')).toString('utf8');
-  const match = /\\semanticdata\{([^\n]+)\}\n/.exec(source);
-  assert.ok(match, 'fixture parses before each planted negative');
+  assert.ok(readSemantic(source).declarations.length, 'fixture parses before each planted negative');
   function changed(mutate) {
-    const data = JSON.parse(match[1]); mutate(data.declarations);
-    return source.replace(match[1], JSON.stringify(canonical(data)));
+    const data = readSemantic(source); mutate(data.declarations);
+    return writeSemantic(source, canonical(data));
   }
   assert.throws(() => corpus(changed(rows => rows.pop())));
   assert.throws(() => corpus(changed(rows => rows.push(rows[0]))));
