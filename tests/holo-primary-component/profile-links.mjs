@@ -91,6 +91,7 @@ export function profileLinkAdversaries(component,owner,oracle){
       put(row.id+'-metadata.json',metadata),put(row.id+'-provenance.json',provenance)];
     assert.equal(oracle.call(['inspect',paths[0]]).accepted,true,'valid actual upstream framing/content before linkage refusal');
     const absent=join(root,row.id+'-must-not-open-vectors.json');assert.equal(existsSync(absent),false);
+    try{oracle.call(['execute',...paths,absent]);console.log('HO15DIAG '+row.id+' expected '+row.expected+' NO THROW');}catch(error){console.log('HO15DIAG '+row.id+' expected '+row.expected+' got '+String(error).slice(-400).replace(/\n/g,' | '));}
     assert.throws(()=>oracle.call(['execute',...paths,absent]),error=>String(error)
       .includes('component profile link mismatch: '+row.expected),
     'the real executor entry must reject the intended cross-structure fact before reading vectors or starting execution');
