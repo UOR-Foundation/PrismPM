@@ -73,3 +73,7 @@ Closes [#249](https://github.com/UOR-Foundation/PrismPM/issues/249).
 ```
 
 `node sdk/docs/generate.mjs verify` (the `docs generate` workflow on every pull request) rejects a shipped release whose features name no request. The rule is `changelogProblems` in `sdk/docs/lib/site.mjs`. The published `changelog.md` on the `docs-site` branch therefore names every request it shipped. Use the full link, not a bare `#N`: the docs vocabulary lint rejects bare issue numbers in prose, and the site is read off GitHub.
+
+## Writing the CHANGELOG.md entry
+
+A change that users can see gets one line in the `## [Unreleased]` entry of `CHANGELOG.md`, under one of the four headers `STABILITY.md` section 2 names, in this order: `### Features Added`, `### Breaking Changes`, `### Bugs Fixed`, `### Other Changes`. A breaking change goes under `### Breaking Changes` and makes the next version a minor bump; before 1.0 everything else is a patch bump. `node sdk/docs/changelog.mjs` checks this and runs in the `docs generate` workflow. [docs/release/versioning.md](docs/release/versioning.md) says how a version is cut.
