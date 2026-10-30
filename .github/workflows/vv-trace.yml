@@ -1,0 +1,45 @@
+name: V&V read-set trace (scratch, not release evidence)
+on:
+  push:
+    branches: [probe/vv-trace]
+permissions:
+  contents: read
+jobs:
+  trace:
+    name: trace ${{ matrix.owner }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        owner: ['DK-07','DK-08','DK-09','DK-10','DK-11','DK-12','DK-13','DK-14','DK-15','DK-16','DK-19','DK-20','DK-23','DK-24','DK-25','DK-26','DK-27','DK-31','DK-32','DK-33','DK-34','DK-35','DK-37','DK-38','ST-17','HO-15','Session Projection','Session Reservation','Session Payload','Session Recovery Frames','Session Journal Recovery','Session Retention']
+    steps:
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Trace this owner in the pinned devcontainer
+        uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
+        env:
+          TRACE_OWNER: ${{ matrix.owner }}
+        with:
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          push: never
+          env: |
+            TRACE_OWNER
+          runCmd: |
+            set -euo pipefail
+            bash scripts/vv.sh --with-sdk bash -euo pipefail -c 'node scripts/_vv-trace.mjs "$TRACE_OWNER"'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: trace-${{ strategy.job-index }}
+          path: target/trace/
+          if-no-files-found: warn
+          retention-days: 7
