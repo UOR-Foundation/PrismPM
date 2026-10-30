@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readSemantic, writeSemantic} from '../../scripts/semantic-source.mjs';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {
@@ -94,11 +95,8 @@ function verifyPins() {
 }
 
 function corpus(source) {
-  const match = /\\semanticdata\{([^\n]+)\}\n/.exec(source);
-  assert.ok(match, 'one canonical semantic module');
-  assert.equal(source.match(/\\semanticdata\{/g)?.length, 1);
-  const data = JSON.parse(match[1]);
-  assert.equal(JSON.stringify(canonical(data)), match[1]);
+  // LexLean reads exactly one module from either source surface.
+  const data = readSemantic(source);
   assert.equal(data.spec, 'lexlean/semantic-module/1');
   const declarations = new Map(data.declarations.map(declaration => [declaration.name, declaration]));
   assert.equal(declarations.size, data.declarations.length);
@@ -186,11 +184,10 @@ function corpus(source) {
 test('corpus collector rejects altered probe bindings and non-data fixture expressions', () => {
   const source = readRegular(join(repository,
     'stdlib/src/Foundation/Browser/V1/WorkspaceCorpus.lex.tex')).toString('utf8');
-  const match = /\\semanticdata\{([^\n]+)\}\n/.exec(source);
   function changed(mutate) {
-    const data = JSON.parse(match[1]);
+    const data = readSemantic(source);
     mutate(data.declarations);
-    return source.replace(match[1], JSON.stringify(canonical(data)));
+    return writeSemantic(source, canonical(data));
   }
   assert.throws(() => corpus(changed(rows => rows.pop())));
   assert.throws(() => corpus(changed(rows => rows.push(rows[0]))));
@@ -233,7 +230,7 @@ test('fresh LexLean workspace corpus executes completely through pinned producti
   const sources = new Map(files.map(file => [file, readRegular(join(repository,
     'stdlib/src/Foundation/Browser/V1', file))]));
   const vectors = corpus(sources.get('WorkspaceCorpus.lex.tex').toString('utf8'));
-  const workspace = JSON.parse(/\\semanticdata\{([^\n]+)\}\n/.exec(sources.get('Workspace.lex.tex').toString('utf8'))[1]);
+  const workspace = readSemantic(sources.get('Workspace.lex.tex').toString('utf8'));
   const errors = workspace.declarations.find(declaration => declaration.name === 'WorkspaceError');
   assert.equal(errors.kind, 'inductive');
   assert.deepEqual([...new Set(vectors.filter(vector => /^[0-9a-f]{2}$/.test(vector.response))
