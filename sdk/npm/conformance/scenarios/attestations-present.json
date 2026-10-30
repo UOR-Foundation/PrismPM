@@ -1,0 +1,56 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "attestations-present",
+  "feature": "attestations",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "fixtures/derived/Calculator.attested.holo",
+  "statement": "An archive with an attestation section still opens and its vectors pass, the inspection shows the ninth row named by the attestation-bundle extension and no recognized revision, and check reaches no verdict with format.revision, because no revision admits the section yet.",
+  "steps": [
+    {
+      "action": "inspect",
+      "archive": "fixtures/derived/Calculator.attested.holo",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "revision": null,
+          "verification": {
+            "footer": true,
+            "labels": true,
+            "cross_references": true
+          },
+          "sections": {
+            "$length": 9,
+            "$some": {
+              "kind": 14,
+              "name": "https://uor.foundation/extension/attestation-bundle/v1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "action": "vectors",
+      "archive": "fixtures/derived/Calculator.attested.holo",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "failed": 0
+        }
+      }
+    },
+    {
+      "action": "check",
+      "archive": "fixtures/derived/Calculator.attested.holo",
+      "expect": {
+        "exit": 2,
+        "result": null,
+        "error": {
+          "code": "format.revision"
+        }
+      }
+    }
+  ]
+}

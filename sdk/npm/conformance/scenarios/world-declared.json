@@ -1,0 +1,60 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "world-declared",
+  "feature": "world",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "The inspection reports the WIT world the archive declares: its contract, package, name, dual digest, imports and exports, that the guest conforms, and whether it is pure.",
+  "steps": [
+    {
+      "action": "inspect",
+      "archive": "$archive",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "world": {
+            "contract": "hologram:guest/core-wasm@1",
+            "package": {
+              "$type": "string"
+            },
+            "name": {
+              "$type": "string"
+            },
+            "digest": {
+              "sha256": {
+                "$regex": "^[0-9a-f]{64}$"
+              },
+              "blake3": {
+                "$regex": "^[0-9a-f]{64}$"
+              }
+            },
+            "imports": {
+              "$type": "array"
+            },
+            "exports": {
+              "$some": "holo_run"
+            },
+            "conforms": true,
+            "pure": {
+              "$type": "boolean"
+            },
+            "effects": {
+              "$type": "array"
+            },
+            "capability_set": {
+              "label": {
+                "$regex": "^blake3:[0-9a-f]{64}$"
+              },
+              "empty": {
+                "$type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -127,6 +127,7 @@ The three honesty levels:
 | `HO-19` | `build` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. |
 | `HO-29` | `build` | A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build. |
 | `HO-20` | `build` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. |
+| `HO-31` | `build` | The cross-runtime conformance suite in sdk/npm/conformance drives a runtime through one entrypoint process per scenario step, with scenarios that cite registered ids and expectations matched by path; the JavaScript runtime passes every scenario over every reference archive, its recorded history, the changed model and an attested archive, an expected failure declared per runtime never counts as a pass, and an undeclared pass of one fails the run. |
 
 ## lifecycle
 
@@ -181,6 +182,7 @@ The three honesty levels:
 | `RP-10` | `build` | All generated documentation is regenerated and validated against model registers. |
 | `RP-11` | `build` | License metadata and files conform to dual MIT/Apache-2.0 requirements. |
 | `RP-12` | `build` | Release artifacts are refused unless all release criteria and verifications hold. |
+| `RP-13` | `build` | COMPLIANCE.md is generated from the conformance suite's reports as one cell of +, - or N/A per feature and runtime and is refused when stale, and every holo format revision @prism-code/spec declares is named by a scenario that loads an archive of it, so a format change cannot merge without a scenario. |
 
 ## sdk
 

@@ -1,0 +1,20 @@
+{
+  "schema": "prism/conformance-runtimes/1",
+  "runtimes": {
+    "prism-code": {
+      "language": "JavaScript",
+      "entrypoint": ["node", "shims/prism-code.mjs"],
+      "xfail": "xfail/prism-code.json"
+    },
+    "prismpm": {
+      "language": "Rust",
+      "entrypoint": null,
+      "xfail": "xfail/prismpm.json"
+    },
+    "prism-python": {
+      "language": "Python",
+      "entrypoint": null,
+      "xfail": "xfail/prism-python.json"
+    }
+  }
+}

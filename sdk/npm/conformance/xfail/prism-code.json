@@ -1,0 +1,6 @@
+{
+  "schema": "prism/conformance-xfail/1",
+  "runtime": "prism-code",
+  "xfail": {},
+  "notApplicable": {}
+}

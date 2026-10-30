@@ -1,0 +1,27 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "attestations-absent",
+  "feature": "attestations",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "An archive of revision 2026-10-23 carries no attestation section: the inspection lists no attestation and no ninth row.",
+  "steps": [
+    {
+      "action": "inspect",
+      "archive": "$archive",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "revision": "2026-10-23",
+          "attestations": [],
+          "sections": {
+            "$length": 8
+          }
+        }
+      }
+    }
+  ]
+}

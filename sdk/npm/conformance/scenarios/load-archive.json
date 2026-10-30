@@ -1,0 +1,46 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "load-archive",
+  "feature": "load",
+  "cites": [
+    "HO-20",
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "A reference archive opens: the footer, every content-blob label and the manifest cross-references verify, it is physical version 4 with canonical flags, and the reader recognizes format revision 2026-10-23.",
+  "steps": [
+    {
+      "action": "inspect",
+      "archive": "$archive",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "schema": "prismpm/holo-inspection/1",
+          "physical_version": 4,
+          "flags": 0,
+          "revision": "2026-10-23",
+          "size": {
+            "$min": 1
+          },
+          "footer": {
+            "$regex": "^[0-9a-f]{64}$"
+          },
+          "digest": {
+            "sha256": {
+              "$regex": "^[0-9a-f]{64}$"
+            },
+            "blake3": {
+              "$regex": "^[0-9a-f]{64}$"
+            }
+          },
+          "verification": {
+            "footer": true,
+            "labels": true,
+            "cross_references": true
+          }
+        }
+      }
+    }
+  ]
+}

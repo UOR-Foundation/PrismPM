@@ -1,5 +1,11 @@
 Feature: holo
 
+  @HO-31 @build
+  Scenario: The cross-runtime conformance suite in sdk/npm/conformance drives a runtime through one entrypoint process per scenario step, with scenarios that cite registered ids and expectations matched by path; the JavaScript runtime passes every scenario over every reference archive, its recorded history, the changed model and an attested archive, an expected failure declared per runtime never counts as a pass, and an undeclared pass of one fails the run.
+    Given the suite's scenarios, the reference archives with their recorded histories, the changed model and the attested archive copied into sdk/npm/conformance, and the JavaScript shim registered as the prism-code entrypoint
+    When the owning Node suites run every scenario through the shim, run the shim on each action and each refusal, and apply expected-failure declarations that are true, stale and unknown
+    Then every scenario passes on prism-code with a deterministic report, a changed expectation is reported by path, an entrypoint without an outcome is an error, a true declaration is xfail, a stale one is unexpected-pass and fails the run, and an unknown one is refused
+
   @HO-29 @build
   Scenario: A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build.
     Given the released Calculator archive, the history recorded from its acceptance vectors, and a coherent archive whose guest and vectors both changed

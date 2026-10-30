@@ -1,0 +1,37 @@
+{
+  "schema": "prism/conformance-features/1",
+  "features": {
+    "load": {
+      "title": "Open a .holo archive and verify its footer, every content-blob label and the manifest cross-references",
+      "definedBy": ["HO-20", "docs/proposals/263-spec-package.md"]
+    },
+    "inspect": {
+      "title": "Describe an archive without running it: sections, dual digests, manifest, model and provenance, as prismpm/holo-inspection/1",
+      "definedBy": ["HO-20", "docs/proposals/271-inspect.md"]
+    },
+    "vectors": {
+      "title": "Dispatch every acceptance vector the model carries through the Core-Wasm guest and compare byte for byte",
+      "definedBy": ["HO-20"]
+    },
+    "history": {
+      "title": "Write the acceptance vectors as a prism/history/1 history",
+      "definedBy": ["HO-29", "docs/proposals/284-histories-replay.md"]
+    },
+    "replay": {
+      "title": "Re-execute recorded histories against a build, report every divergence and write the prism/replay/v1 statement, with exit codes 0, 1 and 2",
+      "definedBy": ["HO-29", "docs/proposals/284-histories-replay.md"]
+    },
+    "check": {
+      "title": "Judge an archive against a policy and return a prism/verdict/1 with its assurance level, with exit codes 0, 1 and 2",
+      "definedBy": ["docs/proposals/269-assurance-levels.md", "docs/proposals/270-check-rust.md"]
+    },
+    "world": {
+      "title": "Report the WIT world the archive declares and whether the guest conforms, and judge the pure-world and pinned-contract policies",
+      "definedBy": ["docs/proposals/278-wit-world.md", "docs/proposals/283-world-within-policy.md"]
+    },
+    "attestations": {
+      "title": "Report the attestation section: absent in an archive of revision 2026-10-23, listed when present, and withholding a verdict until a revision admits it",
+      "definedBy": ["docs/proposals/267-attestation-bundle.md", "docs/proposals/271-inspect.md"]
+    }
+  }
+}

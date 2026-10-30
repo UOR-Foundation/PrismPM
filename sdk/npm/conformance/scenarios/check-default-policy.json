@@ -1,0 +1,39 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "check-default-policy",
+  "feature": "check",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "The default policy requires P2; an archive of revision 2026-10-23 carries no statement, is P0, and fails with policy.level PP5601: exit 1 with the verdict.",
+  "steps": [
+    {
+      "action": "check",
+      "archive": "$archive",
+      "expect": {
+        "exit": 1,
+        "result": {
+          "schema": "prism/verdict/1",
+          "holo": {
+            "$regex": "^blake3:[0-9a-f]{64}$"
+          },
+          "level": "P0",
+          "passed": false,
+          "policy": {
+            "name": "default",
+            "minimum": "P2"
+          },
+          "reasons": {
+            "$some": {
+              "check": "policy.level",
+              "code": "PP5601",
+              "withholds": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -73,3 +73,9 @@ Feature: repository
     Given cargo xtask release-check
     When unverified or incomplete criteria exist
     Then release is refused with specific unmet criteria
+
+  @RP-13 @build
+  Scenario: COMPLIANCE.md is generated from the conformance suite's reports as one cell of +, - or N/A per feature and runtime and is refused when stale, and every holo format revision @prism-code/spec declares is named by a scenario that loads an archive of it, so a format change cannot merge without a scenario.
+    Given the committed COMPLIANCE.md, the conformance suite's report for prism-code, and the format revisions @prism-code/spec declares
+    When the owning Node suites render the matrix from the report, compare it with the committed file, and run the gate against the declared revisions, a revision added without a scenario, a scenario naming an undeclared revision, and a reference archive no scenario loads
+    Then the committed file is the rendering and a changed one is refused, every cell follows the statuses of its feature, and the gate passes the committed suite and names each missing scenario, undeclared revision and unloaded archive

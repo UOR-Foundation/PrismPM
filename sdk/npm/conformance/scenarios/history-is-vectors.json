@@ -1,0 +1,40 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "history-is-vectors",
+  "feature": "history",
+  "cites": [
+    "HO-29",
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "The acceptance vectors are written as a prism/history/1 history: at least one event, each with its request bytes in hex and a response, named after the application.",
+  "steps": [
+    {
+      "action": "history",
+      "archive": "$archive",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "schema": "prism/history/1",
+          "application": {
+            "$type": "string"
+          },
+          "events": {
+            "$length": {
+              "$min": 1
+            },
+            "$some": {
+              "request": {
+                "$regex": "^([0-9a-f]{2})*$"
+              },
+              "response": {
+                "$regex": "^([0-9a-f]{2})*$"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

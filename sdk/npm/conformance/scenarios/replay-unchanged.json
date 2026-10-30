@@ -1,0 +1,108 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "replay-unchanged",
+  "feature": "replay",
+  "cites": [
+    "HO-29",
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "The recorded history replays against the build it came from with no divergence, and the prism/replay/v1 statement names the guest as its subject, the model, the history by dual digest and the runtime.",
+  "steps": [
+    {
+      "action": "replay",
+      "archive": "$archive",
+      "histories": [
+        "$history"
+      ],
+      "expect": {
+        "exit": 0,
+        "error": null,
+        "result": {
+          "schema": "prismpm/replay-result/1",
+          "divergenceCount": 0,
+          "events": {
+            "$min": 1
+          },
+          "histories": [
+            {
+              "digest": {
+                "sha256": {
+                  "$regex": "^[0-9a-f]{64}$"
+                },
+                "blake3": {
+                  "$regex": "^[0-9a-f]{64}$"
+                }
+              },
+              "divergences": [],
+              "events": {
+                "$min": 1
+              }
+            }
+          ],
+          "runtime": {
+            "name": {
+              "$type": "string"
+            },
+            "version": {
+              "$type": "string"
+            }
+          },
+          "statement": {
+            "_type": "https://in-toto.io/Statement/v1",
+            "predicateType": "https://uor.foundation/prism/replay/v1",
+            "subject": [
+              {
+                "name": "guest",
+                "digest": {
+                  "sha256": {
+                    "$regex": "^[0-9a-f]{64}$"
+                  },
+                  "blake3": {
+                    "$regex": "^[0-9a-f]{64}$"
+                  }
+                }
+              }
+            ],
+            "predicate": {
+              "divergenceCount": 0,
+              "model": {
+                "sha256": {
+                  "$regex": "^[0-9a-f]{64}$"
+                },
+                "blake3": {
+                  "$regex": "^[0-9a-f]{64}$"
+                }
+              },
+              "histories": [
+                {
+                  "digest": {
+                    "sha256": {
+                      "$regex": "^[0-9a-f]{64}$"
+                    },
+                    "blake3": {
+                      "$regex": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "divergences": 0,
+                  "events": {
+                    "$min": 1
+                  }
+                }
+              ],
+              "runtime": {
+                "name": {
+                  "$type": "string"
+                },
+                "version": {
+                  "$type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "@prism-code/conformance",
+  "version": "0.1.0",
+  "private": false,
+  "description": "The executable conformance suite every Prism runtime runs: scenarios over the reference .holo archives and their recorded histories, driven through a runtime's entrypoint shim, with expected failures declared per runtime and the COMPLIANCE.md matrix generated from the results.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "prism-conformance": "./bin/prism-conformance.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./scenarios/*": "./scenarios/*",
+    "./fixtures/*": "./fixtures/*",
+    "./features.json": "./features.json",
+    "./runtimes.json": "./runtimes.json",
+    "./xfail/*": "./xfail/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "shims",
+    "scenarios",
+    "fixtures",
+    "xfail",
+    "features.json",
+    "runtimes.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "vendor": "node scripts/vendor.mjs",
+    "run": "node bin/prism-conformance.mjs run --runtime prism-code --report reports/prism-code.json",
+    "matrix": "node bin/prism-conformance.mjs run --runtime prism-code --report reports/prism-code.json && node bin/prism-conformance.mjs matrix reports/prism-code.json --out ../../../COMPLIANCE.md",
+    "gate": "node bin/prism-conformance.mjs gate"
+  },
+  "keywords": [
+    "prism",
+    "prismpm",
+    "holo",
+    "conformance",
+    "compliance",
+    "test-suite",
+    "uor"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UOR-Foundation/PrismPM",
+    "directory": "sdk/npm/conformance"
+  },
+  "homepage": "https://github.com/UOR-Foundation/PrismPM/tree/main/sdk/npm/conformance",
+  "bugs": "https://github.com/UOR-Foundation/PrismPM/issues",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

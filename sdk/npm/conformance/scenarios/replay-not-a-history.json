@@ -1,0 +1,28 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "replay-not-a-history",
+  "feature": "replay",
+  "cites": [
+    "HO-29",
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "fixtures/Calculator.holo",
+  "statement": "A file that is not a prism/history/1 history cannot be replayed: exit 2, no result, the refusal replay.history.",
+  "steps": [
+    {
+      "action": "replay",
+      "archive": "fixtures/Calculator.holo",
+      "histories": [
+        "fixtures/negative/not-a-history.json"
+      ],
+      "expect": {
+        "exit": 2,
+        "result": null,
+        "error": {
+          "code": "replay.history"
+        }
+      }
+    }
+  ]
+}

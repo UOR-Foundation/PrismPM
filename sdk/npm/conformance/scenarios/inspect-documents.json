@@ -1,0 +1,74 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "inspect-documents",
+  "feature": "inspect",
+  "cites": [
+    "HO-20",
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "An inspection describes the archive without running it: eight sections, the manifest naming the Core-Wasm contract and entry with the labels of its guest, view and capability set, the model document with its schema, name, dual digest and vector count, and the provenance with its schema and model identity.",
+  "steps": [
+    {
+      "action": "inspect",
+      "archive": "$archive",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "name": {
+            "$type": "string"
+          },
+          "sections": {
+            "$length": 8
+          },
+          "manifest": {
+            "uri": "https://hologram.foundation/realization/app-manifest",
+            "contract": "hologram:guest/core-wasm@1",
+            "entry": "holo_run",
+            "surface": "portable",
+            "labels": {
+              "guest": {
+                "$regex": "^blake3:[0-9a-f]{64}$"
+              },
+              "view": {
+                "$regex": "^blake3:[0-9a-f]{64}$"
+              },
+              "capability_set": {
+                "$regex": "^blake3:[0-9a-f]{64}$"
+              }
+            }
+          },
+          "model": {
+            "schema": {
+              "$regex": "^prismpm/model-document/[0-9]+$"
+            },
+            "name": {
+              "$type": "string"
+            },
+            "digest": {
+              "sha256": {
+                "$regex": "^[0-9a-f]{64}$"
+              },
+              "blake3": {
+                "$regex": "^[0-9a-f]{64}$"
+              }
+            },
+            "vectors": {
+              "$min": 1
+            }
+          },
+          "provenance": {
+            "schema": "prismpm/model-provenance/1",
+            "model_id": {
+              "$regex": "^[0-9a-f]{64}$"
+            },
+            "application_kappa": {
+              "$regex": "^blake3:[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

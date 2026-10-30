@@ -380,6 +380,17 @@ pub fn run_at(root: &Path, id: &str) {
         "RP-10" => verify_rp_10(root),
         "RP-11" => verify_rp_11(root),
         "RP-12" => verify_rp_12(root),
+        // COMPLIANCE.md is the matrix rendered from the suite's report and is
+        // refused when stale, and every holo format revision has a scenario (#287).
+        "RP-13" => node_suite::verify_exact(
+            root,
+            id,
+            &[
+                ("sdk/npm/conformance/test/matrix.test.mjs", 6),
+                ("sdk/npm/conformance/test/gate.test.mjs", 7),
+            ],
+            "600000",
+        ),
 
         "FT-01" | "FT-02" | "FT-03" | "FT-04" | "FT-05" | "FT-06" | "FT-07" | "FT-08" | "FT-09"
         | "FT-10" => {
@@ -418,6 +429,18 @@ pub fn run_at(root: &Path, id: &str) {
             &[
                 ("sdk/npm/prism-code/test/replay.test.mjs", 28),
                 ("sdk/npm/verify/test/replay-statement.test.mjs", 8),
+            ],
+            "600000",
+        ),
+        // The cross-runtime conformance suite and its JavaScript shim (#287):
+        // prism-code passes every scenario, and expected failures are strict.
+        "HO-31" => node_suite::verify_exact(
+            root,
+            id,
+            &[
+                ("sdk/npm/conformance/test/suite.test.mjs", 8),
+                ("sdk/npm/conformance/test/shim.test.mjs", 7),
+                ("sdk/npm/conformance/test/xfail.test.mjs", 7),
             ],
             "600000",
         ),

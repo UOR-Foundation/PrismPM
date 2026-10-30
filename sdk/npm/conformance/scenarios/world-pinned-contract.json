@@ -1,0 +1,35 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "world-pinned-contract",
+  "feature": "world",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "A policy pinning another contract fails with world.hash, a rule that withholds no level: exit 1.",
+  "steps": [
+    {
+      "action": "check",
+      "archive": "$archive",
+      "policy": {
+        "minimum": "P0",
+        "world": {
+          "contract": "hologram:guest/other@1"
+        }
+      },
+      "expect": {
+        "exit": 1,
+        "result": {
+          "passed": false,
+          "reasons": {
+            "$some": {
+              "check": "world.hash",
+              "withholds": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}

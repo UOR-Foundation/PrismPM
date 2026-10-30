@@ -1,0 +1,127 @@
+name: npm conformance
+
+# The runtime conformance suite in sdk/npm/conformance (#287). Short,
+# path-filtered and outside the devcontainer, like npm-prism-code.yml. It also
+# runs when the runtime it drives, the fixtures it copies, the spec constants
+# that declare the format revisions, or the wire model behind them change,
+# because the suite, the vendored copies, the committed COMPLIANCE.md and the
+# format gate must all agree with them. There is no publish job.
+
+on:
+  pull_request:
+    paths:
+      - sdk/npm/conformance/**
+      - sdk/npm/prism-code/**
+      - sdk/npm/spec/constants.mjs
+      - sdk/npm/verify/src/**
+      - stdlib/src/Foundation/Holo/V1/Wire.lex.tex
+      - COMPLIANCE.md
+      - CONFORMANCE.md
+      - .github/workflows/npm-conformance.yml
+  push:
+    branches: [main]
+    paths:
+      - sdk/npm/conformance/**
+      - sdk/npm/prism-code/**
+      - sdk/npm/spec/constants.mjs
+      - sdk/npm/verify/src/**
+      - stdlib/src/Foundation/Holo/V1/Wire.lex.tex
+      - COMPLIANCE.md
+      - CONFORMANCE.md
+      - .github/workflows/npm-conformance.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-conformance-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: sdk/npm/conformance
+
+jobs:
+  test:
+    name: node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: ${{ matrix.node }}
+      # The unit tests run the suite against the prism-code checkout, so a runtime
+      # change that moves a cell fails here and in the stale check below.
+      - name: Unit tests
+        run: node --test "test/*.test.mjs"
+      - name: Vendored fixtures are current
+        run: node scripts/vendor.mjs --check
+      - name: Package size and contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run --json > pack.json
+          node -e '
+            const pack = JSON.parse(require("fs").readFileSync("pack.json", "utf8"))[0];
+            console.log(`unpacked size: ${pack.unpackedSize} bytes, ${pack.entryCount} files`);
+            // 512 KiB: the suite, its shim and four archives of about 25 KiB each, with room for the second reference archive.
+            if (pack.unpackedSize > 524288) throw new Error("package exceeds 512 KiB");
+            const paths = pack.files.map((f) => f.path);
+            const stray = paths.filter((p) => /^(test|scripts|reports)\//.test(p));
+            if (stray.length) throw new Error(`tests, scripts or reports in the package: ${stray}`);
+            for (const required of ["bin/prism-conformance.mjs", "src/index.mjs", "shims/prism-code.mjs", "features.json", "runtimes.json", "xfail/prism-code.json", "fixtures/Calculator.holo", "fixtures/Calculator.history.json", "README.md", "LICENSE"]) {
+              if (!paths.includes(required)) throw new Error(`missing from the package: ${required}`);
+            }
+            if (!paths.some((p) => /^scenarios\/.*\.json$/.test(p))) throw new Error("no scenario in the package");
+          '
+          rm pack.json
+      - name: The entry point imports cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import('./src/index.mjs').then(m => { if (typeof m.runSuite !== 'function' || typeof m.renderMatrix !== 'function' || typeof m.gate !== 'function') throw new Error('entry point') })"
+
+  # The suite against prism-code, the committed matrix, and the format gate:
+  # one run on one system, because the report holds no host detail and the
+  # matrix is generated from it byte for byte.
+  compliance:
+    name: COMPLIANCE.md is current and every format revision has a scenario
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      - name: The suite against prism-code
+        run: node bin/prism-conformance.mjs run --runtime prism-code --report "$RUNNER_TEMP/prism-code.json"
+      # The committed file must be the one this report renders. A change that
+      # moves a cell regenerates it with `npm run matrix` and commits the result.
+      - name: COMPLIANCE.md is current
+        run: node bin/prism-conformance.mjs matrix "$RUNNER_TEMP/prism-code.json" --check ../../../COMPLIANCE.md
+      # A holo format revision cannot merge without a scenario that loads an archive of it.
+      - name: Every format revision is named by a scenario
+        run: node bin/prism-conformance.mjs gate --spec ../spec/constants.mjs
+      - name: Every scenario cites a registered id
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { loadScenarios } from "./src/index.mjs";
+            const registry = readFileSync("../../../CONFORMANCE.md", "utf8");
+            const ids = new Set([...registry.matchAll(/^\| `([A-Z]{2}-[0-9]{2})` \|/gm)].map((m) => m[1]));
+            for (const scenario of loadScenarios()) for (const cite of scenario.cites) {
+              if (!ids.has(cite)) throw new Error(`${scenario.id} cites ${cite}, which CONFORMANCE.md does not register`);
+            }
+          '

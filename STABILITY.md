@@ -112,6 +112,7 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code replay <history \| dir>... --holo <holo>`, `--statement <file>`, `--json` and exit codes 0, 1, 2 | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
 | `prism-code history <holo>`, `--output <file>`; `prism-code run --record <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
 | `replay <history \| dir>... --holo <holo>`, `--statement <file>` in the Rust CLI, exit codes 0, 1, 2 | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
+| `prism-conformance run --runtime <name>`, `--entrypoint <arg>`, `--report <file>`, `--scenario <id>`, `--keep`; `matrix <report>...`, `--out <file>`, `--check <file>`; `gate`, `--spec <file>`; `list`; exit codes 0, 1, 2, 64 | [#287](https://github.com/UOR-Foundation/PrismPM/issues/287) | On main |
 | `prism-code init [<dir>]`, `--name`, `--template`, `--sdk-image`, `--force`; `npm create prism-code` | [#281](https://github.com/UOR-Foundation/PrismPM/issues/281) | On main |
 | `prism-code manifest [<dir>]`, `--target <browser\|node>`, `--json` | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | On main |
 | The `prism.toml` manifest and its `prism.browser.toml` and `prism.node.toml` overlays, read by the Rust CLI | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | Planned |
@@ -150,8 +151,10 @@ Until then the old spelling runs as before and prints a warning naming the repla
 | `@prism-code/verify` | `verify`, `inspect`, `verifyTransparency`, `ASSURANCE`, `VerifyError`, `FORMAT_REVISION`, `INSPECTION_SCHEMA` | [#273](https://github.com/UOR-Foundation/PrismPM/issues/273), [#275](https://github.com/UOR-Foundation/PrismPM/issues/275) |
 | `@prism-code/spec` | The `prism/proof/v1` types and schema, the `prism/verdict/1` schema, assurance levels, the attestation and Sigstore bundle schemas, the trusted-root schema, the lock schemas, the `prism/capabilities/1` schema and types, the `prism/manifest/1` schema and types, the `prism/replay/v1` types and schema, and the `prism/history/1` schema and types | [#266](https://github.com/UOR-Foundation/PrismPM/issues/266), [#269](https://github.com/UOR-Foundation/PrismPM/issues/269), [#267](https://github.com/UOR-Foundation/PrismPM/issues/267), [#264](https://github.com/UOR-Foundation/PrismPM/issues/264), [#279](https://github.com/UOR-Foundation/PrismPM/issues/279), [#280](https://github.com/UOR-Foundation/PrismPM/issues/280), [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) |
 
+| `@prism-code/conformance` | The `prism/conformance-scenario/1`, `prism/conformance-step/1`, `prism/conformance-outcome/1`, `prism/conformance-report/1`, `prism/conformance-runtimes/1`, `prism/conformance-xfail/1` and `prism/conformance-features/1` shapes, the entrypoint contract, the matcher and its operators, `runSuite`, `renderMatrix`, `gate` and the other exports of `src/index.mjs`, and the generated `COMPLIANCE.md` | [#287](https://github.com/UOR-Foundation/PrismPM/issues/287) |
+
 `prism-code` entries land in the first release after 0.2.0.
-`@prism-code/verify` and `@prism-code/spec` are not published yet.
+`@prism-code/verify`, `@prism-code/spec` and `@prism-code/conformance` are not published yet.
 
 ### 6.3 Verdict fields
 

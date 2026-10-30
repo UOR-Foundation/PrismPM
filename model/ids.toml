@@ -73,6 +73,12 @@ level = "build"
 statement = "Release artifacts are refused unless all release criteria and verifications hold."
 
 [[id]]
+id = "RP-13"
+suite = "repository"
+level = "build"
+statement = "COMPLIANCE.md is generated from the conformance suite's reports as one cell of +, - or N/A per feature and runtime and is refused when stale, and every holo format revision @prism-code/spec declares is named by a scenario that loads an archive of it, so a format change cannot merge without a scenario."
+
+[[id]]
 id = "FT-01"
 suite = "facets"
 level = "build"
@@ -275,6 +281,12 @@ id = "HO-20"
 suite = "holo"
 level = "build"
 statement = "The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change."
+
+[[id]]
+id = "HO-31"
+suite = "holo"
+level = "build"
+statement = "The cross-runtime conformance suite in sdk/npm/conformance drives a runtime through one entrypoint process per scenario step, with scenarios that cite registered ids and expectations matched by path; the JavaScript runtime passes every scenario over every reference archive, its recorded history, the changed model and an attested archive, an expected failure declared per runtime never counts as a pass, and an undeclared pass of one fails the run."
 
 [[id]]
 id = "CT-01"

@@ -1,0 +1,24 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "check-no-verdict",
+  "feature": "check",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "fixtures/negative/not-a-history.json",
+  "statement": "A file that is not a holo gets no verdict: exit 2, no result, the refusal archive.magic.",
+  "steps": [
+    {
+      "action": "check",
+      "archive": "fixtures/negative/not-a-history.json",
+      "expect": {
+        "exit": 2,
+        "result": null,
+        "error": {
+          "code": "archive.magic"
+        }
+      }
+    }
+  ]
+}

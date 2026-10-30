@@ -1,0 +1,38 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "check-pinned-digest",
+  "feature": "check",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "A policy pinning a guest digest the archive does not have fails with policy.digests.guest, a rule that withholds no level: exit 1.",
+  "steps": [
+    {
+      "action": "check",
+      "archive": "$archive",
+      "policy": {
+        "minimum": "P0",
+        "digests": {
+          "guest": {
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "expect": {
+        "exit": 1,
+        "result": {
+          "schema": "prism/verdict/1",
+          "passed": false,
+          "reasons": {
+            "$some": {
+              "check": "policy.digests.guest",
+              "withholds": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}

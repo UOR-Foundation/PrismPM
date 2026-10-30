@@ -1,0 +1,27 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "world-pure-policy",
+  "feature": "world",
+  "cites": [
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "The pure-world policy, effects [], passes an archive whose world imports no effect.",
+  "steps": [
+    {
+      "action": "check",
+      "archive": "$archive",
+      "policy": {
+        "minimum": "P0",
+        "effects": []
+      },
+      "expect": {
+        "exit": 0,
+        "result": {
+          "passed": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "prism/conformance-scenario/1",
+  "id": "vectors-pass",
+  "feature": "vectors",
+  "cites": [
+    "HO-20",
+    "HO-31"
+  ],
+  "revision": "2026-10-23",
+  "archive": "each",
+  "statement": "Every acceptance vector the model carries dispatches through the Core-Wasm guest and answers byte for byte.",
+  "steps": [
+    {
+      "action": "vectors",
+      "archive": "$archive",
+      "expect": {
+        "exit": 0,
+        "result": {
+          "passed": {
+            "$min": 1
+          },
+          "failed": 0,
+          "total": {
+            "$min": 1
+          }
+        },
+        "error": null
+      }
+    }
+  ]
+}
