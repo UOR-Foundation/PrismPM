@@ -49,7 +49,6 @@ export function frozenInputs() {
     ...lexiconPaths(repository), 'tests/fixtures/library/native-library/project/lexlean.toml', 'model/dependencies.toml',
     'model/authorities.toml', 'lean-toolchain', 'rust-toolchain.toml', 'LICENSE-MIT', 'LICENSE-APACHE',
     'vendor/lean4-prod/lean.tar']) files.add(path);
-  for (const path of compilerInputPaths(family)) files.add(path);
   // Capture transitive static imports, not only the visible entry filenames.
   // In particular, the independent session corpus imports the effect corpus.
   const modules = localModuleInputs(repository, [...files].filter(path => path.endsWith('.mjs')), read);
@@ -69,6 +68,8 @@ export function frozenInputs() {
       const input = tree + '/' + relative; assert.equal(sha(read(input)), digest); files.add(input);
     }
   }
+  // Hash, never parse: the registered compiler closure includes vendored test fixtures.
+  for (const path of compilerInputPaths(family)) files.add(path);
   const inputs = Object.freeze(Object.fromEntries([...files].sort().map(path => [path, sha(read(path))])));
   for (const [path, bytes] of modules) assert.equal(sha(bytes), inputs[path], 'captured static module ' + path);
   capturedInputs.add(inputs);
