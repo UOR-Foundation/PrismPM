@@ -152,6 +152,7 @@ fn main() -> ExitCode {
         "conformance" => run_conformance(&root, &std::env::args().skip(2).collect::<Vec<_>>()),
         "unit-tests" => run_unit_tests(&root),
         "vv" => run_vv(&root),
+        "vv-probe" => run_vv_probe(&root),
         _ => {
             eprintln!("Usage: cargo xtask <task>");
             return ExitCode::from(2);
@@ -885,6 +886,97 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     )?;
     println!("All 15 VV gates PASSED for commit {commit}.");
     Ok(())
+}
+
+/// Temporary diagnostic, never release evidence: runs VV gates 7-15 the way
+/// `run_vv` does, but records every gate failure instead of stopping at the
+/// first, so one run reports all of them.
+fn run_vv_probe(root: &Path) -> Result<(), Fail> {
+    require_clean_worktree(root)?;
+    let mut failed: Vec<&str> = Vec::new();
+    let mut gate = |label: &'static str, body: &mut dyn FnMut() -> Result<(), Fail>| {
+        println!("VV probe gate {label}: start");
+        match body() {
+            Ok(()) => println!("VV probe gate {label}: PASSED"),
+            Err(error) => {
+                println!("VV probe gate {label}: FAILED: {error}");
+                failed.push(label);
+            }
+        }
+    };
+    gate("7/15 feature, conformance, and negative fixtures", &mut || {
+        check_fixtures(root, false)?;
+        command(
+            root,
+            "cargo",
+            &[
+                "run",
+                "--locked",
+                "--offline",
+                "--manifest-path",
+                "tests/holo-codec-oracle/Cargo.toml",
+                "--target-dir",
+                "target/holo-codec-oracle",
+            ],
+        )
+    });
+    gate("8/15 generated Lean build, replay, axiom audit, and source audit", &mut || {
+        verify_examples(root, false)?;
+        audit::audit_no_handwritten_lean(root)?;
+        Ok(())
+    });
+    gate("9/15 LexLean format/lock and Prism check/build/verify", &mut || {
+        for operation in [["fmt", "--check"], ["lock", "--check"]] {
+            command(
+                root,
+                "cargo",
+                &[
+                    "run",
+                    "--locked",
+                    "--offline",
+                    "--target-dir",
+                    "target/vendor-lexlean",
+                    "--manifest-path",
+                    "vendor/lexlean/Cargo.toml",
+                    "--",
+                    "--project",
+                    "lexlean.toml",
+                    operation[0],
+                    operation[1],
+                ],
+            )?;
+        }
+        let controller = prismpm::Controller::load(root)?;
+        controller.check(prismpm::controller::CheckRequest { config_path: None })?;
+        let _ = build_once(root)?;
+        let _ = verify_once(root)?;
+        Ok(())
+    });
+    gate("10/15 Holo schema and reviewed golden bytes", &mut || check_golden(root, false));
+    gate("11/15 named export, coverage, Rust compilation, and execution evidence", &mut || {
+        check_verified_evidence(root)
+    });
+    gate("12/15 two-absolute-directory reproducibility", &mut || check_reproducibility(root));
+    gate("13/15 authoritative upstream corpora, registry, and runtime conformance", &mut || {
+        prismpm::upstream_conformance::verify(root)?;
+        Ok(())
+    });
+    gate("14/15 dependency policy", &mut || {
+        command(root, "cargo", &["deny", "--frozen", "--all-features", "check"])
+    });
+    gate("15/15 verified stdlib package, crate archives, and downstream public API", &mut || {
+        package_api_check(root)
+    });
+    if failed.is_empty() {
+        println!("VV probe: gates 7-15 all PASSED (diagnostic only, not release evidence)");
+        Ok(())
+    } else {
+        println!("VV probe: {} gate(s) FAILED:", failed.len());
+        for label in &failed {
+            println!("  - {label}");
+        }
+        Err(format!("{} probe gate(s) failed", failed.len()).into())
+    }
 }
 
 fn verify_examples(root: &Path, _write: bool) -> Result<(), Fail> {
