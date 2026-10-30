@@ -405,6 +405,61 @@ npx prism-code build
 Nothing in this package can produce a `.holo` without the image, and no
 native `prismpm` binary ships in this release.
 
+## Develop with a local studio (experimental, #288)
+
+`prism-code dev` runs the build-and-check loop for you, in the project
+directory, and serves a studio that shows the result:
+
+```
+cd my-prism-project
+npx prism-code dev
+npx prism-code dev --port 4100 --policy policy.json
+```
+
+It watches the model sources and the project files (`prism.toml` and its
+overlays, `prismpm.toml`, `lexlean.toml`, `lexlean.lock`, `prismpm.lock`),
+and on every change runs the project's build and then `check` on the holo the
+build wrote, with the same policy `check` takes. The latest verdict stays in
+memory; nothing is written outside the build root. A burst of saves is one
+rebuild, and a save during a run queues exactly one more.
+
+| What | Where it comes from |
+| --- | --- |
+| Model globs | `[model] watch` in `prism.toml`; else `[model] source`; else `src/**/*.lex.tex` and `language/**/*.toml` |
+| The build | `[model] build` in `prism.toml`, run through the shell; else `prism-code build` (`prismpm build` in the SDK image) |
+| The holo | the newest `.holo` under the build root (`build_root` in `prismpm.toml`, default `.prism`) |
+| Not watched | the build root, `.git`, `node_modules`, `.lake`, `.lexlean` |
+
+The studio is at `http://127.0.0.1:4100/`. The port is fixed so a bookmark and
+a script always reach the same studio: a port in use refuses to start with
+exit 69 instead of picking another, and `--port <n>` chooses a different one
+(`0` picks a free port, for scripts). The studio is three static files served
+by the dev process, with no CDN and no network call, and its page carries a
+`Content-Security-Policy` of `'self'`, so it works offline and the browser
+refuses any other origin.
+
+- The Check tab shows the verdict (passed or failed), the level and its name,
+  the policy, the holo digest, every reason with its title, and the limits
+  text `check` prints from P2 up. A failed build shows the build output; a
+  no-verdict shows why.
+- The Replay tab lists the histories in `histories/` (every `.json` directly in
+  it, as `prism-code replay <dir>` reads them) and their replay result against
+  each build. Until replay (#284) is in this build, it says "replay not
+  available in this build".
+- Every run shows its edit-to-verdict time, measured from the first changed
+  file of the burst to the verdict, split into build and check, so the
+  done-when of #288 can be read off the Runs table.
+
+Live updates go over Server-Sent Events, never polling. The same state is
+plain HTTP for scripts: `GET /state` is everything the studio shows, `GET
+/verdict` is the latest verdict exactly as `check --json` prints it (404
+until there is one), `GET /events` streams `state` events, and `POST /rebuild`
+runs the loop once. The terminal prints one line per run:
+
+```
+run 3  PASSED  P0 unverified  policy p0.json  edit to verdict 4.21 s (build 3.90 s, check 0.31 s; 1 changed: src/Calculator.lex.tex)
+```
+
 ## Plugins (experimental, #293)
 
 An executable named `prism-<name>` on the PATH runs as `prism-code <name>`,

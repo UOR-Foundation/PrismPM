@@ -45,6 +45,7 @@
     "src",
     "types",
     "templates",
+    "studio",
     "fixtures/Calculator.holo",
     "README.md",
     "LICENSE"

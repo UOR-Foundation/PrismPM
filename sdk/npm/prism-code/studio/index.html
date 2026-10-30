@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Prism studio</title>
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<header class="bar">
+  <div class="title">
+    <span class="mark" aria-hidden="true"></span>
+    <h1 id="project-name">Prism studio</h1>
+    <span id="project-version" class="muted"></span>
+  </div>
+  <div class="status">
+    <span id="status" class="pill" data-status="connecting">connecting</span>
+    <span id="run" class="muted"></span>
+    <button id="rebuild" type="button" title="Run the build and the check once, now">Rebuild</button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Studio tabs">
+  <button role="tab" id="tab-check" aria-controls="panel-check" aria-selected="true" data-tab="check">Check</button>
+  <button role="tab" id="tab-replay" aria-controls="panel-replay" aria-selected="false" data-tab="replay">Replay</button>
+</nav>
+
+<main>
+  <section id="panel-check" role="tabpanel" aria-labelledby="tab-check">
+    <div class="verdict" id="verdict-card" data-outcome="none">
+      <div class="outcome"><span id="outcome">waiting for the first run</span></div>
+      <dl class="facts">
+        <div><dt>Level</dt><dd id="level">-</dd></div>
+        <div><dt>Policy</dt><dd id="policy">-</dd></div>
+        <div><dt>Holo</dt><dd id="holo" class="mono">-</dd></div>
+        <div><dt>Edit to verdict</dt><dd id="elapsed">-</dd></div>
+      </dl>
+      <p id="timing-detail" class="muted"></p>
+    </div>
+
+    <section id="build-section" hidden>
+      <h2>Build</h2>
+      <p id="build-problem"></p>
+      <pre id="build-output" class="log"></pre>
+    </section>
+
+    <section id="no-verdict-section" hidden>
+      <h2>No verdict</h2>
+      <p id="no-verdict"></p>
+    </section>
+
+    <section id="reasons-section" hidden>
+      <h2>Reasons</h2>
+      <p class="muted">Every check that did not pass, in evaluation order. A reason that withholds a level kept the holo below it; a policy rule withholds none.</p>
+      <table>
+        <thead><tr><th>Check</th><th>Code</th><th>Title</th><th>Withholds</th><th>Message</th></tr></thead>
+        <tbody id="reasons"></tbody>
+      </table>
+    </section>
+
+    <section id="limits-section">
+      <h2>What this check cannot know</h2>
+      <p id="limits-note" class="muted">Printed with every verdict that reaches P2. It trusts the signer for these:</p>
+      <ul id="limits"></ul>
+    </section>
+
+    <section id="runs-section" hidden>
+      <h2>Runs</h2>
+      <table>
+        <thead><tr><th>Run</th><th>At</th><th>Why</th><th>Outcome</th><th>Edit to verdict</th><th>Build</th><th>Check</th></tr></thead>
+        <tbody id="runs"></tbody>
+      </table>
+    </section>
+  </section>
+
+  <section id="panel-replay" role="tabpanel" aria-labelledby="tab-replay" hidden>
+    <div class="verdict" id="replay-card" data-outcome="none">
+      <div class="outcome"><span id="replay-outcome">replay not available in this build</span></div>
+      <p id="replay-note" class="muted"></p>
+    </div>
+    <section id="histories-section" hidden>
+      <h2>Histories</h2>
+      <table>
+        <thead><tr><th>History</th><th>Application</th><th>Events</th><th>Divergences</th></tr></thead>
+        <tbody id="histories"></tbody>
+      </table>
+    </section>
+    <section id="divergences-section" hidden>
+      <h2>Divergences</h2>
+      <table>
+        <thead><tr><th>History</th><th>Event</th><th>Request</th><th>Recorded</th><th>Replayed</th></tr></thead>
+        <tbody id="divergences"></tbody>
+      </table>
+    </section>
+  </section>
+</main>
+
+<footer class="muted">
+  <span id="watching"></span>
+  <span id="updated"></span>
+  <span>Served from the dev process only: no CDN, no network call.</span>
+</footer>
+<script src="studio.js"></script>
+</body>
+</html>

@@ -28,7 +28,7 @@
       { "code": 2, "name": "refused", "meaning": "The holo, capability file or manifest cannot be read or fails its checks, an identity check failed, or a guest import or the holo's world is not granted; or `check` reached no verdict: not a holo, an unreadable policy or an unknown format revision." },
       { "code": 3, "name": "signing failed", "meaning": "`attest` could not sign, or the optional sigstore packages are not installed." },
       { "code": 64, "name": "usage", "meaning": "The arguments were wrong, or `prismpm.lock` is missing." },
-      { "code": 69, "name": "no Docker", "meaning": "Docker is not installed or not on the PATH." }
+      { "code": 69, "name": "no Docker", "meaning": "Docker is not installed or not on the PATH, or the port `dev` was given is in use." }
     ],
     "verbs": [
       { "name": "run", "usage": "prism-code run <app.holo> [--port <n>] [--policy <file>] [--capabilities <file>]", "summary": "Check the holo against the policy, then serve its view on a local port; a POST to `/_hologram/intent` dispatches one request. A holo that fails check is refused unless `--allow-unverified`, which warns on every start." },
@@ -40,6 +40,7 @@
       { "name": "verify-attestation", "usage": "prism-code verify-attestation <app.holo> --certificate-identity <id> --certificate-oidc-issuer <url>", "summary": "Check the holo's attestations against the signer you expect, or against `--key`." },
       { "name": "check", "usage": "prism-code check <app.holo> [--policy <file>] [--json]", "summary": "Judge the holo against a policy and print its verdict: the assurance level, whether the policy passed, and every reason. Without a holo, the deprecated spelling of `build --check`, removed in 0.4.0." },
       { "name": "build", "usage": "prism-code build [--check]", "summary": "Build the project into a holo inside the toolchain image the lockfile pins. With `--check`, validate the model and write nothing." },
+      { "name": "dev", "usage": "prism-code dev [--port <n>] [--policy <file>]", "summary": "In a project: watch the model and `prism.toml`, rebuild and re-check on every change, and serve a local studio with Check and Replay tabs at `http://127.0.0.1:4100/`, offline. The port is fixed; a busy port refuses to start." },
       { "name": "verify", "usage": "prism-code verify", "summary": "Run verify in the toolchain image the lockfile pins." },
       { "name": "conformance", "usage": "prism-code conformance", "summary": "Run the conformance suite in the toolchain image the lockfile pins." }
     ],

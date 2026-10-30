@@ -5,6 +5,11 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `prism-code dev [--port <n>] [--policy <file>]` (#288, experimental): in a project directory, watches the model sources (`[model] watch` in `prism.toml`, default `src/**/*.lex.tex` and `language/**/*.toml`) and the project files, and on every change runs the project's build (`[model] build`, else `prism-code build`) and then `check` on the newest holo under the build root, with the same policy `check` takes. Bursts are debounced into one rebuild and a change during a run queues exactly one more. It serves a local studio at `http://127.0.0.1:4100/`: three static files from the dev process with a `Content-Security-Policy` of `'self'`, no CDN and no network call, so it works offline; a Check tab (verdict, level, policy, reasons with titles, the limits text from P2 up, build output on a failed build) and a Replay tab that lists `histories/*.json` and their replay result, or says "replay not available in this build" until #284's `replay` is in the build. Live updates go over Server-Sent Events (`GET /events`); `GET /verdict` is the verdict exactly as `check --json` prints it, `GET /state` everything the studio shows, `POST /rebuild` one run. Every run records its edit-to-verdict time, split into build and check. The port is fixed: a port in use refuses to start with exit 69 instead of picking another.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

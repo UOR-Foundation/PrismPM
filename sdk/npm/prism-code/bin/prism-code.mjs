@@ -17,14 +17,15 @@
  *   prism-code check <app.holo> [--policy <file>] [--json]
  *                                                     judge the holo against a policy and print its verdict
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
+ *   prism-code dev [--port <n>] [--policy <file>]     watch the model, rebuild, re-check, and serve the studio (#288)
  *   prism-code <plugin> [args]                        run prism-<plugin> from the PATH (experimental)
  *
  * Exit codes: 0 ok or the policy passed, 1 vectors failed, an attestation did
  * not verify or the policy failed, 2 artifact refused (a guest import no
  * capability set grants, a world outside the grant, or a manifest that fails
  * its checks, included) or no verdict, 3 signing failed or the sigstore
- * packages are missing, 64 usage, 69 Docker unavailable, otherwise the
- * delegated command's or the plugin's code.
+ * packages are missing, 64 usage, 69 Docker unavailable or the studio's port
+ * in use, otherwise the delegated command's or the plugin's code.
  *
  * `check` without a holo is the 0.2.0 spelling of `build --check`. It still
  * runs, with a warning, and is removed in 0.4.0 (STABILITY.md, Deprecated).
@@ -40,8 +41,9 @@ import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs'
 import { CapabilityDeniedError, PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { canonicalJson } from '../src/archive.mjs';
-import { check, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
+import { check, formatVerdict, verdictJson, exitCodeOf, readPolicy, EXIT as CHECK_EXIT } from '../src/check.mjs';
 import { discover, errorHookMessages, listPlugins, pluginHelp, readMetadata, runPlugin } from '../src/plugins.mjs';
+import { DEFAULT_PORT as DEV_PORT, createDevLoop, createDevServer, describeProject, formatRun, replaySupport, watchProject } from '../src/dev.mjs';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
@@ -79,6 +81,9 @@ Usage:
   prism-code build [args]                           prismpm build (needs the Docker socket)
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
   prism-code conformance [args]                     prismpm conformance
+  prism-code dev [--port <n>] [--policy <file>]     in a project: watch the model and prism.toml, rebuild and re-check on
+                                                    every change, and serve a local offline studio (Check and Replay tabs)
+                                                    at http://127.0.0.1:${DEV_PORT}/; a port in use refuses to start (exit 69)
   prism-code <plugin> [args]                        run prism-<plugin> from the PATH; a built-in verb always wins
   prism-code --version | --help
 
@@ -102,6 +107,10 @@ Options for check:    --policy <file>              a JSON policy: name, minimum 
                       deprecated: check without a holo runs build --check; removed in 0.4.0
 Options for manifest: --target <browser|node>      merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the merged manifest and the warnings as canonical JSON
+Options for dev:      --port <n>                   the studio's port, default ${DEV_PORT}; 0 picks a free one (for scripts)
+                      --policy <file>              the policy the Check tab judges by, as for check
+                      the build is [model] build in prism.toml, else prism-code build; the holo is the newest
+                      under the build root; histories/*.json replay when this build has replay
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -359,6 +368,67 @@ async function commandManifest(positional, options) {
   return 0;
 }
 
+const DEV_OPTIONS = ['port', 'policy'];
+
+/**
+ * `dev` (issue #288): watch, rebuild, re-check, serve the studio. The loop
+ * runs the project's build (`[model] build` in prism.toml, else `prism-code
+ * build`) and then `check` on the holo it wrote, with the same policy `check`
+ * takes; the studio shows the verdict and the edit-to-verdict time, offline.
+ */
+async function commandDev(positional, options) {
+  const unknown = Object.keys(options).find((name) => !DEV_OPTIONS.includes(name));
+  if (unknown) return usage(`dev has no option --${unknown}`);
+  if (positional.length !== 0) return usage('dev takes no argument; run it in the project directory');
+  if (Object.hasOwn(options, 'policy') && (typeof options.policy !== 'string' || options.policy === '')) return usage('--policy takes a file');
+  const port = options.port === undefined ? DEV_PORT : Number(options.port);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) return usage('--port must be 0..65535');
+  if (options.policy !== undefined) {
+    try {
+      await readPolicy(options.policy);
+    } catch (error) {
+      if (!(error instanceof PrismError)) throw error;
+      process.stderr.write(`no verdict: ${error.check ?? error.code}: ${error.message}\n`);
+      return CHECK_EXIT.NO_VERDICT;
+    }
+  }
+  const project = await describeProject(process.cwd());
+  const replay = await replaySupport(project.directory);
+  const loop = createDevLoop({ project, replay, policy: options.policy });
+  let served;
+  try {
+    served = await createDevServer(loop, { port });
+  } catch (error) {
+    if (error instanceof PrismCodeError && error.code === 'dev.port') {
+      process.stderr.write(`${error.code}: ${error.message}\n`);
+      return 69;
+    }
+    throw error;
+  }
+  const stop = watchProject(project, loop, { onError: (error) => process.stderr.write(`watch: ${error.message}\n`) });
+  loop.on('error', (error) => process.stderr.write(`${error?.stack ?? error}\n`));
+  loop.on('state', (state) => {
+    if (state.status === 'idle' && state.run > 0) process.stdout.write(formatRun(state));
+  });
+  process.stdout.write(`${project.name} in ${project.directory}\n`);
+  if (project.manifestError) process.stderr.write(`warning: ${project.manifestError.code}: ${project.manifestError.message}; watching the defaults\n`);
+  process.stdout.write(`watching: ${[...project.files, ...project.watch].join(', ')} (not ${project.ignored.join(', ')})\n`);
+  process.stdout.write(`build: ${project.buildCommand ?? 'prism-code build'}; check: policy ${options.policy ?? 'default'}\n`);
+  process.stdout.write(`replay: ${replay.available ? `${replay.histories}/*.json against every build` : replay.reason}\n`);
+  process.stdout.write(`studio at ${served.url} (offline: Check and Replay tabs; GET /verdict, GET /events)\n`);
+  loop.runNow('start');
+  await new Promise((done) => {
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+      process.once(signal, () => {
+        stop();
+        loop.close();
+        served.close().then(done);
+      });
+    }
+  });
+  return 0;
+}
+
 async function commandDelegate(command, args) {
   const cwd = process.cwd();
   let lock;
@@ -443,6 +513,8 @@ async function main(argv) {
     case 'build':
       if (rest.includes('--check')) return commandDelegate('check', rest.filter((a) => a !== '--check'));
       return commandDelegate('build', rest);
+    case 'dev':
+      return commandDev(positional, options);
     default:
       if (Object.hasOwn(DELEGATED, command)) return commandDelegate(command, rest);
       return commandPlugin(command, rest);
