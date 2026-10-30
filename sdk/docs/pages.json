@@ -17,6 +17,7 @@
       "title": "Guides",
       "pages": [
         { "path": "guides/write-from-examples", "narrative": true },
+        { "path": "guides/dev-studio", "narrative": true },
         { "path": "guides/verify-and-inspect", "narrative": true },
         { "path": "guides/run-and-gate", "narrative": true },
         { "path": "guides/ship", "narrative": true },

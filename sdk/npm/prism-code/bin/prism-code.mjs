@@ -16,6 +16,8 @@
  *   prism-code verify-attestation <app.holo> ...      check the signatures of those statements
  *   prism-code check <app.holo> [--policy <file>] [--json]
  *                                                     judge the holo against a policy and print its verdict
+ *   prism-code dev [<dir>] [--port N] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
+ *                                                     watch the project, rebuild and re-check on every change, serve the local studio
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
  *   prism-code <plugin> [args]                        run prism-<plugin> from the PATH (experimental)
  *
@@ -74,6 +76,9 @@ Usage:
   prism-code check <app.holo> [--policy <file>] [--json]
                                                     judge the holo against a policy and print its verdict:
                                                     exit 0 passed, 1 failed, 2 no verdict
+  prism-code dev [<dir>] [--port <n>] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
+                                                    watch the project, rebuild and re-check on every change, and
+                                                    serve the local studio at http://localhost:4100: tabs Check, Replay
   prism-code build --check [args]                   prismpm check in the SDK image named by ./prismpm.lock:
                                                     validate the model, write nothing
   prism-code build [args]                           prismpm build (needs the Docker socket)
@@ -102,6 +107,11 @@ Options for check:    --policy <file>              a JSON policy: name, minimum 
                       deprecated: check without a holo runs build --check; removed in 0.4.0
 Options for manifest: --target <browser|node>      merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the merged manifest and the warnings as canonical JSON
+Options for dev:      --port <n>                   the studio's port, default 4100; a port in use is an error, not a move
+                      --no-open                    do not open the studio in a browser
+                      --policy <file>              the policy the Check tab judges by, as for check; an edit to it re-checks
+                      --build <command>            the build, in a shell; default [model].build of prism.toml, then prism-code build
+                      --holo <path>                the file the build writes; default the one the build reports
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -432,6 +442,10 @@ async function main(argv) {
     case 'init': {
       const { runInit } = await import('../src/init-cli.mjs');
       return runInit(rest);
+    }
+    case 'dev': {
+      const { runDev } = await import('../src/dev-cli.mjs');
+      return runDev(rest);
     }
     case 'attest':
     case 'verify-attestation':
