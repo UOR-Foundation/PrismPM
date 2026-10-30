@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Features Added
 - `prism-code dev [<dir>]` and the local studio (#288, `docs/proposals/288-prism-dev.md`, experimental): watches the model, rebuilds when the bytes of its sources change, judges the new holo with the `check` the command line runs, and serves a page on `http://localhost:4100` (`--port` moves it; a port in use is the error `dev.port`, never a silent move) with a Check tab (the verdict, the level, every reason, the time from the edit to the verdict) and a Replay tab, which says `unavailable` until `prism replay` reaches main and reads one file, `src/dev-replay.mjs`. The page is plain HTML with no framework, loads nothing from outside its origin, and judges the same bytes again with `@prism-code/verify`. A build that fails, or names no holo, leaves no current verdict. `--policy <file>` re-checks on an edit to the policy with no build; `--build <command>` and `--holo <path>` name a build of your own. `.github/workflows/dev-e2e.yml` measures edit to verdict with the real build and runs the page in a network namespace with only loopback.
 
 ## [0.4.0] - 2026-10-27
