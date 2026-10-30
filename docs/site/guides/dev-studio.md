@@ -17,9 +17,9 @@ npx prism-code dev
 Watching src/**/*.lex.tex, model/**/*.lex.tex, prism.toml, prismpm.toml, lexlean.toml
 Studio at http://localhost:4100  tabs: Check, Replay
 Building
-Built Calculator in 41.2s  Level: P0  FAILED, policy default requires P2
+Built Calculator in <seconds>s  Level: P0  FAILED, policy default requires P2
 Changed src/Calculator.lex.tex; rebuilding
-Built Calculator in 6.3s  Level: P0  FAILED, policy default requires P2  edit to verdict 6.4s
+Built Calculator in <seconds>s  Level: P0  FAILED, policy default requires P2  edit to verdict <seconds>s
 ```
 
 The default policy asks for level `P2`, so a holo with no signed statements fails it. That verdict is correct. Pass a policy of your own to judge by something else.
