@@ -5,6 +5,11 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `prismpm check <path.holo> [--policy <file>] [--json]` (#270, experimental, `docs/proposals/270-check-rust.md`): the Rust half of the typed verdict. The holo is read through the modeled wire accessors and judged against a policy; the verdict is the `prism/verdict/1` of `prism-code check`, `holo.verify()` and `@prism-code/verify`, with the same check ids, order and withheld levels, held against the goldens the JavaScript CLI prints (AL-06). Exit 0 when the policy passes, 1 when it fails, 2 when no verdict was reached; with `--json` stdout holds exactly one canonical verdict on 0 and 1 and nothing on 2, and the exit 2 diagnostic is `PP5603` on stderr. The reader admits the attestation section of #267 and checks a proof statement with the checks of #266 (`PP5501` to `PP5507`), but verifies no signature until #272, so a present statement fails its envelope check and every holo is P0 today. `PP5601` (level below the policy minimum) and `PP5602` (world exceeds the granted capabilities) are registered. `prismpm check` without a holo still validates the project model. Conformance AL-03, AL-05 and AL-06.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

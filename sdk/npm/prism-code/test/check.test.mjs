@@ -145,6 +145,24 @@ test('the text form names the human title of each reason, and the limits from P2
   assert.ok(passed.endsWith(`This check trusts the signer for what it cannot know:\n${LIMITS.map((l) => `  ${l}\n`).join('')}`));
 });
 
+test('the committed verdict goldens are what check prints; the Rust CLI holds its verdicts against them (AL-06)', () => {
+  const goldens = here('../test/fixtures/verdict/');
+  const bytes = new Uint8Array(readFileSync(fixture));
+  const guest = parseArchive(bytes).blobs.find((b) => b.label === 'blake3:2adca3e7ca42d7415a5227a20002baad90047d087249cbb9ea36e557f5a4a380');
+  bytes[guest.content.byteOffset + 100] ^= 0xff;
+  const tampered = file('golden-tampered.holo', bytes);
+  const named = file('golden-p0.json', JSON.stringify({ name: 'p0', minimum: 'P0' }));
+  for (const [name, args, code] of [
+    ['calculator.default.json', [fixture], EXIT.FAILED],
+    ['calculator.p0.json', [fixture, '--policy', named], EXIT.PASSED],
+    ['calculator.tampered-guest.json', [tampered], EXIT.FAILED],
+  ]) {
+    const { code: actual, out } = run(['check', ...args, '--json']);
+    assert.equal(actual, code, name);
+    assert.equal(out, readFileSync(join(goldens, name), 'utf8'), name);
+  }
+});
+
 test('check without a holo is the deprecated build --check: it warns and still runs', () => {
   const project = mkdtempSync(join(tmpdir(), 'prism-code-lock-'));
   writeFileSync(join(project, 'prismpm.lock'), JSON.stringify({ spec: 'prismpm/sdk-lock/2', sdk_image: IMAGE }));

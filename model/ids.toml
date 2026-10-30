@@ -301,6 +301,24 @@ level = "build"
 statement = "A blank line, a v0.2 bundle, a messageSignature, a single-digest subject and an oci-manifest subject inside the holo are each refused with a registered diagnostic."
 
 [[id]]
+id = "AL-03"
+suite = "assurance"
+level = "build"
+statement = "A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass."
+
+[[id]]
+id = "AL-05"
+suite = "assurance"
+level = "build"
+statement = "A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level."
+
+[[id]]
+id = "AL-06"
+suite = "assurance"
+level = "build"
+statement = "prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order."
+
+[[id]]
 id = "CT-01"
 suite = "controller"
 level = "build"

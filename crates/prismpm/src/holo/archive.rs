@@ -78,14 +78,14 @@ pub struct ArchiveProvenance {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "tag", rename_all = "lowercase", deny_unknown_fields)]
-enum BrowserProjection {
+pub(crate) enum BrowserProjection {
     None,
     Present { sha256: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "tag", rename_all = "lowercase", deny_unknown_fields)]
-enum ViewBinding {
+pub(crate) enum ViewBinding {
     None,
     Present {
         view_model_id: String,
@@ -99,32 +99,32 @@ enum ViewBinding {
 /// identities are computed after these bytes have been embedded.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct ModelProvenanceV1 {
-    schema: String,
-    model_content_kappa: String,
-    model_id: String,
-    source_id: String,
-    semantic_id: String,
-    compiler_semantics_id: String,
-    snapshot_id: String,
-    stdlib_semantics_id: String,
-    prism_stdlib_crate_sha256: String,
-    lexlean_commit: String,
-    lexlean_package_sha256: String,
-    lean4_prod_commit: String,
-    hologram_live_commit: String,
-    uor_hologram_commit: String,
-    target_profile_id: String,
-    core_wasm_contract: String,
-    lean_manifest_sha256: String,
-    lcnf_manifest_sha256: String,
-    generated_core_sha256: String,
-    cargo_name: String,
-    cargo_version: String,
-    cargo_crate_sha256: String,
-    guest_content_kappa: String,
-    view_binding: ViewBinding,
-    application_kappa: String,
+pub(crate) struct ModelProvenanceV1 {
+    pub(crate) schema: String,
+    pub(crate) model_content_kappa: String,
+    pub(crate) model_id: String,
+    pub(crate) source_id: String,
+    pub(crate) semantic_id: String,
+    pub(crate) compiler_semantics_id: String,
+    pub(crate) snapshot_id: String,
+    pub(crate) stdlib_semantics_id: String,
+    pub(crate) prism_stdlib_crate_sha256: String,
+    pub(crate) lexlean_commit: String,
+    pub(crate) lexlean_package_sha256: String,
+    pub(crate) lean4_prod_commit: String,
+    pub(crate) hologram_live_commit: String,
+    pub(crate) uor_hologram_commit: String,
+    pub(crate) target_profile_id: String,
+    pub(crate) core_wasm_contract: String,
+    pub(crate) lean_manifest_sha256: String,
+    pub(crate) lcnf_manifest_sha256: String,
+    pub(crate) generated_core_sha256: String,
+    pub(crate) cargo_name: String,
+    pub(crate) cargo_version: String,
+    pub(crate) cargo_crate_sha256: String,
+    pub(crate) guest_content_kappa: String,
+    pub(crate) view_binding: ViewBinding,
+    pub(crate) application_kappa: String,
 }
 
 /// Distinct identities returned with a composed archive.
@@ -164,41 +164,41 @@ pub struct GeneratedHolo {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct Directory {
-    schema_version: u16,
-    primary_layer: Option<u32>,
-    requires_kappa: String,
-    layers: Vec<DirectoryLayer>,
-    children: Vec<DirectoryChild>,
-    blobs: Vec<DirectoryBlob>,
+pub(crate) struct Directory {
+    pub(crate) schema_version: u16,
+    pub(crate) primary_layer: Option<u32>,
+    pub(crate) requires_kappa: String,
+    pub(crate) layers: Vec<DirectoryLayer>,
+    pub(crate) children: Vec<DirectoryChild>,
+    pub(crate) blobs: Vec<DirectoryBlob>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct DirectoryLayer {
-    position: u32,
-    kind: String,
-    content_kappa: String,
-    entry: String,
-    contract: Option<String>,
-    architecture: Option<String>,
-    surface: Option<String>,
-    engine: Option<String>,
+pub(crate) struct DirectoryLayer {
+    pub(crate) position: u32,
+    pub(crate) kind: String,
+    pub(crate) content_kappa: String,
+    pub(crate) entry: String,
+    pub(crate) contract: Option<String>,
+    pub(crate) architecture: Option<String>,
+    pub(crate) surface: Option<String>,
+    pub(crate) engine: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct DirectoryChild {
-    position: u32,
-    application_kappa: String,
-    capabilities_kappa: String,
+pub(crate) struct DirectoryChild {
+    pub(crate) position: u32,
+    pub(crate) application_kappa: String,
+    pub(crate) capabilities_kappa: String,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct DirectoryBlob {
-    kappa: String,
-    byte_length: u64,
+pub(crate) struct DirectoryBlob {
+    pub(crate) kappa: String,
+    pub(crate) byte_length: u64,
 }
 
 /// The standard BLAKE3 primitive supplies the digest; modeled wire functions
