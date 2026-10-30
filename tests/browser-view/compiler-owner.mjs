@@ -16,6 +16,7 @@ const families = Object.freeze({
   'signed-context': Object.freeze({directory: 'browser-signed-context', executable: 'browser-signed-context-driver'}),
   'session-retention': Object.freeze({directory: 'browser-session-journal-retention', executable: 'browser-session-journal-retention-driver'}),
   'session-journal-reservation': Object.freeze({directory: 'browser-session-journal', driver: 'reservation-driver', executable: 'browser-session-journal-driver'}),
+  'session-recovery-frames': Object.freeze({directory: 'browser-session-recovery-frames', executable: 'browser-session-recovery-frames-driver'}),
   'publication-linkage': Object.freeze({directory: 'publication-context-linkage', executable: 'publication-context-linkage-driver'}),
   'account-genesis': Object.freeze({directory: 'browser-account-genesis', executable: 'browser-account-genesis-driver'}),
   p256: Object.freeze({directory: 'browser-p256', executable: 'browser-p256-driver'}),
