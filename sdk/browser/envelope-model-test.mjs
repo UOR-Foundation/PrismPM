@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {lexiconPaths} from '../../tests/browser-view/lexicon-inputs.mjs';
 import {readSemantic, writeSemantic} from '../../scripts/semantic-source.mjs';
 import {createHash} from 'node:crypto';
 import {run} from '../../tests/browser-journal/compile.mjs';
@@ -159,7 +160,7 @@ test('envelope corpus binds generated codec and closed literal data', () => {
 test('fresh generated envelope codec and actual browser crypto interoperability', {timeout: 600_000}, async t => {
   verifyPins();
   const sources = new Map(files.map(file => [file, readRegular(join(repository, 'stdlib/src/Foundation/Browser/V1', file))]));
-  assert.equal(sha256(sources.get('Workspace.lex.tex')), '32e718bc606af3cd00703558ec4c1ecdcf1e69239e88adb6ad3a364e69aacc4e');
+  assert.equal(sha256(sources.get('Workspace.lex.tex')), '3e080c15e7324a9865e4520f9ef1cc7ab23e5f6a9af400b3a0ff15462c086234');
   assert.deepEqual(sources.get('Workspace.lex.tex'), readRegular(join(repository, 'stdlib/src/Foundation/Browser/V1/Workspace.lex.tex')));
   const vectors = corpus(sources.get('WorkspaceEnvelopeCorpus.lex.tex').toString('utf8'));
   const work = mkdtempSync(join(tmpdir(), 'prismpm-workspace-envelope-'));
@@ -169,6 +170,10 @@ test('fresh generated envelope codec and actual browser crypto interoperability'
   mkdirSync(sourceRoot, {recursive: true});
   for (const [file, bytes] of sources) writeFileSync(join(sourceRoot, file), bytes, {flag: 'wx'});
   for (const file of ['lexlean.toml', 'lakefile.toml', 'lean-toolchain']) copyFileSync(join(fixture, file), join(project, file));
+  for (const path of lexiconPaths(repository)) {
+    const destination = join(project, path);
+    mkdirSync(dirname(destination), {recursive: true}); copyFileSync(join(repository, path), destination);
+  }
   const driverTarget = createPrivateDriverTarget(work);
   run('cargo', ['build', '--locked', '--offline', '--jobs', '1', '--config', 'profile.dev.debug=0', '--config', 'build.incremental=false', '--config', 'profile.dev.package.sha2.opt-level=3', '--manifest-path', join(fixture, 'driver/Cargo.toml')], repository, {CARGO_TARGET_DIR: driverTarget});
   const driver = join(driverTarget, 'debug/browser-workspace-envelope-driver');
