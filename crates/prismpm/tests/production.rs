@@ -150,7 +150,7 @@ fn check_is_no_write_and_build_detects_tampering() {
     let checked = controller
         .check(CheckRequest { config_path: None })
         .expect("check");
-    assert_eq!(checked.entity_count, 18);
+    assert_eq!(checked.entity_count, 22);
     assert!(!temp.path().join(".prism").exists());
     assert!(!temp.path().join(".lexlean").exists());
 
