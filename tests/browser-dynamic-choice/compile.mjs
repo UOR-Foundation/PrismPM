@@ -36,7 +36,7 @@ export function frozenInputs() {
     ...['compile.mjs', 'driver-cache.mjs', 'prerequisites.mjs', 'file-custody.mjs',
       'compiler-owner.mjs', 'compiler-artifact.mjs', 'compiler-owner-checks.mjs', 'generated-package.mjs',
       'generated-package.test.mjs', 'generated-wasm.mjs', 'generated-wasm.test.mjs',
-      'generated-wasm-mutations.test.mjs'].map(path => 'tests/browser-view/' + path),
+      'generated-wasm-mutations.test.mjs', 'lexicon-inputs.mjs'].map(path => 'tests/browser-view/' + path),
     ...lexiconPaths(repository), 'tests/fixtures/library/native-library/project/lexlean.toml', 'model/authorities.toml',
     'stdlib/src/Foundation/View/Browser/V1/Wire.cddl', 'stdlib/src/Foundation/View/Browser/V1/Wire.md',
     'SPEC.md', 'model/ids.toml', 'features/suites/sdk.feature',
