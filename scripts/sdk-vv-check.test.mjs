@@ -11,7 +11,7 @@ import {networkInterfaces} from 'node:os';
 import test from 'node:test';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 import { selectPlatform, validateIsolation, validateLoadedImage, validateExecution,
-  sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests } from './sdk-vv-check.mjs';
+  sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests, nativeBasis } from './sdk-vv-check.mjs';
 import { inspectNativeExecutable, connect, connectivity, validateResolver, isolatedResolver } from './sdk-vv-probe.mjs';
 
 const digest = bytes => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
@@ -232,6 +232,15 @@ test('SDK execution is same-daemon, read-only and unprivileged with only owned p
 });
 
 test('both original full-VV records and execution identity are independently required', () => {
+  {
+    // The recorded native basis names the runner kind and admits no other kind.
+    const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+    const environment = runner => ({GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: runner, RUNNER_OS: 'Linux',
+      RUNNER_ARCH: arch === 'amd64' ? 'X64' : 'ARM64', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1'});
+    assert.equal(nativeBasis(arch, environment('github-hosted')).basis, 'trusted-hosted-ci-runner-and-matching-native-executable');
+    assert.equal(nativeBasis(arch, environment('self-hosted')).basis, 'organization-self-hosted-ci-runner-and-matching-native-executable');
+    for (const runner of [undefined, '', 'other', 'constructor']) assert.throws(() => nativeBasis(arch, environment(runner)));
+  }
   const raw = Buffer.from(canonical({schema: 'prismpm/vv-evidence/1', commit: revision, gates: Array.from({length: 15}, (_, index) => index + 1), status: 'passed'}));
   const runs = [1, 2].map(run => ({run, path: `run-${run}/vv-evidence.json`, byte_length: raw.length, sha256: digest(raw).slice(7)}));
   const record = {schema: 'prismpm/sdk-vv-execution/1', scope: 'two-full-vv-executions-only', source_revision: revision,

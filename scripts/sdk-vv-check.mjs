@@ -246,7 +246,7 @@ const NATIVE_BASES = Object.freeze({
   'self-hosted': 'organization-self-hosted-ci-runner-and-matching-native-executable',
 });
 
-function nativeBasis(arch, environment) {
+export function nativeBasis(arch, environment) {
   architecture(arch);
   assert.equal(environment.GITHUB_ACTIONS, 'true', 'acceptance requires the independently selected CI runner');
   assert(Object.hasOwn(NATIVE_BASES, environment.RUNNER_ENVIRONMENT), 'unrecognized CI runner environment');
