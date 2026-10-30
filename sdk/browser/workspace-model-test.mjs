@@ -97,7 +97,7 @@ function verifyPins() {
 function corpus(source) {
   // LexLean reads exactly one module from either source surface.
   const data = readSemantic(source);
-  assert.equal(data.spec, 'lexlean/semantic-module/1');
+  assert.equal(data.spec, 'lexlean/semantic-module/2');
   const declarations = new Map(data.declarations.map(declaration => [declaration.name, declaration]));
   assert.equal(declarations.size, data.declarations.length);
   const requests = [...declarations.keys()].filter(name => name.startsWith('request'));
