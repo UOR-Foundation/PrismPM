@@ -363,12 +363,12 @@ test('fresh independent drivers pin hash optimization without changing construct
     {path:'tests/browser-journal/compile.mjs',manifest:'/actual-draft/driver/Cargo.toml',cwd:'/actual-source'},
     ...['session-journal','session-payloads','session-recovery-frames']
       .map(family=>({path:'tests/browser-'+family+'/compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work'})),
-    {path:'tests/browser-session-journal/reservation-compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work'},
     {path:'tests/browser-session-journal-recovery/compile.mjs',manifest:'/captured-manifest/Cargo.toml',cwd:'/actual-work',program:'/pinned-cargo',target:'/actual-owned-target'},
     {path:'sdk/browser/workspace-model-test.mjs',manifest:'/actual-source/tests/browser-workspace/Cargo.toml',cwd:'/actual-source'},
     {path:'sdk/browser/envelope-model-test.mjs',manifest:'/actual-fixture/driver/Cargo.toml',cwd:'/actual-source'},
   ];
-  assert.equal(remaining.length,14);assert.equal(new Set(remaining.map(row=>row.path)).size,14);
+  // Reservation borrows a session-journal-reservation owner; its build is pinned above.
+  assert.equal(remaining.length,13);assert.equal(new Set(remaining.map(row=>row.path)).size,13);
   for(const row of remaining){
     const source=fs.readFileSync(new URL('../../'+row.path,import.meta.url),'utf8');
     const check = text => {
