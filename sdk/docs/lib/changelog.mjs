@@ -10,14 +10,13 @@
  *     entry before it, and an entry without any is a patch bump.
  *
  * Entries up to and including LEGACY_THROUGH (the root CHANGELOG.md only) were
- * written before the rule and keep the Keep a Changelog headers they were
- * published with. They are never rewritten: `release-check` reads the 0.4.0
- * entry and the release notes cite it. The per-package changelogs that
- * release-please writes under sdk/npm/ have no legacy entries.
+ * written before the rule and keep the headers they were published with. Only
+ * 0.1.0 does: 0.2.0 to 0.4.0 use the four headers. The per-package changelogs
+ * under sdk/npm/ have no legacy entries.
  */
 
 export const HEADERS = ['Features Added', 'Breaking Changes', 'Bugs Fixed', 'Other Changes'];
-export const LEGACY_THROUGH = '0.4.0';
+export const LEGACY_THROUGH = '0.1.0';
 
 /**
  * `## [1.2.3] - 2026-01-02`, as written by hand, and
@@ -99,4 +98,63 @@ export function releaseEntryProblems(text, legacyThrough = LEGACY_THROUGH) {
     if (breaking.empty && !patchBump) problems.push({ line: entry.line, message: `${entry.version} breaks nothing, so before 1.0 it must be a patch bump over ${previous.version}` });
   });
   return problems;
+}
+
+/** The first released entry of a changelog as line numbers, or null when it has none. */
+function newestEntryLines(lines) {
+  const start = lines.findIndex((line) => {
+    const match = ENTRY.exec(line);
+    return match && match[1] !== 'Unreleased';
+  });
+  if (start === -1) return null;
+  const next = lines.findIndex((line, index) => index > start && /^## /.test(line));
+  return { start, end: next === -1 ? lines.length : next };
+}
+
+/**
+ * What release-please writes, as the four headers. It opens a breaking entry with
+ * `### ⚠ BREAKING CHANGES` and writes nothing when there are none, so this renames
+ * and moves that section, or adds `### Breaking Changes` with `None.`. It touches
+ * only the newest released entry, changes no bullet, and returns an entry that
+ * already has the shape byte for byte.
+ */
+export function normalizeNewestEntry(text) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+  const range = newestEntryLines(lines);
+  if (!range) return text;
+
+  const preamble = [];
+  const sections = [];
+  for (const line of lines.slice(range.start + 1, range.end)) {
+    const heading = /^### (.+?)\s*$/.exec(line);
+    if (heading) sections.push({ name: /breaking/i.test(heading[1]) ? 'Breaking Changes' : heading[1], written: heading[1], body: [] });
+    else (sections.at(-1)?.body ?? preamble).push(line);
+  }
+  const known = sections.filter((s) => HEADERS.includes(s.name));
+  const ordered = known.every((s, i) => i === 0 || HEADERS.indexOf(s.name) > HEADERS.indexOf(known[i - 1].name));
+  const hasBreaking = sections.some((s) => s.name === 'Breaking Changes');
+  if (ordered && hasBreaking && sections.every((s) => s.name === s.written)) return text;
+
+  if (!hasBreaking) sections.push({ name: 'Breaking Changes', written: 'Breaking Changes', body: ['None.'] });
+  const rank = (s) => (HEADERS.includes(s.name) ? HEADERS.indexOf(s.name) : HEADERS.length);
+  const rebuilt = [...sections].sort((a, b) => rank(a) - rank(b)).flatMap((s) => {
+    const body = s.body.join('\n').trim();
+    return [`### ${s.name}`, '', ...(body ? [...body.split('\n'), ''] : [])];
+  });
+  const head = preamble.join('\n').trim();
+  const entry = [lines[range.start], '', ...(head ? [...head.split('\n'), ''] : []), ...rebuilt];
+  return [...lines.slice(0, range.start), ...entry, ...lines.slice(range.end)].join(eol);
+}
+
+/**
+ * The entry for one version, its heading included, as the GitHub Release body.
+ * @returns {string|null} null when the changelog has no entry for that version.
+ */
+export function entryFor(text, version) {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => ENTRY.exec(line)?.[1] === version);
+  if (start === -1) return null;
+  const next = lines.findIndex((line, index) => index > start && /^## /.test(line));
+  return `${lines.slice(start, next === -1 ? lines.length : next).join('\n').trim()}\n`;
 }

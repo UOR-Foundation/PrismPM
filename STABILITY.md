@@ -38,9 +38,10 @@ Each version entry uses these four headers, in this order:
 The Breaking Changes list is the per-version breaking log.
 It is always present; if it is empty it says `None.` and the release breaks nothing.
 The other three headers appear only when they have lines.
-Entries up to 0.4.0 predate this rule and keep the headers they were published with.
+The 0.1.0 entry predates this rule and keeps the headers it was published with.
 
-release-please is configured for this rule (`bump-minor-pre-major`, in `release-please-config.json`): it proposes the next version in a pull request, and a person tags.
+release-please is configured for this rule (`bump-minor-pre-major`, in `release-please-config.json`): it proposes the next version in a pull request, and merging that pull request cuts the tag.
+Publishing is a separate step, as [RELEASES.md](RELEASES.md) says.
 `node sdk/docs/changelog.mjs` enforces the headers and the bump on every pull request: a version with breaking changes is a minor bump, any other version is a patch bump.
 [docs/release/versioning.md](docs/release/versioning.md) says how a version is cut.
 
