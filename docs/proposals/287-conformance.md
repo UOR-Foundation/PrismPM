@@ -14,7 +14,7 @@ A suite of data, a harness, and one small program per runtime.
 
 - **Scenarios are JSON.** A check is an operation, an input and an expected answer. Any language can be judged by them, and reading one needs no code.
 - **The harness owns the archives.** Damaged holos come from recipes on one reference archive, pinned by sha256. A runtime only ever receives a path, so it needs nothing from this package and cannot shape what it is tested on.
-- **A shim is one process per request**, JSON on stdin and stdout. This is the `sigstore-conformance` shape. It costs a process per check, about 11 seconds for the whole suite here, and buys isolation: a crash fails one check, and writing a shim takes an afternoon in any language.
+- **A shim is one process per request**, JSON on stdin and stdout. This is the `sigstore-conformance` shape. It costs a process per check, about 11 seconds for the whole suite on one Windows machine, and buys isolation: a crash fails one check, and a shim needs only JSON and a process in any language. A throwaway Python shim was run against the harness to test this.
 - **Expected digests are pinned from ADR-015**, and the dispatch vectors are written into the scenario and held to the model document by a test. Neither is read from a runtime at run time.
 
 The shim contract is specified in [`sdk/npm/conformance/README.md`](../../sdk/npm/conformance/README.md).
@@ -24,9 +24,9 @@ The shim contract is specified in [`sdk/npm/conformance/README.md`](../../sdk/np
 | Precedent | What was taken |
 | --- | --- |
 | `sigstore-conformance` | The entrypoint shim, and one invocation per test. |
-| LangChain `standard-tests` | Expected failures declared per implementation, by test id. |
+| LangChain `standard-tests` | Expected failures declared by the implementation under test. |
 | LangGraph `checkpoint-conformance` | A suite published as its own package, apart from any implementation. |
-| OpenTelemetry spec-compliance-matrix | A feature by language table with `+`, `-` and `N/A`. Theirs is edited by hand; this one is generated, as the issue asks. |
+| OpenTelemetry spec-compliance-matrix | A feature by language table with `+`, `-` and `N/A`. Here every cell comes from a run, as the issue asks. |
 
 ## Decisions to check in review
 
