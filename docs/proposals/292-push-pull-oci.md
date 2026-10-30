@@ -289,16 +289,53 @@ localhost:5000/prism/calculator@sha256:1a20cd1b...
 
 ## Evidence
 
-- `test/oci-manifest.test.mjs`: the manifest and referrer bytes of the reference holo equal committed fixtures and are canonical.
-- `test/oci-reference.test.mjs`: the grammar, including every refusal.
-- `test/push-pull.test.mjs`: the directory store end to end, with a keyed signature and tampering at each layer.
-- `test/oci-registry.test.mjs`: the client against an in-process registry that can answer with the API or the fallback, challenge with `Bearer` or `Basic`, and lie about digests.
-- `test/oci-live.test.mjs`: a real `distribution`, from a container when Docker is present or from `PRISM_TEST_REGISTRY` when set, skipped otherwise; with `cosign` and `oras` on the PATH it also runs them.
-- `.github/workflows/oci-interop.yml`: `distribution` with cosign and ORAS on pull requests that touch this code, and GHCR with a keyless signature on manual dispatch.
+Run on 2026-10-30 on Windows 11 with Node 24.22.2, against a real CNCF `distribution` 3.1.2 with in-memory storage, cosign 3.1.4 and ORAS 1.3.4.
+The holo is the Calculator reference archive, attested with a throwaway P-256 key.
+
+```text
+$ prism-code push signed.holo 127.0.0.1:15500/prism/app:v1 --key private.pem
+The push refers to repository [127.0.0.1:15500/prism/app]
+1a7acae69a14: Pushed
+2478535854ac: Attached https://uor.foundation/prism/proof/v1
+caa3e1769104: Signed https://uor.foundation/prism/proof/v1
+v1: digest: sha256:e05aadbbc3fc395a3e3a73119820bb0df1a1107da1a6e9b881d174f2c34666b6 size: 968
+fingerprint: blake3:5bd47a98bf403e1bef8053e85af22ac5785e5c407e2af615d5b629996c15fc71
+[exit 0]
+
+$ cosign verify-attestation --key public.pem --insecure-ignore-tlog --allow-http-registry --type https://uor.foundation/prism/proof/v1 127.0.0.1:15500/prism/app:v1
+[exit 0]
+subject: [{"name":"oci-manifest","digest":{"sha256":"e05aadbb...4666b6"}},
+          {"name":"guest","digest":{"sha256":"dcf53677...334c03","blake3":"2adca3e7...a4a380"}}]
+
+$ oras repo tags --plain-http 127.0.0.1:15500/prism/calculator
+blake3-34373150...0b603c
+sha256-7829d7bd...e028c
+v1
+
+$ curl http://127.0.0.1:15500/v2/prism/calculator/referrers/sha256:0000...
+404, so this registry uses the tag fallback
+
+$ prism-code pull 127.0.0.1:15500/prism/app:v1 bad.holo --key other.pem
+pull_verification_failed: no attestation of this holo passes the signer policy: signature_invalid: signature verification failed
+[exit 1], and bad.holo does not exist
+```
+
+Running this against cosign found a defect in #272: `@sigstore/sign` writes the key's hash as the DSSE `keyid`, and cosign skips a signature whose `keyid` is not its own, so a keyed bundle verified nowhere but in `prism-code`.
+`attest --key` and `push --key` now write an empty `keyid`, and the hint in the verification material still names the key.
+
+| Tests | What they hold |
+| --- | --- |
+| `test/oci-manifest.test.mjs` | The manifest and referrer bytes of the reference holo equal committed fixtures and are canonical. |
+| `test/oci-reference.test.mjs` | The grammar, including every refusal. |
+| `test/push-pull.test.mjs` | The directory store end to end, with a keyed signature and tampering at each layer. |
+| `test/oci-registry.test.mjs` | The client against an in-process registry that can answer with the API or the fallback, challenge with `Bearer` or `Basic`, and lie about digests. |
+| `test/oci-live.test.mjs` | A real `distribution`, from a container when Docker is present or from `PRISM_TEST_REGISTRY` when set, skipped otherwise; with `cosign` and `oras` on the PATH it also runs them. The run above passed all six. |
+| `.github/workflows/oci-interop.yml` | `registry:2.8.3` and `registry:3.0.0` with cosign and ORAS on pull requests that touch this code, and GHCR with a keyless signature on manual dispatch. |
 
 ## What is not done
 
-- The GHCR half of the done criterion runs only when someone dispatches the workflow, because it needs the repository's package permission.
+- The GHCR half of the done criterion has not been run. It runs only when someone dispatches the workflow, because it needs the repository's package permission and asks Sigstore for a certificate. Keyless signing at push is therefore tested only by that job.
+- `registry:2.8.3` has not been run either: Docker was unavailable where this was written, so only `distribution` 3.1.2 is evidence so far. The interop workflow runs it.
 - Conformance ID `HO-28`, which PR 369 reserves for `prism push`, is not registered: a new ID needs a case in `crates/conformance`, and that is Rust side work. The tests above are its oracle.
 - `check` and `verify` do not read the attestation section yet (see above), so a pulled holo's level is P0 whatever it carries.
 - `pull` does not write referrers next to an output file. `pull <ref> dir://<store>` keeps them.

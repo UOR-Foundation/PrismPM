@@ -6,7 +6,8 @@ import { canonicalJson } from '../src/archive.mjs';
 import { blake3Hex } from '../src/blake3.mjs';
 import { sha256Hex } from '../src/sha256.mjs';
 import { readAttestations, BUNDLE_MEDIA_TYPE } from '../src/attestations.mjs';
-import { ANNOTATION, CREATED, EMPTY_BYTES, EMPTY_DESCRIPTOR, HOLO_MEDIA_TYPE, MANIFEST_MEDIA_TYPE, fingerprintTag, holoLayerOf, holoManifest, referrerManifest, referrersTag, registryStatement, registryStatements } from '../src/oci-manifest.mjs';
+import { OCI, ATTESTATION_BUNDLE } from '../../spec/constants.mjs';
+import { ANNOTATION, BUNDLE_CONTENT, CREATED, EMPTY_BYTES, EMPTY_DESCRIPTOR, HOLO_MEDIA_TYPE, MANIFEST_MEDIA_TYPE, fingerprintTag, holoLayerOf, holoManifest, referrerManifest, referrersTag, registryStatement, registryStatements } from '../src/oci-manifest.mjs';
 
 const read = (name) => new Uint8Array(readFileSync(new URL(name, import.meta.url)));
 const plain = read('../fixtures/Calculator.holo');
@@ -118,4 +119,17 @@ test('the tags are shaped as the spec and the proposal say', () => {
   assert.equal(fingerprintTag('blake3:' + 'c'.repeat(64)), `blake3-${'c'.repeat(64)}`);
   // The longest legal tag is 128 characters, and both fit.
   assert.ok(`blake3-${'c'.repeat(64)}`.length <= 128);
+});
+
+test("the values that go into a manifest are the spec package's", () => {
+  assert.equal(HOLO_MEDIA_TYPE, OCI.HOLO_MEDIA_TYPE);
+  assert.equal(CREATED, OCI.CREATED);
+  assert.equal(ANNOTATION.FINGERPRINT, OCI.ANNOTATIONS.FINGERPRINT);
+  assert.equal(ANNOTATION.APPLICATION, OCI.ANNOTATIONS.APPLICATION);
+  assert.equal(ANNOTATION.BLAKE3, OCI.ANNOTATIONS.BLAKE3);
+  assert.ok(fingerprintTag(`blake3:${'c'.repeat(64)}`).startsWith(OCI.FINGERPRINT_TAG_PREFIX));
+  assert.equal(BUNDLE_MEDIA_TYPE, ATTESTATION_BUNDLE.MEDIA_TYPE);
+  assert.equal(ANNOTATION.BUNDLE_CONTENT, ATTESTATION_BUNDLE.OCI_ANNOTATIONS.CONTENT);
+  assert.equal(ANNOTATION.BUNDLE_PREDICATE, ATTESTATION_BUNDLE.OCI_ANNOTATIONS.PREDICATE_TYPE);
+  assert.equal(BUNDLE_CONTENT, ATTESTATION_BUNDLE.OCI_CONTENT);
 });
