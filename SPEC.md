@@ -3882,6 +3882,8 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `FT-11` | `facets` | prism.arch defines OPM (ISO/PAS 19450) and UML 2.5.1 design view entries as ISO/IEC/IEEE 42010 views. | §2 |
 | `FT-12` | `facets` | prism.arch defines Feature and Journey declarations: a feature states what a product does with the interface calls that realize it and the acceptance rows that accept it, and a journey is an ordered sequence of features performed by a stakeholder. | §2 |
 | `FT-13` | `facets` | The SDK checks features and journeys in prismpm check and refuses a feature without a call with PP2014, a feature without an acceptance row with PP2015, a journey step that names an undeclared feature with PP2016, a journey whose actor is not a declared stakeholder with PP2017, and a malformed declaration or a call or acceptance row that names no declaration with PP2018. | §2 |
+| `FT-14` | `facets` | Production.ThreatModel declares assets, threats with a STRIDE category, controls with evidence, their mapping and accepted risks as rows that name Foundation.Sec records, and proves with an empty axiom set that its normalized validator is sound and complete and refuses an unmapped threat, a control without evidence and a threat without a category. | §2 |
+| `FT-15` | `facets` | The SDK checks a threat model over every entrypoint in prismpm check and refuses a threat with no mapped control and no accepted risk with PP2019, a control that names no evidence with PP2020, a threat with no STRIDE category with PP2021, and a malformed or unresolved row with PP2022. | §2 |
 | `HO-01` | `holo` | A Holo/1 artifact is a strict binary Hologram archive with physical version 4 and the HOLO header. | §3 |
 | `HO-02` | `holo` | Legacy application and architecture model documents retain the closed prismpm/model-document/1 schema and model.prism.json name. | §3 |
 | `HO-03` | `holo` | Prism model documents use deterministic canonical JSON and an exact SHA-256 model identity. | §3 |
@@ -3979,6 +3981,7 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `AU-05` | `authorities` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. | §10 |
 | `AU-06` | `authorities` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. | §10 |
 | `AU-07` | `authorities` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. | §10 |
+| `AU-08` | `authorities` | prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance. | §10 |
 | `SY-01` | `system` | Prism system models cover product, components, interfaces, topology, configuration, data, operations, and lifecycle. | §11 |
 | `SY-02` | `system` | System validation enforces closure, uniqueness, references, compatibility, capabilities, ordering, and release completeness. | §11 |
 | `SY-03` | `system` | All Prism system semantics and validators are authored in LexLean and exported only from generated Lean roots. | §11 |

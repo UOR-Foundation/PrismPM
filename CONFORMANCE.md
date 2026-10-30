@@ -41,6 +41,7 @@ The three honesty levels:
 | `AU-05` | `build` | Oracle runners are digest-bound, resource-bounded, networkless, and report exact covered and uncovered requirements. |
 | `AU-06` | `build` | Official positive and negative corpora plus Prism mutations detect stale, bypassed, changed, or always-passing oracles. |
 | `AU-07` | `build` | The imported OSCAL JSON structural oracle executes complete pinned schema corpora and bounded subject-capture adversaries without claiming implemented controls or whole-standard acceptance. |
+| `AU-08` | `build` | prismpm build emits a checked threat model as a reproducible OSCAL 1.1.0 component definition that the locked structural oracle accepts, and the oracle refuses a planted defect, without claiming implemented controls or whole-standard acceptance. |
 
 ## controller
 
@@ -101,6 +102,8 @@ The three honesty levels:
 | `FT-11` | `build` | prism.arch defines OPM (ISO/PAS 19450) and UML 2.5.1 design view entries as ISO/IEC/IEEE 42010 views. |
 | `FT-12` | `build` | prism.arch defines Feature and Journey declarations: a feature states what a product does with the interface calls that realize it and the acceptance rows that accept it, and a journey is an ordered sequence of features performed by a stakeholder. |
 | `FT-13` | `build` | The SDK checks features and journeys in prismpm check and refuses a feature without a call with PP2014, a feature without an acceptance row with PP2015, a journey step that names an undeclared feature with PP2016, a journey whose actor is not a declared stakeholder with PP2017, and a malformed declaration or a call or acceptance row that names no declaration with PP2018. |
+| `FT-14` | `build` | Production.ThreatModel declares assets, threats with a STRIDE category, controls with evidence, their mapping and accepted risks as rows that name Foundation.Sec records, and proves with an empty axiom set that its normalized validator is sound and complete and refuses an unmapped threat, a control without evidence and a threat without a category. |
+| `FT-15` | `build` | The SDK checks a threat model over every entrypoint in prismpm check and refuses a threat with no mapped control and no accepted risk with PP2019, a control that names no evidence with PP2020, a threat with no STRIDE category with PP2021, and a malformed or unresolved row with PP2022. |
 
 ## holo
 
