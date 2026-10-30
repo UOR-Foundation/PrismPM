@@ -91,6 +91,8 @@ The vocabulary page names three people: a user runs a holo, a developer rebuilds
 2. `/docs/<path>` links become `/<path>`.
 3. A page whose `available_in` names a planned release gets a note under its frontmatter naming that release and linking to Release status. The note disappears when `release-status.json` marks the release shipped.
 
+The changelog is written as `changelog/index.md`, because Mintlify skips a file named `changelog.md`. Its URL stays `/changelog`.
+
 The tree also holds `docs.json`, `llms.txt` and `llms-full.txt`, the extension Mintlify requires for a custom full index.
 `docs.json` redirects `/docs/:slug*` to `/:slug*`, so links to today's paths keep working if the domain moves to Mintlify.
 
