@@ -399,8 +399,8 @@ test('complete source gates register standalone execution and all original produ
  const source=sdkSource('xtask/src/main.rs');
  const vv=source.slice(source.indexOf('fn run_vv('),source.indexOf('fn verify_examples('));
  assert.equal(vv.split('verify_standalone_browser_owners(root)?;').length,2);
- assert(vv.indexOf('verify_standalone_browser_owners(root)?;')>vv.indexOf('VV gate 6/15:'));
- assert(vv.indexOf('verify_standalone_browser_owners(root)?;')<vv.indexOf('VV gate 7/15:'));
+ // These private components run nightly in browser-standalone.yml, not in V&V.
+ assert.equal(vv.indexOf('verify_standalone_browser_owners(root)?;'),-1);
  const conformance=source.slice(source.indexOf('fn run_conformance('),source.indexOf('fn run_unit_tests('));
  assert.match(conformance,/if matches!\(category, "all" \| "desktop-browser"\) \{\s*verify_standalone_browser_owners\(root\)\?;/);
  assert.match(conformance,/fn verify_standalone_browser_owners\(root: &Path\) -> Result<\(\), Fail> \{\s*command\(\s*root,\s*"node",\s*&\["scripts\/browser-api-sdk-check.mjs", "standalone"\],\s*\)/);

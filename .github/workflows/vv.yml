@@ -1,19 +1,18 @@
 name: Verification & Validation
 
-# Full normative acceptance runs once per main push or release tag. It covers
+# Full normative acceptance runs once per main push. It covers
 # every gate of the repository verification recipe, including the workspace unit tests, all
 # conformance suites, Lean proofs, packaging, dependency policy and the
 # two-root reproducibility comparison, so none of those are repeated per PR.
 # Start it on a PR head with workflow_dispatch when a merge candidate needs
 # the full result before merging.
 #
-# One complete pass takes about 10 hours and hosted jobs stop at 6, so it runs
-# as three parts on one commit. A failed part can be re-run alone, and the
+# One complete pass takes longer than the 6 hour limit for a hosted job, so it
+# runs as three parts on one commit. A failed part can be re-run alone, and the
 # `complete` job passes only with all three.
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:

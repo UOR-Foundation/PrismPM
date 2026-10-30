@@ -1196,7 +1196,7 @@ A complete pass outgrows the 6 hour limit for one hosted job, so Linux CI runs
 the same checks as three parts of `cargo xtask vv-part` on one commit, each in
 the pinned devcontainer. `source` runs gates 1 to 5, gate 6 without
 `repo-conformance` and gates 7 to 15; `conformance` runs gate 6 for
-`repo-conformance`; `browser` runs the standalone browser owners. Each writes
+`repo-conformance` without its DK owners; `browser` runs its DK owners. Each writes
 canonical `prismpm/vv-part/1`. `scripts/vv-assemble.mjs` writes the acceptance
 evidence only from exactly these three passed records for that commit.
 
@@ -1326,7 +1326,7 @@ Hosted CI qualifies each head once, where it matters. Every pull request, whatev
 its base, runs one fast set of at most three jobs (format, lint and dependency
 policy; model and audits; fixtures and reviewed goldens), each with a timeout and
 superseded by the next push to the same pull request. The complete 15 gates, as
-three parts, execute once per main push or release tag, and on request for any head; it is
+three parts, execute once per main push, and on request for any head; it is
 not repeated for an unchanged head, and no consecutive second pass is required.
 Dual-architecture native source review runs on main pushes and release tags, and
 the standalone two-root reproducibility comparison runs nightly on main. Release
@@ -2231,7 +2231,8 @@ The fixed interpreter is admitted from each digest-pinned image: Bookworm
 Python 3.11.2 or Noble Python 3.12.3, using isolated execution with no host
 fallback. Source binding includes both private supervisor files. Original
 command, file, actor and two-run deadlines remain unchanged.
-Source full V&V and desktop/browser conformance additionally execute the six
+Desktop/browser conformance and the nightly `browser-standalone.yml` workflow,
+not source V&V, additionally execute the six private
 original standalone Session file pairs: Projection (7+1), Reservation (10+23),
 Payload (4+30), Recovery Frames (3+1), Journal Recovery (7+1), Retention (3+18).
 Installed browser qualification preserves all26 original owners and both

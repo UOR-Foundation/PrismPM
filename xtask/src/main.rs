@@ -716,10 +716,6 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
         ],
     )?;
 
-    // Separate original standalone pairs are not implied by registered DK
-    // execution or by including their source files in an SDK inventory.
-    verify_standalone_browser_owners(root)?;
-
     run_vv_gates_7_to_15(root)?;
 
     require_clean_worktree(root)?;
@@ -745,8 +741,8 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
 /// the same commit and `scripts/vv-assemble.mjs` requires all of them.
 ///
 /// - `source`: gates 1 to 5, gate 6 without `repo-conformance`, gates 7 to 15.
-/// - `conformance`: gate 6 for `repo-conformance`.
-/// - `browser`: the standalone browser owners.
+/// - `conformance`: gate 6 for `repo-conformance` without its DK owners.
+/// - `browser`: gate 6 for the DK owners of `repo-conformance`.
 fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
     let [part] = arguments else {
         return Err("usage: cargo xtask vv-part <source|conformance|browser>".into());
@@ -781,7 +777,7 @@ fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
             run_vv_gates_7_to_15(root)?;
         }
         "conformance" => {
-            println!("VV gate 6/15: repo-conformance");
+            println!("VV gate 6/15: repo-conformance without DK owners");
             driver.run_cargo(
                 root,
                 &[
@@ -791,10 +787,28 @@ fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
                     "--all-features",
                     "--locked",
                     "--offline",
+                    "--",
+                    "--skip",
+                    "conformance_dk_",
                 ],
             )?;
         }
-        _ => verify_standalone_browser_owners(root)?,
+        _ => {
+            println!("VV gate 6/15: DK owners of repo-conformance");
+            driver.run_cargo(
+                root,
+                &[
+                    "test",
+                    "--package",
+                    "repo-conformance",
+                    "--all-features",
+                    "--locked",
+                    "--offline",
+                    "--",
+                    "conformance_dk_",
+                ],
+            )?;
+        }
     }
     require_clean_worktree(root)?;
     let commit = vv_commit(root)?;

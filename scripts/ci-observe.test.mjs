@@ -401,7 +401,7 @@ test('all observed workflows retain their full gates, always stop/upload, and ke
 test('one normative workflow owns complete main acceptance and diagnostic owners stay on request, PR or schedule', () => {
   const names = ['bootstrap.yml', 'ci-parallel.yml', 'reproducibility.yml'];
   const check = (normative, diagnostics) => {
-    assert.deepEqual(normative.on, {push: {branches: ['main'], tags: ['v*']}, workflow_dispatch: null});
+    assert.deepEqual(normative.on, {push: {branches: ['main']}, workflow_dispatch: null});
     assert.deepEqual(normative.permissions, {contents: 'read'});
     assert.deepEqual(normative.concurrency, {
       group: '${{ github.workflow }}-${{ github.ref }}',
