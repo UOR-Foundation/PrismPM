@@ -34,7 +34,6 @@ use super::{
     PROVENANCE_SCHEMA, REVISION_2026_10_23, SOURCE_MANIFEST_VERSION, WORLD_EXPORTS,
 };
 use crate::error::PrismError;
-use crate::holo::archive::{Directory, ModelProvenanceV1, ViewBinding};
 use crate::holo::attestation::{self, Attestation, ATTESTATION_EXTENSION};
 use prism_stdlib as wire;
 use serde::Deserialize;
@@ -640,6 +639,111 @@ pub fn check_path(
 }
 
 // ---------------------------------------------------------------- the archive
+
+/// The application directory extension, the exact closed shape
+/// `holo::archive` writes. Mirrored here rather than shared so that
+/// `holo/archive.rs`, whose bytes the shared golden baseline hashes
+/// (`scripts/native-golden.mjs`), stays untouched by the verdict reader.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Directory {
+    #[allow(dead_code)]
+    schema_version: u16,
+    #[allow(dead_code)]
+    primary_layer: Option<u32>,
+    requires_kappa: String,
+    layers: Vec<DirectoryLayer>,
+    #[allow(dead_code)]
+    children: Vec<DirectoryChild>,
+    blobs: Vec<DirectoryBlob>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryLayer {
+    #[allow(dead_code)]
+    position: u32,
+    kind: String,
+    content_kappa: String,
+    #[allow(dead_code)]
+    entry: String,
+    contract: Option<String>,
+    #[allow(dead_code)]
+    architecture: Option<String>,
+    #[allow(dead_code)]
+    surface: Option<String>,
+    #[allow(dead_code)]
+    engine: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryChild {
+    position: u32,
+    application_kappa: String,
+    capabilities_kappa: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryBlob {
+    kappa: String,
+    byte_length: u64,
+}
+
+/// The `prismpm/model-provenance/1` extension, the exact closed shape
+/// `holo::archive` writes, mirrored for the same reason as [`Directory`].
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ModelProvenanceV1 {
+    schema: String,
+    model_content_kappa: String,
+    model_id: String,
+    source_id: String,
+    semantic_id: String,
+    compiler_semantics_id: String,
+    snapshot_id: String,
+    stdlib_semantics_id: String,
+    prism_stdlib_crate_sha256: String,
+    lexlean_commit: String,
+    lexlean_package_sha256: String,
+    lean4_prod_commit: String,
+    hologram_live_commit: String,
+    uor_hologram_commit: String,
+    target_profile_id: String,
+    core_wasm_contract: String,
+    lean_manifest_sha256: String,
+    lcnf_manifest_sha256: String,
+    generated_core_sha256: String,
+    cargo_name: String,
+    cargo_version: String,
+    cargo_crate_sha256: String,
+    guest_content_kappa: String,
+    view_binding: ViewBinding,
+    application_kappa: String,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(tag = "tag", rename_all = "lowercase", deny_unknown_fields)]
+enum BrowserProjection {
+    None,
+    Present { sha256: String },
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(tag = "tag", rename_all = "lowercase", deny_unknown_fields)]
+enum ViewBinding {
+    None,
+    Present {
+        view_model_id: String,
+        view_content_kappa: String,
+        browser_projection: BrowserProjection,
+    },
+}
 
 /// One row of the section table, decoded as far as its kind allows. Problems
 /// are recorded, never thrown.
