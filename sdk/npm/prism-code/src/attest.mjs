@@ -174,6 +174,17 @@ function tufOptions(options) {
   return out;
 }
 
+// sigstore's default is 5 s. A log entry can take longer than that to answer after it is stored, and the
+// client then sends the same request again, which the log refuses as a duplicate.
+const KEYLESS_FETCH = Object.freeze({ timeout: 30_000, retry: Object.freeze({ retries: 2 }) });
+
+/**
+ * The log already holds this exact entry. Only a re-sent request can do that, because each signature is new:
+ * an earlier attempt was stored, and its answer was lost or was a 5xx. `bundleBuilderFromSigningConfig` does
+ * not expose `fetchOnConflict`, which would read that entry back.
+ */
+const isLogConflict = (error) => error?.code === 'TLOG_CREATE_ENTRY_ERROR' && error.cause?.statusCode === 409;
+
 async function keylessBuilder(m, options) {
   let signingConfig = options.signingConfig;
   try {
@@ -184,7 +195,7 @@ async function keylessBuilder(m, options) {
     }
     signingConfig = m.specs.SigningConfig.fromJSON(signingConfig);
     const identityProvider = options.identityToken ? { getToken: async () => options.identityToken } : new m.sign.CIContextProvider('sigstore');
-    return m.sign.bundleBuilderFromSigningConfig({ signingConfig, identityProvider, bundleType: 'dsseEnvelope' });
+    return m.sign.bundleBuilderFromSigningConfig({ signingConfig, identityProvider, bundleType: 'dsseEnvelope', fetchOptions: KEYLESS_FETCH });
   } catch (cause) {
     if (cause instanceof SigningError) throw cause;
     throw new SigningError(`the Sigstore signing configuration is unavailable or unusable:${cause.message}`, { check: 'sign.config', cause });
@@ -204,7 +215,12 @@ export async function signStatement(bytes, options = {}) {
   const m = await sigstore();
   const builder = options.key !== undefined ? await keyedBuilder(m, options.key) : await keylessBuilder(m, options);
   try {
-    const bundle = m.bundle.bundleToJSON(await builder.create({ data: Buffer.from(bytes), type: DSSE_PAYLOAD_TYPE }));
+    const artifact = { data: Buffer.from(bytes), type: DSSE_PAYLOAD_TYPE };
+    const signed = await builder.create(artifact).catch((error) => {
+      if (isLogConflict(error)) return builder.create(artifact);
+      throw error;
+    });
+    const bundle = m.bundle.bundleToJSON(signed);
     // A DSSE verifier skips a signature whose keyid is not its own, and cosign's is not this hash, so a keyed bundle with one
     // verifies nowhere but here. The keyid is not signed, and the hint in the verification material still names the key.
     if (options.key !== undefined) for (const signature of bundle.dsseEnvelope.signatures) signature.keyid = '';
@@ -234,7 +250,9 @@ export async function signStatement(bytes, options = {}) {
  * token (`identityToken`, else GitHub Actions or `SIGSTORE_ID_TOKEN`) is
  * exchanged for a Fulcio certificate, and the Rekor v2 entry and RFC 3161
  * timestamp of the signing configuration (`signingConfig`, else the public
- * instance's, from TUF) are embedded in the bundle.
+ * instance's, from TUF) are embedded in the bundle. If the log refuses the entry
+ * as a duplicate of a re-sent request, the statement is signed once more, which
+ * makes a new entry; the first one stays in the log, unused.
  *
  * @param {Uint8Array | ArrayBuffer | string | object} source the holo as bytes, a path, or an opened holo
  * @param {{ type: string, predicate: unknown, subjects?: string[], key?: string | KeyObject, identityToken?: string, signingConfig?: object | string, tufMirrorUrl?: string, tufRoot?: string, tufCache?: string }} options
