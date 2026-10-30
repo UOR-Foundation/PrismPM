@@ -494,23 +494,14 @@ definition{
 }
 
 definition{
-  name: wireInsertSection,
-  parameters: [section : CanonicalSection, sorted : (List CanonicalSection)],
-  result: (List CanonicalSection),
-  body: (match sorted
-    | List.nil => (ctor List.cons [CanonicalSection] section (ctor List.nil [CanonicalSection]))
-    | List.cons head tail => (if (wireSectionBefore head section) then (ctor List.cons [CanonicalSection] head (wireInsertSection section tail)) else (ctor List.cons [CanonicalSection] section (ctor List.cons [CanonicalSection] head tail)))),
-  axioms: [propext],
-  recursive_argument: sorted
-}
-
-definition{
-  name: wireSortSections,
-  parameters: [sections : (List CanonicalSection)],
-  result: (List CanonicalSection),
+  name: wireSectionMinimumAfter,
+  parameters: [sections : (List CanonicalSection), previousRank : Nat, previousKey : Bytes],
+  result: (Option CanonicalSection),
   body: (match sections
-    | List.nil => (ctor List.nil [CanonicalSection])
-    | List.cons head tail => (wireInsertSection head (wireSortSections tail))),
+    | List.nil => (ctor Option.none [CanonicalSection])
+    | List.cons head tail => (match (wireSectionMinimumAfter tail previousRank previousKey)
+      | Option.none => (if (wireCanonicalOrderValid previousRank previousKey (project head kind) (wireSectionKeyOrEmpty head)) then (ctor Option.some [CanonicalSection] head) else (ctor Option.none [CanonicalSection]))
+      | Option.some current => (if ((wireCanonicalOrderValid previousRank previousKey (project head kind) (wireSectionKeyOrEmpty head)) && ((wireSectionBefore head current) && true)) then (ctor Option.some [CanonicalSection] head) else (ctor Option.some [CanonicalSection] current)))),
   axioms: [propext],
   recursive_argument: sections
 }
@@ -534,32 +525,47 @@ definition{
 
 definition{
   name: wireComposeTableRows,
-  parameters: [sections : (List CanonicalSection), offset : Nat],
+  parameters: [
+    sections : (List CanonicalSection),
+    previousRank : Nat,
+    previousKey : Bytes,
+    offset : Nat,
+    fuel : Nat
+  ],
   result: Bytes,
-  body: (match sections
-    | List.nil => 0x
-    | List.cons head tail => (prim append (prim append 0x (wireCanonicalTableRow (project head kind) offset (prim length (project head payload) : Nat)) : Bytes) (wireComposeTableRows tail (offset + (prim length (project head payload) : Nat))) : Bytes)),
-  axioms: [],
-  recursive_argument: sections
+  body: (match fuel
+    | Nat.zero => 0x
+    | Nat.succ rest => (match (wireSectionMinimumAfter sections previousRank previousKey)
+      | Option.none => 0x
+      | Option.some section => (prim append (prim append 0x (wireCanonicalTableRow (project section kind) offset (prim length (project section payload) : Nat)) : Bytes) (wireComposeTableRows sections (Foundation.Holo.V1.Format::sectionKindRank (project section kind)) (wireSectionKeyOrEmpty section) (offset + (prim length (project section payload) : Nat)) rest) : Bytes))),
+  axioms: [propext],
+  recursive_argument: fuel
 }
 
 definition{
   name: wireComposePayloads,
-  parameters: [sections : (List CanonicalSection)],
+  parameters: [
+    sections : (List CanonicalSection),
+    previousRank : Nat,
+    previousKey : Bytes,
+    fuel : Nat
+  ],
   result: Bytes,
-  body: (match sections
-    | List.nil => 0x
-    | List.cons head tail => (prim append (prim append 0x (project head payload) : Bytes) (wireComposePayloads tail) : Bytes)),
-  axioms: [],
-  recursive_argument: sections
+  body: (match fuel
+    | Nat.zero => 0x
+    | Nat.succ rest => (match (wireSectionMinimumAfter sections previousRank previousKey)
+      | Option.none => 0x
+      | Option.some section => (prim append (prim append 0x (project section payload) : Bytes) (wireComposePayloads sections (Foundation.Holo.V1.Format::sectionKindRank (project section kind)) (wireSectionKeyOrEmpty section) rest) : Bytes))),
+  axioms: [propext],
+  recursive_argument: fuel
 }
 
 definition{
   name: wireComposeCanonicalUnchecked,
-  parameters: [sorted : (List CanonicalSection)],
+  parameters: [sections : (List CanonicalSection)],
   result: Bytes,
-  body: (prim append (prim append (prim append (prim append 0x 0x484f4c4f04000000 : Bytes) (wireEncodeLe16 (wireSectionListCount sorted)) : Bytes) (wireComposeTableRows sorted (10 + (prim multiply (wireSectionListCount sorted) 24 : Nat))) : Bytes) (wireComposePayloads sorted) : Bytes),
-  axioms: []
+  body: (prim append (prim append (prim append (prim append 0x 0x484f4c4f04000000 : Bytes) (wireEncodeLe16 (wireSectionListCount sections)) : Bytes) (wireComposeTableRows sections 0 0x (10 + (prim multiply (wireSectionListCount sections) 24 : Nat)) (wireSectionListCount sections)) : Bytes) (wireComposePayloads sections 0 0x (wireSectionListCount sections)) : Bytes),
+  axioms: [propext]
 }
 
 definition{
@@ -574,7 +580,7 @@ definition{
   name: canonicalArchiveBody,
   parameters: [sections : (List CanonicalSection)],
   result: (Option Bytes),
-  body: (wireCheckedCanonicalBody (wireComposeCanonicalUnchecked (wireSortSections sections))),
+  body: (if ((prim length (wireComposeTableRows sections 0 0x (10 + (prim multiply (wireSectionListCount sections) 24 : Nat)) (wireSectionListCount sections)) : Nat) =? (prim multiply (wireSectionListCount sections) 24 : Nat)) then (wireCheckedCanonicalBody (wireComposeCanonicalUnchecked sections)) else (ctor Option.none [Bytes])),
   axioms: [propext]
 }
 
