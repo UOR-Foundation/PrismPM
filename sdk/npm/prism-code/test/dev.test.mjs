@@ -30,7 +30,13 @@ function project(files = {}) {
   return directory;
 }
 after(() => {
-  for (const directory of made) rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
+  for (const directory of made) {
+    try {
+      rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      // Windows may still hold a directory a stopped child ran in; one left in the temporary directory fails nothing.
+    }
+  }
 });
 
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));

@@ -52,6 +52,15 @@ function parseArguments(argv) {
 
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 
+/** Remove a temporary directory. A browser may hold its profile a moment after it exits, and a leftover must not fail the run. */
+function remove(directory) {
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch (error) {
+    process.stderr.write(`warning: ${directory} is left behind: ${error.code ?? error.message}\n`);
+  }
+}
+
 async function until(predicate, what, ms) {
   const end = Date.now() + ms;
   for (;;) {
@@ -165,11 +174,12 @@ async function openBrowser(chrome, url) {
       replay: document.querySelector('[data-testid=replay-state]')?.textContent ?? null,
       busy: document.querySelector('#panel-check .busy') !== null,
     })`),
-    close() {
+    async close() {
       socket.close();
+      const exited = new Promise((done) => child.once('exit', done));
       child.kill();
-      // Chrome may hold its profile a moment longer; a leftover temporary directory is harmless.
-      setTimeout(() => rmSync(profile, { recursive: true, force: true, maxRetries: 3 }), 300).unref();
+      await exited;
+      remove(profile);
     },
   };
 }
@@ -266,9 +276,11 @@ async function main() {
       if (browser.problems.length > 0) throw new Error(`the page logged errors: ${browser.problems.join(' | ')}`);
     }
   } finally {
-    browser?.close();
+    await browser?.close();
+    const stopped = new Promise((done) => dev.once('exit', done));
     dev.kill();
-    if (standIn) setTimeout(() => rmSync(directory, { recursive: true, force: true, maxRetries: 3 }), 300).unref();
+    await stopped;
+    if (standIn) remove(directory);
   }
 
   const times = result.edits.map((record) => record.pageMs ?? record.serverMs).sort((a, b) => a - b);
