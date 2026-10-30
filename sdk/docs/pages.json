@@ -207,6 +207,12 @@
       "pages": [
         { "path": "changelog", "narrative": true }
       ]
+    },
+    {
+      "title": "Migration",
+      "pages": [
+        { "path": "migration/to-1-0", "narrative": true }
+      ]
     }
   ]
 }
