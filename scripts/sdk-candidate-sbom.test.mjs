@@ -30,7 +30,7 @@ function fixture(sbom = rawSpdx()) {
   return {candidate, child, sbom, record, manifest};
 }
 
-function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/main') {
+function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 'sdk', ref = 'refs/heads/release/v0.4') {
   const config = encode({architecture, os: 'linux', config: {Labels: {
     'org.opencontainers.image.created': '1970-01-01T00:00:00Z',
     'org.opencontainers.image.revision': revision,
@@ -49,7 +49,7 @@ function releaseFixture(sbom = rawSpdx(), architecture = 'amd64', imageName = 's
 }
 
 test('release transport has exact repository/ref/signer policies without pretending candidate or SDK acceptance', () => {
-  for (const ref of ['refs/heads/main', 'refs/tags/v0.4.0']) {
+  for (const ref of ['refs/heads/release/v0.4', 'refs/tags/v0.4.0']) {
     for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
       for (const architecture of ['amd64', 'arm64']) {
         const {record, sbom, manifest, options} = releaseFixture(rawSpdx(), architecture, name, ref);
@@ -60,7 +60,7 @@ test('release transport has exact repository/ref/signer policies without pretend
           `https://github.com/UOR-Foundation/PrismPM/.github/workflows/release.yml@${ref}`,
           '--certificate-oidc-issuer', issuer, '--certificate-github-workflow-repository', 'UOR-Foundation/PrismPM',
           '--certificate-github-workflow-ref', ref, '--certificate-github-workflow-sha', revision,
-          '--certificate-github-workflow-trigger', ref === 'refs/heads/main' ? 'workflow_dispatch' : 'push',
+          '--certificate-github-workflow-trigger', ref === 'refs/heads/release/v0.4' ? 'workflow_dispatch' : 'push',
           '--certificate-github-workflow-name', 'PrismPM OCI/native and Cargo publication', subject]);
         assert.equal(signingArguments(digest(manifest), '/trusted-root', '/bundle', options).at(-1), subject);
         const annotation = JSON.parse(manifest).annotations;

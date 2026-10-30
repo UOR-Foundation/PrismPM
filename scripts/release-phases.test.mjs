@@ -17,13 +17,13 @@ const source = readFileSync(new URL('../.github/workflows/release.yml', import.m
 const workflow = () => load(source);
 const revision = 'a'.repeat(40);
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/main',
-  event: 'workflow_dispatch', version: '0.4.0', publishCrates: false, revision});
+const policy = () => ({repository: 'UOR-Foundation/PrismPM', ref: 'refs/heads/release/v0.4',
+  event: 'workflow_dispatch', version: '0.4.0', publishCrates: false, rehearsal: false, revision});
 const prerequisites = names => Object.fromEntries(names.map(name => [name, {result: 'success'}]));
 const ociNeeds = ['gate', 'images', 'native', 'reproducibility', 'installed-sdk'];
 const buildkit = 'moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa';
-const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/main',
-  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false',
+const environment = () => ({GITHUB_REPOSITORY: 'UOR-Foundation/PrismPM', GITHUB_REF: 'refs/heads/release/v0.4',
+  GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: revision, DISPATCH_VERSION: '0.4.0', PUBLISH_CRATES: 'false', REHEARSAL: 'false',
   GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '123456789', GITHUB_RUN_ATTEMPT: '1'});
 const publicationTag = `sdk-oci-${revision}-123456789-1`;
 
@@ -31,8 +31,15 @@ function validateWorkflow(value) {
   assert.deepEqual(value.jobs['oci-native'].needs, ociNeeds);
   assert.equal(value.jobs['oci-native'].if, undefined, 'normal success gating must not be bypassed');
   assert.deepEqual(value.jobs.release.needs, [...ociNeeds, 'oci-native', 'crates']);
-  assert.equal(value.jobs.release.if, undefined);
-  assert.equal(value.jobs.crates.if, "${{ needs.gate.outputs.publish-crates == 'true' }}");
+  assert.equal(value.jobs.release.if, "${{ needs.gate.outputs.rehearsal != 'true' }}");
+  assert.equal(value.jobs.crates.if, "${{ needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}");
+  assert.deepEqual(value.on.workflow_dispatch.inputs.rehearsal, {description: 'Run every check but publish no release assets, discovery tags or crates. Images are still pushed by digest and signed.',
+    required: true, default: true, type: 'boolean'});
+  for (const name of ['oci-native']) {
+    const publishing = value.jobs[name].steps.filter(step => step.run?.includes('publish-oci') || step.uses?.startsWith('actions/attest-build-provenance'));
+    assert.equal(publishing.length, 2);
+    for (const step of publishing) assert.equal(step.if, "${{ needs.gate.outputs.rehearsal != 'true' }}");
+  }
   assert.deepEqual(value.jobs.crates.needs, [...ociNeeds, 'oci-native']);
   const cargoPublication = value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()'))?.run;
   assert.ok(cargoPublication, 'Cargo publication must select and verify the exact archive');
@@ -82,29 +89,37 @@ function validateWorkflow(value) {
   // The job script is one single-quoted `bash -c` argument: an apostrophe in a
   // comment or a message inside it ends the quote and breaks the whole job.
   execFileSync('bash', ['-n'], {input: publicationStep.run, stdio: ['pipe', 'pipe', 'pipe']});
-  assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
-  assert.match(value.jobs.gate.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
-  const sourceGate = value.jobs.gate.steps.find(step => step.with?.runCmd)?.with.runCmd;
-  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n" + [1, 2].map(run =>
-    `node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '\${{ github.sha }}' amd64 - '\${{ github.run_id }}' '\${{ github.run_attempt }}' ${run}\n`).join('') + 'PRISMPM_VV\n)"\n');
+  assert.equal(value.jobs.policy.outputs['publish-crates'], '${{ steps.version.outputs.publish-crates }}');
+  assert.equal(value.jobs.policy.outputs.rehearsal, '${{ steps.version.outputs.rehearsal }}');
+  assert.equal(value.jobs.gate.outputs['publish-crates'], '${{ needs.policy.outputs.publish-crates }}');
+  assert.equal(value.jobs.gate.outputs.rehearsal, '${{ needs.policy.outputs.rehearsal }}');
+  assert.match(value.jobs.policy.steps.find(step => step.id === 'version').run, /release-phases\.mjs policy/);
+  const sourceGate = value.jobs['source-vv'].steps.find(step => step.with?.runCmd)?.with.runCmd;
+  assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
+    + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
+  assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include, [{part: 'source'}, {part: 'conformance'}, {part: 'browser'}]);
   const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
-  assert.equal(sourceUpload.if, 'always()'); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
+  assert.equal(sourceUpload.if, undefined); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');
   assert.deepEqual(value.jobs.reproducibility.needs, ['gate', 'images']);
-  const installed = value.jobs['installed-sdk'];
-  assert.deepEqual(installed.needs, ['gate', 'images']);
-  assert.equal(installed.if, undefined); assert.equal(installed['continue-on-error'], undefined);
-  assert.equal(installed['runs-on'], '${{ matrix.os }}');
+  const installed = value.jobs['installed-sdk'], parts = value.jobs['installed-vv'];
+  assert.deepEqual(installed.needs, ['gate', 'images', 'installed-vv']); assert.deepEqual(parts.needs, ['gate', 'images']);
+  for (const job of [installed, parts]) {assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], undefined); assert.equal(job['runs-on'], '${{ matrix.os }}');}
   assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
-  const complete = installed.steps.find(step => step.run?.includes('sdk-vv-outer.sh'));
+  assert.deepEqual(parts.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]
+    .flatMap(row => ['source', 'conformance', 'browser'].map(part => ({...row, part}))));
+  const complete = parts.steps.find(step => step.run?.includes('sdk-vv-outer.sh'));
   assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
   assert.match(complete.run, /bash root-a\/scripts\/sdk-vv-outer\.sh/);
   const outer = readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url), 'utf8');
   assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run'));
   assert(outer.includes('--target registry_qualification_tools'));
-  assert(installed.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
-  const retained = installed.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}');
+  assert(parts.steps.some(step => step.with?.name === 'sdk-image' && step.with.path === '.shipped-image'));
+  const retained = parts.steps.find(step => step.with?.name === 'full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}');
   assert.equal(retained.if, 'always()'); assert.equal(retained.with['if-no-files-found'], 'error');
+  assert(retained.with.path.includes('!sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/docker/'), 'private transport data must not be uploaded');
+  const assembled = installed.steps.find(step => step.run?.includes('assemble-installed'));
+  assert(assembled); assert.equal(assembled.if, undefined); assert.equal(assembled['continue-on-error'], undefined);
   const builds = value.jobs.images.steps.find(step => step.id === 'build');
   assert.equal(builds.uses, undefined);
   assert.equal(builds.with, undefined);
@@ -181,7 +196,13 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs['installed-sdk'].if = '${{ false }}'; },
     value => { value.jobs['installed-sdk'].strategy.matrix.include.pop(); },
     value => { value.jobs['installed-sdk'].strategy.matrix.include[1].os = 'ubuntu-24.04'; },
-    value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('sdk-vv-outer.sh')).if = '${{ false }}'; },
+    value => { value.jobs['installed-vv'].strategy.matrix.include[3].os = 'ubuntu-24.04'; },
+    value => { value.jobs['installed-vv'].steps.find(step => step.run?.includes('sdk-vv-outer.sh')).if = '${{ false }}'; },
+    value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('assemble-installed')).if = '${{ false }}'; },
+    value => { value.jobs['installed-vv'].strategy.matrix.include.pop(); },
+    value => { value.jobs['oci-native'].steps.find(step => step.run?.includes('publish-oci')).if = undefined; },
+    value => { value.jobs.release.if = undefined; },
+    value => { value.on.workflow_dispatch.inputs.rehearsal.default = false; },
     value => { value.jobs['oci-native'].if = '${{ always() }}'; },
     value => { value.jobs.release.if = '${{ always() }}'; },
     value => value.jobs.release.needs.pop(),
@@ -219,7 +240,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).env.UPLOAD = 'true'; },
     value => { value.jobs.crates.steps.find(step => step.run?.includes('publish_exact()')).env.CARGO_REGISTRY_TOKEN
       = '${{ steps.auth.outputs.token }}'; },
-    value => { value.jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
+    value => { value.jobs['source-vv'].steps.find(step => step.with?.runCmd).with.runCmd = 'just vv'; },
     value => { value.jobs.reproducibility.steps.find(step => step.env?.DOCKERFILE).run = 'cmp root-a.digest root-b.digest'; },
     value => { value.jobs.images.steps = value.jobs.images.steps.filter(step => !step.run?.includes('release-phases.mjs policy')); },
     ...[
@@ -234,7 +255,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"other-sha" "$GITHUB_REF"'); },
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
-      step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"$GITHUB_SHA" "refs/heads/main"'); },
+      step.run = step.run.replace('"$GITHUB_SHA" "$GITHUB_REF"', '"$GITHUB_SHA" "refs/heads/release/v0.4"'); },
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
       step.run = step.run.replace('set -euo pipefail\n', ''); },
     value => { const step = value.jobs.images.steps.find(step => step.run?.includes('release-phases.mjs image-verify'));
@@ -296,11 +317,16 @@ test('Cargo publication target selection binds the exact package and version arc
 });
 
 test('explicit OCI-only dispatch is distinct from Cargo publication and rejects foreign refs', () => {
-  assert.deepEqual(publicationPolicy(policy()), {version: '0.4.0', publishCrates: false});
+  assert.deepEqual(publicationPolicy(policy()), {version: '0.4.0', publishCrates: false, rehearsal: false});
+  assert.equal(publicationPolicy({...policy(), rehearsal: true}).rehearsal, true);
+  assert.throws(() => publicationPolicy({...policy(), rehearsal: true, publishCrates: true}), /rehearsal cannot publish/);
+  assert.throws(() => publicationPolicy({...policy(), rehearsal: 'true'}));
+  assert.throws(() => publicationPolicy({...policy(), rehearsal: null}));
+  assert.throws(() => publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null, rehearsal: true}));
   assert.equal(publicationPolicy({...policy(), publishCrates: true}).publishCrates, true);
-  assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null}).publishCrates, true);
+  assert.equal(publicationPolicy({...policy(), event: 'push', ref: 'refs/tags/v0.4.0', publishCrates: null, rehearsal: null}).publishCrates, true);
   for (const change of [{publishCrates: 'false'}, {publishCrates: null}, {repository: 'other/PrismPM'},
-    {ref: 'refs/heads/feature'}, {ref: 'refs/tags/v0.3.0'}, {event: 'pull_request'},
+    {ref: 'refs/heads/main'}, {ref: 'refs/heads/feature'}, {ref: 'refs/heads/release/v0.5'}, {ref: 'refs/tags/v0.3.0'}, {event: 'pull_request'},
     {version: '0.5.0'}, {revision: 'main'}, {extra: true}]) {
     assert.throws(() => publicationPolicy({...policy(), ...change}));
   }
@@ -309,7 +335,7 @@ test('explicit OCI-only dispatch is distinct from Cargo publication and rejects 
 test('image-index signatures require the exact current source, ref, trigger, name, issuer and repository', () => {
   const imageDigest = `sha256:${'b'.repeat(64)}`;
   for (const name of ['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']) {
-    for (const ref of ['refs/heads/main', 'refs/tags/v0.4.0']) {
+    for (const ref of ['refs/heads/release/v0.4', 'refs/tags/v0.4.0']) {
       const image = `ghcr.io/uor-foundation/prismpm-${name}@${imageDigest}`;
       assert.deepEqual(imageVerificationArguments(image, revision, ref, '/trusted-root'), [
         'verify', '--trusted-root', '/trusted-root', '--certificate-identity',
@@ -317,18 +343,18 @@ test('image-index signatures require the exact current source, ref, trigger, nam
         '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
         '--certificate-github-workflow-repository', 'UOR-Foundation/PrismPM',
         '--certificate-github-workflow-ref', ref, '--certificate-github-workflow-sha', revision,
-        '--certificate-github-workflow-trigger', ref === 'refs/heads/main' ? 'workflow_dispatch' : 'push',
+        '--certificate-github-workflow-trigger', ref === 'refs/heads/release/v0.4' ? 'workflow_dispatch' : 'push',
         '--certificate-github-workflow-name', 'PrismPM OCI/native and Cargo publication', image,
       ]);
     }
   }
   const image = `ghcr.io/uor-foundation/prismpm-sdk@${imageDigest}`;
   for (const [subject, source, ref] of [
-    [image.replace('uor-foundation', 'other'), revision, 'refs/heads/main'],
-    [image.replace('prismpm-sdk', 'prismpm-sdk-candidate'), revision, 'refs/heads/main'],
-    [image.replace(imageDigest, 'latest'), revision, 'refs/heads/main'],
-    [`${image}@${imageDigest}`, revision, 'refs/heads/main'],
-    [image, 'main', 'refs/heads/main'], [image, revision, 'refs/heads/feature'],
+    [image.replace('uor-foundation', 'other'), revision, 'refs/heads/release/v0.4'],
+    [image.replace('prismpm-sdk', 'prismpm-sdk-candidate'), revision, 'refs/heads/release/v0.4'],
+    [image.replace(imageDigest, 'latest'), revision, 'refs/heads/release/v0.4'],
+    [`${image}@${imageDigest}`, revision, 'refs/heads/release/v0.4'],
+    [image, 'main', 'refs/heads/release/v0.4'], [image, revision, 'refs/heads/feature'], [image, revision, 'refs/heads/main'],
     [image, revision, 'refs/tags/v0.3.0'],
   ]) assert.throws(() => imageVerificationArguments(subject, source, ref, '/trusted-root'));
 });
@@ -341,12 +367,12 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
     const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
     const trust = new URL('../standards/trust/sigstore-trusted-root-cosign-3.1.3.json', import.meta.url).pathname;
     const image = `ghcr.io/uor-foundation/prismpm-sdk@sha256:${'b'.repeat(64)}`;
-    const args = imageVerificationArguments(image, revision, 'refs/heads/main', trust);
+    const args = imageVerificationArguments(image, revision, 'refs/heads/release/v0.4', trust);
     const executable = join(directory, 'cosign');
     writeFileSync(executable, `#!${process.execPath}\nrequire('node:assert/strict').deepEqual(process.argv.slice(2), JSON.parse(process.env.EXPECTED_ARGS));\nprocess.stdout.write('verified-command-fixture\\n');\nprocess.exit(Number(process.env.VERIFIER_STATUS));\n`);
     chmodSync(executable, 0o700);
     const invoke = (status, root = trust, sourceRevision = revision) => execFileSync(process.execPath,
-      [helper, 'image-verify', image, sourceRevision, 'refs/heads/main', root], {stdio: 'pipe', encoding: 'utf8',
+      [helper, 'image-verify', image, sourceRevision, 'refs/heads/release/v0.4', root], {stdio: 'pipe', encoding: 'utf8',
         env: {...process.env, PATH: `${directory}:${process.env.PATH}`, EXPECTED_ARGS: JSON.stringify(args),
           VERIFIER_STATUS: String(status)}});
     assert.equal(invoke(0), 'verified-command-fixture\n');
@@ -358,22 +384,22 @@ test('image-index verifier CLI checks the pinned root and propagates signature-v
   } finally { rmSync(directory, {recursive: true, force: true}); }
 });
 
-test('the release twice-VV shell must fail on either invocation, including first-run-only failure', t => {
+test('the release part shell must fail when its one invocation fails', t => {
   // This checks the actual shell sequence's failure propagation. The helper's
-  // fixed just-vv command and real process capture have separate owning tests.
-  const bodies = [workflow().jobs.gate.steps.find(step => step.with?.runCmd).with.runCmd];
+  // fixed just-vv-part command and real process capture have separate owning tests.
+  const bodies = [workflow().jobs['source-vv'].steps.find(step => step.with?.runCmd).with.runCmd.replaceAll('${{ matrix.part }}', 'source')];
   const verify = body => {
-    for (const [first, second] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    for (const first of [0, 1]) {
       const root = mkdtempSync(join(tmpdir(), 'prismpm-release-session-'));
       t.after(() => rmSync(root, {recursive: true, force: true}));
-      const env = sessionFixture(root, process.env, {first, second, release: true,
+      const env = sessionFixture(root, process.env, {first, release: true,
         image: `ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:${'b'.repeat(64)}`});
-      if (first === 0 && second === 0) {
-        assert.equal(execFileSync('bash', ['-c', body], {cwd: root, env, encoding: 'utf8', timeout: 15_000}), 'call:1\ncall:2\n');
+      if (first === 0) {
+        assert.equal(execFileSync('bash', ['-c', body], {cwd: root, env, encoding: 'utf8', timeout: 15_000}), 'call:1\n');
       } else {
         assert.throws(() => execFileSync('bash', ['-c', body], {cwd: root, env, encoding: 'utf8', timeout: 15_000}), error => {
           assert.equal(error.status, 1);
-          assert.equal(error.stdout, first === 0 ? 'call:1\ncall:2\n' : 'call:1\n');
+          assert.equal(error.stdout, 'call:1\n');
           return true;
         });
       }
@@ -381,7 +407,7 @@ test('the release twice-VV shell must fail on either invocation, including first
   };
   for (const body of bodies) {
     verify(body);
-    assert.throws(() => verify(body.replace('--with-sdk bash -euo pipefail', '--with-sdk bash')));
+    assert.throws(() => verify(body.replace("'source'\n", "'source' || true\n")));
   }
 });
 
@@ -604,7 +630,7 @@ test('release SBOM input binds exact index, child, config, platform, source and 
       ['sbom.spdx.json', spdx]]) writeFileSync(join(directory, name), bytes);
     const helper = new URL('./release-phases.mjs', import.meta.url).pathname;
     const invoke = (command, ...extra) => execFileSync(process.execPath,
-      [helper, command, directory, 'amd64', revision, image, 'refs/heads/main', ...extra], {stdio: 'pipe'});
+      [helper, command, directory, 'amd64', revision, image, 'refs/heads/release/v0.4', ...extra], {stdio: 'pipe'});
     invoke('sbom-record');
     assert.deepEqual(JSON.parse(readFileSync(join(directory, 'sbom-record.json'))), record);
     writeFileSync(join(directory, 'sbom-record.json'), JSON.stringify({...record, production_accepted: true}));

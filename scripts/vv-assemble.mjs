@@ -5,28 +5,17 @@ import assert from 'node:assert/strict';
 import {readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {canonical, validateVvEvidence} from './sdk-vv-run.mjs';
+import {assembleVvEvidence, vvParts} from './sdk-vv-run.mjs';
 
-export const parts = Object.freeze(['browser', 'conformance', 'source']);
+export const parts = Object.freeze([...vvParts].sort());
 
 export function assemble(directory, revision) {
   assert.match(revision, /^[a-f0-9]{40}$/);
   assert.deepEqual(readdirSync(directory).sort(), parts.map(part => `vv-part-${part}.json`), 'exactly the three part records required');
-  for (const part of parts) {
+  return assembleVvEvidence(new Map(parts.map(part => {
     const bytes = readFileSync(join(directory, `vv-part-${part}.json`));
-    assert(bytes.length <= 4096, 'bounded part record');
-    const value = JSON.parse(bytes.toString('utf8'));
-    assert.equal(bytes.toString('utf8'), canonical(value), 'original canonical part bytes required');
-    assert.deepEqual(value, {commit: revision, part, schema: 'prismpm/vv-part/1', status: 'passed'});
-  }
-  const evidence = Buffer.from(canonical({
-    commit: revision,
-    gates: Array.from({length: 15}, (_, index) => index + 1),
-    schema: 'prismpm/vv-evidence/1',
-    status: 'passed',
-  }));
-  validateVvEvidence(evidence, revision);
-  return evidence;
+    return [part, bytes];
+  })), revision);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

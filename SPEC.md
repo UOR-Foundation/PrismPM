@@ -1341,11 +1341,10 @@ command exit status and stop only their own observers. Diagnostics upload runs e
 when the runner is reachable; runner loss can prevent upload and never implies
 acceptance or a diagnosed resource cause.
 
-Consecutive source gates share one exact-source, digest-addressed test SDK
-session and its invocation-owned temporary registry. Both unchanged `just vv`
-commands execute sequentially in the same workspace with separate evidence;
-only SDK preparation is shared, never verification results. Failure stops the
-sequence. Cleanup checks container identity, volume ownership and image identity;
+A release runs one source pass, as the three `just vv-part` jobs. Each prepares
+its own exact-source, digest-addressed test SDK session and invocation-owned
+temporary registry; the parts share no workspace or verification results, and
+the `gate` job accepts only all three passed records for one commit. Cleanup checks container identity, volume ownership and image identity;
 errors fail an otherwise successful session without replacing a verification
 failure. Uncertain publication reports possibly retained resources instead of
 deleting an unverified name.
@@ -2167,11 +2166,11 @@ execution or acceptance.
 `scripts/sdk-vv-run.mjs` is an internal installed-SDK executor. It reconstructs
 the image-owned source/history/bootstrap/advisory closure and copies only the
 image-owned Cargo cache into a fresh writable directory. Fixed SDK tools run
-two consecutive, unchanged `just vv` commands with the independently supplied
-SDK digest and source commit. Each successful command must produce its own
-canonical, exact-commit, complete 15-gate evidence; both original records are
-retained separately and rechecked before publishing the internal execution
-record. A failure retains diagnostics but cannot produce completion evidence.
+one unchanged `just vv-part` command, one job per part, with the independently supplied
+SDK digest and source commit. The successful command must produce its canonical,
+exact-commit part record, which is retained and rechecked before publishing the
+internal execution record. The 15 gates count for an architecture only when all
+three part records validate for one commit and image. A failure retains diagnostics but cannot produce completion evidence.
 Cancellation uses the existing diagnostic supervisor's cleanup boundary.
 
 Original source/native release command capture uses the private Linux
@@ -2201,11 +2200,11 @@ images. Acquisition precedes disconnection of its only external network;
 the SDK starts afterward, under that same daemon, sharing only its isolated
 network namespace, socket and fresh writable workspace. The immutable SDK
 root is read-only and executes as UID 1000. Network route/interface checks and
-positive/negative connection controls surround both full V&V runs. Missing
+positive/negative connection controls surround the V&V part. Missing
 images, wrong native platform, network access, incomplete original evidence,
 cancellation or failed owned-resource cleanup prohibit acceptance output.
 The outer record binds the actual OCI configuration, source, inventory and
-both original gate records. Its native-execution basis is the trusted hosted
+the original part record. Its native-execution basis is the trusted hosted
 CI runner assignment plus matching image/executable architecture, not physical
 hardware attestation. Unit transports do not constitute SDK acceptance.
 After acquisition, only the owned daemon's resolver is replaced with the
@@ -2230,13 +2229,14 @@ descriptor disposal or enclosing-container removal is not timely reaping.
 The fixed interpreter is admitted from each digest-pinned image: Bookworm
 Python 3.11.2 or Noble Python 3.12.3, using isolated execution with no host
 fallback. Source binding includes both private supervisor files. Original
-command, file, actor and two-run deadlines remain unchanged.
+command, file and actor deadlines remain unchanged.
 Desktop/browser conformance and the nightly `browser-standalone.yml` workflow,
 not source V&V, additionally execute the six private
 original standalone Session file pairs: Projection (7+1), Reservation (10+23),
 Payload (4+30), Recovery Frames (3+1), Journal Recovery (7+1), Retention (3+18).
-Installed browser qualification preserves all26 original owners and both
-fixed-null fallbacks, then executes these same108 additional cases. Each
+Installed release qualification runs the registered DK owners through the
+installed V&V parts; the separate read-only browser step verifies the installed
+source closure, image, modules and account construction and runs no suites. Each
 original selected file must report its exact count with no omitted, failed,
 skipped, cancelled or TODO tests. Five groups retain their3600000ms file and
 process bounds; Journal Recovery retains5500000ms with its5400000ms owner.
@@ -2264,7 +2264,7 @@ by the real process controls and actual per-command exhaustion receipts.
 The release gate requires
 the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.
-The two-run execution remains bounded to four hours; operational fit must be
+Each part's execution is bounded to five hours; operational fit must be
 measured on the actual selected image, not inferred from source or unit runs.
 Image-capacity admission re-samples the destination filesystem after all
 asynchronous metadata reads and before the first pull. The initial12GiB
@@ -2375,7 +2375,7 @@ It measures expanded layer lengths and original DiffIDs without filesystem
 extraction. Actual storage admissions preserve the original reserves; inadequate
 hosted capacity fails without qualification. Explicit read-only CA plumbing changes
 only transport trust, never image bytes, oracle cases, limits or acceptance readers.
-The existing browser/library/migration/metadata, two complete installed V&V passes,
+The existing browser/library/migration/metadata, three installed V&V parts,
 and product owners run unchanged on both native platforms before their original
 criteria can be accepted. Private-registry execution is not publication, signing,
 release promotion or immutable downstream Hologram adoption; those remain required

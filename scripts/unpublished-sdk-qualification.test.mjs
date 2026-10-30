@@ -60,8 +60,8 @@ test('actual driver preserves complete whole-ZIP admission and opaque stage reti
 });
 test('optional trust is mechanical and default outer command remains the original complete test-plus-run sequence',()=>{
  const outer=source('scripts/sdk-vv-outer.sh');
- assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run "$1" "$2" "$3" "$4"'));
- assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run-owned-registry "$1" "$2" "$3" "$4" "$5"'));
+ assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run "$1" "$2" "$3" "$4" "$5"'));
+ assert(outer.includes('node root-a/scripts/sdk-vv-check.mjs tests; node root-a/scripts/sdk-vv-check.mjs run-owned-registry "$1" "$2" "$3" "$4" "$5" "$6"'));
  for(const script of['browser-api','library','product']){
   const text=source('scripts/'+script+'-sdk-check.sh');assert(text.includes('scripts/sdk-qualification-trust.mjs'));assert(!/NODE_TLS_REJECT_UNAUTHORIZED|--tls-verify=false|--insecure/.test(text));
  }

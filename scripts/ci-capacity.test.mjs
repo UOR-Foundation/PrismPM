@@ -312,6 +312,8 @@ const expectedMatrices = {
     images: products.map(([name, dockerfile, target]) => ({name, dockerfile, target, repository: `ghcr.io/uor-foundation/prismpm-${name}`})),
     reproducibility: products.flatMap(([image, dockerfile, target]) => platforms.map(({os, arch}) => ({os, platform: `linux/${arch}`, dockerfile, target, name: `${image}-${arch}`, image}))),
     'installed-sdk': platforms,
+    'source-vv': [{part: 'source'}, {part: 'conformance'}, {part: 'browser'}],
+    'installed-vv': platforms.flatMap(({os, arch}) => ['source', 'conformance', 'browser'].map(part => ({os, arch, part}))),
     native: [{platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
   'sdk-candidate': {
@@ -333,8 +335,8 @@ const candidateJobs = {
   publish: [60, 'eed34aecea86d7fb123167999bb1a0048f62609f6fc91d6979eeb0dcb8340128'],
   'unpublished-construction': [180, '41becc11023405b4a03aef46605180df69124b5ebdcc3a90c572b3716c492999'],
   'construction-integrity': [90, '6cf032e9b0febd74a52489ce4f06439f93ddebb3e13910e503e9f68f90fc3fa7'],
-  'unpublished-prerequisites': [360, 'eaa51e906cb16a3b390033e524e84548554ce7fbdb38a9148fbdeb80d02e2938'],
-  'unpublished-installed': [360, 'fb575ed29295c2c233a4ca401e6915c35994ed2a8e805845fe293304c567f86c'],
+  'unpublished-prerequisites': [360, '5057f713c44d33f474ffd88493498157884d36791aaf32de67e42ec356993890'],
+  'unpublished-installed': [360, 'be3439a936501f81eb4ec1f7aea6fc31eabad4c6d75cb285ec18167d8fdd0a6b'],
 };
 function candidateContract(value) {
   assert.deepEqual(Object.keys(value.jobs), Object.keys(candidateJobs));
@@ -357,7 +359,7 @@ function candidateContract(value) {
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }
 }
-const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, native: 2}};
+const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, 'source-vv': 3, 'installed-vv': 6, native: 2}};
 function publicationContract(name, value) {
   if (name === 'sdk-candidate') candidateContract(value);
   const actual = Object.fromEntries(Object.entries(value.jobs).filter(([, job]) => job.strategy).map(([id, job]) => {

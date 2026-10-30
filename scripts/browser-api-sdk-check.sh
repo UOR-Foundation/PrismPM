@@ -46,17 +46,6 @@ docker container cp "$container:/usr/local/bin/prismpm-devcontainer-init" "$sdk_
 cmp "$root/sdk/devcontainer-init.sh" "$sdk_work/entrypoint.sh"
 docker container rm "$container" >/dev/null
 container=''
-# Only private temporary caches/builds are writable. The source, tools and browser
-# modules come from the inspected image; no host source or dependency mount exists.
-container=$(docker container create --user 1000:1000 --read-only --network none --cap-drop ALL \
-  --security-opt no-new-privileges --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \
-  --env PRISMPM_EPHEMERAL_HOME=1 --env CARGO_NET_OFFLINE=true \
-  --workdir /opt/prismpm/share/conformance-root "$image" \
-  node scripts/browser-api-sdk-check.mjs run)
-[[ $container =~ ^[0-9a-f]{64}$ ]] || exit 1
-docker container start --attach "$container"
-test "$(docker container inspect --format '{{.State.ExitCode}}' "$container")" = 0
-docker container rm "$container" >/dev/null
-container=''
+# The installed V&V parts already run the browser owners in this exact image.
 node "$helper" verify "$root" "$sdk_work/source.json"
 printf 'browser SDK closure passed: source=%s image=%s platform=linux/%s\n' "$revision" "$image" "$architecture"

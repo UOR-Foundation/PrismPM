@@ -28,9 +28,9 @@ function transportPolicy(options) {
   assert.equal(options.kind, 'release');
   assert.ok(['sdk', 'runtime', 'adapter-compose', 'adapter-kubernetes', 'adapter-github-pages', 'oracles']
     .some(name => options.repository === `ghcr.io/uor-foundation/prismpm-${name}`));
-  assert.ok(['refs/heads/main', 'refs/tags/v0.4.0'].includes(options.ref));
+  assert.ok(['refs/heads/release/v0.4', 'refs/tags/v0.4.0'].includes(options.ref));
   return {repository: options.repository, workflow: `${source}/.github/workflows/release.yml@${options.ref}`,
-    ref: options.ref, event: options.ref === 'refs/heads/main' ? 'workflow_dispatch' : 'push',
+    ref: options.ref, event: options.ref === 'refs/heads/release/v0.4' ? 'workflow_dispatch' : 'push',
     name: 'PrismPM OCI/native and Cargo publication', candidate: false};
 }
 

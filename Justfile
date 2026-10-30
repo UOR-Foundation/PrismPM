@@ -9,7 +9,7 @@ vv:
 
 # Run one separately run part of vv: source, conformance or browser
 vv-part part:
-    cargo xtask vv-part {{part}}
+    ./scripts/vv.sh vv-part {{part}}
 
 # Validate claim registers and spec links
 validate:

@@ -424,8 +424,7 @@ jobs:
             ${{ runner.temp }}/unpublished-sdk-${{ matrix.arch }}-${{ matrix.phase }}/inner/*.stdout
             ${{ runner.temp }}/unpublished-sdk-${{ matrix.arch }}-${{ matrix.phase }}/inner/*.stderr
             root-a/target/library-sdk-evidence/
-            sdk-${{ matrix.arch }}-full-sdk-vv/
-            sdk-${{ matrix.arch }}-full-sdk-vv-outer-owner/
+            sdk-${{ matrix.arch }}-full-sdk-vv-*/
             sdk-${{ matrix.arch }}-product-cli/
           if-no-files-found: error
           compression-level: 6
@@ -488,8 +487,7 @@ jobs:
             ${{ runner.temp }}/unpublished-sdk-${{ matrix.arch }}-${{ matrix.phase }}/inner/*.stdout
             ${{ runner.temp }}/unpublished-sdk-${{ matrix.arch }}-${{ matrix.phase }}/inner/*.stderr
             root-a/target/library-sdk-evidence/
-            sdk-${{ matrix.arch }}-full-sdk-vv/
-            sdk-${{ matrix.arch }}-full-sdk-vv-outer-owner/
+            sdk-${{ matrix.arch }}-full-sdk-vv-*/
             sdk-${{ matrix.arch }}-product-cli/
           if-no-files-found: error
           compression-level: 6
