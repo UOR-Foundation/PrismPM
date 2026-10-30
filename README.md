@@ -153,3 +153,5 @@ integrity against the release's own evidence, not deployment acceptance.
 - [CONFORMANCE.md](CONFORMANCE.md) — Conformance requirements
 - [ERRORS.md](ERRORS.md) — Error code registry
 - [STABILITY.md](STABILITY.md) — Stability tiers and pre-1.0 versioning policy
+- [RELEASES.md](RELEASES.md) — How releases are cut, what each may contain, and support windows
+- [SECURITY.md](SECURITY.md) — How to report a vulnerability, and how to verify a release

@@ -74,6 +74,18 @@ Closes [#249](https://github.com/UOR-Foundation/PrismPM/issues/249).
 
 `node sdk/docs/generate.mjs verify` (the `docs generate` workflow on every pull request) rejects a shipped release whose features name no request. The rule is `changelogProblems` in `sdk/docs/lib/site.mjs`. The published `changelog.md` on the `docs-site` branch therefore names every request it shipped. Use the full link, not a bare `#N`: the docs vocabulary lint rejects bare issue numbers in prose, and the site is read off GitHub.
 
-## Writing the CHANGELOG.md entry
+## Writing the pull request title
 
-A change that users can see gets one line in the `## [Unreleased]` entry of `CHANGELOG.md`, under one of the four headers `STABILITY.md` section 2 names, in this order: `### Features Added`, `### Breaking Changes`, `### Bugs Fixed`, `### Other Changes`. A breaking change goes under `### Breaking Changes` and makes the next version a minor bump; before 1.0 everything else is a patch bump. `node sdk/docs/changelog.mjs` checks this and runs in the `docs generate` workflow. [docs/release/versioning.md](docs/release/versioning.md) says how a version is cut.
+Do not edit `CHANGELOG.md`. release-please writes it from the commit subjects on `main`, so your pull request title is a line of the changelog. Write it as a [Conventional Commit](https://www.conventionalcommits.org/en/v1.0.0/), `type(scope): subject`. The scope is optional.
+
+| Type | Changelog header | Bump before 1.0 | Bump from 1.0 |
+| --- | --- | --- | --- |
+| `feat` | Features Added | patch | minor |
+| `fix` | Bugs Fixed | patch | patch |
+| `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert` | Other Changes | patch | patch |
+
+A breaking change is `feat(scope)!: subject`, or has a `BREAKING CHANGE:` footer. It also goes under Breaking Changes, and bumps the minor before 1.0 and the major from 1.0.
+
+The `conventional commits` workflow checks the title on every pull request. It also checks the subject of a pull request with one commit, because a squash merge keeps that subject over the title. A release that needs a specific version sets `release-as` in `release-please-config.json`.
+
+`node sdk/docs/changelog.mjs` holds the result to the four headers in `STABILITY.md` section 2 and runs in the `docs generate` workflow. [RELEASES.md](RELEASES.md) says how a release is cut and what each version may contain, and [docs/release/versioning.md](docs/release/versioning.md) describes the tooling. Report a vulnerability as [SECURITY.md](SECURITY.md) says, never in a public issue.
