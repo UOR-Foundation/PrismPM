@@ -7,6 +7,10 @@ default:
 vv:
     ./scripts/vv.sh
 
+# Run one separately run part of vv: source, conformance or browser
+vv-part part:
+    cargo xtask vv-part {{part}}
+
 # Validate claim registers and spec links
 validate:
     cargo run --package xtask -- validate

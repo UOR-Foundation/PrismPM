@@ -173,7 +173,7 @@ test('all affected jobs have explicit bounds; the one normative pass retains six
   const run = workflow('vv').jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd;
   assert.equal(run, `set -euo pipefail
 bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
-node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- just vv
+node scripts/ci-observe.mjs run target/ci-diagnostics/vv -- just vv-part ${'$'}{{ matrix.part }}
 PRISMPM_VV
 )"
 `);
