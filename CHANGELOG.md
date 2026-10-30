@@ -5,6 +5,14 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `prism-code build --unstable-author` (#325, experimental, `docs/proposals/325-authoring-front-door.md`): an agent writes `model/` from `examples/`, `intent.md` and `types/`, and the toolchain, the kernel and the examples gate the build. An unchanged spec never calls the agent. `prism-code check <holo> --unstable-author` proves a holo came from its spec and can compare it with a reference holo.
+
+### Changed
+- The spec digest in `prismpm/sdk-lock/3` covers `intent.md` in place of the `intent/` directory reserved by #264, and the lock gains an optional `authoring` record. A lock with that record needs an SDK image built from this change.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

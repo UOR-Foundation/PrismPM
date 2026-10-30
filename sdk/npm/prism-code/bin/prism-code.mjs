@@ -17,6 +17,7 @@
  *   prism-code check <app.holo> [--policy <file>] [--json]
  *                                                     judge the holo against a policy and print its verdict
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
+ *   prism-code build --unstable-author [--check] ...  write the model from examples and intent, then prove and build it
  *   prism-code <plugin> [args]                        run prism-<plugin> from the PATH (experimental)
  *
  * Exit codes: 0 ok or the policy passed, 1 vectors failed, an attestation did
@@ -33,10 +34,9 @@ import { readFile, stat } from 'node:fs/promises';
 import { statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import { userInfo } from 'node:os';
 import { createRequire } from 'node:module';
 import { fromFile, serve, readManifest } from '../src/node.mjs';
-import { sdkImageFromLock, dockerArguments, DELEGATED } from '../src/docker.mjs';
+import { sdkImageFromLock, hostDockerArguments, DELEGATED } from '../src/docker.mjs';
 import { CapabilityDeniedError, PrismCodeError, PrismError, SigningError, VerificationError } from '../src/errors.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { canonicalJson } from '../src/archive.mjs';
@@ -77,6 +77,10 @@ Usage:
   prism-code build --check [args]                   prismpm check in the SDK image named by ./prismpm.lock:
                                                     validate the model, write nothing
   prism-code build [args]                           prismpm build (needs the Docker socket)
+  prism-code build --unstable-author [--check] [--no-cache] [--project <dir>]
+                                                    experimental: an agent writes model/ from examples/, intent.md
+                                                    and types/, then the proof and the examples gate the build;
+                                                    an unchanged spec never calls the agent
   prism-code verify [args]                          prismpm verify (needs the Docker socket)
   prism-code conformance [args]                     prismpm conformance
   prism-code <plugin> [args]                        run prism-<plugin> from the PATH; a built-in verb always wins
@@ -99,9 +103,18 @@ Options for run:      --policy <file>              the policy check judges the h
 Options for check:    --policy <file>              a JSON policy: name, minimum (P0 to P3), digests, world;
                                                    default: P2 or above, or PRISM_MINIMUM_LEVEL
                       --json                       the verdict as one canonical JSON object
+                      --unstable-author            also prove the holo came from this project's spec
+                      --project <dir>              with --unstable-author, the project; default the current directory
+                      --reference <holo>           with --unstable-author, compare Core-Wasm, acceptance and the other sections
                       deprecated: check without a holo runs build --check; removed in 0.4.0
 Options for manifest: --target <browser|node>      merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the merged manifest and the warnings as canonical JSON
+Options for build --unstable-author:
+                      --author-command <path>      the agent process; default the bundled adapter, which needs @anthropic-ai/sdk
+                      --author-model <id>          the model id to pin in prismpm.lock; default the lock's, then claude-opus-5-5
+                      --author-timeout <seconds>   per attempt, default 600
+                      --author-max-tokens <n>      stop after this many tokens across attempts, default 2000000
+                      --max-iterations <n>         attempts before the build fails, default 10
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -139,6 +152,13 @@ const VALUE_OPTIONS = [
   'capability-set',
   'policy',
   'target',
+  'project',
+  'reference',
+  'author-command',
+  'author-model',
+  'author-timeout',
+  'author-max-tokens',
+  'max-iterations',
 ];
 
 function parse(argv) {
@@ -248,7 +268,7 @@ async function commandAttestation(verb, positional, options) {
   return verb === 'attest' ? cli.runAttest(positional, options, usage) : cli.runVerifyAttestation(positional, options, usage);
 }
 
-const CHECK_OPTIONS = ['policy', 'json'];
+const CHECK_OPTIONS = ['policy', 'json', 'unstable-author', 'project', 'reference'];
 
 /** True when `check` was given a holo, a path ending in `.holo` or a file; otherwise it is the deprecated `build --check`. */
 function namesHolo(positional) {
@@ -267,15 +287,24 @@ async function commandCheck(positional, options) {
   if (unknown) return usage(`check has no option --${unknown}`);
   if (Object.hasOwn(options, 'policy') && (typeof options.policy !== 'string' || options.policy === '')) return usage('--policy takes a file');
   if (positional.length !== 1) return usage('check takes one holo');
+  if (!options['unstable-author'] && (options.project !== undefined || options.reference !== undefined)) return usage('--project and --reference need --unstable-author');
   let verdict;
+  let authoring = null;
   try {
     verdict = await check(positional[0], { policy: options.policy });
+    if (options['unstable-author']) {
+      const { runAuthorCheck } = await import('../src/author/cli.mjs');
+      authoring = await runAuthorCheck(positional[0], options);
+    }
   } catch (error) {
     if (!(error instanceof PrismError)) throw error;
     process.stderr.write(`no verdict: ${error.check ?? error.code}: ${error.message}\n`);
     return CHECK_EXIT.NO_VERDICT;
   }
-  process.stdout.write(options.json ? verdictJson(verdict) : formatVerdict(verdict, positional[0]));
+  if (options.json && authoring) process.stdout.write(`{"authoring":${authoring.json},"verdict":${verdictJson(verdict).trimEnd()}}\n`);
+  else process.stdout.write(options.json ? verdictJson(verdict) : formatVerdict(verdict, positional[0]));
+  if (!options.json && authoring) process.stdout.write(authoring.text);
+  if (authoring && !authoring.passed) return CHECK_EXIT.FAILED;
   return exitCodeOf(verdict);
 }
 
@@ -369,19 +398,7 @@ async function commandDelegate(command, args) {
     return 64;
   }
   const image = sdkImageFromLock(lock);
-  const { build } = DELEGATED[command];
-  let dockerSocketGid = null;
-  if (build && process.platform !== 'win32') {
-    try {
-      dockerSocketGid = statSync('/var/run/docker.sock').gid;
-    } catch {
-      dockerSocketGid = null;
-    }
-  }
-  let uid = null;
-  let gid = null;
-  if (process.platform !== 'win32') ({ uid, gid } = userInfo());
-  const dockerArgs = dockerArguments({ image, cwd, command, args, uid, gid, build, dockerSocketGid });
+  const dockerArgs = hostDockerArguments({ image, cwd, command, args });
   if (process.env.PRISM_CODE_DRY_RUN) {
     process.stdout.write(`docker ${dockerArgs.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}\n`);
     return 0;
@@ -441,6 +458,14 @@ async function main(argv) {
       process.stderr.write('prism-code check without a holo is deprecated and is removed in 0.4.0; use prism-code build --check, which runs the same prismpm check\n');
       return commandDelegate('check', rest);
     case 'build':
+      if (rest.includes('--unstable-author')) {
+        const { runAuthorBuild } = await import('../src/author/cli.mjs');
+        const outcome = await runAuthorBuild({ positional, options }, usage);
+        if (typeof outcome === 'number') return outcome;
+        // A project with no spec files builds as it does without the flag.
+        const flags = rest.filter((a) => a !== '--unstable-author');
+        return flags.includes('--check') ? commandDelegate('check', flags.filter((a) => a !== '--check')) : commandDelegate('build', flags);
+      }
       if (rest.includes('--check')) return commandDelegate('check', rest.filter((a) => a !== '--check'));
       return commandDelegate('build', rest);
     default:
