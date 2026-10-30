@@ -7,7 +7,7 @@ import {prepare,run,draft,repository,sha} from '../../tests/browser-command/comp
 function corpus(){
  const source=readFileSync(join(repository,'stdlib/src/Foundation/Browser/V1/WorkspaceCommandCorpus.lex.tex'),'utf8');
  const data=readSemantic(source);
- assert.equal(data.spec,'lexlean/semantic-module/1');
+ assert.equal(data.spec,'lexlean/semantic-module/2');
  const defs=new Map(data.declarations.map(d=>[d.name,d]));assert.equal(defs.size,data.declarations.length);
  const cache=new Map(),used=new Set();
  function expand(name,active=new Set()){
