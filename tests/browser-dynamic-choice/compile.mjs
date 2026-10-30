@@ -143,7 +143,11 @@ function prepareStage(mutation, sourceOnly, baseline, inputs) {
   try {
     if (mutation) mutateSources(sources, mutation);
     const project = join(work, 'project');
-    for (const path of lexiconPaths(repository)) stage('project/' + path, capturedInput(path, inputs));
+    for (const path of lexiconPaths(repository)) {
+      const destination = join(project, path);
+      mkdirSync(dirname(destination), {recursive: true});
+      writeFileSync(destination, capturedInput(path, inputs), {flag: 'wx'});
+    }
     for (const [module, bytes] of sources) {
       const destination = join(project, 'src', ...module.split('.')) + '.lex.tex';
       mkdirSync(dirname(destination), {recursive: true}); writeFileSync(destination, bytes, {flag: 'wx'});
