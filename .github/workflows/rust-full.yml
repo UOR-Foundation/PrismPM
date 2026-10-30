@@ -1,0 +1,45 @@
+name: Full workspace Rust tests without fail-fast (scratch diagnostic, not for merge)
+
+# Gate 6 runs `cargo test --workspace --all-features --locked --offline` and
+# stops at the first failing binary; this lists every failing test.
+on:
+  push:
+    branches: [probe/rust-full-*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Run every workspace test binary in the pinned devcontainer (SDK image as V&V)
+        uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
+        with:
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          push: never
+          runCmd: |
+            set -euo pipefail
+            mkdir -p target/ci-diagnostics
+            bash scripts/vv.sh --with-sdk bash -uo pipefail -c "$(cat <<'RUST_FULL'
+            cargo test --workspace --all-features --locked --offline --no-fail-fast -- --skip test_portable_view_profiles_and_owned_failure_matrix 2>&1 | tee target/ci-diagnostics/cargo-test.log | grep --line-buffered -E '^test .* FAILED$|^test result:|Running |^error|panicked at' ; echo "cargo exit ${PIPESTATUS[0]}"
+            RUST_FULL
+            )"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: rust-full-${{ github.run_id }}
+          path: target/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7
