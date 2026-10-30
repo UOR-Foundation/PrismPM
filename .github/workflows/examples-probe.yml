@@ -1,0 +1,36 @@
+name: verify-examples and production test (scratch diagnostic, not for merge)
+
+on:
+  push:
+    branches: [probe/examples-*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  examples:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Gate 8 verify-examples and the production test, as V&V runs them
+        uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
+        with:
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          push: never
+          runCmd: |
+            set -euo pipefail
+            bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'EXAMPLES'
+            cargo test --locked --offline -p prismpm --test production -- check_is_no_write_and_build_detects_tampering 2>&1 | grep -E '^test |test result|panicked'
+            cargo xtask verify-examples
+            EXAMPLES
+            )"
