@@ -1,0 +1,40 @@
+name: release-please
+
+# Opens release pull requests that bump versions below 1.0 the way STABILITY.md
+# section 2 says: a breaking change is a minor bump, everything else a patch
+# bump (release-please-config.json: bump-minor-pre-major). Run by hand from the
+# Actions tab; nothing starts it.
+#
+# It opens or updates pull requests and nothing else. skip-github-release stops
+# the tag and the GitHub release a merged release pull request would otherwise
+# create, so a person still pushes every tag (v* for the crates and the image,
+# prism-code-v* for the npm package, see docs/release/versioning.md). No job here
+# publishes.
+#
+# The pull request it opens runs `docs generate`, whose changelog check holds the
+# entry to the four headers of STABILITY.md. release-please writes a BREAKING
+# CHANGES heading first; the check names the rename and the move.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-pr:
+    name: open release pull requests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: main
+          skip-github-release: true
