@@ -107,6 +107,18 @@ pub enum Commands {
         #[arg(long)]
         format: Option<String>,
     },
+    /// Re-execute recorded histories against a `.holo` and fail on divergence.
+    Replay {
+        /// History files, or directories of them.
+        #[arg(required = true)]
+        histories: Vec<PathBuf>,
+        /// The build to replay against.
+        #[arg(long)]
+        holo: PathBuf,
+        /// Write the prism/replay/v1 statement here, also when the replay diverged.
+        #[arg(long)]
+        statement: Option<PathBuf>,
+    },
     /// Export unchanged browser artifacts after source-free release integrity replay.
     ExportBrowser {
         /// Registry-qualified immutable reference of a locally acquired release.
@@ -498,6 +510,19 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
             script,
         ));
     }
+    // A replay reads a holo and its histories, not a project.
+    if let Commands::Replay {
+        histories,
+        holo,
+        statement,
+    } = &cli.command
+    {
+        return crate::replay::run(&crate::replay::ReplayRequest {
+            histories: histories.clone(),
+            holo: holo.clone(),
+            statement: statement.clone(),
+        });
+    }
     let context = match &cli.command {
         Commands::Build { context, .. } => context.as_deref(),
         _ => None,
@@ -532,6 +557,7 @@ fn execute(cli: &Cli) -> Result<(serde_json::Value, String), PrismError> {
     let controller = Controller::load(root)?;
     match &cli.command {
         Commands::Completion { .. } => unreachable!("completion returns before project loading"),
+        Commands::Replay { .. } => unreachable!("replay returns before project loading"),
         Commands::Lock {
             command: None,
             check,

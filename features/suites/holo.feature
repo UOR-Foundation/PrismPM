@@ -1,5 +1,12 @@
 Feature: holo
 
+  @HO-29 @build
+  Scenario: A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build.
+    Given the released Calculator archive, the history recorded from its acceptance vectors, and a coherent archive whose guest and vectors both changed
+    When the owning Node suites replay the history against both archives and check each replay statement against each archive
+    Then the released archive replays with no divergence and its statement supports P3, while the changed archive passes its own vectors, fails with DeterminismViolationError on every changed event, and its statement and the previous build's each withhold P3
+    And prismpm replay writes the same statement but for the runtime that ran it
+
   @HO-20 @build
   Scenario: The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change.
     Given the released Calculator archive and its exported browser closure committed under sdk/npm/prism-code, and no Rust SDK on the path

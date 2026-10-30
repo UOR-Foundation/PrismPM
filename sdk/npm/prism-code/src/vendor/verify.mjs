@@ -1824,6 +1824,25 @@ const __transparency = (() => {
   return Object.freeze({ TrustedRootError, fromBase64, readTrustedRoot, inclusionHolds, bodyProblem, verifyTransparency });
 })();
 
+// src/level.mjs
+const __level = (() => {
+  const assurance = __vendor_assurance_levels;
+  /**
+   * The assurance level a list of verdict reasons leaves: the highest level no
+   * reason withholds (docs/proposals/269-assurance-levels.md). One function, so
+   * `verify` and the statement checks cannot compute it differently.
+   */
+
+  const { ASSURANCE } = assurance;
+
+  function levelOf(reasons) {
+    const { LEVELS, RANK } = ASSURANCE;
+    const lowestWithheld = Math.min(...reasons.filter((r) => r.withholds).map((r) => RANK[r.withholds]), LEVELS.length);
+    return LEVELS[lowestWithheld - 1];
+  }
+  return Object.freeze({ levelOf });
+})();
+
 // src/world.mjs
 const __world = (() => {
   const { WORLDS } = __vendor_spec;
@@ -2192,6 +2211,7 @@ const __index = (() => {
   const { readStructure } = __reader;
   const assurance = __vendor_assurance_levels;
   const transparency = __transparency;
+  const { levelOf } = __level;
   const { checkWorld, checkWorldPolicy, capabilitySetProblem, compareWorldPin, describeWorld, effectsOutsidePolicy, IMPURE_EFFECTS } = __world;
   /**
    * @prism-code/verify: check a `.holo` offline, without the runtime.
@@ -2916,9 +2936,8 @@ const __index = (() => {
       reasons.push({ check: 'world.capabilities', code: 'PP5602', withholds: 'P3', message: sentence(`the world exceeds the granted capabilities: ${worldPolicy.problems.join('; ')}`) });
     }
 
-    const { LEVELS, RANK } = ASSURANCE;
-    const lowestWithheld = Math.min(...reasons.filter((r) => r.withholds).map((r) => RANK[r.withholds]), LEVELS.length);
-    const level = LEVELS[lowestWithheld - 1];
+    const { RANK } = ASSURANCE;
+    const level = levelOf(reasons);
 
     let passed = !outsideGrant;
     if (RANK[level] < RANK[wanted.minimum]) {

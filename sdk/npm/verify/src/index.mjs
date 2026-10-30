@@ -15,6 +15,7 @@ import { sha256Hex } from './sha256.mjs';
 import { readStructure } from './reader.mjs';
 import * as assurance from './vendor/assurance-levels.mjs';
 import * as transparency from './transparency.mjs';
+import { levelOf } from './level.mjs';
 import { checkWorld, checkWorldPolicy, capabilitySetProblem, compareWorldPin, describeWorld, effectsOutsidePolicy, IMPURE_EFFECTS } from './world.mjs';
 
 /** The newest holo format revision this package reads, from @prism-code/spec. */
@@ -730,9 +731,8 @@ export async function verify(source, policy) {
     reasons.push({ check: 'world.capabilities', code: 'PP5602', withholds: 'P3', message: sentence(`the world exceeds the granted capabilities: ${worldPolicy.problems.join('; ')}`) });
   }
 
-  const { LEVELS, RANK } = ASSURANCE;
-  const lowestWithheld = Math.min(...reasons.filter((r) => r.withholds).map((r) => RANK[r.withholds]), LEVELS.length);
-  const level = LEVELS[lowestWithheld - 1];
+  const { RANK } = ASSURANCE;
+  const level = levelOf(reasons);
 
   let passed = !outsideGrant;
   if (RANK[level] < RANK[wanted.minimum]) {

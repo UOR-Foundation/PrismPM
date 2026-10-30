@@ -16,6 +16,7 @@ import { verifyClosure, closureDispatch, initializeGlue } from './closure.mjs';
 import { CapabilityDeniedError, PrismCodeError, fail } from './errors.mjs';
 import { inspect } from './inspect.mjs';
 import { experimental_verify } from './verify.mjs';
+import { acceptanceHistory, experimental_recorder, experimental_replay } from './replay.mjs';
 import { worldPolicy } from './vendor/verify.mjs';
 import * as canonical from './canonical/index.js';
 
@@ -41,6 +42,17 @@ export {
   errorFromVerdict,
 } from './errors.mjs';
 export { experimental_verify, experimental_createClient, MINIMUM_LEVEL_ENV } from './verify.mjs';
+export {
+  HISTORY_SCHEMA,
+  REPLAY_PREDICATE_TYPE,
+  parseHistory,
+  historyBytes,
+  historyDigest,
+  historyJson,
+  acceptanceHistory,
+  experimental_recorder,
+  experimental_replay,
+} from './replay.mjs';
 export { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
 export { decodeHoloview, encodeHoloview } from './view.mjs';
 export { compileGuest, runGuest, runAcceptance } from './core.mjs';
@@ -182,7 +194,7 @@ export async function loadArchive(source, options = {}) {
   }
   const dispatch = async (request) => runGuest(module, asBytes(request), limits);
   let inspection = null;
-  return Object.freeze({
+  const app = Object.freeze({
     kind: 'holo',
     name: application.name ?? provenance.cargo_name ?? null,
     model: modelDocument,
@@ -211,7 +223,14 @@ export async function loadArchive(source, options = {}) {
      * option, so `world.capabilities` judges the grant it runs under (#283).
      */
     experimental_verify: (options) => experimental_verify(parsed.bytes, { capabilities: capabilities.members, ...(options ?? {}) }),
+    /** The acceptance vectors as a history, this application's first (#284). */
+    history: () => acceptanceHistory(app),
+    /** Record dispatches as they run (#284). */
+    experimental_recorder: () => experimental_recorder(app),
+    /** Re-execute histories against this build; see `experimental_replay`. */
+    experimental_replay: (histories, options) => experimental_replay(app, histories, options),
   });
+  return app;
 }
 
 /**
@@ -233,7 +252,7 @@ export async function loadClosure(files, importGlue, { model = null, capabilitie
   const profile = modelDocument ? profileOf(modelDocument) : typeof glue.invoke_bytes === 'function' ? 'text' : 'numeric';
   const dispatch = closureDispatch(glue, { profile, model: modelDocument, limits });
   const view = { entry: 'index.html', files };
-  return Object.freeze({
+  const app = Object.freeze({
     kind: 'closure',
     name: stem,
     model: modelDocument,
@@ -258,7 +277,11 @@ export async function loadClosure(files, importGlue, { model = null, capabilitie
     acceptance: () => runAcceptance(vectors, (r) => dispatch(r)),
     inspect: async () => fail('inspect.kind', 'inspect reads a .holo archive; a closure has no section table'),
     experimental_verify: (options) => experimental_verify({ kind: 'closure' }, options),
+    history: () => acceptanceHistory(app),
+    experimental_recorder: () => experimental_recorder(app),
+    experimental_replay: (histories, options) => experimental_replay(app, histories, options),
   });
+  return app;
 }
 
 /**

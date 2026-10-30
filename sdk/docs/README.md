@@ -91,6 +91,7 @@ An example that exits non-zero fails the pages that show it.
 | `load.mjs` | api/load | `prism-code` 0.2.0, `Calculator.holo` |
 | `dispatch.mjs` | api/dispatch | same |
 | `acceptance.mjs` | api/history-and-replay | same |
+| `replay.mjs` | api/history-and-replay | `prism-code` source, `Calculator.holo` |
 | `three-calls.mjs` | api/index, sdks/typescript | same |
 | `verify.mjs` | api/verify | `prism-code` source, `Calculator.holo` |
 | `spec-constants.mjs` | api/spec-package | the spec in this checkout |
