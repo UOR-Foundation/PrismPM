@@ -189,8 +189,11 @@ test('corpus collector rejects altered probe bindings and non-data fixture expre
     mutate(data.declarations);
     return writeSemantic(source, canonical(data));
   }
-  assert.throws(() => corpus(changed(rows => rows.pop())));
-  assert.throws(() => corpus(changed(rows => rows.push(rows[0]))));
+  // Build each planted source outside the refusal check, so a source that
+  // cannot be written fails the test instead of passing as refused.
+  const refusedBy = (check, text, expected) => assert.throws(() => check(text), expected);
+  refusedBy(corpus, changed(rows => rows.pop()));
+  refusedBy(corpus, changed(rows => rows.push(rows[0])));
   for (const mutate of [
     rows => {
       const helper = rows.find(row => row.name.startsWith('fixtureLiteral') && row.body.hex.length > 0);
@@ -198,8 +201,8 @@ test('corpus collector rejects altered probe bindings and non-data fixture expre
     },
     rows => rows.push({...structuredClone(rows[0]), name: 'fixtureLiteralUnused'}),
     rows => rows.splice(0, 1),
-  ]) assert.throws(() => corpus(changed(mutate)));
-  assert.throws(() => corpus(changed(rows => {
+  ]) refusedBy(corpus, changed(mutate));
+  refusedBy(corpus, changed(rows => {
     const helper = rows.find(row => row.name.startsWith('fixtureLiteral') && row.body.hex === '');
     assert.ok(helper, 'exact empty literal helper');
     function inline(value) {
@@ -210,19 +213,19 @@ test('corpus collector rejects altered probe bindings and non-data fixture expre
     }
     for (const row of rows) row.body = inline(row.body);
     assert.equal(rows.length, 847, 'unused-helper mutation preserves cardinality and bytes');
-  })), /complete request\/response\/probe\/data closure/);
-  assert.throws(() => corpus(changed(rows => {
+  }), /complete request\/response\/probe\/data closure/);
+  refusedBy(corpus, changed(rows => {
     rows.find(row => row.name === 'probeGenesis').body.arguments[0].function.name = 'encodeWorkspaceError';
-  })));
+  }));
   for (const body of [
     {kind: 'call', function: {name: 'fixtureMaximumBody'}, arguments: []},
     {kind: 'call', function: {name: 'fixtureMissing'}, arguments: []},
     {kind: 'call', function: {module: moduleName, name: 'reduceWorkspaceBytes'}, arguments: []},
     {kind: 'if', condition: {kind: 'bool', value: true}, then_value: {kind: 'bytes', hex: '00'}, else_value: {kind: 'bytes', hex: '01'}},
     {kind: 'bytes', hex: '00'.repeat(1_104_666)},
-  ]) assert.throws(() => corpus(changed(rows => {
+  ]) refusedBy(corpus, changed(rows => {
     rows.find(row => row.name === 'fixtureMaximumBody').body = body;
-  })));
+  }));
 });
 
 test('fresh LexLean workspace corpus executes completely through pinned production codegen', {timeout: 1_200_000}, async t => {
