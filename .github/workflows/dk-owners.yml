@@ -1,0 +1,63 @@
+name: Browser owner timing (scratch diagnostic, not evidence)
+
+# Scratch-branch only: per-suite wall time of the six original standalone
+# pairs, and the exact V&V `standalone` command, in the pinned devcontainer.
+on:
+  push:
+    branches: [probe/dk-owners-*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ['DK-10', 'DK-11', 'DK-12', 'DK-13', 'DK-14', 'DK-15', 'DK-16', 'DK-20', 'DK-23', 'DK-24', 'DK-24 independent', 'DK-25', 'DK-26', 'DK-27', 'DK-27 independent', 'DK-31', 'DK-35', 'DK-37', 'DK-38']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - id: cache
+        uses: ./.github/actions/devcontainer-cache
+      - name: Time the selected owner in the pinned devcontainer
+        uses: devcontainers/ci@8bf61b26e9c3a98f69cb6ce2f88d24ff59b785c6 # v0.3.1900000417
+        env:
+          SUITE: ${{ matrix.suite }}
+        with:
+          cacheFrom: ${{ steps.cache.outputs.cache-from }}
+          push: never
+          env: SUITE
+          runCmd: |
+            set -euo pipefail
+            mkdir -p target/ci-diagnostics
+            started=$(date +%s)
+            if test "$SUITE" = unit; then
+              node --test --test-concurrency=1 tests/browser-session-journal/reservation.test.mjs scripts/compiler-driver-cache.test.mjs 2>&1 | tee target/ci-diagnostics/unit.log | grep -E '^# (tests|pass|fail)|^not ok|AssertionError'
+              node --test --test-concurrency=1 --test-name-pattern='driver substitution lookup|malformed or incomplete input closures' tests/browser-view/compiler-owner.test.mjs 2>&1 | tee target/ci-diagnostics/owner-unit.log | grep -E '^# (tests|pass|fail)|^not ok|AssertionError'
+            elif test "$SUITE" = standalone; then
+              node scripts/browser-api-sdk-check.mjs standalone 2>&1 | tee target/ci-diagnostics/standalone.log | grep --line-buffered -E '^SDK browser suite|preparationMs|^# (tests|pass|fail|duration_ms)|^\[|AssertionError|timedOut'
+            else
+              # Diagnostic only: the selected pair with the suite's own file
+              # deadline, the same reporter and flags V&V passes.
+              node --input-type=module -e "import {standaloneSuites,suites,fallbackSuites} from './scripts/browser-api-sdk-check.mjs';const row=[...standaloneSuites,...suites,...fallbackSuites].find(row=>row.id+(row.construction?' '+row.construction:'')===process.env.SUITE);console.log([row.deadline,...row.files].join(String.fromCharCode(10)))" > target/ci-diagnostics/selected.txt
+              mapfile -t selected < target/ci-diagnostics/selected.txt
+              node --test --test-concurrency=1 --test-reporter=./scripts/owning-node-reporter.mjs --test-timeout="${selected[0]}" "${selected[@]:1}" 2>&1 | tee target/ci-diagnostics/suite.log | { grep --line-buffered -E 'preparationMs|elapsedMs|^# (tests|pass|fail|duration_ms)|^(not )?ok |prismpm-owning-file|AssertionError' || true; }
+            fi
+            echo "SUITE $SUITE wall seconds $(( $(date +%s) - started ))"
+      - name: Retain logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dk-owners-${{ strategy.job-index }}-${{ github.run_id }}
+          path: target/ci-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7
