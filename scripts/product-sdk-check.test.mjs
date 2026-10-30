@@ -235,7 +235,7 @@ test('owning shell contract rejects missing executions, shared producer mount an
 test('native release gate remains downstream of published images and mandatory alongside complete SDK VV',()=>{
  const source=readFileSync(new URL('../.github/workflows/release.yml',import.meta.url),'utf8');
  const job=source.split('\n  installed-sdk:\n')[1]?.split('\n  native:\n')[0];assert(job);
- assert(job.includes('needs: [gate, images]'));assert(job.includes('os: ubuntu-24.04-arm'));assert(job.includes('arch: amd64'));assert(job.includes('arch: arm64'));
+ assert(job.includes('needs: [gate, images]'));assert(job.includes('os: prismpm-vv-arm64'));assert(job.includes('arch: amd64'));assert(job.includes('arch: arm64'));
  const outer=job.indexOf('bash root-a/scripts/sdk-vv-outer.sh');
  assert(outer>=0&&outer<job.indexOf('product-sdk-check.sh'));
  assert(job.includes('node root-a/scripts/product-sdk-check.mjs tests'));

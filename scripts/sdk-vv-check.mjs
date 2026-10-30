@@ -241,14 +241,20 @@ export function validateImageMetadata(index, manifest, image, arch) {
     compressed_bytes: compressed, index_sha256: hash(index), manifest_sha256: hash(manifest), annotations: child.annotations ?? {}};
 }
 
+const NATIVE_BASES = Object.freeze({
+  'github-hosted': 'trusted-hosted-ci-runner-and-matching-native-executable',
+  'self-hosted': 'organization-self-hosted-ci-runner-and-matching-native-executable',
+});
+
 function nativeBasis(arch, environment) {
   architecture(arch);
-  assert.equal(environment.GITHUB_ACTIONS, 'true', 'acceptance requires the independently selected hosted CI runner');
-  assert.equal(environment.RUNNER_ENVIRONMENT, 'github-hosted'); assert.equal(environment.RUNNER_OS, 'Linux');
+  assert.equal(environment.GITHUB_ACTIONS, 'true', 'acceptance requires the independently selected CI runner');
+  assert(Object.hasOwn(NATIVE_BASES, environment.RUNNER_ENVIRONMENT), 'unrecognized CI runner environment');
+  assert.equal(environment.RUNNER_OS, 'Linux');
   assert.equal(environment.RUNNER_ARCH, arch === 'amd64' ? 'X64' : 'ARM64');
   assert.equal(process.platform, 'linux'); assert.equal(process.arch, arch === 'amd64' ? 'x64' : 'arm64');
   assert.match(environment.GITHUB_RUN_ID, /^[0-9]+$/); assert.match(environment.GITHUB_RUN_ATTEMPT, /^[0-9]+$/);
-  return {basis: 'trusted-hosted-ci-runner-and-matching-native-executable', runner_os: environment.RUNNER_OS,
+  return {basis: NATIVE_BASES[environment.RUNNER_ENVIRONMENT], runner_os: environment.RUNNER_OS,
     runner_architecture: environment.RUNNER_ARCH, run_id: environment.GITHUB_RUN_ID, run_attempt: environment.GITHUB_RUN_ATTEMPT,
     hardware_attestation: 'not-established'};
 }
@@ -438,7 +444,7 @@ export async function runOuter({image, revision, arch, destination, source, regi
     const before = await checkNetwork();
     phases.push('isolated-native-sdk-probed');
     const run = await inside(['exec', names.sdk, 'node', `${SHARED}/conformance-root/scripts/sdk-vv-run.mjs`,
-      'run', image, revision, '/workspace/run'], {timeout: 14400000, limit: 64 * 1024 * 1024});
+      'run', image, revision, '/workspace/run'], {timeout: 144000000, limit: 64 * 1024 * 1024});
     successful(run, 'two installed full VV runs');
     const after = await checkNetwork();
     const bytes = await sdk(['cat', '/workspace/run/evidence/execution.json']);

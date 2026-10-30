@@ -163,7 +163,7 @@ test('source trigger policy refuses missing filtered broadened or redundant exec
 
 // Complete V&V passes outgrow the 6 hour limit for GitHub-hosted jobs, so only
 // these jobs run on self-hosted runners with longer reviewed bounds.
-const selfHostedBounds = {vv: {vv: 1440}, release: {gate: 2880}};
+const selfHostedBounds = {vv: {vv: 1440}, release: {gate: 2880, 'installed-sdk': 2880}};
 test('all affected jobs have explicit bounds; only complete V&V passes exceed six hours', () => {
   for (const name of ['ci-parallel', 'vv', 'bootstrap', 'reproducibility', 'sdk', 'release', 'sdk-candidate', 'native-golden']) {
     for (const [id, job] of Object.entries(workflow(name).jobs)) {
@@ -317,7 +317,7 @@ const expectedMatrices = {
   release: {
     images: products.map(([name, dockerfile, target]) => ({name, dockerfile, target, repository: `ghcr.io/uor-foundation/prismpm-${name}`})),
     reproducibility: products.flatMap(([image, dockerfile, target]) => platforms.map(({os, arch}) => ({os, platform: `linux/${arch}`, dockerfile, target, name: `${image}-${arch}`, image}))),
-    'installed-sdk': platforms,
+    'installed-sdk': [{os: 'prismpm-vv-amd64', arch: 'amd64'}, {os: 'prismpm-vv-arm64', arch: 'arm64'}],
     native: [{platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
   'sdk-candidate': {

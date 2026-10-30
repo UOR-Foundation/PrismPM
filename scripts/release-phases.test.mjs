@@ -95,7 +95,7 @@ function validateWorkflow(value) {
   assert.deepEqual(installed.needs, ['gate', 'images']);
   assert.equal(installed.if, undefined); assert.equal(installed['continue-on-error'], undefined);
   assert.equal(installed['runs-on'], '${{ matrix.os }}');
-  assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
+  assert.deepEqual(installed.strategy.matrix.include, [{os:'prismpm-vv-amd64',arch:'amd64'}, {os:'prismpm-vv-arm64',arch:'arm64'}]);
   const complete = installed.steps.find(step => step.run?.includes('sdk-vv-outer.sh'));
   assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
   assert.match(complete.run, /bash root-a\/scripts\/sdk-vv-outer\.sh/);
@@ -180,7 +180,7 @@ test('publication phases preserve all gates and decouple OCI/native from optiona
     value => { delete value.jobs['installed-sdk']; },
     value => { value.jobs['installed-sdk'].if = '${{ false }}'; },
     value => { value.jobs['installed-sdk'].strategy.matrix.include.pop(); },
-    value => { value.jobs['installed-sdk'].strategy.matrix.include[1].os = 'ubuntu-24.04'; },
+    value => { value.jobs['installed-sdk'].strategy.matrix.include[1].os = 'prismpm-vv-amd64'; },
     value => { value.jobs['installed-sdk'].steps.find(step => step.run?.includes('sdk-vv-outer.sh')).if = '${{ false }}'; },
     value => { value.jobs['oci-native'].if = '${{ always() }}'; },
     value => { value.jobs.release.if = '${{ always() }}'; },

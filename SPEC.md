@@ -2198,9 +2198,9 @@ positive/negative connection controls surround both full V&V runs. Missing
 images, wrong native platform, network access, incomplete original evidence,
 cancellation or failed owned-resource cleanup prohibit acceptance output.
 The outer record binds the actual OCI configuration, source, inventory and
-both original gate records. Its native-execution basis is the trusted hosted
-CI runner assignment plus matching image/executable architecture, not physical
-hardware attestation. Unit transports do not constitute SDK acceptance.
+both original gate records. Its native-execution basis is the CI runner
+assignment, GitHub-hosted or organization self-hosted and recorded as such, plus
+matching image/executable architecture, not physical hardware attestation. Unit transports do not constitute SDK acceptance.
 After acquisition, only the owned daemon's resolver is replaced with the
 recorded loopback-only configuration; nested containers use that same DNS
 policy. Effective resolver bytes, a live external bootstrap control, blocked
@@ -2256,7 +2256,7 @@ by the real process controls and actual per-command exhaustion receipts.
 The release gate requires
 the complete, non-skipped owning test set in dedicated native AMD64 and ARM64
 SDK jobs, independent of image rebuild jobs and mandatory before publication.
-The two-run execution remains bounded to four hours; operational fit must be
+The two-run execution is bounded to forty hours; operational fit must be
 measured on the actual selected image, not inferred from source or unit runs.
 Image-capacity admission re-samples the destination filesystem after all
 asynchronous metadata reads and before the first pull. The initial12GiB

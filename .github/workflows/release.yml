@@ -494,8 +494,9 @@ jobs:
           retention-days: 30
   installed-sdk:
     needs: [gate, images]
+    # Two complete installed V&V passes; see the runner note in vv.yml.
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 360
+    timeout-minutes: 2880
     permissions:
       contents: read
       packages: read
@@ -504,9 +505,9 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: prismpm-vv-amd64
             arch: amd64
-          - os: ubuntu-24.04-arm
+          - os: prismpm-vv-arm64
             arch: arm64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

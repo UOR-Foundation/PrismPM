@@ -655,7 +655,7 @@ test('executed omission mutants cannot satisfy the owning orchestration contract
   const absoluteImports = text => text.replace(/from '(\.[^']+)'/g, (_, path) => `from '${new URL(path, import.meta.url).href}'`);
   const mutants = [
     text => text.replace("await outer(['network', 'disconnect', names.network, names.daemon]);", '/* unit mutant: omitted disconnect */'),
-    text => text.replace(/const run = await inside\(\['exec', names.sdk, 'node', `\$\{SHARED\}\/conformance-root\/scripts\/sdk-vv-run.mjs`,\s*'run', image, revision, '\/workspace\/run'\], \{timeout: 14400000, limit: 64 \* 1024 \* 1024\}\);/,
+    text => text.replace(/const run = await inside\(\['exec', names.sdk, 'node', `\$\{SHARED\}\/conformance-root\/scripts\/sdk-vv-run.mjs`,\s*'run', image, revision, '\/workspace\/run'\], \{timeout: 144000000, limit: 64 \* 1024 \* 1024\}\);/,
       "const run = {status:0,signal:null,stdout:Buffer.alloc(0),stderr:Buffer.alloc(0)};"),
     text => text.replace('for (const resource of owned.reverse()) {', 'for (const resource of []) {'),
   ];
@@ -721,7 +721,7 @@ test('native release matrix executes the additional exact-image gate and preserv
   const sdkRows = [...job.matchAll(/          - os: ([^\n]+)\n            arch: ([^\n]+)\n/g)];
   assert.equal([...job.matchAll(/^            arch: /gm)].length, 2);
   assert.deepEqual(sdkRows.map(row => row.slice(1)),
-    [['ubuntu-24.04', 'amd64'], ['ubuntu-24.04-arm', 'arm64']]);
+    [['prismpm-vv-amd64', 'amd64'], ['prismpm-vv-arm64', 'arm64']]);
   const steps = [...job.matchAll(/^      - name: Verify both complete installed-SDK runs on the native isolated runner\n([\s\S]*?)(?=^      - )/gm)]; assert.equal(steps.length, 1);
   const step = /^        shell: bash\n        env:\n          RESULT_NAME: sdk-\$\{\{ matrix.arch \}\}\n          NATIVE_PLATFORM: linux\/\$\{\{ matrix.arch \}\}\n        run: \|\n((?:          .*\n)+)$/.exec(steps[0][1]);
   assert(step, 'closed mandatory SDK step required');
