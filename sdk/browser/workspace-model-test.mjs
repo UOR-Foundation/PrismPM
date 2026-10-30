@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {lexiconPaths} from '../../tests/browser-view/lexicon-inputs.mjs';
 import {readSemantic, writeSemantic} from '../../scripts/semantic-source.mjs';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -255,9 +256,13 @@ test('fresh LexLean workspace corpus executes completely through pinned producti
   for (const [file, bytes] of sources) writeFileSync(join(sourceRoot, file), bytes, {flag: 'wx'});
   writeFileSync(join(project, 'lean-toolchain'), 'leanprover/lean4:v4.32.1\n', {flag: 'wx'});
   writeFileSync(join(project, 'lakefile.toml'), 'name = "workspace_verification"\nversion = "0.1.0"\n', {flag: 'wx'});
+  for (const path of lexiconPaths(repository)) {
+    const destination = join(project, path);
+    mkdirSync(dirname(destination), {recursive: true}); writeFileSync(destination, readRegular(join(repository, path)), {flag: 'wx'});
+  }
   writeFileSync(join(project, 'lexlean.toml'), `spec = "lexlean/project/1"
 name = "workspace-model-verification"
-language = "1.1"
+language = "1.2"
 module_prefix = "PrismPM"
 source_roots = ["src"]
 entrypoints = ["src/Foundation/Browser/V1/WorkspaceCorpus.lex.tex"]
@@ -266,8 +271,15 @@ lockfile = "lexlean.lock"
 lean_workspace = "."
 lean_toolchain = "leanprover/lean4:v4.32.1"
 [[lexicon_source]]
+package = "lexlean.std.bool"
+kind = "builtin"
+[[lexicon_source]]
 package = "lexlean.std.nat"
 kind = "builtin"
+[[lexicon_source]]
+package = "prism.arch"
+kind = "path"
+path = "language/prism.arch"
 [limits]
 max_file_bytes = 4194304
 max_total_source_bytes = 67108864
