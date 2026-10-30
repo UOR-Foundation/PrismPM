@@ -1,0 +1,36 @@
+name: Self-hosted change test proof (scratch, not release evidence)
+on:
+  push:
+    branches: [probe/selfhost-tests]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - name: Install the yaml parser where the tests look for it
+        run: |
+          sudo mkdir -p /opt/prismpm/oracles
+          sudo chown "$(id -u):$(id -g)" /opt/prismpm/oracles
+          cd /opt/prismpm/oracles
+          npm init -y >/dev/null
+          npm install --ignore-scripts --silent js-yaml@4.1.0
+      - name: Run the edited test files
+        run: |
+          status=0
+          for name in ci-capacity ci-observe release-phases sdk-vv-check product-sdk-check; do
+            echo "::group::$name"
+            node --test --test-concurrency=1 --test-timeout=300000 --test-reporter=tap "scripts/$name.test.mjs" > "$name.tap" 2>&1 || status=1
+            grep -E '^(not ok|# (pass|fail) )' "$name.tap" | sed "s/^/$name: /" || true
+            echo "::endgroup::"
+            grep -E '^(not ok|# (pass|fail) )' "$name.tap" | sed "s/^/$name: /" >> "$GITHUB_STEP_SUMMARY" || true
+          done
+          exit "$status"
