@@ -62,12 +62,15 @@ Why this shape:
 
 Bind AU-07's validator through SPEC §10: an `OSCAL-1-1-0` authority, an `oscal-1.1.0-structural` oracle row, the `oscal` profile of `prismpm oracle`, and installation in the SDK image. The result is regenerated into `standards.lock` by `authority resolve`.
 
+The workspace's own `jsonschema` 0.50.1 cannot stand in for it. That version mishandles the fragment `$id` references the OSCAL schemas use (upstream issue 1668), which is why the oracle pins 0.58.2. It wrongly rejects a valid document. So the unit suite pins the emitted bytes to committed subjects, and AU-08 passes those subjects through the locked oracle.
+
 Passing means JSON structural validity only (SPEC §10.1). It does not establish that a control is implemented, that evidence is true, or conformance to OSCAL as a whole. The emitted document says the same in its remarks.
 
 ## Costs a reviewer should weigh
 
 - **Controller pin.** A threat model outside the application roots is invisible to `design::render_snapshot`, which sees only the application-root snapshot when a system release exists. The call therefore has to sit in `controller/mod.rs`, whose hash `scripts/native-golden.mjs` pins for independent source review. That pin is left for the reviewer to move.
 - **Goldens.** A new stdlib entrypoint moves the shared stdlib goldens and native records, which come from the golden refresh and native source review workflows.
+- **A design-view gap this exposes.** When a system release exists, `design::render_snapshot` and the feature check see only the application-root snapshot. A design view or feature declared in another entrypoint is therefore not read in that case. This change does not alter that behaviour.
 
 ## Not in scope
 
