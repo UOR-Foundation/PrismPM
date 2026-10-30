@@ -5,6 +5,13 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `@prism-code/conformance` (new package, not yet published, experimental, #287, `docs/proposals/287-conformance.md`): the executable suite every Prism runtime runs in CI through an entrypoint shim, `prism/conformance-shim/1`. Scenarios are data, with stable check ids, covering load, `verify` verdicts and typed errors, dispatch of the reference archive's acceptance vectors, capabilities deny by default, dual digests and the world contract, over a corpus of damaged archives derived from the reference and pinned by sha256. A runtime declares expected failures by check id, and the report distinguishes pass, fail, xfail, unexpected pass and not applicable. Replay checks are named placeholders until #284 merges. `prism-code` passes.
+- `COMPLIANCE.md`: a matrix of feature by runtime (JavaScript, Rust, Python) with `+`, `-` and `N/A` cells, generated from the suite's results. `.github/workflows/npm-conformance.yml` regenerates it and fails when the committed copy is stale.
+- The format-change gate: `.github/workflows/conformance-gate.yml` fails a pull request that changes the `.holo` format (the spec package's schemas or the Rust writer) without adding or changing a scenario. `CONTRIBUTING.md` says how to satisfy it.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added
