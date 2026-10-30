@@ -21,7 +21,7 @@ function judge(name, input) {
 }
 
 // The P1, P2 and over-privileged fixtures are the reference archive's real facts with the evidence a signed holo
-// will carry written in by hand, because no holo can carry a statement until #267's wire model change.
+// will carry written in by hand, because verify reads no statement yet and no build writes one (#267, #268).
 const TABLE = [
   // fixture               default  pure-only  provenance-only
   ['calculator-p2', true, true, true],
@@ -56,6 +56,9 @@ test('the default policy is the file, and it says what the spec says', () => {
 test('pure-only names each thing beyond pure dispatch', () => {
   assert.deepEqual(judge('pure-only', fixture('over-privileged-p2')).rules, ['policy.pure-only.effects', 'policy.pure-only.imports']);
   assert.deepEqual(judge('pure-only', fixture('granted-p0')).rules, ['policy.pure-only.granted']);
+  const provider = fixture('calculator-p0');
+  provider.capabilities = { 'allow-providers': ['search'] };
+  assert.deepEqual(judge('pure-only', provider).rules, ['policy.pure-only.granted']);
   const requests = fixture('calculator-p0');
   requests.world.capability_set.empty = false;
   assert.deepEqual(judge('pure-only', requests).rules, ['policy.pure-only.requested']);

@@ -50,8 +50,8 @@ export const CASES = Object.freeze([
   { name: 'a comparison with nothing is undefined, not false', rules: 'deny contains "ne" if {\n\tinput.missing != 1\n}', deny: [] },
 
   { name: 'equality is structural', rules: 'deny contains "same" if {\n\t{"a": [1, 2]} == {"a": [1, 2]}\n}\ndeny contains "sets" if {\n\t{1, 2} == {2, 1}\n}', deny: ['same', 'sets'] },
-  { name: 'an array is not a set', rules: 'deny contains "same" if {\n\t[1, 2] == {1, 2}\n}', deny: [] },
-  { name: 'a number is not a string', rules: 'deny contains "same" if {\n\t1 == "1"\n}', deny: [] },
+  { name: 'an array is not a set', rules: 'deny contains "same" if {\n\tinput.numbers == {1, 2, 3}\n}', deny: [] },
+  { name: 'a number is not a string', rules: 'deny contains "same" if {\n\tinput.n == "3"\n}', deny: [] },
   { name: 'order of numbers', rules: 'deny contains "a" if {\n\tinput.n < 4\n}\ndeny contains "b" if {\n\tinput.n <= 3\n}\ndeny contains "c" if {\n\tinput.n > 3\n}\ndeny contains "d" if {\n\tinput.n >= 3\n}', deny: ['a', 'b', 'd'] },
   { name: 'order of strings', rules: 'deny contains "a" if {\n\t"P1" < "P2"\n}\ndeny contains "b" if {\n\t"a" > "B"\n}', deny: ['a', 'b'] },
 
@@ -89,7 +89,7 @@ export const CASES = Object.freeze([
   { name: 'contains is a function in a body', rules: 'deny contains "yes" if {\n\tcontains(input.s, "ell")\n}', deny: ['yes'] },
   { name: 'object.get', rules: 'deny contains [object.get(input.object, "x", 0), object.get(input.object, "z", 0)] if {\n\ttrue\n}', deny: [[1, 0]] },
   { name: 'object.keys', rules: 'deny contains k if {\n\tsome k in object.keys(input.object)\n}', deny: ['x', 'y'] },
-  { name: 'set()', rules: 'deny contains count(set()) if {\n\tset() == set()\n}', deny: [0] },
+  { name: 'set()', rules: 'deny contains count(set()) if {\n\ttrue\n}', deny: [0] },
   { name: 'type_name', rules: 'deny contains [type_name(null), type_name(true), type_name(1), type_name("s"), type_name([]), type_name({}), type_name(set())] if {\n\ttrue\n}', deny: [['null', 'boolean', 'number', 'string', 'array', 'object', 'set']] },
   { name: 'sprintf with each verb', rules: 'deny contains sprintf("%s %d %v %v %v %%", ["a", 1, "b", 2, true]) if {\n\ttrue\n}', deny: ['a 1 b 2 true %'] },
   { name: 'sprintf %v of collections', rules: 'deny contains sprintf("%v %v %v", [["a", 1], {"k": "v"}, {"s"}]) if {\n\ttrue\n}', deny: ['["a", 1] {"k": "v"} {"s"}'] },

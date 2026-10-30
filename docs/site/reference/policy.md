@@ -116,7 +116,7 @@ A policy reads one document, `input`, whose `schema` member is `prism/policy-inp
 
 ### The Rego it accepts
 
-The evaluator runs in a browser with no dependencies, so it accepts a part of Rego and refuses the rest. A policy it accepts means what it means under OPA, so you can try one there:
+The evaluator runs in a browser with no dependencies, so it accepts a part of Rego and refuses the rest. A policy that both it and OPA accept gets the same answer from each, so you can try one there:
 
 ```bash
 opa eval -d policy.rego -i input.json data.prism.policy
@@ -133,6 +133,8 @@ opa eval -d policy.rego -i input.json data.prism.policy
 | `concat`, `contains`, `count`, `endswith`, `object.get`, `object.keys`, `set`, `sprintf`, `startswith`, `type_name` | Every other function |
 
 It is stricter than OPA in three ways, and each one stops a mistake from reading as a pass. A function given the wrong type, or `<` between two types, is an error where OPA gives no value. A rule that neither `minimum` nor `deny` uses is an error, which catches an `allow` nothing consults. A body is read in the order written, so a variable used before it is bound is an error.
+
+It is looser in one way, because it has no type checker. OPA refuses a policy that compares values it can see are different types, such as `1 == "1"`, when it compiles. This evaluator answers false.
 
 ## The default policy
 

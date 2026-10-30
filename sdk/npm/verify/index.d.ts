@@ -102,6 +102,8 @@ export interface CapabilitySet {
   'deny-key-value-stores'?: string[];
   'allow-variables'?: string[];
   'deny-variables'?: string[];
+  'allow-providers'?: string[];
+  'deny-providers'?: string[];
 }
 
 /** Is a contract's world within a granted set, and is it pure (issue #283)? `known` is false for a contract this reader has no world for. */

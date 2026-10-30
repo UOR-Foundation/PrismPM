@@ -161,7 +161,9 @@
         "allow-key-value-stores": { "$ref": "#/$defs/entries" },
         "deny-key-value-stores": { "$ref": "#/$defs/entries" },
         "allow-variables": { "$ref": "#/$defs/entries" },
-        "deny-variables": { "$ref": "#/$defs/entries" }
+        "deny-variables": { "$ref": "#/$defs/entries" },
+        "allow-providers": { "$ref": "#/$defs/entries" },
+        "deny-providers": { "$ref": "#/$defs/entries" }
       }
     },
     "entries": { "type": "array", "items": { "type": "string" } },

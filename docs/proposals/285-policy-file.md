@@ -59,12 +59,14 @@ CUE is additive: the input document is plain JSON and names no language, so a se
 
 ### A closed subset, which refuses rather than guesses
 
-A hand-written evaluator is only safe if it cannot disagree quietly with OPA. Two rules hold that.
+A hand-written evaluator is only safe if it cannot disagree quietly with OPA. Two rules hold that, so a policy both accept gets the same answer from each.
 
 - A construct outside the subset is a parse error that names it. Refused: functions, partial objects, `else`, `with`, `=`, arithmetic and set operators, `_` and unbound variables in a reference, `data`, other imports, and any function not listed.
 - Where OPA would turn a mistake into `undefined`, this evaluator stops with an evaluation error. `count(1)` under `not` would otherwise read as a pass. Mixed-type ordering and duplicate object keys stop too.
 
 Two more checks catch mistakes that would read as a pass: a rule that neither `minimum` nor `deny` uses is a parse error, which catches `allow` and a misspelled `denny`, and a body is read in the order written, so a variable used before it is bound is a parse error.
+
+There is no type checker, which is the one place this evaluator is looser: OPA refuses `1 == "1"` when it compiles, and this answers false. OPA's first run against the corpus found this, and it found no case where the two gave different answers. Input is untyped to OPA, so the difference reaches only literals and values derived from them.
 
 An evaluation is bounded at two million steps. Nothing reads a clock, the network or randomness, so the same input gives the same verdict.
 
@@ -135,7 +137,7 @@ An archive with an extra extension section matches no format revision, so it get
 
 The issue's sign-off asks that the default policy pass both reference archives. That cannot happen in this change.
 
-- `verify` reports P0 for every holo, because no holo can carry a signed statement until #267's wire model change (draft PR #369) and #268's build step. The default policy needs P2, so the real `Calculator.holo` fails it, and correctly.
+- `verify` reports P0 for every holo. #267's wire model is in the Rust reader and writer (#369), but `@prism-code/verify` does not read statements yet and no build writes them (#268). The default policy needs P2, so the real `Calculator.holo` fails it, and correctly.
 - The Payment Approval archive is not in this repository.
 
 The evaluator side is tested with `calculator-p2.json`, the reference archive's real facts with P2 evidence written in by hand. Two `test.todo` entries in `prism-code/test/policy.test.mjs` hold the end-to-end check open until those land.

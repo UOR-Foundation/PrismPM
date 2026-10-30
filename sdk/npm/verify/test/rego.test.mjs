@@ -63,6 +63,12 @@ for (const [name, rules, pattern] of REFUSED) {
   });
 }
 
+test('OPA refuses literals of different types when it compiles; here the comparison is false', () => {
+  // The one known difference: OPA's type checker has no counterpart here, so this is accepted and answers, never disagreeing with an answer OPA gives.
+  const program = parseRego(module('deny contains "same" if {\n\t1 == "1"\n}\ndeny contains "differ" if {\n\t1 != "1"\n}'));
+  assert.deepEqual(evaluateRego(program, {}).deny, ['differ']);
+});
+
 test('a module must be the package this file reads, and define minimum', () => {
   assert.throws(() => parseRego('deny contains "x"'), /a policy starts with package prism\.policy/);
   assert.throws(() => parseRego('package other\nminimum := "P0"'), /the package must be prism\.policy, not other/);

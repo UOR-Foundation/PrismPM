@@ -6,9 +6,11 @@
  * no npm package evaluates Rego source without a compile step. The rule that
  * keeps a hand-written evaluator honest is that it refuses, and never guesses:
  * a construct outside the subset is a parse error that names it, so a policy
- * this file accepts means what it means under OPA, or it does not run. Where
+ * that both this file and OPA accept gets the same answer from each. Where
  * OPA would turn a mistake into `undefined`, such as `count(1)`, this file
- * stops with an evaluation error, so a mistake cannot read as a pass.
+ * stops with an evaluation error, so a mistake cannot read as a pass. There is
+ * no type checker here: OPA refuses `1 == "1"` when it compiles, and this file
+ * answers false.
  *
  * The subset, which the OPA differential test in test/rego-corpus.mjs pins:
  *
