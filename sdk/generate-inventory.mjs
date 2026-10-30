@@ -108,6 +108,7 @@ const definitions = [
   ['oci-image-schema-conformance', 'oracle', '1.1.1@147f9c13', '/usr/local/bin/oci-image-schema-conformance'],
   ['oci-runtime-1.3.0-corpus', 'test-corpus', '92249139eea7161e13745abd4cb6d0ea02a3227a', 'standards/oracles/oci-runtime-1.3.0', 'tree'],
   ['oci-runtime-validate', 'oracle', '1.3.0@92249139', '/usr/local/bin/oci-runtime-validate'],
+  ['oscal-validator', 'oracle', 'jsonschema-0.58.2+oscal-1.1.0', '/usr/local/bin/oscal-validator'],
   ['openid-conformance-suite-corpus', 'test-corpus', '3e09b13b896fce95d78c2c0f931feee9614e9452', 'standards/oracles/openid-conformance-suite-3e09b13b', 'tree'],
   ['openid-conformance', 'oracle', '3e09b13b896f', '/usr/local/bin/openid-conformance'],
   ['json-schema-2020-12-corpus', 'test-corpus', 'c9510e3bf8a896c3cba4e08509cf752b4f30dff8', 'standards/corpora/json-schema-2020-12', 'tree'],

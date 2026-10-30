@@ -7,8 +7,9 @@ use std::fmt;
 pub struct DiagnosticCode(String);
 
 impl DiagnosticCode {
-    const REGISTERED: [&'static str; 92] = [
-        "PP2010", "PP2011", "PP2012", "PP2014", "PP2015", "PP2016", "PP2017", "PP2018", "PP1001",
+    const REGISTERED: [&'static str; 96] = [
+        "PP2019", "PP2020", "PP2021", "PP2022", "PP2010", "PP2011", "PP2012", "PP2014", "PP2015",
+        "PP2016", "PP2017", "PP2018", "PP1001",
         "PP1002", "PP1003", "PP2001", "PP2002", "PP2003", "PP2004", "PP2005", "PP2006", "PP2007",
         "PP2008", "PP2009", "PP3001", "PP3002", "PP3003", "PP3004", "PP3005", "PP3006", "PP3007",
         "PP3008", "PP3009", "PP3010", "PP3011", "PP3012", "PP3013", "PP3014", "PP3015", "PP4001",

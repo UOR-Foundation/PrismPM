@@ -5,6 +5,13 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Threat models a downstream system authors in LexLean (#209, `docs/proposals/209-threat-model-oscal.md`, SPEC §2.3): `Production.ThreatModel` states the STRIDE category, evidence, mapping and accepted risks of `Foundation.Sec` records. `prismpm check` refuses an unmapped threat with `PP2019`, a control without evidence with `PP2020`, a threat without a category with `PP2021` and a malformed or unresolved row with `PP2022`. A model with no such row is unaffected.
+- `prismpm build` emits a checked threat model as a reproducible OSCAL 1.1.0 component definition, `oscal/component-definition.json` (#209).
+- The OSCAL structural validator is bound through `standards.lock` as the `oscal-1.1.0-structural` oracle, the `oscal` profile of `prismpm oracle` (#209, SPEC §10.1). Acceptance is JSON structural validity only, not control implementation or whole-standard conformance.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added
