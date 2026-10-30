@@ -15,10 +15,9 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { experimental_verify } from './verify.mjs';
+import { experimental_verify, attestationBlocker } from './verify.mjs';
 import { ASSURANCE } from './vendor/verify.mjs';
-import { parseArchive, canonicalJson } from './archive.mjs';
-import { attestationSection, ATTESTATION_EXTENSION } from './attestations.mjs';
+import { canonicalJson } from './archive.mjs';
 import { PrismError, VerificationError, classForCheck } from './errors.mjs';
 
 export const EXIT = ASSURANCE.EXIT;
@@ -70,25 +69,6 @@ async function holoBytes(path) {
   if (!info) throw noVerdict('load.path', `${path} does not exist`);
   if (info.isDirectory()) throw noVerdict('verify.kind', `${path} is a directory; check reads a .holo archive, and a closure has no footer or section table`);
   return new Uint8Array(await readFile(resolve(path)));
-}
-
-/**
- * Why a holo with an attestation section has no verdict yet, or null. The
- * section joins a format revision only when the wire model change of #267
- * merges; until then every reader refuses it, and a pass would be invented.
- */
-function attestationBlocker(bytes) {
-  let section;
-  try {
-    section = attestationSection(parseArchive(bytes));
-  } catch {
-    return null;
-  }
-  if (!section) return null;
-  return noVerdict(
-    'format.revision',
-    `the holo carries an attestation section (${ATTESTATION_EXTENSION}), which joins a format revision only when the wire model change of #267 merges; no reader can judge its statements until then`,
-  );
 }
 
 /**

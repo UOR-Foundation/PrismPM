@@ -5,6 +5,16 @@ All notable changes to PrismPM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Containers in `prism-code` (#348, `docs/proposals/348-container-lifecycle.md`, experimental): one run of a holo is a container with Docker's states (`created`, `running`, `exited`), a start and finish time, an exit code and the returned output, kept until removed. `prism.containers.run(image, input)` returns it after it exits, `create` and `start` are the two-step form, `container.inspect()` reports `prism/container/1` with the state, the exit code and the image digest, and `rm: true` removes it on exit. `prism-code run <holo> <input>` (or `--input`) is the same lifecycle: stdout holds the output and nothing else, the process exits with the container's code, `--rm` removes it, and otherwise the record stays in `$PRISM_HOME/containers` (default `~/.prism/containers`) until `prism-code rm <container>`; `prism-code inspect <container>` reads it. `prism-code run <holo>` with no input still serves.
+- `EXIT_CODES` and `exitCodeFor(error)` in `prism-code` (#348): 0 on success and a non-zero code for each `PrismError` subclass, the single table containers and the command line share. New codes: 10 `ProofMismatchError`, 11 `WorldMismatchError`, 12 `DeterminismViolationError`, 13 `ReplayError`.
+
+### Breaking Changes
+- `prism-code run <holo>` no longer exits 1 for every failed verdict (#348): it exits with the code of the error that explains the verdict. A provenance, document or policy reason, which is every holo today, stays 1; a proof reason is 10; a world outside the grant is 2.
+- A `VerificationError` with no verdict that reaches the top of `prism-code` exits 2 instead of 1 (#348), such as `attest` on a holo whose footer does not verify. `check` keeps 0, 1 and 2 unchanged.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

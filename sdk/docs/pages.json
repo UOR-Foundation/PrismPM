@@ -18,6 +18,7 @@
       "pages": [
         { "path": "guides/write-from-examples", "narrative": true },
         { "path": "guides/verify-and-inspect", "narrative": true },
+        { "path": "guides/run-a-holo", "narrative": true },
         { "path": "guides/run-and-gate", "narrative": true },
         { "path": "guides/ship", "narrative": true },
         { "path": "guides/agents", "narrative": true },
