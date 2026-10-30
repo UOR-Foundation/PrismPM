@@ -30,8 +30,9 @@ env:
 
 jobs:
   gate:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    # Two complete source V&V passes; see the runner note in vv.yml.
+    runs-on: prismpm-vv-amd64
+    timeout-minutes: 2880
     permissions:
       contents: read
     outputs:

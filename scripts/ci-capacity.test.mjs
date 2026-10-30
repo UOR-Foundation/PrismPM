@@ -161,14 +161,21 @@ test('source trigger policy refuses missing filtered broadened or redundant exec
   }
 });
 
-test('all affected jobs have explicit bounds; the one normative pass retains six hours', () => {
+// Complete V&V passes outgrow the 6 hour limit for GitHub-hosted jobs, so only
+// these jobs run on self-hosted runners with longer reviewed bounds.
+const selfHostedBounds = {vv: {vv: 1440}, release: {gate: 2880}};
+test('all affected jobs have explicit bounds; only complete V&V passes exceed six hours', () => {
   for (const name of ['ci-parallel', 'vv', 'bootstrap', 'reproducibility', 'sdk', 'release', 'sdk-candidate', 'native-golden']) {
     for (const [id, job] of Object.entries(workflow(name).jobs)) {
       const bound = job['timeout-minutes'];
-      assert(Number.isInteger(bound) && bound > 0 && bound <= 360, `${name}/${id}`);
+      const selfHosted = selfHostedBounds[name]?.[id];
+      assert(Number.isInteger(bound) && bound > 0 && bound <= (selfHosted ?? 360), `${name}/${id}`);
+      if (selfHosted) assert.equal(bound, selfHosted, `${name}/${id}`);
     }
   }
-  assert.equal(workflow('vv').jobs.vv['timeout-minutes'], 360);
+  assert.equal(workflow('vv').jobs.vv['timeout-minutes'], 1440);
+  assert.equal(workflow('vv').jobs.vv['runs-on'], 'prismpm-vv-amd64');
+  assert.equal(workflow('release').jobs.gate['runs-on'], 'prismpm-vv-amd64');
   assert.equal(workflow('bootstrap').jobs['native-gate']['timeout-minutes'], 360);
   const run = workflow('vv').jobs.vv.steps.find(step => step.with?.runCmd).with.runCmd;
   assert.equal(run, `set -euo pipefail

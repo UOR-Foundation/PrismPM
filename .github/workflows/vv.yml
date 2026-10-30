@@ -22,11 +22,11 @@ concurrency:
 jobs:
   vv:
     name: Linux x86-64 normative acceptance
-    runs-on: ubuntu-24.04
-    # One full pass was cancelled at the 6 hour limit before reaching gate 11
-    # (the 6th gate alone took 3.4 hours), so the bound stays at the platform
-    # maximum until the measured pass fits below it.
-    timeout-minutes: 360
+    # One full pass takes about 10 hours on a 4-vCPU hosted runner (measured
+    # on 1010e48d), past the 6 hour limit for GitHub-hosted jobs, so it runs on
+    # the organization's self-hosted runner, where the job limit is 5 days.
+    runs-on: prismpm-vv-amd64
+    timeout-minutes: 1440
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

@@ -409,7 +409,7 @@ test('one normative workflow owns complete main acceptance and diagnostic owners
     });
     assert.equal(normative.jobs.vv.if, undefined);
     assert.equal(normative.jobs.vv['continue-on-error'], undefined);
-    assert.equal(normative.jobs.vv['timeout-minutes'], 360);
+    assert.equal(normative.jobs.vv['timeout-minutes'], 1440);
     const checkout = normative.jobs.vv.steps.find(step => step.uses?.startsWith('actions/checkout@'));
     assert.equal(checkout.with['fetch-depth'], 0);
     assert.equal(checkout.with['persist-credentials'], false);
