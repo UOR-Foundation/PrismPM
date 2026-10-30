@@ -143,14 +143,17 @@ test('envelope corpus binds generated codec and closed literal data', () => {
     const data = readSemantic(source); mutate(data.declarations);
     return writeSemantic(source, canonical(data));
   }
-  assert.throws(() => corpus(changed(rows => rows.pop())));
-  assert.throws(() => corpus(changed(rows => rows.push(rows[0]))));
-  assert.throws(() => corpus(changed(rows => {
+  // Build each planted source outside the refusal check, so a source that
+  // cannot be written fails the test instead of passing as refused.
+  const refusedBy = (check, text, expected) => assert.throws(() => check(text), expected);
+  refusedBy(corpus, changed(rows => rows.pop()));
+  refusedBy(corpus, changed(rows => rows.push(rows[0])));
+  refusedBy(corpus, changed(rows => {
     rows.find(row => row.name === 'probeRoundTripGenesis').body.arguments[0].function.name = 'workspaceEnvelopeCandidate';
-  })));
-  assert.throws(() => corpus(changed(rows => {
+  }));
+  refusedBy(corpus, changed(rows => {
     rows.find(row => row.name === 'requestRoundTripGenesis').body = {kind: 'call', function: {name: 'requestRoundTripGenesis'}, arguments: []};
-  })));
+  }));
 });
 
 test('fresh generated envelope codec and actual browser crypto interoperability', {timeout: 600_000}, async t => {
