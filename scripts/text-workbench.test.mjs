@@ -581,13 +581,18 @@ async function keyboardOnlyProbe(source) {
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#field-message').inputValue(), example.values[0], 'the keyboard-loaded example must fill the guided field');
     await page.locator('#field-message').focus();
+    await page.keyboard.press('Control+A');
     await page.keyboard.type('keyboard input');
+    // The modeled field is multiline, where Enter inserts a line: Tab reaches Compute.
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator('#guided-submit').evaluate(node => node === document.activeElement), true, 'Tab must reach the compute control');
     await page.keyboard.press('Enter');
     await expectCell(page, 'KEYBOARD INPUT', 3000);
     await page.locator('#raw-editor > summary').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#raw-editor').evaluate(node => node.open), true, 'Enter must open the raw disclosure');
     await page.locator('#request').focus();
+    await page.keyboard.press('Control+A');
     await page.keyboard.type('raw keyboard');
     await page.keyboard.press('Control+Enter');
     await expectCell(page, 'RAW KEYBOARD', 3000);
