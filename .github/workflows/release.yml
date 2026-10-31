@@ -1026,6 +1026,9 @@ jobs:
           target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           generate_release_notes: false
+          # release-please may already have created this release with the changelog
+          # entry as its body; add how to verify below that instead of replacing it.
+          append_body: true
           body_path: RELEASE_NOTES.md
           files: |
             release/*
