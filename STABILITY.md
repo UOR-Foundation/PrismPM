@@ -76,6 +76,7 @@ Nothing is Stable today.
 | `prism-code` `inspect`, `Application.inspect`, `prism-code inspect` and the `prismpm/holo-inspection/1` shape | `sdk/npm/prism-code` | Experimental |
 | Holo build provenance: the `https://uor.foundation/prism/holo-build/v1` statement, its `min` and `max` modes, and `provenanceStatement`, `attachProvenance`, `readProvenance` in `prism-code` | [docs/proposals/268-build-provenance.md](docs/proposals/268-build-provenance.md) | Experimental |
 | `prism-code` `experimental_verify`, `experimental_createClient`, `Application.experimental_verify` and the `PrismError` hierarchy with its stable codes | `sdk/npm/prism-code` | Experimental |
+| `prism-code` middleware: `Application.experimental_middleware` (the stack, its four steps and the `Pluggable` shape), `MIDDLEWARE_STEPS`, `experimental_tracing`, `MiddlewareError` and the `middleware.*` codes | `sdk/npm/prism-code` | Experimental |
 | SDK image contract: the digest-pinned OCI index for `linux/amd64` and `linux/arm64` | [SPEC.md](SPEC.md) section 1 | Experimental |
 | `prism-code` containers ([#348](https://github.com/UOR-Foundation/PrismPM/issues/348)): `prism.containers`, the `prism/container/1` shape, `EXIT_CODES`, `run <holo> <input>`, `--rm`, `rm` and the `PRISM_HOME` store | `sdk/npm/prism-code` | Experimental |
 | `prism-code` CLI plugins ([#293](https://github.com/UOR-Foundation/PrismPM/issues/293)): `prism-<name>` on the PATH runs as `prism-code <name>`, the `prism-cli-plugin-metadata` and `prism-cli-plugin-hooks` calls (schema version 1), `errorHooks`, `PRISM_CODE_NO_HOOKS`, and the first-party `prism-doctor` | `sdk/npm/prism-code` | Experimental |
@@ -106,7 +107,7 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code check <holo>`, `--policy <file>`, `--json` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `--policy` on `prism-code check` and `run` taking a Rego file or the name of a shipped policy (`default`, `pure-only`, `provenance-only`) | [#285](https://github.com/UOR-Foundation/PrismPM/issues/285) | On main |
 | `prism-code build --check` | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
-| `check` as a typed verdict in the Rust CLI, with `--json`, `--policy <file>` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | Planned |
+| `check <path.holo>` as a typed verdict in the Rust CLI, with `--json`, `--policy <file>` and exit codes 0, 1, 2 | [#270](https://github.com/UOR-Foundation/PrismPM/issues/270) | On main |
 | `build --provenance=<min\|max>`, `build --no-provenance` | [#268](https://github.com/UOR-Foundation/PrismPM/issues/268) | Planned |
 | `prism-code attest <holo> --predicate <file> --type <uri>`, `--subject`, `--key`, `--output`, `--signing-config` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
 | `prism-code verify-attestation <holo>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--key`, `--type`, `--trusted-root`, `--entries`, `--timestamps`, `--json` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
@@ -115,21 +116,30 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | The reference grammar: `registry/repo[:tag]`, `@sha256:`, `@blake3:`, `dir://`; the `blake3-<fingerprint>` tag; the `prism/push-result/1` and `prism/pull-result/1` shapes | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) | On main |
 | The OCI layout of a holo: media type `application/vnd.uor.prism.holo.v1`, the fixed `created` annotation and the `foundation.uor.prism.*` annotations. Each is part of the manifest digest | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) | On main |
 | `prism-code run --capabilities <file>`, `--capability-set <name>` | [#279](https://github.com/UOR-Foundation/PrismPM/issues/279) | On main |
+| `prism-code generate <holo> --out <dir>`, `--lang js`, the generated files and the `prismpm/generate-record/1` record in `prism-generate.json` | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
+| `generate --lang rust`, `--lang python`, and `generate` in the Rust CLI | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | Planned |
 | `prism-code run <holo>` gated on `check`, `--policy <file>`, `--allow-unverified`; the policy member `effects` and the `policy.effects` reason | [#282](https://github.com/UOR-Foundation/PrismPM/issues/282) | On main |
+| `prism-code replay <history \| dir>... --holo <holo>`, `--statement <file>`, `--json` and exit codes 0, 1, 2; `prism-code check --replay <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
+| `prism-code history <holo>`, `--output <file>`; `prism-code run --record <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
+| `replay <history \| dir>... --holo <holo>`, `--statement <file>` in the Rust CLI, exit codes 0, 1, 2 | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
 | `prism-code run <holo> <input>`, `--input`, `--rm`; `prism-code inspect <container>`; `prism-code rm <container>`; the exit codes of `EXIT_CODES`; `PRISM_HOME` | [#348](https://github.com/UOR-Foundation/PrismPM/issues/348) | On main |
 | `prism-code init [<dir>]`, `--name`, `--template`, `--sdk-image`, `--force`; `npm create prism-code` | [#281](https://github.com/UOR-Foundation/PrismPM/issues/281) | On main |
+| `prism-code dev [<dir>]`, `--port`, `--no-open`, `--policy <file>`, `--build <command>`, `--holo <path>`; the studio on port 4100, its Check and Replay tabs and the `prism/dev-state/1` state it reads | [#288](https://github.com/UOR-Foundation/PrismPM/issues/288) | On main |
 | `prism-code manifest [<dir>]`, `--target <browser\|node>`, `--json` | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | On main |
 | `prism-code providers <up\|down> [<dir>]`, `--target <browser\|node>`, `--json`; the `prism-provider-kv` binary, its flags and file layout | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) | On main |
 | The provider wire protocol: `prism-provider-<type>` on the PATH, its arguments, the `info`, `debug`, `error` and `setenv` messages, `PRISM_PROVIDER_MESSAGES`; the `provider-` prefix reserved from plugin names | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) | On main |
 | The `prism.toml` manifest and its `prism.browser.toml` and `prism.node.toml` overlays, read by the Rust CLI | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | Planned |
-| `attest --predicate <file> --type <uri>` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
-| `verify --certificate-identity`, `--certificate-oidc-issuer`, `--key` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
+| `prism-code export <name@sha256:digest>`, `--out <dir>`, `--tar <file>`, `--project <dir>`, `--json`, and the `<name>.attestations.jsonl` file beside the output | [#290](https://github.com/UOR-Foundation/PrismPM/issues/290) | On main |
+| `attest <path.holo> --predicate <file> --type <uri> --key <pem>`, `--subject`, `--output` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
+| `verify-attestation <path.holo>`, `--certificate-identity`, `--certificate-identity-regexp`, `--certificate-oidc-issuer`, `--key`, `--type`, `--trusted-root`, `--entries`, `--timestamps`, `--json` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | On main |
+| Keyless (OIDC) signing in the Rust `attest`; fetching the trusted root over TUF in the Rust `verify-attestation` | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 
-Today `prismpm check` validates the model and `prismpm verify` checks the Lean proofs.
-In the JavaScript CLI `check` already judges a holo and returns a verdict (#270), and the model check is `prism-code build --check`; the Rust CLI follows when it reads the attestation section (#267).
-The JavaScript CLI names the attestation verb `verify-attestation`, because `prism-code verify` already runs `prismpm verify`; the Rust name is open (`docs/proposals/272-attest-verify.md`).
-When #270 and #272 ship in the Rust CLI, both verbs judge a holo and return a verdict.
-That change is breaking and gets its changelog line.
+Today `prismpm check` validates the model, `prismpm check <path.holo>` judges a holo and returns a verdict (#270, `docs/proposals/270-check-rust.md`), and `prismpm verify` checks the Lean proofs.
+In the JavaScript CLI `check` judges a holo and the model check is `prism-code build --check`.
+Both CLIs name the attestation verb `verify-attestation`, because `prism-code verify` already runs `prismpm verify`, which is build verification (`docs/proposals/272-attest-verify.md`).
+`prismpm verify-attestation` checks a holo's attestations against a signer policy and returns `prismpm/attestation-verification-result/1`, on exit 0 and 1 alike.
+The `check` verdict reads the attestation section (#267) and checks each statement's shape and subjects, but does not yet run the signature verification of `verify-attestation`, so no holo reaches P2 through `check` in either CLI.
+Wiring that verification into the verdict is breaking and gets its changelog line; the holo form of `check` was additive and is not.
 
 ### 6.1.1 Deprecated
 
@@ -149,9 +159,11 @@ Until then the old spelling runs as before and prints a warning naming the repla
 | `prism-code/node` | `fileContainerStore`, `containersDirectory` | [#348](https://github.com/UOR-Foundation/PrismPM/issues/348) |
 | `prism-code/node` | `experimental_attest`, `experimental_verifyAttestations`, `experimental_verifyBundle`, `GITHUB_ACTIONS_ISSUER`; the optional `sigstore` dependencies they load | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) |
 | `prism-code` | `SigningError`, `SignatureInvalidError`, `IdentityMismatchError`, `TransparencyError`, `SubjectMismatchError`, `AttestationNotFoundError`, `TrustRootError` and their `code`s | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) |
+| `prism-code` | `experimental_replay`, `experimental_recorder`, `Application.experimental_replay`, `Application.experimental_recorder`, `Application.history`, `acceptanceHistory`, `parseHistory`, `historyBytes`, `historyDigest`, `historyJson`, `HISTORY_SCHEMA`, `REPLAY_PREDICATE_TYPE` and the `replay.*` check ids | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) |
 | `prism-code/node` | `experimental_push`, `experimental_pull`, `openEndpoint`, `openStore`, `createRegistryClient`, `dockerCredentials`, `parseReference`, `formatReference`, `holoManifest`, `referrerManifest`, `registryStatement`, `registryStatements`, `fingerprintTag`, `referrersTag`, `parseChallenge`, `isLoopback`, the media type and annotation constants | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) |
 | `prism-code` | `RegistryError`, `RegistryAuthError`, `ReferrersUnsupportedError`, `ManifestNotFoundError`, `DigestMismatchError`, `PullVerificationError`, `ReferenceInvalidError` and their `code`s and `registry.*`, `store.*`, `referrers.*`, `digest.*`, `pull.*`, `reference.*` checks | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) |
 | `@prism-code/spec` | `OCI`: the holo's media type, its fixed `created` value and its annotation names | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) |
+| `prism-code/node` | `experimental_exportBrowser`, `experimental_checkExport`; `ExportMismatchError` and its `code` and `check` ids in `prism-code` | [#290](https://github.com/UOR-Foundation/PrismPM/issues/290) |
 | `prism-code` | `inspect`, `formatInspection`, `INSPECTION_SCHEMA`, `Application.inspect` | [#271](https://github.com/UOR-Foundation/PrismPM/issues/271) |
 | `prism-code` | `readAttestations`, `attestationSection`, `decodeBundle`, `appendAttestations`, `stripAttestations`, `encodeArchive`, `ATTESTATION_EXTENSION`, `BUNDLE_MEDIA_TYPE` | [#267](https://github.com/UOR-Foundation/PrismPM/issues/267) |
 | `prism-code` | `parseCapabilities`, `grantOf`, `CAPABILITIES_SCHEMA`, `CAPABILITY_KINDS`, `DEFAULT_SET`, `Application.capabilities`, the `capabilities` and `capabilitySet` load options, and the `capabilities.*` check ids of `CapabilityDeniedError` | [#279](https://github.com/UOR-Foundation/PrismPM/issues/279) |
@@ -162,12 +174,11 @@ Until then the old spelling runs as before and prints a warning naming the repla
 | `@prism-code/verify` | `POLICIES`, `POLICY_INPUT_SCHEMA`, `parsePolicy`, `evaluatePolicy`, `policyInput`, `policy.rego`, the accepted Rego subset, and the `policy.parse` and `policy.evaluation` codes | [#285](https://github.com/UOR-Foundation/PrismPM/issues/285) |
 | `@prism-code/verify` | `worldPolicy`, `policy.capabilities`, the `world.capabilities` reason (`PP5602`), and the inspection's `world.pure` and `world.effects` | [#283](https://github.com/UOR-Foundation/PrismPM/issues/283) |
 | `@prism-code/verify` | `verify`, `inspect`, `verifyTransparency`, `ASSURANCE`, `VerifyError`, `FORMAT_REVISION`, `INSPECTION_SCHEMA` | [#273](https://github.com/UOR-Foundation/PrismPM/issues/273), [#275](https://github.com/UOR-Foundation/PrismPM/issues/275) |
-| `@prism-code/spec` | The `prism/proof/v1` types and schema, the `prism/verdict/1` schema, assurance levels, the attestation and Sigstore bundle schemas, the trusted-root schema, the lock schemas, the `prism/capabilities/1` schema and types, the `prism/manifest/1` schema and types, each with its provider members, and the `prism/policy-input/1` schema and types, `POLICY` and the shipped policy files | [#266](https://github.com/UOR-Foundation/PrismPM/issues/266), [#269](https://github.com/UOR-Foundation/PrismPM/issues/269), [#267](https://github.com/UOR-Foundation/PrismPM/issues/267), [#264](https://github.com/UOR-Foundation/PrismPM/issues/264), [#279](https://github.com/UOR-Foundation/PrismPM/issues/279), [#280](https://github.com/UOR-Foundation/PrismPM/issues/280), [#294](https://github.com/UOR-Foundation/PrismPM/issues/294), [#285](https://github.com/UOR-Foundation/PrismPM/issues/285) |
+| `@prism-code/spec` | The `prism/proof/v1` types and schema, the `prism/verdict/1` schema, assurance levels, the attestation and Sigstore bundle schemas, the trusted-root schema, the lock schemas, the `prism/capabilities/1` schema and types, the `prism/manifest/1` schema and types, each with its provider members, the `prism/policy-input/1` schema and types, `POLICY` and the shipped policy files, the `prism/replay/v1` types and schema, and the `prism/history/1` schema and types | [#266](https://github.com/UOR-Foundation/PrismPM/issues/266), [#269](https://github.com/UOR-Foundation/PrismPM/issues/269), [#267](https://github.com/UOR-Foundation/PrismPM/issues/267), [#264](https://github.com/UOR-Foundation/PrismPM/issues/264), [#279](https://github.com/UOR-Foundation/PrismPM/issues/279), [#280](https://github.com/UOR-Foundation/PrismPM/issues/280), [#294](https://github.com/UOR-Foundation/PrismPM/issues/294), [#285](https://github.com/UOR-Foundation/PrismPM/issues/285), [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) |
 | `@prism-code/conformance` | `runSuite`, `renderMatrix`, `runGate`, `loadScenarios`, the shim contract `prism/conformance-shim/1`, every check id, and `COMPLIANCE.md`'s cells | [#287](https://github.com/UOR-Foundation/PrismPM/issues/287) |
 
 `prism-code` entries land in the first release after 0.2.0.
 `@prism-code/verify`, `@prism-code/spec` and `@prism-code/conformance` are not published yet.
-The `prism/replay/v1` predicate is a placeholder owned by M3 and carries no promise.
 
 ### 6.3 Verdict fields
 

@@ -805,6 +805,16 @@ subsystem code and structured locations; Rust debug formatting is not part of
 the contract. User-controlled input must produce a registered diagnostic and
 must not panic.
 
+`prismpm replay <history|dir>... --holo PATH [--statement PATH]` re-executes
+`prism/history/1` histories against a `.holo` and compares every outcome byte
+for byte. Unlike the commands above it reads no project. A difference is
+`PP5701`, exit 1; a replay that cannot be carried out is `PP5706`, exit 2. On
+success it returns `prismpm/replay-result/1`. On both, `--statement` writes the
+`https://uor.foundation/prism/replay/v1` in-toto statement, whose one subject is
+the guest blob and which holds no clock. A replay is evidence for assurance level
+P3; it proves nothing about the Lean model, and a statement from another guest or
+model, or one that records a divergence, withholds P3.
+
 ## 5. Prism-stdlib contract
 
 `prism-stdlib` is the first portable foundation/runtime layer: the ecosystem
@@ -3854,12 +3864,19 @@ Every row below is normative, has the honesty level registered in `model/ids.tom
 | `HO-17` | `holo` | The explicit text/3 profile models its command-line surface in source and generates static musl programs whose bounded raw input, model-owned help and version, declared exit-code map and registered usage, I/O and fault diagnostics are accepted against the Core-Wasm entry for every vector, without handwritten product code or any claim about targets not executed. | §3 |
 | `HO-18` | `holo` | The SDK checks OPM and UML design views against the system model, refuses an unknown component, edge, process, state or viewpoint with PP2012, and emits OPL text and PlantUML source as build artifacts. | §3 |
 | `HO-19` | `holo` | The optional Text/3 workbench binds typed source-owned guidance, forms, examples, error recovery and mandatory no-store Wasm acquisition to real byte-guest results, six exact portable assets and cancellable browser worker execution while preserving Text/1 and Text/2 resource semantics and the text/3 command-line surface. | §3 |
+| `HO-31` | `holo` | A recorded history replays byte-identically against the build it came from in both the JavaScript runtime and prismpm, and a changed model that passes its own acceptance vectors fails replay with a typed divergence, writes a statement that records it, and cannot support assurance level P3 with that statement or with the statement of the previous build. | §3 |
 | `HO-20` | `holo` | The JavaScript runtime in sdk/npm/prism-code opens a composed .holo archive and an exported browser closure without the Rust SDK, verifies the footer, every content-blob label and the manifest cross-references with its own BLAKE3, decodes and re-encodes the HOLOVIEW bundle byte for byte, dispatches requests through the Core-Wasm guest on fresh instances, and replays every modeled acceptance vector byte-identically, so a change to the archive, bundle or model-document layout fails this case in the same change. | §3 |
 | `HO-23` | `holo` | A holo without the attestation section loads and verifies with the same bytes and identities as before the section existed, and reports no attestations. | §3 |
 | `HO-24` | `holo` | An attestation section is an Extension row named https://uor.foundation/extension/attestation-bundle/v1, is the last row, appears at most once, and the footer is BLAKE3 of the body including it. | §3 |
 | `HO-25` | `holo` | Removing the attestation section yields the unsigned archive byte for byte; rows 0 to 7, every blob label and application_kappa are unchanged by adding it, and the Rust and JavaScript writers produce the same bytes. | §3 |
 | `HO-26` | `holo` | Every attestation line is one Sigstore bundle v0.3 with a DSSE envelope over an in-toto Statement v1, and every subject names a content blob of the archive with matching sha256 and blake3. | §3 |
 | `HO-27` | `holo` | A blank line, a v0.2 bundle, a messageSignature, a single-digest subject and an oci-manifest subject inside the holo are each refused with a registered diagnostic. | §3 |
+| `HO-28` | `holo` | verify-attestation checks every attestation of the requested type in the oracle's order: subjects against the holo's blobs, the DSSE signature under the signing certificate or the given key with the chain and its signed certificate timestamps at a signed time, the exact certificate identity and OIDC issuer, and the transparency evidence with Rekor v1 dsse 0.0.1, Rekor v2 dsse 0.0.2 and hashedrekord 0.0.2 bodies checked against the envelope, offline against a pinned trusted root; the bundles the JavaScript signer writes verify, and the Sigstore conformance bundles pass and fail as they do there. | §3 |
+| `HO-29` | `holo` | attest signs an in-toto Statement v1 about the holo's content blobs with a local P-256 or Ed25519 key into the attestation section as a Sigstore bundle v0.3 in the shape the JavaScript signer writes, leaves the input holo untouched, strips back to it byte for byte, and verifies offline with the public key. | §3 |
+| `HO-30` | `holo` | Every refusal of attest and verify-attestation is a registered diagnostic with its check: PP3101 signing, PP3102 signature, PP3103 identity, PP3104 transparency, PP3105 subject, PP3106 no attestation, PP3107 trusted root, and PP1001 for a policy that would let any signer pass. | §3 |
+| `AL-03` | `assurance` | A holo without provenance reports P0 even when its proof statement is valid, and the reasons name the missing provenance beside every proof check that did not pass. | §8 |
+| `AL-05` | `assurance` | A statement's verifiedLevels never changes the computed level: a claim other than P2 is a shape failure of the proof statement, and no claim raises the level. | §8 |
+| `AL-06` | `assurance` | prismpm check and prism-code check return equal verdicts for every committed verdict fixture: the same holo digest, level, policy, result, and the same check ids, codes and withheld levels in the same order. | §8 |
 | `CT-01` | `controller` | The Controller API exposes owned request and result types for load, check, and build. | §4 |
 | `CT-02` | `controller` | The Controller encapsulates LexLean Engine operations without exposing internal compiler types. | §4 |
 | `CT-03` | `controller` | prismpm check validates models in memory without modifying the filesystem. | §4 |
