@@ -70,7 +70,7 @@ Passing means JSON structural validity only (SPEC §10.1). It does not establish
 
 - **Controller pin.** A threat model outside the application roots is invisible to `design::render_snapshot`, which sees only the application-root snapshot when a system release exists. The call therefore has to sit in `controller/mod.rs`, whose hash `scripts/native-golden.mjs` pins for independent source review. That pin is left for the reviewer to move.
 - **Goldens.** A new stdlib entrypoint moves the shared stdlib goldens and native records, which come from the golden refresh and native source review workflows.
-- **A design-view gap this exposes.** When a system release exists, `design::render_snapshot` and the feature check see only the application-root snapshot. A design view or feature declared in another entrypoint is therefore not read in that case. This change does not alter that behaviour.
+- **A design-view gap this exposes.** When a system release exists, `design::render_snapshot` and the feature check see only the application-root snapshot. A design view or feature declared in another entrypoint is therefore not read in that case. A build of prism-code's model, whose design views sit in `src/Design.lex.tex`, rendered none. This change does not alter that behaviour.
 
 ## Not in scope
 

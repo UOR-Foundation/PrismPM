@@ -3302,6 +3302,21 @@ mod tests {
             "PP5404"
         );
 
+        let oscal = root.path().join("component-definition.json");
+        let component_definition: &[u8] =
+            include_bytes!("../../../tests/fixtures/threat-model/oscal-subjects/complete.json");
+        std::fs::write(&oscal, component_definition).unwrap();
+        run_oracle_in_project(root.path(), "oscal", &oscal).unwrap();
+        let mut planted: Value = serde_json::from_slice(component_definition).unwrap();
+        planted["component-definition"]["metadata"]["oscal-version"] = json!("1.1.1");
+        std::fs::write(&oscal, serde_json::to_vec(&planted).unwrap()).unwrap();
+        assert_eq!(
+            run_oracle_in_project(root.path(), "oscal", &oscal)
+                .unwrap_err()
+                .code,
+            "PP5404"
+        );
+
         let kubernetes = root.path().join("kubernetes.yaml");
         std::fs::write(
             &kubernetes,
