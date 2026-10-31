@@ -101,6 +101,26 @@ fn verified_root(root: &Path) -> PathBuf {
     root.join(&verified(root).verified_root)
 }
 
+/// The project's own declaration audits. LexLean 1.2 also attests the runtime
+/// declarations the verified modules import; each must pass its exact policy.
+fn owned_audits(attestation: &Value) -> Vec<&Value> {
+    let (runtime, owned): (Vec<&Value>, Vec<&Value>) = attestation["declarations"]
+        .as_array()
+        .expect("attested declarations")
+        .iter()
+        .partition(|row| {
+            row["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("LexLeanRuntime."))
+        });
+    for row in runtime {
+        assert_eq!(row["result"], "ok");
+        assert_eq!(row["policy"]["kind"], "exact");
+        assert_eq!(row["observed"], row["policy"]["axioms"]);
+    }
+    owned
+}
+
 fn json(path: &Path) -> Value {
     serde_json::from_slice(
         &std::fs::read(path).unwrap_or_else(|error| panic!("{}: {error}", path.display())),
@@ -3500,6 +3520,11 @@ fn verify_holo(root: &Path, id: &str) {
             (
                 "/application/profile",
                 serde_json::json!("prismpm/text-application/2"),
+                "PP4004",
+            ),
+            (
+                "/application/profile",
+                serde_json::json!("prismpm/text-application/0"),
                 "PP2009",
             ),
             (
