@@ -126,19 +126,19 @@ A container exits 0 on success. Otherwise the code follows the typed error that 
 | 1 | `SubjectMismatchError` | An attestation did not verify: its subject. |
 | 1 | `AttestationNotFoundError` | An attestation did not verify: there is none. |
 | 1 | `TrustRootError` | An attestation did not verify: the trusted root is unusable. |
-| 1 | `PolicyDeniedError`, with a verdict | A rule of a policy file denied the holo. |
-| 2 | `PolicyParseError`, no verdict | A policy file could not be parsed. |
-| 2 | `PolicyEvaluationError`, no verdict | A policy file could not be evaluated. |
-| 2 | `RegistryError` | A registry or a local store could not do what was asked. |
-| 2 | `RegistryAuthError` | The registry refused the credentials, or asked for them where they must not be sent. |
-| 2 | `ReferrersUnsupportedError` | The registry has no referrers API and the fallback cannot be used. |
-| 2 | `ManifestNotFoundError` | The reference names nothing in the registry or the store. |
-| 1 | `DigestMismatchError` | Bytes differ from the digest something claimed for them. |
-| 1 | `PullVerificationError` | A pulled holo failed its verdict, its attestations or the signer policy. |
-| 1 | `ReferenceInvalidError` | The text is not a registry or store reference. |
-| 2 | `ProviderNotFoundError` | No provider service for a capability is on the PATH. |
-| 2 | `ProviderReplyError` | A provider broke the protocol, or a variable it returned has a second source. |
-| 2 | `ProviderFailedError` | A provider exited non-zero, would not start or ran out of time. |
+| 1 | `PolicyDeniedError`, with a verdict | A policy rule denied the holo. |
+| 2 | `PolicyParseError`, no verdict | A policy did not parse. |
+| 2 | `PolicyEvaluationError`, no verdict | A policy could not be evaluated. |
+| 2 | `RegistryError` | The registry or store failed. |
+| 2 | `RegistryAuthError` | The registry refused the credentials. |
+| 2 | `ReferrersUnsupportedError` | No referrers API or tag. |
+| 2 | `ManifestNotFoundError` | The reference names nothing. |
+| 1 | `DigestMismatchError` | Bytes differ from their digest. |
+| 1 | `PullVerificationError` | A pulled holo failed verification. |
+| 1 | `ReferenceInvalidError` | Not a registry or store reference. |
+| 2 | `ProviderNotFoundError` | No provider on the PATH. |
+| 2 | `ProviderReplyError` | A provider broke the protocol. |
+| 2 | `ProviderFailedError` | A provider failed. |
 | 1 | `PrismError` | Any other typed error. |
 | 70 | anything else | Dispatch threw something untyped: a guest trap, or a bug in the runtime. |
 
