@@ -10,7 +10,7 @@ A downstream model can state assets, threats, risks and controls with `Foundatio
 
 The comment of 2026-10-22 names two blockers. Neither is open on `main`.
 
-- **Emitter digest.** `model/emitter-inputs.toml` holds `d2f93926...`, not `973aff8e...`, and the 31-input closure has grown since. `5540d783...` was the digest of an older input set, so writing it would fail `audit_emitter_inputs`. This design changes no emitter input, so the registered digest stands.
+- **Emitter digest.** `model/emitter-inputs.toml` holds `aec10024...`, not `973aff8e...`, and the 31-input closure has grown since. `5540d783...` was the digest of an older input set, so writing it would fail `audit_emitter_inputs`. This design changes no emitter input, so the registered digest stands.
 - **Facet records beside an application.** `project_application_with_facets` and `facet_validate` already carry and accept them (SPEC §2). The app-projection branch landed through #230.
 
 PR #61's oracle source also landed. `sdk/oracles/oscal`, `standards/oracles/oscal-1.1.0`, AU-07 and SPEC §10.1 are on `main` and match the PR byte for byte. The missing part is its authority binding: neither `model/authorities.toml` nor `standards.lock` names OSCAL.
