@@ -73,11 +73,8 @@ impl Attestation {
     #[must_use]
     pub(crate) fn statement(&self) -> Option<Value> {
         let bundle: Value = serde_json::from_slice(&self.line).ok()?;
-        let payload = base64_bytes(
-            bundle.get("dsseEnvelope")?.get("payload")?,
-            "DSSE payload",
-        )
-        .ok()?;
+        let payload =
+            base64_bytes(bundle.get("dsseEnvelope")?.get("payload")?, "DSSE payload").ok()?;
         serde_json::from_slice(&payload).ok()
     }
 }

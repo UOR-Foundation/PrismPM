@@ -473,7 +473,9 @@ fn holo_check(holo: &Path, policy: Option<&Path>, json: bool) -> ExitCode {
                 std::io::stdout()
                     .lock()
                     .write_all(text.as_bytes())
-                    .map_err(|error| PrismError::new("PP9001", format!("write CLI output: {error}")))
+                    .map_err(|error| {
+                        PrismError::new("PP9001", format!("write CLI output: {error}"))
+                    })
             };
             match written {
                 Ok(()) => ExitCode::from(verdict.exit_code()),

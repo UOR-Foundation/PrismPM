@@ -98,7 +98,13 @@ fn check_judges_a_holo_anywhere_with_the_documented_exit_codes() {
     let policy = dir.path().join("p0.json");
     std::fs::write(&policy, br#"{"minimum":"P0"}"#).unwrap();
     let passed = prismpm(
-        &["check", holo, "--policy", policy.to_str().unwrap(), "--json"],
+        &[
+            "check",
+            holo,
+            "--policy",
+            policy.to_str().unwrap(),
+            "--json",
+        ],
         dir.path(),
     );
     assert_eq!(passed.code, Some(0), "{}", passed.err);
@@ -144,13 +150,40 @@ fn check_judges_a_holo_anywhere_with_the_documented_exit_codes() {
     let unknown = dir.path().join("unknown.json");
     std::fs::write(&unknown, br#"{"minimum":"P0","signer":"me"}"#).unwrap();
     let none = prismpm(
-        &["check", holo, "--policy", unknown.to_str().unwrap(), "--json"],
+        &[
+            "check",
+            holo,
+            "--policy",
+            unknown.to_str().unwrap(),
+            "--json",
+        ],
         dir.path(),
     );
     assert_eq!(none.code, Some(2));
     assert_eq!(none.out, "");
     assert!(
         none.err.contains("no verdict: policy.invalid: "),
+        "{}",
+        none.err
+    );
+    // A Rego policy (#285) is refused by name, not misread as JSON.
+    let rego = dir.path().join("release.rego");
+    std::fs::write(
+        &rego,
+        b"package prism.policy
+
+minimum := \"P0\"
+",
+    )
+    .unwrap();
+    let none = prismpm(
+        &["check", holo, "--policy", rego.to_str().unwrap(), "--json"],
+        dir.path(),
+    );
+    assert_eq!(none.code, Some(2));
+    assert_eq!(none.out, "");
+    assert!(
+        none.err.contains("no verdict: policy.invalid: ") && none.err.contains("Rego"),
         "{}",
         none.err
     );

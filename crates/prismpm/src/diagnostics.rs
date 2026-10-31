@@ -313,7 +313,11 @@ probes!(
     ("PP5505", "proof-verifier-disagreement", Exact),
     ("PP5506", "proof-verdict-failure", Complete),
     ("PP5507", "proof-tcb-incomplete", Complete),
-    ("PP5601", "assurance-level-below-policy-minimum", PositiveBound),
+    (
+        "PP5601",
+        "assurance-level-below-policy-minimum",
+        PositiveBound
+    ),
     ("PP5602", "world-exceeds-granted-capabilities", Reference),
     ("PP5603", "no-verdict-reached", Required),
     ("PP6001", "reference-model-identity-drift", Digest),

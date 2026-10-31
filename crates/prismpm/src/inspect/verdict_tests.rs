@@ -22,19 +22,28 @@ const SIGNED_BY_JAVASCRIPT: &[u8] = include_bytes!(
 const FOOTER: &str = "8408e0895572fab09e783f7aadb129dc4cb96d0b62850a16f3ddbe44ed6021ba";
 const GUEST_LABEL: &str = "blake3:2adca3e7ca42d7415a5227a20002baad90047d087249cbb9ea36e557f5a4a380";
 const GUEST_SHA256: &str = "dcf53677c7c80636f8fc2247676b8f747d1549ce4af742c8505eb0f0ae334c03";
-const STATEMENTS: [&str; 3] = ["provenance.statement", "proof.statement", "replay.statement"];
+const STATEMENTS: [&str; 3] = [
+    "provenance.statement",
+    "proof.statement",
+    "replay.statement",
+];
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn fixture(relative: &str) -> Value {
-    let bytes = std::fs::read(root().join(relative)).unwrap_or_else(|error| panic!("{relative}: {error}"));
+    let bytes =
+        std::fs::read(root().join(relative)).unwrap_or_else(|error| panic!("{relative}: {error}"));
     serde_json::from_slice(&bytes).expect("fixture is JSON")
 }
 
 fn checks(verdict: &Verdict) -> Vec<&str> {
-    verdict.reasons.iter().map(|reason| reason.check.as_str()).collect()
+    verdict
+        .reasons
+        .iter()
+        .map(|reason| reason.check.as_str())
+        .collect()
 }
 
 fn p0() -> Policy {
@@ -195,14 +204,26 @@ fn the_reference_archive_is_p0_and_fails_the_default_policy() {
     assert_eq!(verdict.exit_code(), 1);
     assert_eq!(verdict.policy_name, "default");
     assert_eq!(verdict.minimum, Level::P2);
-    assert_eq!(checks(&verdict), [&STATEMENTS[..], &["policy.level"]].concat());
     assert_eq!(
-        verdict.reasons.iter().map(|reason| reason.withholds).collect::<Vec<_>>(),
+        checks(&verdict),
+        [&STATEMENTS[..], &["policy.level"]].concat()
+    );
+    assert_eq!(
+        verdict
+            .reasons
+            .iter()
+            .map(|reason| reason.withholds)
+            .collect::<Vec<_>>(),
         [Some(Level::P1), Some(Level::P2), Some(Level::P3), None]
     );
     assert_eq!(verdict.reasons[3].code, Some("PP5601"));
-    assert_eq!(verdict.reasons[3].message, "The level is P0; the policy requires P2 or above.");
-    assert!(!checks(&verdict).iter().any(|check| check.starts_with("holo.")));
+    assert_eq!(
+        verdict.reasons[3].message,
+        "The level is P0; the policy requires P2 or above."
+    );
+    assert!(!checks(&verdict)
+        .iter()
+        .any(|check| check.starts_with("holo.")));
 }
 
 #[test]
@@ -223,7 +244,9 @@ fn the_json_form_is_the_spec_fixture_for_a_provenance_only_policy() {
         ..Policy::default()
     };
     let verdict = verify(CALCULATOR, &policy).unwrap();
-    let expected = fixture("sdk/npm/spec/test/fixtures/verdict/verdict-v1/unsigned-p0-provenance-only-policy.json");
+    let expected = fixture(
+        "sdk/npm/spec/test/fixtures/verdict/verdict-v1/unsigned-p0-provenance-only-policy.json",
+    );
     assert_eq!(assert_valid(&verdict), expected);
 }
 
@@ -237,15 +260,22 @@ fn a_tampered_guest_blob_fails_holo_integrity_twice_and_drops_to_p0() {
     assert_ne!(verdict.holo, format!("blake3:{FOOTER}"));
     assert_eq!(
         checks(&verdict),
-        [&["holo.integrity", "holo.integrity"][..], &STATEMENTS[..], &["policy.level"]].concat()
+        [
+            &["holo.integrity", "holo.integrity"][..],
+            &STATEMENTS[..],
+            &["policy.level"]
+        ]
+        .concat()
     );
     assert!(verdict.reasons[0].message.starts_with(&format!(
         "The footer {FOOTER} does not equal the BLAKE3 of the body, "
     )));
-    assert!(verdict.reasons[0].message.ends_with(": the archive was altered."));
-    assert!(verdict.reasons[1]
+    assert!(verdict.reasons[0]
         .message
-        .starts_with(&format!("Section 4 is labelled {GUEST_LABEL} but its content hashes to blake3:")));
+        .ends_with(": the archive was altered."));
+    assert!(verdict.reasons[1].message.starts_with(&format!(
+        "Section 4 is labelled {GUEST_LABEL} but its content hashes to blake3:"
+    )));
     assert_eq!(verdict.reasons[0].withholds, Some(Level::P1));
     // P0 asks only that check could read the file, so a policy of P0 accepts even a damaged holo.
     assert!(verify(&bytes, &p0()).unwrap().passed);
@@ -260,18 +290,24 @@ fn a_resealed_footer_does_not_hide_a_changed_blob() {
         checks(&verdict),
         [&["holo.integrity"][..], &STATEMENTS[..], &["policy.level"]].concat()
     );
-    assert!(verdict.reasons[0].message.starts_with("Section 4 is labelled"));
+    assert!(verdict.reasons[0]
+        .message
+        .starts_with("Section 4 is labelled"));
 }
 
 #[test]
 fn a_flipped_document_byte_fails_the_footer_even_when_every_label_matches() {
     let mut bytes = CALCULATOR.to_vec();
-    let metadata_offset = u64::from_le_bytes(bytes[10 + 24 + 8..10 + 24 + 16].try_into().unwrap()) as usize;
+    let metadata_offset =
+        u64::from_le_bytes(bytes[10 + 24 + 8..10 + 24 + 16].try_into().unwrap()) as usize;
     bytes[metadata_offset + 20] ^= 0x01;
     let verdict = verify(&bytes, &Policy::default()).unwrap();
     assert_eq!(verdict.reasons[0].check, "holo.integrity");
     assert!(verdict.reasons[0].message.starts_with("The footer "));
-    assert!(!verdict.reasons.iter().any(|reason| reason.message.starts_with("Section ")));
+    assert!(!verdict
+        .reasons
+        .iter()
+        .any(|reason| reason.message.starts_with("Section ")));
 }
 
 #[test]
@@ -280,22 +316,32 @@ fn pinned_digests_pass_and_one_wrong_digest_fails_the_policy_not_the_level() {
     right.digests.insert(
         "archive".to_owned(),
         [
-            ("sha256".to_owned(), format!("{:x}", Sha256::digest(CALCULATOR))),
-            ("blake3".to_owned(), blake3::hash(CALCULATOR).to_hex().to_string()),
+            (
+                "sha256".to_owned(),
+                format!("{:x}", Sha256::digest(CALCULATOR)),
+            ),
+            (
+                "blake3".to_owned(),
+                blake3::hash(CALCULATOR).to_hex().to_string(),
+            ),
         ]
         .into_iter()
         .collect(),
     );
     right.digests.insert(
         "guest".to_owned(),
-        [("sha256".to_owned(), GUEST_SHA256.to_owned())].into_iter().collect(),
+        [("sha256".to_owned(), GUEST_SHA256.to_owned())]
+            .into_iter()
+            .collect(),
     );
     assert!(verify(CALCULATOR, &right).unwrap().passed);
 
     let mut wrong = p0();
     wrong.digests.insert(
         "guest".to_owned(),
-        [("sha256".to_owned(), "0".repeat(64))].into_iter().collect(),
+        [("sha256".to_owned(), "0".repeat(64))]
+            .into_iter()
+            .collect(),
     );
     let verdict = verify(CALCULATOR, &wrong).unwrap();
     assert_valid(&verdict);
@@ -304,7 +350,9 @@ fn pinned_digests_pass_and_one_wrong_digest_fails_the_policy_not_the_level() {
     let reason = verdict.reasons.last().unwrap();
     assert_eq!(reason.check, "policy.digests.guest");
     assert_eq!(reason.withholds, None);
-    assert!(reason.message.contains(&format!("its sha256 is {GUEST_SHA256}, the policy pins 0000")));
+    assert!(reason.message.contains(&format!(
+        "its sha256 is {GUEST_SHA256}, the policy pins 0000"
+    )));
 }
 
 #[test]
@@ -324,15 +372,26 @@ fn a_pinned_world_is_compared_with_the_declared_one() {
     assert_eq!(title_of("world.hash"), "WorldMismatch");
     let mut pure = p0();
     pure.effects = Some(Vec::new());
-    assert!(verify(CALCULATOR, &pure).unwrap().passed, "core-wasm imports nothing");
+    assert!(
+        verify(CALCULATOR, &pure).unwrap().passed,
+        "core-wasm imports nothing"
+    );
 }
 
 #[test]
 fn a_policy_file_is_named_by_its_path_unless_it_names_itself() {
     let (_dir, path) = temp_file("p0.json", br#"{"minimum":"P0"}"#);
     let policy = read_policy(&path).unwrap();
-    assert_eq!(policy.name.as_deref(), Some(path.display().to_string().as_str()));
-    let verdict = check_path(Path::new(&root().join("sdk/npm/prism-code/fixtures/Calculator.holo")), Some(&path), None).unwrap();
+    assert_eq!(
+        policy.name.as_deref(),
+        Some(path.display().to_string().as_str())
+    );
+    let verdict = check_path(
+        Path::new(&root().join("sdk/npm/prism-code/fixtures/Calculator.holo")),
+        Some(&path),
+        None,
+    )
+    .unwrap();
     assert!(verdict.passed);
     assert_eq!(verdict.policy_name, path.display().to_string());
     let (_dir, named) = temp_file("named.json", br#"{"name":"pure","minimum":"P0"}"#);
@@ -341,16 +400,35 @@ fn a_policy_file_is_named_by_its_path_unless_it_names_itself() {
 
 #[test]
 fn the_environment_sets_the_minimum_only_when_the_policy_does_not() {
-    assert!(verify(CALCULATOR, &Policy::default().with_environment(Some("P0")).unwrap()).unwrap().passed);
+    assert!(
+        verify(
+            CALCULATOR,
+            &Policy::default().with_environment(Some("P0")).unwrap()
+        )
+        .unwrap()
+        .passed
+    );
     let strict = Policy {
         minimum: Some(Level::P2),
         ..Policy::default()
     };
-    assert!(!verify(CALCULATOR, &strict.with_environment(Some("P0")).unwrap()).unwrap().passed);
-    assert_eq!(Policy::default().with_environment(Some("")).unwrap().minimum, None);
+    assert!(
+        !verify(CALCULATOR, &strict.with_environment(Some("P0")).unwrap())
+            .unwrap()
+            .passed
+    );
+    assert_eq!(
+        Policy::default()
+            .with_environment(Some(""))
+            .unwrap()
+            .minimum,
+        None
+    );
     let error = Policy::default().with_environment(Some("L2")).unwrap_err();
     assert_eq!(error.check, "policy.invalid");
-    assert!(error.message.starts_with("PRISM_MINIMUM_LEVEL is \"L2\"; expected one of P0, P1, P2, P3"));
+    assert!(error
+        .message
+        .starts_with("PRISM_MINIMUM_LEVEL is \"L2\"; expected one of P0, P1, P2, P3"));
 }
 
 #[test]
@@ -369,12 +447,37 @@ fn no_verdict_names_what_stopped_it() {
     let folder = dir.path().join("closure.holo");
     std::fs::create_dir(&folder).unwrap();
     let cases: [(&Path, Option<&Path>, &str, &str); 7] = [
-        (&dir.path().join("missing.holo"), None, "load.path", "does not exist"),
-        (&not_holo, None, "archive.magic", "expected magic HOLO, found \"HOLX\""),
-        (&holo, Some(&dir.path().join("missing.json")), "policy.unreadable", "cannot be read"),
+        (
+            &dir.path().join("missing.holo"),
+            None,
+            "load.path",
+            "does not exist",
+        ),
+        (
+            &not_holo,
+            None,
+            "archive.magic",
+            "expected magic HOLO, found \"HOLX\"",
+        ),
+        (
+            &holo,
+            Some(&dir.path().join("missing.json")),
+            "policy.unreadable",
+            "cannot be read",
+        ),
         (&holo, Some(&not_json), "policy.invalid", "is not JSON"),
-        (&holo, Some(&unknown), "policy.invalid", "unknown members signer; expected name, minimum, digests, world, effects"),
-        (&holo, Some(&bad_level), "policy.invalid", "policy.minimum \"P4\" is not one of P0, P1, P2, P3"),
+        (
+            &holo,
+            Some(&unknown),
+            "policy.invalid",
+            "unknown members signer; expected name, minimum, digests, world, effects",
+        ),
+        (
+            &holo,
+            Some(&bad_level),
+            "policy.invalid",
+            "policy.minimum \"P4\" is not one of P0, P1, P2, P3",
+        ),
         (&folder, None, "verify.kind", "is a directory"),
     ];
     for (path, policy, check, needle) in cases {
@@ -384,15 +487,26 @@ fn no_verdict_names_what_stopped_it() {
         let diagnostic = error.diagnostic();
         assert_eq!(diagnostic.code, "PP5603");
         assert_eq!(diagnostic.exit_code(), 2);
-        assert!(diagnostic.message.starts_with(&format!("no verdict: {check}: ")));
+        assert!(diagnostic
+            .message
+            .starts_with(&format!("no verdict: {check}: ")));
     }
-    assert_eq!(verify(b"HOL", &Policy::default()).unwrap_err().check, "archive.magic");
+    assert_eq!(
+        verify(b"HOL", &Policy::default()).unwrap_err().check,
+        "archive.magic"
+    );
     let mut version = CALCULATOR.to_vec();
     version[4] = 5;
-    assert_eq!(verify(&version, &Policy::default()).unwrap_err().check, "archive.version");
+    assert_eq!(
+        verify(&version, &Policy::default()).unwrap_err().check,
+        "archive.version"
+    );
     let mut truncated = CALCULATOR.to_vec();
     truncated.truncate(CALCULATOR.len() - 1);
-    assert_eq!(verify(&truncated, &Policy::default()).unwrap_err().check, "archive.table");
+    assert_eq!(
+        verify(&truncated, &Policy::default()).unwrap_err().check,
+        "archive.table"
+    );
 }
 
 #[test]
@@ -413,7 +527,8 @@ fn an_intact_holo_of_an_unknown_layout_has_no_verdict() {
 
 #[test]
 fn the_text_form_names_the_human_title_of_each_reason_and_the_limits_from_p2_up() {
-    let fixture_p1 = fixture("sdk/npm/spec/test/fixtures/verdict/verdict-v1/calculator-p1-tampered-guest.json");
+    let fixture_p1 =
+        fixture("sdk/npm/spec/test/fixtures/verdict/verdict-v1/calculator-p1-tampered-guest.json");
     let verdict = Verdict {
         holo: fixture_p1["holo"].as_str().unwrap().to_owned(),
         level: Level::P1,
@@ -425,7 +540,8 @@ fn the_text_form_names_the_human_title_of_each_reason_and_the_limits_from_p2_up(
                 check: "proof.subject".to_owned(),
                 code: Some("PP5503"),
                 withholds: Some(Level::P2),
-                message: "The proof statement names a guest blob this holo does not contain.".to_owned(),
+                message: "The proof statement names a guest blob this holo does not contain."
+                    .to_owned(),
             },
             super::Reason {
                 check: "policy.level".to_owned(),
@@ -437,7 +553,9 @@ fn the_text_form_names_the_human_title_of_each_reason_and_the_limits_from_p2_up(
     };
     let text = verdict.text(Some("app.holo"));
     assert!(text.starts_with("FAILED  P1 provenance  policy default requires P2 or above\nholo    app.holo\ndigest  blake3:"));
-    assert!(text.contains("\n  proof.subject (PP5503, ProofMismatch, withholds P2)\n    The proof statement names"));
+    assert!(text.contains(
+        "\n  proof.subject (PP5503, ProofMismatch, withholds P2)\n    The proof statement names"
+    ));
     assert!(text.contains("\n  policy.level (PP5601, Verification, policy rule)\n"));
     assert!(!text.contains("cannot know"));
     assert_eq!(title_of("proof.subject"), "ProofMismatch");
@@ -451,24 +569,46 @@ fn the_text_form_names_the_human_title_of_each_reason_and_the_limits_from_p2_up(
         ..verdict
     };
     let text = passed.text(None);
-    assert!(text.starts_with("PASSED  P2 proof checked  policy default requires P2 or above\ndigest  blake3:"));
-    let limits = LIMITS.iter().map(|limit| format!("  {limit}\n")).collect::<String>();
-    assert!(text.ends_with(&format!("This check trusts the signer for what it cannot know:\n{limits}")));
+    assert!(text.starts_with(
+        "PASSED  P2 proof checked  policy default requires P2 or above\ndigest  blake3:"
+    ));
+    let limits = LIMITS
+        .iter()
+        .map(|limit| format!("  {limit}\n"))
+        .collect::<String>();
+    assert!(text.ends_with(&format!(
+        "This check trusts the signer for what it cannot know:\n{limits}"
+    )));
 }
 
 // --- The attestation section (#267): a signed archive has a verdict, never exit 2.
 
 #[test]
-fn al_03_a_holo_without_provenance_is_p0_even_with_a_proof_statement_that_passes_every_other_check() {
+fn al_03_a_holo_without_provenance_is_p0_even_with_a_proof_statement_that_passes_every_other_check()
+{
     let bytes = with_proof(json!(["P2"]));
     let verdict = verify(&bytes, &Policy::default()).unwrap();
     assert_valid(&verdict);
     assert_eq!(verdict.level, Level::P0);
     assert!(!verdict.passed);
     let ids = checks(&verdict);
-    assert_eq!(ids, ["provenance.statement", "proof.envelope", "replay.statement", "policy.level"]);
+    assert_eq!(
+        ids,
+        [
+            "provenance.statement",
+            "proof.envelope",
+            "replay.statement",
+            "policy.level"
+        ]
+    );
     // The proof checks this CLI can run all pass: only the unverified envelope is listed.
-    for check in ["proof.statement", "proof.subject", "proof.model", "proof.verdict", "proof.tcb"] {
+    for check in [
+        "proof.statement",
+        "proof.subject",
+        "proof.model",
+        "proof.verdict",
+        "proof.tcb",
+    ] {
         assert!(!ids.contains(&check), "{check}");
     }
     assert_eq!(verdict.reasons[1].code, Some("PP5501"));
@@ -476,19 +616,34 @@ fn al_03_a_holo_without_provenance_is_p0_even_with_a_proof_statement_that_passes
 }
 
 #[test]
-fn al_03_the_javascript_signed_fixture_reaches_a_verdict_and_its_bare_proof_statement_fails_its_shape() {
+fn al_03_the_javascript_signed_fixture_reaches_a_verdict_and_its_bare_proof_statement_fails_its_shape(
+) {
     // The fixture carries a bare proof statement and a provenance statement with placeholder
     // signatures: both are present, neither verifies, and the level stays P0.
     let verdict = verify(SIGNED_BY_JAVASCRIPT, &Policy::default()).unwrap();
     assert_valid(&verdict);
     assert_eq!(verdict.level, Level::P0);
-    assert_eq!(verdict.holo, format!("blake3:{}", blake3::hash(&SIGNED_BY_JAVASCRIPT[..SIGNED_BY_JAVASCRIPT.len() - 32]).to_hex()));
+    assert_eq!(
+        verdict.holo,
+        format!(
+            "blake3:{}",
+            blake3::hash(&SIGNED_BY_JAVASCRIPT[..SIGNED_BY_JAVASCRIPT.len() - 32]).to_hex()
+        )
+    );
     assert_eq!(
         checks(&verdict),
-        ["provenance.envelope", "proof.envelope", "proof.statement", "replay.statement", "policy.level"]
+        [
+            "provenance.envelope",
+            "proof.envelope",
+            "proof.statement",
+            "replay.statement",
+            "policy.level"
+        ]
     );
     assert_eq!(verdict.reasons[2].code, Some("PP5502"));
-    assert!(verdict.reasons[2].message.starts_with("The proof statement has the wrong shape: "));
+    assert!(verdict.reasons[2]
+        .message
+        .starts_with("The proof statement has the wrong shape: "));
     assert!(verify(SIGNED_BY_JAVASCRIPT, &p0()).unwrap().passed);
 }
 
@@ -508,7 +663,9 @@ fn a_tampered_guest_under_a_proof_statement_fails_with_proof_mismatch() {
     assert_eq!(mismatch.code, Some("PP5503"));
     assert_eq!(mismatch.withholds, Some(Level::P2));
     assert_eq!(title_of(&mismatch.check), "ProofMismatch");
-    assert!(mismatch.message.contains("which is not this holo's guest (blake3 "));
+    assert!(mismatch
+        .message
+        .contains("which is not this holo's guest (blake3 "));
     assert_eq!(&checks(&verdict)[..2], ["holo.integrity", "holo.integrity"]);
 }
 
@@ -521,10 +678,18 @@ fn a_proof_about_another_model_or_a_failed_theorem_or_a_short_tcb_is_reported() 
     let bytes = attach_attestations(CALCULATOR, &[bundle(&statement)]).unwrap();
     let verdict = verify(&bytes, &Policy::default()).unwrap();
     assert_valid(&verdict);
-    let codes = verdict.reasons.iter().filter_map(|reason| reason.code).collect::<Vec<_>>();
+    let codes = verdict
+        .reasons
+        .iter()
+        .filter_map(|reason| reason.code)
+        .collect::<Vec<_>>();
     assert_eq!(codes, ["PP5501", "PP5504", "PP5506", "PP5507", "PP5601"]);
-    assert!(verdict.reasons[2].message.contains("model.sourceId is not the extension's source_id"));
-    assert!(verdict.reasons[3].message.contains("Calculator.total is FAILED"));
+    assert!(verdict.reasons[2]
+        .message
+        .contains("model.sourceId is not the extension's source_id"));
+    assert!(verdict.reasons[3]
+        .message
+        .contains("Calculator.total is FAILED"));
     assert!(verdict.reasons[4].message.ends_with("lacks sdk-image."));
 }
 
@@ -539,10 +704,15 @@ fn al_05_a_verified_levels_claim_never_changes_the_computed_level() {
         .find(|reason| reason.check == "proof.statement")
         .expect("a claim other than P2 is a shape failure");
     assert_eq!(shape.code, Some("PP5502"));
-    assert!(shape.message.contains("predicate.verifiedLevels is [\"P3\"], expected [\"P2\"]"));
+    assert!(shape
+        .message
+        .contains("predicate.verifiedLevels is [\"P3\"], expected [\"P2\"]"));
     let claims_p2 = verify(&with_proof(json!(["P2"])), &Policy::default()).unwrap();
     assert_eq!(claims_p2.level, claims_p3.level);
-    assert_eq!(verify(&with_proof(json!(["P2"])), &p0()).unwrap().level, Level::P0);
+    assert_eq!(
+        verify(&with_proof(json!(["P2"])), &p0()).unwrap().level,
+        Level::P0
+    );
 }
 
 #[test]
@@ -571,13 +741,25 @@ fn al_06_the_rust_verdicts_equal_the_javascript_goldens_in_every_member_but_the_
         ..Policy::default()
     };
     for (name, bytes, policy) in [
-        ("calculator.default.json", CALCULATOR.to_vec(), Policy::default()),
+        (
+            "calculator.default.json",
+            CALCULATOR.to_vec(),
+            Policy::default(),
+        ),
         ("calculator.p0.json", CALCULATOR.to_vec(), p0_named),
-        ("calculator.tampered-guest.json", tampered(), Policy::default()),
+        (
+            "calculator.tampered-guest.json",
+            tampered(),
+            Policy::default(),
+        ),
     ] {
         let golden = fixture(&format!("{goldens}/{name}"));
         let verdict = verify(&bytes, &policy).unwrap();
-        assert_eq!(without_messages(assert_valid(&verdict)), without_messages(golden), "{name}");
+        assert_eq!(
+            without_messages(assert_valid(&verdict)),
+            without_messages(golden),
+            "{name}"
+        );
     }
 }
 
@@ -588,6 +770,9 @@ fn the_no_verdict_diagnostic_is_registered_with_exit_two() {
         message: "x".to_owned(),
     };
     assert_eq!(error.to_string(), "no verdict: policy.invalid: x");
-    assert_eq!(error.diagnostic().to_string(), "PP5603: no verdict: policy.invalid: x");
+    assert_eq!(
+        error.diagnostic().to_string(),
+        "PP5603: no verdict: policy.invalid: x"
+    );
     assert_eq!(error.diagnostic().exit_code(), super::EXIT_NO_VERDICT);
 }

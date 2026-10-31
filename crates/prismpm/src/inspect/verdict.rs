@@ -27,11 +27,11 @@
 //! Experimental until the v0.6 freeze (STABILITY.md section 6).
 
 use super::{
-    blake3_hex, hex, holoview_version, prefix_identifier, read_interface, sha256_hex,
-    world_purity, Export, Import, CORE_WASM_CONTRACT,
-    CORE_WASM_WORLD_BLAKE3, CORE_WASM_WORLD_SHA256, HOLOVIEW_VERSION, IMPURE_EFFECTS,
-    KIND_APP_MANIFEST, KIND_CONTENT_BLOB, KIND_EXTENSION, KIND_METADATA, MODEL_DOCUMENT_SCHEMAS,
-    PROVENANCE_SCHEMA, REVISION_2026_10_23, SOURCE_MANIFEST_VERSION, WORLD_EXPORTS,
+    blake3_hex, hex, holoview_version, prefix_identifier, read_interface, sha256_hex, world_purity,
+    Export, Import, CORE_WASM_CONTRACT, CORE_WASM_WORLD_BLAKE3, CORE_WASM_WORLD_SHA256,
+    HOLOVIEW_VERSION, IMPURE_EFFECTS, KIND_APP_MANIFEST, KIND_CONTENT_BLOB, KIND_EXTENSION,
+    KIND_METADATA, MODEL_DOCUMENT_SCHEMAS, PROVENANCE_SCHEMA, REVISION_2026_10_23,
+    SOURCE_MANIFEST_VERSION, WORLD_EXPORTS,
 };
 use crate::error::PrismError;
 use crate::holo::attestation::{self, Attestation, ATTESTATION_EXTENSION};
@@ -186,7 +186,12 @@ pub struct Reason {
 }
 
 impl Reason {
-    fn new(check: &str, code: Option<&'static str>, withholds: Option<Level>, message: String) -> Self {
+    fn new(
+        check: &str,
+        code: Option<&'static str>,
+        withholds: Option<Level>,
+        message: String,
+    ) -> Self {
         Self {
             check: check.to_owned(),
             code,
@@ -203,7 +208,8 @@ impl Reason {
         }
         row.insert(
             "withholds".to_owned(),
-            self.withholds.map_or(Value::Null, |level| json!(level.as_str())),
+            self.withholds
+                .map_or(Value::Null, |level| json!(level.as_str())),
         );
         row.insert("message".to_owned(), json!(self.message));
         Value::Object(row)
@@ -380,7 +386,10 @@ pub struct Policy {
 }
 
 fn hex64(text: &str) -> bool {
-    text.len() == 64 && text.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    text.len() == 64
+        && text
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 fn invalid(message: impl Into<String>) -> NoVerdict {
@@ -422,9 +431,10 @@ impl Policy {
                         DIGEST_TARGETS.join(", ")
                     )));
                 }
-                let set = set.as_object().filter(|set| !set.is_empty()).ok_or_else(|| {
-                    invalid(format!("policy.digests.{target} names no digest"))
-                })?;
+                let set = set
+                    .as_object()
+                    .filter(|set| !set.is_empty())
+                    .ok_or_else(|| invalid(format!("policy.digests.{target} names no digest")))?;
                 let mut pinned = BTreeMap::new();
                 for (algorithm, digest) in set {
                     if algorithm != "sha256" && algorithm != "blake3" {
@@ -432,11 +442,15 @@ impl Policy {
                             "policy.digests.{target}.{algorithm}: only sha256 and blake3 are known"
                         )));
                     }
-                    let digest = digest.as_str().filter(|digest| hex64(digest)).ok_or_else(|| {
-                        invalid(format!(
+                    let digest =
+                        digest
+                            .as_str()
+                            .filter(|digest| hex64(digest))
+                            .ok_or_else(|| {
+                                invalid(format!(
                             "policy.digests.{target}.{algorithm} is not 64 lowercase hex characters"
                         ))
-                    })?;
+                            })?;
                     pinned.insert(algorithm.clone(), digest.to_owned());
                 }
                 policy.digests.insert(target.clone(), pinned);
@@ -579,9 +593,20 @@ fn capability_set_problem(set: &Value) -> Option<String> {
 
 /// Read a policy file: one JSON object whose members are `name`, `minimum`,
 /// `digests`, `world` and `effects`. Without a `name`, the policy is named by
-/// the path as given.
+/// the path as given. A Rego file (#285) is refused by its extension, naming
+/// what is missing, rather than read as JSON: the Rust CLI evaluates no Rego
+/// until the Rust half of #285.
 pub fn read_policy(path: &Path) -> Result<Policy, NoVerdict> {
     let shown = path.display();
+    if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("rego"))
+    {
+        return Err(invalid(format!(
+            "the policy file {shown} is Rego, which prismpm check does not evaluate yet (#285);              give the JSON form with {}",
+            POLICY_MEMBERS.join(", ")
+        )));
+    }
     let text = std::fs::read_to_string(path).map_err(|error| {
         NoVerdict::new(
             "policy.unreadable",
@@ -910,12 +935,18 @@ fn kinds_text(kinds: &[u8]) -> String {
         .join(",")
 }
 
+/// The header, the body and the section table of an archive.
+type Structure = (Vec<u8>, Vec<u8>, Vec<Row>);
+
 /// Read the structure of the archive, or say why there is no verdict.
-fn structure(bytes: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<Row>), NoVerdict> {
+fn structure(bytes: &[u8]) -> Result<Structure, NoVerdict> {
     if bytes.len() < 4 {
         return Err(NoVerdict::new(
             "archive.magic",
-            format!("the input is {} bytes, too short for the HOLO magic", bytes.len()),
+            format!(
+                "the input is {} bytes, too short for the HOLO magic",
+                bytes.len()
+            ),
         ));
     }
     if &bytes[..4] != b"HOLO" {
@@ -930,7 +961,10 @@ fn structure(bytes: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<Row>), NoVerdict> {
     if bytes.len() < 42 {
         return Err(NoVerdict::new(
             "archive.version",
-            format!("the archive is {} bytes, shorter than its header and footer", bytes.len()),
+            format!(
+                "the archive is {} bytes, shorter than its header and footer",
+                bytes.len()
+            ),
         ));
     }
     let version = u16::from_le_bytes([bytes[4], bytes[5]]);
@@ -997,7 +1031,11 @@ fn world_problems(guest: &[u8]) -> Vec<String> {
     };
     let signature = |name: &str, signature: Option<&(Vec<String>, Vec<String>)>| match signature {
         Some((parameters, results)) => {
-            format!("{name}({}) -> {}", parameters.join(", "), results.join(", "))
+            format!(
+                "{name}({}) -> {}",
+                parameters.join(", "),
+                results.join(", ")
+            )
         }
         None => format!("{name}(?) -> ?"),
     };
@@ -1020,8 +1058,14 @@ fn world_problems(guest: &[u8]) -> Vec<String> {
             )),
             Some(actual) if kind == "func" => {
                 let expected = (
-                    parameters.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>(),
-                    results.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>(),
+                    parameters
+                        .iter()
+                        .map(|value| (*value).to_owned())
+                        .collect::<Vec<_>>(),
+                    results
+                        .iter()
+                        .map(|value| (*value).to_owned())
+                        .collect::<Vec<_>>(),
                 );
                 if actual.signature.as_ref() != Some(&expected) {
                     problems.push(format!(
@@ -1053,7 +1097,8 @@ fn world_problems(guest: &[u8]) -> Vec<String> {
 fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
     let (body, footer, rows) = structure(bytes)?;
     let mut findings = Vec::new();
-    let mut add = |id: &'static str, ok: bool, detail: String| findings.push(Finding { id, ok, detail });
+    let mut add =
+        |id: &'static str, ok: bool, detail: String| findings.push(Finding { id, ok, detail });
 
     // P0: the footer and the labels.
     let stored = hex(&footer);
@@ -1089,7 +1134,10 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
         "blob.labels",
         bad_blobs.is_empty(),
         if bad_blobs.is_empty() {
-            format!("all {} content blobs match their BLAKE3 labels", blobs.len())
+            format!(
+                "all {} content blobs match their BLAKE3 labels",
+                blobs.len()
+            )
         } else {
             bad_blobs.join("; ")
         },
@@ -1102,8 +1150,12 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
         rows.iter()
             .find(|row| row.kind == KIND_EXTENSION && row.name.as_deref() == Some(name))
     };
-    let blob_by_label =
-        |label: &str| blobs.iter().copied().find(|row| row.label.as_deref() == Some(label));
+    let blob_by_label = |label: &str| {
+        blobs
+            .iter()
+            .copied()
+            .find(|row| row.label.as_deref() == Some(label))
+    };
 
     // manifest.wire: Foundation.Holo.V1.Wire.validAppManifest.
     let manifests = rows
@@ -1128,9 +1180,12 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
                     payload.len()
                 ));
             } else if !payload.starts_with(&prefix) {
-                problem = Some("the application manifest prefix is not the Wire constant".to_owned());
+                problem =
+                    Some("the application manifest prefix is not the Wire constant".to_owned());
             } else if !payload.ends_with(&suffix) {
-                problem = Some("the application manifest layer suffix is not the Wire constant".to_owned());
+                problem = Some(
+                    "the application manifest layer suffix is not the Wire constant".to_owned(),
+                );
             } else {
                 let mut labels = Vec::new();
                 for (index, role) in MANIFEST_LABELS.iter().enumerate() {
@@ -1182,7 +1237,10 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
         "metadata.schema",
         source_manifest.is_ok(),
         match &source_manifest {
-            Ok(value) => format!("the source manifest matches its shape, version {}", value["version"]),
+            Ok(value) => format!(
+                "the source manifest matches its shape, version {}",
+                value["version"]
+            ),
             Err(problem) => problem.clone(),
         },
     );
@@ -1277,7 +1335,9 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
     // references: the manifest, directory and provenance name the same blobs.
     let mut roles: BTreeMap<&'static str, String> = BTreeMap::new();
     let mut contract = None;
-    if let (Ok(directory), Ok(provenance), Some(labels)) = (&directory, &provenance, &manifest_labels) {
+    if let (Ok(directory), Ok(provenance), Some(labels)) =
+        (&directory, &provenance, &manifest_labels)
+    {
         let mut problems = Vec::new();
         let wasm = directory.layers.iter().find(|layer| layer.kind == "wasm");
         let view = directory.layers.iter().find(|layer| layer.kind == "view");
@@ -1289,7 +1349,11 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
         }
         if let (Some(wasm), Some(view)) = (wasm, view) {
             contract = wasm.contract.clone();
-            let expected = [&directory.requires_kappa, &wasm.content_kappa, &view.content_kappa];
+            let expected = [
+                &directory.requires_kappa,
+                &wasm.content_kappa,
+                &view.content_kappa,
+            ];
             for (index, role) in MANIFEST_LABELS.iter().enumerate() {
                 if labels[index] != *expected[index] {
                     problems.push(format!(
@@ -1304,7 +1368,10 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
                     provenance.guest_content_kappa, wasm.content_kappa
                 ));
             }
-            if let ViewBinding::Present { view_content_kappa, .. } = &provenance.view_binding {
+            if let ViewBinding::Present {
+                view_content_kappa, ..
+            } = &provenance.view_binding
+            {
                 if *view_content_kappa != view.content_kappa {
                     problems.push(format!(
                         "the provenance view {view_content_kappa} differs from the view layer {}",
@@ -1325,25 +1392,31 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
                     "the directory lists {}, which is not a content blob of this archive",
                     entry.kappa
                 )),
-                Some(row) if row.content.len() as u64 != entry.byte_length => problems.push(format!(
-                    "{} is {} bytes; the directory says {}",
-                    entry.kappa,
-                    row.content.len(),
-                    entry.byte_length
-                )),
+                Some(row) if row.content.len() as u64 != entry.byte_length => {
+                    problems.push(format!(
+                        "{} is {} bytes; the directory says {}",
+                        entry.kappa,
+                        row.content.len(),
+                        entry.byte_length
+                    ))
+                }
                 Some(_) => {}
             }
         }
         for row in &blobs {
             if let Some(label) = &row.label {
                 if !listed.contains(label.as_str()) {
-                    problems.push(format!("content blob {label} is not listed in the directory"));
+                    problems.push(format!(
+                        "content blob {label} is not listed in the directory"
+                    ));
                 }
             }
         }
         for (role, label) in &roles {
             if blob_by_label(label).is_none() {
-                problems.push(format!("the {role} {label} is not a content blob of this archive"));
+                problems.push(format!(
+                    "the {role} {label} is not a content blob of this archive"
+                ));
             }
         }
         add(
@@ -1414,7 +1487,10 @@ fn analyze(bytes: &[u8]) -> Result<Analysis, NoVerdict> {
                 if problems.is_empty() {
                     format!("the guest has exactly the imports and exports of the {contract} world")
                 } else {
-                    format!("the guest does not match the {contract} world: {}", problems.join("; "))
+                    format!(
+                        "the guest does not match the {contract} world: {}",
+                        problems.join("; ")
+                    )
                 },
             );
         }
@@ -1640,19 +1716,30 @@ fn proof_reasons(statement: &Value, analysis: &Analysis) -> Vec<Reason> {
     )];
     let mut shape = Vec::new();
     if statement.get("_type").and_then(Value::as_str) != Some(attestation::STATEMENT_TYPE) {
-        shape.push(format!("_type is {}", statement.get("_type").cloned().unwrap_or(Value::Null)));
+        shape.push(format!(
+            "_type is {}",
+            statement.get("_type").cloned().unwrap_or(Value::Null)
+        ));
     }
     if statement.get("predicateType").and_then(Value::as_str) != Some(PROOF_PREDICATE) {
         shape.push(format!(
             "predicateType is {}",
-            statement.get("predicateType").cloned().unwrap_or(Value::Null)
+            statement
+                .get("predicateType")
+                .cloned()
+                .unwrap_or(Value::Null)
         ));
     }
     let subject = statement
         .get("subject")
         .and_then(Value::as_array)
         .filter(|subjects| subjects.len() == 1)
-        .and_then(|subjects| subjects[0].get("digest").and_then(Value::as_object).map(|_| &subjects[0]));
+        .and_then(|subjects| {
+            subjects[0]
+                .get("digest")
+                .and_then(Value::as_object)
+                .map(|_| &subjects[0])
+        });
     if subject.is_none() {
         shape.push("the statement must have exactly one subject with a digest set".to_owned());
     }
@@ -1682,7 +1769,10 @@ fn proof_reasons(statement: &Value, analysis: &Analysis) -> Vec<Reason> {
                 shape.push("predicate.tcb is empty".to_owned());
             }
             if predicate.verifier.id != "https://uor.foundation/prism/verifier/lean4" {
-                shape.push(format!("predicate.verifier.id is {}", json!(predicate.verifier.id)));
+                shape.push(format!(
+                    "predicate.verifier.id is {}",
+                    json!(predicate.verifier.id)
+                ));
             }
             if predicate.tcb.iter().any(|entry| entry.trust != "trusted") {
                 shape.push("predicate.tcb names a component whose trust is not trusted".to_owned());
@@ -1705,14 +1795,23 @@ fn proof_reasons(statement: &Value, analysis: &Analysis) -> Vec<Reason> {
         reasons.push(proof_reason(
             "proof.statement",
             PROOF_STATEMENT,
-            format!("The proof statement has the wrong shape: {}.", shape.join("; ")),
+            format!(
+                "The proof statement has the wrong shape: {}.",
+                shape.join("; ")
+            ),
         ));
         return reasons;
     };
 
     let digest = &subject["digest"];
-    let subject_blake3 = digest.get("blake3").and_then(Value::as_str).unwrap_or_default();
-    let subject_sha256 = digest.get("sha256").and_then(Value::as_str).unwrap_or_default();
+    let subject_blake3 = digest
+        .get("blake3")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let subject_sha256 = digest
+        .get("sha256")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let guest = analysis.role("guest").map(Row::content_digests);
     if guest
         .as_ref()
@@ -1738,12 +1837,42 @@ fn proof_reasons(statement: &Value, analysis: &Analysis) -> Vec<Reason> {
     }
     let provenance = analysis.provenance.as_ref();
     let pairs: [(&str, &str, &str, Option<&str>); 6] = [
-        ("document.sha256", &predicate.model.document.sha256, "model_id", provenance.map(|p| p.model_id.as_str())),
-        ("sourceId", &predicate.model.source_id, "source_id", provenance.map(|p| p.source_id.as_str())),
-        ("semanticId", &predicate.model.semantic_id, "semantic_id", provenance.map(|p| p.semantic_id.as_str())),
-        ("snapshotId", &predicate.model.snapshot_id, "snapshot_id", provenance.map(|p| p.snapshot_id.as_str())),
-        ("compilerSemanticsId", &predicate.model.compiler_semantics_id, "compiler_semantics_id", provenance.map(|p| p.compiler_semantics_id.as_str())),
-        ("leanManifestSha256", &predicate.model.lean_manifest_sha256, "lean_manifest_sha256", provenance.map(|p| p.lean_manifest_sha256.as_str())),
+        (
+            "document.sha256",
+            &predicate.model.document.sha256,
+            "model_id",
+            provenance.map(|p| p.model_id.as_str()),
+        ),
+        (
+            "sourceId",
+            &predicate.model.source_id,
+            "source_id",
+            provenance.map(|p| p.source_id.as_str()),
+        ),
+        (
+            "semanticId",
+            &predicate.model.semantic_id,
+            "semantic_id",
+            provenance.map(|p| p.semantic_id.as_str()),
+        ),
+        (
+            "snapshotId",
+            &predicate.model.snapshot_id,
+            "snapshot_id",
+            provenance.map(|p| p.snapshot_id.as_str()),
+        ),
+        (
+            "compilerSemanticsId",
+            &predicate.model.compiler_semantics_id,
+            "compiler_semantics_id",
+            provenance.map(|p| p.compiler_semantics_id.as_str()),
+        ),
+        (
+            "leanManifestSha256",
+            &predicate.model.lean_manifest_sha256,
+            "lean_manifest_sha256",
+            provenance.map(|p| p.lean_manifest_sha256.as_str()),
+        ),
     ];
     for (field, value, member, recorded) in pairs {
         if Some(value) != recorded {
@@ -1760,7 +1889,10 @@ fn proof_reasons(statement: &Value, analysis: &Analysis) -> Vec<Reason> {
 
     let mut verdict = Vec::new();
     if predicate.verification_result != "PASSED" {
-        verdict.push(format!("verificationResult is {}", predicate.verification_result));
+        verdict.push(format!(
+            "verificationResult is {}",
+            predicate.verification_result
+        ));
     }
     for theorem in &predicate.theorems {
         if theorem.verdict != "PASSED" {
@@ -1808,7 +1940,9 @@ fn statement_reasons(analysis: &Analysis, reasons: &mut Vec<Reason>) {
                 "holo.documents",
                 None,
                 Some(Level::P1),
-                sentence(&format!("the attestation section cannot be read: {problem}")),
+                sentence(&format!(
+                    "the attestation section cannot be read: {problem}"
+                )),
             ));
             &[]
         }
@@ -1872,7 +2006,8 @@ fn statement_reasons(analysis: &Analysis, reasons: &mut Vec<Reason>) {
             "replay.statement",
             None,
             Some(Level::P3),
-            "The holo carries a replay statement, which no checker verifies before #284.".to_owned(),
+            "The holo carries a replay statement, which no checker verifies before #284."
+                .to_owned(),
         ),
     });
 }
@@ -1911,7 +2046,9 @@ fn world_policy(contract: Option<&str>, _capabilities: Option<&Value>) -> Option
 /// names; empty when they match. `None` pins "no world expected".
 fn compare_world_pin(contract: &str, pin: Option<&WorldPin>) -> Vec<String> {
     let Some(pin) = pin else {
-        return vec![format!("the policy expects no world, the holo declares {contract}")];
+        return vec![format!(
+            "the policy expects no world, the holo declares {contract}"
+        )];
     };
     let mut problems = Vec::new();
     if let Some(pinned) = &pin.contract {
@@ -1921,8 +2058,10 @@ fn compare_world_pin(contract: &str, pin: Option<&WorldPin>) -> Vec<String> {
             ));
         }
     }
-    let known = (contract == CORE_WASM_CONTRACT)
-        .then_some([("blake3", CORE_WASM_WORLD_BLAKE3), ("sha256", CORE_WASM_WORLD_SHA256)]);
+    let known = (contract == CORE_WASM_CONTRACT).then_some([
+        ("blake3", CORE_WASM_WORLD_BLAKE3),
+        ("sha256", CORE_WASM_WORLD_SHA256),
+    ]);
     for (algorithm, pinned) in [("blake3", &pin.blake3), ("sha256", &pin.sha256)] {
         let Some(pinned) = pinned else { continue };
         match known {
@@ -1971,7 +2110,12 @@ pub fn verify(bytes: &[u8], policy: &Policy) -> Result<Verdict, NoVerdict> {
     for finding in &analysis.findings {
         if !finding.ok {
             if let Some(check) = reported_as(finding.id) {
-                reasons.push(Reason::new(check, None, Some(Level::P1), sentence(&finding.detail)));
+                reasons.push(Reason::new(
+                    check,
+                    None,
+                    Some(Level::P1),
+                    sentence(&finding.detail),
+                ));
             }
         }
     }
@@ -2023,7 +2167,11 @@ pub fn verify(bytes: &[u8], policy: &Policy) -> Result<Verdict, NoVerdict> {
             Some((sha256, blake3)) => expected
                 .iter()
                 .filter_map(|(algorithm, pinned)| {
-                    let observed = if algorithm == "sha256" { sha256 } else { blake3 };
+                    let observed = if algorithm == "sha256" {
+                        sha256
+                    } else {
+                        blake3
+                    };
                     (observed != pinned)
                         .then(|| format!("its {algorithm} is {observed}, the policy pins {pinned}"))
                 })
@@ -2062,14 +2210,19 @@ pub fn verify(bytes: &[u8], policy: &Policy) -> Result<Verdict, NoVerdict> {
                 "policy.effects",
                 None,
                 None,
-                sentence(&format!("the world imports {}, and {allows}", outside.join(", "))),
+                sentence(&format!(
+                    "the world imports {}, and {allows}",
+                    outside.join(", ")
+                )),
             ));
         }
     }
 
     if let Some(pin) = &policy.world {
         let mismatches = match analysis.contract.as_deref() {
-            None => vec!["the holo declares no guest contract to compare with the pinned world".to_owned()],
+            None => vec![
+                "the holo declares no guest contract to compare with the pinned world".to_owned(),
+            ],
             Some(contract) => compare_world_pin(contract, pin.as_ref()),
         };
         if !mismatches.is_empty() {

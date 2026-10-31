@@ -62,6 +62,8 @@ The Rust CLI sits on the wire model of #267 (PR 369), which admits the attestati
 
 One JSON object with the members `name`, `minimum`, `digests`, `world` and `effects`, checked as `@prism-code/verify` checks them. Without a `name`, the verdict names the policy by the path as given. `PRISM_MINIMUM_LEVEL` sets the minimum when the policy does not. `capabilities` is never read from a policy file: a policy never grants, `run` does (#282).
 
+Since #285 the JavaScript `check` also takes a Rego file or the name of a shipped policy (`default`, `pure-only`, `provenance-only`), and treats any other path as this JSON form. The Rust CLI reads the JSON form only. A path ending in `.rego` is refused with `policy.invalid` naming #285 rather than read as JSON, so the message says what is missing instead of "not JSON". The JSON form means the default policy adjusted by its members, in both CLIs, so a CI job can keep one `policy.json` for `prismpm check` and `prism-code check`. Rego in the Rust CLI follows with #285's Rust half (`regorus`, the same corpus), as that proposal plans.
+
 ```json
 { "name": "release", "minimum": "P2", "digests": { "guest": { "sha256": "<64 hex>" } } }
 ```
