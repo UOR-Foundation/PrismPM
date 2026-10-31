@@ -169,6 +169,6 @@ The stand-in build copies the reference archive, so it times the loop alone. On 
 
 ## Unresolved questions
 
-1. Payment Approval, the second reference archive named for this milestone, is not in this repository. `dev` holds no assumption about a project beyond `prism.toml` or `prismpm.toml`, so it should run there unchanged, and that is untested until the archive exists.
+1. Payment Approval, the second reference archive, reached main after these measurements. `dev` has not been run on it yet. `dev` holds no assumption about a project beyond `prism.toml` or `prismpm.toml`, so it should run there unchanged, and that is untested until the archive exists.
 2. Whether `prism/dev-state/1` should be a published schema. It is private to the studio today, which is why it is not in `@prism-code/spec`.
 3. The Rust CLI has no `dev` verb. `prism dev` in the guides is `prism-code dev` until the binary is renamed.
