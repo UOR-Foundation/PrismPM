@@ -6,6 +6,7 @@ import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
+import {parts as vvParts} from './vv-assemble.mjs';
 
 const {load} = createRequire('/opt/prismpm/oracles/package.json')('js-yaml');
 const workflow = name => load(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'));
@@ -307,13 +308,17 @@ const products = [
   ['oracles', 'sdk/Dockerfile', 'oracles'],
 ];
 const platforms = [{os: 'ubuntu-24.04', arch: 'amd64'}, {os: 'ubuntu-24.04-arm', arch: 'arm64'}];
+// Longest-measured part first, so max-parallel starts the slow ones early. The
+// set is checked against the one list in vv-assemble.mjs.
+const vvStartOrder = ['dk-3', 'ho-oc', 'dk-2', 'gates', 'st-sy', 'dk-0-1', 'conformance', 'source'];
+assert.deepEqual([...vvStartOrder].sort(), [...vvParts].sort());
 const expectedMatrices = {
   release: {
     images: products.map(([name, dockerfile, target]) => ({name, dockerfile, target, repository: `ghcr.io/uor-foundation/prismpm-${name}`})),
     reproducibility: products.flatMap(([image, dockerfile, target]) => platforms.map(({os, arch}) => ({os, platform: `linux/${arch}`, dockerfile, target, name: `${image}-${arch}`, image}))),
     'installed-sdk': platforms,
-    'source-vv': [{part: 'source'}, {part: 'conformance'}, {part: 'browser'}],
-    'installed-vv': platforms.flatMap(({os, arch}) => ['source', 'conformance', 'browser'].map(part => ({os, arch, part}))),
+    'source-vv': vvStartOrder.map(part => ({part})),
+    'installed-vv': vvStartOrder.flatMap(part => platforms.map(({os, arch}) => ({os, arch, part}))),
     native: [{platform: 'linux/amd64', target: 'x86_64-unknown-linux-gnu', arch: 'amd64'}, {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'}],
   },
   'sdk-candidate': {
@@ -359,7 +364,7 @@ function candidateContract(value) {
     assert.equal(createHash('sha256').update(JSON.stringify(canonical(job))).digest('hex'), digest, id);
   }
 }
-const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, 'source-vv': 3, 'installed-vv': 6, native: 2}};
+const matrixParallelism = {release: {images: 3, reproducibility: 4, 'installed-sdk': 2, 'source-vv': 4, 'installed-vv': 8, native: 2}};
 function publicationContract(name, value) {
   if (name === 'sdk-candidate') candidateContract(value);
   const actual = Object.fromEntries(Object.entries(value.jobs).filter(([, job]) => job.strategy).map(([id, job]) => {

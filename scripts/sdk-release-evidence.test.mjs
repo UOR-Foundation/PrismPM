@@ -10,6 +10,7 @@ import {pathToFileURL} from 'node:url';
 import test from 'node:test';
 import {assembleInstalled, captureEvidence, packEvidence} from './sdk-release-evidence.mjs';
 import {assetNames} from './release-phases.mjs';
+import {parts as vvParts} from './vv-assemble.mjs';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 const require = createRequire('/opt/prismpm/oracles/package.json');
 const {load} = require('js-yaml');
@@ -94,7 +95,7 @@ function validateWorkflow(workflow) {
     download(`product-cli-sdk-${arch}`, `.sdk-gate-evidence/product-cli-sdk-${arch}`);
     assert(assetNames().includes(`sdk-${arch}-product-cli.tar`));
     assert(assetNames().includes(`sdk-${arch}-vv-evidence.json`));
-    for (const part of ['source', 'conformance', 'browser']) assert(assetNames().includes(`sdk-${arch}-full-sdk-vv-${part}.tar`));
+    for (const part of vvParts) assert(assetNames().includes(`sdk-${arch}-full-sdk-vv-${part}.tar`));
     download(`browser-sdk-sdk-${arch}`, 'release');
     download(`library-sdk-sdk-${arch}`, `.sdk-gate-evidence/library-sdk-sdk-${arch}`);
     for (const kind of ['browser', 'library']) assert(assetNames().includes(`sdk-${arch}-${kind}-sdk.log`));
@@ -111,11 +112,12 @@ function validateWorkflow(workflow) {
     'cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/',
     'node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \\',
     '  release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"',
+    'parts=$(node scripts/vv-assemble.mjs --list)',
     'for architecture in amd64 arm64; do',
     '  node scripts/library-sdk-metadata-evidence.mjs pack \\',
     '    ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \\',
     '    "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"',
-    '  for part in source conformance browser; do',
+    '  for part in $parts; do',
     '    node scripts/sdk-release-evidence.mjs full-sdk-vv \\',
     '      ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \\',
     '      "$image" "$GITHUB_SHA" "$architecture" "$part"', '  done',
@@ -134,16 +136,16 @@ function validateWorkflow(workflow) {
   assert(workflow.jobs.release.needs.includes('crates'));
 }
 
-test('an architecture counts only with all three validated parts', t => {
+test('an architecture counts only with every validated part', t => {
   const root = temporary(t), output = temporary(t);
-  for (const part of ['source', 'conformance', 'browser']) {
+  for (const part of vvParts) {
     const directory = join(root, `sdk-amd64-full-sdk-vv-${part}`); mkdirSync(directory); vv(directory, part);
   }
   assert.throws(() => assembleInstalled(root, join(output, 'wrong.json'), {...context, architecture: 'arm64'}));
   assembleInstalled(root, join(output, 'good.json'), context);
   assert.deepEqual(JSON.parse(readFileSync(join(output, 'good.json'))), {commit: context.source_revision,
     gates: Array.from({length: 15}, (_, index) => index + 1), schema: 'prismpm/vv-evidence/1', status: 'passed'});
-  rmSync(join(root, 'sdk-amd64-full-sdk-vv-browser'), {recursive: true});
+  rmSync(join(root, 'sdk-amd64-full-sdk-vv-dk-2'), {recursive: true});
   assert.throws(() => assembleInstalled(root, join(output, 'partial.json'), context));
   assert.equal(readdirSync(output).length, 1);
 });
@@ -231,7 +233,7 @@ test('missing, extra, stale and changed original evidence fails before archive c
     root => put(root, 'vv-part.json', {status: 'passed'}),
     root => {const value = JSON.parse(readFileSync(join(root, 'acceptance.json'))); value.source_revision = '2'.repeat(40); put(root, 'acceptance.json', value);},
     root => {const value = JSON.parse(readFileSync(join(root, 'acceptance.json'))); value.phases.pop(); put(root, 'acceptance.json', value);},
-    root => {const value = JSON.parse(readFileSync(join(root, 'execution.json'))); value.part = 'browser'; put(root, 'execution.json', value);},
+    root => {const value = JSON.parse(readFileSync(join(root, 'execution.json'))); value.part = 'dk-2'; put(root, 'execution.json', value);},
   ]) {
     const source = temporary(t), output = temporary(t); vv(source); change(source);
     assert.throws(() => packEvidence(source, 'full-sdk-vv', join(output, 'bad.tar'), partContext));

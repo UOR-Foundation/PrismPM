@@ -64,7 +64,7 @@ test('one part execution retains its unchanged raw evidence after removing stale
   assert.deepEqual(retained, { part: 'source', path: 'part/vv-part.json', byte_length: bytes.length, sha256: sha(bytes) });
   assert.deepEqual(readFileSync(join(f.output, retained.path)), bytes);
   assert(existsSync(join(f.output, 'bootstrap.json')));
-  for (const part of ['conformance', 'browser']) {
+  for (const part of vvParts.filter(part => part !== 'source')) {
     const other = fixture(t), raw = Buffer.from(canonical(partEvidence(part)));
     await retainPart(other.source, other.output, revision, part, async () => { writeFileSync(join(other.source, `target/vv-part-${part}.json`), raw); return 0; });
     assert(!existsSync(join(other.output, 'bootstrap.json')), 'only the source part runs the bootstrap gate');
@@ -81,7 +81,7 @@ test('failed, missing, wrong-commit, wrong-part or aliased results cannot promot
       if (mode === 'missing') return 0;
       if (mode === 'directory') mkdirSync(f.input);
       if (mode === 'wrong-commit') writeFileSync(f.input, canonical({ ...partEvidence(), commit: '4'.repeat(40) }));
-      if (mode === 'wrong-part') writeFileSync(f.input, canonical(partEvidence('browser')));
+      if (mode === 'wrong-part') writeFileSync(f.input, canonical(partEvidence('gates')));
       if (mode === 'symlink') { writeFileSync(join(f.work, 'elsewhere'), bytes); symlinkSync(join(f.work, 'elsewhere'), f.input); }
       return 0;
     }));
@@ -90,14 +90,14 @@ test('failed, missing, wrong-commit, wrong-part or aliased results cannot promot
   }
 });
 
-test('assembled evidence requires exactly all three passed parts of one commit', () => {
+test('assembled evidence requires exactly every passed part of one commit', () => {
   const records = () => new Map(vvParts.map(part => [part, Buffer.from(canonical(partEvidence(part)))]));
   assert.deepEqual(validateVvEvidence(assembleVvEvidence(records(), revision), revision), evidence());
   assert.deepEqual(validateVvPart(records().get('source'), revision, 'source'), partEvidence());
   for (const mutate of [
-    map => map.delete('browser'),
+    map => map.delete('st-sy'),
     map => map.set('extra', map.get('source')),
-    map => map.set('browser', map.get('source')),
+    map => map.set('st-sy', map.get('source')),
     map => map.set('source', Buffer.from(canonical({ ...partEvidence(), status: 'failed' }))),
     map => map.set('source', Buffer.from(canonical({ ...partEvidence(), commit: '4'.repeat(40) }))),
     map => map.set('source', Buffer.from(canonical({ ...partEvidence(), extra: true }))),
@@ -176,9 +176,9 @@ test('failure never overwrites caller evidence', async t => {
 });
 
 test('exact part gate invocation has no alternate binary, source command or login shell', () => {
-  assert.deepEqual(gateInvocation('/fresh/source', '/fresh/evidence/part', 'browser'), {
+  assert.deepEqual(gateInvocation('/fresh/source', '/fresh/evidence/part', 'dk-2'), {
     command: '/usr/local/bin/node',
-    args: ['/fresh/source/scripts/ci-observe.mjs', 'run', '/fresh/evidence/part/diagnostics', '--', '/usr/local/bin/just', 'vv-part', 'browser'],
+    args: ['/fresh/source/scripts/ci-observe.mjs', 'run', '/fresh/evidence/part/diagnostics', '--', '/usr/local/bin/just', 'vv-part', 'dk-2'],
     cwd: '/fresh/source',
   });
   assert.throws(() => gateInvocation('/fresh/source', '/fresh/evidence/part', 'other'));

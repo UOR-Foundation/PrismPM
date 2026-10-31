@@ -5,9 +5,12 @@ test "$#" -eq 5 -o "$#" -eq 6 || { echo 'usage: sdk-vv-outer.sh IMAGE@sha256:DIG
 sdk_image=$1 revision=$2 architecture=$3 part=$4 destination=$5
 [[ $sdk_image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}$ ]] || exit 64
 [[ $revision =~ ^[0-9a-f]{40}$ ]] || exit 64
-[[ $part =~ ^(source|conformance|browser)$ ]] || exit 64
 case "$(uname -m):$architecture" in x86_64:amd64|aarch64:arm64) ;; *) exit 64 ;; esac
 root=$(cd "$(dirname "$0")/.." && pwd -P)
+# The closed part list is scripts/vv-assemble.mjs `parts`; it is not repeated here.
+part_pattern=$(node "$root/scripts/vv-assemble.mjs" --list | paste -sd'|' -)
+[[ $part_pattern =~ ^[a-z0-9|-]+$ ]] || exit 64
+[[ $part =~ ^($part_pattern)$ ]] || exit 64
 qualification_trust=()
 qualification_ca=${6:-}
 if test "$#" -eq 6; then test -n "$qualification_ca"; fi
@@ -26,7 +29,7 @@ workspace=$(pwd -P)
 test "$(git -C "$root" rev-parse HEAD)" = "$revision"
 test -z "$(git -C "$root" status --porcelain)"
 test "$root" = "$workspace/root-a"
-[[ $destination =~ ^sdk-(amd64|arm64)-full-sdk-vv-(source|conformance|browser)$ ]] || exit 64
+[[ $destination =~ ^sdk-(amd64|arm64)-full-sdk-vv-($part_pattern)$ ]] || exit 64
 test "$destination" = "sdk-$architecture-full-sdk-vv-$part"
 test ! -e "$workspace/$destination"
 evidence="$workspace/$destination-outer-owner"

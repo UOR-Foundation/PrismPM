@@ -9,6 +9,7 @@ import {createServer as createTlsServer} from 'node:https';
 import {execFileSync} from 'node:child_process';
 import {networkInterfaces} from 'node:os';
 import test from 'node:test';
+import {parts} from './vv-assemble.mjs';
 import {bootstrapFixture} from './sdk-bootstrap-retention-fixture.mjs';
 import { selectPlatform, validateIsolation, validateLoadedImage, validateExecution,
   sdkContainerArguments, readRuntimeLock, runOuter, execute, acquireImageMetadata, inspectLoadedImage, validateOwningTests } from './sdk-vv-check.mjs';
@@ -232,18 +233,18 @@ test('SDK execution is same-daemon, read-only and unprivileged with only owned p
 });
 
 test('the original part record and execution identity are independently required', () => {
-  const raw = Buffer.from(canonical({commit: revision, part: 'browser', schema: 'prismpm/vv-part/1', status: 'passed'}));
-  const run = {part: 'browser', path: 'part/vv-part.json', byte_length: raw.length, sha256: digest(raw).slice(7)};
-  const record = {schema: 'prismpm/sdk-vv-execution/2', scope: 'one-vv-part-execution-only', part: 'browser', source_revision: revision,
+  const raw = Buffer.from(canonical({commit: revision, part: 'dk-2', schema: 'prismpm/vv-part/1', status: 'passed'}));
+  const run = {part: 'dk-2', path: 'part/vv-part.json', byte_length: raw.length, sha256: digest(raw).slice(7)};
+  const record = {schema: 'prismpm/sdk-vv-execution/2', scope: 'one-vv-part-execution-only', part: 'dk-2', source_revision: revision,
     image_reference: image, process_architecture: 'x64', inventory_sha256: 'd'.repeat(64), cli_sha256: 'e'.repeat(64),
     input_policy_sha256: 'f'.repeat(64), input_manifest_sha256: '1'.repeat(64), advisory_revision: '2'.repeat(40), run,
     unclaimed: ['native-host', 'network-isolation', 'oci-image-identity', 'sdk-release', 'product-readiness']};
-  validateExecution(Buffer.from(canonical(record)), raw, image, revision, 'amd64', 'browser');
+  validateExecution(Buffer.from(canonical(record)), raw, image, revision, 'amd64', 'dk-2');
   for (const changed of [{...record, run: {...run, part: 'source'}}, {...record, part: 'source'}, {...record, source_revision: '3'.repeat(40)},
     {...record, process_architecture: 'arm64'}, {...record, unclaimed: []}, {...record, extra: true}]) {
-    assert.throws(() => validateExecution(Buffer.from(canonical(changed)), raw, image, revision, 'amd64', 'browser'));
+    assert.throws(() => validateExecution(Buffer.from(canonical(changed)), raw, image, revision, 'amd64', 'dk-2'));
   }
-  assert.throws(() => validateExecution(Buffer.from(canonical(record)), Buffer.from('{}'), image, revision, 'amd64', 'browser'));
+  assert.throws(() => validateExecution(Buffer.from(canonical(record)), Buffer.from('{}'), image, revision, 'amd64', 'dk-2'));
   assert.throws(() => validateExecution(Buffer.from(canonical(record)), raw, image, revision, 'amd64', 'other'));
 });
 
@@ -288,7 +289,7 @@ function orchestrationFixture(t, fault, store = 'classic', registryEndpoint) {
   const lock = {schema: 'prismpm/sdk-vv-runtime-inputs/1', images: Object.fromEntries(Object.entries(images).filter(([name]) => name !== 'sdk').map(([name, row]) =>
     [name, name === 'dind' ? {reference: row.reference, source: 'https://github.com/docker-library/docker', source_revision: revision, version: '28.4.0-dind'} : {reference: row.reference}]))};
   writeFileSync(join(source, 'sdk/vv-runtime.lock.json'), canonical(lock) + '\n');
-  for (const name of ['sdk-vv-run', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence', 'sdk-registry-reader', 'sdk-qualification-trust']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
+  for (const name of ['sdk-vv-run', 'vv-assemble', 'sdk-vv-probe', 'sdk-vv-check', 'sdk-bootstrap-retention', 'bootstrap-evidence', 'sdk-registry-reader', 'sdk-qualification-trust']) writeFileSync(join(source, `scripts/${name}.mjs`), `// unit-only source-binding fixture: ${name}\n`);
   for (const name of ['sdk-command-owner.mjs', 'sdk-command-owner.py', 'sdk-vv-outer.sh']) writeFileSync(join(source, 'scripts', name), `# unit-only binding fixture: ${name}\n`);
   const policy = Buffer.from(canonical({source_revision: revision, advisory_revision: '2'.repeat(40)})), inventory = Buffer.from('unit inventory'), inputManifest = Buffer.from('unit input manifest'), cli = Buffer.from('unit CLI bytes');
   const raw = Buffer.from(canonical({commit: revision, part: 'source', schema: 'prismpm/vv-part/1', status: 'passed'}));
@@ -722,9 +723,9 @@ test('native release matrix executes the additional exact-image gate and preserv
     assert.throws(() => hostPrerequisite(text.replace('node-version: 22.23.2', 'node-version: 20'), command));
   }
   const sdkRows = [...job.matchAll(/          - os: ([^\n]+)\n            arch: ([^\n]+)\n            part: ([^\n]+)\n/g)];
-  assert.equal([...job.matchAll(/^            arch: /gm)].length, 6);
-  assert.deepEqual(sdkRows.map(row => row.slice(1)),
-    [['ubuntu-24.04', 'amd64'], ['ubuntu-24.04-arm', 'arm64']].flatMap(row => ['source', 'conformance', 'browser'].map(part => [...row, part])));
+  assert.equal([...job.matchAll(/^            arch: /gm)].length, parts.length * 2);
+  assert.deepEqual(sdkRows.map(row => row.slice(1)).sort(),
+    [['ubuntu-24.04', 'amd64'], ['ubuntu-24.04-arm', 'arm64']].flatMap(row => parts.map(part => [...row, part])).sort());
   const steps = [...job.matchAll(/^      - name: Verify this installed-SDK part on the native isolated runner\n([\s\S]*?)(?=^      - )/gm)]; assert.equal(steps.length, 1);
   const step = /^        shell: bash\n        env:\n          RESULT_NAME: sdk-\$\{\{ matrix.arch \}\}\n          NATIVE_PLATFORM: linux\/\$\{\{ matrix.arch \}\}\n          PART: \$\{\{ matrix.part \}\}\n        run: \|\n((?:          .*\n)+)$/.exec(steps[0][1]);
   assert(step, 'closed mandatory SDK step required');
@@ -742,9 +743,9 @@ test('native release matrix executes the additional exact-image gate and preserv
   // Explicit workflow units, not real Docker/image/SDK acceptance. Execute the
   // actual job command and its exact image-owned inner command in real shells.
   const script = `cd "$UNIT_ROOT"\nnode() { printf '%s\\n' "$*" >> "$UNIT_ROOT/commands"; [ "\${UNIT_FAIL:-}" != "$2" ]; }; export -f node\nbash() { test "$1" = root-a/scripts/sdk-vv-outer.sh; shift; test "$#" = 5; /bin/bash --noprofile --norc -euo pipefail -c ${JSON.stringify(inner[1])} sdk-outer "$@"; }\n` + run;
-  const env = {PATH:process.env.PATH, UNIT_ROOT:dir, RESULT_NAME:'sdk-unit', NATIVE_PLATFORM:'linux/amd64', PART:'browser', GITHUB_SHA:revision};
+  const env = {PATH:process.env.PATH, UNIT_ROOT:dir, RESULT_NAME:'sdk-unit', NATIVE_PLATFORM:'linux/amd64', PART:'dk-2', GITHUB_SHA:revision};
   const result = await execute('/bin/bash', ['-c', script], {environment:env}); assert.equal(result.status,0);
   assert.deepEqual(readFileSync(join(dir, 'commands'), 'utf8').trim().split('\n'), [
-    'root-a/scripts/sdk-vv-check.mjs tests', `root-a/scripts/sdk-vv-check.mjs run ${image} ${revision} amd64 browser sdk-unit-full-sdk-vv-browser`]);
+    'root-a/scripts/sdk-vv-check.mjs tests', `root-a/scripts/sdk-vv-check.mjs run ${image} ${revision} amd64 dk-2 sdk-unit-full-sdk-vv-dk-2`]);
   for (const mode of ['tests', 'run']) assert.notEqual((await execute('/bin/bash', ['-c', script], {environment:{...env,UNIT_FAIL:mode}})).status,0);
 });

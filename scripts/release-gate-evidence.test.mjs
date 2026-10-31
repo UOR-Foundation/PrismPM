@@ -349,7 +349,7 @@ test('source and native archives preserve complete originals without promoting t
     // A later attempt may keep this earlier job's results; an earlier one may not.
     assert.equal(captureEvidence(root, kind, {...binding, run_attempt: '2'}).manifest.run_attempt, '2');
     const later = temporary(t); fixture(later);
-    const result = kind === 'source-vv' ? 'source-browser-result.json' : 'native-result.json';
+    const result = kind === 'source-vv' ? 'source-dk-2-result.json' : 'native-result.json';
     put(later, result, {...JSON.parse(readFileSync(join(later, result))), run_attempt: '2'});
     assert.throws(() => captureEvidence(later, kind, binding), /attempt later/);
     assert.equal(captureEvidence(later, kind, {...binding, run_attempt: '2'}).manifest.run_attempt, '2');
@@ -360,12 +360,12 @@ test('missing bootstrap, failed command, substituted bytes and wrong native invo
   for (const [kind, fixture, binding, changes] of [
     ['source-vv', sourceFixture, sourceContext, [
       root => rmSync(join(root, 'run-1-bootstrap-prior-capture.json')),
-      root => rmSync(join(root, 'source-browser.json')),
-      root => put(root, 'source-browser-vv.json', rawPart('browser').subarray(1)),
-      root => put(root, 'source-browser-vv.json', rawPart('source')),
+      root => rmSync(join(root, 'source-dk-2.json')),
+      root => put(root, 'source-dk-2-vv.json', rawPart('dk-2').subarray(1)),
+      root => put(root, 'source-dk-2-vv.json', rawPart('source')),
       root => put(root, 'source-source.stdout', 'changed original'),
       root => {const row = JSON.parse(readFileSync(join(root, 'source-conformance.json'))); row.status = 1; put(root, 'source-conformance.json', row);},
-      root => {const row = JSON.parse(readFileSync(join(root, 'source-conformance.json'))); row.arguments = ['vv-part', 'browser']; put(root, 'source-conformance.json', row);},
+      root => {const row = JSON.parse(readFileSync(join(root, 'source-conformance.json'))); row.arguments = ['vv-part', 'dk-2']; put(root, 'source-conformance.json', row);},
       root => put(root, 'source-vv.json', Buffer.from(rawVv().toString().replace('"passed"', '"failed"'))),
       root => rmSync(join(root, 'source-vv.json')),
       root => put(root, 'run-1-extra.json', '{}'),
@@ -423,7 +423,10 @@ function workflowContract(value) {
   assert.equal(source.if, undefined); assert.equal(source['continue-on-error'], undefined);
   assert.equal(source.with.runCmd, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
     + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
-  assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part), vvParts);
+  assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
+  assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
+  assert.equal(value.jobs['source-vv'].strategy['max-parallel'], 4);
+  for (const [name, job] of Object.entries(value.jobs)) assert(job['timeout-minutes'] > 0 && job['timeout-minutes'] <= 360, `${name} is bounded by one hosted-job limit`);
   const partUpload = value.jobs['source-vv'].steps.find(step => step.with?.name === 'source-vv-part-${{ matrix.part }}');
   assert.equal(partUpload.if, 'always()'); assert.equal(partUpload.with['if-no-files-found'], 'error');
   assert.equal(partUpload.with.path, 'target/source-vv-evidence/');
@@ -445,7 +448,7 @@ function workflowContract(value) {
     {platform: 'linux/arm64', target: 'aarch64-unknown-linux-gnu', arch: 'arm64'},
   ]);
 }
-test('actual workflow retains all three source parts and complete native failure originals', () => {
+test('actual workflow retains every source part and complete native failure originals', () => {
   const value = load(readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8')); workflowContract(value);
   for (const mutate of [
     v => {v.jobs['source-vv'].steps.find(s => s.with?.runCmd).with.runCmd = 'just vv\n';},

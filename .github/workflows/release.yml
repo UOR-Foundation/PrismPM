@@ -59,7 +59,9 @@ jobs:
           test "$(git status --porcelain)" = ""
           test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.4.0
 
-  # One source pass, as three parts that each fit one hosted job.
+  # One source pass, as the eight `just vv-part` parts of scripts/vv-assemble.mjs,
+  # each under one 6 h hosted-job limit. Longest parts first so max-parallel
+  # starts them before the short ones; tests derive the set from `parts`.
   source-vv:
     needs: policy
     runs-on: ubuntu-24.04
@@ -68,12 +70,17 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 4
       matrix:
         include:
-          - part: source
+          - part: dk-3
+          - part: ho-oc
+          - part: dk-2
+          - part: gates
+          - part: st-sy
+          - part: dk-0-1
           - part: conformance
-          - part: browser
+          - part: source
     steps:
       - name: Free runner disk
         run: |
@@ -124,7 +131,7 @@ jobs:
           pattern: source-vv-part-*
           merge-multiple: true
           path: target/source-vv-evidence
-      - name: Require all three source parts on this commit
+      - name: Require every source part on this commit
         run: |
           node scripts/release-gate-evidence.mjs source-assemble . target/source-vv-evidence "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" -
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -557,7 +564,9 @@ jobs:
             root-a/target/library-sdk-evidence/
           if-no-files-found: error
           retention-days: 30
-  # One installed pass per architecture, as three parts that each fit one hosted job.
+  # One installed pass per architecture, as the eight parts of
+  # scripts/vv-assemble.mjs: 16 jobs, each under one 6 h hosted-job limit.
+  # Part-major order so max-parallel 8 runs four parts on each architecture.
   installed-vv:
     needs: [gate, images]
     runs-on: ${{ matrix.os }}
@@ -567,27 +576,57 @@ jobs:
       packages: read
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 8
       matrix:
         include:
           - os: ubuntu-24.04
             arch: amd64
-            part: source
+            part: dk-3
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: dk-3
+          - os: ubuntu-24.04
+            arch: amd64
+            part: ho-oc
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: ho-oc
+          - os: ubuntu-24.04
+            arch: amd64
+            part: dk-2
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: dk-2
+          - os: ubuntu-24.04
+            arch: amd64
+            part: gates
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: gates
+          - os: ubuntu-24.04
+            arch: amd64
+            part: st-sy
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: st-sy
+          - os: ubuntu-24.04
+            arch: amd64
+            part: dk-0-1
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: dk-0-1
           - os: ubuntu-24.04
             arch: amd64
             part: conformance
-          - os: ubuntu-24.04
-            arch: amd64
-            part: browser
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            part: source
           - os: ubuntu-24.04-arm
             arch: arm64
             part: conformance
+          - os: ubuntu-24.04
+            arch: amd64
+            part: source
           - os: ubuntu-24.04-arm
             arch: arm64
-            part: browser
+            part: source
     steps:
       - name: Free runner disk
         run: |
@@ -670,7 +709,7 @@ jobs:
           pattern: full-sdk-vv-sdk-${{ matrix.arch }}-*
           merge-multiple: true
           path: .installed-vv
-      - name: Require all three installed parts on this commit and image
+      - name: Require every installed part on this commit and image
         shell: bash
         env:
           ARCH: ${{ matrix.arch }}
@@ -886,11 +925,12 @@ jobs:
           cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/
           node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \
             release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          parts=$(node scripts/vv-assemble.mjs --list)
           for architecture in amd64 arm64; do
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
               "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"
-            for part in source conformance browser; do
+            for part in $parts; do
               node scripts/sdk-release-evidence.mjs full-sdk-vv \
                 ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \
                 "$image" "$GITHUB_SHA" "$architecture" "$part"

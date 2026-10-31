@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parts as vvParts } from './vv-assemble.mjs';
 import { materializeClosure, verifyClosure } from './sdk-vv-inputs.mjs';
 import {bootstrapNames, captureBootstrap, readOriginal, validateBootstrapRetention} from './sdk-bootstrap-retention.mjs';
 
@@ -52,7 +53,9 @@ export function validateVvEvidence(bytes, revision) {
   return value;
 }
 
-export const vvParts = Object.freeze(['source', 'conformance', 'browser']);
+// The part list lives only in vv-assemble.mjs (a live-binding cycle: nothing
+// here reads it while modules evaluate).
+export { vvParts };
 
 export function validateVvPart(bytes, revision, part) {
   assert.match(revision, /^[a-f0-9]{40}$/);
@@ -65,10 +68,10 @@ export function validateVvPart(bytes, revision, part) {
   return value;
 }
 
-// The evidence for all 15 gates exists only when all three parts passed.
+// The evidence for all 15 gates exists only when every listed part passed.
 export function assembleVvEvidence(records, revision) {
   assert(records instanceof Map);
-  assert.deepEqual([...records.keys()].sort(), [...vvParts].sort(), 'exactly the three part records required');
+  assert.deepEqual([...records.keys()].sort(), [...vvParts].sort(), 'exactly the part records required');
   for (const part of vvParts) validateVvPart(records.get(part), revision, part);
   const evidence = Buffer.from(canonical({
     commit: revision,

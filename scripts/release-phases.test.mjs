@@ -8,6 +8,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { parts as vvParts } from './vv-assemble.mjs';
 import {sessionFixture} from './vv-sdk-session-fixture.mjs';
 import { assetNames, imageVerificationArguments, publicationNotes, publicationPolicy, publishOci, releaseSbomRecord, requirePrerequisites, verifyReproducibility, verifyExistingRelease } from './release-phases.mjs';
 
@@ -97,7 +98,8 @@ function validateWorkflow(value) {
   const sourceGate = value.jobs['source-vv'].steps.find(step => step.with?.runCmd)?.with.runCmd;
   assert.equal(sourceGate, "set -euo pipefail\nbash scripts/vv.sh --with-sdk bash -euo pipefail -c \"$(cat <<'PRISMPM_VV'\n"
     + "node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'\n" + 'PRISMPM_VV\n)"\n');
-  assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include, [{part: 'source'}, {part: 'conformance'}, {part: 'browser'}]);
+  assert.deepEqual(value.jobs['source-vv'].strategy.matrix.include.map(row => row.part).sort(), [...vvParts].sort());
+  assert.equal(value.jobs['source-vv'].strategy.matrix.include.length, vvParts.length);
   const sourceUpload = value.jobs.gate.steps.find(step => step.with?.name === 'source-vv');
   assert.equal(sourceUpload.if, undefined); assert.equal(sourceUpload.with.path, 'target/source-vv-evidence/');
   assert.equal(sourceUpload.with['if-no-files-found'], 'error');
@@ -106,8 +108,11 @@ function validateWorkflow(value) {
   assert.deepEqual(installed.needs, ['gate', 'images', 'installed-vv']); assert.deepEqual(parts.needs, ['gate', 'images']);
   for (const job of [installed, parts]) {assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], undefined); assert.equal(job['runs-on'], '${{ matrix.os }}');}
   assert.deepEqual(installed.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]);
-  assert.deepEqual(parts.strategy.matrix.include, [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]
-    .flatMap(row => ['source', 'conformance', 'browser'].map(part => ({...row, part}))));
+  const byKey = row => `${row.arch}/${row.part}`;
+  assert.deepEqual(parts.strategy.matrix.include.map(byKey).sort(), [{os:'ubuntu-24.04',arch:'amd64'}, {os:'ubuntu-24.04-arm',arch:'arm64'}]
+    .flatMap(row => vvParts.map(part => byKey({...row, part}))).sort());
+  assert.equal(parts.strategy.matrix.include.length, vvParts.length * 2);
+  for (const row of parts.strategy.matrix.include) assert.equal(row.os, row.arch === 'amd64' ? 'ubuntu-24.04' : 'ubuntu-24.04-arm');
   const complete = parts.steps.find(step => step.run?.includes('sdk-vv-outer.sh'));
   assert(complete); assert.equal(complete.if, undefined); assert.equal(complete['continue-on-error'], undefined);
   assert.match(complete.run, /bash root-a\/scripts\/sdk-vv-outer\.sh/);

@@ -409,7 +409,7 @@ export async function runOuter({image, revision, arch, part, destination, source
     await inner(sdkContainerArguments(names.sdk, image, group, '/workspace')); await inner(['start', names.sdk]);
     const ownImage = (await sdk(['docker', '--host', SOCKET, 'inspect', names.sdk, '--format', '{{.Image}}'])).toString().trim();
     assert.equal(ownImage, loadedIdentities.sdk.id);
-    const boundPaths = ['scripts/sdk-vv-run.mjs', 'scripts/sdk-vv-probe.mjs', 'scripts/sdk-vv-check.mjs',
+    const boundPaths = ['scripts/sdk-vv-run.mjs', 'scripts/vv-assemble.mjs', 'scripts/sdk-vv-probe.mjs', 'scripts/sdk-vv-check.mjs',
       'scripts/sdk-command-owner.mjs', 'scripts/sdk-command-owner.py',
       'scripts/sdk-vv-outer.sh',
       'scripts/sdk-qualification-trust.mjs',

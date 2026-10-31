@@ -1,7 +1,8 @@
 # Publication phases
 
 `release.yml` accepts an exact `release/v0.4` dispatch or the `v0.4.0` tag. Source
-verification runs one pass as three `just vv-part` jobs. All existing image, native,
+verification runs one pass as the eight `just vv-part` jobs listed in
+`scripts/vv-assemble.mjs`. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
 
 A dispatch with `rehearsal=true`, the default, runs every check and publishes no GitHub
@@ -72,7 +73,7 @@ cryptographic registry verification; a saved success file is not sufficient.
 Image-index signatures use the same exact source/workflow/ref/event policy and
 pinned trust root; a signature from another allowed release ref is insufficient.
 
-Before SDK acceptance, the release path still requires all three parts
+Before SDK acceptance, the release path still requires all eight parts (`scripts/vv-assemble.mjs`)
 in the exact shipped SDK images on both architectures; the
 source-devcontainer runs are not that evidence. No SDK acceptance receipt or
 consumer lock is changed by this workflow split.

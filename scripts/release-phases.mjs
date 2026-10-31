@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateConfig } from './sdk-candidate.mjs';
+import { parts as vvParts } from './vv-assemble.mjs';
 import { describeSpdx, releaseTransportPolicy, transportSbom, trustRootDigest, verificationArguments } from './sdk-candidate-sbom.mjs';
 
 const repository = 'UOR-Foundation/PrismPM';
@@ -287,7 +288,7 @@ export function assetNames() {
   return [
     'SHA256SUMS', 'source-vv.tar', 'sdk-metadata-native-join.json',
     ...['amd64', 'arm64'].flatMap(architecture => [
-      ...['source', 'conformance', 'browser'].map(part => `sdk-${architecture}-full-sdk-vv-${part}.tar`),
+      ...vvParts.map(part => `sdk-${architecture}-full-sdk-vv-${part}.tar`),
       `sdk-${architecture}-vv-evidence.json`, `sdk-${architecture}-product-cli.tar`,
       `sdk-${architecture}-native-equivalence.tar`,
       `sdk-${architecture}-native-metadata.tar`,
