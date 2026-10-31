@@ -85,7 +85,10 @@ function bounded(file,args,{env,timeout,maxBuffer}){
 }
 async function execute(context){
  try{
-  const result=await bounded('bash',[join(context.root,'scripts/library-sdk-check.sh'),image,revision],{env:context.env,timeout:30000,maxBuffer:1024*1024});
+  // Each real shell run took about 22 s on a hosted 4-core runner (source run 8-part: 88 s for the four
+  // runs each of the two workers executes, while the preceding docker-sequence test took 155 s), so a
+  // 30 s deadline failed whenever one run met contention. The deadline still bounds a hung shell.
+  const result=await bounded('bash',[join(context.root,'scripts/library-sdk-check.sh'),image,revision],{env:context.env,timeout:120000,maxBuffer:1024*1024});
   assert.equal(result.error,undefined,'shell transport must complete within its resource bounds');assert.equal(result.signal,null,'shell transport must exit without a signal');
   const calls=readFileSync(context.env.RECORDED_CALLS,'utf8').trim().split('\n').map(JSON.parse);
   const retainedPath=join(context.root,'target/library-sdk-evidence/linux-'+(process.arch==='x64'?'amd64':'arm64'));
