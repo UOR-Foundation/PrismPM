@@ -3,25 +3,19 @@
 // assurance level through holo.verify() and `prism-code check`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { inspect, experimental_verify, formatInspection, canonicalJson } from '../src/index.mjs';
 import { inspect as verifyInspect } from '../../verify/src/index.mjs';
 import { EXIT } from '../src/check.mjs';
-import { referenceArchive, referenceArchives, assertReplays, scriptedDispatch } from '../../testing/src/index.mjs';
+import { resolveArchive, inspect, experimental_verify, formatInspection, canonicalJson, runCli, referenceArchive, referenceArchives, assertReplays, scriptedDispatch } from '../../testing/src/index.mjs';
 import { spec } from '../../spec/test/spec.mjs';
 import { validate } from '../../spec/test/json-schema.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const bin = here('../bin/prism-code.mjs');
 const golden = (name) => readFileSync(here(`./fixtures/${name}`), 'utf8').replace(/\r\n/g, '\n');
-const run = (args, env = {}) => {
-  const result = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
-  return { code: result.status, out: result.stdout, err: result.stderr };
-};
+const run = (args, env = {}) => runCli(args, { env });
 
 /** Each reference archive: its vector count, the application profile the runtime reports and its model document schema. */
 export const REFERENCE_ARCHIVES = Object.freeze({
@@ -79,7 +73,7 @@ for (const [name, expected] of Object.entries(REFERENCE_ARCHIVES)) {
 
   test(`${name}: the model document matches the schema it names`, async () => {
     const app = await (await referenceArchive(name)).load();
-    const document = app.archive ? (await import('../src/archive.mjs')).resolveArchive(app.archive).modelDocument : null;
+    const document = app.archive ? resolveArchive(app.archive).modelDocument : null;
     assert.equal(document.schema, expected.document);
     const path = spec.SCHEMAS[document.schema];
     const schema = JSON.parse(readFileSync(here(`../../spec/${path}`), 'utf8'));

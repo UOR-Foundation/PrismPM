@@ -13,5 +13,18 @@ export {
   grantOf,
   DEFAULT_SET,
   load,
+  inspect,
+  formatInspection,
+  canonicalJson,
+  experimental_verify,
+  historyBytes,
+  historyDigest,
+  acceptanceHistory,
+  REPLAY_PREDICATE_TYPE,
+  DeterminismViolationError,
+  ReplayError,
+  blake3Hex,
+  resolveArchive,
 } from 'prism-code';
+
 export { fromFile } from 'prism-code/node';

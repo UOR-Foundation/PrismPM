@@ -18,3 +18,24 @@ export { scriptedDispatch, historyScript } from './script.mjs';
 export { readHistory, writeHistory, recordHistory, assertReplays, referenceArchive, referenceArchives } from './history.mjs';
 export { TestingError, UnexpectedCallError, ScriptIncompleteError, TestSetupError } from './errors.mjs';
 export { HISTORY_SCHEMA, parseHistory, historyJson } from './runtime.mjs';
+// The runtime calls a test of a reference archive needs beside the helpers, so such a test imports this package only.
+export {
+  load,
+  fromFile,
+  inspect,
+  formatInspection,
+  canonicalJson,
+  experimental_verify,
+  historyBytes,
+  historyDigest,
+  acceptanceHistory,
+  experimental_recorder,
+  experimental_replay,
+  REPLAY_PREDICATE_TYPE,
+  DeterminismViolationError,
+  PrismError,
+  ReplayError,
+  blake3Hex,
+} from './runtime.mjs';
+export { resolveArchive } from './runtime.mjs';
+export { runCli, spawnCli, buildDigests } from './cli.mjs';

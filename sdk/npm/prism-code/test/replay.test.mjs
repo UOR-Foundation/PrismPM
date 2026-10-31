@@ -2,7 +2,7 @@
 // error, the statement's fields are right, and that statement cannot carry a changed model to P3.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,14 +26,16 @@ import {
   HISTORY_SCHEMA,
   REPLAY_PREDICATE_TYPE,
   blake3Hex,
-} from '../src/index.mjs';
-import { fromFile } from '../src/node.mjs';
+  fromFile,
+  buildDigests,
+  spawnCli,
+  runCli,
+} from '../../testing/src/index.mjs';
 import { policyInput } from '../src/vendor/verify.mjs';
 import { VERSION } from '../src/version.mjs';
 import { deriveChangedModel } from '../scripts/derive-changed-model.mjs';
 
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
-const bin = here('../bin/prism-code.mjs');
 const holoPath = here('../fixtures/Calculator.holo');
 const changedPath = here('./fixtures/Calculator.changed-model.holo');
 const historyPath = here('../fixtures/Calculator.history.json');
@@ -49,18 +51,14 @@ const replaySchema = json(here('../../spec/predicates/replay-v1.schema.json'));
 const SIGNED = { verified: true };
 const encoder = new TextEncoder();
 
-const cli = (...args) => spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8' });
+const cli = (...args) => {
+  const { code, out, err } = runCli(args);
+  return { status: code, stdout: out, stderr: err };
+};
 const out = (name) => join(dir, `${name}-${Math.random().toString(36).slice(2)}`);
 
 /** A guest's blobs as the statement check takes them, read off the holo the way a checker would. */
-async function blobsOf(bytes) {
-  const app = await load(bytes);
-  const { resolveArchive } = await import('../src/archive.mjs');
-  const { sha256Hex } = await import('../src/sha256.mjs');
-  const { guest, model } = resolveArchive(app.archive);
-  const digests = async (blob) => ({ blake3: blake3Hex(blob.content), sha256: await sha256Hex(blob.content) });
-  return { guest: await digests(guest), model: await digests(model) };
-}
+const blobsOf = async (bytes) => buildDigests(await load(bytes));
 
 // ---- The reference archive replays green.
 
@@ -460,7 +458,7 @@ test('history: prints the acceptance vectors, or writes them with --output', () 
 
 test('run --record writes every dispatch to the file, and that file replays', async () => {
   const record = out('recorded.json');
-  const child = spawn(process.execPath, [bin, 'run', holoPath, '--allow-unverified', '--record', record], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnCli(['run', holoPath, '--allow-unverified', '--record', record]);
   try {
     const url = await new Promise((resolve, reject) => {
       let text = '';

@@ -38,6 +38,7 @@ dispatch.assertComplete(); // ScriptIncompleteError if a listed call never happe
 | `recordHistory(app, run)` | The history of the dispatches `run` makes, refusals included. |
 | `assertReplays(app, histories)` | Replay against the build; `DeterminismViolationError` on a divergence. |
 | `referenceArchive(name)`, `referenceArchives()` | Calculator and Payment Approval with their committed histories, read from the installed `prism-code`'s fixtures. |
+| `runCli`, `spawnCli`, `buildDigests` | Run the installed `prism-code` command line, start it without waiting, and get a build's guest and model digests. The runtime calls a reference-archive test needs (`load`, `fromFile`, `inspect`, `experimental_verify`, the history and replay calls) are re-exported, so such a test imports this package only. |
 | `UnexpectedCallError`, `ScriptIncompleteError`, `TestSetupError` | Typed errors, all `PrismError`s with stable `code`s: `unexpected_call`, `script_incomplete`, `test_setup`. |
 
 `index.d.ts` has the types.

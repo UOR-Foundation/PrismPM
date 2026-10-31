@@ -121,3 +121,9 @@ export interface ReferenceArchive {
 }
 export function referenceArchive(name: string, options?: { directory?: string }): Promise<ReferenceArchive>;
 export function referenceArchives(options?: { directory?: string }): Promise<string[]>;
+
+export { load, inspect, formatInspection, canonicalJson, experimental_verify, historyBytes, historyDigest, acceptanceHistory, experimental_recorder, experimental_replay, REPLAY_PREDICATE_TYPE, DeterminismViolationError, ReplayError, PrismError, blake3Hex, resolveArchive } from 'prism-code';
+export { fromFile } from 'prism-code/node';
+export function runCli(args: string[], options?: { env?: Record<string, string>; input?: string }): { code: number | null; out: string; err: string };
+export function spawnCli(args: string[], options?: { env?: Record<string, string> }): import('node:child_process').ChildProcessWithoutNullStreams;
+export function buildDigests(app: object): Promise<{ guest: { blake3: string; sha256: string }; model: { blake3: string; sha256: string } }>;
