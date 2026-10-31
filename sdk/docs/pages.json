@@ -133,6 +133,10 @@
           "narrative": true
         },
         {
+          "path": "guides/test-your-application",
+          "narrative": true
+        },
+        {
           "path": "guides/ship",
           "narrative": true
         },
