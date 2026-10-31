@@ -18,6 +18,7 @@ import { inspect } from './inspect.mjs';
 import { experimental_verify } from './verify.mjs';
 import { createMiddlewareStack } from './middleware.mjs';
 import { worldPolicy } from './vendor/verify.mjs';
+import { createContainers } from './containers.mjs';
 import * as canonical from './canonical/index.js';
 
 export {
@@ -36,13 +37,31 @@ export {
   SubjectMismatchError,
   AttestationNotFoundError,
   TrustRootError,
+  RegistryError,
+  RegistryAuthError,
+  ReferrersUnsupportedError,
+  ManifestNotFoundError,
+  DigestMismatchError,
+  PullVerificationError,
+  ReferenceInvalidError,
+  ProviderError,
+  ProviderNotFoundError,
+  ProviderReplyError,
+  ProviderFailedError,
+  ExportMismatchError,
   MiddlewareError,
   ERROR_CLASSES,
+  PolicyParseError,
+  PolicyEvaluationError,
+  PolicyDeniedError,
   classForCheck,
   errorForReason,
   errorFromVerdict,
+  EXIT_CODES,
+  exitCodeFor,
 } from './errors.mjs';
 export { experimental_verify, experimental_createClient, MINIMUM_LEVEL_ENV } from './verify.mjs';
+export { CONTAINER_SCHEMA, memoryContainerStore } from './containers.mjs';
 export { parseArchive, resolveArchive, canonicalJson } from './archive.mjs';
 export { decodeHoloview, encodeHoloview } from './view.mjs';
 export { compileGuest, runGuest, runAcceptance } from './core.mjs';
@@ -55,6 +74,7 @@ export {
   lintManifest,
   mergeOverlay,
   manifestCapabilities,
+  manifestProviders,
   resolveVariables,
   MANIFEST_FILE,
   MANIFEST_TARGETS,
@@ -315,6 +335,18 @@ export async function load(source, options = {}) {
   }
   fail('load.source', 'load() takes bytes, a Blob, a path or a URL');
 }
+
+/**
+ * A client with containers of its own (issue #348). `options.store` keeps the
+ * records, in memory unless given; `options.warn` receives the warning of an
+ * unverified run, `console.warn` unless given.
+ */
+export function createPrism(options = {}) {
+  return Object.freeze({ containers: createContainers({ load, ...options }) });
+}
+
+/** The default client: `prism.containers.run(image, input)`. Its records live in memory until removed. */
+export const prism = createPrism();
 
 // 0.1.0 compatibility: the canonicalization API stays at `prism-code/canonical`.
 // These top-level re-exports are deprecated and will be removed in 0.3.0.
