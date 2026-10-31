@@ -50,10 +50,13 @@ jobs:
       matrix:
         part: [source, gates, conformance, ho-oc, st-sy, dk-0-1, dk-2, dk-3]
     steps:
-      # A full gate 6 otherwise exhausts the hosted runner disk (ENOSPC).
+      # A full gate 6 otherwise exhausts the hosted runner disk (ENOSPC). The conformance part
+      # drops from 107 GiB free to under 10 GiB by OC-10, whose capture requires 10 GiB.
       - name: Free runner disk
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /usr/local/julia* /opt/az /opt/microsoft \
+            /usr/lib/jvm /usr/share/miniconda /usr/local/share/powershell
           df -h /
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
