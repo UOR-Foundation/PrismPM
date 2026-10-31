@@ -195,12 +195,11 @@ pub(crate) enum SigningKey {
     Ed25519(ed25519_dalek::SigningKey),
 }
 
-
 impl SigningKey {
     /// Read an unencrypted PKCS#8 (`PRIVATE KEY`) or SEC1 (`EC PRIVATE KEY`) PEM.
     pub(crate) fn from_pem(text: &str) -> Result<Self, String> {
+        // The same `pkcs8` trait serves both curves.
         use ed25519_dalek::pkcs8::DecodePrivateKey as _;
-        use p256::pkcs8::DecodePrivateKey as _;
         if text.contains("-----BEGIN EC PRIVATE KEY-----") {
             return p256::SecretKey::from_sec1_pem(text)
                 .map(|secret| Self::P256(p256::ecdsa::SigningKey::from(&secret)))

@@ -462,11 +462,7 @@ fn check_kind(
                 return problem("the logged digest is not the digest of what this bundle signed");
             }
             let logged = safe_base64(record.pointer("/signature/content"));
-            if !facts
-                .signatures
-                .iter()
-                .any(|signature| *signature == logged)
-            {
+            if !facts.signatures.contains(&logged) {
                 return problem("the logged signature is not this bundle's signature");
             }
             let verifier = record

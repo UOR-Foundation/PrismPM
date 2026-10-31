@@ -241,29 +241,6 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// The ECDSA signature `SEQUENCE { r, s }` as the fixed-width `r || s`.
-pub(crate) fn ecdsa_to_raw(der: &[u8], size: usize) -> DerResult<Vec<u8>> {
-    let sequence = expect(Some(&parse(der, 0)?), 0x30, "ECDSA signature")?;
-    let integers = children(&sequence)?;
-    if integers.len() != 2 {
-        return Err("ECDSA signature is not two integers".to_owned());
-    }
-    let mut out = vec![0; size * 2];
-    for (index, integer) in integers.iter().enumerate() {
-        expect(Some(integer), 0x02, "ECDSA integer")?;
-        let mut body = integer.body;
-        while body.len() > size && body[0] == 0 {
-            body = &body[1..];
-        }
-        if body.len() > size {
-            return Err("ECDSA integer is too wide for the curve".to_owned());
-        }
-        let at = index * size + (size - body.len());
-        out[at..at + body.len()].copy_from_slice(body);
-    }
-    Ok(out)
-}
-
 /// A PEM block's DER bytes. The label is checked when given.
 pub(crate) fn pem_to_der(text: &str, label: Option<&str>) -> Option<Vec<u8>> {
     let begin = text.find("-----BEGIN ")?;

@@ -136,10 +136,7 @@ fn chain_problem_at(
             reason = "a certificate signature does not verify under the pinned issuer".to_owned();
             continue;
         }
-        match chain_problem_at(issuer, pool, at, depth + 1) {
-            None => return None,
-            Some(above) => reason = above,
-        }
+        reason = chain_problem_at(issuer, pool, at, depth + 1)?;
     }
     Some(reason)
 }

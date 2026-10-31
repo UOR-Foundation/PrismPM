@@ -1,9 +1,9 @@
 //! A pinned Sigstore trusted root (`trusted_root.json`), read and normalised.
 //! The caller pins it; nothing is fetched.
 
+use super::base64_any;
 use super::certificate::{parse_certificate, Certificate};
 use super::clock::parse_rfc3339;
-use super::base64_any;
 use serde_json::Value;
 
 #[derive(Debug, Clone, Copy)]
