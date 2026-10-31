@@ -3027,7 +3027,7 @@ fn verify_rp_04(root: &Path) {
         1,
         "the main-push workflow must run each verification part exactly once"
     );
-    assert!(workflow.contains("part: [source, conformance, browser, browser-2]"));
+    assert!(workflow.contains("part: [source, conformance, browser]"));
     assert!(workflow.contains("node scripts/vv-assemble.mjs"));
 }
 

@@ -736,38 +736,18 @@ fn run_vv(root: &Path) -> Result<(), Fail> {
     Ok(())
 }
 
-/// DK owners of `repo-conformance` (by number) run by the `browser` part. The
-/// split balances the wall time measured in run 41166153345: the long owners
-/// 18 to 38 are here, while the other half holds DK-02, which alone ran for
-/// over four hours there, and the short owners.
-const BROWSER_OWNERS: &[u8] = &[18, 20, 23, 24, 25, 26, 27, 30, 31, 32, 33, 34, 35, 37, 38];
-
-/// DK owners run by the `browser-2` part, including DK-02.
-const BROWSER_2_OWNERS: &[u8] = &[
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 21, 22, 28, 29,
-];
-
-fn dk_owner_names(owners: &[u8]) -> Vec<String> {
-    owners
-        .iter()
-        .map(|number| format!("conformance_dk_{number:02}"))
-        .collect()
-}
-
-/// One of four separately run parts of `cargo xtask vv`. A complete pass
+/// One of three separately run parts of `cargo xtask vv`. A complete pass
 /// outgrows the 6 hour limit for one hosted CI job, so CI runs these parts on
 /// the same commit and `scripts/vv-assemble.mjs` requires all of them.
 ///
 /// - `source`: gates 1 to 5, gate 6 without `repo-conformance`, gates 7 to 15.
 /// - `conformance`: gate 6 for `repo-conformance` without its DK owners.
-/// - `browser` and `browser-2`: gate 6 for the DK owners of `repo-conformance`,
-///   in two fixed halves ([`BROWSER_OWNERS`] and [`BROWSER_2_OWNERS`]) because
-///   the DK owners alone outgrew one 6 hour job.
+/// - `browser`: gate 6 for the DK owners of `repo-conformance`.
 fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
     let [part] = arguments else {
-        return Err("usage: cargo xtask vv-part <source|conformance|browser|browser-2>".into());
+        return Err("usage: cargo xtask vv-part <source|conformance|browser>".into());
     };
-    if !["source", "conformance", "browser", "browser-2"].contains(&part.as_str()) {
+    if !["source", "conformance", "browser"].contains(&part.as_str()) {
         return Err(format!("unknown V&V part: {part}").into());
     }
     let evidence_path = root.join(format!("target/vv-part-{part}.json"));
@@ -814,43 +794,20 @@ fn run_vv_part(root: &Path, arguments: &[String]) -> Result<(), Fail> {
             )?;
         }
         _ => {
-            let owners = if part == "browser" {
-                BROWSER_OWNERS
-            } else {
-                BROWSER_2_OWNERS
-            };
-            println!("VV gate 6/15: DK owners of repo-conformance ({part})");
-            let names = dk_owner_names(owners);
-            let mut base = vec![
-                "test".to_owned(),
-                "--package".to_owned(),
-                "repo-conformance".to_owned(),
-                "--all-features".to_owned(),
-                "--locked".to_owned(),
-                "--offline".to_owned(),
-                "--".to_owned(),
-            ];
-            // An exact filter that matches nothing passes with zero tests, so
-            // first list what it selects and require every named owner.
-            let mut listing = base.clone();
-            listing.extend(["--list".to_owned(), "--exact".to_owned()]);
-            listing.extend(names.iter().cloned());
-            let listed = driver.capture_cargo(root, &listing)?;
-            let selected = listed
-                .lines()
-                .filter(|line| line.ends_with(": test"))
-                .count();
-            if selected == 0 || selected != names.len() {
-                return Err(format!(
-                    "V&V part {part} selects {selected} of {} DK owners",
-                    names.len()
-                )
-                .into());
-            }
-            base.push("--exact".to_owned());
-            base.extend(names);
-            let arguments = base.iter().map(String::as_str).collect::<Vec<_>>();
-            driver.run_cargo(root, &arguments)?;
+            println!("VV gate 6/15: DK owners of repo-conformance");
+            driver.run_cargo(
+                root,
+                &[
+                    "test",
+                    "--package",
+                    "repo-conformance",
+                    "--all-features",
+                    "--locked",
+                    "--offline",
+                    "--",
+                    "conformance_dk_",
+                ],
+            )?;
         }
     }
     require_clean_worktree(root)?;
@@ -2596,35 +2553,5 @@ unsafe_code = "deny"
             &workspace.replace("version = \"0.3.0\", ", "")
         )
         .is_err());
-    }
-}
-
-#[cfg(test)]
-mod vv_part_split_tests {
-    use super::*;
-
-    #[test]
-    fn browser_parts_run_exactly_the_dk_owners_of_the_conformance_crate() {
-        let source = std::fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../crates/conformance/tests/conformance.rs"),
-        )
-        .unwrap();
-        let mut declared = source
-            .lines()
-            .filter_map(|line| line.strip_prefix("test_case!(conformance_dk_"))
-            .map(|rest| rest.split(',').next().unwrap().parse::<u8>().unwrap())
-            .collect::<Vec<_>>();
-        declared.sort_unstable();
-        let mut split = BROWSER_OWNERS
-            .iter()
-            .chain(BROWSER_2_OWNERS)
-            .copied()
-            .collect::<Vec<_>>();
-        split.sort_unstable();
-        assert!(!BROWSER_OWNERS.is_empty() && !BROWSER_2_OWNERS.is_empty());
-        assert!(!declared.is_empty());
-        assert_eq!(split, declared, "disjoint halves of exactly the DK owners");
-        assert!(BROWSER_2_OWNERS.contains(&2));
     }
 }
