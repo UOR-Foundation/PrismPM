@@ -4,9 +4,9 @@ name: dev end to end
 #   offline   the studio in a real browser, in a network namespace with only
 #             loopback, so nothing it asks for from outside can arrive
 #   measure   edit to verdict on Calculator with the real build in the SDK image.
-#             Each edit must beat this run's cold build of the project. The issue's
-#             own bar, the SDK image's rebuild floor, is checked too; it is far looser
-#             (docs/proposals/288-prism-dev.md)
+#             A verdict on new source costs one hermetic build, so the job compares
+#             each edit with this run's own cold build, and holds the time the loop
+#             adds on top of it (docs/proposals/288-prism-dev.md, The floor)
 #
 # It pulls a multi-gigabyte image, so it runs only on changes to the verb. No SDK
 # release exists yet (#194): the image is a development candidate until one does.
@@ -36,8 +36,6 @@ concurrency:
 env:
   # sdk-candidate.yml's build of 1010e48d.
   SDK_IMAGE: ${{ inputs.sdk_image || 'ghcr.io/uor-foundation/prismpm-sdk-candidate@sha256:81e6bc91fffb077608e906cdcdd4047ae45e2d96a5b09382c221387e0b93382b' }}
-  # The fastest of 18 successful sdk-candidate.yml build jobs: 49.7 minutes.
-  FLOOR_SECONDS: '2982'
 
 jobs:
   offline:
@@ -104,4 +102,4 @@ jobs:
             --project "$RUNNER_TEMP/Calculator" \
             --from 'Enter a signed 64-bit integer.' --to 'Enter a signed 64 bit integer.' \
             --edits 4 --chrome "$(command -v google-chrome)" \
-            --floor-seconds "$FLOOR_SECONDS" --under-cold --summary "$GITHUB_STEP_SUMMARY"
+            --cold-factor 1.25 --overhead-seconds 2 --summary "$GITHUB_STEP_SUMMARY"

@@ -102,24 +102,38 @@ The tab and its tests already handle every state.
 
 ### The floor
 
-The issue's bar is edit to verdict "under the SDK image's rebuild floor". No document in the repository defines that floor, so this proposal does.
+The issue's bar is edit to verdict "under the SDK image's rebuild floor". No document in the repository defines that floor. There are two readings, and they give very different numbers.
 
-The floor is the fastest observed rebuild of the SDK image: the wall time of the fastest successful `build` job of `sdk-candidate.yml`.
+**A rebuild of the image.** The fastest of 18 successful `build` jobs of `sdk-candidate.yml` from 2026-10-21 to 2026-10-29 took 49.7 minutes. Any working loop clears that by a factor of forty, so it proves nothing, and it is not a gate.
 
-| Sample | Fastest job | Minutes |
-| --- | --- | --- |
-| 18 successful jobs, 2026-10-21 to 2026-10-29 | `6ebbef86`, arm64 | 49.7 |
-| The 10 of them since 2026-10-26 | `35e9f01d`, amd64 | 79.8 |
+**A rebuild in the image.** This is the floor used here: one `prismpm build` of the project in the SDK image. It is a true floor, because `prismpm build` is hermetic: every run starts from a fresh workspace and a fresh exporter acquisition, and reuses no compiled work. A verdict on new source needs a holo, and a holo costs one build. On Calculator on a standard runner that is about 70 s.
 
-The bar is 2,982 s, the fastest job in the sample. It meets the issue's words and proves little, because almost any loop clears it.
+By this reading, edit to verdict cannot be strictly under the floor, because it contains the floor. Getting under it would take reuse inside `prismpm build`, which must be designed against that build's custody rules, not bypassed from `dev`. So the issue's bar is met only under the first reading, and this proposal says so rather than choosing a number that passes.
 
-So `dev-e2e.yml` gates on a second, tighter bar: every edit, from the save to the verdict in the browser, must beat the same job's cold build of the project. That one fails if the loop stops reusing work between builds.
+`dev-e2e.yml` therefore gates on what `dev` controls, and both limits fail on a real regression:
+
+| Gate | Limit | Why this value | Catches |
+| --- | --- | --- | --- |
+| Time outside the build and check | 2 s per edit | One 1 s scan, the debounce and the page's update, with room for a loaded runner | A slower watcher, state or page |
+| Edit to verdict | 1.25 times this run's cold build | Above the 7% spread of builds seen on one runner, and well below the 2 times of a build that runs twice | A second build, or a build triggering itself |
+
+The cold build is measured in the same job, so the limit moves with the runner and with the build, and the gate needs no number that goes stale.
 
 ### Measured
 
 `sdk/npm/prism-code/scripts/dev-measure.mjs` starts the clock in its own process just before an atomic save, and stops it when a headless browser shows the new digest.
 
-`dev-e2e.yml` runs it on Calculator with the real build in the candidate SDK image, and on the stand-in build inside a network namespace with only loopback. Its step summary is the record for each pull request.
+`dev-e2e.yml` runs it on Calculator with the real build in the candidate SDK image, and on the stand-in build inside a network namespace with only loopback. Its step summary is the record for each pull request. On a standard `ubuntu-24.04` runner, in the run that set these limits:
+
+| Calculator, real build, 4 edits | Seconds |
+| --- | --- |
+| Cold build | 70.72 |
+| Median edit to verdict in the browser | 70.62 |
+| Slowest | 71.11 |
+| Fastest | 66.26 |
+| Most any edit spent outside its build and check | 0.08 |
+| Most any edit spent in `check` | 0.01 |
+
 
 The stand-in build copies the reference archive, so it times the loop alone. On a Windows 11 developer machine with Chrome, over six edits:
 

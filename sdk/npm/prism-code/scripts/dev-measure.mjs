@@ -20,9 +20,10 @@
  *
  *   sudo unshare -n sh -c 'ip link set lo up && node dev-measure.mjs --stand-in --chrome "$(command -v google-chrome)"'
  *
- * Also: --floor-seconds <n> fails the run when an edit takes longer, --under-cold
- * fails it when an edit takes longer than this run's own cold build, --summary
- * <file> appends a Markdown table, and --json prints the whole result.
+ * Also: --cold-factor <x> fails the run when an edit takes longer than x times
+ * this run's own cold build, --overhead-seconds <n> fails it when an edit spends
+ * longer than n outside its build and check, --summary <file> appends a Markdown
+ * table, and --json prints the whole result.
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -41,7 +42,7 @@ writeFileSync('App.holo', bytes);
 `;
 
 function parseArguments(argv) {
-  const flags = new Set(['stand-in', 'json', 'under-cold']);
+  const flags = new Set(['stand-in', 'json']);
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     const name = argv[i].replace(/^--/, '');
@@ -194,7 +195,8 @@ async function main() {
   const to = standIn ? 'model DAMAGE' : options.to;
   const edits = Number(options.edits ?? 4);
   const buildTimeoutMs = Number(options['timeout-seconds'] ?? 1800) * 1000;
-  const floorMs = options['floor-seconds'] === undefined ? null : Number(options['floor-seconds']) * 1000;
+  const coldFactor = options['cold-factor'] === undefined ? null : Number(options['cold-factor']);
+  const overheadLimitMs = options['overhead-seconds'] === undefined ? null : Number(options['overhead-seconds']) * 1000;
   const source = standIn ? join(directory, 'src/App.lex.tex') : fileHolding(directory, from);
 
   const args = [BIN, 'dev', directory, '--no-open', '--port', options.port ?? '0'];
@@ -285,29 +287,33 @@ async function main() {
   }
 
   const times = result.edits.map((record) => record.pageMs ?? record.serverMs).sort((a, b) => a - b);
-  result.editToVerdict = { minMs: times[0], medianMs: times[Math.floor(times.length / 2)], maxMs: times.at(-1), floorMs };
+  // What the loop itself costs: the time of an edit that went to neither the build nor the check.
+  for (const record of result.edits) record.overheadMs = (record.pageMs ?? record.serverMs) - (record.buildMs ?? 0) - (record.checkMs ?? 0);
+  const overheads = result.edits.map((record) => record.overheadMs);
+  const coldLimitMs = coldFactor === null ? null : result.cold.buildMs * coldFactor;
+  result.editToVerdict = { minMs: times[0], medianMs: times[Math.floor(times.length / 2)], maxMs: times.at(-1), coldBuildMs: result.cold.buildMs, coldLimitMs, maxOverheadMs: Math.max(...overheads), overheadLimitMs };
   const seconds = (ms) => (ms === null || ms === undefined ? '' : (ms / 1000).toFixed(2));
   const table = [
     `### \`prism-code dev\` edit to verdict${standIn ? ', stand-in build (the loop alone)' : ''}`,
     '',
     `Cold first build ${seconds(result.cold.buildMs)} s. Clock stops when ${browser ? 'the browser shows' : 'the studio state holds'} the verdict.`,
     '',
-    '| Edit | Edit to verdict (s) | Build (s) | Check (s) | Verdict digest |',
-    '| --- | --- | --- | --- | --- |',
-    ...result.edits.map((record) => `| ${record.edit} | ${seconds(record.pageMs ?? record.serverMs)} | ${seconds(record.buildMs)} | ${seconds(record.checkMs)} | \`${(record.digest ?? '').slice(0, 19)}\` |`),
+    '| Edit | Edit to verdict (s) | Build (s) | Check (s) | Loop (s) | Verdict digest |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...result.edits.map((record) => `| ${record.edit} | ${seconds(record.pageMs ?? record.serverMs)} | ${seconds(record.buildMs)} | ${seconds(record.checkMs)} | ${seconds(record.overheadMs)} | \`${(record.digest ?? '').slice(0, 19)}\` |`),
     '',
-    `Median ${seconds(result.editToVerdict.medianMs)} s, slowest ${seconds(result.editToVerdict.maxMs)} s${floorMs === null ? '' : `, floor ${seconds(floorMs)} s`}.`,
+    `Median ${seconds(result.editToVerdict.medianMs)} s, slowest ${seconds(result.editToVerdict.maxMs)} s, slowest loop ${seconds(result.editToVerdict.maxOverheadMs)} s.${coldLimitMs === null ? '' : ` Limit ${seconds(coldLimitMs)} s, ${coldFactor} times the cold build.`}`,
     ...(result.browser ? ['', `The browser made ${result.browser.requests} requests, all to the studio's origin: ${result.browser.distinct.map((request) => new URL(request).pathname).filter((path, index, all) => all.indexOf(path) === index).join(', ')}. Replay tab: ${result.browser.replay}.`] : []),
     '',
   ].join('\n');
   if (options.summary) appendFileSync(options.summary, table);
   process.stdout.write(options.json ? `${JSON.stringify(result, null, 2)}\n` : table);
-  if (floorMs !== null && result.editToVerdict.maxMs >= floorMs) {
-    process.stderr.write(`the slowest edit took ${seconds(result.editToVerdict.maxMs)} s, not under the floor of ${seconds(floorMs)} s\n`);
+  if (coldLimitMs !== null && result.editToVerdict.maxMs > coldLimitMs) {
+    process.stderr.write(`the slowest edit took ${seconds(result.editToVerdict.maxMs)} s, over ${coldFactor} times this run's cold build of ${seconds(result.cold.buildMs)} s\n`);
     return 1;
   }
-  if (options['under-cold'] === true && result.editToVerdict.maxMs >= result.cold.buildMs) {
-    process.stderr.write(`the slowest edit took ${seconds(result.editToVerdict.maxMs)} s, not under this run's cold build of ${seconds(result.cold.buildMs)} s\n`);
+  if (overheadLimitMs !== null && result.editToVerdict.maxOverheadMs > overheadLimitMs) {
+    process.stderr.write(`an edit spent ${seconds(result.editToVerdict.maxOverheadMs)} s outside its build and check, over the limit of ${seconds(overheadLimitMs)} s\n`);
     return 1;
   }
   return 0;
