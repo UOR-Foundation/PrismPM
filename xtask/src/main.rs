@@ -1103,6 +1103,10 @@ fn application_outputs(
     for field in PROVENANCE_ACCEPTANCE_FIELDS {
         fields.remove(field);
     }
+    // `browser_timing` (#392) is a per-run measurement, not provenance and not
+    // acceptance: two verifications of the same application never agree on
+    // it. Verification compares the same projection (`comparable_acceptance`).
+    fields.remove("browser_timing");
     outputs.insert(
         "application-acceptance.json".to_owned(),
         serde_json::to_vec(&masked)?,
