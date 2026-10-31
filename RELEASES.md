@@ -13,6 +13,7 @@ Each package has its own version and its own tag.
 | `@prism-code/spec` | `prism-code-spec-vX.Y.Z` |
 | `@prism-code/verify` | `prism-code-verify-vX.Y.Z` |
 | `create-prism-code` | `create-prism-code-vX.Y.Z` |
+| `@prism-code/conformance` | `prism-code-conformance-vX.Y.Z` |
 
 ## How a release is cut
 
@@ -21,7 +22,8 @@ Each package has its own version and its own tag.
 3. Automation creates the tag and the GitHub Release. The release body is the changelog entry.
 4. A maintainer publishes from the tag.
 
-Nobody edits a changelog by hand. Each entry is written from the commit subjects, so a pull request title is a line of the changelog.
+Nobody has to edit a changelog by hand. Each entry is written from the commit subjects, so a pull request title is a line of the changelog.
+A longer note can go under `## [Unreleased]`, and the release pull request folds it into the new entry.
 [docs/proposals/303-release-automation.md](docs/proposals/303-release-automation.md) has the details.
 
 ## Who may cut a release

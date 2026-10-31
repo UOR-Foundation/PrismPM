@@ -30,7 +30,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { Errors, GitHub, Manifest, setLogger } from 'release-please';
-import { entryFor, normalizeNewestEntry, releaseEntryProblems, LEGACY_THROUGH } from '../../sdk/docs/lib/changelog.mjs';
+import { entryFor, finishReleaseEntry, releaseEntryProblems, LEGACY_THROUGH } from '../../sdk/docs/lib/changelog.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const QUIET = { error() {}, warn() {}, info() {}, debug() {}, trace() {} };
@@ -103,7 +103,7 @@ export async function dryRun(options) {
       const update = candidate.updates.find((u) => u.path === changelog);
       const before = existsSync(join(ROOT, changelog)) ? readFileSync(join(ROOT, changelog), 'utf8').replaceAll('\r\n', '\n') : '';
       const written = update ? update.updater.updateContent(before) : before;
-      const normalized = normalizeNewestEntry(written);
+      const normalized = finishReleaseEntry(written);
       const legacy = release.path === '.' ? LEGACY_THROUGH : '0.0.0';
       results.push({
         path: release.path,

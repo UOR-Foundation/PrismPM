@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { HEADERS } from '../lib/changelog.mjs';
 import { ROOT } from '../lib/spec.mjs';
@@ -36,6 +36,20 @@ test('the manifest and the config name the same packages, and each exists', () =
   }
 });
 
+test('every npm package is released, and the manifest holds the versions the packages declare', () => {
+  for (const name of readdirSync(join(ROOT, 'sdk/npm'))) {
+    if (!existsSync(join(ROOT, 'sdk/npm', name, 'package.json'))) continue;
+    const path = `sdk/npm/${name}`;
+    assert.ok(config.packages[path], `${path} is not in release-please-config.json`);
+    assert.equal(manifest[path], JSON.parse(read(`${path}/package.json`)).version, path);
+  }
+  assert.equal(manifest['.'], /^version = "(.+)"$/m.exec(read('Cargo.toml'))[1]);
+});
+
+test('release-please reads history only back to the 0.4.0 preparation commit while a package has no tag', () => {
+  assert.equal(config['bootstrap-sha'], '2e44eed0a426c0e6b0d513e161358c059a9e26db');
+});
+
 test('the root tag stays v<version>, which release.yml reads, and npm tags carry the component', () => {
   assert.equal(config['include-v-in-tag'], true);
   assert.equal(config.packages['.']['include-component-in-tag'], false);
@@ -69,6 +83,10 @@ test('the open-pr job never tags, and leaves each pull request passing the chang
   const openPr = uncommented(job('open-pr'));
   assert.match(openPr, /skip-github-release: true/);
   assert.match(openPr, /changelog\.mjs --normalize/);
+  assert.match(openPr, /--depth=2/);
+  assert.ok(openPr.indexOf('git/ref/tags/') < openPr.indexOf('release-please-action'), 'the tag check runs before release-please');
+  assert.match(openPr, /"v\$\(jq -r '\."\."' \.release-please-manifest\.json\)"/);
+  assert.match(openPr, /"prism-code-v\$\(jq -r/);
   assert.match(openPr, /cargo update --workspace/);
   assert.match(openPr, /node sdk\/docs\/changelog\.mjs\n/);
 });

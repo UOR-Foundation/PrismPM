@@ -1,7 +1,8 @@
 {
-  ".": "0.3.0",
-  "sdk/npm/prism-code": "0.2.0",
+  ".": "0.4.0",
+  "sdk/npm/prism-code": "0.3.0",
   "sdk/npm/spec": "0.1.0",
   "sdk/npm/verify": "0.1.0",
-  "sdk/npm/create-prism-code": "0.1.0"
+  "sdk/npm/create-prism-code": "0.1.0",
+  "sdk/npm/conformance": "0.1.0"
 }

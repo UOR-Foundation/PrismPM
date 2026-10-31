@@ -1,5 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "2e44eed0a426c0e6b0d513e161358c059a9e26db",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
   "include-v-in-tag": true,
@@ -32,6 +33,7 @@
     "sdk/npm/prism-code": { "release-type": "node", "component": "prism-code" },
     "sdk/npm/spec": { "release-type": "node", "component": "prism-code-spec" },
     "sdk/npm/verify": { "release-type": "node", "component": "prism-code-verify" },
-    "sdk/npm/create-prism-code": { "release-type": "node", "component": "create-prism-code" }
+    "sdk/npm/create-prism-code": { "release-type": "node", "component": "create-prism-code" },
+    "sdk/npm/conformance": { "release-type": "node", "component": "prism-code-conformance" }
   }
 }

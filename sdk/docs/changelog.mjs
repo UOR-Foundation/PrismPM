@@ -7,9 +7,9 @@
  *   node sdk/docs/changelog.mjs            check CHANGELOG.md at the repository root and
  *                                          every sdk/npm/<package>/CHANGELOG.md that exists
  *   node sdk/docs/changelog.mjs <path>...  check these files
- *   node sdk/docs/changelog.mjs --normalize [<path>...]
- *                                          rewrite the newest entry of each to the four
- *                                          headers, for a release pull request, then exit
+ *   node sdk/docs/changelog.mjs --normalize <path>...
+ *                                          finish a changelog whose newest entry release-please
+ *                                          just wrote: fold in Unreleased and use the four headers
  *
  * The root changelog's 0.1.0 entry predates the rule (see lib/changelog.mjs). The
  * package changelogs under sdk/npm/ are written by release-please and have none.
@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LEGACY_THROUGH, normalizeNewestEntry, releaseEntryProblems } from './lib/changelog.mjs';
+import { LEGACY_THROUGH, finishReleaseEntry, releaseEntryProblems } from './lib/changelog.mjs';
 import { ROOT } from './lib/spec.mjs';
 
 const NPM = join(ROOT, 'sdk', 'npm');
@@ -37,12 +37,16 @@ function check(file) {
 function main(argv) {
   const normalize = argv[0] === '--normalize';
   const paths = normalize ? argv.slice(1) : argv;
+  if (normalize && !paths.length) {
+    console.error('--normalize needs the changelogs whose newest entry was just written');
+    return 2;
+  }
   const files = paths.length ? paths.map((a) => resolve(process.cwd(), a)) : defaultTargets();
   if (normalize) {
     for (const file of files) {
       const text = readFileSync(file, 'utf8');
-      const normalized = normalizeNewestEntry(text);
-      if (normalized !== text) writeFileSync(file, normalized);
+      const finished = finishReleaseEntry(text);
+      if (finished !== text) writeFileSync(file, finished);
     }
     return 0;
   }

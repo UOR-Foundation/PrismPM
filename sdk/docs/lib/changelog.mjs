@@ -116,7 +116,7 @@ function newestEntryLines(lines) {
  * `### ⚠ BREAKING CHANGES` and writes nothing when there are none, so this renames
  * and moves that section, or adds `### Breaking Changes` with `None.`. It touches
  * only the newest released entry, changes no bullet, and returns an entry that
- * already has the shape byte for byte.
+ * already has the shape byte for byte. Two sections with one name become one.
  */
 export function normalizeNewestEntry(text) {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
@@ -126,25 +126,75 @@ export function normalizeNewestEntry(text) {
 
   const preamble = [];
   const sections = [];
+  let current = preamble;
+  let repeated = false;
   for (const line of lines.slice(range.start + 1, range.end)) {
     const heading = /^### (.+?)\s*$/.exec(line);
-    if (heading) sections.push({ name: /breaking/i.test(heading[1]) ? 'Breaking Changes' : heading[1], written: heading[1], body: [] });
-    else (sections.at(-1)?.body ?? preamble).push(line);
+    if (!heading) {
+      current.push(line);
+      continue;
+    }
+    const name = /breaking/i.test(heading[1]) ? 'Breaking Changes' : heading[1];
+    const existing = sections.find((s) => s.name === name);
+    repeated ||= Boolean(existing);
+    const section = existing ?? { name, written: heading[1], body: [] };
+    if (existing) section.body.push('');
+    else sections.push(section);
+    current = section.body;
   }
   const known = sections.filter((s) => HEADERS.includes(s.name));
   const ordered = known.every((s, i) => i === 0 || HEADERS.indexOf(s.name) > HEADERS.indexOf(known[i - 1].name));
   const hasBreaking = sections.some((s) => s.name === 'Breaking Changes');
-  if (ordered && hasBreaking && sections.every((s) => s.name === s.written)) return text;
+  if (ordered && hasBreaking && !repeated && sections.every((s) => s.name === s.written)) return text;
 
   if (!hasBreaking) sections.push({ name: 'Breaking Changes', written: 'Breaking Changes', body: ['None.'] });
   const rank = (s) => (HEADERS.includes(s.name) ? HEADERS.indexOf(s.name) : HEADERS.length);
   const rebuilt = [...sections].sort((a, b) => rank(a) - rank(b)).flatMap((s) => {
-    const body = s.body.join('\n').trim();
+    const body = s.body.join('\n').trim().replace(/\n{3,}/g, '\n\n');
     return [`### ${s.name}`, '', ...(body ? [...body.split('\n'), ''] : [])];
   });
   const head = preamble.join('\n').trim();
   const entry = [lines[range.start], '', ...(head ? [...head.split('\n'), ''] : []), ...rebuilt];
   return [...lines.slice(0, range.start), ...entry, ...lines.slice(range.end)].join(eol);
+}
+
+/**
+ * Moves what `## [Unreleased]` holds into the newest released entry, and removes the
+ * section. release-please inserts its entry above `## [Unreleased]` and leaves that
+ * section alone, so hand-written notes would otherwise stay there, unreleased, after they
+ * shipped. Call this only on a changelog whose newest entry was just written.
+ */
+export function foldUnreleased(text) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => ENTRY.exec(line)?.[1] === 'Unreleased');
+  const range = newestEntryLines(lines);
+  if (start === -1 || !range) return text;
+  const next = lines.findIndex((line, index) => index > start && /^## /.test(line));
+  const end = next === -1 ? lines.length : next;
+
+  const sections = [{ name: 'Other Changes', body: [] }];
+  for (const line of lines.slice(start + 1, end)) {
+    const heading = /^### (.+?)\s*$/.exec(line);
+    if (heading) sections.push({ name: heading[1], body: [] });
+    else sections.at(-1).body.push(line);
+  }
+  const notes = sections.flatMap(({ name, body }) => {
+    const note = body.join('\n').trim();
+    return !note || /^none\.?$/i.test(note) ? [] : [`### ${name}`, '', ...note.split('\n'), ''];
+  });
+  const folded = [];
+  lines.forEach((line, index) => {
+    if (index === range.end) folded.push(...notes);
+    if (index < start || index >= end) folded.push(line);
+  });
+  if (range.end === lines.length) folded.push(...notes);
+  return folded.join(eol);
+}
+
+/** A changelog whose newest entry release-please just wrote, as it should be committed. */
+export function finishReleaseEntry(text) {
+  return normalizeNewestEntry(foldUnreleased(text));
 }
 
 /**

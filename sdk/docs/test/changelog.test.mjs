@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { entryFor, normalizeNewestEntry, parseChangelog, releaseEntryProblems as problemsWith, LEGACY_THROUGH } from '../lib/changelog.mjs';
+import { entryFor, finishReleaseEntry, foldUnreleased, normalizeNewestEntry, parseChangelog, releaseEntryProblems as problemsWith, LEGACY_THROUGH } from '../lib/changelog.mjs';
 import { ROOT } from '../lib/spec.mjs';
 
 const command = fileURLToPath(new URL('../changelog.mjs', import.meta.url));
@@ -142,6 +142,41 @@ test('the command normalizes a file in place', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('a release folds Unreleased into the new entry, under the matching headers', () => {
+  const unreleased = '## [Unreleased]\n\n### Features Added\n- A long note.\n\n### Breaking Changes\nNone.\n\n### Bugs Fixed\n- Another note.\n\n';
+  const entry041 = `${HEADING.replaceAll('0.5.0', '0.4.1')}\n\n### Bugs Fixed\n\n* a fix\n\n`;
+  // release-please inserts above Unreleased; the other order is what a hand-cut entry would have.
+  const written = `# Changelog\n\n## Policy\n\n### Compatibility\n- Kept.\n\n${entry041}${unreleased}${LEGACY}`;
+  const finished = finishReleaseEntry(written);
+  assert.equal(finishReleaseEntry(`# Changelog\n\n## Policy\n\n### Compatibility\n- Kept.\n\n${unreleased}${entry041}${LEGACY}`), finished);
+  assert.deepEqual(releaseEntryProblems(finished), []);
+  assert.doesNotMatch(finished, /Unreleased/);
+  const [entry] = parseChangelog(finished);
+  assert.equal(entry.version, '0.4.1');
+  assert.deepEqual(entry.sections.map((s) => s.name), ['Features Added', 'Breaking Changes', 'Bugs Fixed']);
+  assert.match(finished, /### Features Added\n\n- A long note\.\n\n### Breaking Changes\n\nNone\.\n\n### Bugs Fixed\n\n\* a fix\n\n- Another note\.\n\n## \[0\.4\.0\]/);
+  assert.ok(finished.includes('## Policy\n\n### Compatibility\n- Kept.\n\n## [0.4.1]'), 'the policy stays, and no blank run is left');
+  assert.ok(finished.endsWith(LEGACY), 'older entries are untouched');
+  assert.equal(finishReleaseEntry(finished), finished);
+});
+
+test('a breaking note under Unreleased reaches the check, which then holds the bump to a minor', () => {
+  const written = `${HEADING.replaceAll('0.5.0', '0.4.1')}\n\n### Bugs Fixed\n\n* a fix\n\n## [Unreleased]\n\n### Breaking Changes\n- A break.\n\n${LEGACY}`;
+  assert.match(messages(finishReleaseEntry(written)).join(), /lists breaking changes, so before 1\.0 it must be a minor bump/);
+});
+
+test('folding needs both an Unreleased section and a released entry, and keeps line endings', () => {
+  assert.equal(foldUnreleased(LEGACY), LEGACY);
+  assert.equal(foldUnreleased('## [Unreleased]\n\n- Soon.\n'), '## [Unreleased]\n\n- Soon.\n');
+  const crlf = `## [Unreleased]\n\n### Bugs Fixed\n- Note.\n\n${LEGACY}`.replaceAll('\n', '\r\n');
+  assert.ok(foldUnreleased(crlf).split('\r\n').includes('- Note.'));
+  assert.doesNotMatch(foldUnreleased(crlf).replaceAll('\r\n', ''), /\n/);
+});
+
+test('--normalize names what it rewrites: it never picks files, since folding is only right on a new entry', () => {
+  assert.equal(spawnSync(process.execPath, [command, '--normalize'], { encoding: 'utf8' }).status, 2);
 });
 
 test('the release body is one version entry with its heading', () => {

@@ -38,13 +38,14 @@ The 0.1.0 entry keeps the Keep a Changelog headers it was published with (`LEGAC
 `release-check` reads the dated 0.4.0 entry and the `### Compatibility` policy, which sits above the entries.
 
 release-please writes a `⚠ BREAKING CHANGES` heading first, and nothing at all when a release breaks nothing.
-`node sdk/docs/changelog.mjs --normalize` fixes both, and the workflow runs it on each release pull request, so nobody edits the entry.
+`node sdk/docs/changelog.mjs --normalize <path>` fixes both and folds in `## [Unreleased]`, and the workflow runs it on each release pull request, so nobody edits the entry.
+If a note under `## [Unreleased]` lists a breaking change that no commit marked with `!`, the check refuses the patch bump. Set `release-as` for that package to the minor, and remove it once the tag exists.
 
 ## Cutting a release
 
 [RELEASES.md](../../RELEASES.md) has the policy, and [the proposal](../proposals/303-release-automation.md) has the full flow.
 
-1. Run the `release-please` workflow from the Actions tab, with mode `open-pr`. It opens a release pull request per package that has releasable commits, and normalizes the entry and updates `Cargo.lock` on each branch: release-please edits the workspace version in `Cargo.toml` but cannot edit the package array of `Cargo.lock`.
+1. Run the `release-please` workflow from the Actions tab, with mode `open-pr`. It refuses until `v<version>` and `prism-code-v<version>` exist for the versions in the manifest. Then it opens a release pull request per package that has releasable commits, and on each branch folds `## [Unreleased]` into the new entry, normalizes the entry and updates `Cargo.lock`: release-please edits the workspace version in `Cargo.toml` but cannot edit the package array of `Cargo.lock`.
 2. For a root release, make the release's own preparation changes first. `release-check` and `release.yml` name the version they release (`0.4.0` today), so each root release still needs a preparation pull request.
 3. Review and merge the release pull request. Its `tag` job creates the tag and the GitHub Release, with the changelog entry as the body.
 4. Publish. The new tag started no workflow, so for npm run `gh workflow run npm-prism-code.yml --ref prism-code-vX.Y.Z`. `release.yml` publishes the crates and the images, and cannot publish a root version other than `0.4.0` until the preparation in step 2 is done.
