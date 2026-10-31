@@ -19,6 +19,10 @@ packages, which need Node 22.22.2 or newer; nothing else loads them.
 npm install prism-code
 ```
 
+## Write from examples (experimental)
+
+`prism-code build --unstable-author` has an agent write `model/` from `examples/`, `intent.md` and `types/`. The toolchain, the kernel and the examples gate the build, and an unchanged spec never calls the agent again. `prism-code check <holo> --unstable-author` proves a holo came from its spec. See `docs/proposals/325-authoring-front-door.md`.
+
 ## Three calls
 
 ```js

@@ -90,8 +90,8 @@ The Verification API ships in v0.5 as Experimental, issue [#277](https://github.
 Pin the exact version if you use any surface in this section.
 Each moves up one tier at the v0.6 feature freeze ([#291](https://github.com/UOR-Foundation/PrismPM/issues/291)) and is Stable at 1.0 ([#306](https://github.com/UOR-Foundation/PrismPM/issues/306)).
 
-The CLI has no `--unstable-<feature>` flag yet.
-Until it has, this list is the marker: every verb and flag below is Experimental whether or not it carries the prefix.
+The CLI has one `--unstable-<feature>` flag so far, `--unstable-author`.
+For the rest, this list is the marker: every verb and flag below is Experimental whether or not it carries the prefix.
 A flag marked planned is named here so you can plan for it; its spelling may change before it ships.
 
 ### 6.1 CLI verbs and flags
@@ -122,6 +122,7 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | `prism-code providers <up\|down> [<dir>]`, `--target <browser\|node>`, `--json`; the `prism-provider-kv` binary, its flags and file layout | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) | On main |
 | The provider wire protocol: `prism-provider-<type>` on the PATH, its arguments, the `info`, `debug`, `error` and `setenv` messages, `PRISM_PROVIDER_MESSAGES`; the `provider-` prefix reserved from plugin names | [#294](https://github.com/UOR-Foundation/PrismPM/issues/294) | On main |
 | The `prism.toml` manifest and its `prism.browser.toml` and `prism.node.toml` overlays, read by the Rust CLI | [#280](https://github.com/UOR-Foundation/PrismPM/issues/280) | Planned |
+| `prism-code build --unstable-author`, `--check`, `--no-cache`, `--project`, `--author-command`, `--author-model`, `--author-timeout`, `--author-max-tokens`, `--max-iterations`; `prism-code check <holo> --unstable-author`, `--project`, `--reference`; `intent.md` and `examples/` formats; the `authoring` member of `prismpm/sdk-lock/3`; `prism/author-request/1` and `prism/author-response/1` | [#325](https://github.com/UOR-Foundation/PrismPM/issues/325) | On main |
 | `attest --predicate <file> --type <uri>` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 | `verify --certificate-identity`, `--certificate-oidc-issuer`, `--key` in the Rust CLI | [#272](https://github.com/UOR-Foundation/PrismPM/issues/272) | Planned |
 

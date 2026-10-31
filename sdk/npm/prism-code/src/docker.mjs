@@ -4,6 +4,8 @@
  * UOR-Foundation/template's `bootstrap.yml` uses, minus the Docker socket and
  * Buildx lines, which only `build` needs. Pure functions here; `bin/` spawns.
  */
+import { statSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { fail } from './errors.mjs';
 
 /** The template's admission test for an immutable SDK image reference. */
@@ -60,6 +62,25 @@ export function dockerArguments({
   if (build) out.push('--env', `SDK_IMAGE=${image}`);
   out.push(image, 'prismpm', command, ...args);
   return out;
+}
+
+/** `dockerArguments` with this host's user and Docker socket group, as every delegated command runs. */
+export function hostDockerArguments({ image, cwd, command, args = [] }) {
+  const { build = false } = DELEGATED[command] ?? {};
+  let dockerSocketGid = null;
+  let uid = null;
+  let gid = null;
+  if (process.platform !== 'win32') {
+    ({ uid, gid } = userInfo());
+    if (build) {
+      try {
+        dockerSocketGid = statSync('/var/run/docker.sock').gid;
+      } catch {
+        dockerSocketGid = null;
+      }
+    }
+  }
+  return dockerArguments({ image, cwd, command, args, uid, gid, build, dockerSocketGid });
 }
 
 /** Commands this CLI delegates to the image, and whether they need the Docker socket. */

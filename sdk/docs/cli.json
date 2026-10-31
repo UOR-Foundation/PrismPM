@@ -87,7 +87,12 @@
         { "flag": "--no-provenance", "default": "off", "meaning": "Skip provenance. Unsafe: the holo cannot pass `check` above P0." },
         { "flag": "--no-cache", "default": "off", "meaning": "Rebuild even when the spec digest is unchanged." },
         { "flag": "--target <browser|node>", "default": "none", "meaning": "Apply the matching overlay, `prism.browser.toml` or `prism.node.toml`." },
-        { "flag": "--max-iterations <n>", "default": "10", "meaning": "How many times the agent may revise the model before the build fails." }
+        { "flag": "--max-iterations <n>", "default": "10", "meaning": "How many times the agent may revise the model before the build fails." },
+        { "flag": "--author-model <id>", "default": "the lockfile's, then claude-opus-5-5", "meaning": "The model id to pin in the lockfile when the agent runs. It changes nothing while the spec digest is unchanged." },
+        { "flag": "--author-command <path>", "default": "the bundled adapter", "meaning": "The agent process: one request document on stdin, one response document on stdout." },
+        { "flag": "--author-timeout <seconds>", "default": "600", "meaning": "How long one attempt may take." },
+        { "flag": "--author-max-tokens <n>", "default": "2000000", "meaning": "Stop after this many tokens across attempts." },
+        { "flag": "--project <dir>", "default": ".", "meaning": "The project to author." }
       ],
       "example": "prism build"
     },
