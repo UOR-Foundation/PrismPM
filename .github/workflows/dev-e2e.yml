@@ -3,7 +3,7 @@ name: dev end to end
 # Issue #288's acceptance, measured on a clean runner:
 #   offline   the studio in a real browser, in a network namespace with only
 #             loopback, so nothing it asks for from outside can arrive
-#   measure   edit to verdict on Calculator with the real build in the SDK image.
+#   measure   edit to verdict on each reference archive with the real build in the SDK image.
 #             A verdict on new source costs one hermetic build, so the job compares
 #             each edit with this run's own cold build, and holds the time the loop
 #             adds on top of it (docs/proposals/288-prism-dev.md, The floor)
@@ -64,9 +64,20 @@ jobs:
           '
 
   measure:
-    name: edit to verdict on Calculator, real build
+    name: edit to verdict on ${{ matrix.project }}, real build
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Each edit is to text no theorem or acceptance vector reads, so the build still succeeds.
+          - project: Calculator
+            from: Enter a signed 64-bit integer.
+            to: Enter a signed 64 bit integer.
+          - project: PaymentApproval
+            from: a payment approval decision over a requester role
+            to: a payment approval decision over the requester's role
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -84,22 +95,28 @@ jobs:
         run: echo "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
       - name: Cache the SDK image (not timed)
         run: docker pull "$SDK_IMAGE"
-      - name: Bind a copy of Calculator to the image
+      - name: Bind a copy of the project to the image
         shell: bash
+        env:
+          PROJECT: ${{ matrix.project }}
         run: |
           set -euo pipefail
-          work="$RUNNER_TEMP/Calculator"
-          cp -a examples/Calculator "$work"
+          work="$RUNNER_TEMP/$PROJECT"
+          cp -a "examples/$PROJECT" "$work"
           cd "$work"
           docker run --rm --network none --entrypoint cat "$SDK_IMAGE" /opt/prismpm/share/standards.lock > standards.lock
           docker run --rm --user "$(id -u):$(id -g)" --tmpfs /tmp:rw,exec,nosuid,size=2g --volume "$PWD:$PWD" --workdir "$PWD" \
             --env HOME=/tmp/prismpm-home --env PRISMPM_EPHEMERAL_HOME=1 "$SDK_IMAGE" prismpm update --toolchain "$SDK_IMAGE"
       - name: Measure edit to verdict
         shell: bash
+        env:
+          PROJECT: ${{ matrix.project }}
+          EDIT_FROM: ${{ matrix.from }}
+          EDIT_TO: ${{ matrix.to }}
         run: |
           set -euo pipefail
           node sdk/npm/prism-code/scripts/dev-measure.mjs \
-            --project "$RUNNER_TEMP/Calculator" \
-            --from 'Enter a signed 64-bit integer.' --to 'Enter a signed 64 bit integer.' \
+            --project "$RUNNER_TEMP/$PROJECT" \
+            --from "$EDIT_FROM" --to "$EDIT_TO" \
             --edits 4 --chrome "$(command -v google-chrome)" \
             --cold-factor 1.25 --overhead-seconds 2 --summary "$GITHUB_STEP_SUMMARY"

@@ -739,3 +739,31 @@ test('dev judges by a shipped policy name, which is no file to resolve or watch'
   assert.equal(state.result.verdict.policy.name, 'pure-only');
   assert.doesNotMatch(dev.output.out, /rebuilding/);
 });
+
+// The reference projects
+
+test('an edit to a lexicon entry rebuilds, and the patterns reach every model input of both reference projects', async () => {
+  const example = (name) => fileURLToPath(new URL(`../../../../examples/${name}`, import.meta.url));
+  const watched = async (name) => (await createSnapshot({ root: example(name), patterns: DEFAULT_WATCH }).scan()).files;
+  const payment = await watched('PaymentApproval');
+  assert.ok(payment.includes('src/PaymentApproval.lex.tex'));
+  assert.ok(payment.includes('src/Foundation/Bytes.lex.tex'));
+  assert.ok(payment.includes('language/prism.arch/entries/arch-edge.toml'));
+  assert.ok(payment.includes('lexlean.toml'));
+  assert.ok((await watched('Calculator')).includes('src/Calculator.lex.tex'));
+  assert.equal((await describeProject(example('PaymentApproval'))).name, 'PaymentApproval');
+
+  const root = project({ 'language/prism.arch/entries/arch-edge.toml': 'one', 'language/notes.md': 'one' });
+  const seen = [];
+  const watcher = await createWatcher({ root, patterns: DEFAULT_WATCH, onChange: (change) => seen.push(change), pollMs: 50 });
+  try {
+    save(root, 'language/notes.md', 'two');
+    await delay(200);
+    assert.deepEqual(seen, [], 'not a lexicon entry');
+    save(root, 'language/prism.arch/entries/arch-edge.toml', 'two');
+    await until(() => seen.length === 1, 'the lexicon edit');
+    assert.deepEqual(seen[0].files, ['language/prism.arch/entries/arch-edge.toml']);
+  } finally {
+    watcher.close();
+  }
+});

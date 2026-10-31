@@ -14,7 +14,7 @@ npx prism-code dev
 ```
 
 ```text
-Watching src/**/*.lex.tex, model/**/*.lex.tex, prism.toml, prismpm.toml, lexlean.toml
+Watching src/**/*.lex.tex, model/**/*.lex.tex, language/**/*.toml, prism.toml, prismpm.toml, lexlean.toml
 Studio at http://localhost:4100  tabs: Check, Replay
 Building with --update: prismpm.lock follows the model, so commit it with your source
 Building

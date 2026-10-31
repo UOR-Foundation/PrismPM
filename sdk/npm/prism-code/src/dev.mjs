@@ -26,8 +26,12 @@ import { ASSURANCE } from './vendor/verify.mjs';
 /** The schema of the state the studio reads. Experimental, like the verdict it carries. */
 export const DEV_STATE_SCHEMA = 'prism/dev-state/1';
 
-/** What a project without a `[model]` table watches: its model and the files that configure the build. */
-export const DEFAULT_WATCH = Object.freeze(['src/**/*.lex.tex', 'model/**/*.lex.tex', MANIFEST_FILE, 'prismpm.toml', 'lexlean.toml']);
+/**
+ * What a project without a `[model]` table watches: its model, its lexicons, and
+ * the files that configure the build. A lexicon is as much the model as a
+ * `.lex.tex` file is. `language/**\/*.toml` is what `prism-code init` declares.
+ */
+export const DEFAULT_WATCH = Object.freeze(['src/**/*.lex.tex', 'model/**/*.lex.tex', 'language/**/*.toml', MANIFEST_FILE, 'prismpm.toml', 'lexlean.toml']);
 
 /** Directories no pattern reaches: build output and tooling state, which a build itself rewrites. */
 export const IGNORED_DIRECTORIES = Object.freeze(['.git', '.prism', '.lake', '.lexlean', 'node_modules', 'target']);

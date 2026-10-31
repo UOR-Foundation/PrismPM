@@ -41,6 +41,7 @@ save ─ fs.watch or a 1 s scan ─ hash the watched files ─ bytes changed? �
 ```
 
 The watcher hashes the watched files, so a change is a change of bytes, not of a time.
+The defaults include `language/**/*.toml`, the pattern `prism-code init` declares, because an edit to a lexicon changes the model. A lexicon elsewhere needs `[model].watch`.
 `fs.watch` carries the latency and the scan carries the guarantee, because some file systems deliver no events (a network mount, a Windows path seen from WSL).
 
 One cycle runs at a time and everything saved during it becomes exactly one more cycle.
