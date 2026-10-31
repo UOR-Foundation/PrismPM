@@ -8,8 +8,8 @@ name: Verification & Validation
 # the full result before merging.
 #
 # One complete pass takes longer than the 6 hour limit for a hosted job, so it
-# runs as three parts on one commit. A failed part can be re-run alone, and the
-# `complete` job passes only with all three.
+# runs as four parts on one commit. A failed part can be re-run alone, and the
+# `complete` job passes only with all four.
 on:
   push:
     branches: [main]
@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [source, conformance, browser]
+        part: [source, conformance, browser, browser-2]
     steps:
       # A full gate 6 otherwise exhausts the hosted runner disk (ENOSPC). The conformance part
       # drops from 107 GiB free to under 10 GiB by OC-10, whose capture requires 10 GiB.
@@ -113,7 +113,7 @@ jobs:
           pattern: vv-part-*
           merge-multiple: true
           path: target/vv-parts
-      - name: Require all three parts on this commit
+      - name: Require all four parts on this commit
         run: |
           node --test scripts/vv-assemble.test.mjs
           node scripts/vv-assemble.mjs target/vv-parts target/vv-evidence.json "$GITHUB_SHA"

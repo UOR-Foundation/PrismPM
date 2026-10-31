@@ -87,6 +87,25 @@ impl GateDriver {
         Ok(())
     }
 
+    /// Runs a Cargo command and returns its standard output; any failure is an error.
+    pub(crate) fn capture_cargo(&self, root: &Path, arguments: &[String]) -> Result<String, Fail> {
+        self.executable
+            .require_unchanged(&std::env::current_exe()?)?;
+        let outcome = self
+            .cargo_command(
+                root,
+                &arguments.iter().map(String::as_str).collect::<Vec<_>>(),
+            )
+            .output();
+        self.executable
+            .require_unchanged(&std::env::current_exe()?)?;
+        let output = outcome?;
+        if !output.status.success() {
+            return Err(format!("cargo {} exited {}", arguments.join(" "), output.status).into());
+        }
+        Ok(String::from_utf8(output.stdout)?)
+    }
+
     /// CLI produced by a scoped Cargo build, never the running VV driver.
     pub(crate) fn prismpm_binary(&self) -> PathBuf {
         self.target_dir
