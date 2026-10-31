@@ -64,11 +64,7 @@ fn requirement(declared: &Declared, id: &str, control: &Control) -> Value {
     for (threat, controls) in &declared.mappings {
         if controls.iter().any(|name| name == id) {
             let row = &declared.threats[threat];
-            props.push(property(
-                "threat",
-                Some(&row.category),
-                &row.described.name,
-            ));
+            props.push(property("threat", Some(&row.category), &row.described.name));
         }
     }
     json!({
