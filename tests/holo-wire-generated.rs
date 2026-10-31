@@ -389,6 +389,12 @@ fn generated_call(name: &str, arguments: &[TestValue]) -> TestValue {
         "canonicalArchiveSection" => {
             TestValue::Optional(wire::canonicalArchiveSection(b(0), n(1)).unwrap())
         }
+        "wireRowsValid" => TestValue::Bool(wire::wireRowsValid(&b(0), n(1), n(2), n(3)).unwrap()),
+        "wireBodyPayloadsValid" => TestValue::Bool(wire::wireBodyPayloadsValid(&b(0)).unwrap()),
+        "wireAttestationRowValid" => TestValue::Bool(wire::wireAttestationRowValid(&b(0)).unwrap()),
+        "wireSectionBytesUnchecked" => {
+            TestValue::Bytes(wire::wireSectionBytesUnchecked(b(0), n(1)).unwrap())
+        }
         "wireBytesEqual" => TestValue::Bool(wire::wireBytesEqual(&b(0), &b(1))),
         "wireEncodeLe64" => TestValue::Bytes(wire::wireEncodeLe64(n(0))),
         "wireDecodeLe64" => TestValue::Nat(wire::wireDecodeLe64(b(0)).unwrap()),

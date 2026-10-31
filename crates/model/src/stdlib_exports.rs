@@ -234,7 +234,7 @@ mod tests {
         let exports: StdlibExports = toml::from_str(SOURCE).unwrap();
         let runtime = vec!["PrismPM.Foundation.Holo.validateComponentIndexes".to_owned()];
         let union = exports.union_with_runtime(&runtime).unwrap();
-        assert_eq!(union.len(), 67);
+        assert_eq!(union.len(), 78);
         assert_eq!(runtime.len(), 1);
         assert!(union.contains(&runtime[0]));
         let mut document: toml::Value = toml::from_str(SOURCE).unwrap();
