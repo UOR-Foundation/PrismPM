@@ -285,6 +285,12 @@ function invoke(f, overrides = {}, script = entrypoint) {
 const isolation = () => ['run', '--rm', '--user', `${process.getuid()}:${process.getgid()}`,
   '--env', 'HOME=/tmp/prismpm-home', '--env', 'PRISMPM_EPHEMERAL_HOME=1',
   '--tmpfs', '/tmp:rw,exec,nosuid,size=1g', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'];
+// The build alone keeps a private Buildx configuration and a 2g scratch (entrypoint.sh, 77f5fd6d and
+// 03e8dfd0, landed by #326); the export and closure runs keep the 1g isolation above.
+const buildIsolation = () => ['run', '--rm', '--user', `${process.getuid()}:${process.getgid()}`,
+  '--env', 'HOME=/tmp/prismpm-home', '--env', 'PRISMPM_EPHEMERAL_HOME=1',
+  '--env', 'BUILDX_CONFIG=/tmp/prismpm-buildx',
+  '--tmpfs', '/tmp:rw,exec,nosuid,size=2g', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'];
 
 function verifyPublication(result, f) {
   assert.equal(result.status, 0, result.stderr);
@@ -293,7 +299,7 @@ function verifyPublication(result, f) {
   const project = join(f.workspace, 'project with spaces');
   const sdkArguments = ['--network', 'none', '--volume', `${f.workspace}:${f.workspace}`,
     '--env', `PRISMPM_SOURCE_REVISION=${revision}`, sdk];
-  assert.deepEqual(build, [...isolation(), ...sdkArguments, 'prismpm', '--json',
+  assert.deepEqual(build, [...buildIsolation(), ...sdkArguments, 'prismpm', '--json',
     'build', '--locked', '--tag', f.reference, project]);
   assert.deepEqual(exported, [...isolation(), ...sdkArguments, 'prismpm', '--project', project, '--json',
     'export-browser', `registry.example.test:5000/team/product@${f.releaseDigest}`, '--output', f.output]);
