@@ -38,4 +38,4 @@ export {
   blake3Hex,
 } from './runtime.mjs';
 export { resolveArchive } from './runtime.mjs';
-export { runCli, spawnCli, buildDigests } from './cli.mjs';
+export { runCli } from './cli.mjs';
