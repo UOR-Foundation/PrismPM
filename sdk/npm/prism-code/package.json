@@ -47,7 +47,6 @@
     "types",
     "templates",
     "fixtures/Calculator.holo",
-    "fixtures/PaymentApproval.holo",
     "README.md",
     "LICENSE"
   ],

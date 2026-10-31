@@ -25,14 +25,14 @@ structure{
   name: Request,
   type_parameters: [],
   parameters: [],
-  fields: [{name: role, type: Role}, {name: amount, type: Nat}, {name: limit, type: Nat}]
+  fields: [{name: role, type: Role}, {name: amount, type: Int64}, {name: limit, type: Int64}]
 }
 
 definition{
   name: application,
   parameters: [],
   result: Foundation.View.Text.V1.Model::TextApplication,
-  body: (record Foundation.View.Text.V1.Model::TextApplication {profile := "prismpm/text-application/1", name := "PaymentApproval", cargoName := "prism-payment-approval", cargoVersion := "0.1.0", cargoDescription := "The second PrismPM reference archive: a payment approval decision over a requester role, an amount and a limit.", cargoRepository := "https://github.com/UOR-Foundation/PrismPM", cargoHomepage := "https://github.com/UOR-Foundation/PrismPM", libraryRoots := (cons "PrismPaymentApproval.PaymentApproval.dispatch" (nil String)), acceptanceVectors := (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093235300931303030, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09313030300931303030, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209353030300931303030, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209343239343936373239350930, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09313030310931303030, response := 0x72656675736564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09310930, response := 0x72656675736564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209300931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b092d350931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b0930350931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09343239343936373239360931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b0931303030092d31, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x61756469746f720931300931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093130, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093130093130303009, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0xff, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e61676572093109393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209310939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131, response := 0x696e76616c6964}) (nil Foundation.View.Text.V1.Model::AcceptanceVector)))))))))))))))))))), entryRoot := "PrismPaymentApproval.PaymentApproval.dispatch", coreContract := "hologram:guest/core-wasm@1", requestMaximum := (64 : UInt32), responseMaximum := (256 : UInt32), guestAllocationMaximum := (128 : UInt32), capabilitiesEmpty := true, fatArchive := true, primaryLayer := (0 : UInt8), viewLayer := (1 : UInt8), view := (record Foundation.View.Text.V1.Model::TextView {title := "Payment approval", heading := "Payment approval", inputLabel := "Request: role, amount, limit (tab-separated)", submitLabel := "Decide", outputLabel := "Decision", inputError := "Invalid request", responseError := "Invalid response"})})
+  body: (record Foundation.View.Text.V1.Model::TextApplication {profile := "prismpm/text-application/1", name := "PaymentApproval", cargoName := "prism-payment-approval", cargoVersion := "0.1.0", cargoDescription := "The second PrismPM reference archive: a payment approval decision over a requester role, an amount and a limit.", cargoRepository := "https://github.com/UOR-Foundation/PrismPM", cargoHomepage := "https://github.com/UOR-Foundation/PrismPM", libraryRoots := (cons "PrismPaymentApproval.PaymentApproval.dispatch" (nil String)), acceptanceVectors := (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093235300931303030, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09313030300931303030, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209353030300931303030, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209393232333337323033363835343737353830370930, response := 0x617070726f766564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09313030310931303030, response := 0x72656675736564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09310930, response := 0x72656675736564}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209300931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b092d350931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b0930350931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b09393232333337323033363835343737353830380931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b0931303030092d31, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x61756469746f720931300931303030, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093130, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093130093130303009, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0xff, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e61676572093109393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6d616e6167657209310939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x636c65726b093131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131, response := 0x696e76616c6964}) (nil Foundation.View.Text.V1.Model::AcceptanceVector)))))))))))))))))))), entryRoot := "PrismPaymentApproval.PaymentApproval.dispatch", coreContract := "hologram:guest/core-wasm@1", requestMaximum := (64 : UInt32), responseMaximum := (256 : UInt32), guestAllocationMaximum := (128 : UInt32), capabilitiesEmpty := true, fatArchive := true, primaryLayer := (0 : UInt8), viewLayer := (1 : UInt8), view := (record Foundation.View.Text.V1.Model::TextView {title := "Payment approval", heading := "Payment approval", inputLabel := "Request: role, amount, limit (tab-separated)", submitLabel := "Decide", outputLabel := "Decision", inputError := "Invalid request", responseError := "Invalid response"})})
 }
 
 definition{
@@ -43,12 +43,18 @@ definition{
 }
 
 definition{
-  name: parseNumber,
+  name: parseAmount,
   parameters: [value : String],
-  result: (Option Nat),
-  body: (match (prim parse_decimal value : (Option UInt32))
-    | Option.none => (ctor Option.none [Nat])
-    | Option.some number => (ctor Option.some [Nat] (prim to_nat number : Nat))),
+  result: (Option Int64),
+  body: (match (prim split_exact value "-" (2 : UInt32) : (Option (List String)))
+    | Option.none => (ctor Option.none [Int64])
+    | Option.some parts => (match parts
+      | List.nil => (ctor Option.none [Int64])
+      | List.cons digits rest => (match rest
+        | List.cons afterSign more => (ctor Option.none [Int64])
+        | List.nil => (match (prim parse_decimal digits : (Option Int64))
+          | Option.none => (ctor Option.none [Int64])
+          | Option.some number => (ctor Option.some [Int64] number))))),
   axioms: [Classical.choice, Quot.sound, propext]
 }
 
@@ -58,11 +64,11 @@ definition{
   result: (Option Request),
   body: (match (parseRole roleText)
     | Option.none => (ctor Option.none [Request])
-    | Option.some role => (match (parseNumber amountText)
+    | Option.some role => (if (prim equal amountText "0" : Bool) then (ctor Option.none [Request]) else (match (parseAmount amountText)
       | Option.none => (ctor Option.none [Request])
-      | Option.some amount => (match (parseNumber limitText)
+      | Option.some amount => (match (parseAmount limitText)
         | Option.none => (ctor Option.none [Request])
-        | Option.some limit => (ctor Option.some [Request] (record Request {role := role, amount := amount, limit := limit}))))),
+        | Option.some limit => (ctor Option.some [Request] (record Request {role := role, amount := amount, limit := limit})))))),
   axioms: [Classical.choice, Quot.sound, propext]
 }
 
@@ -83,12 +89,21 @@ definition{
 }
 
 definition{
-  name: decide,
+  name: judge,
   parameters: [request : Request],
   result: Decision,
-  body: (if ((project request amount) =? 0) then (ctor Decision.Invalid) else (match (project request role)
+  body: (match (project request role)
     | Role.Manager => (ctor Decision.Approved)
-    | Role.Clerk => (if ((project request amount) <=? (project request limit)) then (ctor Decision.Approved) else (ctor Decision.Refused))))
+    | Role.Clerk => (match (prim checked_subtract (project request limit) (project request amount) : (Option Int64))
+      | Option.none => (ctor Decision.Refused)
+      | Option.some headroom => (match (prim split_exact (prim format_decimal headroom : String) "-" (2 : UInt32) : (Option (List String)))
+        | Option.none => (ctor Decision.Refused)
+        | Option.some parts => (match parts
+          | List.nil => (ctor Decision.Refused)
+          | List.cons digits rest => (match rest
+            | List.nil => (ctor Decision.Approved)
+            | List.cons afterSign more => (ctor Decision.Refused)))))),
+  axioms: [Classical.choice, Quot.sound, propext]
 }
 
 definition{
@@ -109,7 +124,7 @@ definition{
     | Option.none => "invalid"
     | Option.some fields => (match (decodeFields fields)
       | Option.none => "invalid"
-      | Option.some request => (encodeDecision (decide request)))),
+      | Option.some request => (encodeDecision (judge request)))),
   axioms: [Classical.choice, Quot.sound, propext]
 }
 
