@@ -15,14 +15,16 @@ import { createDevLoop, createWatcher, describeProject, judgeHolo, runBuild, wat
 import { readReplay } from './dev-replay.mjs';
 import { STUDIO_PORT, serveStudio } from './dev-server.mjs';
 import { fail } from './errors.mjs';
+import { POLICIES } from './vendor/verify.mjs';
 
 export const DEV_USAGE = `Usage: dev [<dir>] [--port <n>] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
 
   <dir>               the project directory; default the current directory
   --port <n>          the studio's port; default ${STUDIO_PORT}. A port in use is an error, not a move
   --no-open           do not open the studio in a browser
-  --policy <file>     the policy the Check tab judges by, as for check; an edit to it re-checks
-  --build <command>   the build to run, in a shell; default [model].build of prism.toml, then prism-code build
+  --policy <file>     the policy the Check tab judges by, a file or a shipped name, as for check; an edit to a file re-checks
+  --build <command>   the build to run, in a shell; default [model].build of prism.toml, then prism-code build --update,
+                      which rewrites the model's pins in prismpm.lock
   --holo <path>       the file the build writes; default the one the build reports
 `;
 
@@ -100,9 +102,9 @@ export async function runDev(argv) {
   const port = Number(options.port ?? STUDIO_PORT);
   const command = buildCommand(options.build, project.manifest);
   const holoPath = options.holo === undefined ? null : resolve(directory, options.holo);
-  const policyPath = options.policy === undefined ? undefined : resolve(options.policy);
   const patterns = watchPatterns(project.manifest);
-  const policyKey = policyPath === undefined ? null : watchedPath(directory, policyPath);
+  // The policy reaches check as given, so the verdict names it as check does. A shipped policy's name is no file to watch.
+  const policyKey = options.policy === undefined || Object.hasOwn(POLICIES, options.policy) ? null : watchedPath(directory, resolve(options.policy));
 
   let child = null;
   let studio = null;
@@ -116,9 +118,9 @@ export async function runDev(argv) {
         child = spawned;
       },
     }),
-    judge: (holo) => judgeHolo({ directory, holo, policy: policyPath, hasManifest: project.hasManifest }),
+    judge: (holo) => judgeHolo({ directory, holo, policy: options.policy, hasManifest: project.hasManifest }),
     replay: ({ holo, verdict }) => readReplay({ holo, directory, verdict }),
-    initial: { project: { name, directory, watch: patterns, build: command ?? 'prism-code build', policy: options.policy ?? null } },
+    initial: { project: { name, directory, watch: patterns, build: command ?? 'prism-code build --update', policy: options.policy ?? null } },
     onState: (state) => {
       studio?.publish(state);
       if (state.phase === 'building') process.stdout.write(state.cycle.files.length > 0 ? `Changed ${state.cycle.files.join(', ')}; rebuilding\n` : 'Building\n');
@@ -142,6 +144,7 @@ export async function runDev(argv) {
 
   process.stdout.write(`Watching ${patterns.join(', ')}\n`);
   process.stdout.write(`Studio at ${studio.url}  tabs: Check, Replay\n`);
+  if (command === null) process.stdout.write('Building with --update: prismpm.lock follows the model, so commit it with your source\n');
   if (!options['no-open'] && !process.env.CI) openBrowser(studio.url);
   const first = loop.trigger({ reason: 'start' });
 

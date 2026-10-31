@@ -701,3 +701,41 @@ test('Ctrl-C stops dev with exit 0 and frees the port', { skip: process.platform
   assert.equal(await dev.exited, 0, dev.output.err);
   await assert.rejects(fetchRaw(`${local}/api/state`));
 });
+
+// The default build, and the policies check takes
+
+test('the default build updates the lock, because a plain build refuses every edit to the model', async () => {
+  const image = `ghcr.io/uor-foundation/prismpm-sdk@sha256:${'a'.repeat(64)}`;
+  const root = project({ 'prismpm.lock': JSON.stringify({ sdk_image: image }) });
+  const built = await runBuild({ directory: root, command: null, env: { ...process.env, PRISM_CODE_DRY_RUN: '1' } });
+  assert.equal(built.code, 0, built.log);
+  assert.match(built.log, new RegExp(`${image} prismpm build --update --json`));
+});
+
+test('the page verifier takes each policy check takes, and reaches the same verdict', async () => {
+  const bytes = new Uint8Array(readFileSync(fixture));
+  const files = project({ 'p0.rego': 'package prism.policy\n\nimport rego.v1\n\nminimum := "P0"\n', 'p0.json': '{"minimum":"P0"}' });
+  for (const policy of [undefined, 'pure-only', join(files, 'p0.rego'), join(files, 'p0.json')]) {
+    const { verdict, policy: forPage } = await judgeHolo({ directory: files, holo: fixture, policy, hasManifest: false });
+    assert.equal(agreement(verdict, await verify(bytes, forPage)), true, String(policy));
+    // The page receives the policy as JSON.
+    assert.equal(agreement(verdict, await verify(bytes, JSON.parse(JSON.stringify(forPage)))), true, String(policy));
+  }
+});
+
+test('dev judges by a shipped policy name, which is no file to resolve or watch', { timeout: 30000 }, async (t) => {
+  const root = project({ 'prismpm.toml': 'project = "App"\n', 'src/App.lex.tex': 'model\n', 'build.mjs': `import { copyFileSync } from 'node:fs';copyFileSync(process.argv[2], 'App.holo');` });
+  const dev = startDev([root, '--build', `node build.mjs ${JSON.stringify(fixture)}`, '--holo', 'App.holo', '--policy', 'pure-only']);
+  t.after(async () => {
+    dev.child.kill();
+    await dev.exited;
+  });
+  const url = await until(() => /Studio at (http:\/\/localhost:\d+)/.exec(dev.output.out)?.[1], `the studio address in ${JSON.stringify(dev.output)}`);
+  const state = await until(async () => {
+    const current = await stateOf(url.replace('localhost', '127.0.0.1'));
+    return current.phase === 'idle' && current.result ? current : null;
+  }, 'the first cycle');
+  assert.equal(state.result.outcome, 'verdict', JSON.stringify(state.result));
+  assert.equal(state.result.verdict.policy.name, 'pure-only');
+  assert.doesNotMatch(dev.output.out, /rebuilding/);
+});

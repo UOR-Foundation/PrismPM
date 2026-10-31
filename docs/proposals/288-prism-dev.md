@@ -60,6 +60,10 @@ The build reports its result as JSON and `dev` reads the `.holo` beside its `man
 Taking the newest file would be wrong: a rebuild of source that went back to an earlier state reuses its old directory, so the newest file describes the state the developer just left.
 A custom build that prints no result must write a holo during the run or name it with `--holo`; otherwise the outcome is `no-verdict`.
 
+### The lock
+
+The default build is `prism-code build --update`. A plain `prismpm build` refuses a lock whose model pin is stale (`PP5401`), and every edit to a model makes it stale, so a plain build would fail on every save. The lock therefore follows the model during `dev`, and `dev` says so when it starts. The developer commits it with the source, and a plain `prismpm build` in CI still refuses a lock that was not.
+
 ### The port
 
 The port is 4100, which the guides and `sdk/docs/cli.json` already promised.

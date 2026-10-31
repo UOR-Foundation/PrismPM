@@ -259,8 +259,11 @@ async function holoWrittenSince(directory, buildRoot, since) {
  * no holo reports a `problem` and no holo: a verdict on some older file would
  * describe source the developer has already changed.
  *
- * `command` is null for `prism-code build --json`, the build in the SDK image
- * `prismpm.lock` names; otherwise it runs in a shell, as an npm script does.
+ * `command` is null for `prism-code build --update --json`, the build in the
+ * SDK image `prismpm.lock` names; otherwise it runs in a shell, as an npm script
+ * does. `--update` is what makes this a development loop: a plain build refuses
+ * a lock whose model pin the edit just made stale (PP5401), so without it every
+ * edit would fail. The lock follows the model, for the developer to commit.
  *
  * @param {{ directory: string, command: string | null, holo?: string | null, buildRoot?: string, env?: object, onSpawn?: (child: object) => void, now?: () => number }} options
  */
@@ -269,7 +272,7 @@ export async function runBuild({ directory, command, holo = null, buildRoot = '.
   // A coarse file system rounds a time down, so a holo written at once can look older than its build's start.
   const writtenSince = startedAt - 2000;
   const child = command === null
-    ? spawn(process.execPath, [BIN, 'build', '--json'], { cwd: directory, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    ? spawn(process.execPath, [BIN, 'build', '--update', '--json'], { cwd: directory, env, stdio: ['ignore', 'pipe', 'pipe'] })
     : spawn(command, { cwd: directory, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
   onSpawn(child);
   let stdout = '';
@@ -313,8 +316,9 @@ export async function judgeHolo({ directory, holo, policy, hasManifest }) {
   return {
     verdict,
     bytes: new Uint8Array(await readFile(holo)),
-    // What the page passes to `verify`: the file, the grant, and the name and minimum the verdict settled on.
-    policy: { ...file, capabilities, name: verdict.policy.name, minimum: verdict.policy.minimum },
+    // What the page passes to `verify`: the policy, the grant and the name the verdict settled on. A Rego policy
+    // states its own minimum and refuses one given beside it; any other takes the minimum the verdict settled on.
+    policy: { ...file, capabilities, name: verdict.policy.name, ...(file.rego === undefined ? { minimum: verdict.policy.minimum } : {}) },
     limits: ASSURANCE.RANK[verdict.level] >= ASSURANCE.RANK.P2 ? [...LIMITS] : [],
     levelName: ASSURANCE.NAMES[verdict.level],
     reasons: verdict.reasons.map((reason) => ({ ...reason, title: titleOf(reason) })),

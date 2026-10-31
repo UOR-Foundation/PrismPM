@@ -16,6 +16,7 @@ npx prism-code dev
 ```text
 Watching src/**/*.lex.tex, model/**/*.lex.tex, prism.toml, prismpm.toml, lexlean.toml
 Studio at http://localhost:4100  tabs: Check, Replay
+Building with --update: prismpm.lock follows the model, so commit it with your source
 Building
 Built Calculator in <seconds>s  Level: P0  FAILED, policy default requires P2
 Changed src/Calculator.lex.tex; rebuilding
@@ -53,7 +54,9 @@ A change means changed bytes. Saving a file without changing it rebuilds nothing
 
 1. `--build <command>`, in a shell.
 2. `build` in the `[model]` table of `prism.toml`, in a shell. `prism build` means the next item.
-3. `prism-code build`, in the SDK image `prismpm.lock` names. This needs Docker.
+3. `prism-code build --update`, in the SDK image `prismpm.lock` names. This needs Docker.
+
+The default build uses `--update` because a plain build refuses a lock whose model pin is stale, which every edit makes it. So `prismpm.lock` follows your model as you save. Commit it with your source.
 
 A build command from `prism.toml` runs on your machine with your permissions, as an npm script does. Read the manifest of a project you did not write before you run `dev` in it.
 
@@ -68,7 +71,7 @@ The Check tab shows the verdict `check` prints for the same holo:
 - **In this page.** The page fetches the holo and judges it again with `@prism-code/verify`, and says whether the two verdicts agree.
 - **Last cycle.** The files that changed, the time from your edit to the verdict, and the build and check times.
 
-Pass `--policy <file>` to judge by a policy file. An edit to that file re-checks the same holo without a build.
+Pass `--policy <file>` to judge by a policy file, or the name of a shipped policy, as for `check`. An edit to a policy file re-checks the same holo without a build.
 
 When a build fails, the tab shows `BUILD FAILED` and the end of its output. The last verdict stays below it, labeled as describing source that has since changed. While a build runs, a line at the top says that what follows describes the last finished build.
 
