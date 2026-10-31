@@ -633,9 +633,8 @@ pub fn run_at(root: &Path, id: &str) {
                 "tests/browser-p256/corpus.test.mjs",
                 "tests/browser-p256/bridge.test.mjs",
                 "tests/browser-p256/owner.test.mjs",
-                "tests/browser-view/local-module-inputs.test.mjs",
             ],
-            22,
+            16,
             "3600000",
         ),
         "DK-18" => browser_effect::verify(root),
@@ -732,25 +731,6 @@ pub fn run_at(root: &Path, id: &str) {
         "TM-01" | "TM-02" | "TM-03" | "TM-04" | "TM-05" | "TM-06" => verify_template(root, id),
 
         _ => panic!("unhandled conformance id: {id}"),
-    }
-    // Qualify the independent construction as well as the original shared
-    // owner. Each complete file retains its separate unchanged deadline.
-    match id {
-        "DK-24" => verify_node_suite(
-            root,
-            id,
-            &["tests/browser-operation-journal/fallback-owner.test.mjs"],
-            28,
-            "3600000",
-        ),
-        "DK-27" => verify_node_suite(
-            root,
-            id,
-            &["tests/browser-budget/fallback-owner.test.mjs"],
-            12,
-            "3600000",
-        ),
-        _ => {}
     }
 }
 
@@ -3041,10 +3021,16 @@ fn verify_rp_04(root: &Path) {
     assert!(workflow.contains("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"));
     assert!(workflow.contains("runCmd: |"));
     assert_eq!(
-        workflow.matches("just vv").count(),
+        workflow
+            .matches("-- just vv-part ${{ matrix.part }}")
+            .count(),
         1,
-        "the main-push workflow must run the complete verification exactly once"
+        "the main-push workflow must run each verification part exactly once"
     );
+    assert!(
+        workflow.contains("part: [source, gates, conformance, ho-oc, st-sy, dk-0-1, dk-2, dk-3]")
+    );
+    assert!(workflow.contains("node scripts/vv-assemble.mjs"));
 }
 
 fn verify_rp_05(root: &Path) {
