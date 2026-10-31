@@ -111,8 +111,9 @@ The floor is the fastest observed rebuild of the SDK image: the wall time of the
 | 18 successful jobs, 2026-10-21 to 2026-10-29 | `6ebbef86`, arm64 | 49.7 |
 | The 10 of them since 2026-10-26 | `35e9f01d`, amd64 | 79.8 |
 
-The bar is 2,982 s, the fastest job in the sample. It is a loose bar: a developer would stop using the loop long before that.
-So `dev-e2e.yml` also reports the stricter comparison, the project's own cold build beside each edit.
+The bar is 2,982 s, the fastest job in the sample. It meets the issue's words and proves little, because almost any loop clears it.
+
+So `dev-e2e.yml` gates on a second, tighter bar: every edit, from the save to the verdict in the browser, must beat the same job's cold build of the project. That one fails if the loop stops reusing work between builds.
 
 ### Measured
 

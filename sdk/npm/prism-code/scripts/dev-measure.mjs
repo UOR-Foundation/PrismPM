@@ -20,7 +20,8 @@
  *
  *   sudo unshare -n sh -c 'ip link set lo up && node dev-measure.mjs --stand-in --chrome "$(command -v google-chrome)"'
  *
- * Also: --floor-seconds <n> fails the run when an edit takes longer, --summary
+ * Also: --floor-seconds <n> fails the run when an edit takes longer, --under-cold
+ * fails it when an edit takes longer than this run's own cold build, --summary
  * <file> appends a Markdown table, and --json prints the whole result.
  */
 import { spawn } from 'node:child_process';
@@ -40,7 +41,7 @@ writeFileSync('App.holo', bytes);
 `;
 
 function parseArguments(argv) {
-  const flags = new Set(['stand-in', 'json']);
+  const flags = new Set(['stand-in', 'json', 'under-cold']);
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     const name = argv[i].replace(/^--/, '');
@@ -303,6 +304,10 @@ async function main() {
   process.stdout.write(options.json ? `${JSON.stringify(result, null, 2)}\n` : table);
   if (floorMs !== null && result.editToVerdict.maxMs >= floorMs) {
     process.stderr.write(`the slowest edit took ${seconds(result.editToVerdict.maxMs)} s, not under the floor of ${seconds(floorMs)} s\n`);
+    return 1;
+  }
+  if (options['under-cold'] === true && result.editToVerdict.maxMs >= result.cold.buildMs) {
+    process.stderr.write(`the slowest edit took ${seconds(result.editToVerdict.maxMs)} s, not under this run's cold build of ${seconds(result.cold.buildMs)} s\n`);
     return 1;
   }
   return 0;
