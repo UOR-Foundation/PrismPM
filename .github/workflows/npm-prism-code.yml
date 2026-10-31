@@ -114,8 +114,9 @@ jobs:
           for entry in ./src/index.mjs ./src/node.mjs ./src/browser.mjs ./src/canonical/index.js; do
             node --input-type=module -e "import('$entry').then(m => { if (Object.keys(m).length === 0) throw new Error('$entry exports nothing') })"
           done
-          node bin/prism-code.mjs vectors fixtures/Calculator.holo
-      # Every reference archive replays its committed history (#284). A second archive joins by adding its two files.
+          # Every reference archive replays its vectors (#278): Calculator and Payment Approval.
+          for holo in fixtures/*.holo; do node bin/prism-code.mjs vectors "$holo"; done
+      # Every reference archive replays its committed history (#284): Calculator and Payment Approval.
       - name: The reference archives replay green
         shell: bash
         run: |

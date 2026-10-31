@@ -194,7 +194,7 @@ The negative fixture is `sdk/npm/prism-code/test/fixtures/Calculator.changed-mod
 Its guest answers `OK` where the reference answers `ok`, and its acceptance vectors changed with it, so it passes its own 22 vectors and diverges on 7 recorded events.
 It is a rewrite, not a rebuild: its Lean identities still describe the original sources, and it is a test input, never reference evidence.
 
-Conformance scenario `HO-29` runs these suites as the owning acceptance.
+Conformance scenario `HO-31` runs these suites as the owning acceptance.
 
 ### Graduation criteria
 
@@ -219,7 +219,6 @@ Conformance scenario `HO-29` runs these suites as the owning acceptance.
 
 ## Unresolved questions
 
-1. The issue says both reference archives replay in CI. The tree holds one, calculator-example's `Calculator.holo`. The second, named Payment Approval in #325, is in no branch or repository we could find; #278 asked the same question. CI replays every `fixtures/*.history.json`, so a second archive joins by adding its holo and its history.
-2. `prism replay <history>` in the issue names no build. Both commands take `--holo` and require it, because a default needs a stable path to the current build, which `prismpm build` does not write yet. Should it default to the build tree's holo once one exists?
-3. Should a policy be able to require named histories, by digest? Recommendation: yes, in #285 or its successor, since `predicate.histories` already names them.
-4. The site guide `run-and-gate` says a run under `--allow-unverified` marks its history unverified and that `replay` refuses it as evidence. This format has no such mark, because a replay's evidence is the comparison, not where the history came from. Should the mark exist, or should the guide change when the `prism` CLI ships?
+1. `prism replay <history>` in the issue names no build. Both commands take `--holo` and require it, because a default needs a stable path to the current build, which `prismpm build` does not write yet. Should it default to the build tree's holo once one exists?
+2. Should a policy be able to require named histories, by digest? Recommendation: yes, in #285 or its successor, since `predicate.histories` already names them.
+3. The site guide `run-and-gate` says a run under `--allow-unverified` marks its history unverified and that `replay` refuses it as evidence. This format has no such mark, because a replay's evidence is the comparison, not where the history came from. Should the mark exist, or should the guide change when the `prism` CLI ships?

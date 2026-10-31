@@ -396,7 +396,9 @@ pub fn run_at(root: &Path, id: &str) {
         "HO-13" => holo_browser::verify(root),
         // The attestation section (#267): the Rust reader and writer over the modeled
         // wire codec, bound to the JavaScript appender by the committed signed archive.
-        "HO-23" | "HO-24" | "HO-25" | "HO-26" | "HO-27" => verify_attestation(root, id),
+        "HO-23" | "HO-24" | "HO-25" | "HO-26" | "HO-27" | "HO-28" | "HO-29" | "HO-30" => {
+            verify_attestation(root, id)
+        }
         // The JavaScript runtime reads the composed archive, the HOLOVIEW
         // bundle and the exported closure without the Rust SDK; its complete
         // owning suite is the acceptance, file by file.
@@ -415,11 +417,11 @@ pub fn run_at(root: &Path, id: &str) {
         ),
         // A history replays unchanged and a changed model cannot reach P3; the
         // Rust half holds the same fixtures in crates/prismpm/src/replay/tests.rs.
-        "HO-29" => node_suite::verify_exact(
+        "HO-31" => node_suite::verify_exact(
             root,
             id,
             &[
-                ("sdk/npm/prism-code/test/replay.test.mjs", 28),
+                ("sdk/npm/prism-code/test/replay.test.mjs", 32),
                 ("sdk/npm/verify/test/replay-statement.test.mjs", 8),
             ],
             "600000",
@@ -3480,7 +3482,7 @@ fn verify_portable_view_report(root: &Path) {
     }
 }
 
-/// HO-23 to HO-27: run the named Rust regressions with their exact inventory and, where the
+/// HO-23 to HO-30: run the named Rust regressions with their exact inventory and, where the
 /// JavaScript reference implementation owns the same rule, its complete Node file.
 fn verify_attestation(root: &Path, id: &str) {
     let (filter, expected) = match id {
@@ -3489,7 +3491,10 @@ fn verify_attestation(root: &Path, id: &str) {
         "HO-25" => ("holo::attestation::tests::ho_25_", 3),
         "HO-26" => ("holo::attestation::tests::ho_26_", 2),
         "HO-27" => ("holo::attestation::tests::ho_27_", 3),
-        _ => unreachable!("HO-23 to HO-27 only"),
+        "HO-28" => ("attest::tests::ho_28_", 6),
+        "HO-29" => ("attest::tests::ho_29_", 2),
+        "HO-30" => ("attest::tests::ho_30_", 2),
+        _ => unreachable!("HO-23 to HO-30 only"),
     };
     let output = Command::new("cargo")
         .args([
@@ -3535,6 +3540,7 @@ fn verify_attestation(root: &Path, id: &str) {
         "HO-24" => &[("sdk/npm/prism-code/test/attestations.test.mjs", 11)],
         "HO-25" => &[("sdk/npm/prism-code/test/attestation-interop.test.mjs", 2)],
         "HO-26" => &[("sdk/npm/spec/test/attestation-bundle.test.mjs", 6)],
+        "HO-28" => &[("sdk/npm/verify/test/entry-kinds.test.mjs", 5)],
         _ => &[],
     };
     if !owned.is_empty() {

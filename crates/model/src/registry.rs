@@ -467,7 +467,7 @@ pub struct ContractRow {
 impl Contracts {
     /// Validate public contract registry invariants.
     pub fn check(&self, root: &std::path::Path) -> Result<(), ModelError> {
-        if self.spec != "prismpm/contracts/1" || self.contract.len() != 65 {
+        if self.spec != "prismpm/contracts/1" || self.contract.len() != 67 {
             return Err(ModelError::Inconsistent(
                 "public contract registry is incomplete".to_owned(),
             ));
@@ -569,8 +569,9 @@ pub struct CommandRow {
 impl Commands {
     /// Validate the complete stable command surface.
     pub fn check(&self) -> Result<(), ModelError> {
-        const EXPECTED: [&str; 32] = [
+        const EXPECTED: [&str; 34] = [
             "backup",
+            "attest",
             "authority",
             "build",
             "check",
@@ -599,6 +600,7 @@ impl Commands {
             "template",
             "update",
             "verify",
+            "verify-attestation",
             "verify-browser-publication",
             "verify-release",
             "verify-signature",
