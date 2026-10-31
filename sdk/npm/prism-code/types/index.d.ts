@@ -43,6 +43,18 @@ export class CapabilityDeniedError extends PrismError {
 export class WorldMismatchError extends PrismError {
   static readonly code: 'world_mismatch';
 }
+/** `policy_parse_failed`: the policy file does not parse, or uses a construct outside the subset (`policy.parse`). No verdict; `check` exits 2. Issue #285. */
+export class PolicyParseError extends VerificationError {
+  static readonly code: 'policy_parse_failed';
+}
+/** `policy_evaluation_failed`: the policy file parsed but produced no decision (`policy.evaluation`); the message names the rule. No verdict; `check` exits 2. Issue #285. */
+export class PolicyEvaluationError extends VerificationError {
+  static readonly code: 'policy_evaluation_failed';
+}
+/** `policy_denied`: a rule of a policy file denied the holo; `check` is the rule, such as `policy.pure-only.effects`. `check` exits 1. Issue #285. */
+export class PolicyDeniedError extends VerificationError {
+  static readonly code: 'policy_denied';
+}
 /** `determinism_violation`: a replay diverged from its recorded history (`replay.divergence`). */
 export class DeterminismViolationError extends PrismError {
   static readonly code: 'determinism_violation';
@@ -75,9 +87,53 @@ export class SubjectMismatchError extends PrismError {
 export class AttestationNotFoundError extends PrismError {
   static readonly code: 'attestation_not_found';
 }
+/** Running a provider service failed (#294). `details` names the capability and the provider type. */
+export class ProviderError extends PrismError {
+  static readonly code: 'provider_error' | 'provider_not_found' | 'provider_reply_invalid' | 'provider_failed';
+}
+/** No `prism-provider-<type>` is on the PATH. */
+export class ProviderNotFoundError extends ProviderError {
+  static readonly code: 'provider_not_found';
+}
+/** A provider broke the protocol (`provider.reply`), or a variable it returned has a second source (`provider.collision`). */
+export class ProviderReplyError extends ProviderError {
+  static readonly code: 'provider_reply_invalid';
+}
+/** A provider failed (`provider.failed`), would not start (`provider.spawn`) or ran out of time (`provider.timeout`). */
+export class ProviderFailedError extends ProviderError {
+  static readonly code: 'provider_failed';
+}
 /** `trust_root_invalid`: the pinned trusted root cannot be read or does not pin what the policy needs. */
 export class TrustRootError extends PrismError {
   static readonly code: 'trust_root_invalid';
+}
+/** `registry_failed`: a registry or a local store could not do what was asked. `check` is `registry.*` or `store.*`. */
+export class RegistryError extends PrismError {
+  static readonly code: 'registry_failed';
+}
+/** `registry_auth_failed`: the registry refused the credentials, or asked for them where they must not be sent. */
+export class RegistryAuthError extends PrismError {
+  static readonly code: 'registry_auth_failed';
+}
+/** `referrers_unsupported`: no referrers API, and the referrers tag cannot be read or written, or the fallback is off. */
+export class ReferrersUnsupportedError extends PrismError {
+  static readonly code: 'referrers_unsupported';
+}
+/** `manifest_not_found`: the reference names nothing in the registry or the store. */
+export class ManifestNotFoundError extends PrismError {
+  static readonly code: 'manifest_not_found';
+}
+/** `digest_mismatch`: bytes differ from the digest a descriptor, a reference, a registry header or an annotation claimed. */
+export class DigestMismatchError extends PrismError {
+  static readonly code: 'digest_mismatch';
+}
+/** `pull_verification_failed`: a pulled holo failed its verdict, its attestations or the signer policy; nothing was written. */
+export class PullVerificationError extends PrismError {
+  static readonly code: 'pull_verification_failed';
+}
+/** `reference_invalid`: the text is not a registry or store reference. `check` is `reference.*`. */
+export class ReferenceInvalidError extends PrismError {
+  static readonly code: 'reference_invalid';
 }
 export const ERROR_CLASSES: Readonly<Record<string, typeof PrismError>>;
 /** The class a verdict reason's check id maps to. */
@@ -481,8 +537,8 @@ export interface LoadOptions {
   capabilitySet?: string;
 }
 
-/** The three resource kinds a capability set grants. */
-export type CapabilityKind = 'outbound-hosts' | 'key-value-stores' | 'variables';
+/** The resource kinds a capability set grants. */
+export type CapabilityKind = 'outbound-hosts' | 'key-value-stores' | 'variables' | 'providers';
 
 /** A `prism/capabilities/1` file; see `@prism-code/spec` `schemas/capabilities/capabilities-v1.schema.json`. */
 export interface Capabilities {
@@ -496,6 +552,8 @@ export interface CapabilitySet {
   'deny-key-value-stores'?: readonly string[];
   'allow-variables'?: readonly string[];
   'deny-variables'?: readonly string[];
+  'allow-providers'?: readonly string[];
+  'deny-providers'?: readonly string[];
 }
 
 /** What a runtime enforces: one set of a capability file, or nothing. A deny entry wins over an allow entry. */
@@ -513,7 +571,7 @@ export interface CapabilityGrant {
 }
 
 export const CAPABILITIES_SCHEMA: 'prism/capabilities/1';
-export const CAPABILITY_KINDS: readonly ['outbound-hosts', 'key-value-stores', 'variables'];
+export const CAPABILITY_KINDS: readonly ['outbound-hosts', 'key-value-stores', 'variables', 'providers'];
 export const DEFAULT_SET: 'default';
 /** Validate a capability file and return it frozen. Throws `PrismCodeError` `capabilities.invalid`; unknown members are errors. */
 export function parseCapabilities(source: Capabilities | Uint8Array | string): Capabilities;
@@ -525,11 +583,21 @@ export interface Manifest {
   manifest_version?: 1;
   application: { name: string; version: string; description?: string; authors?: readonly string[] };
   model?: { source?: string; build?: string; watch?: readonly string[] };
-  /** A capability file and set, or the members of one capability set inline. Absent grants nothing. */
-  capabilities?: { file: string; set?: string } | CapabilitySet;
+  /** A capability file and set, or the members of one capability set inline, and any capabilities a provider provisions. Absent grants nothing. */
+  capabilities?: ({ file: string; set?: string } | CapabilitySet) & { [name: string]: unknown };
   variables?: Readonly<Record<string, string | { value?: string; secret?: boolean }>>;
 }
 export type ManifestTarget = 'browser' | 'node';
+
+/** One provider a manifest declares (#294). `flags` are its options as `--<key>=<value>` arguments, sorted by key. */
+export interface ManifestProviderDeclaration {
+  readonly name: string;
+  readonly type: string;
+  readonly options: Readonly<Record<string, string | number | boolean | readonly (string | number | boolean)[]>>;
+  readonly flags: readonly string[];
+}
+/** The providers a manifest declares, in order of capability name. */
+export function manifestProviders(manifest: Manifest): readonly ManifestProviderDeclaration[];
 /** A lint finding: `secret-literal` and `credential` are errors, `variable-not-granted` a warning. */
 export interface ManifestFinding {
   rule: 'secret-literal' | 'credential' | 'variable-not-granted';
