@@ -239,7 +239,7 @@ fn a_p0_policy_passes_and_keeps_the_reasons_for_the_missing_levels() {
 #[test]
 fn the_json_form_is_the_spec_fixture_for_a_provenance_only_policy() {
     let policy = Policy {
-        name: Some("policies/provenance-only.cue".to_owned()),
+        name: Some("provenance-only".to_owned()),
         minimum: Some(Level::P1),
         ..Policy::default()
     };
