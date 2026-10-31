@@ -1,8 +1,13 @@
 # Publication phases
 
-`release.yml` accepts an exact `main` dispatch or the `v0.4.0` tag. Source
-verification runs `just vv` twice without cleanup. All existing image, native,
+`release.yml` accepts an exact `release/v0.4` dispatch or the `v0.4.0` tag. Source
+verification runs one pass as the eight `just vv-part` jobs listed in
+`scripts/vv-assemble.mjs`. All existing image, native,
 package, oracle, bootstrap and reproducibility gates remain required.
+
+A dispatch with `rehearsal=true`, the default, runs every check and publishes no GitHub
+release assets, discovery aliases, crates or native-archive provenance. It still pushes
+images by digest and signs them, because later checks read those exact images.
 
 With `publish-crates=false`, OCI images are pushed by digest without discovery aliases.
 The `sdk-oci-<source SHA>-<run ID>-<attempt>` GitHub prerelease publishes their immutable references,
@@ -16,13 +21,13 @@ different bytes and incomplete drafts fail closed. The workflow never deletes,
 overwrites or silently repairs them. Each credentialed writer independently
 checks the allowed repository, source revision, event, ref and Cargo choice.
 
-Both native installed-SDK two-run records and their original command transcripts,
+All six native installed-SDK part records and their original command transcripts,
 genuine product-CLI evidence, and complete browser/library logs are retained in
 that same immutable publication. Deterministic USTAR archives bind each original
 file; missing, substituted, aliased or over-bound inputs stop publication.
-Both source `just vv` runs retain separate stdout, stderr, exit status, original
-VV receipt and four bootstrap outputs. Installed SDK runs likewise retain all
-four fresh bootstrap outputs per run before the next run can replace them.
+Each source `just vv-part` job retains separate stdout, stderr, exit status and its
+original part receipt; the source part also retains the four bootstrap outputs.
+Installed SDK source parts likewise retain all four fresh bootstrap outputs.
 Native/SDK comparisons retain all four commands and separate output streams,
 including expected exit code 6; negative stdout and stderr must both agree.
 Source and native records bind source, architecture, GitHub run and attempt;
@@ -68,8 +73,8 @@ cryptographic registry verification; a saved success file is not sufficient.
 Image-index signatures use the same exact source/workflow/ref/event policy and
 pinned trust root; a signature from another allowed release ref is insufficient.
 
-Before SDK acceptance, the release path still requires twice-run verification
-in the exact shipped SDK images; the
+Before SDK acceptance, the release path still requires all eight parts (`scripts/vv-assemble.mjs`)
+in the exact shipped SDK images on both architectures; the
 source-devcontainer runs are not that evidence. No SDK acceptance receipt or
 consumer lock is changed by this workflow split.
 

@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      rehearsal:
+        description: Run every check but publish no release assets, discovery tags or crates. Images are still pushed by digest and signed.
+        required: true
+        default: true
+        type: boolean
   push:
     tags:
       - v0.4.0
@@ -29,41 +34,107 @@ env:
   RUNTIME_REPOSITORY: ghcr.io/uor-foundation/prismpm-runtime
 
 jobs:
-  gate:
+  policy:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       publish-crates: ${{ steps.version.outputs.publish-crates }}
+      rehearsal: ${{ steps.version.outputs.rehearsal }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          fetch-depth: 0
           submodules: false
       - id: version
         shell: bash
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: |
           set -euo pipefail
           node scripts/release-phases.mjs policy >> "$GITHUB_OUTPUT"
           test "$(git status --porcelain)" = ""
           test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = 0.4.0
+
+  # One source pass, as the eight `just vv-part` parts of scripts/vv-assemble.mjs,
+  # each under one 6 h hosted-job limit. Longest parts first so max-parallel
+  # starts them before the short ones; tests derive the set from `parts`.
+  source-vv:
+    needs: policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - part: dk-3
+          - part: ho-oc
+          - part: dk-2
+          - part: gates
+          - part: st-sy
+          - part: dk-0-1
+          - part: conformance
+          - part: source
+    steps:
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          df -h /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          submodules: false
       - uses: devcontainers/ci@513af61f4de4f75d37e4438f184ba4358f0fc1ca
         with:
           push: never
           runCmd: |
             set -euo pipefail
             bash scripts/vv.sh --with-sdk bash -euo pipefail -c "$(cat <<'PRISMPM_VV'
-            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 1
-            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' 2
+            node scripts/release-gate-evidence.mjs source-run . target/source-vv-evidence '${{ github.sha }}' amd64 - '${{ github.run_id }}' '${{ github.run_attempt }}' '${{ matrix.part }}'
             PRISMPM_VV
             )"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
+        with:
+          name: source-vv-part-${{ matrix.part }}
+          path: target/source-vv-evidence/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  gate:
+    needs: [policy, source-vv]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ needs.policy.outputs.version }}
+      publish-crates: ${{ needs.policy.outputs.publish-crates }}
+      rehearsal: ${{ needs.policy.outputs.rehearsal }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: source-vv-part-*
+          merge-multiple: true
+          path: target/source-vv-evidence
+      - name: Require every source part on this commit
+        run: |
+          node scripts/release-gate-evidence.mjs source-assemble . target/source-vv-evidence "$GITHUB_SHA" amd64 - "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" -
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: source-vv
           path: target/source-vv-evidence/
@@ -119,6 +190,7 @@ jobs:
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs policy
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
@@ -222,6 +294,7 @@ jobs:
           ARM64_DIGEST: ${{ steps.platforms.outputs.arm64 }}
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: |
           set -euo pipefail
           for architecture in amd64 arm64; do
@@ -491,8 +564,114 @@ jobs:
             root-a/target/library-sdk-evidence/
           if-no-files-found: error
           retention-days: 30
-  installed-sdk:
+  # One installed pass per architecture, as the eight parts of
+  # scripts/vv-assemble.mjs: 16 jobs, each under one 6 h hosted-job limit.
+  # Part-major order so max-parallel 8 runs four parts on each architecture.
+  installed-vv:
     needs: [gate, images]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+            part: dk-3
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: dk-3
+          - os: ubuntu-24.04
+            arch: amd64
+            part: ho-oc
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: ho-oc
+          - os: ubuntu-24.04
+            arch: amd64
+            part: dk-2
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: dk-2
+          - os: ubuntu-24.04
+            arch: amd64
+            part: gates
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: gates
+          - os: ubuntu-24.04
+            arch: amd64
+            part: st-sy
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: st-sy
+          - os: ubuntu-24.04
+            arch: amd64
+            part: dk-0-1
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: dk-0-1
+          - os: ubuntu-24.04
+            arch: amd64
+            part: conformance
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: conformance
+          - os: ubuntu-24.04
+            arch: amd64
+            part: source
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            part: source
+    steps:
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          df -h /
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: root-a
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.23.2
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.28.0
+          driver-opts: image=moby/buildkit@sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sdk-image
+          path: .shipped-image
+      - name: Verify this installed-SDK part on the native isolated runner
+        shell: bash
+        env:
+          RESULT_NAME: sdk-${{ matrix.arch }}
+          NATIVE_PLATFORM: linux/${{ matrix.arch }}
+          PART: ${{ matrix.part }}
+        run: |
+          set -euo pipefail
+          bash root-a/scripts/sdk-vv-outer.sh "$(cat .shipped-image/sdk-image.txt)" \
+            "$GITHUB_SHA" "${NATIVE_PLATFORM#linux/}" "$PART" "$RESULT_NAME-full-sdk-vv-$PART"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: full-sdk-vv-sdk-${{ matrix.arch }}-${{ matrix.part }}
+          path: |
+            sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/
+            sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}-outer-owner/
+            !sdk-${{ matrix.arch }}-full-sdk-vv-${{ matrix.part }}/docker/
+          if-no-files-found: error
+          retention-days: 30
+
+  installed-sdk:
+    needs: [gate, images, installed-vv]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
     permissions:
@@ -525,22 +704,23 @@ jobs:
         with:
           name: sdk-image
           path: .shipped-image
-      - name: Verify both complete installed-SDK runs on the native isolated runner
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: full-sdk-vv-sdk-${{ matrix.arch }}-*
+          merge-multiple: true
+          path: .installed-vv
+      - name: Require every installed part on this commit and image
         shell: bash
         env:
-          RESULT_NAME: sdk-${{ matrix.arch }}
-          NATIVE_PLATFORM: linux/${{ matrix.arch }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
-          bash root-a/scripts/sdk-vv-outer.sh "$(cat .shipped-image/sdk-image.txt)" \
-            "$GITHUB_SHA" "${NATIVE_PLATFORM#linux/}" "$RESULT_NAME-full-sdk-vv"
+          node root-a/scripts/sdk-release-evidence.mjs assemble-installed .installed-vv \
+            "sdk-$ARCH-vv-evidence.json" "$(cat .shipped-image/sdk-image.txt)" "$GITHUB_SHA" "$ARCH"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
         with:
-          name: full-sdk-vv-sdk-${{ matrix.arch }}
-          path: |
-            sdk-${{ matrix.arch }}-full-sdk-vv/
-            sdk-${{ matrix.arch }}-full-sdk-vv-outer-owner/
+          name: installed-vv-evidence-${{ matrix.arch }}
+          path: sdk-${{ matrix.arch }}-vv-evidence.json
           if-no-files-found: error
           retention-days: 30
       - name: Verify genuine installed product CLI and source-free browser release
@@ -660,6 +840,7 @@ jobs:
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs policy
       - name: Require every original non-Cargo prerequisite
         env:
@@ -687,12 +868,14 @@ jobs:
           merge-multiple: true
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: full-sdk-vv-sdk-amd64
-          path: .sdk-gate-evidence/full-sdk-vv-sdk-amd64
+          pattern: full-sdk-vv-sdk-*
+          merge-multiple: true
+          path: .sdk-gate-evidence/full-sdk-vv
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: full-sdk-vv-sdk-arm64
-          path: .sdk-gate-evidence/full-sdk-vv-sdk-arm64
+          pattern: installed-vv-evidence-*
+          merge-multiple: true
+          path: release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: product-cli-sdk-amd64
@@ -742,15 +925,19 @@ jobs:
           cp .sdk-gate-evidence/library-sdk-sdk-arm64/sdk-arm64-library-sdk.log release/
           node scripts/sdk-release-evidence.mjs source-vv .sdk-gate-evidence/source-vv \
             release/source-vv.tar - "$GITHUB_SHA" amd64 "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          parts=$(node scripts/vv-assemble.mjs --list)
           for architecture in amd64 arm64; do
             node scripts/library-sdk-metadata-evidence.mjs pack \
               ".sdk-gate-evidence/library-sdk-sdk-$architecture/root-a/target/library-sdk-evidence/linux-$architecture" \
               "release/sdk-$architecture-native-metadata.tar" . "$image" "$GITHUB_SHA" "$architecture"
-            for kind in full-sdk-vv product-cli; do
-              node scripts/sdk-release-evidence.mjs "$kind" \
-                ".sdk-gate-evidence/$kind-sdk-$architecture" "release/sdk-$architecture-$kind.tar" \
-                "$image" "$GITHUB_SHA" "$architecture"
+            for part in $parts; do
+              node scripts/sdk-release-evidence.mjs full-sdk-vv \
+                ".sdk-gate-evidence/full-sdk-vv/sdk-$architecture-full-sdk-vv-$part" "release/sdk-$architecture-full-sdk-vv-$part.tar" \
+                "$image" "$GITHUB_SHA" "$architecture" "$part"
             done
+            node scripts/sdk-release-evidence.mjs product-cli \
+              ".sdk-gate-evidence/product-cli-sdk-$architecture" "release/sdk-$architecture-product-cli.tar" \
+              "$image" "$GITHUB_SHA" "$architecture"
             node scripts/sdk-release-evidence.mjs native-equivalence \
               ".sdk-gate-evidence/native-equivalence-sdk-$architecture" "release/sdk-$architecture-native-equivalence.tar" \
               "$image" "$GITHUB_SHA" "$architecture" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
@@ -764,14 +951,17 @@ jobs:
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$checksums"
           mv "$checksums" SHA256SUMS
       - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661
+        if: ${{ needs.gate.outputs.rehearsal != 'true' }}
         with:
           subject-path: release/prismpm-*.tar.gz
       - name: Publish only exact unaccepted verification assets; never overwrite
+        if: ${{ needs.gate.outputs.rehearsal != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NEEDS: ${{ toJSON(needs) }}
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs publish-oci release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -790,7 +980,7 @@ jobs:
   # uploaded. docs/release/crates-io-publication.md states the order and the
   # pre-release version scheme (#214).
   crates:
-    if: ${{ needs.gate.outputs.publish-crates == 'true' }}
+    if: ${{ needs.gate.outputs.publish-crates == 'true' && needs.gate.outputs.rehearsal != 'true' }}
     needs: [gate, images, native, reproducibility, installed-sdk, oci-native]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -810,6 +1000,7 @@ jobs:
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs policy
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -949,6 +1140,7 @@ jobs:
             '
 
   release:
+    if: ${{ needs.gate.outputs.rehearsal != 'true' }}
     needs: [gate, images, native, reproducibility, installed-sdk, oci-native, crates]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -965,6 +1157,7 @@ jobs:
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
           PUBLISH_CRATES: ${{ toJSON(inputs.publish-crates) }}
+          REHEARSAL: ${{ toJSON(inputs.rehearsal) }}
         run: node scripts/release-phases.mjs policy
       - name: Require the complete Cargo-dependent publication prerequisites
         env:

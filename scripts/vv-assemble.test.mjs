@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, rmSync, unlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import {canonical, validateVvEvidence} from './sdk-vv-run.mjs';
 import {assemble, parts} from './vv-assemble.mjs';
@@ -36,4 +38,13 @@ test('assembly refuses a missing, extra, failed, foreign or altered part', t => 
   }
   assert.throws(() => assemble(fixture(t), 'b'.repeat(40)));
   assert.throws(() => assemble(fixture(t), 'not-a-revision'));
+});
+
+test('the part list is the one source of truth for every consumer', async () => {
+  const {vvParts} = await import('./sdk-vv-run.mjs');
+  assert.deepEqual([...vvParts], [...parts]);
+  assert.equal(parts.length, 8);
+  assert.deepEqual([...parts], [...parts].sort());
+  assert.equal(new Set(parts).size, parts.length);
+  assert.deepEqual(execFileSync(process.execPath, [fileURLToPath(new URL('./vv-assemble.mjs', import.meta.url)), '--list']).toString().split('\n').filter(Boolean), [...parts]);
 });
