@@ -29,6 +29,7 @@
 
 # Editor and OS
 /sdk/oracles/node_modules/
+/sdk/npm/*/node_modules/
 .DS_Store
 *.swp
 *~
