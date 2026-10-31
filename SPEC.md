@@ -1192,13 +1192,14 @@ rewriting require separate explicit commands and a review reason. Acceptance
 evidence is canonical `prismpm/vv-evidence/1`, lists all 15 gates, records
 `passed`, and binds the exact full Git commit.
 
-A complete pass outgrows the 6 hour limit for one hosted job, so Linux CI runs
-the same checks as three parts of `cargo xtask vv-part` on one commit, each in
-the pinned devcontainer. `source` runs gates 1 to 5, gate 6 without
-`repo-conformance` and gates 7 to 15; `conformance` runs gate 6 for
-`repo-conformance` without its DK owners; `browser` runs its DK owners. Each writes
-canonical `prismpm/vv-part/1`. `scripts/vv-assemble.mjs` writes the acceptance
-evidence only from exactly these three passed records for that commit.
+A complete pass outgrows the 6 hour limit and the disk of one hosted job, so
+Linux CI runs the same checks as separate parts of `cargo xtask vv-part` on one
+commit, each in the pinned devcontainer. `source` runs gates 1 to 5 and gate 6
+without `repo-conformance`; `gates` runs gates 7 to 15; `ho-oc`, `st-sy`, `dk-0-1`,
+`dk-2` and `dk-3` run the named `repo-conformance` test groups; `conformance` runs
+the rest of it. Every registered test must belong to exactly one part. Each part
+writes canonical `prismpm/vv-part/1`. `scripts/vv-assemble.mjs` writes the
+acceptance evidence only from exactly these passed records for that commit.
 
 The source audit first checks both retained native-record sets against the
 shared golden tree using the same closed composition rules as the later native
@@ -1326,7 +1327,7 @@ Hosted CI qualifies each head once, where it matters. Every pull request, whatev
 its base, runs one fast set of at most three jobs (format, lint and dependency
 policy; model and audits; fixtures and reviewed goldens), each with a timeout and
 superseded by the next push to the same pull request. The complete 15 gates, as
-three parts, execute once per main push, and on request for any head; it is
+separate parts, execute once per main push, and on request for any head; it is
 not repeated for an unchanged head, and no consecutive second pass is required.
 Dual-architecture native source review runs on main pushes and release tags, and
 the standalone two-root reproducibility comparison runs nightly on main. Release

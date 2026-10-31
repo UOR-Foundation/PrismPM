@@ -15,17 +15,17 @@ const fixture = t => {
   return directory;
 };
 
-test('three passed parts of one commit produce the unchanged 15-gate evidence', t => {
+test('every passed part of one commit produces the unchanged 15-gate evidence', t => {
   validateVvEvidence(assemble(fixture(t), revision), revision);
 });
 
 test('assembly refuses a missing, extra, failed, foreign or altered part', t => {
   const altered = [
-    ['missing part', directory => unlinkSync(join(directory, 'vv-part-browser.json'))],
+    ['missing part', directory => unlinkSync(join(directory, 'vv-part-dk-2.json'))],
     ['extra record', directory => writeFileSync(join(directory, 'vv-part-other.json'), record('other'))],
     ['failed part', directory => writeFileSync(join(directory, 'vv-part-source.json'), record('source', {status: 'failed'}))],
     ['other commit', directory => writeFileSync(join(directory, 'vv-part-conformance.json'), record('conformance', {commit: 'b'.repeat(40)}))],
-    ['wrong part name', directory => writeFileSync(join(directory, 'vv-part-browser.json'), record('source'))],
+    ['wrong part name', directory => writeFileSync(join(directory, 'vv-part-dk-2.json'), record('source'))],
     ['extra field', directory => writeFileSync(join(directory, 'vv-part-source.json'), record('source', {gates: [1]}))],
     ['noncanonical bytes', directory => writeFileSync(join(directory, 'vv-part-source.json'), `${record('source')}\n`)],
   ];

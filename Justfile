@@ -7,7 +7,7 @@ default:
 vv:
     ./scripts/vv.sh
 
-# Run one separately run part of vv: source, conformance or browser
+# Run one separately run part of vv: source, gates, conformance, ho-oc, st-sy, dk-0-1, dk-2 or dk-3
 vv-part part:
     cargo xtask vv-part {{part}}
 
