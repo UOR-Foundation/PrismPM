@@ -43,6 +43,7 @@ pub mod template;
 #[cfg(test)]
 mod test_compiler;
 mod text_cli;
+mod threat_model;
 pub mod upstream_conformance;
 mod verification;
 mod workbench;

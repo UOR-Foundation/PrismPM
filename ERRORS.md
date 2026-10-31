@@ -125,6 +125,30 @@ A feature or journey is not a closed literal record, a feature statement is out 
 
 Class: `semantic`. Exit code: 1.
 
+## `PP2019` --- Threat without a control or an accepted risk
+
+A threat of a threat model has no mapped control and no accepted risk.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2020` --- Control without evidence
+
+A control of a threat model names no evidence that realizes it.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2021` --- Threat without a STRIDE category
+
+A threat of a threat model has no modeled threat row, so it has no STRIDE category.
+
+Class: `semantic`. Exit code: 1.
+
+## `PP2022` --- Invalid threat model declaration
+
+A threat model row is not a closed literal record, is repeated, is blank or out of bounds, names no record of the model document, or the model does not declare exactly one control set with a valid time, or an asset has no row.
+
+Class: `semantic`. Exit code: 1.
+
 ## `PP3001` --- Malformed Hologram archive header or version
 
 A .holo file is not a binary Hologram v4 archive with the exact HOLO header.

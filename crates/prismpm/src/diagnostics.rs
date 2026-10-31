@@ -44,6 +44,10 @@ enum Rule {
     FeatureStep,
     JourneyActor,
     FeatureDeclaration,
+    ThreatAnswer,
+    ControlEvidence,
+    ThreatCategory,
+    ThreatModelDeclaration,
 }
 
 impl Rule {
@@ -65,6 +69,10 @@ impl Rule {
             | Self::FeatureStep
             | Self::JourneyActor
             | Self::FeatureDeclaration => feature_specimens(self),
+            Self::ThreatAnswer
+            | Self::ControlEvidence
+            | Self::ThreatCategory
+            | Self::ThreatModelDeclaration => threat_model_specimens(self),
             Self::ArtifactIntegrity => filesystem::specimens("PP4001"),
             Self::ConfinedOutput => filesystem::specimens("PP8001"),
             Self::ImmutableLock => filesystem::specimens("PP1101"),
@@ -145,6 +153,10 @@ impl Rule {
             | Self::FeatureStep
             | Self::JourneyActor
             | Self::FeatureDeclaration => crate::features::probe(value).is_ok(),
+            Self::ThreatAnswer
+            | Self::ControlEvidence
+            | Self::ThreatCategory
+            | Self::ThreatModelDeclaration => crate::threat_model::probe(value).is_ok(),
             Self::ArtifactIntegrity | Self::ConfinedOutput | Self::ImmutableLock => {
                 filesystem::validate(value).is_ok()
             }
@@ -262,6 +274,18 @@ probes!(
         "PP2018",
         "invalid-feature-or-journey-declaration",
         FeatureDeclaration
+    ),
+    (
+        "PP2019",
+        "threat-without-control-or-accepted-risk",
+        ThreatAnswer
+    ),
+    ("PP2020", "control-without-evidence", ControlEvidence),
+    ("PP2021", "threat-without-stride-category", ThreatCategory),
+    (
+        "PP2022",
+        "invalid-threat-model-declaration",
+        ThreatModelDeclaration
     ),
     ("PP3002", "malformed-holo-section-table", PositiveBound),
     ("PP3003", "invalid-holo-section-closure", Complete),
@@ -398,6 +422,25 @@ fn feature_specimens(rule: Rule) -> (Value, Value) {
     (valid, invalid)
 }
 
+fn threat_model_specimens(rule: Rule) -> (Value, Value) {
+    let valid = json!({
+        "last_modified": "2026-10-30T00:00:00Z",
+        "threats": ["Probe::threat"],
+        "controls": ["Probe::control"],
+        "categorized": ["Probe::threat"],
+        "mappings": {"Probe::threat": ["Probe::control"]},
+        "evidence": {"Probe::control": ["Probe gate"]},
+    });
+    let mut invalid = valid.clone();
+    match rule {
+        Rule::ThreatAnswer => invalid["mappings"] = json!({}),
+        Rule::ControlEvidence => invalid["evidence"] = json!({"Probe::control": []}),
+        Rule::ThreatCategory => invalid["categorized"] = json!([]),
+        _ => invalid["last_modified"] = json!("yesterday"),
+    }
+    (valid, invalid)
+}
+
 fn browser_specimen() -> Value {
     serde_json::from_str(r#"{"profile":"prismpm/browser-application/1","name":"Browser Contract","cargo_name":"prism-browser-contract","cargo_version":"0.1.0","cargo_description":"Source projection fixture, not an executable application.","cargo_repository":"https://github.com/UOR-Foundation/PrismPM","cargo_homepage":"https://github.com/UOR-Foundation/PrismPM","library_roots":["BrowserContract.Probe.dispatch","BrowserContract.Probe.present","BrowserContract.Probe.replay"],"acceptance_vectors":[{"request":[0],"response":[0]}],"entry_root":"BrowserContract.Probe.dispatch","core_contract":"hologram:guest/core-wasm@1","request_maximum":1,"response_maximum":1,"guest_allocation_maximum":1,"memory_pages":32,"capabilities_empty":true,"fat_archive":true,"primary_layer":0,"view_layer":1,"protocol":"prismpm/browser-application-session/1","requested_effects":[{"resource":"digest","adapter":{"kind":"digest","maximum":1048576}},{"resource":"guest","adapter":{"kind":"guest","entry_root":"BrowserContract.Probe.dispatch","protocol":"fixture/1","input_maximum":1,"output_maximum":1,"memory_pages":32}},{"resource":"random","adapter":{"kind":"random","maximum":65536}},{"resource":"sign","adapter":{"kind":"sign","credential_slot":"selected","context":"prismpm/fixture/1","maximum":1048576}},{"resource":"store","adapter":{"kind":"store","namespace":"browser-contract","max_object_bytes":1048576,"max_objects":4096,"max_heads":64}},{"resource":"verify","adapter":{"kind":"verify","context":"prismpm/fixture/1","maximum":1048576}}],"durability":{"protocol":"prismpm/browser-operation-journal/1","resource":"journal","head":"operations","replay_root":"BrowserContract.Probe.replay","max_pending":1,"namespace":"browser-contract-journal","staging_head":"staging","signing_resource":"journal-sign","credential_slot":"selected","maximum_records":1024},"view":{"surface":"prismpm-browser/1","protocol":"prismpm/browser-presentation/1","title":"Browser Contract","heading":"Declaration fixture","presentation_root":"BrowserContract.Probe.present","maximum":1,"labels":[{"id":"status","text":"Runtime unavailable"}]}}"#).expect("closed browser diagnostic fixture")
 }
@@ -454,6 +497,15 @@ fn validate(spec: ProbeSpec, value: &Value) -> Result<(), PrismError> {
             | Rule::FeatureDeclaration
     ) {
         return crate::features::probe(value);
+    }
+    if matches!(
+        spec.rule,
+        Rule::ThreatAnswer
+            | Rule::ControlEvidence
+            | Rule::ThreatCategory
+            | Rule::ThreatModelDeclaration
+    ) {
+        return crate::threat_model::probe(value);
     }
     if spec.rule.accepts(value) {
         Ok(())
