@@ -26,7 +26,7 @@ Prism has four ways in. Pick the lowest one that does the job.
 | `examples/` | One JSON file per example: an input and its expected output. These are the holo's acceptance vectors, in the order of their file names. |
 | `intent.md` | One sentence per line. Each becomes a theorem. |
 | `types/` | Optional. The input and output types, in TypeScript, JSON Schema or Pydantic. |
-| `prismpm.lock` | The lockfile: the toolchain image digest, the model, spec and world digests, and the version of every tool in the toolchain image. |
+| `prismpm.lock` | The lockfile: the SDK image digest, the model, spec and world digests, and the version of every tool in the SDK image. |
 
 For calculator, `prism.toml` names the application:
 
@@ -66,7 +66,7 @@ One form is also checked against your examples before any agent runs. Put the by
 `build` runs the same steps every time.
 
 - Reads the examples, the intent and the types, and fails if an example contradicts a sentence.
-- Has an agent write the model, unless `model/` already comes from this exact spec. The agent's answer goes through the toolchain image at the digest in the lockfile: the compiler and the provers live there, not on your machine. Whatever fails goes back to the agent, up to the budget.
+- Has an agent write the model, unless `model/` already comes from this exact spec. The agent's answer goes through the SDK image at the digest in the lockfile: the compiler and the provers live there, not on your machine. Whatever fails goes back to the agent, up to the budget.
 - Requires the holo's acceptance vectors to equal your examples, and replays every one through the compiled program.
 - Requires a theorem the kernel accepted for every sentence. What the agent says it proved counts for nothing.
 - Writes the model to `model/` and pins its digest and the spec digest in the lockfile, last, once everything passed.
