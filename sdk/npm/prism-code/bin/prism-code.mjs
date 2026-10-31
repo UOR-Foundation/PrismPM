@@ -19,8 +19,13 @@
  *   prism-code attest <app.holo> --predicate <file> --type <uri> [--key <private.pem>]
  *                                                     sign a statement into the holo's attestation section
  *   prism-code verify-attestation <app.holo> ...      check the signatures of those statements
+ *   prism-code export <NAME@sha256:DIGEST> [--out <dir> | --tar <file>]
+ *                                                     write a verified release's six-file browser export
+ *   prism-code generate <app.holo> --out <dir>        write bindings and a typed client from the world
  *   prism-code check <app.holo> [--policy <file>] [--json]
  *                                                     judge the holo against a policy and print its verdict
+ *   prism-code dev [<dir>] [--port N] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
+ *                                                     watch the project, rebuild and re-check on every change, serve the local studio
  *   prism-code push <app.holo> <reference>            put the holo and its attestations in a registry or a local store
  *   prism-code pull <reference> [<out.holo>]          fetch a holo, verify it, then write it
  *   prism-code build [--check]|verify|conformance ... run prismpm in the locked SDK image
@@ -29,7 +34,8 @@
  * Exit codes: 0 ok or the policy passed, 1 vectors failed, an attestation did
  * not verify or the policy failed, 2 artifact refused (a guest import no
  * capability set grants, a world outside the grant, a manifest that fails
- * its checks, or a provider that failed, included) or no verdict, 3 signing failed or the sigstore
+ * its checks, or a provider that failed, included), no verdict, or an export that
+ * differs from its build manifest, 3 signing failed or the sigstore
  * packages are missing, 10 to 13 a typed error from a run, 64 usage, 69 Docker
  * unavailable, 70 something untyped, otherwise the delegated command's or the
  * plugin's code. `EXIT_CODES` in src/errors.mjs is the table for typed errors.
@@ -54,6 +60,7 @@ import { ASSURANCE } from '../src/vendor/verify.mjs';
 import { inspect, formatInspection, select } from '../src/inspect.mjs';
 import { manifestProviders } from '../src/manifest.mjs';
 import { canonicalJson } from '../src/archive.mjs';
+import { generate, WRITERS } from '../src/generate/index.mjs';
 import { check, readPolicy, formatVerdict, verdictJson, exitCodeOf, EXIT as CHECK_EXIT } from '../src/check.mjs';
 import { discover, errorHookMessages, listPlugins, pluginHelp, readMetadata, runPlugin } from '../src/plugins.mjs';
 
@@ -95,9 +102,20 @@ Usage:
                                                     check the holo's attestations against a signer policy;
                                                     --certificate-identity-regexp <re> in place of the exact id,
                                                     --type <uri> to check one predicate type, --json for the result
+  prism-code export <NAME@sha256:DIGEST> [--out <dir> | --tar <file>] [--project <dir>] [--json]
+                                                    write the six-file browser export of a verified release in
+                                                    <project>/.prism/oci, or one tarball, with the holo's
+                                                    attestations beside it; every byte is checked against
+                                                    the build manifest
+  prism-code generate <app.holo> --out <dir> [--lang js]
+                                                    write bindings and a typed client from the holo's WIT world
+                                                    and model into <dir>; writes nothing when nothing changed
   prism-code check <app.holo> [--policy <file>] [--json]
                                                     judge the holo against a policy and print its verdict:
                                                     exit 0 passed, 1 failed, 2 no verdict
+  prism-code dev [<dir>] [--port <n>] [--no-open] [--policy <file>] [--build <command>] [--holo <path>]
+                                                    watch the project, rebuild and re-check on every change, and
+                                                    serve the local studio at http://localhost:4100: tabs Check, Replay
   prism-code push <app.holo | dir://store:tag> <reference> [--key <private.pem> | --keyless] [--store <dir>]
                                                     put the holo in an OCI registry or a local store, each attestation
                                                     a referrer; a signer also signs a statement naming the manifest
@@ -149,8 +167,17 @@ Options for both:     --store <dir>                the reference is a name in th
                       credentials come from Docker's config, or GHCR_TOKEN or GITHUB_TOKEN for ghcr.io
 Options for manifest: --target <browser|node>      merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the merged manifest and the warnings as canonical JSON
+Options for dev:      --port <n>                   the studio's port, default 4100; a port in use is an error, not a move
+                      --no-open                    do not open the studio in a browser
+                      --policy <file>              the policy the Check tab judges by, a file or a shipped name, as for check; an edit to a file re-checks
+                      --build <command>            the build, in a shell; default [model].build of prism.toml, then prism-code build --update
+                      --holo <path>                the file the build writes; default the one the build reports
 Options for providers: --target <browser|node>     merge prism.browser.toml or prism.node.toml over prism.toml
                       --json                       the result as canonical JSON, with the values; text output never prints one
+Options for export:   --out <dir>                  a new directory name in the project, default export
+                      --tar <file>                 a new <name>.tar in the project instead of a directory
+                      --project <dir>              the project holding .prism/oci, default the current directory
+                      --json                       print the prismpm/browser-export/1 receipt
 Options for closures: --model <model.prism.json>   the model document (numeric-profile closures need it)
 `;
 
@@ -174,6 +201,10 @@ const VALUE_OPTIONS = [
   'subject',
   'key',
   'output',
+  'out',
+  'tar',
+  'project',
+  'lang',
   'signing-config',
   'trusted-root',
   'certificate-identity',
@@ -342,6 +373,42 @@ async function commandAttestation(verb, positional, options) {
   if (bad) return usage(`--${bad} takes a value`);
   const cli = await import('../src/attest-cli.mjs');
   return verb === 'attest' ? cli.runAttest(positional, options, usage) : cli.runVerifyAttestation(positional, options, usage);
+}
+
+async function commandGenerate(positional, options) {
+  if (positional.length !== 1) return usage('generate takes one artifact');
+  if (typeof options.out !== 'string' || options.out === '') return usage('generate needs --out <dir>; it never writes to a default place');
+  const language = options.lang ?? 'js';
+  if (typeof language !== 'string' || !Object.hasOwn(WRITERS, language)) {
+    return usage(`--lang takes ${Object.keys(WRITERS).join(', ')}; rust and python are not written yet (#289)`);
+  }
+  const holo = new Uint8Array(await readFile(resolve(positional[0])));
+  const { status, out, files, record } = await generate({ holo, out: options.out, language });
+  const what = `${language}, ${record.world.contract}, model blake3:${record.model.blake3.slice(0, 12)}`;
+  process.stdout.write(status === 'unchanged' ? `${out} is up to date (${what})\n` : `wrote ${files.length} of ${Object.keys(record.files).length} files to ${out} (${what})\n`);
+  return 0;
+}
+
+async function commandExport(positional, options) {
+  if (positional.length !== 1) return usage('export takes one release reference, NAME@sha256:DIGEST');
+  const bad = missingValue(options);
+  if (bad) return usage(`--${bad} takes a value`);
+  if (options.out !== undefined && options.tar !== undefined) return usage('give --out or --tar, not both');
+  const { exportBrowser } = await import('../src/export.mjs');
+  const { receipt, path, attestations } = exportBrowser({
+    project: options.project ?? '.',
+    reference: positional[0],
+    out: options.tar === undefined ? (options.out ?? 'export') : undefined,
+    tar: options.tar,
+  });
+  if (options.json) {
+    process.stdout.write(`${canonicalJson(receipt)}\n`);
+    return 0;
+  }
+  process.stdout.write(`exported ${receipt.files.length} files of ${receipt.release_digest} to ${path} (integrity only)\n`);
+  process.stdout.write(`tree ${receipt.tree_digest}\n`);
+  process.stdout.write(attestations ? `${attestations.bundles} attestation bundle(s) in ${attestations.path}\n` : 'the holo carries no attestations\n');
+  return 0;
 }
 
 // A registry client and a store are not needed by any other verb; load them only when one of these runs.
@@ -597,6 +664,10 @@ async function main(argv) {
       return commandInspect(positional, options);
     case 'run':
       return commandRun(positional, options);
+    case 'generate':
+      return commandGenerate(positional, options);
+    case 'export':
+      return commandExport(positional, options);
     case 'rm':
       return commandRm(positional);
     case 'manifest':
@@ -606,6 +677,10 @@ async function main(argv) {
     case 'init': {
       const { runInit } = await import('../src/init-cli.mjs');
       return runInit(rest);
+    }
+    case 'dev': {
+      const { runDev } = await import('../src/dev-cli.mjs');
+      return runDev(rest);
     }
     case 'attest':
     case 'verify-attestation':
