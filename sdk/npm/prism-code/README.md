@@ -412,7 +412,50 @@ const { statement, divergenceCount } = await app.experimental_replay([history, r
 
 A divergence rejects with `DeterminismViolationError` (`replay.divergence`), and every divergence is in its `details`. With `throw: false` the result comes back instead. A replay that cannot be carried out always rejects with `ReplayError`.
 
-`statement` is an in-toto Statement v1 of type `https://uor.foundation/prism/replay/v1`: the guest as its subject, the model, every history by its sha256 and BLAKE3, the divergence count and the runtime. It holds no clock, so the same replay writes the same bytes. Sign it with `prism-code attest`. `check` does not read it yet: that comes with the attestation wire model change, and until then every holo is P0. The design is `docs/proposals/284-histories-replay.md`.
+`statement` is an in-toto Statement v1 of type `https://uor.foundation/prism/replay/v1`: the guest as its subject, the model, every history by its sha256 and BLAKE3, the divergence count and the runtime. It holds no clock, so the same replay writes the same bytes. Sign it with `prism-code attest`. `check <holo> --replay <file>` judges a statement from beside the holo, which can withhold P3 and never support it because it is unsigned. Reading signed statements from the holo waits on #270, and until then every holo is P0. The design is `docs/proposals/284-histories-replay.md`.
+
+## Generate a typed client (experimental)
+
+`prism-code generate` writes bindings and a typed client from the holo's WIT
+world and its model into a directory you name. There is no default directory,
+and nothing is written into `node_modules`.
+
+```
+npx prism-code generate Calculator.holo --out src/calculator
+```
+
+For the Calculator it writes four files, ES modules with TypeScript
+declarations beside them, that import nothing:
+
+- `world.js`, `world.d.ts`: the world `hologram:guest/core-wasm@1`, read from
+  its WIT file. `instantiate(module)` checks the guest's exports, and
+  `dispatch(module, request)` runs one request on a fresh instance.
+- `calculator.js`, `calculator.d.ts`: the `Calculator` class, with one method
+  per operation of the model, `CalculatorError` with the guest's error codes,
+  and `MODEL`, `OPERATIONS`.
+
+```js
+import { load } from 'prism-code';
+import { Calculator, CalculatorError } from './calculator/calculator.js';
+
+const app = await load('Calculator.holo');
+const calculator = new Calculator(app.dispatch);
+await calculator.add(20, 22);      // 42n
+await calculator.divide(1, 0);     // rejects: CalculatorError, code 'division-by-zero'
+```
+
+A model without typed operations gets a client with `invoke(bytes)`.
+
+Beside the files, `prism-generate.json` records the language, the generator
+(version and the sha256 of its source), the world and the model the files came
+from, and the sha256 of each file. The world and the model are shaped like
+`inputs.world` and `inputs.model` of `prismpm.lock`. A second run with the same
+inputs and intact files writes nothing and says the directory is up to date. An
+edited generated file is written again; a file in the directory that
+`generate` did not write is never overwritten.
+
+`--lang js` is the only writer today. Rust and Python writers follow on the
+same code model (#289).
 
 ## Check one in CI (experimental)
 

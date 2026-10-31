@@ -116,6 +116,8 @@ A flag marked planned is named here so you can plan for it; its spelling may cha
 | The reference grammar: `registry/repo[:tag]`, `@sha256:`, `@blake3:`, `dir://`; the `blake3-<fingerprint>` tag; the `prism/push-result/1` and `prism/pull-result/1` shapes | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) | On main |
 | The OCI layout of a holo: media type `application/vnd.uor.prism.holo.v1`, the fixed `created` annotation and the `foundation.uor.prism.*` annotations. Each is part of the manifest digest | [#292](https://github.com/UOR-Foundation/PrismPM/issues/292) | On main |
 | `prism-code run --capabilities <file>`, `--capability-set <name>` | [#279](https://github.com/UOR-Foundation/PrismPM/issues/279) | On main |
+| `prism-code generate <holo> --out <dir>`, `--lang js`, the generated files and the `prismpm/generate-record/1` record in `prism-generate.json` | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | On main |
+| `generate --lang rust`, `--lang python`, and `generate` in the Rust CLI | [#289](https://github.com/UOR-Foundation/PrismPM/issues/289) | Planned |
 | `prism-code run <holo>` gated on `check`, `--policy <file>`, `--allow-unverified`; the policy member `effects` and the `policy.effects` reason | [#282](https://github.com/UOR-Foundation/PrismPM/issues/282) | On main |
 | `prism-code replay <history \| dir>... --holo <holo>`, `--statement <file>`, `--json` and exit codes 0, 1, 2; `prism-code check --replay <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
 | `prism-code history <holo>`, `--output <file>`; `prism-code run --record <file>` | [#284](https://github.com/UOR-Foundation/PrismPM/issues/284) | On main |
