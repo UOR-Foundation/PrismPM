@@ -31,8 +31,8 @@ Read this table first. It separates what ran from what has not.
 | The loop, the cache, the lock record, rollback and the reports | Verified with test doubles | `sdk/npm/prism-code/test/author.test.mjs`: the agent and the toolchain are fakes, and the holo is the real reference archive |
 | The negative fixture fails by name, with no agent, lock or Docker | Verified end to end | The same test file, through the real command line |
 | The Calculator examples equal the reference acceptance vectors, byte for byte | Verified | Checked against `fixtures/Calculator.holo`; 22 of 22, in order |
-| `spec_digest` in Rust equals `specDigest` in JavaScript | Verified on the two reference vectors in JavaScript; the fixture vector runs in Rust only under CI | `author.spec.digest` and `the_calculator_authoring_fixture_has_the_digest_javascript_pins` |
-| The Rust change and the lock schema change compile and pass | **Not run** | Drive C ran out of space during this work, so no container build ran; the Rust test needs CI |
+| `spec_digest` in Rust equals `specDigest` in JavaScript | Verified | `author.spec.digest` and `the_calculator_authoring_fixture_has_the_digest_javascript_pins` pin the same digest of the same fixture |
+| The Rust change and the lock schema change compile and pass | Verified | The 14 `input_lock` tests pass in a Linux container with Rust 1.97.1. No CI workflow runs them, so run `cargo xtask unit-tests` when this code changes |
 | A real agent writes a Calculator model that passes the kernel | **Not run** | No API key, `claude` CLI or `lexlean-mcp` gateway on the build host, and no SDK image with this change |
 | The Core-Wasm section is byte-identical to the reference | **Not run, and not expected** | See [Byte identity](#byte-identity) |
 | Payment Approval rebuilds against a reference | **Impossible as written** | No Payment Approval archive exists anywhere; the spec in the fixtures is new and its rules are a proposal |
@@ -120,9 +120,9 @@ A failed build restores `model/` and the lock's bytes, and keeps the attempt in 
 `replayExamplesGate` in `src/author/build.mjs` is the named hook for #284.
 Until `prism replay` lands, gate 6 replays through `Application.acceptance`, and every report says so.
 
-## Decisions for Ilya to confirm
+## Decisions
 
-Each is the simplest option that keeps builds reproducible, and each is one seam to swap.
+Ilya accepted all four as written on 2026-10-31, so they are confirmed. Each is the simplest option that keeps builds reproducible, and each is one seam to swap.
 
 1. **Agent and pinning.** The default is the Anthropic adapter with `claude-opus-5-5`, pinned in `prismpm.lock`. The pin records what wrote the model and does not make the model reproducible: no agent is deterministic. The committed model and its digest are the anchor. Changing the pin alone calls nothing; `--no-cache` or a spec change does. Any process can be the agent: `--author-command`, one JSON document in and one out. The adapter sets `fallbacks: "default"`, so a safety decline is retried on another model and the reply can come from a model other than the pinned one. To swap: change `DEFAULT_MODEL` and `DEFAULT_COMMAND`.
 2. **Controlled grammar: yes, tiny.** Exactly one of always, never or only, and one sentence per line. This makes the mapping deterministic and refuses a sentence with no quantifier, such as "add is commutative.". The backticked form adds a check no agent can argue with. To swap: `parseIntent` and `ruleOf`.
