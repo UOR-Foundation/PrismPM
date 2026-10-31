@@ -111,7 +111,9 @@ export -f git df stat cat
     t.after(() => rmSync(dir, {recursive: true, force: true}));
     mkdirSync(join(dir, 'bin')); mkdirSync(join(dir, 'root-a/scripts'), {recursive: true});
     writeFileSync(join(dir, 'bin/docker'), docker, {mode: 0o700});
-    writeFileSync(join(dir, 'root-a/scripts/sdk-vv-outer.sh'), readFileSync(new URL('./sdk-vv-outer.sh', import.meta.url)));
+    // sdk-vv-outer.sh reads the closed part list from vv-assemble.mjs, so its import closure travels with it.
+    for (const file of ['sdk-vv-outer.sh', 'vv-assemble.mjs', 'sdk-vv-run.mjs', 'sdk-bootstrap-retention.mjs', 'bootstrap-evidence.mjs', 'semantic-source.mjs', 'sdk-vv-inputs.mjs'])
+      writeFileSync(join(dir, 'root-a/scripts', file), readFileSync(new URL('./' + file, import.meta.url)));
     if (['foreign-container', 'foreign-matching-label'].includes(mode)) {writeFileSync(join(dir, 'container.exists'), ''); writeFileSync(join(dir, 'owner'), 'foreign');}
     if (mode === 'foreign-tag') writeFileSync(join(dir, 'image.exists'), '');
     const architecture = process.arch === 'x64' ? 'amd64' : 'arm64';
