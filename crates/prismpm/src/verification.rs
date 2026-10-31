@@ -86,7 +86,7 @@ fn package_export_roots(source: &str, runtime: &RuntimeRoots) -> Result<Vec<Stri
         || register.spec != "prismpm/stdlib-exports/1"
         || register.lean_module != runtime.lean_module
         || register.ir_module != runtime.ir_module
-        || names.len() != 66
+        || names.len() != 69
         || names.windows(2).any(|pair| pair[0] >= pair[1])
         || symbols.len() != names.len()
         || [
@@ -878,7 +878,14 @@ pub(crate) fn validate_hologram_oracle_report(
         expected["textarea_normalized_vector_indexes"] = json!(selected.normalized);
         expected["unrepresentable_frame_vector_indexes"] = json!(selected.unrepresentable);
     }
-    if report["portable_browser"] != expected {
+    // `browser_timing` is a measurement: it varies per run and must not
+    // participate in the identity comparison. Remove it from a clone before
+    // comparing the deterministic subset to the expected report.
+    let mut portable_browser = report["portable_browser"].clone();
+    if let Some(object) = portable_browser.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    if portable_browser != expected {
         return Err(invalid());
     }
     Ok(())
@@ -2060,6 +2067,96 @@ pub(crate) fn validate_release_native_evidence(
     validate_control_coverage_corpus(snapshot, &corpus)
 }
 
+// Summarize raw dispatch-to-render samples per vector as the issue requests:
+// median and maximum over repetitions, plus the engine and its version. The
+// summary is a measurement and never participates in an identity comparison.
+// The browser reports fractional milliseconds; the summary is written in whole
+// microseconds because `application-acceptance.json` is canonical JSON, which
+// forbids floats (PP4004).
+fn summarize_browser_timing(report: &Value) -> Option<Value> {
+    let entries = report
+        .get("portable_browser")
+        .and_then(|browser| browser.get("browser_timing"))
+        .and_then(Value::as_array)?;
+    let engine = report["portable_browser"]["engine"]
+        .as_str()
+        .unwrap_or("chromium");
+    let engine_version = report["portable_browser"]["browser_version"]
+        .as_str()
+        .unwrap_or("");
+    let mut groups: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    for entry in entries {
+        let index = entry.get("vector_index").and_then(Value::as_u64);
+        let duration = entry
+            .get("duration_milliseconds")
+            .and_then(Value::as_f64)
+            .filter(|milliseconds| milliseconds.is_finite() && *milliseconds >= 0.0)
+            .map(|milliseconds| (milliseconds * 1000.0).round() as u64);
+        if let (Some(index), Some(duration)) = (index, duration) {
+            groups.entry(index).or_default().push(duration);
+        }
+    }
+    let mut summary = Vec::with_capacity(groups.len());
+    for (index, mut durations) in groups {
+        durations.sort_unstable();
+        let repetitions = durations.len();
+        let median = if repetitions % 2 == 0 {
+            (durations[repetitions / 2 - 1] + durations[repetitions / 2]) / 2
+        } else {
+            durations[repetitions / 2]
+        };
+        summary.push(json!({
+            "vector_index": index,
+            "median_microseconds": median,
+            "maximum_microseconds": durations[repetitions - 1],
+            "repetitions": repetitions,
+            "engine": engine,
+            "engine_version": engine_version,
+        }));
+    }
+    Some(json!(summary))
+}
+
+// The oracle's raw dispatch-to-render samples vary per run; the acceptance
+// summary carries them. Retain the oracle report without them, so the
+// manifest, and with it the attestation id, is the same on every run.
+fn retained_processes(processes: &[ProcessRecord]) -> Result<Value, PrismError> {
+    let mut value = serde_json::to_value(processes)
+        .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+    for row in value.as_array_mut().into_iter().flatten() {
+        if row["tool"] != "hologram-oracle" {
+            continue;
+        }
+        let Some(mut report) = row["stdout"]
+            .as_str()
+            .and_then(|stdout| serde_json::from_str::<Value>(stdout.trim()).ok())
+        else {
+            continue;
+        };
+        let removed = report
+            .get_mut("portable_browser")
+            .and_then(Value::as_object_mut)
+            .and_then(|browser| browser.remove("browser_timing"));
+        if removed.is_some() {
+            let line = serde_json::to_string(&report)
+                .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+            row["stdout"] = json!(format!("{line}\n"));
+        }
+    }
+    Ok(value)
+}
+
+// `browser_timing` is a measurement: it varies per run. Compare the
+// deterministic projection of `application-acceptance.json` so a repeated
+// verification that reuses its attestation id accepts the differing timing.
+fn comparable_acceptance(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut value: Value = serde_json::from_slice(bytes).ok()?;
+    if let Some(object) = value.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    encode_value(&value).ok()
+}
+
 pub(crate) fn publish(
     output_root: &Path,
     attestation_id: &str,
@@ -2155,7 +2252,12 @@ pub(crate) fn publish(
             }
             let observed = std::fs::read(path)
                 .map_err(|_| PrismError::new("PP4002", "verified artifact is missing"))?;
-            if &observed != expected {
+            let identical = if relative == "application-acceptance.json" {
+                comparable_acceptance(&observed) == comparable_acceptance(expected)
+            } else {
+                &observed == expected
+            };
+            if !identical {
                 return Err(PrismError::new("PP4001", "verified artifact was modified"));
             }
         }
@@ -2671,8 +2773,7 @@ fn run_application(
             .map_err(|error| PrismError::new("PP3014", format!("Holo identities: {error}")))?,
     )
     .map_err(|error| PrismError::new("PP3014", format!("Holo identities: {error}")))?;
-    let process_value = serde_json::to_value(&processes)
-        .map_err(|error| PrismError::new("PP9001", error.to_string()))?;
+    let process_value = retained_processes(&processes)?;
     let mut acceptance = json!({
         "application": application.name(),
         "artifact_closure": "verified",
@@ -2692,9 +2793,29 @@ fn run_application(
     if let Some(evidence) = command_line {
         acceptance["command_line"] = evidence;
     }
+    // `browser_timing` is a measurement: it varies per run. Extract the raw
+    // dispatch-to-render samples from the oracle report, summarize them per
+    // vector as the issue requests (median and maximum over repetitions, with
+    // the engine and version), and keep the summary out of the deterministic
+    // acceptance hash that seeds the manifest and attestation id.
+    if let Some(oracle) = processes
+        .iter()
+        .find(|process| process.tool == "hologram-oracle")
+    {
+        if let Ok(report) = serde_json::from_str::<Value>(oracle.stdout.trim()) {
+            if let Some(summary) = summarize_browser_timing(&report) {
+                acceptance["browser_timing"] = summary;
+            }
+        }
+    }
     let acceptance_bytes = encode_value(&acceptance)?;
+    let mut acceptance_for_hash = acceptance.clone();
+    if let Some(object) = acceptance_for_hash.as_object_mut() {
+        object.remove("browser_timing");
+    }
+    let acceptance_sha256 = format!("{:x}", Sha256::digest(&encode_value(&acceptance_for_hash)?));
     let manifest = json!({
-        "acceptance_sha256": format!("{:x}", Sha256::digest(&acceptance_bytes)),
+        "acceptance_sha256": acceptance_sha256,
         "build_id": build.build_id,
         "exporter_owner": exporter_owner.finish()?,
         "lexlean_attestation_sha256": format!("{:x}", Sha256::digest(&lex_attestation)),
@@ -3531,7 +3652,7 @@ mod tests {
     fn package_exports_are_closed_and_do_not_change_runtime_accounting() {
         let (runtime, corpus, _) = corpus();
         let package = package_export_roots(STDLIB_EXPORTS_SOURCE, &runtime).unwrap();
-        assert_eq!(package.len(), 66);
+        assert_eq!(package.len(), 69);
         let union = runtime
             .roots
             .iter()
@@ -4120,6 +4241,117 @@ mod tests {
         assert_eq!(
             error.message,
             "verified artifact set differs from its manifest"
+        );
+    }
+
+    #[test]
+    fn browser_timing_summarizes_to_median_and_maximum() {
+        let report = json!({
+            "portable_browser": {
+                "engine": "chromium",
+                "browser_version": "157.0.8099.0",
+                "browser_timing": [
+                    {"vector_index": 0, "duration_milliseconds": 10.0},
+                    {"vector_index": 0, "duration_milliseconds": 20.0},
+                    {"vector_index": 0, "duration_milliseconds": 30.0},
+                    {"vector_index": 1, "duration_milliseconds": 5.0}
+                ]
+            }
+        });
+        let summary = summarize_browser_timing(&report).unwrap();
+        assert_eq!(
+            summary,
+            json!([
+                {"vector_index": 0, "median_microseconds": 20000, "maximum_microseconds": 30000,
+                 "repetitions": 3, "engine": "chromium", "engine_version": "157.0.8099.0"},
+                {"vector_index": 1, "median_microseconds": 5000, "maximum_microseconds": 5000,
+                 "repetitions": 1, "engine": "chromium", "engine_version": "157.0.8099.0"}
+            ])
+        );
+    }
+
+    #[test]
+    fn browser_timing_summary_is_canonical_json() {
+        // `performance.now()` yields fractional milliseconds; the summary must
+        // still encode, because the acceptance file is canonical (no floats).
+        let report = json!({
+            "portable_browser": {
+                "engine": "chromium",
+                "browser_version": "157.0.8099.0",
+                "browser_timing": [
+                    {"vector_index": 0, "duration_milliseconds": 12.3456},
+                    {"vector_index": 0, "duration_milliseconds": 7.0004}
+                ]
+            }
+        });
+        let summary = summarize_browser_timing(&report).unwrap();
+        assert_eq!(summary[0]["median_microseconds"], json!(9673));
+        assert_eq!(summary[0]["maximum_microseconds"], json!(12346));
+        encode_value(&json!({"browser_timing": summary})).unwrap();
+    }
+
+    #[test]
+    fn browser_timing_summarizes_even_repetitions_with_the_midpoint() {
+        let report = json!({
+            "portable_browser": {
+                "engine": "chromium",
+                "browser_version": "157.0.8099.0",
+                "browser_timing": [
+                    {"vector_index": 0, "duration_milliseconds": 10.0},
+                    {"vector_index": 0, "duration_milliseconds": 20.0}
+                ]
+            }
+        });
+        let summary = summarize_browser_timing(&report).unwrap();
+        assert_eq!(summary[0]["median_microseconds"], json!(15000));
+        assert_eq!(summary[0]["maximum_microseconds"], json!(20000));
+        assert_eq!(summary[0]["repetitions"], json!(2));
+    }
+
+    #[test]
+    fn retained_oracle_process_omits_per_run_browser_timing() {
+        let oracle = |duration: f64, skipped: u64| ProcessRecord {
+            tool: "hologram-oracle".to_owned(),
+            argv: Vec::new(),
+            executable_sha256: "0".repeat(64),
+            exit_code: 0,
+            stdout: format!(
+                "{}\n",
+                json!({"schema":"prismpm/hologram-oracle/2","portable_browser":{
+                    "skipped":skipped,
+                    "browser_timing":[{"vector_index":0,"duration_milliseconds":duration}]}})
+            ),
+            stderr: String::new(),
+            exporter: None,
+        };
+        let first = retained_processes(&[oracle(54.86, 0)]).unwrap();
+        assert_eq!(first, retained_processes(&[oracle(54.29, 0)]).unwrap());
+        assert_ne!(first, retained_processes(&[oracle(54.86, 1)]).unwrap());
+        let report: Value =
+            serde_json::from_str(first[0]["stdout"].as_str().unwrap().trim()).unwrap();
+        assert_eq!(report["portable_browser"], json!({"skipped":0}));
+        // The in-memory record still feeds the acceptance summary.
+        assert!(summarize_browser_timing(
+            &serde_json::from_str(oracle(54.86, 0).stdout.trim()).unwrap()
+        )
+        .is_some());
+        let other = ProcessRecord {
+            tool: "core-wasm-validate".to_owned(),
+            ..oracle(54.86, 0)
+        };
+        assert_eq!(
+            retained_processes(std::slice::from_ref(&other)).unwrap()[0]["stdout"],
+            json!(other.stdout)
+        );
+    }
+
+    #[test]
+    fn comparable_acceptance_ignores_browser_timing() {
+        let with_timing = br#"{"browser_timing":[{"vector_index":0,"duration_milliseconds":10.0}],"status":"verified"}"#;
+        let without_timing = br#"{"status":"verified"}"#;
+        assert_eq!(
+            comparable_acceptance(with_timing),
+            comparable_acceptance(without_timing)
         );
     }
 }

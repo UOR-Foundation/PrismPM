@@ -304,6 +304,8 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "scripts/installed-exporter-concurrency.test.mjs",
             "sdk/migration-qualification.test.mjs",
             "sdk/npm/prism-code/test/archive.test.mjs",
+            "sdk/npm/prism-code/test/attestation-interop.test.mjs",
+            "sdk/npm/prism-code/test/attestations.test.mjs",
             "sdk/npm/prism-code/test/blake3.test.mjs",
             "sdk/npm/prism-code/test/canonical.test.mjs",
             "sdk/npm/prism-code/test/cli.test.mjs",
@@ -313,6 +315,7 @@ fn audit_all(root: &Path) -> Result<(), Fail> {
             "sdk/npm/prism-code/test/node.test.mjs",
             "sdk/npm/prism-code/test/verify.test.mjs",
             "sdk/npm/spec/test/agreement.test.mjs",
+            "sdk/npm/spec/test/attestation-bundle.test.mjs",
             "sdk/npm/spec/test/package.test.mjs",
             "sdk/npm/spec/test/reference.test.mjs",
             "sdk/npm/spec/test/schemas.test.mjs",
@@ -1036,7 +1039,8 @@ const COMMAND_LINE_TARGETS: [&str; 2] = ["aarch64-unknown-linux-musl", "x86_64-u
 /// makes V&V produce a generated command line and accept it over vectors
 /// within and beyond its request maximum. Calculator is built in both LexLean
 /// languages; the 1.2 copy is `lexlean migrate --to 1.2` of the 1.1 example.
-const EXAMPLES: [Example; 4] = [
+/// The prism-code model is the first downstream language-1.2 project (#203).
+const EXAMPLES: [Example; 5] = [
     Example {
         name: "Calculator",
         project: "examples/Calculator",
@@ -1064,6 +1068,18 @@ const EXAMPLES: [Example; 4] = [
             within_request_maximum: 4,
             oversized_vectors: 2,
             examples: 2,
+        }),
+        same_outputs_as: None,
+    },
+    Example {
+        name: "prism-code model (language 1.2)",
+        project: "tests/fixtures/controller/ct-02-prism-code-model/project",
+        command_line: Some(CommandLine {
+            program: "dataflow-policy",
+            vectors: 30,
+            within_request_maximum: 29,
+            oversized_vectors: 1,
+            examples: 3,
         }),
         same_outputs_as: None,
     },
@@ -1863,7 +1879,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
     .trim()
     .to_owned();
     let archive = Command::new("git")
-        .args(["archive", "--format=tar", "--prefix=PrismPM-0.3.0/", "HEAD"])
+        .args(["archive", "--format=tar", "--prefix=PrismPM-0.4.0/", "HEAD"])
         .current_dir(root)
         .output()?;
     if !archive.status.success() {
@@ -1873,7 +1889,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         )
         .into());
     }
-    let source_name = "PrismPM-0.3.0-source.tar";
+    let source_name = "PrismPM-0.4.0-source.tar";
     std::fs::write(destination.join(source_name), archive.stdout)?;
 
     let metadata = Command::new("cargo")
@@ -1939,11 +1955,11 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "components": components,
         "source_commit": head,
         "spec": "prismpm/sbom/1",
-        "version": "0.3.0"
+        "version": "0.4.0"
     });
     let mut sbom_bytes = prismpm::holo::canonical::encode_value(&sbom)?;
     sbom_bytes.push(b'\n');
-    let sbom_name = "PrismPM-0.3.0-sbom.json";
+    let sbom_name = "PrismPM-0.4.0-sbom.json";
     std::fs::write(destination.join(sbom_name), &sbom_bytes)?;
 
     let artifact_rows = [
@@ -1963,7 +1979,7 @@ fn assemble_release(root: &Path, destination: &Path) -> Result<(), Fail> {
         "artifacts": artifact_rows.iter().map(|(path, sha256)| serde_json::json!({"path": path, "sha256": sha256})).collect::<Vec<_>>(),
         "commit": head,
         "schema": "prismpm/release-manifest/1",
-        "version": "0.3.0"
+        "version": "0.4.0"
     });
     let mut manifest_bytes = prismpm::holo::canonical::encode_value(&manifest)?;
     manifest_bytes.push(b'\n');
