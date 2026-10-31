@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 
 /// The reference archive, `calculator-example` `artifacts/Calculator.holo`, unsigned.
 const CALCULATOR: &[u8] = include_bytes!("../../../../sdk/npm/prism-code/fixtures/Calculator.holo");
+const PAYMENT_APPROVAL: &[u8] =
+    include_bytes!("../../../../sdk/npm/prism-code/fixtures/PaymentApproval.holo");
 /// `appendAttestations(CALCULATOR, two placeholder bundles)` as written by `sdk/npm/prism-code`.
 const SIGNED_BY_JAVASCRIPT: &[u8] = include_bytes!(
     "../../../../sdk/npm/prism-code/test/fixtures/attestation/Calculator.signed.holo"
@@ -750,6 +752,11 @@ fn al_06_the_rust_verdicts_equal_the_javascript_goldens_in_every_member_but_the_
         (
             "calculator.tampered-guest.json",
             tampered(),
+            Policy::default(),
+        ),
+        (
+            "payment-approval.default.json",
+            PAYMENT_APPROVAL.to_vec(),
             Policy::default(),
         ),
     ] {

@@ -13,6 +13,7 @@ import { formatVerdict, titleOf, LIMITS, EXIT } from '../src/check.mjs';
 const here = (relative) => fileURLToPath(new URL(relative, import.meta.url));
 const bin = here('../bin/prism-code.mjs');
 const fixture = here('../fixtures/Calculator.holo');
+const paymentApproval = here('../fixtures/PaymentApproval.holo');
 const verdicts = here('../../spec/test/fixtures/verdict/verdict-v1/');
 const GUEST_SHA256 = 'dcf53677c7c80636f8fc2247676b8f747d1549ce4af742c8505eb0f0ae334c03';
 const IMAGE = 'ghcr.io/uor-foundation/prismpm-sdk@sha256:36da25ef924d84899453f24ec0c117a7a220e708037933eb8b499caa7723d99e';
@@ -156,6 +157,7 @@ test('the committed verdict goldens are what check prints; the Rust CLI holds it
     ['calculator.default.json', [fixture], EXIT.FAILED],
     ['calculator.p0.json', [fixture, '--policy', named], EXIT.PASSED],
     ['calculator.tampered-guest.json', [tampered], EXIT.FAILED],
+    ['payment-approval.default.json', [paymentApproval], EXIT.FAILED],
   ]) {
     const { code: actual, out } = run(['check', ...args, '--json']);
     assert.equal(actual, code, name);
